@@ -1,0 +1,280 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_header.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
+
+class SidebarSpace extends StatelessWidget {
+  const SidebarSpace({
+    super.key,
+    this.isHoverEnabled = true,
+    required this.userProfile,
+  });
+
+  final bool isHoverEnabled;
+  final UserProfilePB userProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentWorkspace =
+        context.watch<UserWorkspaceBloc>().state.currentWorkspace;
+
+    // only show spaces if the user role is member or owner
+    final currentUserRole = currentWorkspace?.role;
+    final shouldShowSpaces = [
+      AFRolePB.Member,
+      AFRolePB.Owner,
+    ].contains(currentUserRole);
+
+    return ValueListenableBuilder(
+      valueListenable: getIt<MenuSharedState>().notifier,
+      builder: (_, __, ___) => Provider.value(
+        value: userProfile,
+        child: Column(
+          children: [
+            const VSpace(sidebarEntryGroupTopGap),
+            // PonyNotes 主菜单按钮
+            // home button
+            const SidebarHomeButton(),
+            // AI button
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarAiButton(),
+            // calendar button
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarCalendarButton(),
+            // favorite button
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarFavoriteButton(),
+
+            // public or private (只在协作工作空间显示)
+            BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
+              builder: (context, state) {
+                // 是否协作工作区
+                final isCollaborativeWorkspace =
+                    context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+                // 使用 SpaceBloc 中的 getter，只展示「空间」类型视图
+                final spaceBloc = context.read<SpaceBloc>();
+                final privateSpaces = spaceBloc.privateSpaces;
+                final publicSpaces = spaceBloc.publicSpaces;
+
+                return Column(
+                  children: isCollaborativeWorkspace
+                      ? [
+                          // 私有空间（仅 Space）
+                          PrivateSectionFolder(
+                            views: privateSpaces,
+                          ),
+                          // 协作区 / 公共空间（仅 Space）
+                          PublicSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ]
+                      : [
+                          // 非协作工作区：个人空间仅使用公共空间中的 Space
+                          PersonalSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ],
+                );
+              },
+            ),
+
+            // 共享
+            const SidebarShareButton(),
+            // 发布
+            // 文件库
+            // const VSpace(4.0),
+            // const SidebarFileLibraryButton(),
+            // 模版
+            // const VSpace(4.0),
+            // const SidebarTemplateNewButton(),
+            // 回收站
+            // const VSpace(4.0),
+            // const SidebarTrashItem(),
+            // // 设置
+            // const VSpace(4.0),
+            // const SidebarSettingsButton(),
+
+            // spaces
+            // if (shouldShowSpaces) ...[
+            //   // spaces
+            //   const VSpace(16.0),
+            //   const _Space(),
+            // ],
+
+            // const VSpace(200),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Space extends StatefulWidget {
+  const _Space();
+
+  @override
+  State<_Space> createState() => _SpaceState();
+}
+
+class _SpaceState extends State<_Space> {
+  final isHovered = ValueNotifier(false);
+  final isExpandedNotifier = PropertyValueNotifier(false);
+
+  @override
+  void initState() {
+    super.initState();
+
+    switchToTheNextSpace.addListener(_switchToNextSpace);
+    switchToSpaceNotifier.addListener(_switchToSpace);
+  }
+
+  @override
+  void dispose() {
+    switchToTheNextSpace.removeListener(_switchToNextSpace);
+    isHovered.dispose();
+    isExpandedNotifier.dispose();
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentWorkspace =
+        context.watch<UserWorkspaceBloc>().state.currentWorkspace;
+    return BlocBuilder<SpaceBloc, SpaceState>(
+      builder: (context, state) {
+        if (state.spaces.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final currentSpace = state.currentSpace ?? state.spaces.first;
+
+        return Column(
+          children: [
+            SidebarSpaceHeader(
+              isExpanded: state.isExpanded,
+              space: currentSpace,
+              onAdded: (layout) => _showCreatePagePopup(
+                context,
+                currentSpace,
+                layout,
+              ),
+              onCreateNewSpace: () => _showCreateSpaceDialog(context),
+            ),
+            if (state.isExpanded)
+              MouseRegion(
+                onEnter: (_) => isHovered.value = true,
+                onExit: (_) => isHovered.value = false,
+                child: SpacePages(
+                  key: ValueKey(
+                    Object.hashAll([
+                      currentWorkspace?.workspaceId ?? '',
+                      currentSpace.id,
+                    ]),
+                  ),
+                  isExpandedNotifier: isExpandedNotifier,
+                  space: currentSpace,
+                  isHovered: isHovered,
+                  onSelected: (context, view) {
+                    CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                      context,
+                      () {
+                        if (HardwareKeyboard.instance.isControlPressed) {
+                          context.read<TabsBloc>().openTab(view);
+                        }
+                        context.read<TabsBloc>().openPlugin(view);
+                      },
+                    );
+                  },
+                  onTertiarySelected: (context, view) {
+                    CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                      context,
+                      () => context.read<TabsBloc>().openTab(view),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showCreateSpaceDialog(BuildContext context) {
+    final spaceBloc = context.read<SpaceBloc>();
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: BlocProvider.value(
+          value: spaceBloc,
+          child: const CreateSpacePopup(),
+        ),
+      ),
+    );
+  }
+
+  void _showCreatePagePopup(
+    BuildContext context,
+    ViewPB space,
+    ViewLayoutPB layout,
+  ) {
+    context.read<SpaceBloc>().add(
+          SpaceEvent.createPage(
+            name: layout.defaultName,
+            layout: layout,
+            index: 0,
+            openAfterCreate: true,
+          ),
+        );
+
+    context.read<SpaceBloc>().add(SpaceEvent.expand(space, true));
+  }
+
+  void _switchToNextSpace() {
+    context.read<SpaceBloc>().add(const SpaceEvent.switchToNextSpace());
+  }
+
+  void _switchToSpace() {
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
+    final space = switchToSpaceNotifier.value;
+    if (space == null) {
+      return;
+    }
+
+    context.read<SpaceBloc>().add(SpaceEvent.open(space: space));
+  }
+}

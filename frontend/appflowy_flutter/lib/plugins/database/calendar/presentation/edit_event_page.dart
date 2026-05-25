@@ -1,0 +1,1177 @@
+import 'dart:convert';
+import 'package:appflowy/util/int64_extension.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:intl/intl.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
+import 'widgets/reminder_selection_dialog.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:collection/collection.dart';
+import '../models/schedule_model.dart';
+import 'package:appflowy_backend/log.dart';
+import 'new_event_page.dart'; // 重用一些组件
+
+class EditEventPage extends StatefulWidget {
+  final ScheduleItem schedule; // 要编辑的日程
+  final Function(Map<String, dynamic>) onEventUpdated;
+  final Function(String) onEventDeleted; // 删除回调
+  final VoidCallback onCancel;
+  final Function(bool Function())? onSaveRequested;
+  final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
+  /// 当「日程配置」是否有未保存变更发生变化时回调（用于离开前弹窗提示）
+  final void Function(bool hasUnsavedConfig)? onHasUnsavedConfigChanged;
+
+  const EditEventPage({
+    Key? key,
+    required this.schedule,
+    required this.onEventUpdated,
+    required this.onEventDeleted,
+    required this.onCancel,
+    required this.scheduleModel,
+    this.onSaveRequested,
+    this.onHasUnsavedConfigChanged,
+  }) : super(key: key);
+
+  @override
+  State<EditEventPage> createState() => _EditEventPageState();
+}
+
+class _EditEventPageState extends State<EditEventPage> {
+  late TimeOfDay _startTime;
+  late TimeOfDay _endTime;
+  late DateTime _startDate;
+  late DateTime _endDate;
+  late bool _isAllDay;
+  late bool _isImportant;
+  String _repeatLabel = '任务重复';
+  int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
+  String? _repeatCustomSummary;
+  late String _calendar;
+  late String _description;
+  ReminderOption _reminderOption = ReminderOption.none;
+
+  /// 用于判断是否有未保存的配置变更（与初始加载值对比）
+  late String _initialDescription;
+  late int _initialRepeatType;
+  late ReminderOption _initialReminderOption;
+  late DateTime _initialStartDate;
+  late DateTime _initialEndDate;
+  late TimeOfDay _initialStartTime;
+  late TimeOfDay _initialEndTime;
+  late bool _initialIsAllDay;
+  late bool _initialIsImportant;
+  String? _initialRepeatCustomSummary;
+
+  // 使用外层传入的 ScheduleModel（不在本页创建/销毁）
+
+  @override
+  void initState() {
+    super.initState();
+    Log.debug('🆕 [EditEventPage] initState: schedule.id=${widget.schedule.id}, schedule.title=${widget.schedule.title}');
+    
+    // 从传入的日程初始化数据
+    _initializeFromSchedule();
+    
+    // 初始化日历视图
+    _initializeCalendarView();
+    
+    // 设置保存回调
+    if (widget.onSaveRequested != null) {
+      widget.onSaveRequested!(saveEvent);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyUnsavedConfig());
+  }
+
+  @override
+  void didUpdateWidget(EditEventPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当 schedule 发生变化时，重新初始化表单数据并触发 UI 更新
+    if (oldWidget.schedule.id != widget.schedule.id) {
+      Log.debug('🔄 [EditEventPage] schedule 发生变化: ${oldWidget.schedule.id} -> ${widget.schedule.id}');
+      setState(() {
+        _initializeFromSchedule();
+      });
+      _notifyUnsavedConfig();
+      Log.debug('✅ [EditEventPage] 已重新初始化表单数据: title=${widget.schedule.title}');
+    }
+  }
+
+  // 从传入的日程初始化表单数据
+  void _initializeFromSchedule() {
+    final schedule = widget.schedule;
+    
+    _startDate = schedule.startTime;
+    _endDate = schedule.endTime;
+    _startTime = TimeOfDay.fromDateTime(schedule.startTime);
+    _endTime = TimeOfDay.fromDateTime(schedule.endTime);
+    _isAllDay = schedule.isAllDay;
+    _isImportant = schedule.isImportant;
+    _repeatType = schedule.repeatType;
+    _repeatCustomSummary = schedule.repeatRuleJson;
+    _repeatLabel = _repeatType == 0
+        ? '任务重复'
+        : (_repeatType == 99
+            ? _extractSummaryFromJson(_repeatCustomSummary ?? '自定义')
+            : _repeatTypeName(_repeatType));
+    _calendar = schedule.category;
+    _description = schedule.title; // 使用title作为description
+    _reminderOption = schedule.reminderOption;
+    _initialDescription = _description;
+    _initialRepeatType = _repeatType;
+    _initialReminderOption = _reminderOption;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialIsAllDay = _isAllDay;
+    _initialIsImportant = _isImportant;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
+  }
+
+  /// 是否有未保存的日程配置变更（说明、重复、提醒、时间、重要与初始值不同）
+  bool _hasUnsavedConfigChanges() {
+    // 手动比较 TimeOfDay 的 hour 和 minute，避免 == 比较引用问题
+    final startTimeChanged = _startTime.hour != _initialStartTime.hour ||
+        _startTime.minute != _initialStartTime.minute;
+    final endTimeChanged = _endTime.hour != _initialEndTime.hour ||
+        _endTime.minute != _initialEndTime.minute;
+
+    return _description != _initialDescription ||
+        _repeatType != _initialRepeatType ||
+        (_repeatCustomSummary ?? '') != (_initialRepeatCustomSummary ?? '') ||
+        _reminderOption != _initialReminderOption ||
+        _startDate != _initialStartDate ||
+        _endDate != _initialEndDate ||
+        startTimeChanged ||
+        endTimeChanged ||
+        _isAllDay != _initialIsAllDay ||
+        _isImportant != _initialIsImportant;
+  }
+
+  void _notifyUnsavedConfig() {
+    if (!mounted) return;
+    widget.onHasUnsavedConfigChanged?.call(_hasUnsavedConfigChanges());
+  }
+
+  /// 保存成功后调用：将当前表单视为已保存，后续只有用户再次改动才标记为有未保存
+  void _markCurrentStateAsSaved() {
+    _initialDescription = _description;
+    _initialRepeatType = _repeatType;
+    _initialReminderOption = _reminderOption;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialIsAllDay = _isAllDay;
+    _initialIsImportant = _isImportant;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
+    _notifyUnsavedConfig();
+  }
+
+  // 初始化日历视图
+  Future<void> _initializeCalendarView() async {
+    try {
+      final success = await widget.scheduleModel.initializeCalendarView();
+      if (success) {
+        // 如果日程有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取
+        await _refreshReminderIfNeeded();
+      } else {
+        if (mounted) {
+          showToastNotification(
+            message: '⚠️ 数据库连接失败，日程将无法保存',
+            type: ToastificationType.warning,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: '⚠️ 初始化失败: ${e.toString()}',
+          type: ToastificationType.warning,
+        );
+      }
+    }
+  }
+
+  // 如果日程有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取
+  Future<void> _refreshReminderIfNeeded() async {
+    final schedule = widget.schedule;
+    if (schedule.reminderId != null && 
+        schedule.reminderId!.isNotEmpty && 
+        schedule.reminderOption == ReminderOption.none) {
+      try {
+        Log.debug('🔄 [EditEventPage] 检测到有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取');
+        final reminderBloc = getIt<ReminderBloc>();
+        final reminder = reminderBloc.state.reminders.firstWhereOrNull(
+              (r) => r.id == schedule.reminderId,
+            ) ??
+            reminderBloc.state.allReminders.firstWhereOrNull(
+              (r) => r.id == schedule.reminderId,
+            );
+        
+        if (reminder != null) {
+          final scheduledAt = reminder.scheduledAt.toDateTime();
+          final optionFromBloc = ReminderOption.fromDateDifference(
+            schedule.startTime,
+            scheduledAt,
+          );
+          Log.debug('✅ [EditEventPage] 从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+          if (mounted) {
+            setState(() {
+              _reminderOption = optionFromBloc;
+            });
+          }
+        } else {
+          Log.debug('⚠️ [EditEventPage] ReminderBloc 中未找到提醒，等待状态同步');
+          // 等待一段时间后重试（最多等待1秒）
+          for (int i = 0; i < 10; i++) {
+            await Future.delayed(const Duration(milliseconds: 100));
+            final retryReminder = reminderBloc.state.reminders.firstWhereOrNull(
+                  (r) => r.id == schedule.reminderId,
+                ) ??
+                reminderBloc.state.allReminders.firstWhereOrNull(
+                  (r) => r.id == schedule.reminderId,
+                );
+            if (retryReminder != null) {
+              final scheduledAt = retryReminder.scheduledAt.toDateTime();
+              final optionFromBloc = ReminderOption.fromDateDifference(
+                schedule.startTime,
+                scheduledAt,
+              );
+              Log.debug('✅ [EditEventPage] 重试后从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+              if (mounted) {
+                setState(() {
+                  _reminderOption = optionFromBloc;
+                });
+              }
+              break;
+            }
+          }
+        }
+        } catch (e) {
+        Log.error('⚠️ [EditEventPage] 从 ReminderBloc 读取提醒失败: $e');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  bool saveEvent() {
+    // 验证输入
+    if (_description.trim().isEmpty) {
+      showToastNotification(
+        message: '请添加日程描述',
+        type: ToastificationType.error,
+      );
+      return false;
+    }
+
+    // 构建开始和结束时间进行验证
+    final startDateTime = DateTime(
+      _startDate.year,
+      _startDate.month,
+      _startDate.day,
+      _startTime.hour,
+      _startTime.minute,
+    );
+    
+    final endDateTime = DateTime(
+      _endDate.year,
+      _endDate.month,
+      _endDate.day,
+      _endTime.hour,
+      _endTime.minute,
+    );
+    
+    // 检查时间是否在1970年之后
+    if (startDateTime.year < 1970 || endDateTime.year < 1970) {
+      showToastNotification(
+        message: '❌ 时间设置无效，请选择有效的时间',
+        type: ToastificationType.error,
+      );
+      return false;
+    }
+
+    // 检查结束时间不能小于开始时间
+    if (endDateTime.isBefore(startDateTime)) {
+      showToastNotification(
+        message: '结束时间不能小于开始时间',
+        type: ToastificationType.error,
+      );
+      return false;
+    }
+
+    // 检查日程时长是否合理（不能超过30天）
+    final duration = endDateTime.difference(startDateTime);
+    if (duration.inDays > 30) {
+      showToastNotification(
+        message: '⚠️ 日程时长超过30天，请确认时间设置',
+        type: ToastificationType.warning,
+      );
+      // 不阻止保存，但给出警告
+    }
+
+    // 异步保存日程
+    _saveEventAsync();
+    return true;
+  }
+
+  Future<void> _saveEventAsync() async {
+    
+    try {
+      // 构建开始和结束时间
+      final startDateTime = DateTime(
+        _startDate.year,
+        _startDate.month,
+        _startDate.day,
+        _startTime.hour,
+        _startTime.minute,
+      );
+      
+      final endDateTime = DateTime(
+        _endDate.year,
+        _endDate.month,
+        _endDate.day,
+        _endTime.hour,
+        _endTime.minute,
+      );
+
+      // 检查widget是否仍然挂载
+      if (!mounted) {
+        return;
+      }
+
+      // 检查ScheduleModel的状态
+      
+      if (widget.scheduleModel.currentViewId == null) {
+        
+        // 尝试初始化日历视图
+        final initialized = await widget.scheduleModel.initializeCalendarView();
+        if (!initialized) {
+          throw Exception('无法初始化日历视图，请检查 AppFlowy 数据库连接');
+        }
+      }
+
+      // 使用ScheduleModel更新日程
+      
+      // 创建更新后的ScheduleItem
+      // 重要：显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
+      final updatedSchedule = widget.schedule.copyWith(
+        title: _description.isNotEmpty ? _description : '无标题日程',
+        description: _description,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        isAllDay: _isAllDay,
+        isImportant: _isImportant,
+        reminderOption: _reminderOption, // 直接使用 ReminderOption
+        // 显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
+        reminderId: widget.schedule.reminderId,
+        repeatType: _repeatType,
+        repeatRuleJson: _repeatCustomSummary,
+      );
+      
+      final success = await widget.scheduleModel.updateSchedule(updatedSchedule);
+
+      // 再次检查widget是否仍然挂载
+      if (!mounted) {
+        return;
+      }
+
+      // 更新成功
+      if (success) {
+        // 创建更新后的事件数据
+        final eventData = {
+          'id': widget.schedule.id,
+          'date': _startDate,
+          'startTime': _startTime,
+          'endTime': _endTime,
+          'startDate': _startDate,
+          'endDate': _endDate,
+          'isAllDay': _isAllDay,
+          'isImportant': _isImportant,
+          'calendar': _calendar,
+          'description': _description,
+        };
+
+        widget.onEventUpdated(eventData);
+
+        // 标记为已保存，切换页面时不再弹确认窗；只有用户再次改动后才算有未保存
+        _markCurrentStateAsSaved();
+
+        // 显示成功消息
+        if (mounted) {
+          showToastNotification(
+            message: '✅ 日程更新成功！',
+            type: ToastificationType.success,
+          );
+        }
+      } else {
+        throw Exception('更新日程失败');
+      }
+    } catch (e, stackTrace) {
+      // 异常处理
+      
+      if (mounted) {
+        String errorMessage = '更新日程失败';
+        String detailedError = e.toString();
+        
+        // 根据不同类型的错误提供不同的提示
+        if (e.toString().contains('数据库未连接')) {
+          errorMessage = '数据库连接失败';
+          detailedError = '请确保 AppFlowy 数据库正在运行';
+        } else if (e.toString().contains('初始化')) {
+          errorMessage = '日历视图初始化失败';
+          detailedError = '请检查数据库连接和权限设置';
+        }
+        
+        showToastNotification(
+          message: '❌ $errorMessage',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  // 删除日程
+  Future<void> _deleteEvent() async {
+    // 显示确认对话框
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('确认删除'),
+          ],
+        ),
+        content: Text('确定要删除这个日程吗？此操作不可撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: Text('删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      
+      if (widget.scheduleModel.currentViewId == null) {
+        final initialized = await widget.scheduleModel.initializeCalendarView();
+        if (!initialized) {
+          throw Exception('无法初始化日历视图，请检查 AppFlowy 数据库连接');
+        }
+      }
+
+      final success = await widget.scheduleModel.deleteSchedule(widget.schedule.id);
+      
+      if (!mounted) return;
+
+      if (success) {
+        widget.onEventDeleted(widget.schedule.id);
+        
+        showToastNotification(
+          message: '✅ 日程已删除',
+          type: ToastificationType.success,
+        );
+        
+        // 使用 SchedulerBinding 确保在下一帧执行导航
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        });
+      } else {
+        throw Exception('删除日程失败');
+      }
+    } catch (e) {
+      
+      if (mounted) {
+        // 只要异常信息中明确说明已经没有元素，也判定为成功
+        if (e.toString().contains('Bad state: No element') || 
+            e.toString().contains('本地列表中未找到要删除的日程') || 
+            e.toString().contains('Not found')) {
+          widget.onEventDeleted(widget.schedule.id);
+          showToastNotification(
+            message: '✅ 日程已删除',
+            type: ToastificationType.success,
+          );
+          // 使用 SchedulerBinding 确保在下一帧执行导航
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
+        } else {
+          showToastNotification(
+            message: '❌ 日程删除失败',
+            type: ToastificationType.error,
+          );
+        }
+      }
+    }
+  }
+
+  String _formatTime(TimeOfDay time) {
+    final now = DateTime.now();
+    final dt = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+    return DateFormat('H:mm').format(dt);
+  }
+
+  String _formatDate(DateTime date) {
+    final today = DateTime.now();
+    if (date.year == today.year && date.month == today.month && date.day == today.day) {
+      return '今天 周${_getWeekday(date.weekday)}';
+    }
+    return '${date.month}月${date.day}日 周${_getWeekday(date.weekday)}';
+  }
+
+  String _getWeekday(int weekday) {
+    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+    return weekdays[weekday - 1];
+  }
+
+  // 构建全天日期选择器
+  Widget _buildAllDayDatePicker(ThemeData theme, bool isDark) {
+    return GestureDetector(
+      onTap: () => _showDatePicker(),
+      child: Row(
+        children: [
+          Expanded(child: Container()),
+          Column(
+            children: [
+              Text(
+                _formatAllDayDate(_startDate),
+                style: TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.w300,
+                  color: theme.textTheme.headlineLarge?.color ?? (isDark ? Colors.white : Colors.black87),
+                ),
+              ),
+              Text(
+                '全天',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6) ?? (isDark ? Colors.grey[400] : Colors.grey[600]),
+                ),
+              ),
+            ],
+          ),
+          Expanded(child: Container()),
+        ],
+      ),
+    );
+  }
+
+  // 构建时间区间选择器
+  Widget _buildTimeRangePicker(ThemeData theme, bool isDark) {
+    return Row(
+      children: [
+        // 开始时间
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _showCustomTimePicker(isStartTime: true),
+            child: Column(
+              children: [
+                Text(
+                  _formatTime(_startTime),
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w300,
+                    color: theme.textTheme.headlineLarge?.color ?? (isDark ? Colors.white : Colors.black87),
+                  ),
+                ),
+                Text(
+                  _formatDate(_startDate),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6) ?? (isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // 箭头
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Icon(
+            Icons.arrow_forward,
+            color: theme.iconTheme.color?.withOpacity(0.4) ?? (isDark ? Colors.grey[600] : Colors.grey[400]),
+            size: 24,
+          ),
+        ),
+        
+        // 结束时间
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _showCustomTimePicker(isStartTime: false),
+            child: Column(
+              children: [
+                Text(
+                  _formatTime(_endTime),
+                  style: TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.w300,
+                    color: theme.textTheme.headlineLarge?.color ?? (isDark ? Colors.white : Colors.black87),
+                  ),
+                ),
+                Text(
+                  _formatDate(_endDate),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6) ?? (isDark ? Colors.grey[400] : Colors.grey[600]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 格式化全天日期显示
+  String _formatAllDayDate(DateTime date) {
+    final today = DateTime.now();
+    if (date.year == today.year && date.month == today.month && date.day == today.day) {
+      return '今天';
+    }
+    return '${date.month}月${date.day}日';
+  }
+
+  // 显示日期选择器
+  Future<void> _showDatePicker() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+        child: CustomTimePickerBottomSheet(
+          initialDate: _startDate,
+          initialTime: _startTime,
+          title: '选择日期',
+          showTimePicker: false,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      final selectedDate = result['date'] as DateTime;
+      setState(() {
+        _startDate = selectedDate;
+        _endDate = selectedDate;
+      });
+      _notifyUnsavedConfig();
+    }
+  }
+
+  // 显示自定义时间选择器
+  Future<void> _showCustomTimePicker({required bool isStartTime}) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(20),
+          child: CustomTimePickerBottomSheet(
+          initialDate: isStartTime ? _startDate : _endDate,
+          initialTime: isStartTime ? _startTime : _endTime,
+          title: isStartTime ? '开始时间' : '结束时间',
+          showTimePicker: !_isAllDay,
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (isStartTime) {
+          _startDate = result['date'];
+          _startTime = result['time'];
+          // 确保结束时间在开始时间之后
+          final startDateTime = DateTime(
+            _startDate.year,
+            _startDate.month,
+            _startDate.day,
+            _startTime.hour,
+            _startTime.minute,
+          );
+          final endDateTime = DateTime(
+            _endDate.year,
+            _endDate.month,
+            _endDate.day,
+            _endTime.hour,
+            _endTime.minute,
+          );
+          
+          if (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime)) {
+            _endDate = _startDate;
+            _endTime = TimeOfDay(
+              hour: (_startTime.hour + 1) % 24,
+              minute: _startTime.minute,
+            );
+          }
+        } else {
+          _endDate = result['date'];
+          _endTime = result['time'];
+        }
+      });
+      _notifyUnsavedConfig();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 顶部时间选择区域
+            Container(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  SizedBox(height: 20),
+                  // 时间选择器
+                  _isAllDay ? _buildAllDayDatePicker(theme, isDark) : _buildTimeRangePicker(theme, isDark),
+                  SizedBox(height: 40),
+                ],
+              ),
+            ),
+            
+            // 选项列表
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  // 全天选项
+                  ListTile(
+                    leading: FlowySvg(
+                      FlowySvgs.icon_time_calendar_lg,
+                      color: theme.iconTheme.color,
+                      size: const Size.square(24),
+                    ),
+                    title: Text(
+                      '全天',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    trailing: Toggle(
+                      value: _isAllDay,
+                      onChanged: (value) {
+                        setState(() {
+                          _isAllDay = value;
+                          if (_isAllDay) {
+                            _endDate = _startDate;
+                            _startTime = const TimeOfDay(hour: 0, minute: 0);
+                            _endTime = const TimeOfDay(hour: 23, minute: 59);
+                          }
+                        });
+                        _notifyUnsavedConfig();
+                      },
+                      style: const ToggleStyle.mobile(),
+                      padding: EdgeInsets.zero,
+                    ),
+                    onTap: () {
+                      setState(() {
+                        _isAllDay = !_isAllDay;
+                      });
+                      _notifyUnsavedConfig();
+                    },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
+                  ),
+                  
+                  // 提醒选项
+                  ListTile(
+                    leading: FlowySvg(
+                      FlowySvgs.icon_alarm_clock_m,
+                      color: theme.iconTheme.color,
+                      size: const Size.square(24),
+                    ),
+                    title: Text(
+                      _getReminderOptionLabel(_reminderOption, !_isAllDay),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    onTap: () {
+                      _showReminderDialog();
+                    },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
+                  ),
+                  
+                  // 日程重复选项
+                  ListTile(
+                    leading: FlowySvg(
+                      FlowySvgs.icon_repeat_calender_m,
+                      color: theme.iconTheme.color,
+                      size: const Size.square(24),
+                    ),
+                    title: Text(
+                      _repeatType == 0
+                          ? '任务重复'
+                          : _repeatLabel,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    onTap: () {
+                      _showRepeatDialog();
+                    },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
+                  ),
+                  
+                  // 我的日历选项
+                  // ListTile(
+                  //   leading: FlowySvg(
+                  //     FlowySvgs.icon_calendar_m,
+                  //     color: theme.iconTheme.color,
+                  //     size: const Size.square(24),
+                  //   ),
+                  //   title: Text(
+                  //     '我的日历',
+                  //     style: TextStyle(
+                  //       fontSize: 16,
+                  //       color: theme.textTheme.bodyLarge?.color,
+                  //     ),
+                  //   ),
+                  //   onTap: () {
+                  //     // 显示日历选择器
+                  //   },
+                  //   horizontalTitleGap: 8.0,
+                  //   minLeadingWidth: 0,
+                  // ),
+                  
+                  // 添加说明选项
+                  ListTile(
+                    leading: FlowySvg(
+                      FlowySvgs.icon_edit_m,
+                      color: theme.iconTheme.color,
+                      size: const Size.square(24),
+                    ),
+                    title: Text(
+                      '添加说明',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    onTap: () {
+                      _showDescriptionDialog();
+                    },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
+                  ),
+
+                  // 分隔线
+                  Divider(height: 40),
+
+                  // 删除按钮
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline,
+                      color: Colors.red,
+                      size: 24,
+                    ),
+                    title: Text(
+                      '删除日程',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.red,
+                      ),
+                    ),
+                    onTap: _deleteEvent,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDescriptionDialog() {
+    final controller = TextEditingController(text: _description);
+    final theme = Theme.of(context);
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 标题栏
+              Row(
+                children: [
+                  Icon(
+                    Icons.edit_note,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '编辑说明',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // 输入框
+              TextField(
+                controller: controller,
+                maxLines: 4,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+                decoration: InputDecoration(
+                  hintText: '请输入日程说明...',
+                  hintStyle: TextStyle(
+                    color: theme.hintColor,
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                  hoverColor: Colors.transparent, // 禁用悬停时的背景颜色变化
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+                autofocus: true,
+              ),
+              
+              const SizedBox(height: 24),
+              
+              // 按钮栏
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // 取消按钮
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(width: 12),
+                  
+                  // 确定按钮
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _description = controller.text;
+                      });
+                      _notifyUnsavedConfig();
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '确定',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
+  // 获取提醒选项的显示标签（与 reminder_selector.dart 逻辑一致）
+  String _getReminderOptionLabel(ReminderOption option, bool hasTime) {
+    String label = option.label;
+    // 对于 withoutTime 的选项，显示时间信息（与 reminder_selector.dart 逻辑一致）
+    if (option.withoutTime && !option.timeExempt) {
+      const time = "09:00";
+      final t = TimeFormatPB.TwentyFourHour == TimeFormatPB.TwelveHour 
+          ? "$time AM" 
+          : time;
+      label = "$label ($t)";
+    }
+    return label;
+  }
+
+  void _showReminderDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return ReminderSelectionDialog(
+          currentOption: _reminderOption,
+          hasTime: !_isAllDay, // 如果不是全天，则包含时间
+          timeFormat: TimeFormatPB.TwentyFourHour, // 默认使用24小时制
+          onSave: (selectedOption) {
+            setState(() {
+              _reminderOption = selectedOption;
+            });
+            _notifyUnsavedConfig();
+          },
+        );
+      },
+    );
+  }
+
+  void _showRepeatDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RepeatSelectionDialog(
+        currentType: _repeatType,
+        currentCustomSummary: _repeatCustomSummary,
+        onSave: ({required int type, String? customSummary}) {
+          setState(() {
+            if (type == 0) {
+              _repeatType = 0;
+              _repeatLabel = '任务重复';
+              _repeatCustomSummary = null;
+            } else if (type == 99) {
+              _repeatType = 99;
+              _repeatCustomSummary = customSummary;
+              // 从 JSON 中提取显示文本
+              _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
+            } else {
+              _repeatType = type;
+              _repeatCustomSummary = null;
+              _repeatLabel = _repeatTypeName(type);
+            }
+          });
+          _notifyUnsavedConfig();
+        },
+      ),
+    );
+  }
+
+  String _repeatTypeName(int t) {
+    switch (t) {
+      case 1:
+        return '每天';
+      case 2:
+        return '每周';
+      case 3:
+        return '每年';
+      case 4:
+        return '法定工作日';
+      default:
+        return '任务重复';
+    }
+  }
+
+  // 从 JSON 中提取显示摘要
+  String _extractSummaryFromJson(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) {
+      return '自定义';
+    }
+    try {
+      final data = jsonDecode(jsonStr);
+      if (data is Map && data.containsKey('summary')) {
+        final summary = data['summary'];
+        if (summary is String && summary.isNotEmpty) {
+          return summary;
+        }
+      }
+      // 如果没有 summary 字段，尝试从其他字段构建显示文本
+      return '自定义';
+    } catch (e) {
+      // 如果不是有效的 JSON，返回默认值
+      return '自定义';
+    }
+  }
+}

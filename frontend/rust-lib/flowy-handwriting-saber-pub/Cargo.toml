@@ -1,0 +1,13 @@
+[package]
+name = "flowy-handwriting-saber-pub"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+protobuf.workspace = true
+bytes.workspace = true
+collab = { workspace = true }
+flowy-error = { workspace = true }
+lib-infra = { workspace = true }
+uuid = { workspace = true }
+

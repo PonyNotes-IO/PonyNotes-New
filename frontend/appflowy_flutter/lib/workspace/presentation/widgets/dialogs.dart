@@ -1,0 +1,1187 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/util/theme_extension.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/size.dart';
+import 'package:flowy_infra_ui/style_widget/text.dart';
+import 'package:flowy_infra_ui/style_widget/text_input.dart';
+import 'package:flowy_infra_ui/widget/buttons/primary_button.dart';
+import 'package:flowy_infra_ui/widget/buttons/secondary_button.dart';
+import 'package:flowy_infra_ui/widget/dialog/styled_dialogs.dart';
+import 'package:flowy_infra_ui/widget/spacing.dart';
+import 'package:flutter/material.dart';
+import 'package:toastification/toastification.dart';
+import 'package:universal_platform/universal_platform.dart';
+
+export 'package:flowy_infra_ui/widget/dialog/styled_dialogs.dart';
+export 'package:toastification/toastification.dart';
+
+class NavigatorCustomDialog extends StatefulWidget {
+  const NavigatorCustomDialog({
+    super.key,
+    required this.child,
+    this.cancel,
+    this.confirm,
+    this.hideCancelButton = false,
+  });
+
+  final Widget child;
+  final void Function()? cancel;
+  final void Function()? confirm;
+  final bool hideCancelButton;
+
+  @override
+  State<NavigatorCustomDialog> createState() => _NavigatorCustomDialog();
+}
+
+class _NavigatorCustomDialog extends State<NavigatorCustomDialog> {
+  @override
+  Widget build(BuildContext context) {
+    return StyledDialog(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: HomeSizes.dialogMaxWidth,
+                  maxHeight: HomeSizes.dialogMaxHeight,
+                ),
+                child: widget.child,
+              ),
+              if (widget.confirm != null) ...[
+                const VSpace(20),
+                OkCancelButton(
+                  onOkPressed: () {
+                    widget.confirm?.call();
+                    Navigator.of(context).pop();
+                  },
+                  onCancelPressed: widget.hideCancelButton
+                      ? null
+                      : () {
+                          widget.cancel?.call();
+                          Navigator.of(context).pop();
+                        },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NavigatorTextFieldDialog extends StatefulWidget {
+  const NavigatorTextFieldDialog({
+    super.key,
+    required this.title,
+    this.autoSelectAllText = false,
+    required this.value,
+    required this.onConfirm,
+    this.onCancel,
+    this.maxLength,
+    this.hintText,
+    this.subtitle,
+    this.dialogMaxWidth = 400,
+    this.showCounter = false,
+  });
+
+  final String value;
+  final String title;
+  final VoidCallback? onCancel;
+  final void Function(String, BuildContext) onConfirm;
+  final bool autoSelectAllText;
+  final int? maxLength;
+  final String? hintText;
+
+  /// Optional short description under the title (e.g. create-workspace flow).
+  final String? subtitle;
+  final double dialogMaxWidth;
+
+  /// Show character counter (e.g. "12/256"). Only meaningful when maxLength is set.
+  final bool showCounter;
+
+  @override
+  State<NavigatorTextFieldDialog> createState() =>
+      _NavigatorTextFieldDialogState();
+}
+
+class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
+  String newValue = "";
+  final controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    newValue = widget.value;
+    controller.text = newValue;
+    if (widget.autoSelectAllText) {
+      controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: newValue.length,
+      );
+    }
+
+    // 延迟初始化以确保键盘状态正确
+    // 这可以修复键盘事件冲突导致无法输入的问题
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 强制重新聚焦文本输入框以确保键盘状态正确
+      if (mounted) {
+        // 短暂失去焦点再重新聚焦，这样可以重置键盘状态
+        FocusScope.of(context).unfocus();
+        Future.delayed(const Duration(milliseconds: 10), () {
+          if (mounted) {
+            FocusScope.of(context).requestFocus();
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return StyledDialog(
+      maxWidth: widget.dialogMaxWidth,
+      borderRadius: const BorderRadius.all(
+        Radius.circular(HomeRadii.dialog),
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: HomeInsets.dialogHorizontalPadding,
+        vertical: HomeInsets.dialogVerticalPadding,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              FlowyText.medium(
+                widget.title,
+                color: scheme.onSurface,
+                fontSize: FontSizes.s16,
+              ),
+              if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+                VSpace(Insets.sm),
+                FlowyText.regular(
+                  widget.subtitle!,
+                  color: scheme.onSurface.withOpacity(0.62),
+                  fontSize: FontSizes.s14,
+                  maxLines: 4,
+                ),
+              ],
+              VSpace(Insets.m),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, child) {
+                  return TextFormField(
+                    controller: controller,
+                    autofocus: true,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(fontSize: FontSizes.s16),
+                    decoration: InputDecoration(
+                      hintText: widget.hintText ??
+                          LocaleKeys.dialogCreatePageNameHint.tr(),
+                      hintStyle: Theme.of(context)
+                          .textTheme
+                          .bodyMedium!
+                          .copyWith(
+                              color: Theme.of(context)
+                                  .hintColor
+                                  .withValues(alpha: 0.7)),
+                      suffixText: widget.showCounter && widget.maxLength != null
+                          ? ' ${value.text.length}/${widget.maxLength}'
+                          : null,
+                      counterText: '',
+                      border:
+                          const OutlineInputBorder(borderSide: BorderSide.none),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: Insets.sm),
+                    ),
+                    maxLength: widget.maxLength,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onChanged: (text) {
+                      newValue = text;
+                    },
+                    onFieldSubmitted: (_) {
+                      final trimmed = newValue.trim();
+                      if (trimmed.isEmpty) {
+                        return;
+                      }
+                      widget.onConfirm(trimmed, context);
+                    },
+                  );
+                },
+              ),
+              VSpace(Insets.xl),
+              OkCancelButton(
+                onOkPressed: () {
+                  Log.info('NavigatorTextFieldDialog OK: $newValue');
+                  if (newValue.trim().isEmpty) {
+                    showToastNotification(
+                      message: LocaleKeys.space_spaceNameCannotBeEmpty.tr(),
+                    );
+                    return;
+                  }
+
+                  // 🔧 FIX: Ensure dialog stays open until workspace creation process starts
+                  try {
+                    final trimmed = newValue.trim();
+                    Log.info('[DIALOG] Calling onConfirm with trimmed name');
+                    widget.onConfirm(trimmed, context);
+                    Log.info('[DIALOG] onConfirm completed');
+
+                    // 🔧 FIX: Don't close dialog here - let BlocListener handle it
+                    // This prevents Navigator state conflicts
+                    Log.info(
+                        '[DIALOG] 🔄 Dialog will be closed by BlocListener');
+                  } catch (e) {
+                    Log.error('[DIALOG] ❌ Error in onConfirm callback: $e');
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  }
+                },
+                okTitle: '确认',
+                onCancelPressed: () {
+                  widget.onCancel?.call();
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class NavigatorAlertDialog extends StatefulWidget {
+  const NavigatorAlertDialog({
+    super.key,
+    required this.title,
+    this.cancel,
+    this.confirm,
+    this.hideCancelButton = false,
+    this.constraints,
+  });
+
+  final String title;
+  final void Function()? cancel;
+  final void Function()? confirm;
+  final bool hideCancelButton;
+  final BoxConstraints? constraints;
+
+  @override
+  State<NavigatorAlertDialog> createState() => _CreateFlowyAlertDialog();
+}
+
+class _CreateFlowyAlertDialog extends State<NavigatorAlertDialog> {
+  @override
+  Widget build(BuildContext context) {
+    return StyledDialog(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          ...[
+            ConstrainedBox(
+              constraints: widget.constraints ??
+                  const BoxConstraints(
+                    maxWidth: HomeSizes.dialogMaxWidth,
+                    maxHeight: HomeSizes.dialogMaxHeight,
+                  ),
+              child: FlowyText.medium(
+                widget.title,
+                fontSize: FontSizes.s16,
+                textAlign: TextAlign.center,
+                color: Theme.of(context).colorScheme.tertiary,
+                maxLines: null,
+              ),
+            ),
+          ],
+          if (widget.confirm != null) ...[
+            const VSpace(20),
+            OkCancelButton(
+              onOkPressed: () {
+                widget.confirm?.call();
+                Navigator.of(context).pop();
+              },
+              onCancelPressed: widget.hideCancelButton
+                  ? null
+                  : () {
+                      widget.cancel?.call();
+                      Navigator.of(context).pop();
+                    },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class NavigatorOkCancelDialog extends StatelessWidget {
+  const NavigatorOkCancelDialog({
+    super.key,
+    this.onOkPressed,
+    this.onCancelPressed,
+    this.okTitle,
+    this.cancelTitle,
+    this.title,
+    this.message,
+    this.maxWidth,
+    this.titleUpperCase = true,
+    this.autoDismiss = true,
+  });
+
+  final VoidCallback? onOkPressed;
+  final VoidCallback? onCancelPressed;
+  final String? okTitle;
+  final String? cancelTitle;
+  final String? title;
+  final String? message;
+  final double? maxWidth;
+  final bool titleUpperCase;
+  final bool autoDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final onCancel = onCancelPressed == null
+        ? null
+        : () {
+            onCancelPressed?.call();
+            if (autoDismiss) {
+              Navigator.of(context).pop();
+            }
+          };
+    return StyledDialog(
+      maxWidth: maxWidth ?? HomeSizes.okCancelDialogMaxWidth,
+      padding: const EdgeInsets.symmetric(
+        horizontal: HomeInsets.dialogHorizontalPadding,
+        vertical: HomeInsets.dialogVerticalPadding,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (title != null) ...[
+            FlowyText.medium(
+              titleUpperCase ? title!.toUpperCase() : title!,
+              fontSize: FontSizes.s16,
+              maxLines: 3,
+            ),
+            VSpace(Insets.sm * 1.5),
+            Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              height: 1,
+            ),
+            VSpace(Insets.m * 1.5),
+          ],
+          if (message != null)
+            FlowyText.medium(
+              message!,
+              maxLines: 3,
+            ),
+          SizedBox(height: Insets.l),
+          OkCancelButton(
+            onOkPressed: () {
+              onOkPressed?.call();
+              if (autoDismiss) {
+                Navigator.of(context).pop();
+              }
+            },
+            onCancelPressed: onCancel,
+            okTitle: okTitle?.toUpperCase(),
+            cancelTitle: cancelTitle?.toUpperCase(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class OkCancelButton extends StatelessWidget {
+  const OkCancelButton({
+    super.key,
+    this.onOkPressed,
+    this.onCancelPressed,
+    this.okTitle,
+    this.cancelTitle,
+    this.minHeight,
+    this.alignment = MainAxisAlignment.spaceAround,
+    this.mode = TextButtonMode.big,
+  });
+
+  final VoidCallback? onOkPressed;
+  final VoidCallback? onCancelPressed;
+  final String? okTitle;
+  final String? cancelTitle;
+  final double? minHeight;
+  final MainAxisAlignment alignment;
+  final TextButtonMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: Row(
+        mainAxisAlignment: alignment,
+        children: <Widget>[
+          if (onCancelPressed != null)
+            SecondaryTextButton(
+              cancelTitle ?? LocaleKeys.button_cancel.tr(),
+              onPressed: onCancelPressed,
+              mode: mode,
+            ),
+          if (onCancelPressed != null) HSpace(Insets.m),
+          if (onOkPressed != null)
+            PrimaryTextButton(
+              okTitle ?? LocaleKeys.button_ok.tr(),
+              onPressed: onOkPressed,
+              mode: mode,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+ToastificationItem showToastNotification({
+  String? message,
+  TextSpan? richMessage,
+  String? description,
+  ToastificationType type = ToastificationType.success,
+  ToastificationCallbacks? callbacks,
+  double bottomPadding = 100,
+  Alignment alignment = Alignment.bottomCenter,
+  Offset offset = Offset.zero,
+}) {
+  assert(
+    (message == null) != (richMessage == null),
+    "Exactly one of message or richMessage must be non-null.",
+  );
+  return toastification.showCustom(
+    alignment: alignment,
+    autoCloseDuration: const Duration(milliseconds: 3000),
+    callbacks: callbacks ?? const ToastificationCallbacks(),
+    builder: (_, item) {
+      return UniversalPlatform.isMobile
+          ? Transform.translate(
+              offset: offset,
+              child: _MobileToast(
+                message: message,
+                type: type,
+                bottomPadding: bottomPadding,
+                description: description,
+                alignment: alignment,
+              ),
+            )
+          : Transform.translate(
+              offset: offset,
+              child: DesktopToast(
+                message: message,
+                richMessage: richMessage,
+                type: type,
+                onDismiss: () => toastification.dismiss(item),
+                alignment: alignment,
+              ),
+            );
+    },
+  );
+}
+
+class _MobileToast extends StatelessWidget {
+  const _MobileToast({
+    this.message,
+    this.type = ToastificationType.success,
+    this.bottomPadding = 100,
+    this.description,
+    this.alignment = Alignment.bottomCenter,
+  });
+
+  final String? message;
+  final ToastificationType type;
+  final double bottomPadding;
+  final String? description;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message == null) {
+      return const SizedBox.shrink();
+    }
+    final hintText = FlowyText.regular(
+      message!,
+      fontSize: 16.0,
+      figmaLineHeight: 18.0,
+      color: Colors.white,
+      maxLines: 10,
+    );
+    final descriptionText = description != null
+        ? FlowyText.regular(
+            description!,
+            fontSize: 12,
+            color: Colors.white,
+            maxLines: 10,
+          )
+        : null;
+    final isCenter = alignment == Alignment.center;
+    return Container(
+      alignment: alignment,
+      padding: EdgeInsets.only(
+        bottom: isCenter ? 0 : bottomPadding,
+        left: 16,
+        right: 16,
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12.0,
+          vertical: 13.0,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12.0),
+          color: const Color(0xE5171717),
+        ),
+        child: type == ToastificationType.success
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (type == ToastificationType.success) ...[
+                        const FlowySvg(
+                          FlowySvgs.success_s,
+                          blendMode: null,
+                        ),
+                        const HSpace(8.0),
+                      ],
+                      Expanded(child: hintText),
+                    ],
+                  ),
+                  if (descriptionText != null) ...[
+                    const VSpace(4.0),
+                    descriptionText,
+                  ],
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  hintText,
+                  if (descriptionText != null) ...[
+                    const VSpace(4.0),
+                    descriptionText,
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+@visibleForTesting
+class DesktopToast extends StatelessWidget {
+  const DesktopToast({
+    super.key,
+    this.message,
+    this.richMessage,
+    required this.type,
+    this.onDismiss,
+    this.alignment = Alignment.bottomCenter,
+  });
+
+  final String? message;
+  final TextSpan? richMessage;
+  final ToastificationType type;
+  final void Function()? onDismiss;
+  final Alignment alignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCenter = alignment == Alignment.center;
+    return Align(
+      alignment: alignment,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+        margin:
+            isCenter ? EdgeInsets.zero : const EdgeInsets.only(bottom: 32.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).isLightMode
+              ? const Color(0xFF333333)
+              : const Color(0xFF363D49),
+          borderRadius: const BorderRadius.all(Radius.circular(8.0)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // icon
+            FlowySvg(
+              switch (type) {
+                ToastificationType.warning => FlowySvgs.toast_warning_filled_s,
+                ToastificationType.success => FlowySvgs.toast_checked_filled_s,
+                ToastificationType.error => FlowySvgs.toast_error_filled_s,
+                _ => FlowySvgs.toast_checked_filled_s,
+              },
+              size: const Size.square(20.0),
+              blendMode: null,
+            ),
+            const HSpace(8.0),
+            // text
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220.0),
+              child: message != null
+                  ? FlowyText(
+                      message!,
+                      maxLines: 2,
+                      figmaLineHeight: 20.0,
+                      overflow: TextOverflow.ellipsis,
+                      color: const Color(0xFFFFFFFF),
+                    )
+                  : RichText(
+                      text: richMessage!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+            ),
+            const HSpace(16.0),
+            // close
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onDismiss,
+                child: const SizedBox.square(
+                  dimension: 24.0,
+                  child: Center(
+                    child: FlowySvg(
+                      FlowySvgs.toast_close_s,
+                      size: Size.square(16.0),
+                      color: Color(0xFFBDBDBD),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> showConfirmDeletionDialog({
+  required BuildContext context,
+  required String name,
+  required String description,
+  required VoidCallback onConfirm,
+}) {
+  return showDialog(
+    context: context,
+    builder: (_) {
+      final title = LocaleKeys.space_deleteConfirmation.tr() + name;
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          width: 440,
+          child: ConfirmPopup(
+            title: title,
+            description: description,
+            onConfirm: (_) => onConfirm(),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> showConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String description,
+  TextStyle? titleStyle,
+  TextStyle? descriptionStyle,
+  void Function(BuildContext context)? onConfirm,
+  VoidCallback? onCancel,
+  String? confirmLabel,
+  ConfirmPopupStyle style = ConfirmPopupStyle.onlyOk,
+  WidgetBuilder? confirmButtonBuilder,
+  Color? confirmButtonColor,
+}) {
+  return showDialog(
+    context: context,
+    builder: (context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          width: 440,
+          child: ConfirmPopup(
+            title: title,
+            description: description,
+            titleStyle: titleStyle,
+            descriptionStyle: descriptionStyle,
+            confirmButtonBuilder: confirmButtonBuilder,
+            onConfirm: (_) => onConfirm?.call(context),
+            onCancel: () => onCancel?.call(),
+            confirmLabel: confirmLabel,
+            style: style,
+            confirmButtonColor: confirmButtonColor,
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> showCancelAndConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String description,
+  void Function(BuildContext context)? onConfirm,
+  VoidCallback? onCancel,
+  String? confirmLabel,
+  String? cancelLabel,
+}) {
+  return showDialog(
+    context: context,
+    builder: (_) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          width: 540,
+          child: ConfirmPopup(
+            title: title,
+            description: description,
+            onConfirm: (context) => onConfirm?.call(context),
+            confirmLabel: confirmLabel,
+            confirmButtonColor: Theme.of(context).colorScheme.primary,
+            cancelLabel: cancelLabel,
+            onCancel: () => onCancel?.call(),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> showCustomConfirmDialog({
+  required BuildContext context,
+  required String title,
+  required String description,
+  required Widget Function(BuildContext) builder,
+  VoidCallback? onConfirm,
+  VoidCallback? onCancel,
+  String? confirmLabel,
+  ConfirmPopupStyle style = ConfirmPopupStyle.onlyOk,
+  bool closeOnConfirm = true,
+  bool showCloseButton = true,
+  bool enableKeyboardListener = true,
+  bool barrierDismissible = true,
+}) {
+  return showDialog(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          width: 440,
+          child: ConfirmPopup(
+            title: title,
+            description: description,
+            onConfirm: (_) => onConfirm?.call(),
+            onCancel: onCancel,
+            confirmLabel: confirmLabel,
+            confirmButtonColor: Theme.of(context).colorScheme.primary,
+            style: style,
+            closeOnAction: closeOnConfirm,
+            showCloseButton: showCloseButton,
+            enableKeyboardListener: enableKeyboardListener,
+            child: builder(context),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> showCancelAndDeleteDialog({
+  required BuildContext context,
+  required String title,
+  required String description,
+  Widget Function(BuildContext)? builder,
+  VoidCallback? onDelete,
+  String? confirmLabel,
+  bool closeOnAction = false,
+}) {
+  return showDialog(
+    context: context,
+    builder: (_) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: SizedBox(
+          width: 440,
+          child: ConfirmPopup(
+            title: title,
+            description: description,
+            onConfirm: (_) => onDelete?.call(),
+            closeOnAction: closeOnAction,
+            confirmLabel: confirmLabel,
+            confirmButtonColor: Theme.of(context).colorScheme.error,
+            child: builder?.call(context),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// iOS风格的简洁确认对话框
+Future<void> showSimpleConfirmDialog({
+  required BuildContext context,
+  required String message,
+  required String confirmText,
+  required VoidCallback onConfirm,
+  String? cancelText,
+  Color? confirmTextColor,
+}) {
+  return showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 提示信息区域
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            // 分割线
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+            // 底部操作区域
+            Container(
+              width: double.infinity,
+              height: 56,
+              child: Row(
+                children: [
+                  // 取消区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          cancelText ?? LocaleKeys.button_cancel.tr(),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.7),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 垂直分割线
+                  Container(
+                    width: 1,
+                    height: double.infinity,
+                    color:
+                        Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                  // 确认区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onConfirm();
+                      },
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          confirmText,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: confirmTextColor ??
+                                        Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// iOS-style confirmation before moving a page to trash (same layout as recycle bin prompts).
+Future<void> showDeleteViewToTrashConfirmDialog({
+  required BuildContext context,
+  required String name,
+  required VoidCallback onConfirm,
+}) {
+  final pageType = LocaleKeys.settings_sites_publishedPage_page.tr();
+  final title = LocaleKeys.views_deleteContentTitle
+      .tr(namedArgs: {'pageType': pageType}).replaceFirst(pageType, name);
+  final message = '$title\n\n'
+      '${LocaleKeys.views_deleteContentCaption.tr(namedArgs: {
+        'pageType': pageType
+      })}';
+  return showSimpleConfirmDialog(
+    context: context,
+    message: message,
+    confirmText: LocaleKeys.disclosureAction_delete.tr(),
+    confirmTextColor: Theme.of(context).colorScheme.error,
+    onConfirm: onConfirm,
+  );
+}
+
+/// iOS 风格单按钮提示弹窗（与 [showSimpleConfirmDialog] 布局一致，居中，底部单按钮）
+Future<void> showSimpleAlertDialog({
+  required BuildContext context,
+  required String message,
+  String buttonText = '我已知晓',
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 32.0,
+              ),
+              child: Text(
+                message,
+                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(dialogContext).colorScheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              height: 1,
+              color:
+                  Theme.of(dialogContext).colorScheme.outline.withOpacity(0.2),
+            ),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: InkWell(
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
+                onTap: () => Navigator.of(dialogContext).pop(),
+                child: Container(
+                  alignment: Alignment.center,
+                  child: Text(
+                    buttonText,
+                    style: Theme.of(dialogContext)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(
+                          color: Theme.of(dialogContext).colorScheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// iOS风格的简洁确认对话框 - 异步版本，返回 true 表示确认，false 表示取消
+Future<bool> showSimpleConfirmDialogAsync({
+  required BuildContext context,
+  required String message,
+  required String confirmText,
+  String? cancelText,
+  Color? confirmTextColor,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 提示信息区域
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            // 分割线
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+            // 底部操作区域
+            Container(
+              width: double.infinity,
+              height: 56,
+              child: Row(
+                children: [
+                  // 取消区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () => Navigator.of(context).pop(false),
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          cancelText ?? LocaleKeys.button_cancel.tr(),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.7),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 垂直分割线
+                  Container(
+                    width: 1,
+                    height: double.infinity,
+                    color:
+                        Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                  // 确认区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () {
+                        Navigator.of(context).pop(true);
+                      },
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          confirmText,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: confirmTextColor ??
+                                        Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  return result ?? false;
+}

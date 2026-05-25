@@ -1,0 +1,12 @@
+[package]
+name = "workspace-template"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+collab = { workspace = true }
+collab-entity = { workspace = true }
+uuid = { version = "1.5", features = ["v4"] }
+

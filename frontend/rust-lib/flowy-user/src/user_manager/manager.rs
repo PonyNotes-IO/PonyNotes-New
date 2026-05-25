@@ -1,0 +1,1243 @@
+use chrono::Utc;
+use client_api::entity::GotrueTokenResponse;
+use collab_integrate::collab_builder::AppFlowyCollabBuilder;
+use collab_integrate::CollabKVDB;
+use flowy_error::FlowyResult;
+use std::str::FromStr;
+
+use collab::lock::RwLock;
+use collab_user::core::UserAwareness;
+use dashmap::DashMap;
+use flowy_sqlite::kv::KVStorePreferences;
+use flowy_sqlite::schema::user_table;
+use flowy_sqlite::ConnectionPool;
+use flowy_sqlite::{query_dsl::*, DBConnection, ExpressionMethods};
+use flowy_user_pub::cloud::{UserCloudServiceProvider, UserUpdate};
+use flowy_user_pub::entities::*;
+use flowy_user_pub::workspace_service::UserWorkspaceService;
+use lib_infra::box_any::BoxAny;
+use semver::Version;
+use serde_json::Value;
+use std::string::ToString;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::{Arc, Weak};
+use tokio_stream::StreamExt;
+use tracing::{debug, error, event, info, instrument, warn};
+use uuid::Uuid;
+
+use crate::entities::{AuthStateChangedPB, AuthStatePB, UserProfilePB, UserSettingPB};
+use crate::event_map::{AppLifeCycle, DefaultUserStatusCallback};
+use crate::migrations::document_empty_content::HistoricalEmptyDocumentMigration;
+use crate::migrations::migration::{
+  save_migration_record, UserDataMigration, UserLocalDataMigration, FIRST_TIME_INSTALL_VERSION,
+};
+use crate::migrations::workspace_and_favorite_v1::FavoriteV1AndWorkspaceArrayMigration;
+use crate::migrations::workspace_trash_v1::WorkspaceTrashMapToSectionMigration;
+use crate::services::authenticate_user::AuthenticateUser;
+use crate::services::cloud_config::get_cloud_config;
+use crate::services::collab_interact::{DefaultCollabInteract, UserReminder};
+
+use crate::migrations::anon_user_workspace::AnonUserWorkspaceTableMigration;
+use crate::migrations::doc_key_with_workspace::CollabDocKeyWithWorkspaceIdMigration;
+use crate::{errors::FlowyError, notification::*};
+use flowy_user_pub::session::Session;
+use flowy_user_pub::sql::*;
+
+pub struct UserManager {
+  pub(crate) cloud_service: Weak<dyn UserCloudServiceProvider>,
+  pub(crate) store_preferences: Arc<KVStorePreferences>,
+  pub(crate) user_awareness_by_workspace: DashMap<Uuid, Arc<RwLock<UserAwareness>>>,
+  pub app_life_cycle: RwLock<Arc<dyn AppLifeCycle>>,
+  pub(crate) collab_builder: Weak<AppFlowyCollabBuilder>,
+  pub(crate) collab_interact: RwLock<Arc<dyn UserReminder>>,
+  pub(crate) user_workspace_service: Arc<dyn UserWorkspaceService>,
+  pub(crate) authenticate_user: Arc<AuthenticateUser>,
+  refresh_user_profile_since: AtomicI64,
+  pub(crate) is_loading_awareness: Arc<DashMap<Uuid, bool>>,
+}
+
+impl Drop for UserManager {
+  fn drop(&mut self) {
+    tracing::trace!("[Drop] drop user manager");
+  }
+}
+
+impl UserManager {
+  pub fn new(
+    cloud_services: Weak<dyn UserCloudServiceProvider>,
+    store_preferences: Arc<KVStorePreferences>,
+    collab_builder: Weak<AppFlowyCollabBuilder>,
+    authenticate_user: Arc<AuthenticateUser>,
+    user_workspace_service: Arc<dyn UserWorkspaceService>,
+  ) -> Arc<Self> {
+    let user_status_callback: RwLock<Arc<dyn AppLifeCycle>> =
+      RwLock::new(Arc::new(DefaultUserStatusCallback));
+
+    let refresh_user_profile_since = AtomicI64::new(0);
+    let user_manager = Arc::new(Self {
+      cloud_service: cloud_services,
+      store_preferences,
+      user_awareness_by_workspace: Default::default(),
+      app_life_cycle: user_status_callback,
+      collab_builder,
+      collab_interact: RwLock::new(Arc::new(DefaultCollabInteract)),
+      authenticate_user,
+      refresh_user_profile_since,
+      user_workspace_service,
+      is_loading_awareness: Arc::new(Default::default()),
+    });
+
+    let weak_user_manager = Arc::downgrade(&user_manager);
+    if let Ok(user_service) = user_manager
+      .cloud_service
+      .upgrade()
+      .ok_or_else(FlowyError::ref_drop)
+      .and_then(|v| v.get_user_service())
+    {
+      if let Some(mut rx) = user_service.subscribe_user_update() {
+        tokio::spawn(async move {
+          while let Some(update) = rx.recv().await {
+            if let Some(user_manager) = weak_user_manager.upgrade() {
+              if let Err(err) = user_manager.handler_user_update(update).await {
+                error!("handler_user_update failed: {:?}", err);
+              }
+            }
+          }
+        });
+      }
+    }
+
+    // 注意：系统通知订阅在 AppFlowyCore 初始化时通过
+    // subscribe_system_notifications_with_manager() 方法进行，
+    // 因为此时需要访问 ServerProvider 来获取 WebSocket 消息接收器
+
+    user_manager
+  }
+
+  pub fn cloud_service(&self) -> FlowyResult<Arc<dyn UserCloudServiceProvider>> {
+    self
+      .cloud_service
+      .upgrade()
+      .ok_or_else(FlowyError::ref_drop)
+  }
+
+  pub fn close_db(&self) {
+    if let Err(err) = self.authenticate_user.close_db() {
+      error!("Close db failed: {:?}", err);
+    }
+  }
+
+  pub fn get_store_preferences(&self) -> Weak<KVStorePreferences> {
+    Arc::downgrade(&self.store_preferences)
+  }
+
+  /// Initializes the user session, including data migrations and user awareness configuration. This function
+  /// will be invoked each time the user opens the application.
+  ///
+  /// Starts by retrieving the current session. If the session is successfully obtained, it will attempt
+  /// a local data migration for the user. After ensuring the user's data is migrated and up-to-date,
+  /// the function will set up the collaboration configuration and initialize the user's awareness. Upon successful
+  /// completion, a user status callback is invoked to signify that the initialization process is complete.
+  #[instrument(level = "debug", skip_all, err)]
+  pub async fn init_with_callback<C: AppLifeCycle + 'static, I: UserReminder>(
+    &self,
+    user_status_callback: C,
+    collab_interact: I,
+  ) -> Result<(), FlowyError> {
+    let app_life_cycle = Arc::new(user_status_callback);
+    *self.app_life_cycle.write().await = app_life_cycle.clone();
+    *self.collab_interact.write().await = Arc::new(collab_interact);
+    let cloud_service = self.cloud_service()?;
+
+    if let Ok(session) = self.get_session() {
+      info!(
+        "Init user session: {}, workspace: {}",
+        session.user_id, session.workspace_id
+      );
+      let workspace_uuid = Uuid::parse_str(&session.workspace_id)?;
+      let mut conn = self.db_connection(session.user_id)?;
+      let workspace_type =
+        select_user_workspace_type(&session.workspace_id, &mut conn).or_else(|err| {
+          // Anonymous workspaces aren’t yet recorded in user_workspace_table,
+          // so calling select_user_workspace_type(...) will Err for anon users.
+          // As a temporary workaround, if we detect the current user is anonymous,
+          // we force the workspace type to WorkspaceType::Local.
+          // In the upcoming run_data_migration, we’ll insert proper anon‐user records
+          // and can remove this special case.
+          if self
+            .get_anon_user_id()
+            .ok()
+            .filter(|&anon_id| anon_id == session.user_id)
+            .is_some()
+          {
+            Ok(WorkspaceType::Local)
+          } else {
+            Err(err)
+          }
+        })?;
+
+      let uid = session.user_id;
+      let auth_type = AuthType::from(workspace_type);
+      let token = self.token_from_auth_type(&auth_type)?;
+      cloud_service.set_server_auth_type(&auth_type, token.clone())?;
+
+      event!(
+        tracing::Level::INFO,
+        "init user session: {}, auth type: {:?}",
+        uid,
+        workspace_type,
+      );
+
+      self.prepare_user(&session).await;
+      self.prepare_backup(&session).await;
+
+      // Set the token if the current cloud service using token to authenticate
+      // Currently, only the AppFlowy cloud using token to init the client api.
+      // TODO(nathan): using trait to separate the init process for different cloud service
+      if auth_type.is_appflowy_cloud() {
+        let local_token = token.unwrap_or_default();
+        // Subscribe the token state
+        let weak_cloud_services = self.cloud_service.clone();
+        let weak_authenticate_user = Arc::downgrade(&self.authenticate_user);
+        let weak_pool = Arc::downgrade(&self.db_pool(uid)?);
+        let workspace_id = session.workspace_id.clone();
+        let cloned_session = session.clone();
+        if let Some(mut token_state_rx) = cloud_service.subscribe_token_state() {
+          event!(tracing::Level::DEBUG, "Listen token state change");
+          let user_uid = uid;
+          tokio::spawn(async move {
+            while let Some(token_state) = token_state_rx.next().await {
+              debug!("Token state changed: {:?}", token_state);
+              match token_state {
+                UserTokenState::Refresh { token: new_token } => {
+                  // Only save the token if the token is different from the current token
+                  if new_token != local_token {
+                    if let Some(conn) = weak_pool.upgrade().and_then(|pool| pool.get().ok()) {
+                      // Save the new token
+                      if let Err(err) = save_user_token(user_uid, &workspace_id, conn, new_token) {
+                        error!("Save user token failed: {}", err);
+                      }
+                    }
+                  }
+                },
+                UserTokenState::Invalid => {
+                  // Attempt to upgrade the weak reference for cloud_services
+                  let cloud_services = match weak_cloud_services.upgrade() {
+                    Some(cloud_services) => cloud_services,
+                    None => {
+                      error!("Failed to upgrade weak reference for cloud_services");
+                      return; // Exit early if the upgrade fails
+                    },
+                  };
+
+                  // Attempt to upgrade the weak reference for authenticate_user
+                  let authenticate_user = match weak_authenticate_user.upgrade() {
+                    Some(authenticate_user) => authenticate_user,
+                    None => {
+                      warn!("Failed to upgrade weak reference for authenticate_user");
+                      return; // Exit early if the upgrade fails
+                    },
+                  };
+
+                  // Attempt to upgrade the weak reference for pool and then get a connection
+                  let conn = match weak_pool.upgrade() {
+                    Some(pool) => match pool.get() {
+                      Ok(conn) => conn,
+                      Err(_) => {
+                        warn!("Failed to get connection from pool");
+                        return; // Exit early if getting connection fails
+                      },
+                    },
+                    None => {
+                      warn!("Failed to upgrade weak reference for pool");
+                      return; // Exit early if the upgrade fails
+                    },
+                  };
+
+                  // If all upgrades succeed, proceed with the sign_out operation
+                  if let Err(err) =
+                    sign_out(&cloud_services, &cloned_session, &authenticate_user, conn).await
+                  {
+                    error!("Sign out when token invalid failed: {:?}", err);
+                  }
+                },
+                UserTokenState::Init => {},
+              }
+            }
+          });
+        }
+      }
+
+      // Do the user data migration if needed.
+      event!(tracing::Level::INFO, "Prepare user data migration");
+      let mut conn = self.db_connection(uid)?;
+      let user_auth_type = select_user_auth_type(uid, &mut conn)?;
+      match (
+        self
+          .authenticate_user
+          .database
+          .get_collab_db(session.user_id),
+        self.authenticate_user.database.get_pool(session.user_id),
+      ) {
+        (Ok(collab_db), Ok(sqlite_pool)) => {
+          run_data_migration(
+            &session,
+            &user_auth_type,
+            collab_db,
+            sqlite_pool,
+            self.store_preferences.clone(),
+            &self.authenticate_user.user_config.app_version,
+          );
+        },
+        _ => error!("Failed to get collab db or sqlite pool"),
+      }
+
+      // migrations should run before set the first time installed version
+      self.set_first_time_installed_version();
+      let cloud_config = get_cloud_config(session.user_id, &self.store_preferences);
+      // Init the user awareness. here we ignore the error
+      let _ = self
+        .initial_user_awareness(
+          session.user_id,
+          &session.user_uuid,
+          &workspace_uuid,
+          &workspace_type,
+        )
+        .await;
+
+      app_life_cycle
+        .on_launch_if_authenticated(
+          uid,
+          &cloud_config,
+          &workspace_uuid,
+          &self.authenticate_user.user_config,
+          &self.authenticate_user.user_paths,
+          &workspace_type,
+        )
+        .await?;
+    } else {
+      self.set_first_time_installed_version();
+    }
+    Ok(())
+  }
+
+  fn set_first_time_installed_version(&self) {
+    if self
+      .store_preferences
+      .get_str(FIRST_TIME_INSTALL_VERSION)
+      .is_none()
+    {
+      info!(
+        "Set install version: {:?}",
+        self.authenticate_user.user_config.app_version
+      );
+      if let Err(err) = self.store_preferences.set_object(
+        FIRST_TIME_INSTALL_VERSION,
+        &self.authenticate_user.user_config.app_version,
+      ) {
+        error!("Set install version error: {:?}", err);
+      }
+    }
+  }
+
+  pub fn get_session(&self) -> FlowyResult<Arc<Session>> {
+    self.authenticate_user.get_session()
+  }
+
+  pub fn db_connection(&self, uid: i64) -> Result<DBConnection, FlowyError> {
+    self.authenticate_user.database.get_connection(uid)
+  }
+
+  pub fn db_pool(&self, uid: i64) -> Result<Arc<ConnectionPool>, FlowyError> {
+    self.authenticate_user.database.get_pool(uid)
+  }
+
+  pub fn get_collab_db(&self, uid: i64) -> Result<Weak<CollabKVDB>, FlowyError> {
+    self.authenticate_user.database.get_collab_db(uid)
+  }
+
+  #[cfg(debug_assertions)]
+  pub fn get_collab_backup_list(&self, uid: i64) -> Vec<String> {
+    self.authenticate_user.database.get_collab_backup_list(uid)
+  }
+
+  /// Performs a user sign-in, initializing user awareness and sending relevant notifications.
+  ///
+  /// This asynchronous function interacts with an external user service to authenticate and sign in a user
+  /// based on provided parameters. Once signed in, it updates the collaboration configuration, logs the user,
+  /// saves their workspaces, and initializes their user awareness.
+  ///
+  /// A sign-in notification is also sent after a successful sign-in.
+  ///
+  #[tracing::instrument(level = "info", skip(self, params))]
+  pub async fn sign_in(
+    &self,
+    params: SignInParams,
+    auth_type: AuthType,
+  ) -> Result<UserProfile, FlowyError> {
+    let cloud_service = self.cloud_service()?;
+    cloud_service.set_server_auth_type(&auth_type, None)?;
+
+    let response: AuthResponse = cloud_service
+      .get_user_service()?
+      .sign_in(BoxAny::new(params))
+      .await?;
+    let session = Session::from(&response);
+    // 先保存认证数据，然后初始化用户感知和生命周期回调
+    // 最后再关闭旧的数据库连接，为后续操作准备新的连接
+    // 如果先关闭数据库连接，后续操作（如 initial_user_awareness 和 on_sign_in）可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
+    let latest_workspace = response.latest_workspace.clone();
+    let workspace_id = Uuid::parse_str(&latest_workspace.id)?;
+    let user_profile = UserProfile::from((&response, &auth_type));
+    self.save_auth_data(&response, auth_type, &session).await?;
+
+    let _ = self
+      .initial_user_awareness(
+        session.user_id,
+        &session.user_uuid,
+        &workspace_id,
+        &user_profile.workspace_type,
+      )
+      .await;
+    self
+      .app_life_cycle
+      .read()
+      .await
+      .on_sign_in(
+        user_profile.uid,
+        &workspace_id,
+        &self.authenticate_user.user_config,
+        &self.authenticate_user.user_paths,
+        &user_profile.workspace_type,
+      )
+      .await?;
+    // 注意：不在登录过程中调用 prepare_user，因为：
+    // 1. 登录后可能还有其他异步操作需要使用数据库连接（如数据迁移、初始化等）
+    // 2. prepare_user 会关闭数据库连接，如果此时有其他操作正在使用连接，会导致 "database is locked" 错误
+    // 3. prepare_user 应该只在切换用户或退出时调用，而不是在登录过程中调用
+    // self.prepare_user(&session).await;  // ❌ 移除登录过程中的 prepare_user 调用
+    send_auth_state_notification(AuthStateChangedPB {
+      state: AuthStatePB::AuthStateSignIn,
+      message: "Sign in success".to_string(),
+    });
+
+    // Record sign-in log asynchronously (don't block login flow)
+    // Try to get client from cloud service and record login
+    if let Ok(cloud_service) = self.cloud_service() {
+      if let Ok(user_service) = cloud_service.get_user_service() {
+        // We need to get the client, but UserCloudService doesn't expose it directly
+        // So we'll record the log in the cloud_service_impl.rs sign_in method instead
+      }
+    }
+
+    Ok(user_profile)
+  }
+
+  /// Manages the user sign-up process, potentially migrating data if necessary.
+  ///
+  /// This asynchronous function interacts with an external authentication service to register and sign up a user
+  /// based on the provided parameters. Following a successful sign-up, it handles configuration updates, logging,
+  /// and saving workspace information. If a user is signing up with a new profile and previously had guest data,
+  /// this function may migrate that data over to the new account.
+  ///
+  #[tracing::instrument(level = "info", skip(self, params))]
+  pub async fn sign_up(
+    &self,
+    auth_type: AuthType,
+    params: BoxAny,
+  ) -> Result<UserProfile, FlowyError> {
+    let cloud_service = self.cloud_service()?;
+    cloud_service.set_server_auth_type(&auth_type, None)?;
+
+    let auth_service = cloud_service.get_user_service()?;
+    let response: AuthResponse = auth_service.sign_up(params).await?;
+    let new_user_profile = UserProfile::from((&response, &auth_type));
+    self
+      .continue_sign_up(&new_user_profile, response, &auth_type)
+      .await?;
+    Ok(new_user_profile)
+  }
+
+  #[tracing::instrument(level = "info", skip_all, err)]
+  async fn continue_sign_up(
+    &self,
+    new_user_profile: &UserProfile,
+    response: AuthResponse,
+    auth_type: &AuthType,
+  ) -> FlowyResult<()> {
+    let new_session = Session::from(&response);
+    let workspace_id = Uuid::parse_str(&new_session.workspace_id)?;
+    // 先保存认证数据，然后初始化用户感知和生命周期回调
+    // 最后再关闭旧的数据库连接，为后续操作准备新的连接
+    // 如果先关闭数据库连接，后续操作（如 initial_user_awareness 和 on_sign_up）可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
+    self
+      .save_auth_data(&response, *auth_type, &new_session)
+      .await?;
+    let _ = self
+      .initial_user_awareness(
+        new_session.user_id,
+        &new_session.user_uuid,
+        &workspace_id,
+        &new_user_profile.workspace_type,
+      )
+      .await;
+    let workspace_id = Uuid::parse_str(&new_session.workspace_id)?;
+    self
+      .app_life_cycle
+      .read()
+      .await
+      .on_sign_up(
+        response.is_new_user,
+        new_user_profile,
+        &workspace_id,
+        &self.authenticate_user.user_config,
+        &self.authenticate_user.user_paths,
+        &new_user_profile.workspace_type,
+      )
+      .await?;
+
+    if response.is_new_user {
+      // For new user, we don't need to run the migrations
+      if let Ok(pool) = self
+        .authenticate_user
+        .database
+        .get_pool(new_session.user_id)
+      {
+        mark_all_migrations_as_applied(&pool);
+      } else {
+        error!("Failed to get pool for user {}", new_session.user_id);
+      }
+    }
+    // 注意：不在注册过程中调用 prepare_user，因为：
+    // 1. 注册后可能还有其他异步操作需要使用数据库连接（如数据迁移、初始化等）
+    // 2. prepare_user 会关闭数据库连接，如果此时有其他操作正在使用连接，会导致 "database is locked" 错误
+    // 3. prepare_user 应该只在切换用户或退出时调用，而不是在注册过程中调用
+    // self.prepare_user(&new_session).await;  // ❌ 移除注册过程中的 prepare_user 调用
+
+    send_auth_state_notification(AuthStateChangedPB {
+      state: AuthStatePB::AuthStateSignIn,
+      message: "Sign up success".to_string(),
+    });
+    Ok(())
+  }
+
+  #[tracing::instrument(level = "info", skip(self))]
+  pub async fn sign_out(&self) -> Result<(), FlowyError> {
+    if let Ok(session) = self.get_session() {
+      sign_out(
+        &self.cloud_service()?,
+        &session,
+        &self.authenticate_user,
+        self.db_connection(session.user_id)?,
+      )
+      .await?;
+    }
+    Ok(())
+  }
+
+  #[tracing::instrument(level = "info", skip(self))]
+  pub async fn delete_account(&self) -> Result<(), FlowyError> {
+    self
+      .cloud_service()?
+      .get_user_service()?
+      .delete_account()
+      .await?;
+    Ok(())
+  }
+
+  /// Updates the user's profile with the given parameters.
+  ///
+  /// This function modifies the user's profile based on the provided update parameters. After updating, it
+  /// sends a notification about the change. It's also responsible for handling interactions with the underlying
+  /// database and updates user profile.
+  ///
+  #[tracing::instrument(level = "debug", skip(self))]
+  pub async fn update_user_profile(
+    &self,
+    params: UpdateUserProfileParams,
+  ) -> Result<(), FlowyError> {
+    let changeset = UserTableChangeset::new(params.clone());
+    let session = self.get_session()?;
+    upsert_user_profile_change(
+      session.user_id,
+      &session.workspace_id,
+      self.db_connection(session.user_id)?,
+      changeset,
+    )?;
+    self
+      .cloud_service()?
+      .get_user_service()?
+      .update_user(params)
+      .await?;
+
+    Ok(())
+  }
+
+  pub async fn init_user(&self) -> Result<(), FlowyError> {
+    Ok(())
+  }
+
+  pub async fn prepare_user(&self, session: &Session) {
+    let _ = self.authenticate_user.database.close(session.user_id);
+  }
+
+  pub async fn prepare_backup(&self, session: &Session) {
+    // Ensure to backup user data if a cloud drive is used for storage. While using a cloud drive
+    // for storing user data is not advised due to potential data corruption risks, in scenarios where
+    // users opt for cloud storage, the application should automatically create a backup of the user
+    // data. This backup should be in the form of a zip file and stored locally on the user's disk
+    // for safety and data integrity purposes
+    self
+      .authenticate_user
+      .database
+      .backup(session.user_id, &session.workspace_id);
+  }
+
+  /// Fetches the user profile for the given user ID.
+  pub async fn get_user_profile_from_disk(
+    &self,
+    uid: i64,
+    workspace_id: &str,
+  ) -> Result<UserProfile, FlowyError> {
+    let mut conn = self.db_connection(uid)?;
+    select_user_profile(uid, workspace_id, &mut conn)
+  }
+
+  #[tracing::instrument(level = "info", skip_all, err)]
+  pub async fn refresh_user_profile(
+    &self,
+    old_user_profile: &UserProfile,
+    workspace_id: &str,
+  ) -> FlowyResult<()> {
+    self.refresh_user_profile_with_force(old_user_profile, workspace_id, false).await
+  }
+
+  #[tracing::instrument(level = "info", skip_all, err)]
+  pub async fn refresh_user_profile_with_force(
+    &self,
+    old_user_profile: &UserProfile,
+    workspace_id: &str,
+    force: bool,
+  ) -> FlowyResult<()> {
+    // If the user is a local user, no need to refresh the user profile
+    if old_user_profile.workspace_type.is_local() {
+      return Ok(());
+    }
+
+    let now = chrono::Utc::now().timestamp();
+    // Add debounce to avoid too many requests (unless force is true)
+    if !force && now - self.refresh_user_profile_since.load(Ordering::SeqCst) < 5 {
+      tracing::info!("⏭️ Skipping refresh due to debounce (last refresh was < 5 seconds ago)");
+      return Ok(());
+    }
+    self.refresh_user_profile_since.store(now, Ordering::SeqCst);
+
+    let uid = old_user_profile.uid;
+    let result: Result<UserProfile, FlowyError> = self
+      .cloud_service()?
+      .get_user_service()?
+      .get_user_profile(uid, workspace_id)
+      .await;
+
+    match result {
+      Ok(new_user_profile) => {
+        tracing::info!(
+          "📥 Received user profile from cloud: phone={:?}, email={}, name={}",
+          new_user_profile.phone,
+          new_user_profile.email,
+          new_user_profile.name
+        );
+        
+        // Always save the new user profile from cloud to ensure data consistency
+        // Previously we only saved if updated_at was newer, but this could cause
+        // issues when phone/email changes don't update the timestamp
+        let changeset = UserTableChangeset::from_user_profile(new_user_profile.clone());
+        tracing::info!(
+          "💾 Saving user profile to local DB: phone={:?}",
+          changeset.phone_number
+        );
+        
+        let _ = upsert_user_profile_change(
+          uid,
+          workspace_id,
+          self.authenticate_user.database.get_connection(uid)?,
+          changeset,
+        );
+        Ok(())
+      },
+      Err(err) => {
+        if err.is_local_version_not_support() {
+          return Ok(());
+        }
+        // If the user is not found, notify the frontend to logout
+        if err.is_unauthorized() {
+          event!(
+            tracing::Level::ERROR,
+            "User is unauthorized, sign out the user"
+          );
+
+          self.sign_out().await?;
+          send_auth_state_notification(AuthStateChangedPB {
+            state: AuthStatePB::InvalidAuth,
+            message: "User is not found on the server".to_string(),
+          });
+        }
+        Err(err)
+      },
+    }
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub fn user_dir(&self, uid: i64) -> String {
+    self.authenticate_user.user_paths.user_data_dir(uid)
+  }
+
+  pub fn token_from_auth_type(&self, auth_type: &AuthType) -> FlowyResult<Option<String>> {
+    match auth_type {
+      AuthType::Local => Ok(None),
+      AuthType::AppFlowyCloud => {
+        let uid = self.user_id()?;
+        let mut conn = self.db_connection(uid)?;
+        Ok(select_user_token(uid, &mut conn).ok())
+      },
+    }
+  }
+  pub fn user_setting(&self) -> Result<UserSettingPB, FlowyError> {
+    let session = self.get_session()?;
+    let user_setting = UserSettingPB {
+      user_folder: self.user_dir(session.user_id),
+    };
+    Ok(user_setting)
+  }
+
+  pub fn user_id(&self) -> Result<i64, FlowyError> {
+    Ok(self.get_session()?.user_id)
+  }
+
+  pub fn user_uuid(&self) -> Result<Uuid, FlowyError> {
+    Ok(self.get_session()?.user_uuid)
+  }
+
+  pub fn workspace_id(&self) -> Result<Uuid, FlowyError> {
+    let session = self.get_session()?;
+    let uuid = Uuid::from_str(&session.workspace_id)?;
+    Ok(uuid)
+  }
+
+  pub fn token(&self) -> Result<Option<String>, FlowyError> {
+    Ok(None)
+  }
+
+  async fn save_user(&self, uid: i64, user: UserTable) -> Result<(), FlowyError> {
+    let conn = self.db_connection(uid)?;
+    upsert_user(user, conn)?;
+    Ok(())
+  }
+
+  pub async fn receive_realtime_event(&self, json: Value) {
+    // 首先转发给 user_service 处理
+    if let Ok(user_service) = self.cloud_service().and_then(|v| v.get_user_service()) {
+      user_service.receive_realtime_event(json.clone())
+    }
+
+    // 处理系统通知：检查是否是 WorkspaceNotification::SystemNotification
+    // JSON 格式: { "SystemNotification": { "id": "...", "workspace_id": "...", ... } }
+    if let Some(system_notification) = json.get("SystemNotification") {
+      self.handle_system_notification(system_notification).await;
+    }
+  }
+
+  /// 处理系统通知，将其转换为 Reminder 并保存
+  async fn handle_system_notification(&self, notification: &Value) {
+    // 解析系统通知字段
+    let id = notification
+      .get("id")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let workspace_id = notification
+      .get("workspace_id")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let notification_type = notification
+      .get("notification_type")
+      .and_then(|v| v.as_str())
+      .unwrap_or("system");
+    let title = notification
+      .get("title")
+      .and_then(|v| v.as_str())
+      .unwrap_or("系统通知");
+    let message = notification
+      .get("message")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let payload_json = notification
+      .get("payload_json")
+      .and_then(|v| v.as_str())
+      .unwrap_or("{}");
+    let created_at = notification
+      .get("created_at")
+      .and_then(|v| v.as_i64())
+      .unwrap_or_else(|| chrono::Utc::now().timestamp());
+
+    if id.is_empty() {
+      warn!("Received system notification with empty id, skipping");
+      return;
+    }
+
+    info!(
+      "Received system notification: id={}, type={}, title={}",
+      id, notification_type, title
+    );
+
+    // 创建 Reminder
+    // 将 cloud 通知类型映射到 Flutter tab 分类：mention → mention，其他 → system
+    let tab_type = match notification_type {
+      "mention" => "mention",
+      _ => "system",
+    };
+    let mut meta = std::collections::HashMap::new();
+    meta.insert("notification_type".to_string(), tab_type.to_string());
+    meta.insert("cloud_notification_type".to_string(), notification_type.to_string());
+    meta.insert("payload".to_string(), payload_json.to_string());
+    meta.insert(
+      "created_at".to_string(),
+      created_at.to_string(),
+    );
+
+    let reminder_pb = crate::entities::ReminderPB {
+      id: id.to_string(),
+      object_id: workspace_id.to_string(),
+      scheduled_at: created_at,
+      is_ack: true, // 系统通知默认已确认
+      is_read: false,
+      title: title.to_string(),
+      message: message.to_string(),
+      meta,
+    };
+
+    // 添加 Reminder
+    match self.add_reminder(reminder_pb).await {
+      Ok(_) => {
+        info!("Successfully created reminder for system notification: {}", id);
+      },
+      Err(e) => {
+        error!(
+          "Failed to create reminder for system notification {}: {:?}",
+          id, e
+        );
+      },
+    }
+  }
+
+  /// 订阅系统通知并处理
+  /// 注意：此方法需要在 Arc<UserManager> 上调用
+  pub fn subscribe_system_notifications_with_manager<T: flowy_user_pub::cloud::UserCloudServiceProvider + 'static>(
+    manager: Arc<UserManager>,
+    cloud_service: &Arc<T>,
+  ) {
+    use client_api::entity::UserMessage;
+
+    let cloud_service = cloud_service.clone();
+    let weak_manager = Arc::downgrade(&manager);
+
+    tokio::spawn(async move {
+      loop {
+        // 外循环：等待直到能获取到订阅（auth_type 切换为 AppFlowyCloud 后才返回 Some）
+        let mut rx = loop {
+          match cloud_service.subscribe_user_message() {
+            Some(rx) => break rx,
+            None => {
+              tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            },
+          }
+        };
+
+        info!("Started listening for system notifications");
+
+        // 内循环：处理消息，直到信道关闭再返回外循环重新订阅
+        loop {
+          let msg = match rx.recv().await {
+            Ok(m) => m,
+            // Lagged: 广播信道满了丢弃了部分消息，继续循环不要退出
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+              warn!("system notification receiver lagged, skipped {} messages", n);
+              continue;
+            },
+            // 信道关闭（server 被替换），退出内循环，外循环将重新订阅
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+              info!("system notification channel closed, will re-subscribe");
+              break;
+            },
+          };
+          if let UserMessage::SystemNotification(notification) = msg {
+            info!(
+              "Received system notification from WebSocket: id={}, type={}",
+              notification.id, notification.notification_type
+            );
+
+            // 通过弱引用获取 UserManager 并创建 Reminder
+            if let Some(manager) = weak_manager.upgrade() {
+              // 创建 Reminder
+              // 将 cloud 通知类型映射到 Flutter tab 分类：mention → mention，其他 → system
+              let tab_type = match notification.notification_type.as_str() {
+                "mention" => "mention",
+                _ => "system",
+              };
+              let mut meta = std::collections::HashMap::new();
+              meta.insert("notification_type".to_string(), tab_type.to_string());
+              meta.insert("cloud_notification_type".to_string(), notification.notification_type.clone());
+              meta.insert("payload".to_string(), notification.payload_json.clone());
+              meta.insert("created_at".to_string(), notification.created_at.to_string());
+
+              let reminder_pb = crate::entities::ReminderPB {
+                id: notification.id.clone(),
+                object_id: notification.workspace_id.clone(),
+                scheduled_at: notification.created_at,
+                is_ack: true,
+                is_read: false,
+                title: notification.title.clone(),
+                message: notification.message.clone(),
+                meta,
+              };
+
+              // Clone before moving into add_reminder so we can send the push
+              let reminder_pb_for_push = reminder_pb.clone();
+
+              match manager.add_reminder(reminder_pb).await {
+                Ok(_) => {
+                  info!(
+                    "Successfully created reminder for system notification: {}",
+                    notification.id
+                  );
+                  // Push real-time notification to Flutter so ReminderBloc updates
+                  // immediately without waiting for the 30-second periodic refresh.
+                  send_notification("user_reminder", UserNotification::DidUpdateReminder)
+                    .payload(reminder_pb_for_push)
+                    .send();
+                },
+                Err(e) => {
+                  error!(
+                    "Failed to create reminder for system notification {}: {:?}",
+                    notification.id, e
+                  );
+                },
+              }
+
+              // 当用户被移出工作区时，立即处理：
+              // 1. 从 payload_json 中解析被移除的 workspace_id
+              // 2. 立即从本地 SQLite 删除该工作区记录
+              // 3. 立即发送 DidUpdateUserWorkspaces 通知，Flutter 层收到后
+              //    _onEmitWorkspaces 检测到当前工作区不在新列表中，立即切换到自己的工作区
+              // 4. 同时在后台触发服务端同步，确保本地数据与服务端一致
+              if notification.notification_type == "workspace_member_removed" {
+                info!("workspace_member_removed received, applying immediate local removal");
+
+                // 从 payload_json 解析 workspace_id
+                let removed_workspace_id = serde_json::from_str::<Value>(&notification.payload_json)
+                  .ok()
+                  .and_then(|v| v.get("workspace_id").and_then(|id| id.as_str()).map(|s| s.to_string()));
+
+                if let Ok(session) = manager.get_session() {
+                  let uid = session.user_id;
+
+                  // 立即从本地 SQLite 删除被移除的工作区，并发送通知给 Flutter
+                  if let Some(ref ws_id) = removed_workspace_id {
+                    if let Ok(conn) = manager.db_connection(uid) {
+                      match delete_user_workspace(conn, ws_id) {
+                        Ok(_) => info!("Deleted workspace {} from local DB after member removal", ws_id),
+                        Err(e) => warn!("Failed to delete workspace {} from local DB: {:?}", ws_id, e),
+                      }
+                    }
+                    // 查询本地剩余工作区列表并立即通知 Flutter 层切换工作区
+                    if let Ok(mut conn) = manager.db_connection(uid) {
+                      match select_all_user_workspace(uid, &mut conn) {
+                        Ok(workspaces) => {
+                          info!(
+                            "Sending DidUpdateUserWorkspaces after removal: {} workspaces remain",
+                            workspaces.len()
+                          );
+                          let repeated_pb = crate::entities::RepeatedUserWorkspacePB::from(workspaces);
+                          send_notification(uid, UserNotification::DidUpdateUserWorkspaces)
+                            .payload(repeated_pb)
+                            .send();
+                        },
+                        Err(e) => warn!("Failed to query local workspaces after removal: {:?}", e),
+                      }
+                    }
+                  }
+
+                  // 后台触发服务端同步，确保本地列表与服务端最终一致
+                  if let Ok(profile) = manager
+                    .get_user_profile_from_disk(uid, &session.workspace_id)
+                    .await
+                  {
+                    if let Err(e) = manager
+                      .get_all_user_workspaces(profile.uid, profile.auth_type)
+                      .await
+                    {
+                      warn!(
+                        "Failed to refresh workspace list after member removal: {:?}",
+                        e
+                      );
+                    } else {
+                      info!("Background workspace list sync triggered after member removal");
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }  // end inner message loop
+      }  // end outer retry loop
+    });
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn generate_sign_in_url_with_email(
+    &self,
+    authenticator: &AuthType,
+    email: &str,
+  ) -> Result<String, FlowyError> {
+    let cloud_service = self.cloud_service()?;
+    cloud_service.set_server_auth_type(authenticator, None)?;
+
+    let auth_service = cloud_service.get_user_service()?;
+    let url = auth_service.generate_sign_in_url_with_email(email).await?;
+    Ok(url)
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn sign_in_with_password(
+    &self,
+    email: &str,
+    password: &str,
+  ) -> Result<GotrueTokenResponse, FlowyError> {
+    self
+      .cloud_service()?
+      .set_server_auth_type(&AuthType::AppFlowyCloud, None)?;
+    let auth_service = self.cloud_service()?.get_user_service()?;
+    let response = auth_service.sign_in_with_password(email, password).await?;
+    Ok(response)
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn sign_in_with_magic_link(
+    &self,
+    email: &str,
+    redirect_to: &str,
+  ) -> Result<(), FlowyError> {
+    self
+      .cloud_service()?
+      .set_server_auth_type(&AuthType::AppFlowyCloud, None)?;
+    let auth_service = self.cloud_service()?.get_user_service()?;
+    auth_service
+      .sign_in_with_magic_link(email, redirect_to)
+      .await?;
+    Ok(())
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn sign_in_with_passcode(
+    &self,
+    email: &str,
+    passcode: &str,
+  ) -> Result<GotrueTokenResponse, FlowyError> {
+    self
+      .cloud_service()?
+      .set_server_auth_type(&AuthType::AppFlowyCloud, None)?;
+    let auth_service = self.cloud_service()?.get_user_service()?;
+    let response = auth_service.sign_in_with_passcode(email, passcode).await?;
+    Ok(response)
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn verify_and_bind_phone(
+    &self,
+    _phone: &str,
+    _otp: &str,
+  ) -> Result<(), FlowyError> {
+    // This is a placeholder. The actual implementation should be done in Dart
+    // by calling the /api/user/verify-phone endpoint directly via HTTP.
+    // The backend API is already implemented in user_verify.rs
+    Err(FlowyError::not_support().with_context("Use Dart HTTP client to call /api/user/verify-phone"))
+  }
+
+  #[instrument(level = "info", skip_all)]
+  pub(crate) async fn generate_oauth_url(
+    &self,
+    oauth_provider: &str,
+  ) -> Result<String, FlowyError> {
+    self
+      .cloud_service()?
+      .set_server_auth_type(&AuthType::AppFlowyCloud, None)?;
+    let auth_service = self.cloud_service()?.get_user_service()?;
+    let url = auth_service
+      .generate_oauth_url_with_provider(oauth_provider)
+      .await?;
+    Ok(url)
+  }
+
+  #[instrument(level = "info", skip_all, err)]
+  async fn save_auth_data(
+    &self,
+    response: &impl UserAuthResponse,
+    auth_type: AuthType,
+    session: &Session,
+  ) -> Result<(), FlowyError> {
+    let user_profile = UserProfile::from((response, &auth_type));
+    let uid = user_profile.uid;
+
+    if auth_type.is_local() {
+      event!(tracing::Level::DEBUG, "Save new anon user: {:?}", uid);
+      self.set_anon_user(session);
+    }
+
+    let mut conn = self.db_connection(uid)?;
+    let workspace_type = WorkspaceType::from(&auth_type);
+    sync_user_workspaces_with_diff(uid, workspace_type, response.user_workspaces(), &mut conn)?;
+    info!(
+      "Save new user profile to disk, authenticator: {:?}",
+      auth_type
+    );
+
+    self
+      .authenticate_user
+      .set_session(Some(session.clone().into()))?;
+    self
+      .save_user(uid, (user_profile, auth_type).into())
+      .await?;
+    Ok(())
+  }
+
+  async fn handler_user_update(&self, user_update: UserUpdate) -> FlowyResult<()> {
+    let session = self.get_session()?;
+    if session.user_id == user_update.uid {
+      debug!("Receive user update: {:?}", user_update);
+      // Save the user profile change
+      upsert_user_profile_change(
+        user_update.uid,
+        &session.workspace_id,
+        self.db_connection(user_update.uid)?,
+        UserTableChangeset::from(user_update),
+      )?;
+    }
+
+    Ok(())
+  }
+}
+
+pub fn upsert_user_profile_change(
+  uid: i64,
+  workspace_id: &str,
+  mut conn: DBConnection,
+  changeset: UserTableChangeset,
+) -> FlowyResult<()> {
+  tracing::info!(
+    "💾 [upsert_user_profile_change] Updating local DB with changeset: phone={:?}",
+    changeset.phone_number
+  );
+  update_user_profile(&mut conn, changeset)?;
+  let user = select_user_profile(uid, workspace_id, &mut conn)?;
+  tracing::info!(
+    "💾 [upsert_user_profile_change] After update, local DB has: phone={:?}",
+    user.phone
+  );
+  send_notification(uid, UserNotification::DidUpdateUserProfile)
+    .payload(UserProfilePB::from(user))
+    .send();
+  Ok(())
+}
+
+#[instrument(level = "info", skip_all, err)]
+fn save_user_token(
+  uid: i64,
+  workspace_id: &str,
+  conn: DBConnection,
+  token: String,
+) -> FlowyResult<()> {
+  let params = UpdateUserProfileParams::new(uid).with_token(token);
+  let changeset = UserTableChangeset::new(params);
+  upsert_user_profile_change(uid, workspace_id, conn, changeset)
+}
+
+#[instrument(level = "info", skip_all, err)]
+fn remove_user_token(uid: i64, mut conn: DBConnection) -> FlowyResult<()> {
+  diesel::update(user_table::dsl::user_table.filter(user_table::id.eq(&uid.to_string())))
+    .set(user_table::token.eq(""))
+    .execute(&mut *conn)?;
+  Ok(())
+}
+
+fn collab_migration_list() -> Vec<Box<dyn UserDataMigration>> {
+  // ⚠️The order of migrations is crucial. If you're adding a new migration, please ensure
+  // it's appended to the end of the list.
+  vec![
+    Box::new(HistoricalEmptyDocumentMigration),
+    Box::new(FavoriteV1AndWorkspaceArrayMigration),
+    Box::new(WorkspaceTrashMapToSectionMigration),
+    Box::new(CollabDocKeyWithWorkspaceIdMigration),
+    Box::new(AnonUserWorkspaceTableMigration),
+    Box::new(crate::migrations::add_team_acl_tables::AddTeamAclTablesMigration),
+    Box::new(crate::migrations::add_join_requests_table::AddJoinRequestsTableMigration),
+  ]
+}
+
+fn mark_all_migrations_as_applied(sqlite_pool: &Arc<ConnectionPool>) {
+  if let Ok(mut conn) = sqlite_pool.get() {
+    for migration in collab_migration_list() {
+      save_migration_record(&mut conn, migration.name());
+    }
+    info!("Mark all migrations as applied");
+  }
+}
+
+pub(crate) fn run_data_migration(
+  session: &Session,
+  user_auth_type: &AuthType,
+  collab_db: Weak<CollabKVDB>,
+  sqlite_pool: Arc<ConnectionPool>,
+  kv: Arc<KVStorePreferences>,
+  app_version: &Version,
+) {
+  let migrations = collab_migration_list();
+  match UserLocalDataMigration::new(session.clone(), collab_db, sqlite_pool, kv).run(
+    migrations,
+    user_auth_type,
+    app_version,
+  ) {
+    Ok(applied_migrations) => {
+      if !applied_migrations.is_empty() {
+        info!(
+          "[Migration]: did apply migrations: {:?}",
+          applied_migrations
+        );
+      }
+    },
+    Err(e) => error!("[AppflowyData]:User data migration failed: {:?}", e),
+  }
+}
+
+#[instrument(level = "info", skip_all, err)]
+pub async fn sign_out(
+  cloud_services: &Arc<dyn UserCloudServiceProvider>,
+  session: &Session,
+  authenticate_user: &AuthenticateUser,
+  conn: DBConnection,
+) -> Result<(), FlowyError> {
+  info!("[Sign out] Sign out user: {}", session.user_id);
+  let _ = remove_user_token(session.user_id, conn);
+
+  info!(
+    "[Sign out] Close user related database: {}",
+    session.user_id
+  );
+  authenticate_user.database.close(session.user_id)?;
+  authenticate_user.set_session(None)?;
+
+  let server = cloud_services.get_user_service()?;
+  if let Err(err) = server.sign_out(None).await {
+    event!(tracing::Level::ERROR, "{:?}", err);
+  }
+
+  Ok(())
+}

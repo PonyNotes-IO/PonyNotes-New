@@ -1,0 +1,19 @@
+name: Translation Notify
+on:
+  push:
+    branches: [ main, "!backup/**" ]
+    paths:
+      - "frontend/appflowy_flutter/assets/translations/en.json"
+
+jobs:
+  Discord-Notify:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Ilshidur/action-discord@master
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        with:
+          args: |
+            @appflowytranslators English UI strings has been updated.
+            Link to changes: ${{github.event.compare}}

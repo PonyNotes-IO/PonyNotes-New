@@ -1,0 +1,892 @@
+import 'dart:math' as math;
+
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/shared/share/constants.dart';
+import 'package:appflowy/shared/appflowy_cache_manager.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/share_log_files.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:appflowy/workspace/application/settings/appflowy_cloud_urls_bloc.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/setting_ai_view/settings_ai_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_account_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/account_management_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_billing_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_manage_data_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_plan_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_shortcuts_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_workspace_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_workspace_management_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_storage_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_sharing_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_about_xiaoma_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_user_profile_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/recharge_records_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/sites/settings_sites_view.dart';
+import 'package:appflowy/workspace/presentation/settings/shared/af_dropdown_menu_entry.dart';
+import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
+import 'package:appflowy/workspace/presentation/settings/shared/settings_dropdown.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/feature_flags/feature_flag_page.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_page.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/settings_notifications_view.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/web_url_hint_widget.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'pages/setting_ai_view/local_settings_ai_view.dart';
+import 'widgets/setting_cloud.dart';
+
+import 'package:appflowy/env/env.dart';
+
+@visibleForTesting
+const kSelfHostedTextInputFieldKey =
+    ValueKey('self_hosted_url_input_text_field');
+@visibleForTesting
+const kSelfHostedWebTextInputFieldKey =
+    ValueKey('self_hosted_web_url_input_text_field');
+
+class SettingsDialog extends StatelessWidget {
+  SettingsDialog(
+    this.user, {
+    required this.dismissDialog,
+    required this.didLogout,
+    required this.restartApp,
+    this.initPage,
+  }) : super(key: ValueKey(user.id));
+
+  final UserProfilePB user;
+  final SettingsPage? initPage;
+  final VoidCallback dismissDialog;
+  final VoidCallback didLogout;
+  final VoidCallback restartApp;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    const goldenRatio = 1.618;
+    final horizontalMargin = screenSize.width < 900 ? 24.0 : 80.0;
+    final verticalMargin = screenSize.height < 720 ? 24.0 : 80.0;
+    final availableWidth = math.max(360.0, screenSize.width - horizontalMargin);
+    final availableHeight = math.max(420.0, screenSize.height - verticalMargin);
+    final minWidth = math.min(720.0, availableWidth);
+    final maxWidth = math.min(1120.0, availableWidth);
+    final width = math.min(
+      maxWidth,
+      math.max(minWidth, screenSize.width * 0.72),
+    );
+    final minHeight = math.min(560.0, availableHeight);
+    final maxHeight = math.min(760.0, availableHeight);
+    final height = math.min(
+      maxHeight,
+      math.max(minHeight, width / goldenRatio),
+    );
+    final theme = AppFlowyTheme.of(context);
+    final currentWorkspaceMemberRole =
+        context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+    return BlocProvider<SettingsDialogBloc>(
+      create: (context) => SettingsDialogBloc(
+        user,
+        currentWorkspaceMemberRole,
+        initPage: initPage,
+      )..add(const SettingsDialogEvent.initial()),
+      child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
+        builder: (context, state) => FlowyDialog(
+          width: width,
+          backgroundColor: theme.backgroundColorScheme.primary,
+          constraints: BoxConstraints(
+            minWidth: width,
+            maxWidth: width,
+            minHeight: minHeight,
+            maxHeight: height,
+          ),
+          expandHeight: false,
+          child: ScaffoldMessenger(
+            child: Scaffold(
+              backgroundColor: theme.backgroundColorScheme.primary,
+              body: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+                builder: (context, workspaceState) {
+                  final currentWorkspace = workspaceState.currentWorkspace;
+                  return BlocProvider<SpaceBloc>(
+                    create: (context) => SpaceBloc(
+                      userProfile: user,
+                      workspaceId: currentWorkspace?.workspaceId ?? '',
+                    )..add(const SpaceEvent.initial(openFirstPage: false)),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: SettingsMenu(
+                            userProfile: state.userProfile,
+                            changeSelectedPage: (index) => context
+                                .read<SettingsDialogBloc>()
+                                .add(
+                                    SettingsDialogEvent.setSelectedPage(index)),
+                            currentPage:
+                                context.read<SettingsDialogBloc>().state.page,
+                            currentUserRole: currentWorkspaceMemberRole,
+                            isBillingEnabled: state.isBillingEnabled,
+                            workspaceId:
+                                workspaceState.currentWorkspace?.workspaceId ??
+                                    '',
+                            currentSubscription: context
+                                .read<SettingsDialogBloc>()
+                                .state
+                                .currentSubscription,
+                          ),
+                        ),
+                        AFDivider(
+                          axis: Axis.vertical,
+                          color: theme.borderColorScheme.primary,
+                        ),
+                        Expanded(
+                          flex: 5,
+                          child: Container(
+                            // Ensure right pane fully covers dialog area to avoid tiny gap
+                            // caused by rounding or inner padding of children.
+                            color: theme.backgroundColorScheme.primary,
+                            child: Padding(
+                              // Only reduce right padding to avoid visible gap on dialog edge.
+                              padding: const EdgeInsets.only(right: 12),
+                              child: currentWorkspace == null
+                                  ? const Center(
+                                      child:
+                                          CircularProgressIndicator.adaptive(),
+                                    )
+                                  : getSettingsView(
+                                      currentWorkspace,
+                                      context
+                                          .read<SettingsDialogBloc>()
+                                          .state
+                                          .page,
+                                      state.userProfile,
+                                      currentWorkspace.role,
+                                      context,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget getSettingsView(
+    UserWorkspacePB workspace,
+    SettingsPage page,
+    UserProfilePB user,
+    AFRolePB? currentWorkspaceMemberRole,
+    BuildContext context,
+  ) {
+    switch (page) {
+      case SettingsPage.account:
+        return SettingsAccountView(
+          userProfile: user,
+          didLogout: didLogout,
+          didLogin: dismissDialog,
+        );
+      case SettingsPage.accountManagement:
+        return AccountManagementView(
+          userProfile: user,
+          workspaceId: workspace.workspaceId,
+          changeSelectedPage: (index) => context
+              .read<SettingsDialogBloc>()
+              .add(SettingsDialogEvent.setSelectedPage(index)),
+          currentSubscription:
+              context.read<SettingsDialogBloc>().state.currentSubscription,
+          isLoadingCurrentSubscription: context
+              .read<SettingsDialogBloc>()
+              .state
+              .isLoadingCurrentSubscription,
+        );
+      case SettingsPage.rechargeRecords:
+        return RechargeRecordsView(
+          changeSelectedPage: (index) => context
+              .read<SettingsDialogBloc>()
+              .add(SettingsDialogEvent.setSelectedPage(index)),
+        );
+      case SettingsPage.workspace:
+        return SettingsWorkspaceView(
+          userProfile: user,
+          currentWorkspaceMemberRole: currentWorkspaceMemberRole,
+        );
+      case SettingsPage.workspaceManagement:
+        return SettingsWorkspaceManagementView(
+          userProfile: user,
+          workspace: workspace,
+        );
+      case SettingsPage.storage:
+        return SettingsStorageView(
+          userProfile: user,
+        );
+      case SettingsPage.sharing:
+        return SettingsSharingView(
+          userProfile: user,
+        );
+      case SettingsPage.aboutXiaoma:
+        return const SettingsAboutXiaomaView();
+      case SettingsPage.userProfile:
+        return SettingsUserProfileView(
+          userProfile: user,
+        );
+      case SettingsPage.manageData:
+        return SettingsManageDataView(
+          userProfile: user,
+          workspace: workspace,
+        );
+      case SettingsPage.notifications:
+        return const SettingsNotificationsView();
+      case SettingsPage.cloud:
+        return SettingCloud(restartAppFlowy: () => restartApp());
+      case SettingsPage.shortcuts:
+        return const SettingsShortcutsView();
+      case SettingsPage.ai:
+        if (user.workspaceType == WorkspaceTypePB.ServerW) {
+          return SettingsAIView(
+            key: ValueKey(workspace.workspaceId),
+            userProfile: user,
+            currentWorkspaceMemberRole: currentWorkspaceMemberRole,
+            workspaceId: workspace.workspaceId,
+          );
+        } else {
+          return LocalSettingsAIView(
+            key: ValueKey(workspace.workspaceId),
+            userProfile: user,
+            workspaceId: workspace.workspaceId,
+          );
+        }
+      case SettingsPage.member:
+        return WorkspaceMembersPage(
+          userProfile: user,
+          workspaceId: workspace.workspaceId,
+        );
+      case SettingsPage.plan:
+        return SettingsPlanView(
+          workspaceId: workspace.workspaceId,
+          user: user,
+        );
+      case SettingsPage.billing:
+        return SettingsBillingView(
+          workspaceId: workspace.workspaceId,
+          user: user,
+        );
+      case SettingsPage.sites:
+        return SettingsSitesPage(
+          workspaceId: workspace.workspaceId,
+          user: user,
+        );
+      case SettingsPage.featureFlags:
+        return const FeatureFlagsPage();
+      // return const SizedBox.shrink();
+    }
+  }
+}
+
+class SimpleSettingsDialog extends StatefulWidget {
+  const SimpleSettingsDialog({super.key});
+
+  @override
+  State<SimpleSettingsDialog> createState() => _SimpleSettingsDialogState();
+}
+
+class _SimpleSettingsDialogState extends State<SimpleSettingsDialog> {
+  SettingsPage page = SettingsPage.cloud;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<AppearanceSettingsCubit>().state;
+
+    return FlowyDialog(
+      width: MediaQuery.of(context).size.width * 0.55,
+      constraints: const BoxConstraints(maxWidth: 640, minWidth: 500),
+      expandHeight: false,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // header
+              FlowyText(
+                LocaleKeys.signIn_settings.tr(),
+                fontSize: 36.0,
+                fontWeight: FontWeight.w600,
+              ),
+              const VSpace(18.0),
+
+              // language
+              _LanguageSettings(key: ValueKey('language${settings.hashCode}')),
+              const VSpace(22.0),
+
+              // Server configuration is now determined at compile time
+              // Users cannot change server settings at runtime
+              // 服务器配置现在在编译时确定，用户无法在运行时更改
+              _ServerInfoDisplay(
+                  key: ValueKey('serverinfo${settings.hashCode}')),
+              const VSpace(22.0),
+
+              // support
+              _SupportSettings(key: ValueKey('support${settings.hashCode}')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageSettings extends StatelessWidget {
+  const _LanguageSettings({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsCategory(
+      title: LocaleKeys.settings_workspacePage_language_title.tr(),
+      children: const [LanguageDropdown()],
+    );
+  }
+}
+
+/// Displays current server configuration (read-only)
+/// 显示当前服务器配置（只读）
+class _ServerInfoDisplay extends StatelessWidget {
+  const _ServerInfoDisplay({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final authenticatorType =
+        AuthenticatorType.fromValue(Env.authenticatorType);
+
+    String environmentName;
+    String serverUrl;
+    String webDomain;
+    Color statusColor;
+
+    switch (authenticatorType) {
+      case AuthenticatorType.appflowyCloudDevelop:
+        environmentName = "开发环境 (Development)";
+        serverUrl = "${Env.afCloudUrl}:8000";
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFFFFB020);
+        break;
+      case AuthenticatorType.appflowyCloud:
+        environmentName = "生产环境 (Production)";
+        serverUrl = Env.afCloudUrl;
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFF00BCF0);
+        break;
+      case AuthenticatorType.appflowyCloudSelfHost:
+        environmentName = "自托管 (Self-Host)";
+        serverUrl = Env.afCloudUrl;
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFF9B59B6);
+        break;
+      case AuthenticatorType.local:
+        environmentName = "本地模式 (Local)";
+        serverUrl = "本地存储";
+        webDomain = "无";
+        statusColor = const Color(0xFF7F8C8D);
+        break;
+    }
+
+    return SettingsCategory(
+      title: "服务器配置",
+      children: [
+        // Environment indicator
+        Row(
+          children: [
+            FlowyText("当前环境", fontSize: 14),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: statusColor, width: 1),
+              ),
+              child: FlowyText(
+                environmentName,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: statusColor,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(12),
+
+        // Server URL
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: FlowyText(
+                "服务器地址",
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: FlowyText(
+                serverUrl,
+                fontSize: 14,
+                maxLines: 2,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(8),
+
+        // Web domain
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: FlowyText(
+                "Web 域名",
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: FlowyText(
+                webDomain,
+                fontSize: 14,
+                maxLines: 2,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(12),
+
+        // Info message
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.surfaceContainerColorScheme.layer02,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: FlowySvg(
+                  FlowySvgs.information_s,
+                  size: const Size.square(16),
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const HSpace(8),
+              Expanded(
+                child: FlowyText(
+                  "服务器配置在编译时确定，如需更改请修改环境配置文件后重新编译",
+                  fontSize: 12,
+                  maxLines: 3,
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelfHostSettings extends StatefulWidget {
+  const _SelfHostSettings();
+
+  @override
+  State<_SelfHostSettings> createState() => _SelfHostSettingsState();
+}
+
+class _SelfHostSettingsState extends State<_SelfHostSettings> {
+  final cloudUrlTextController = TextEditingController();
+  final webUrlTextController = TextEditingController();
+
+  AuthenticatorType type = AuthenticatorType.appflowyCloud;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _fetchUrls();
+  }
+
+  @override
+  void dispose() {
+    cloudUrlTextController.dispose();
+    webUrlTextController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsCategory(
+      title: LocaleKeys.settings_menu_cloudAppFlowy.tr(),
+      children: [
+        Flexible(
+          child: SettingsServerDropdownMenu(
+            selectedServer: type,
+            onSelected: _onSelected,
+          ),
+        ),
+        if (type == AuthenticatorType.appflowyCloudSelfHost) _buildInputField(),
+      ],
+    );
+  }
+
+  Widget _buildInputField() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SelfHostUrlField(
+          textFieldKey: kSelfHostedTextInputFieldKey,
+          textController: cloudUrlTextController,
+          title: LocaleKeys.settings_menu_cloudURL.tr(),
+          hintText: LocaleKeys.settings_menu_cloudURLHint.tr(),
+          onSave: (url) => _saveUrl(
+            cloudUrl: url,
+            webUrl: webUrlTextController.text,
+            type: AuthenticatorType.appflowyCloudSelfHost,
+          ),
+        ),
+        const VSpace(12.0),
+        _SelfHostUrlField(
+          textFieldKey: kSelfHostedWebTextInputFieldKey,
+          textController: webUrlTextController,
+          title: LocaleKeys.settings_menu_webURL.tr(),
+          hintText: LocaleKeys.settings_menu_webURLHint.tr(),
+          hintBuilder: (context) => const WebUrlHintWidget(),
+          onSave: (url) => _saveUrl(
+            cloudUrl: cloudUrlTextController.text,
+            webUrl: url,
+            type: AuthenticatorType.appflowyCloudSelfHost,
+          ),
+        ),
+        const VSpace(12.0),
+        _buildSaveButton(),
+      ],
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return Container(
+      height: 36,
+      constraints: const BoxConstraints(minWidth: 78),
+      child: OutlinedRoundedButton(
+        text: LocaleKeys.button_save.tr(),
+        onTap: () => _saveUrl(
+          cloudUrl: cloudUrlTextController.text,
+          webUrl: webUrlTextController.text,
+          type: AuthenticatorType.appflowyCloudSelfHost,
+        ),
+      ),
+    );
+  }
+
+  void _onSelected(AuthenticatorType type) async {
+    if (type == this.type) {
+      return;
+    }
+
+    Log.info('Switching server type to $type');
+
+    setState(() {
+      this.type = type;
+    });
+
+    if (type == AuthenticatorType.appflowyCloud) {
+      cloudUrlTextController.text = kAppflowyCloudUrl;
+      webUrlTextController.text = ShareConstants.defaultBaseWebDomain;
+      _saveUrl(
+        cloudUrl: kAppflowyCloudUrl,
+        webUrl: ShareConstants.defaultBaseWebDomain,
+        type: type,
+      );
+    } else if (type == AuthenticatorType.appflowyCloudDevelop) {
+      // 为开发模式添加保存逻辑，使用本地开发服务器地址
+      const developmentUrl = "http://localhost";
+      const developmentWebUrl = "https://test.xiaomabiji.com";
+      cloudUrlTextController.text = developmentUrl;
+      webUrlTextController.text = developmentWebUrl;
+
+      // 直接保存开发模式配置
+      _saveUrl(
+        cloudUrl: developmentUrl,
+        webUrl: developmentWebUrl,
+        type: type,
+      );
+    }
+  }
+
+  Future<void> _saveUrl({
+    required String cloudUrl,
+    required String webUrl,
+    required AuthenticatorType type,
+  }) async {
+    if (cloudUrl.isEmpty || webUrl.isEmpty) {
+      showToastNotification(
+        message: LocaleKeys.settings_menu_pleaseInputValidURL.tr(),
+        type: ToastificationType.error,
+      );
+      return;
+    }
+
+    final isValid = await _validateUrl(cloudUrl) && await _validateUrl(webUrl);
+
+    if (mounted) {
+      if (isValid) {
+        showToastNotification(
+          message: LocaleKeys.settings_menu_changeUrl.tr(args: [cloudUrl]),
+        );
+
+        Navigator.of(context).pop();
+
+        await useBaseWebDomain(webUrl);
+        await useAppFlowyBetaCloudWithURL(cloudUrl, type);
+
+        await runAppFlowy();
+      } else {
+        showToastNotification(
+          message: LocaleKeys.settings_menu_pleaseInputValidURL.tr(),
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  Future<bool> _validateUrl(String url) async {
+    return await validateUrl(url).fold(
+      (url) async {
+        return true;
+      },
+      (err) {
+        Log.error(err);
+        return false;
+      },
+    );
+  }
+
+  Future<void> _fetchUrls() async {
+    // 首先获取当前的认证类型
+    final currentAuthType = await getAuthenticatorType();
+
+    await Future.wait([
+      getAppFlowyCloudUrl(),
+      getAppFlowyShareDomain(),
+    ]).then((values) {
+      if (values.length != 2) {
+        return;
+      }
+
+      cloudUrlTextController.text = values[0];
+      webUrlTextController.text = values[1];
+
+      // 根据存储的认证类型来设置UI状态
+      setState(() {
+        type = currentAuthType;
+      });
+    });
+  }
+}
+
+@visibleForTesting
+extension SettingsServerDropdownMenuExtension on AuthenticatorType {
+  String get label {
+    switch (this) {
+      case AuthenticatorType.appflowyCloud:
+        return LocaleKeys.settings_menu_cloudAppFlowy.tr();
+      case AuthenticatorType.appflowyCloudSelfHost:
+        return LocaleKeys.settings_menu_cloudAppFlowySelfHost.tr();
+      case AuthenticatorType.appflowyCloudDevelop:
+        return "小马AI笔记 Cloud (Development)";
+      default:
+        throw Exception('Unsupported server type: $this');
+    }
+  }
+}
+
+@visibleForTesting
+class SettingsServerDropdownMenu extends StatelessWidget {
+  const SettingsServerDropdownMenu({
+    super.key,
+    required this.selectedServer,
+    required this.onSelected,
+  });
+
+  final AuthenticatorType selectedServer;
+  final void Function(AuthenticatorType type) onSelected;
+
+  // in the settings page from sign in page, we support appflowy cloud, self-hosted and development
+  static final supportedServers = [
+    AuthenticatorType.appflowyCloud,
+    AuthenticatorType.appflowyCloudSelfHost,
+    AuthenticatorType.appflowyCloudDevelop,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsDropdown<AuthenticatorType>(
+      expandWidth: false,
+      onChanged: onSelected,
+      selectedOption: selectedServer,
+      options: supportedServers
+          .map(
+            (serverType) => buildDropdownMenuEntry<AuthenticatorType>(
+              context,
+              selectedValue: selectedServer,
+              value: serverType,
+              label: serverType.label,
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+class _SupportSettings extends StatelessWidget {
+  const _SupportSettings({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsCategory(
+      title: LocaleKeys.settings_mobile_support.tr(),
+      children: [
+        // export logs
+        Row(
+          children: [
+            FlowyText(
+              LocaleKeys.workspace_errorActions_exportLogFiles.tr(),
+            ),
+            const Spacer(),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 78),
+              child: OutlinedRoundedButton(
+                text: LocaleKeys.settings_files_export.tr(),
+                onTap: () {
+                  shareLogFiles(context);
+                },
+              ),
+            ),
+          ],
+        ),
+        // clear cache
+        Row(
+          children: [
+            FlowyText(
+              LocaleKeys.settings_files_clearCache.tr(),
+            ),
+            const Spacer(),
+            ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 78),
+              child: OutlinedRoundedButton(
+                text: LocaleKeys.button_clear.tr(),
+                onTap: () async {
+                  await getIt<FlowyCacheManager>().clearAllCache();
+                  if (context.mounted) {
+                    showToastNotification(
+                      message: LocaleKeys
+                          .settings_manageDataPage_cache_dialog_successHint
+                          .tr(),
+                    );
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SelfHostUrlField extends StatelessWidget {
+  const _SelfHostUrlField({
+    required this.textController,
+    required this.title,
+    required this.hintText,
+    required this.onSave,
+    this.textFieldKey,
+    this.hintBuilder,
+  });
+
+  final TextEditingController textController;
+  final String title;
+  final String hintText;
+  final ValueChanged<String> onSave;
+  final Key? textFieldKey;
+  final WidgetBuilder? hintBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHintWidget(context),
+        const VSpace(6.0),
+        SizedBox(
+          height: 36,
+          child: FlowyTextField(
+            key: textFieldKey,
+            controller: textController,
+            autoFocus: false,
+            textStyle: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+            ),
+            hintText: hintText,
+            onEditingComplete: () => onSave(textController.text),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHintWidget(BuildContext context) {
+    return Row(
+      children: [
+        FlowyText(
+          title,
+          overflow: TextOverflow.ellipsis,
+        ),
+        hintBuilder?.call(context) ?? const SizedBox.shrink(),
+      ],
+    );
+  }
+}

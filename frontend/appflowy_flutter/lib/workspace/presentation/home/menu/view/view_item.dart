@@ -1,0 +1,1410 @@
+import 'dart:async';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
+import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
+import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/rename_view/rename_view_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/prelude.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_item.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
+import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
+import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+typedef ViewItemOnSelected = void Function(BuildContext context, ViewPB view);
+typedef ViewItemLeftIconBuilder = Widget Function(
+  BuildContext context,
+  ViewPB view,
+);
+typedef ViewItemRightIconsBuilder = List<Widget> Function(
+  BuildContext context,
+  ViewPB view,
+);
+
+enum IgnoreViewType { none, hide, disable }
+
+class ViewItem extends StatelessWidget {
+  const ViewItem({
+    super.key,
+    required this.view,
+    this.parentView,
+    required this.spaceType,
+    required this.level,
+    this.leftPadding = 10,
+    required this.onSelected,
+    this.onTertiarySelected,
+    this.isFirstChild = false,
+    this.isDraggable = true,
+    required this.isFeedback,
+    this.height,
+    this.isHoverEnabled = false,
+    this.isPlaceholder = false,
+    this.isHovered,
+    this.shouldRenderChildren = true,
+    this.leftIconBuilder,
+    this.rightIconsBuilder,
+    this.shouldLoadChildViews = true,
+    this.isExpandedNotifier,
+    this.extendBuilder,
+    this.disableSelectedStatus,
+    this.shouldIgnoreView,
+    this.engagedInExpanding = false,
+    this.enableRightClickContext = false,
+  });
+
+  final ViewPB view;
+  final ViewPB? parentView;
+
+  final FolderSpaceType spaceType;
+
+  // indicate the level of the view item
+  // used to calculate the left padding
+  final int level;
+
+  // the left padding of the view item for each level
+  // the left padding of the each level = level * leftPadding
+  final double leftPadding;
+
+  // Selected by normal conventions
+  final ViewItemOnSelected onSelected;
+
+  // Selected by middle mouse button
+  final ViewItemOnSelected? onTertiarySelected;
+
+  // used for indicating the first child of the parent view, so that we can
+  // add top border to the first child
+  final bool isFirstChild;
+
+  // it should be false when it's rendered as feedback widget inside DraggableItem
+  final bool isDraggable;
+
+  // identify if the view item is rendered as feedback widget inside DraggableItem
+  final bool isFeedback;
+
+  final double? height;
+
+  final bool isHoverEnabled;
+
+  // all the view movement depends on the [ViewItem] widget, so we have to add a
+  // placeholder widget to receive the drop event when moving view across sections.
+  final bool isPlaceholder;
+
+  // used for control the expand/collapse icon
+  final ValueNotifier<bool>? isHovered;
+
+  // render the child views of the view
+  final bool shouldRenderChildren;
+
+  // custom the left icon widget, if it's null, the default expand/collapse icon will be used
+  final ViewItemLeftIconBuilder? leftIconBuilder;
+
+  // custom the right icon widget, if it's null, the default ... and + button will be used
+  final ViewItemRightIconsBuilder? rightIconsBuilder;
+
+  final bool shouldLoadChildViews;
+  final PropertyValueNotifier<bool>? isExpandedNotifier;
+
+  final List<Widget> Function(ViewPB view)? extendBuilder;
+
+  // disable the selected status of the view item
+  final bool? disableSelectedStatus;
+
+  // ignore the views when rendering the child views
+  final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
+
+  /// Whether to add right-click to show the view action context menu
+  ///
+  final bool enableRightClickContext;
+
+  /// to record the ViewBlock which is expanded or collapsed
+  final bool engagedInExpanding;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => ViewBloc(
+        view: view,
+        shouldLoadChildViews: shouldLoadChildViews,
+        engagedInExpanding: engagedInExpanding,
+      )..add(const ViewEvent.initial()),
+      child: BlocConsumer<ViewBloc, ViewState>(
+        listenWhen: (p, c) {
+          final newView = c.lastCreatedView;
+          final oldId = p.lastCreatedView?.id;
+          return newView != null && oldId != newView.id;
+        },
+        listener: (context, state) {
+          final created = state.lastCreatedView;
+          if (created == null) return;
+          // Guard: only open plugin automatically when view has been annotated as handwriting_saber
+          // to avoid opening a plugin too early before extra metadata is set.
+          final extra = created.extra;
+          final bool isHandwriting = extra.contains('handwriting_saber');
+          if (isHandwriting) {
+            context.read<TabsBloc>().openPlugin(created);
+          } else {
+            Log.info(
+                '🔵 [VIEW_ITEM] Skipping auto-open for created view ${created.id}, extra=$extra');
+          }
+        },
+        builder: (context, state) {
+          // filter the child views that should be ignored
+          List<ViewPB> childViews = state.view.childViews;
+          if (shouldIgnoreView != null) {
+            childViews = childViews
+                .where((v) => shouldIgnoreView!(v) != IgnoreViewType.hide)
+                .toList();
+          }
+
+          final itemHeight = height ?? HomeSpaceViewSizes.viewHeight;
+          final Widget child = InnerViewItem(
+            view: state.view,
+            parentView: parentView,
+            childViews: childViews,
+            spaceType: spaceType,
+            level: level,
+            leftPadding: leftPadding,
+            showActions: state.isEditing,
+            enableRightClickContext: enableRightClickContext,
+            isExpanded: state.isExpanded,
+            disableSelectedStatus: disableSelectedStatus,
+            onSelected: onSelected,
+            onTertiarySelected: onTertiarySelected,
+            isFirstChild: isFirstChild,
+            isDraggable: isDraggable,
+            isFeedback: isFeedback,
+            height: itemHeight,
+            isHoverEnabled: isHoverEnabled,
+            isPlaceholder: isPlaceholder,
+            isHovered: isHovered,
+            shouldRenderChildren: shouldRenderChildren,
+            leftIconBuilder: leftIconBuilder,
+            rightIconsBuilder: rightIconsBuilder,
+            isExpandedNotifier: isExpandedNotifier,
+            extendBuilder: extendBuilder,
+            shouldIgnoreView: shouldIgnoreView,
+            engagedInExpanding: engagedInExpanding,
+          );
+
+          if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
+            return Opacity(
+              opacity: 0.5,
+              child: FlowyTooltip(
+                message: LocaleKeys.space_cannotMovePageToDatabase.tr(),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.forbidden,
+                  child: IgnorePointer(child: child),
+                ),
+              ),
+            );
+          }
+
+          return child;
+        },
+      ),
+    );
+  }
+}
+
+// TODO: We shouldn't have local global variables
+bool _isDragging = false;
+
+class InnerViewItem extends StatefulWidget {
+  const InnerViewItem({
+    super.key,
+    required this.view,
+    required this.parentView,
+    required this.childViews,
+    required this.spaceType,
+    this.isDraggable = true,
+    this.isExpanded = true,
+    required this.level,
+    required this.leftPadding,
+    required this.showActions,
+    this.enableRightClickContext = false,
+    required this.onSelected,
+    this.onTertiarySelected,
+    this.isFirstChild = false,
+    required this.isFeedback,
+    required this.height,
+    this.isHoverEnabled = true,
+    this.isPlaceholder = false,
+    this.isHovered,
+    this.shouldRenderChildren = true,
+    required this.leftIconBuilder,
+    required this.rightIconsBuilder,
+    this.isExpandedNotifier,
+    required this.extendBuilder,
+    this.disableSelectedStatus,
+    this.engagedInExpanding = false,
+    required this.shouldIgnoreView,
+  });
+
+  final ViewPB view;
+  final ViewPB? parentView;
+  final List<ViewPB> childViews;
+  final FolderSpaceType spaceType;
+
+  final bool isDraggable;
+  final bool isExpanded;
+  final bool isFirstChild;
+
+  // identify if the view item is rendered as feedback widget inside DraggableItem
+  final bool isFeedback;
+
+  final int level;
+  final double leftPadding;
+
+  final bool showActions;
+  final bool enableRightClickContext;
+  final ViewItemOnSelected onSelected;
+  final ViewItemOnSelected? onTertiarySelected;
+  final double height;
+
+  final bool isHoverEnabled;
+  final bool isPlaceholder;
+  final bool? disableSelectedStatus;
+  final ValueNotifier<bool>? isHovered;
+  final bool shouldRenderChildren;
+  final ViewItemLeftIconBuilder? leftIconBuilder;
+  final ViewItemRightIconsBuilder? rightIconsBuilder;
+
+  final PropertyValueNotifier<bool>? isExpandedNotifier;
+  final List<Widget> Function(ViewPB view)? extendBuilder;
+  final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
+  final bool engagedInExpanding;
+
+  @override
+  State<InnerViewItem> createState() => _InnerViewItemState();
+}
+
+class _InnerViewItemState extends State<InnerViewItem> {
+  @override
+  Widget build(BuildContext context) {
+    Widget child = ValueListenableBuilder(
+      valueListenable: getIt<MenuSharedState>().notifier,
+      builder: (context, value, _) {
+        final isSelected = value?.id == widget.view.id;
+        return SingleInnerViewItem(
+          view: widget.view,
+          parentView: widget.parentView,
+          level: widget.level,
+          showActions: widget.showActions,
+          enableRightClickContext: widget.enableRightClickContext,
+          spaceType: widget.spaceType,
+          onSelected: widget.onSelected,
+          onTertiarySelected: widget.onTertiarySelected,
+          isExpanded: widget.isExpanded,
+          isDraggable: widget.isDraggable,
+          leftPadding: widget.leftPadding,
+          isFeedback: widget.isFeedback,
+          height: widget.height,
+          isPlaceholder: widget.isPlaceholder,
+          isHovered: widget.isHovered,
+          leftIconBuilder: widget.leftIconBuilder,
+          rightIconsBuilder: widget.rightIconsBuilder,
+          extendBuilder: widget.extendBuilder,
+          disableSelectedStatus: widget.disableSelectedStatus,
+          shouldIgnoreView: widget.shouldIgnoreView,
+          isSelected: isSelected,
+        );
+      },
+    );
+
+    // if the view is expanded and has child views, render its child views
+    if (widget.isExpanded &&
+        widget.shouldRenderChildren &&
+        widget.childViews.isNotEmpty) {
+      final children = widget.childViews.map((childView) {
+        return ViewItem(
+          key: ValueKey('${widget.spaceType.name} ${childView.id}'),
+          parentView: widget.view,
+          spaceType: widget.spaceType,
+          isFirstChild: childView.id == widget.childViews.first.id,
+          view: childView,
+          level: widget.level + 1,
+          enableRightClickContext: widget.enableRightClickContext,
+          onSelected: widget.onSelected,
+          onTertiarySelected: widget.onTertiarySelected,
+          isDraggable: widget.isDraggable,
+          disableSelectedStatus: widget.disableSelectedStatus,
+          leftPadding: widget.leftPadding,
+          isFeedback: widget.isFeedback,
+          isPlaceholder: widget.isPlaceholder,
+          isHovered: widget.isHovered,
+          leftIconBuilder: widget.leftIconBuilder,
+          rightIconsBuilder: widget.rightIconsBuilder,
+          extendBuilder: widget.extendBuilder,
+          shouldIgnoreView: widget.shouldIgnoreView,
+          engagedInExpanding: widget.engagedInExpanding,
+        );
+      }).toList();
+
+      child = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [child, ...children],
+      );
+    }
+
+    // wrap the child with DraggableItem if isDraggable is true
+    if ((widget.isDraggable || widget.isPlaceholder) &&
+        !isReferencedDatabaseView(widget.view, widget.parentView)) {
+      child = DraggableViewItem(
+        isFirstChild: widget.isFirstChild,
+        view: widget.view,
+        onDragging: (isDragging) => _isDragging = isDragging,
+        onMove: widget.isPlaceholder
+            ? (from, to) => moveViewCrossSpace(
+                  context,
+                  null,
+                  widget.view,
+                  widget.parentView,
+                  widget.spaceType,
+                  from,
+                  to.parentViewId,
+                )
+            : null,
+        feedback: (context) => Container(
+          width: 250,
+          decoration: BoxDecoration(
+            color: Brightness.light == Theme.of(context).brightness
+                ? Colors.white
+                : Colors.black54,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ViewItem(
+            view: widget.view,
+            parentView: widget.parentView,
+            spaceType: widget.spaceType,
+            level: widget.level,
+            onSelected: widget.onSelected,
+            onTertiarySelected: widget.onTertiarySelected,
+            isDraggable: false,
+            leftPadding: widget.leftPadding,
+            isFeedback: true,
+            enableRightClickContext: widget.enableRightClickContext,
+            leftIconBuilder: widget.leftIconBuilder,
+            rightIconsBuilder: widget.rightIconsBuilder,
+            extendBuilder: widget.extendBuilder,
+            shouldIgnoreView: widget.shouldIgnoreView,
+          ),
+        ),
+        child: child,
+      );
+    } else {
+      // keep the same height of the DraggableItem
+      child = Padding(
+        padding: const EdgeInsets.only(top: kDraggableViewItemDividerHeight),
+        child: child,
+      );
+    }
+
+    return child;
+  }
+}
+
+class SingleInnerViewItem extends StatefulWidget {
+  const SingleInnerViewItem({
+    super.key,
+    required this.view,
+    required this.parentView,
+    required this.isExpanded,
+    required this.level,
+    required this.leftPadding,
+    this.isDraggable = true,
+    required this.spaceType,
+    required this.showActions,
+    this.enableRightClickContext = false,
+    required this.onSelected,
+    this.onTertiarySelected,
+    required this.isFeedback,
+    required this.height,
+    this.isHoverEnabled = true,
+    this.isPlaceholder = false,
+    this.isHovered,
+    required this.leftIconBuilder,
+    required this.rightIconsBuilder,
+    required this.extendBuilder,
+    required this.disableSelectedStatus,
+    required this.shouldIgnoreView,
+    required this.isSelected,
+  });
+
+  final ViewPB view;
+  final ViewPB? parentView;
+  final bool isExpanded;
+
+  // identify if the view item is rendered as feedback widget inside DraggableItem
+  final bool isFeedback;
+
+  final int level;
+  final double leftPadding;
+
+  final bool isDraggable;
+  final bool showActions;
+  final bool enableRightClickContext;
+  final ViewItemOnSelected onSelected;
+  final ViewItemOnSelected? onTertiarySelected;
+  final FolderSpaceType spaceType;
+  final double height;
+
+  final bool isHoverEnabled;
+  final bool isPlaceholder;
+  final bool? disableSelectedStatus;
+  final ValueNotifier<bool>? isHovered;
+  final ViewItemLeftIconBuilder? leftIconBuilder;
+  final ViewItemRightIconsBuilder? rightIconsBuilder;
+
+  final List<Widget> Function(ViewPB view)? extendBuilder;
+  final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
+  final bool isSelected;
+
+  @override
+  State<SingleInnerViewItem> createState() => _SingleInnerViewItemState();
+}
+
+class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
+  final controller = PopoverController();
+  final viewMoreActionController = PopoverController();
+  final TextEditingController _renameController = TextEditingController();
+  final FocusNode _renameFocusNode = FocusNode();
+
+  bool isIconPickerOpened = false;
+  bool isRenaming = false;
+
+  @override
+  void dispose() {
+    _renameController.dispose();
+    _renameFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isSelected = widget.isSelected;
+
+    if (widget.disableSelectedStatus == true) {
+      isSelected = false;
+    }
+
+    if (widget.isPlaceholder) {
+      return const SizedBox(height: 4, width: double.infinity);
+    }
+
+    if (widget.isFeedback || !widget.isHoverEnabled) {
+      return _buildViewItem(
+        false,
+        !widget.isHoverEnabled ? isSelected : false,
+      );
+    }
+
+    return FlowyHover(
+      style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
+      resetHoverOnRebuild: widget.showActions || !isIconPickerOpened,
+      buildWhenOnHover: () =>
+          !widget.showActions &&
+          !_isDragging &&
+          !isIconPickerOpened &&
+          !isRenaming,
+      isSelected: () => widget.showActions || isSelected,
+      builder: (_, onHover) => _buildViewItem(onHover, isSelected),
+    );
+  }
+
+  Widget _buildViewItem(bool onHover, [bool isSelected = false]) {
+    // 构建名称部分 - 内联编辑或普通文本
+    final nameWidget =
+        isRenaming ? _buildInlineRenameField() : _buildNameText();
+
+    final children = [
+      const HSpace(2),
+      // expand icon or placeholder
+      widget.leftIconBuilder?.call(context, widget.view) ?? _buildLeftIcon(),
+      const HSpace(2),
+      // icon
+      _buildViewIconButton(),
+      const HSpace(6),
+      // title
+      Expanded(
+        child: widget.extendBuilder != null
+            ? Row(
+                children: [
+                  Flexible(child: nameWidget),
+                  ...widget.extendBuilder!(widget.view),
+                ],
+              )
+            : nameWidget,
+      ),
+    ];
+
+    // hover action
+    if (widget.showActions || onHover) {
+      if (widget.rightIconsBuilder != null) {
+        children.addAll(widget.rightIconsBuilder!(context, widget.view));
+      } else {
+        // ··· more action button
+        children.add(
+          _buildViewMoreActionButton(
+            context,
+            viewMoreActionController,
+            (_) => FlowyTooltip(
+              message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+              child: FlowyIconButton(
+                width: 24,
+                icon: const FlowySvg(FlowySvgs.workspace_three_dots_s),
+                onPressed: viewMoreActionController.show,
+              ),
+            ),
+          ),
+        );
+        // support add button for document, folder, and notebook layouts
+        if (widget.view.layout == ViewLayoutPB.Document ||
+            widget.view.layout == ViewLayoutPB.Folder ||
+            widget.view.layout == ViewLayoutPB.Notebook) {
+          // + button
+          children.add(const HSpace(8.0));
+          children.add(_buildViewAddButton(context));
+        }
+        children.add(const HSpace(4.0));
+      }
+    }
+
+    final child = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => widget.onSelected(context, widget.view),
+      onTertiaryTapDown: (_) =>
+          widget.onTertiarySelected?.call(context, widget.view),
+      child: SizedBox(
+        height: widget.height,
+        child: Padding(
+          padding: EdgeInsets.only(left: widget.level * widget.leftPadding),
+          child: Listener(
+            onPointerDown: (event) {
+              if (event.buttons == kSecondaryMouseButton &&
+                  widget.enableRightClickContext) {
+                viewMoreActionController.showAt(
+                  // We add some horizontal offset
+                  event.position + const Offset(4, 0),
+                );
+              }
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Row(children: children),
+          ),
+        ),
+      ),
+    );
+
+    if (isSelected) {
+      final popoverController = getIt<RenameViewBloc>().state.controller;
+      return AppFlowyPopover(
+        controller: popoverController,
+        triggerActions: PopoverTriggerFlags.none,
+        offset: const Offset(0, 5),
+        direction: PopoverDirection.bottomWithLeftAligned,
+        popupBuilder: (_) => RenameViewPopover(
+          view: widget.view,
+          name: widget.view.name,
+          emoji: widget.view.icon.toEmojiIconData(),
+          popoverController: popoverController,
+          showIconChanger: false,
+        ),
+        child: child,
+      );
+    }
+
+    return child;
+  }
+
+  Widget _buildViewIconButton() {
+    final iconData = widget.view.icon.toEmojiIconData();
+    final icon = iconData.isNotEmpty
+        ? RawEmojiIconWidget(
+            emoji: iconData,
+            emojiSize: 16.0,
+            lineHeight: 18.0 / 16.0,
+          )
+        : Opacity(opacity: 0.6, child: widget.view.defaultIcon());
+
+    final Widget child = AppFlowyPopover(
+      offset: const Offset(20, 0),
+      controller: controller,
+      direction: PopoverDirection.rightWithCenterAligned,
+      constraints: BoxConstraints.loose(const Size(364, 356)),
+      margin: const EdgeInsets.all(0),
+      onClose: () => setState(() => isIconPickerOpened = false),
+      child: GestureDetector(
+        // prevent the tap event from being passed to the parent widget
+        onTap: () {},
+        child: FlowyTooltip(
+          message: LocaleKeys.document_plugins_cover_changeIcon.tr(),
+          child: SizedBox(width: 16.0, child: icon),
+        ),
+      ),
+      popupBuilder: (context) {
+        isIconPickerOpened = true;
+        return FlowyIconEmojiPicker(
+          initialType: iconData.type.toPickerTabType(),
+          tabs: const [
+            PickerTabType.emoji,
+            PickerTabType.icon,
+            PickerTabType.custom,
+          ],
+          documentId: widget.view.id,
+          onSelectedEmoji: (r) {
+            ViewBackendService.updateViewIcon(
+              view: widget.view,
+              viewIcon: r.data,
+            );
+            if (!r.keepOpen) controller.close();
+          },
+        );
+      },
+    );
+
+    if (widget.view.isLocked) {
+      return LockPageButtonWrapper(
+        child: child,
+      );
+    }
+
+    return child;
+  }
+
+  Widget _buildNameText() {
+    final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 14.0,
+          height: 1.35,
+          leadingDistribution: TextLeadingDistribution.even,
+        );
+
+    return GestureDetector(
+      onDoubleTap: () {
+        // 双击开始重命名
+        _startRenaming();
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 28),
+        child: Text(
+          widget.view.nameOrDefault,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          style: textStyle,
+          strutStyle: StrutStyle.fromTextStyle(
+            textStyle,
+            forceStrutHeight: true,
+            height: 1.35,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineRenameField() {
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          _cancelRenaming();
+        }
+      },
+      child: SizedBox(
+        height: 24.0,
+        child: TextField(
+          controller: _renameController,
+          focusNode: _renameFocusNode,
+          style: const TextStyle(
+            fontSize: 14.0,
+            height: 1.35,
+            leadingDistribution: TextLeadingDistribution.even,
+          ),
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4.0),
+              borderSide:
+                  BorderSide(color: Theme.of(context).colorScheme.primary),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(4.0),
+              borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.primary, width: 2.0),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6.0),
+            isDense: true,
+            counterText: '',
+          ),
+          maxLength: 256,
+          onSubmitted: _finishRenaming,
+        ),
+      ),
+    );
+  }
+
+  void _startRenaming() {
+    setState(() {
+      isRenaming = true;
+      _renameController.text = widget.view.nameOrDefault;
+      _renameController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: widget.view.nameOrDefault.length,
+      );
+    });
+    // 延迟聚焦以确保TextField已经构建
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _renameFocusNode.requestFocus();
+    });
+
+    // 监听焦点丢失事件
+    _renameFocusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_renameFocusNode.hasFocus && isRenaming) {
+      _finishRenaming(_renameController.text);
+      _renameFocusNode.removeListener(_onFocusChange);
+    }
+  }
+
+  Future<void> _finishRenaming(String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) {
+      showToastNotification(
+        message: LocaleKeys.web_error_pageNameCannotBeEmpty.tr(),
+      );
+    } else if (trimmed != widget.view.nameOrDefault) {
+      await ViewBackendService.updateView(
+        viewId: widget.view.id,
+        name: trimmed,
+      );
+      if (mounted) {
+        _refreshSpaceBlocIfNeeded(context);
+      }
+    }
+    if (mounted) {
+      setState(() {
+        isRenaming = false;
+      });
+    }
+  }
+
+  void _cancelRenaming() {
+    setState(() {
+      isRenaming = false;
+    });
+  }
+
+  // > button or · button
+  // show > if the view is expandable.
+  // show · if the view can't contain child views.
+  Widget _buildLeftIcon() {
+    return ViewItemDefaultLeftIcon(
+      view: widget.view,
+      parentView: widget.parentView,
+      isExpanded: widget.isExpanded,
+      leftPadding: widget.leftPadding,
+      isHovered: widget.isHovered,
+    );
+  }
+
+  // + button
+  Widget _buildViewAddButton(BuildContext context) {
+    return FlowyTooltip(
+      message: LocaleKeys.menuAppHeader_addPageTooltip.tr(),
+      child: ViewAddButton(
+        parentViewId: widget.view.id,
+        onEditing: (value) =>
+            context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
+        onSelected: _onSelected,
+      ),
+    );
+  }
+
+  void _onSelected(
+    PluginBuilder pluginBuilder,
+    String? name,
+    List<int>? initialDataBytes,
+    bool openAfterCreated,
+    bool createNewView,
+  ) async {
+    // debug logs removed
+    final viewBloc = context.read<ViewBloc>();
+    // 如果是 HandwritingSaberPluginBuilder，使用"未命名手记"作为默认名称
+    final isHandwritingSaber =
+        pluginBuilder.pluginType == PluginType.handwritingSaber;
+    final viewName = isHandwritingSaber
+        ? '未命名手记'
+        : (pluginBuilder.layoutType?.defaultName ?? '');
+
+    // debug logs removed
+
+    // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
+    // 否则，直接通过 ViewBloc 创建视图
+    if (isHandwritingSaber) {
+      // Saber 手写视图：直接调用 ViewBackendService.createView 创建文档，
+      // 然后通过 updateView 把 view_type 写入 extra，供 ViewExtension.plugin() 识别
+      final parentViewId = widget.view.id;
+      Log.info(
+        '🔵 [VIEW_ITEM] Creating handwriting_saber view via ViewBackendService.createView, parentViewId: $parentViewId',
+      );
+
+      final result = await ViewBackendService.createView(
+        parentViewId: parentViewId,
+        name: viewName,
+        layoutType: pluginBuilder.layoutType!,
+        openAfterCreate: openAfterCreated,
+        section: widget.spaceType.toViewSectionPB,
+        // Ensure the backend receives view_type at creation time to avoid race where
+        // the view is opened before extra metadata (view_type) is set.
+        ext: const {'view_type': 'handwriting_saber'},
+      );
+
+      // If the widget has been unmounted while waiting for createView, skip further UI actions.
+      if (!context.mounted) {
+        Log.error(
+            '🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
+        // Still ensure ViewBloc state is updated with created view if possible
+        await result.fold(
+          (createdView) async {
+            viewBloc.add(
+              ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
+            );
+          },
+          (error) async {
+            viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
+          },
+        );
+        return;
+      }
+
+      await result.fold(
+        (createdView) async {
+          // debug log removed
+
+          const extraJson = '{"view_type": "handwriting_saber"}';
+          final updateResult = await ViewBackendService.updateView(
+            viewId: createdView.id,
+            extra: extraJson,
+          );
+
+          updateResult.fold(
+            (_) {
+              // Note: FolderEventUpdateView returns void on success. Use the createdView
+              // object (which contains the real id) when opening the plugin.
+              // debug log removed
+              // ensure the local createdView carries the extra so plugin selection
+              // will pick HandwritingSaber immediately (avoid race where backend
+              // hasn't yet propagated extra to returned view)
+              try {
+                createdView.extra = extraJson;
+              } catch (_) {}
+              viewBloc.add(
+                ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
+              );
+              if (openAfterCreated) {
+                // debug log removed
+                try {
+                  getIt<TabsBloc>().openPlugin(createdView);
+                } catch (e) {
+                  Log.error(
+                      '🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                }
+              }
+            },
+            (error) {
+              Log.error(
+                '❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${createdView.id}, error=${error.msg}',
+              );
+              // even if update failed, set extra locally so the client will render
+              // HandwritingSaber instead of DocumentPlugin
+              try {
+                createdView.extra = extraJson;
+              } catch (_) {}
+              viewBloc.add(
+                ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
+              );
+              if (openAfterCreated) {
+                try {
+                  getIt<TabsBloc>().openPlugin(createdView);
+                } catch (e) {
+                  Log.warn(
+                      '🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                }
+              }
+            },
+          );
+        },
+        (error) async {
+          Log.error(
+            '❌ [VIEW_ITEM] Failed to create handwriting_saber view: ${error.msg}',
+          );
+          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
+        },
+      );
+    } else {
+      // 非 Saber 视图，直接通过 ViewBloc 创建
+      viewBloc.add(
+        ViewEvent.createView(
+          viewName,
+          pluginBuilder.layoutType!,
+          openAfterCreated: openAfterCreated,
+          section: widget.spaceType.toViewSectionPB,
+        ),
+      );
+    }
+
+    viewBloc.add(const ViewEvent.setIsExpanded(true));
+  }
+
+  /// 刷新 SpaceBloc 的列表（如果存在）
+  /// 用于在删除、重命名、复制等操作后更新空间文档列表
+  void _refreshSpaceBlocIfNeeded(BuildContext context) {
+    try {
+      // 尝试从外层 context 获取 SpaceBloc
+      SpaceBloc? spaceBloc;
+
+      // 方法1: 尝试从当前 context 读取（可能是外层提供的）
+      try {
+        spaceBloc = context.read<SpaceBloc>();
+      } catch (_) {
+        // 方法2: 通过 Navigator 获取根 context
+        try {
+          final navigator = Navigator.of(context, rootNavigator: false);
+          final rootContext = navigator.context;
+          spaceBloc = rootContext.read<SpaceBloc>();
+        } catch (_) {
+          // 根 context 也没有 SpaceBloc，忽略
+        }
+      }
+
+      if (spaceBloc != null && !spaceBloc.isClosed) {
+        spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
+      }
+    } catch (_) {
+      // SpaceBloc 不存在，忽略
+    }
+  }
+
+  // ··· more action button
+  Widget _buildViewMoreActionButton(
+    BuildContext context,
+    PopoverController controller,
+    Widget Function(PopoverController) buildChild,
+  ) {
+    // 尝试获取外层的 SpaceBloc，如果不存在则创建新的
+    SpaceBloc? outerSpaceBloc;
+    try {
+      outerSpaceBloc = context.read<SpaceBloc>();
+    } catch (_) {
+      // 外层没有 SpaceBloc，需要创建新的
+      try {
+        final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+        final userProfile = userWorkspaceBloc.state.userProfile;
+        final workspaceId =
+            userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+        if (workspaceId.isNotEmpty) {
+          outerSpaceBloc = SpaceBloc(
+            userProfile: userProfile,
+            workspaceId: workspaceId,
+          )..add(const SpaceEvent.initial(openFirstPage: false));
+        }
+      } catch (_) {
+        // 无法创建 SpaceBloc
+      }
+    }
+
+    Widget child = BlocListener<ViewBloc, ViewState>(
+      listenWhen: (prev, curr) {
+        // 只在删除状态变化或操作成功时触发
+        return prev.isDeleted != curr.isDeleted ||
+            (prev.successOrFailure.isFailure &&
+                curr.successOrFailure.isSuccess);
+      },
+      listener: (context, state) {
+        // 监听删除成功状态，刷新 SpaceBloc
+        if (state.isDeleted) {
+          // 延迟一下，确保后端删除操作完成
+          // 增加延迟时间，确保最后一条文档删除后也能刷新
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (context.mounted) {
+              _refreshSpaceBlocIfNeeded(context);
+            }
+          });
+        }
+        // 监听视图更新（重命名、复制等），刷新 SpaceBloc
+        // 使用 fold 检查操作是否成功
+        state.successOrFailure.fold(
+          (success) {
+            // 操作成功，刷新列表
+            // 延迟一下，确保后端操作完成
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (context.mounted) {
+                _refreshSpaceBlocIfNeeded(context);
+              }
+            });
+          },
+          (error) {
+            // 操作失败，不刷新
+          },
+        );
+      },
+      child: ViewMoreActionPopover(
+        view: widget.view,
+        controller: controller,
+        isExpanded: widget.isExpanded,
+        spaceType: widget.spaceType,
+        onEditing: (value) =>
+            context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
+        buildChild: buildChild,
+        onAction: (action, data) async {
+          switch (action) {
+            case ViewMoreActionType.favorite:
+            case ViewMoreActionType.unFavorite:
+              context
+                  .read<FavoriteBloc>()
+                  .add(FavoriteEvent.toggle(widget.view));
+              break;
+            case ViewMoreActionType.rename:
+              // 如果是 Space 类型，显示弹框重命名
+              if (widget.view.isSpace) {
+                await showAFTextFieldDialog(
+                  context: context,
+                  title: LocaleKeys.space_rename.tr(),
+                  initialValue: widget.view.name,
+                  hintText: LocaleKeys.space_spaceName.tr(),
+                  onConfirm: (name) {
+                    if (context.mounted) {
+                      context.read<SpaceBloc>().add(
+                            SpaceEvent.rename(
+                              space: widget.view,
+                              name: name,
+                            ),
+                          );
+                      // 重命名后刷新列表
+                      _refreshSpaceBlocIfNeeded(context);
+                    }
+                  },
+                );
+              } else {
+                // 非 Space 类型使用内联编辑
+                _startRenaming();
+                // 重命名后刷新列表（内联编辑完成后会触发 ViewBloc 更新）
+              }
+              break;
+            case ViewMoreActionType.leaveWorkspace:
+              // 离开工作区
+              if (context.mounted) {
+                final workspaceId = context
+                    .read<UserWorkspaceBloc>()
+                    .state
+                    .currentWorkspace
+                    ?.workspaceId;
+                if (workspaceId != null) {
+                  context.read<UserWorkspaceBloc>().add(
+                        UserWorkspaceEvent.leaveWorkspace(
+                            workspaceId: workspaceId),
+                      );
+                }
+              }
+              break;
+            case ViewMoreActionType.delete:
+              // 如果是 Space 类型，使用 SpaceBloc 删除
+              if (widget.view.isSpace) {
+                if (context.mounted) {
+                  context.read<SpaceBloc>().add(
+                        SpaceEvent.delete(widget.view),
+                      );
+                  // 删除空间后刷新列表
+                  _refreshSpaceBlocIfNeeded(context);
+                }
+              } else {
+                // 保存父视图ID，用于删除后刷新
+                final parentViewId = widget.view.parentViewId;
+                // get if current page contains published child views
+                final (containPublishedPage, _) =
+                    await ViewBackendService.containPublishedPage(widget.view);
+                if (containPublishedPage && context.mounted) {
+                  await showConfirmDeletionDialog(
+                    context: context,
+                    name: widget.view.name,
+                    description: LocaleKeys.publish_containsPublishedPage.tr(),
+                    onConfirm: () {
+                      context.read<ViewBloc>().add(const ViewEvent.delete());
+                      // 删除后立即刷新列表（不等待监听，确保最后一条也能刷新）
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (context.mounted) {
+                          _refreshSpaceBlocIfNeeded(context);
+                        }
+                      });
+                    },
+                  );
+                } else if (context.mounted) {
+                  await showDeleteViewToTrashConfirmDialog(
+                    context: context,
+                    name: widget.view.nameOrDefault,
+                    onConfirm: () {
+                      context.read<ViewBloc>().add(const ViewEvent.delete());
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (context.mounted) {
+                          _refreshSpaceBlocIfNeeded(context);
+                        }
+                      });
+                    },
+                  );
+                }
+              }
+              break;
+            case ViewMoreActionType.duplicate:
+              // 如果是 Space 类型，使用 SpaceBloc 复制空间
+              if (widget.view.isSpace) {
+                if (context.mounted) {
+                  context.read<SpaceBloc>().add(
+                        SpaceEvent.duplicate(space: widget.view),
+                      );
+                  // 复制后刷新列表
+                  _refreshSpaceBlocIfNeeded(context);
+                }
+              } else {
+                context.read<ViewBloc>().add(const ViewEvent.duplicate());
+                // 复制后刷新列表（通过 BlocListener 监听成功）
+              }
+              break;
+            case ViewMoreActionType.duplicateToMySpace:
+              // 触发复制到我的空间操作
+              context
+                  .read<ViewBloc>()
+                  .add(const ViewEvent.duplicateToMySpace());
+              // 复制后刷新列表（通过 BlocListener 监听成功）
+              // 使用 addPostFrameCallback 延迟显示成功提示，确保在状态更新后执行
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      showToastNotification(
+                        message: '已复制到我的空间',
+                        type: ToastificationType.success,
+                      );
+                    }
+                  });
+                }
+              });
+              break;
+            case ViewMoreActionType.openInNewTab:
+              // 使用addPostFrameCallback延迟执行，避免在渲染周期中触发UI状态变化
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  context.read<TabsBloc>().openTab(widget.view);
+                }
+              });
+              break;
+            case ViewMoreActionType.changeIcon:
+              if (data is! SelectedEmojiIconResult) {
+                return;
+              }
+              // Space 与文档统一走 view.icon（FolderEventUpdateViewIcon）。
+              // 旧逻辑仅在 FlowyIconType.icon 时 dispatch SpaceBloc（写 extra），
+              // Emojis / Upload 分支为空，导致菜单里选表情「无反应」。
+              if (context.mounted) {
+                await ViewBackendService.updateViewIcon(
+                  view: widget.view,
+                  viewIcon: data.data,
+                );
+                _refreshSpaceBlocIfNeeded(context);
+              }
+              break;
+            case ViewMoreActionType.manageSpace:
+              // 显示管理空间弹窗，传入当前点击的 Space
+              if (context.mounted) {
+                await showDialog(
+                  context: context,
+                  builder: (_) => Dialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: BlocProvider.value(
+                      value: context.read<SpaceBloc>(),
+                      child: ManageSpacePopup(space: widget.view),
+                    ),
+                  ),
+                );
+              }
+              break;
+            case ViewMoreActionType.moveTo:
+              final value = data;
+              if (value is! (ViewPB, ViewPB)) {
+                return;
+              }
+              final space = value.$1;
+              final target = value.$2;
+              moveViewCrossSpace(
+                context,
+                space,
+                widget.view,
+                widget.parentView,
+                widget.spaceType,
+                widget.view,
+                target.id,
+              );
+              // 移动后刷新列表
+              _refreshSpaceBlocIfNeeded(context);
+              break;
+            default:
+              throw UnsupportedError('$action is not supported');
+          }
+        },
+      ),
+    );
+
+    // 如果有外层的 SpaceBloc，使用 BlocProvider.value 传递；否则直接返回
+    if (outerSpaceBloc != null) {
+      return BlocProvider<SpaceBloc>.value(
+        value: outerSpaceBloc,
+        child: child,
+      );
+    } else {
+      return child;
+    }
+  }
+}
+
+class _DotIconWidget extends StatelessWidget {
+  const _DotIconWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(6.0),
+      child: Container(
+        width: 4,
+        height: 4,
+        decoration: BoxDecoration(
+          color: Theme.of(context).iconTheme.color,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+}
+
+// workaround: we should use view.isEndPoint or something to check if the view can contain child views. But currently, we don't have that field.
+bool isReferencedDatabaseView(ViewPB view, ViewPB? parentView) {
+  if (parentView == null) {
+    return false;
+  }
+  return view.layout.isDatabaseView && parentView.layout.isDatabaseView;
+}
+
+void moveViewCrossSpace(
+  BuildContext context,
+  ViewPB? toSpace,
+  ViewPB view,
+  ViewPB? parentView,
+  FolderSpaceType spaceType,
+  ViewPB from,
+  String toId,
+) {
+  if (isReferencedDatabaseView(view, parentView)) {
+    return;
+  }
+
+  if (from.id == toId) {
+    return;
+  }
+
+  final currentSpace = context.read<SpaceBloc>().state.currentSpace;
+  if (currentSpace != null &&
+      toSpace != null &&
+      currentSpace.id != toSpace.id) {
+    Log.info(
+      'Move view(${from.name}) to another space(${toSpace.name}), unpublish the view',
+    );
+    context.read<ViewBloc>().add(const ViewEvent.unpublish(sync: false));
+
+    switchToSpaceNotifier.value = toSpace;
+  }
+
+  context.read<ViewBloc>().add(ViewEvent.move(from, toId, null, null, null));
+}
+
+class ViewItemDefaultLeftIcon extends StatelessWidget {
+  const ViewItemDefaultLeftIcon({
+    super.key,
+    required this.view,
+    required this.parentView,
+    required this.isExpanded,
+    required this.leftPadding,
+    required this.isHovered,
+  });
+
+  final ViewPB view;
+  final ViewPB? parentView;
+  final bool isExpanded;
+  final double leftPadding;
+  final ValueNotifier<bool>? isHovered;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isReferencedDatabaseView(view, parentView)) {
+      return const _DotIconWidget();
+    }
+
+    if (context.read<ViewBloc>().state.view.childViews.isEmpty) {
+      return HSpace(leftPadding);
+    }
+
+    final child = FlowyHover(
+      child: GestureDetector(
+        child: FlowySvg(
+          isExpanded
+              ? FlowySvgs.view_item_expand_s
+              : FlowySvgs.view_item_unexpand_s,
+          size: const Size.square(16.0),
+        ),
+        onTap: () =>
+            context.read<ViewBloc>().add(ViewEvent.setIsExpanded(!isExpanded)),
+      ),
+    );
+
+    if (isHovered != null) {
+      return ValueListenableBuilder<bool>(
+        valueListenable: isHovered!,
+        builder: (_, isHovered, child) =>
+            Opacity(opacity: isHovered ? 1.0 : 0.0, child: child),
+        child: child,
+      );
+    }
+
+    return child;
+  }
+}

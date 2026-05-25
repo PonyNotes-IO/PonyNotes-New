@@ -1,0 +1,350 @@
+import 'dart:async';
+
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/account_merge_dialog.dart';
+import 'package:appflowy/util/validator.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/material.dart';
+
+/// 首次绑定手机号弹窗（用于微信登录后未绑定手机号的场景）
+class PhoneBindDialog extends StatefulWidget {
+  const PhoneBindDialog({
+    super.key,
+    this.onBindComplete,
+  });
+
+  final VoidCallback? onBindComplete;
+
+  @override
+  State<PhoneBindDialog> createState() => _PhoneBindDialogState();
+}
+
+class _PhoneBindDialogState extends State<PhoneBindDialog> {
+  final phoneController = TextEditingController();
+  final codeController = TextEditingController();
+  final phoneFocusNode = FocusNode();
+  final codeFocusNode = FocusNode();
+
+  bool _isBinding = false;
+  bool _isSending = false;
+  bool _hasRequestedCode = false;
+  int _countdown = 0;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    phoneController.dispose();
+    codeController.dispose();
+    phoneFocusNode.dispose();
+    codeFocusNode.dispose();
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Dialog(
+      backgroundColor: theme.surfaceColorScheme.layer01,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        width: 400,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                FlowyText(
+                  '绑定手机号',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: theme.textColorScheme.primary,
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.close,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const VSpace(8),
+            FlowyText(
+              '为保障账号安全，请先绑定手机号。',
+              fontSize: 14,
+              color: theme.textColorScheme.secondary,
+            ),
+            const VSpace(24),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    children: [
+                      const FlowyText('+86', fontSize: 14),
+                      const HSpace(4),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ],
+                  ),
+                ),
+                const HSpace(12),
+                Expanded(
+                  child: TextField(
+                    controller: phoneController,
+                    focusNode: phoneFocusNode,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: '手机号',
+                      hintText: '请输入手机号',
+                      labelStyle:
+                          TextStyle(color: theme.textColorScheme.secondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onSubmitted: (_) => codeFocusNode.requestFocus(),
+                  ),
+                ),
+              ],
+            ),
+            const VSpace(12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: codeController,
+                    focusNode: codeFocusNode,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: InputDecoration(
+                      labelText: '验证码',
+                      hintText: '请输入6位验证码',
+                      counterText: '',
+                      labelStyle:
+                          TextStyle(color: theme.textColorScheme.secondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onSubmitted: (_) => _bindPhone(),
+                  ),
+                ),
+                const HSpace(12),
+                GestureDetector(
+                  onTap: (_canResendCode() && !_isSending) ? _sendCode : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12,),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border.all(
+                        color: _canResendCode()
+                            ? theme.textColorScheme.primary
+                            : theme.textColorScheme.secondary,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _isSending
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  theme.textColorScheme.secondary,),
+                            ),
+                          )
+                        : FlowyText(_getButtonText(), fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+            const VSpace(24),
+            SizedBox(
+              width: double.infinity,
+              child: FlowyButton(
+                text: _isBinding
+                    ? Row(
+                        children: const [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          HSpace(6),
+                          FlowyText('绑定中', fontSize: 14),
+                        ],
+                      )
+                    : const FlowyText('绑定手机号', fontSize: 14),
+                onTap: _isBinding ? null : _bindPhone,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _canResendCode() {
+    return _countdown == 0;
+  }
+
+  String _getButtonText() {
+    if (_countdown > 0) {
+      return '重新获取(${_countdown}s)';
+    } else if (_hasRequestedCode) {
+      return '重新获取';
+    } else {
+      return '获取验证码';
+    }
+  }
+
+  Future<void> _sendCode() async {
+    if (!_canResendCode() || _isSending) return;
+
+    final cleanPhone = Validator.cleanPhoneNumber(phoneController.text);
+    if (!Validator.isValidPhone(cleanPhone)) {
+      showToastNotification(message: '手机号格式不正确');
+      return;
+    }
+
+    setState(() {
+      _isSending = true;
+    });
+
+    // 使用新的含合并检测的 API
+    final result = await UserBackendService.sendPhoneBindCode(cleanPhone);
+
+    result.fold(
+      (data) {
+        if (!mounted) return;
+        setState(() => _isSending = false);
+
+        if (data.isOwnPhone) {
+          showToastNotification(message: '该手机号已绑定到当前账号');
+          return;
+        }
+
+        if (data.phoneExists) {
+          // 手机号已被其他账号注册 → 弹出账号合并确认框
+          _showMergeDialog(cleanPhone);
+          return;
+        }
+
+        // 验证码已发送
+        setState(() {
+          _countdown = 60;
+          _hasRequestedCode = true;
+        });
+        _startCountdown();
+      },
+      (error) {
+        if (!mounted) return;
+        setState(() => _isSending = false);
+        showToastNotification(message: '发送失败: ${error.msg}');
+      },
+    );
+  }
+
+  void _showMergeDialog(String phone) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AccountMergeDialog(
+        phone: phone,
+        onMergeComplete: () {
+          Navigator.of(context).pop();
+          widget.onBindComplete?.call();
+        },
+        onCancelled: () {
+          Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  void _startCountdown() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_countdown > 0) {
+        setState(() {
+          _countdown--;
+        });
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  Future<void> _bindPhone() async {
+    final cleanPhone = Validator.cleanPhoneNumber(phoneController.text);
+    if (!Validator.isValidPhone(cleanPhone)) {
+      showToastNotification(message: '手机号格式不正确');
+      return;
+    }
+    if (codeController.text.length != 6) {
+      showToastNotification(message: '请输入6位验证码');
+      return;
+    }
+
+    setState(() {
+      _isBinding = true;
+    });
+
+    // 不走合并路径，直接绑定
+    final result = await UserBackendService.confirmPhoneBind(
+      phone: cleanPhone,
+      token: codeController.text,
+      merge: false,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _isBinding = false;
+    });
+
+    result.fold(
+      (data) {
+        if (data.bindToExisting) {
+          // 走合并路径（绑定到已注册账号）
+          Navigator.of(context).pop();
+          widget.onBindComplete?.call();
+          return;
+        }
+        // 正常绑定成功
+        Navigator.of(context).pop();
+        widget.onBindComplete?.call();
+      },
+      (error) {
+        showToastNotification(message: error.msg);
+      },
+    );
+  }
+}

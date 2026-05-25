@@ -1,0 +1,40 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "packages/**/*.dart"
+  errors:
+    unused_import: ignore
+    dead_code: ignore
+    unnecessary_cast: ignore
+    unnecessary_null_check: ignore
+    unnecessary_overrides: ignore
+    unused_local_variable: ignore
+    invalid_override: ignore
+    unused_element: ignore
+    missing_return: ignore
+    non_constant_identifier_names: ignore
+    prefer_final_locals: ignore
+    invalid_annotation_target: ignore
+
+linter:
+  rules:
+    avoid_print: false
+    require_trailing_commas: true
+    prefer_collection_literals: true
+    prefer_final_fields: true
+    prefer_final_in_for_each: true
+    prefer_final_locals: true
+    sized_box_for_whitespace: true
+    use_decorated_box: true
+    unnecessary_parenthesis: true
+    unnecessary_await_in_return: true
+    unnecessary_raw_strings: true
+    avoid_unnecessary_containers: true
+    avoid_redundant_argument_values: true
+    avoid_unused_constructor_parameters: true
+    always_declare_return_types: true
+    sort_constructors_first: true
+    unawaited_futures: true

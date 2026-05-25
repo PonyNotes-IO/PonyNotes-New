@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package flowy_user;
+
+// Workspace settings used by user services.
+message AFWorkspaceSettings {
+  bool disable_search_indexing = 1;
+  string ai_model = 2;
+  // workspace type (Local/Server) - defined elsewhere in existing protos
+  int32 workspace_type = 3;
+
+  // New flag: when true, only workspace owners can create team workspaces.
+  bool only_owner_can_create_team_workspace = 4;
+}
+
+// Change set for updating workspace settings. Fields are optional so
+// callers can send partial updates.
+message AFWorkspaceSettingsChange {
+  google.protobuf.BoolValue disable_search_indexing = 1;
+  google.protobuf.StringValue ai_model = 2;
+  google.protobuf.BoolValue only_owner_can_create_team_workspace = 3;
+}
+
+

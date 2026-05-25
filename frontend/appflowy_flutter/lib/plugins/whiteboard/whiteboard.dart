@@ -1,0 +1,1232 @@
+library;
+
+import 'dart:convert';
+import 'dart:io';
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/util.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:get_it/get_it.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
+import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
+
+const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
+const _preferHostTopRightActionsKey = 'preferHostTopRightActions';
+const _whiteboardHostActionIconColorLight = Color(0xFF111111);
+const _whiteboardHostActionIconColorDark = Color(0xFFF3F4F6);
+const _whiteboardActionSurfaceColorLight = Color(0xF7FFFFFF);
+const _whiteboardActionSurfaceColorDark = Color(0xE61B1C20);
+const _whiteboardActionBorderColorLight = Color(0x16000000);
+const _whiteboardActionBorderColorDark = Color(0x22FFFFFF);
+
+class WhiteboardPluginBuilder extends PluginBuilder {
+  @override
+  Plugin build(dynamic data) {
+    // debug logs removed
+
+    if (data is ViewPB) {
+      // debug logs removed
+      return WhiteboardPlugin(pluginType: pluginType, view: data);
+    }
+
+    Log.error(
+      '❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception',
+    );
+    throw FlowyPluginException.invalidData;
+  }
+
+  @override
+  String get menuName => "白板";
+
+  @override
+  FlowySvgData get icon => FlowySvgs.icon_board_s; // 暂时使用看板图标，后续可替换为专用白板图标
+
+  @override
+  PluginType get pluginType => PluginType.whiteboard;
+
+  @override
+  ViewLayoutPB? get layoutType => ViewLayoutPB.Whiteboard;
+}
+
+class WhiteboardPlugin extends Plugin {
+  WhiteboardPlugin({
+    required ViewPB view,
+    required PluginType pluginType,
+  }) : notifier = ViewPluginNotifier(view: view) {
+    // debug log removed
+    _pluginType = pluginType;
+  }
+
+  @override
+  late final ViewPluginNotifier notifier;
+  late final PluginType _pluginType;
+  late final ViewInfoBloc _viewInfoBloc;
+  late final PageAccessLevelBloc _pageAccessLevelBloc;
+
+  @override
+  PluginWidgetBuilder get widgetBuilder => WhiteboardPluginWidgetBuilder(
+        bloc: _viewInfoBloc,
+        notifier: notifier,
+        pageAccessLevelBloc: _pageAccessLevelBloc,
+      );
+
+  @override
+  PluginId get id => notifier.view.id;
+
+  @override
+  PluginType get pluginType => _pluginType;
+
+  @override
+  void init() {
+    // debug log removed
+    _viewInfoBloc = ViewInfoBloc(view: notifier.view)
+      ..add(const ViewInfoEvent.started());
+    _pageAccessLevelBloc = PageAccessLevelBloc(view: notifier.view)
+      ..add(const PageAccessLevelEvent.initial());
+    // debug log removed
+  }
+
+  @override
+  void dispose() {
+    _viewInfoBloc.close();
+    _pageAccessLevelBloc.close();
+    notifier.dispose();
+  }
+}
+
+class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
+  WhiteboardPluginWidgetBuilder({
+    required this.bloc,
+    required this.notifier,
+    required this.pageAccessLevelBloc,
+  });
+
+  final ViewInfoBloc bloc;
+  final ViewPluginNotifier notifier;
+  final PageAccessLevelBloc pageAccessLevelBloc;
+
+  ViewPB get view => notifier.view;
+  @override
+  EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
+  Widget buildWidget({
+    required PluginContext context,
+    required bool shrinkWrap,
+    Map<String, dynamic>? data,
+  }) {
+    // debug logs removed
+    final widget = MultiBlocProvider(
+      providers: [
+        BlocProvider<ViewInfoBloc>.value(
+          value: bloc,
+        ),
+        BlocProvider<PageAccessLevelBloc>.value(
+          value: pageAccessLevelBloc,
+        ),
+      ],
+      child: WhiteboardPage(
+        key: ValueKey('whiteboard_page_${notifier.view.id}'),
+        view: notifier.view,
+        onViewChanged: (view) => notifier.view = view,
+        preferHostFullWindowMoreItem: false,
+        preferHostTopRightActions: false,
+      ),
+    );
+    // debug log removed
+    return widget;
+  }
+
+  @override
+  List<NavigationItem> get navigationItems => [this];
+
+  @override
+  String? get viewName => notifier.view.nameOrDefault;
+
+  @override
+  Widget get leftBarItem => BlocProvider<PageAccessLevelBloc>.value(
+        value: pageAccessLevelBloc,
+        child: ViewTitleBar(
+          key: ValueKey(notifier.view.id),
+          view: notifier.view,
+        ),
+      );
+
+  @override
+  Widget? get rightBarItem => null;
+
+  @override
+  Widget? get fullWindowMoreItem => null;
+
+  @override
+  Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
+      ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+}
+
+class WhiteboardPage extends StatefulWidget {
+  WhiteboardPage({
+    super.key,
+    required this.view,
+    required this.onViewChanged,
+    this.preferHostFullWindowMoreItem = false,
+    this.preferHostTopRightActions = true,
+  }) {
+    // debug log removed
+  }
+
+  final ViewPB view;
+  final Function(ViewPB) onViewChanged;
+  final bool preferHostFullWindowMoreItem;
+  final bool preferHostTopRightActions;
+
+  @override
+  State<WhiteboardPage> createState() {
+    // debug log removed
+    return _WhiteboardPageState();
+  }
+}
+
+// 全局WebView实例计数器，确保每个WebView的Key绝对唯一
+
+class _WhiteboardPageState extends State<WhiteboardPage> {
+  Map<String, dynamic>? _initialData;
+  bool _isLoadingData = true;
+  bool get _showLegacyBlockingLoader => false;
+  bool _isDisposing = false; // 标记是否正在销毁
+  int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
+
+  // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
+  WhiteboardCollabAdapter? _collabAdapter;
+
+  // ExcalidrawWebView的GlobalKey，用于调用其方法
+  // ✅ 关键修复：为每个视图创建唯一的GlobalKey，避免视图切换时PlatformView重复创建
+  // 使用view.id确保每个白板视图都有唯一的key
+  late GlobalKey<ExcalidrawWebViewState> _webViewKey;
+
+  // 主题监听
+  Brightness? _lastBrightness;
+  late final String _sessionTraceId;
+  late final String _loadTraceId;
+  late final Stopwatch _loadStopwatch;
+
+  @override
+  void initState() {
+    super.initState();
+    _sessionTraceId =
+        ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
+    _loadTraceId = ponyNotesDiagTraceId('whiteboard', widget.view.id);
+    _loadStopwatch = Stopwatch()..start();
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'page_init',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'viewName': widget.view.name,
+      },
+    );
+    // debug logs removed
+
+    // ✅ 关键修复：为每个视图创建唯一的GlobalKey
+    // 使用view.id确保每个白板视图都有唯一的key，避免视图切换时PlatformView重复创建
+    _webViewKey = GlobalKey<ExcalidrawWebViewState>(
+      debugLabel: 'whiteboard_webview_${widget.view.id}',
+    );
+
+    // 注册导出和导入控制器到 GetIt，供 "更多操作" 菜单中的功能使用
+    _registerControllers();
+
+    // 初始化 Collab 适配器（模仿 DocumentBloc）
+    _initCollabAdapter();
+
+    _loadInitialData();
+  }
+
+  /// 注册导出和导入控制器到 GetIt
+  void _registerControllers() {
+    try {
+      final getIt = GetIt.instance;
+      final viewId = widget.view.id;
+
+      // 注册导出控制器
+      final exportController = WhiteboardExportController(
+        viewId: viewId,
+        exportCallback: _performExport,
+      );
+      getIt.registerSingleton<WhiteboardExportController>(
+        exportController,
+        instanceName: '${viewId}_export',
+      );
+      Log.info('[Whiteboard] 注册导出控制器: $viewId');
+
+      // 注册导入控制器
+      final importController = WhiteboardImportController(
+        viewId: viewId,
+        importCallback: _performImport,
+      );
+      getIt.registerSingleton<WhiteboardImportController>(
+        importController,
+        instanceName: '${viewId}_import',
+      );
+      Log.info('[Whiteboard] 注册导入控制器: $viewId');
+    } catch (e) {
+      Log.warn('[Whiteboard] 注册控制器失败: $e');
+    }
+  }
+
+  /// 执行导出操作
+  void _performExport(String format) {
+    Log.info('[Whiteboard] 执行导出: $format');
+    switch (format) {
+      case 'ponynotes':
+        _exportAsSourceFile();
+        break;
+      case 'png':
+      case 'svg':
+        _exportAsImage(format);
+        break;
+      default:
+        Log.warn('[Whiteboard] 未知的导出格式: $format');
+    }
+  }
+
+  /// 执行导入操作
+  void _performImport(String filePath) {
+    Log.info('[Whiteboard] 执行导入: $filePath');
+    _importFromFilePath(filePath);
+  }
+
+  /// 从文件路径导入白板数据
+  Future<void> _importFromFilePath(String filePath) async {
+    final importStopwatch = Stopwatch()..start();
+    try {
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_start',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'filePath': filePath,
+        },
+      );
+      // 读取文件内容
+      final fileContent = await File(filePath).readAsString();
+      final data = jsonDecode(fileContent) as Map<String, dynamic>;
+
+      // 验证数据格式
+      if (!_isValidExcalidrawData(data)) {
+        Log.error('[Whiteboard] 导入失败：文件格式无效');
+        _showErrorSnackBar('文件格式无效，请选择有效的白板文件');
+        return;
+      }
+
+      // 从标准Excalidraw格式中提取场景数据
+      final sceneData = <String, dynamic>{
+        'elements': data['elements'] ?? [],
+        'appState': data['appState'] ?? {},
+        'files': data['files'] ?? {},
+      };
+
+      // 更新 Adapter 的全量数据缓存并保存到后端
+      _collabAdapter?.onWhiteboardDataChanged('update', sceneData);
+      await _collabAdapter?.forceSync();
+
+      // 通过重建 WebView（更换 Key + 更新 initialData）确保数据立即显示，
+      // 与切换 tab 后重新加载的效果一致，避免依赖 JS 调用可能失败的问题。
+      if (mounted && !_isDisposing) {
+        setState(() {
+          _initialData = sceneData;
+          _isLoadingData = true;
+          _importReloadCounter++;
+          _webViewKey = GlobalKey<ExcalidrawWebViewState>(
+            debugLabel:
+                'whiteboard_webview_${widget.view.id}_i$_importReloadCounter',
+          );
+        });
+        // 短暂延迟让 loading 指示器渲染出来
+        await Future.delayed(const Duration(milliseconds: 80));
+        if (mounted && !_isDisposing) {
+          setState(() {
+            _isLoadingData = false;
+          });
+        }
+      }
+
+      Log.info('[Whiteboard] 导入成功');
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_done',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'durationMs': importStopwatch.elapsedMilliseconds,
+          'elementsCount': sceneData['elements'] is List
+              ? (sceneData['elements'] as List).length
+              : null,
+          'filesCount': sceneData['files'] is Map
+              ? (sceneData['files'] as Map).length
+              : null,
+          'reloadCounter': _importReloadCounter,
+        },
+      );
+      if (mounted) _showSuccessSnackBar('导入成功');
+    } catch (e, stackTrace) {
+      Log.error('[Whiteboard] 导入失败: $e');
+      Log.error('[Whiteboard] 堆栈: $stackTrace');
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_done',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'durationMs': importStopwatch.elapsedMilliseconds,
+          'success': false,
+          'error': '$e',
+        },
+        warning: true,
+      );
+      if (mounted) _showErrorSnackBar('导入失败: $e');
+    }
+  }
+
+  /// 显示错误提示
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    showToastNotification(
+      message: message,
+      type: ToastificationType.error,
+    );
+  }
+
+  /// 显示成功提示
+  void _showSuccessSnackBar(String message) {
+    if (!mounted) return;
+    showToastNotification(
+      message: message,
+      type: ToastificationType.success,
+    );
+  }
+
+  @override
+  void dispose() {
+    _isDisposing = true;
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'page_dispose_start',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+      },
+    );
+
+    print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
+
+    final adapter = _collabAdapter;
+
+    // 注销所有控制器（同步操作）
+    _unregisterControllers();
+
+    // fire-and-forget：先 forceSync 完成后再 dispose adapter
+    if (adapter != null) {
+      adapter.forceSync().then((_) {
+        _collabAdapter = null;
+        print('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
+        logDiagnosticEvent(
+          'WhiteboardLoad',
+          'page_dispose_force_sync_done',
+          {
+            'sessionId': _sessionTraceId,
+            'traceId': _loadTraceId,
+            'viewId': widget.view.id,
+            'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+            'success': true,
+          },
+        );
+        adapter.dispose();
+      }).catchError((e) {
+        _collabAdapter = null;
+        print('[WhiteboardPage] ❌ Force sync failed: $e');
+        logDiagnosticEvent(
+          'WhiteboardLoad',
+          'page_dispose_force_sync_done',
+          {
+            'sessionId': _sessionTraceId,
+            'traceId': _loadTraceId,
+            'viewId': widget.view.id,
+            'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+            'success': false,
+            'error': '$e',
+          },
+          warning: true,
+        );
+        adapter.dispose();
+      });
+    }
+
+    // 关闭白板以释放后端资源（fire-and-forget）
+    final viewId = widget.view.id;
+    Future(() async {
+      try {
+        final service = WhiteboardDataService();
+        final result = await service.closeWhiteboard(viewId: viewId);
+        result.fold(
+          (_) => print('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
+          (error) => print(
+              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+        );
+      } catch (e) {
+        print('[WhiteboardPage] Exception closing whiteboard: $e');
+      }
+    });
+
+    super.dispose();
+    print('[WhiteboardPage] ✅ Dispose completed (sync part)');
+  }
+
+  /// 注销所有控制器
+  void _unregisterControllers() {
+    try {
+      final getIt = GetIt.instance;
+      final viewId = widget.view.id;
+
+      // 注销导出控制器
+      if (getIt.isRegistered<WhiteboardExportController>(
+        instanceName: '${viewId}_export',
+      )) {
+        getIt.unregister<WhiteboardExportController>(
+          instanceName: '${viewId}_export',
+        );
+        Log.info('[Whiteboard] 注销导出控制器: $viewId');
+      }
+
+      // 注销导入控制器
+      if (getIt.isRegistered<WhiteboardImportController>(
+        instanceName: '${viewId}_import',
+      )) {
+        getIt.unregister<WhiteboardImportController>(
+          instanceName: '${viewId}_import',
+        );
+        Log.info('[Whiteboard] 注销导入控制器: $viewId');
+      }
+    } catch (e) {
+      Log.warn('[Whiteboard] 注销控制器失败: $e');
+    }
+  }
+
+  /// 初始化 Collab 适配器（完全模仿 DocumentBloc 的 TransactionAdapter）
+  void _initCollabAdapter() {
+    _collabAdapter = WhiteboardCollabAdapter(
+      viewId: widget.view.id,
+      traceId: _loadTraceId,
+      sessionId: _sessionTraceId,
+      onDataChanged: (data) {
+        // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
+        if (!_isDisposing && mounted) {
+          for (final entry in data.entries) {
+            Log.info('[Whiteboard] 🔔 Pushing remote update: ${entry.key}');
+            _webViewKey.currentState?.pushData(entry.key, entry.value);
+          }
+        }
+      },
+    );
+  }
+
+  Future<void> _loadInitialData() async {
+    final stageStopwatch = Stopwatch()..start();
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'local_data_start',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+      },
+    );
+    // debug log removed
+    final service = WhiteboardDataService();
+    final data = await service.loadWhiteboardData(
+      widget.view.id,
+      traceId: _loadTraceId,
+      sessionId: _sessionTraceId,
+      source: 'page-load',
+    );
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'local_data_done',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'durationMs': stageStopwatch.elapsedMilliseconds,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+        'hasData': data.isNotEmpty,
+        'keys': data.keys.length,
+        'elements':
+            data['elements'] is List ? (data['elements'] as List).length : null,
+        'files': data['files'] is Map ? (data['files'] as Map).length : null,
+        'slow': stageStopwatch.elapsedMilliseconds > 1000,
+      },
+      warning: stageStopwatch.elapsedMilliseconds > 1000,
+    );
+
+    // debug log removed
+
+    if (mounted && !_isDisposing) {
+      setState(() {
+        _initialData = data.isEmpty ? null : data;
+        _isLoadingData = false;
+      });
+
+      // 初始化 Collab Adapter 的全量数据缓存
+      // 确保后续的增量更新能合并到完整的状态中
+      if (data.isNotEmpty) {
+        _collabAdapter?.setInitialData(data);
+      }
+    }
+
+    // debug log removed
+  }
+
+  /// 白板数据变更回调 - 完全模仿 DocumentBloc 的 transactionStream 监听
+  void _onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
+    if (_isDisposing) {
+      Log.debug('⚠️ [Whiteboard] Data change ignored - widget is disposing');
+      return;
+    }
+
+    // debug log removed
+
+    // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
+    _collabAdapter?.onWhiteboardDataChanged(type, data);
+  }
+
+  void _onWhiteboardExport(String format, dynamic data) {
+    if (!mounted) return;
+
+    if (format == 'png' && data is String) {
+      // dataURL -> 保存PNG
+      _savePngDataUrl(data);
+      return;
+    }
+
+    if (format == 'svg' && data is String) {
+      // SVG 文本 -> 保存SVG
+      _saveSvgData(data);
+      return;
+    }
+
+    // PonyNotes 源文件（json）
+    if (format == 'ponynotes' && data is Map<String, dynamic>) {
+      _savePonyNotesJson(data);
+      return;
+    }
+
+    showToastNotification(
+      message: '导出格式不受支持: $format',
+      type: ToastificationType.error,
+    );
+  }
+
+  Future<void> _savePonyNotesJson(Map<String, dynamic> data) async {
+    try {
+      // 确保数据符合Excalidraw标准格式（保持兼容性）
+      final ponyNotesData = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'source': 'https://ponynotes.io',
+        'elements': data['elements'] ?? [],
+        'appState': data['appState'] ?? {},
+        'files': data['files'] ?? {},
+      };
+
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存PonyNotes白板文件',
+        fileName: '${widget.view.name}.ponynotes',
+        type: FileType.custom,
+        allowedExtensions: ['ponynotes', 'json'],
+      );
+      if (savePath == null) return;
+
+      final file = File(savePath);
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(ponyNotesData),
+      );
+
+      if (mounted) {
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
+        );
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save PonyNotes json failed: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _savePngDataUrl(String dataUrl) async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存PNG图片',
+        fileName: '${widget.view.name}.png',
+        type: FileType.custom,
+        allowedExtensions: ['png'],
+      );
+      if (savePath == null) return;
+
+      final uri = Uri.parse(dataUrl);
+      final data = uri.data;
+      if (data == null) {
+        throw Exception('PNG 数据为空');
+      }
+      final bytes = data.contentAsBytes();
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+
+      if (mounted) {
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
+        );
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save PNG failed: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _saveSvgData(String svgContent) async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存SVG图片',
+        fileName: '${widget.view.name}.svg',
+        type: FileType.custom,
+        allowedExtensions: ['svg'],
+      );
+      if (savePath == null) return;
+
+      final file = File(savePath);
+      await file.writeAsString(svgContent);
+
+      if (mounted) {
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
+        );
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save SVG failed: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  void _onWhiteboardError(String error) {
+    if (_isDisposing) {
+      Log.debug('⚠️ [Whiteboard] Error ignored - widget is disposing: $error');
+      return; // 如果正在销毁，忽略错误通知
+    }
+
+    // 处理错误
+    Log.error('❌ [Whiteboard] Error: $error');
+    if (mounted && !_isDisposing) {
+      showToastNotification(
+        message: '白板错误: $error',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
+  /// 手动保存白板数据（现在通过 CollabAdapter 自动处理）
+  Future<void> _saveWhiteboard() async {
+    Log.debug(
+      '💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)',
+    );
+
+    // 强制立即同步（模仿 DocumentBloc 的行为）
+    await _collabAdapter?.forceSync();
+
+    if (mounted) {
+      Log.debug('✅ [Whiteboard] Manual save completed via CollabAdapter');
+      showToastNotification(
+        message: '白板已保存',
+        type: ToastificationType.success,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Log.debug(
+      '🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData',
+    );
+
+    // 监听主题变化
+    final appearanceCubit = context.watch<AppearanceSettingsCubit>();
+    final currentBrightness = Theme.of(context).brightness;
+
+    // 如果主题发生变化，更新Excalidraw主题
+    if (_lastBrightness != null && _lastBrightness != currentBrightness) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _webViewKey.currentState?.updateTheme(
+          currentBrightness == Brightness.dark ? 'dark' : 'light',
+        );
+      });
+    }
+    _lastBrightness = currentBrightness;
+
+    if (_isLoadingData && _showLegacyBlockingLoader) {
+      Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
+      return Scaffold(
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('正在加载白板数据...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Log.debug('✅ [WhiteboardPage] Building whiteboard content');
+    return Scaffold(
+      body: ValueListenableBuilder<bool>(
+        valueListenable: FullWindowController.isFullWindow,
+        builder: (context, isFullWindow, _) {
+          return Stack(
+            children: [
+              _buildExcalidrawView(),
+              Positioned(
+                top: isFullWindow ? 12 : 14,
+                right: isFullWindow ? 12 : 18,
+                child: SafeArea(
+                  bottom: false,
+                  child: _buildTopActionsBar(
+                    context,
+                    isFullWindow: isFullWindow,
+                  ),
+                ),
+              ),
+              if (_isLoadingData)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: 0.92),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('姝ｅ湪鍔犺浇鐧芥澘鏁版嵁...'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopActionsBar(
+    BuildContext context, {
+    required bool isFullWindow,
+  }) {
+    if (!isFullWindow && widget.preferHostTopRightActions) {
+      return const SizedBox.shrink();
+    }
+
+    final rightPadding = isFullWindow ? 116.0 : 18.0;
+    final topPadding = isFullWindow ? 12.0 : 8.0;
+    final hideInternalMoreButton = isFullWindow &&
+        (widget.preferHostFullWindowMoreItem ||
+            widget.preferHostTopRightActions);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark
+        ? _whiteboardActionSurfaceColorDark
+        : _whiteboardActionSurfaceColorLight;
+    final borderColor = isDark
+        ? _whiteboardActionBorderColorDark
+        : _whiteboardActionBorderColorLight;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(18.0, topPadding, rightPadding, 8.0),
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                onSurface: _whiteboardActionIconColor(context),
+              ),
+        ),
+        child: IconTheme(
+          data: IconThemeData(color: _whiteboardActionIconColor(context)),
+          child: Row(
+            children: [
+              const Spacer(),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderColor, width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color:
+                          Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeaderAction(
+                        ShareButton(
+                          key: ValueKey('share_button_${widget.view.id}'),
+                          view: widget.view,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildHeaderAction(_buildFavoriteAction(context)),
+                      const SizedBox(width: 6),
+                      if (!isFullWindow) ...[
+                        _buildHeaderAction(_buildFullWindowAction(context)),
+                        const SizedBox(width: 6),
+                      ],
+                      if (!hideInternalMoreButton)
+                        _buildHeaderAction(_buildMoreActionsButton(context)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderAction(Widget child, {double width = 36}) {
+    return SizedBox(
+      width: width,
+      height: width,
+      child: Center(child: child),
+    );
+  }
+
+  Color _whiteboardActionIconColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? _whiteboardHostActionIconColorDark
+        : _whiteboardHostActionIconColorLight;
+  }
+
+  Widget _buildFullWindowAction(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return FlowyTooltip(
+          message: isFullWindow
+              ? '\u9000\u51fa\u5e94\u7528\u5185\u5168\u5c4f'
+              : '\u5e94\u7528\u5185\u5168\u5c4f',
+          child: SizedBox.square(
+            dimension: 36,
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: Icon(
+                isFullWindow
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.fullscreen_rounded,
+                size: 20,
+                color: _whiteboardActionIconColor(context),
+              ),
+              onTap: FullWindowController.toggle,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFavoriteAction(BuildContext context) {
+    return BlocBuilder<FavoriteBloc, FavoriteState>(
+      builder: (context, state) {
+        final isFavorite = state.views.any((v) => v.item.id == widget.view.id);
+        final inactiveIconColor = _whiteboardActionIconColor(context);
+        return Listener(
+          onPointerDown: (_) => context
+              .read<FavoriteBloc>()
+              .add(FavoriteEvent.toggle(widget.view)),
+          child: FlowyTooltip(
+            message: isFavorite
+                ? LocaleKeys.button_removeFromFavorites.tr()
+                : LocaleKeys.button_addToFavorites.tr(),
+            child: FlowyHover(
+              resetHoverOnRebuild: false,
+              child: SizedBox.square(
+                dimension: 36,
+                child: Center(
+                  child: FlowySvg(
+                    isFavorite ? FlowySvgs.favorited_s : FlowySvgs.favorite_s,
+                    size: const Size.square(18),
+                    color: isFavorite ? null : inactiveIconColor,
+                    blendMode: isFavorite ? null : BlendMode.srcIn,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 构建导出按钮 - 直接调用 WhiteboardPage 的导出方法
+  Widget _buildMoreActionsButton(BuildContext context) {
+    return AppFlowyPopover(
+      direction: PopoverDirection.leftWithTopAligned,
+      constraints: const BoxConstraints(
+        maxWidth: 200,
+        maxHeight: 150,
+      ),
+      margin: const EdgeInsets.symmetric(
+        horizontal: 14.0,
+        vertical: 12.0,
+      ),
+      clickHandler: PopoverClickHandler.gestureDetector,
+      offset: const Offset(-10, 0),
+      popupBuilder: (_) => _buildExportMenu(context),
+      child: FlowyTooltip(
+        message: LocaleKeys.button_more.tr(),
+        child: SizedBox.square(
+          dimension: 36,
+          child: FlowyButton(
+            useIntrinsicWidth: true,
+            margin: EdgeInsets.zero,
+            text: FlowySvg(
+              FlowySvgs.workspace_three_dots_s,
+              size: const Size.square(18),
+              color: _whiteboardActionIconColor(context),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建导出菜单
+  Widget _buildExportMenu(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildExportOption(
+          context,
+          label: '导出ponynotes文件',
+          icon: Icons.save_alt,
+          onTap: () => _exportAsPonynotes(context),
+        ),
+        const VSpace(4),
+        _buildExportOption(
+          context,
+          label: '导出为 PNG 图片',
+          icon: Icons.image,
+          onTap: () => _exportAsPng(context),
+        ),
+        const VSpace(4),
+        _buildExportOption(
+          context,
+          label: '导出为 SVG 图片',
+          icon: Icons.broken_image,
+          onTap: () => _exportAsSvg(context),
+        ),
+      ],
+    );
+  }
+
+  /// 构建导出选项
+  Widget _buildExportOption(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: FlowyButton(
+        margin: const EdgeInsets.symmetric(horizontal: 6),
+        onTap: () {
+          // 关闭弹出菜单 - 使用 maybeOf 并添加空值检查，避免在没有 PopoverContainer 时崩溃
+          appflowy_popover.PopoverContainer.maybeOf(context)?.close();
+          // 执行导出
+          onTap();
+        },
+        leftIcon: Icon(
+          icon,
+          size: 16,
+          color: Theme.of(context).iconTheme.color,
+        ),
+        iconPadding: 10.0,
+        text: FlowyText.regular(
+          label,
+          fontSize: 14.0,
+          lineHeight: 1.0,
+          figmaLineHeight: 18.0,
+        ),
+      ),
+    );
+  }
+
+  /// 导出为 PonyNotes 源文件
+  Future<void> _exportAsPonynotes(BuildContext context) async {
+    Log.info('[Whiteboard] 导出为 ponynotes 格式');
+    try {
+      await _exportAsSourceFile();
+    } catch (e) {
+      Log.error('[Whiteboard] 导出 ponynotes 失败: $e');
+    }
+  }
+
+  /// 导出为 PNG 图片
+  Future<void> _exportAsPng(BuildContext context) async {
+    Log.info('[Whiteboard] 导出为 PNG');
+    try {
+      await _exportAsImage('png');
+    } catch (e) {
+      Log.error('[Whiteboard] 导出 PNG 失败: $e');
+    }
+  }
+
+  /// 导出为 SVG 图片
+  Future<void> _exportAsSvg(BuildContext context) async {
+    Log.info('[Whiteboard] 导出为 SVG');
+    try {
+      await _exportAsImage('svg');
+    } catch (e) {
+      Log.error('[Whiteboard] 导出 SVG 失败: $e');
+    }
+  }
+
+  Widget _buildExcalidrawView() {
+    // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
+    // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
+    // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
+    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
+    Log.debug(
+      '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
+    );
+
+    return ExcalidrawWebView(
+      key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
+      viewId: widget.view.id,
+      sessionTraceId: _sessionTraceId,
+      loadTraceId: _loadTraceId,
+      initialData: _initialData,
+      initialDataLoaded: !_isLoadingData,
+      deferInitialDataLoad: true,
+      onDataChanged: _onWhiteboardDataChanged,
+      onExport: _onWhiteboardExport,
+      onError: _onWhiteboardError,
+    );
+  }
+
+  /// 导出为源文件
+  /// 修复：使用WebView的导出API获取标准格式的Excalidraw数据，而不是直接从服务加载
+  Future<void> _exportAsSourceFile() async {
+    try {
+      // 触发 WebView 内的导出，通过 _onWhiteboardExport 回调处理
+      await _webViewKey.currentState?.exportDrawing('ponynotes');
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export source file failed: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '导出失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  /// 导出为图片
+  Future<void> _exportAsImage(String format) async {
+    try {
+      // 触发 WebView 内的导出
+      await _webViewKey.currentState?.exportDrawing(format);
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export image failed: $e');
+      rethrow;
+    }
+  }
+
+  /// 验证是否为有效的Excalidraw数据格式
+  bool _isValidExcalidrawData(Map<String, dynamic> data) {
+    return data.containsKey('type') &&
+        data['type'] == 'excalidraw' &&
+        data.containsKey('elements') &&
+        data['elements'] is List;
+  }
+}

@@ -1,0 +1,1248 @@
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'import_page_widgets.dart';
+import 'package:appflowy/plugins/import_page/import_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/settings/share/import_service.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:fixnum/fixnum.dart' as fixnum;
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:appflowy/shared/markdown_to_document.dart';
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'enhanced_pdf_import_dialog.dart';
+import 'enhanced_word_import_dialog.dart';
+import 'enhanced_html_import_dialog.dart';
+
+class ImportPageScreen extends StatefulWidget {
+  const ImportPageScreen({super.key});
+
+  @override
+  State<ImportPageScreen> createState() => _ImportPageScreenState();
+}
+
+class _ImportPageScreenState extends State<ImportPageScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(45.0, 68.0, 45.0, 32.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            _buildHeader(),
+            const SizedBox(height: 20),
+            
+            // Separator line
+            Container(
+              height: 1,
+              width: double.infinity,
+              color: Theme.of(context).dividerColor,
+            ),
+            const SizedBox(height: 17),
+            
+            // Description
+            _buildDescription(),
+            const SizedBox(height: 30),
+            
+            // File-based import section
+            _buildFileImportSection(context),
+            const SizedBox(height: 30),
+            
+            // Third-party import section  
+            // _buildThirdPartyImportSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        FlowyText.semibold(
+          "导入或者迁移",
+          fontSize: 20,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDescription() {
+    return Row(
+      children: [
+        Expanded(
+          child: FlowyText(
+            "从其他应用和文件导入数据到 小马AI笔记",
+            fontSize: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        // const SizedBox(width: 10),
+        // GestureDetector(
+        //   onTap: () {
+        //     // TODO: Show details
+        //   },
+        //   child: FlowyText(
+        //     "了解详情",
+        //     fontSize: 20,
+        //     color: const Color(0xFFF89575), // Orange color from design
+        //     fontWeight: FontWeight.w500,
+        //   ),
+        // ),
+      ],
+    );
+  }
+
+  Widget _buildFileImportSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          "基于文件导入",
+          fontSize: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 20),
+        
+        // First row: CSV, PDF, Markdown
+        Row(
+          children: [
+            Expanded(
+              child: ImportFileCard(
+                icon: Icons.table_chart,
+                title: "CSV",
+                onTap: () => _handleFileImport(context,'csv'),
+              ),
+            ),
+            const SizedBox(width: 30),
+            Expanded(
+              child: ImportFileCard(
+                icon: Icons.picture_as_pdf,
+                title: "PDF",
+                onTap: () => _handleFileImport(context,'pdf'),
+              ),
+            ),
+            const SizedBox(width: 30),
+            Expanded(
+              child: ImportFileCard(
+                icon: Icons.text_snippet,
+                title: "文本与 Markdown",
+                onTap: () => _handleFileImport(context,'markdown'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 30),
+        //
+        // // Second row: HTML, Word
+        Row(
+          children: [
+            Expanded(
+              child: ImportFileCard(
+                icon: Icons.code,
+                title: "HTML",
+                onTap: () => _handleFileImport(context,'html'),
+              ),
+            ),
+        //     const SizedBox(width: 30),
+        //     Expanded(
+        //       child: ImportFileCard(
+        //         icon: Icons.description,
+        //         title: "Word",
+        //         onTap: () => _handleFileImport('word'),
+        //       ),
+        //     ),
+            const SizedBox(width: 30),
+            const Expanded(child: SizedBox()),
+            const SizedBox(width: 30),
+            const Expanded(child: SizedBox()), // Empty space for alignment
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildThirdPartyImportSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          "第三方导入",
+          fontSize: 16,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: 20),
+        
+        Row(
+          children: [
+            Expanded(
+              child: ImportServiceCard(
+                iconPath: 'assets/images/notion_icon.png', // You'll need to add this asset
+                title: "Notion",
+                subtitle: "你的笔记和笔记本",
+                onTap: () => _handleServiceImport('notion'),
+              ),
+            ),
+            const SizedBox(width: 30),
+            Expanded(
+              child: ImportServiceCard(
+                iconPath: 'assets/images/evernote_icon.png', // You'll need to add this asset
+                title: "Evernote",
+                subtitle: "引入你的笔记和笔记本",
+                onTap: () => _handleServiceImport('evernote'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _handleFileImport(BuildContext context ,String type) async {
+    try {
+      if (type == 'csv') {
+        await _handleCsvImport();
+      } else if (type == 'markdown') {
+        await _handleMarkdownImport(context);
+      } else if (type == 'pdf') {
+        await _handlePdfImport();
+      } else if (type == 'html') {
+        await _handleEnhancedHtmlImport();
+      } else if (type == 'word') {
+        await _handleWordImport();
+      } else {
+        final result = await ImportService.pickAndImportFile(type);
+        if (result != null && mounted) {
+          showToastNotification(
+            message: '成功导入 ${result.fileName}',
+            type: ToastificationType.success,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCsvImport() async {
+    try {
+      // 获取当前工作空间
+      final workspaceResult = await FolderEventReadCurrentWorkspace().send();
+      final workspace = workspaceResult.fold(
+        (workspace) => workspace,
+        (error) => throw Exception('获取当前工作空间失败: $error'),
+      );
+
+      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      final externalImportView = await _getOrCreateExternalImportView(workspace.id);
+      
+      // 使用现有的导入面板逻辑导入CSV文件
+      final result = await ImportService.pickAndImportFile('csv');
+      if (result != null) {
+        // 创建导入项目
+        final importValues = <ImportItemPayloadPB>[
+          ImportItemPayloadPB.create()
+            ..name = p.basenameWithoutExtension(result.fileName)
+            ..data = utf8.encode(result.content)
+            ..viewLayout = ViewLayoutPB.Grid
+            ..importType = ImportTypePB.CSV,
+        ];
+
+        // 导入到"外部导入"子项目下
+        final importResult = await ImportBackendService.importPages(
+          externalImportView.id,
+          importValues,
+        );
+
+        importResult.fold(
+          (views) {
+            if (mounted) {
+              showToastNotification(
+                message: '成功将 ${result.fileName} 导入到外部导入项目',
+                type: ToastificationType.success,
+              );
+
+              // 如果有导入的视图，打开第一个
+              if (views.items.isNotEmpty) {
+                context.read<TabsBloc>().openPlugin(views.items.first);
+              }
+            }
+          },
+          (error) {
+            if (mounted) {
+              showToastNotification(
+                message: '导入失败: $error',
+                type: ToastificationType.error,
+              );
+            }
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: 'CSV导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  Future<void> _handleMarkdownImport(BuildContext context) async {
+    try {
+      // 获取当前工作空间
+      final workspaceResult = await FolderEventReadCurrentWorkspace().send();
+      final workspace = workspaceResult.fold(
+        (workspace) => workspace,
+        (error) => throw Exception('获取当前工作空间失败: $error'),
+      );
+
+      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      final externalImportView = await _getOrCreateExternalImportView(workspace.id);
+      
+      // 选择并读取文本/Markdown文件
+      final result = await getIt<FilePickerService>().pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['md', 'markdown', 'txt'],
+        allowMultiple: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final importValues = <ImportItemPayloadPB>[];
+        
+        // 先检查所有文件大小
+        bool hasValidFiles = false;
+        for (final file in result.files) {
+          final path = file.path;
+          if (path != null) {
+            final fileSize = await File(path).length();
+            const maxFileSize = 1024 * 1024; // 1MB
+            if (fileSize <= maxFileSize) {
+              hasValidFiles = true;
+              break;
+            }
+          }
+        }
+        
+        // 只有有有效文件时才显示进度对话框
+        BuildContext? dialogContext;
+        ValueNotifier<double>? progressNotifier;
+        int totalFiles = result.files.length;
+        int processedFiles = 0;
+        
+        if (hasValidFiles) {
+          // 显示导入进度对话框
+          progressNotifier = ValueNotifier<double>(0.0);
+          
+          // 立即更新初始进度
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            progressNotifier!.value = 0.0;
+          });
+          
+          // 非阻塞显示对话框
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              dialogContext = context;
+              return AlertDialog(
+                title: const Text('导入进度'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('正在处理文件，请稍候...'),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder<double>(
+                      valueListenable: progressNotifier!,
+                      builder: (context, value, child) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 8,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ValueListenableBuilder<double>(
+                      valueListenable: progressNotifier!,
+                      builder: (context, value, child) => Text(
+                        '${(value * 100).toStringAsFixed(0)}%',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }
+        
+        for (final file in result.files) {
+          final path = file.path;
+          if (path == null) {
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            continue;
+          }
+          
+          final fileName = file.name;
+          final name = p.basenameWithoutExtension(fileName);
+          
+          // 检查文件大小
+          final fileSize = await File(path).length();
+          const maxFileSize = 1024 * 1024; // 1MB
+          if (fileSize > maxFileSize) {
+            if (mounted) {
+              showToastNotification(
+                message: '文件 $fileName 过大（${(fileSize / 1024 / 1024).toStringAsFixed(1)}MB），最大支持 1MB',
+                type: ToastificationType.warning,
+              );
+            }
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            continue;
+          }
+          
+          try {
+            // 读取文件内容
+            final data = await File(path).readAsString();
+            
+            // 读取完成后更新进度
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            
+            // 使用 Isolate 进行后台处理
+            final documentBytes = await compute((Map<String, dynamic> params) {
+              final content = params['content'] as String;
+              final doc = customMarkdownToDocument(content);
+              return DocumentDataPBFromTo.fromDocument(doc)?.writeToBuffer();
+            }, {'content': data});
+            
+            if (documentBytes != null) {
+              importValues.add(
+                ImportItemPayloadPB.create()
+                  ..name = name
+                  ..data = documentBytes
+                  ..viewLayout = ViewLayoutPB.Document
+                  ..importType = ImportTypePB.Markdown,
+              );
+            }
+          } catch (e) {
+            Log.error('处理文件 $fileName 失败: $e');
+            if (mounted) {
+              showToastNotification(
+                message: '处理文件 $fileName 失败: $e',
+                type: ToastificationType.error,
+              );
+            }
+            // 即使出错也要更新进度
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+          }
+        }
+
+        // 关闭进度对话框
+        if (dialogContext != null) {
+          Navigator.of(dialogContext!).pop();
+        }
+
+        if (importValues.isNotEmpty) {
+          // 导入到"外部导入"子项目下
+          final importResult = await ImportBackendService.importPages(
+            externalImportView.id,
+            importValues,
+          );
+
+          importResult.fold(
+            (views) {
+              if (mounted) {
+                final fileCount = importValues.length;
+                final fileNames = result.files.map((f) => f.name).join(', ');
+                showToastNotification(
+                  message: '成功导入 $fileCount 个文件到外部导入项目：$fileNames',
+                  type: ToastificationType.success,
+                );
+
+                // 如果有导入的视图，打开第一个
+                if (views.items.isNotEmpty) {
+                  context.read<TabsBloc>().openPlugin(views.items.first);
+                }
+              }
+            },
+            (error) {
+              if (mounted) {
+                showToastNotification(
+                  message: '导入失败: $error',
+                  type: ToastificationType.error,
+                );
+              }
+            },
+          );
+        } else if (mounted) {
+          showToastNotification(
+            message: '没有成功处理的文件',
+            type: ToastificationType.info,
+          );
+        }
+      }
+    } catch (e) {
+      Log.error('Markdown导入失败: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '文本与Markdown导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+
+  Future<ViewPB> _getOrCreateExternalImportView(String workspaceId) async {
+    const externalImportName = '外部导入';
+    
+    // 获取工作空间服务
+    final workspaceService = WorkspaceService(
+      workspaceId: workspaceId,
+      userId: fixnum.Int64(1),
+    );
+    
+    // 获取私有空间
+    final privateViewsResult = await workspaceService.getPrivateViews();
+    final privateViews = privateViewsResult.fold(
+      (views) => views,
+      (error) => throw Exception('获取私有空间失败: $error'),
+    );
+    // 查找私有空间中的空间类型视图
+    final allSpaces = privateViews.where((view) => view.isSpace).toList();
+    
+    // 检查是否已存在"外部导入"空间
+    Log.info('检查私有空间中是否已存在"外部导入"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
+    final existingSpace = allSpaces.firstWhere(
+      (space) => space.name == externalImportName,
+      orElse: () => ViewPB(),
+    );
+
+    if (existingSpace.id.isNotEmpty) {
+      Log.info('找到已存在的"外部导入"空间，ID: ${existingSpace.id}，类型: ${existingSpace.spacePermission}');
+      return existingSpace;
+    }
+
+    // 在私有空间中创建"外部导入"空间
+    Log.info('在私有空间中创建新的"外部导入"空间');
+    
+    // 创建空间（使用与AI会话相同的逻辑）
+    final spaceExtra = {
+      ViewExtKeys.isSpaceKey: true,
+      ViewExtKeys.spaceIconKey: '📥',
+      ViewExtKeys.spaceIconColorKey: '#FF6B6B',
+      ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+      ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+    };
+    
+    final result = await workspaceService.createView(
+      name: externalImportName,
+      viewSection: ViewSectionPB.Private,
+      layout: ViewLayoutPB.Document,
+      extra: jsonEncode(spaceExtra),
+      setAsCurrent: false,
+    );
+
+    return result.fold(
+      (view) {
+        Log.info('成功创建"外部导入"空间，ID: ${view.id}');
+        return view;
+      },
+      (error) => throw Exception('创建外部导入空间失败: $error'),
+    );
+  }
+
+  Future<void> _handlePdfImport() async {
+    try {
+      // 获取当前工作空间
+      final workspaceResult = await FolderEventReadCurrentWorkspace().send();
+      final workspace = workspaceResult.fold(
+        (workspace) => workspace,
+        (error) => throw Exception('获取当前工作空间失败: $error'),
+      );
+
+      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      final externalImportView = await _getOrCreateExternalImportView(workspace.id);
+
+      // 显示增强的PDF导入对话框
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => EnhancedPdfImportDialog(
+            parentViewId: externalImportView.id,
+            onImportSuccess: () {
+              // 刷新页面或显示成功提示
+              if (mounted) {
+                setState(() {
+                  // 触发页面刷新
+                });
+              }
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: 'PDF导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+
+  void _handleServiceImport(String service) async {
+    try {
+      await ImportService.importFromService(service);
+      if (mounted) {
+        showToastNotification(
+          message: '正在从 $service 导入数据...',
+          type: ToastificationType.info,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+
+  Future<void> _handleEnhancedHtmlImport() async {
+    try {
+      // 获取当前工作空间
+      final workspaceResult = await FolderEventReadCurrentWorkspace().send();
+      final workspace = workspaceResult.fold(
+            (workspace) => workspace,
+            (error) => throw Exception('获取当前工作空间失败: $error'),
+      );
+
+      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      final externalImportView = await _getOrCreateExternalImportView(workspace.id);
+
+      // 显示增强的HTML导入对话框
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => EnhancedHtmlImportDialog(
+            parentViewId: externalImportView.id,
+            onImportSuccess: () {
+              // 刷新页面或显示成功提示
+              if (mounted) {
+                setState(() {
+                  // 触发页面刷新
+                });
+              }
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showToastNotification(
+          message: '打开HTML导入对话框失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  /// 清理HTML标签并转换为纯文本（回退方案）
+  String _cleanHtmlToText(String htmlContent, String fileName) {
+    Log.info('⚠️ 使用回退方案清理HTML内容');
+    
+    // 移除HTML标签
+    String cleanedContent = htmlContent
+        .replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '') // 移除脚本
+        .replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '') // 移除样式
+        .replaceAll(RegExp(r'<[^>]*>'), '') // 移除所有HTML标签
+        .replaceAll(RegExp(r'&[a-zA-Z0-9#]+;'), '') // 移除HTML实体
+        .replaceAll(RegExp(r'\s+'), ' ') // 规范化空格
+        .trim();
+    
+    // 如果清理后内容为空或太短，使用默认内容
+    if (cleanedContent.isEmpty || cleanedContent.length < 10) {
+      cleanedContent = '# $fileName\n\n导入的HTML内容需要手动处理。\n\n原始内容可能包含复杂格式或JavaScript。';
+    } else {
+      cleanedContent = '# $fileName\n\n$cleanedContent';
+    }
+    
+    return cleanedContent;
+  }
+
+  /// 优化Markdown内容
+  String _optimizeMarkdownContent(String markdown, String fileName) {
+    // 添加标题如果没有的话
+    if (!markdown.trimLeft().startsWith('#')) {
+      markdown = '# $fileName\n\n$markdown';
+    }
+    
+    // 清理多余的空行
+    markdown = markdown.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+    
+    // 确保内容不为空
+    if (markdown.trim().isEmpty) {
+      markdown = '# $fileName\n\n导入的HTML文件内容为空。';
+    }
+    
+    return markdown.trim();
+  }
+
+
+  Future<void> _handleWordImport() async {
+    try {
+      // 获取当前工作空间
+      final workspaceResult = await FolderEventReadCurrentWorkspace().send();
+      final workspace = workspaceResult.fold(
+        (workspace) => workspace,
+        (error) => throw Exception('获取当前工作空间失败: $error'),
+      );
+
+      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      final externalImportView = await _getOrCreateExternalImportView(workspace.id);
+
+      // 显示Word导入弹框
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => EnhancedWordImportDialog(
+            parentViewId: externalImportView.id,
+            onImportSuccess: () {
+              // 导入成功后可以执行的操作
+            },
+          ),
+        );
+      }
+    } catch (e) {
+      Log.error('❌ Word导入失败: $e');
+      if (mounted) {
+        showToastNotification(
+          message: 'Word导入失败: $e',
+          type: ToastificationType.error,
+        );
+      }
+    }
+  }
+
+  /// 从document.xml中提取纯文本
+  String _extractTextFromDocumentXml(String xmlContent) {
+    try {
+      // 改进的XML文本提取：处理更多的文本标签和编码问题
+      final textBuffer = StringBuffer();
+      
+      // 1. 提取<w:t>标签中的内容（主要文本内容）
+      final RegExp textPattern = RegExp(r'<w:t[^>]*>([^<]*)</w:t>');
+      final matches = textPattern.allMatches(xmlContent);
+      
+      for (final match in matches) {
+        final text = match.group(1);
+        if (text != null && text.trim().isNotEmpty) {
+          // 解码XML实体
+          final decodedText = _decodeXmlEntities(text);
+          textBuffer.write(decodedText);
+          textBuffer.write(' '); // 在文本片段之间添加空格
+        }
+      }
+      
+      // 2. 如果没有找到<w:t>标签，尝试提取其他可能的文本标签
+      if (textBuffer.isEmpty) {
+        // 尝试提取<w:instrText>标签（域代码文本）
+        final RegExp instrTextPattern = RegExp(r'<w:instrText[^>]*>([^<]*)</w:instrText>');
+        final instrMatches = instrTextPattern.allMatches(xmlContent);
+        
+        for (final match in instrMatches) {
+          final text = match.group(1);
+          if (text != null && text.trim().isNotEmpty) {
+            final decodedText = _decodeXmlEntities(text);
+            textBuffer.write(decodedText);
+            textBuffer.write(' ');
+          }
+        }
+      }
+      
+      // 改进的段落处理：基于XML结构重建文本
+      String result = _reconstructTextWithStructure(xmlContent, textBuffer.toString());
+      
+      // 如果结构化重建失败，使用简单的文本处理
+      if (result.trim().isEmpty) {
+        result = textBuffer.toString();
+        
+        // 规范化空格和换行
+        result = result.replaceAll(RegExp(r'\s+'), ' ').trim();
+        
+        // 简单的段落分割：基于句号和长度
+        if (result.length > 100) {
+          final sentences = result.split(RegExp(r'[。！？]'));
+          final paragraphs = <String>[];
+          String currentParagraph = '';
+          
+          for (final sentence in sentences) {
+            final trimmed = sentence.trim();
+            if (trimmed.isEmpty) continue;
+            
+            if (currentParagraph.length + trimmed.length > 200) {
+              if (currentParagraph.isNotEmpty) {
+                paragraphs.add(currentParagraph.trim());
+                currentParagraph = trimmed;
+              }
+            } else {
+              currentParagraph += trimmed;
+              if (sentence != sentences.last) {
+                currentParagraph += sentence.endsWith('。') ? '。' : 
+                                   sentence.endsWith('！') ? '！' : 
+                                   sentence.endsWith('？') ? '？' : '。';
+              }
+            }
+          }
+          
+          if (currentParagraph.trim().isNotEmpty) {
+            paragraphs.add(currentParagraph.trim());
+          }
+          
+          result = paragraphs.join('\n\n');
+        }
+      }
+      
+      return result.trim();
+    } catch (e) {
+      Log.error('XML文本提取失败: $e');
+      throw Exception('无法从DOCX XML中提取文本: $e');
+    }
+  }
+
+  /// 将纯文本转换为结构化的Markdown
+  String _convertTextToMarkdown(String text, String fileName) {
+    final lines = text.split('\n');
+    final markdownLines = <String>[];
+    
+    // 添加文档标题
+    markdownLines.add('# $fileName');
+    markdownLines.add('');
+    
+    // 处理每一行，识别可能的结构
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      
+      if (line.isEmpty) {
+        // 保持空行，但不要连续太多空行
+        if (markdownLines.isNotEmpty && markdownLines.last.isNotEmpty) {
+          markdownLines.add('');
+        }
+        continue;
+      }
+      
+      // 识别可能的标题（短行、全大写、或者数字开头）
+      if (_isLikelyTitle(line)) {
+        // 确保标题前有空行
+        if (markdownLines.isNotEmpty && markdownLines.last.isNotEmpty) {
+          markdownLines.add('');
+        }
+        markdownLines.add('## $line');
+        markdownLines.add('');
+      } else if (_isLikelyListItem(line)) {
+        // 识别列表项
+        final listItem = _formatAsListItem(line);
+        markdownLines.add(listItem);
+      } else {
+        // 普通段落
+        markdownLines.add(line);
+      }
+    }
+    
+    // 清理多余的空行
+    final cleanedLines = <String>[];
+    String? lastLine;
+    
+    for (final line in markdownLines) {
+      if (line.isEmpty && lastLine?.isEmpty == true) {
+        continue; // 跳过连续的空行
+      }
+      cleanedLines.add(line);
+      lastLine = line;
+    }
+    
+    return cleanedLines.join('\n').trim();
+  }
+
+  /// 判断是否可能是标题
+  bool _isLikelyTitle(String line) {
+    // 长度较短且不包含句号
+    if (line.length <= 60 && !line.contains('。') && !line.contains('.')) {
+      // 全大写
+      if (line == line.toUpperCase()) return true;
+      
+      // 数字编号开头
+      if (RegExp(r'^\d+[\.、\s]').hasMatch(line)) return true;
+      
+      // 常见标题词汇
+      final titleKeywords = ['第', '章', '节', '部分', '摘要', '总结', '介绍', '概述'];
+      for (final keyword in titleKeywords) {
+        if (line.contains(keyword)) return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /// 判断是否可能是列表项
+  bool _isLikelyListItem(String line) {
+    // 数字编号
+    if (RegExp(r'^\d+[\.、）]\s*').hasMatch(line)) return true;
+    
+    // 字母编号
+    if (RegExp(r'^[a-zA-Z][\.、）]\s*').hasMatch(line)) return true;
+    
+    // 括号编号
+    if (RegExp(r'^\([a-zA-Z0-9]+\)\s*').hasMatch(line)) return true;
+    
+    // 中文编号
+    if (RegExp(r'^[一二三四五六七八九十][、．]\s*').hasMatch(line)) return true;
+    
+    return false;
+  }
+
+  /// 格式化为列表项
+  String _formatAsListItem(String line) {
+    // 移除原有的编号并添加Markdown列表标记
+    final cleaned = line.replaceFirst(RegExp(r'^[0-9a-zA-Z一二三四五六七八九十\(\)\.、）]+\s*'), '');
+    return '- $cleaned';
+  }
+
+  /// 创建空文档内容
+  String _createEmptyDocumentContent(String fileName) {
+    return '''# $fileName
+
+此Word文档似乎没有可提取的文本内容。
+
+|**可能的原因：**|
+|- 文档主要包含图片或图表
+|- 文档是扫描版PDF转换而成
+|- 文档内容被加密或保护
+
+|**建议：**|
+|- 请检查原始文档是否包含文本内容
+|- 如果文档包含重要信息，请考虑手动复制粘贴
+''';
+  }
+
+  /// 创建DOC文件不支持的内容
+  String _createDocNotSupportedContent(String fileName) {
+    return '''# $fileName
+
+|**暂不支持.doc格式文件**
+
+目前系统仅支持.docx格式的Word文档导入。
+
+|**解决方案：**
+1. 使用Microsoft Word打开此文件
+2. 选择"文件" → "另存为"
+3. 将格式改为"Word文档(.docx)"
+4. 重新导入转换后的文件
+
+|**为什么不支持.doc格式？**
+.doc是较老的二进制格式，解析复杂且容易出错。
+.docx是基于XML的现代格式，更容易处理且兼容性更好。
+
+|**导入时间：** ${DateTime.now().toString().split('.')[0]}
+''';
+  }
+
+  /// 创建错误内容
+  String _createErrorContent(String fileName, String error) {
+    return '''# $fileName - 导入失败
+
+|**导入过程中发生错误**
+
+|**错误信息：** $error
+
+|**可能的解决方案：**
+1. 确保文件没有损坏
+2. 检查文件是否被密码保护
+3. 尝试用Microsoft Word打开并重新保存
+4. 确保文件格式正确（支持.docx格式）
+
+|**技术信息：**
+- 文件名：$fileName
+- 导入时间：${DateTime.now().toString().split('.')[0]}
+- 错误类型：文档解析失败
+
+如果问题持续，请联系技术支持。
+''';
+  }
+
+  /// 基于XML结构重建文本，保持段落和格式
+  String _reconstructTextWithStructure(String xmlContent, String extractedText) {
+    try {
+      final paragraphs = <String>[];
+      
+      // 找到所有段落<w:p>
+      final RegExp paragraphPattern = RegExp(r'<w:p[^>]*>(.*?)</w:p>', dotAll: true);
+      final paragraphMatches = paragraphPattern.allMatches(xmlContent);
+      
+      for (final paragraphMatch in paragraphMatches) {
+        final paragraphXml = paragraphMatch.group(1) ?? '';
+        
+        // 从段落中提取文本
+        final RegExp textPattern = RegExp(r'<w:t[^>]*>([^<]*)</w:t>');
+        final textMatches = textPattern.allMatches(paragraphXml);
+        
+        final paragraphBuffer = StringBuffer();
+        for (final textMatch in textMatches) {
+          final text = textMatch.group(1);
+          if (text != null && text.trim().isNotEmpty) {
+            final decodedText = _decodeXmlEntities(text);
+            paragraphBuffer.write(decodedText);
+          }
+        }
+        
+        final paragraphText = paragraphBuffer.toString().trim();
+        if (paragraphText.isNotEmpty) {
+          // 检查是否是表格行
+          if (paragraphXml.contains('<w:tbl>') || paragraphXml.contains('<w:tc>')) {
+            // 表格内容，添加特殊格式
+            paragraphs.add('| $paragraphText |');
+          } else if (_isLikelyListItem(paragraphText)) {
+            // 列表项
+            paragraphs.add(_formatAsListItem(paragraphText));
+          } else {
+            // 普通段落
+            paragraphs.add(paragraphText);
+          }
+        }
+      }
+      
+      // 如果没有找到段落，返回空字符串让调用者使用备用方法
+      if (paragraphs.isEmpty) {
+        return '';
+      }
+      
+      return paragraphs.join('\n\n');
+    } catch (e) {
+      Log.error('结构化文本重建失败: $e');
+      return ''; // 返回空字符串，让调用者使用备用方法
+    }
+  }
+
+  /// 解码XML实体
+  String _decodeXmlEntities(String text) {
+    return text
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        // 处理数字字符引用
+        .replaceAllMapped(RegExp(r'&#(\d+);'), (match) {
+          final codePoint = int.tryParse(match.group(1)!);
+          if (codePoint != null && codePoint > 0 && codePoint <= 0x10FFFF) {
+            return String.fromCharCode(codePoint);
+          }
+          return match.group(0)!;
+        })
+        // 处理十六进制字符引用
+        .replaceAllMapped(RegExp(r'&#x([0-9a-fA-F]+);'), (match) {
+          final codePoint = int.tryParse(match.group(1)!, radix: 16);
+          if (codePoint != null && codePoint > 0 && codePoint <= 0x10FFFF) {
+            return String.fromCharCode(codePoint);
+          }
+          return match.group(0)!;
+        });
+  }
+
+
+  /// 预处理HTML内容，为传统解析做准备
+  String _preprocessHtmlForLegacyParsing(String htmlContent) {
+    try {
+      String processed = htmlContent;
+
+      // 移除script和style标签及其内容
+      processed = processed.replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '');
+      processed = processed.replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '');
+
+      // 移除注释
+      processed = processed.replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
+
+      // 处理br标签，确保换行
+      processed = processed.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+
+      // 处理div标签，添加换行
+      processed = processed.replaceAll(RegExp(r'</div>', caseSensitive: false), '\n');
+
+      // 处理p标签，确保段落分隔
+      processed = processed.replaceAll(RegExp(r'</p>', caseSensitive: false), '\n\n');
+
+      // 处理li标签，确保列表项分隔
+      processed = processed.replaceAll(RegExp(r'</li>', caseSensitive: false), '\n');
+
+      // 处理表格标签，确保表格结构
+      processed = processed.replaceAll(RegExp(r'</tr>', caseSensitive: false), '\n');
+      processed = processed.replaceAll(RegExp(r'</td>', caseSensitive: false), ' | ');
+      processed = processed.replaceAll(RegExp(r'</th>', caseSensitive: false), ' | ');
+
+      Log.info('✅ HTML预处理完成');
+      return processed;
+    } catch (e) {
+      Log.error('❌ HTML预处理失败: $e');
+      return htmlContent; // 返回原始内容
+    }
+  }
+
+  /// 后处理传统解析的Markdown内容
+  String _postProcessLegacyMarkdown(String markdownContent, String filename) {
+    try {
+      String processed = markdownContent;
+
+      // 添加文档标题
+      if (!processed.startsWith('#')) {
+        processed = '# $filename\n\n$processed';
+      }
+
+      // 清理多余的空行
+      processed = processed.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+      // 修复表格格式
+      processed = _fixTableFormat(processed);
+
+      // 修复列表格式
+      processed = _fixListFormat(processed);
+
+      // 清理行首行尾空白
+      final lines = processed.split('\n');
+      final cleanedLines = lines.map((line) => line.trim()).toList();
+      processed = cleanedLines.join('\n');
+
+      // 移除文档开头的空行
+      processed = processed.replaceFirst(RegExp(r'^\s*\n+'), '');
+
+      Log.info('✅ Markdown后处理完成');
+      return processed;
+    } catch (e) {
+      Log.error('❌ Markdown后处理失败: $e');
+      return markdownContent; // 返回原始内容
+    }
+  }
+
+  /// 修复表格格式
+  String _fixTableFormat(String content) {
+    try {
+      final lines = content.split('\n');
+      final List<String> result = [];
+      bool inTable = false;
+
+      for (int i = 0; i < lines.length; i++) {
+        final line = lines[i].trim();
+
+        // 检测表格行（包含 | 符号）
+        if (line.contains('|') && line.split('|').length > 2) {
+          if (!inTable) {
+            inTable = true;
+            result.add(''); // 添加空行分隔
+          }
+
+          // 清理表格行
+          String cleanLine = line
+              .replaceAll(RegExp(r'\|\s*'), '|') // 清理 | 前后的空格
+              .replaceAll(RegExp(r'\s*\|'), '|') // 清理 | 前的空格
+              .replaceAll(RegExp(r'\|+'), '|'); // 合并多个 |
+
+          // 确保行首行尾有 |
+          if (!cleanLine.startsWith('|')) cleanLine = '|$cleanLine';
+          if (!cleanLine.endsWith('|')) cleanLine = '$cleanLine|';
+
+          result.add(cleanLine);
+
+          // 如果是第一行表格数据，添加分隔行
+          if (inTable && result.length > 1 && !result.any((l) => l.contains('---'))) {
+            final cellCount = cleanLine.split('|').length - 2; // 减去首尾空元素
+            final separator = '|' + ' --- |' * cellCount;
+            result.add(separator);
+          }
+        } else {
+          if (inTable) {
+            inTable = false;
+            result.add(''); // 表格结束，添加空行
+          }
+          result.add(line);
+        }
+      }
+
+      return result.join('\n');
+    } catch (e) {
+      Log.error('❌ 表格格式修复失败: $e');
+      return content;
+    }
+  }
+
+  /// 修复列表格式
+  String _fixListFormat(String content) {
+    try {
+      final lines = content.split('\n');
+      final List<String> result = [];
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+
+        // 检测列表项
+        if (trimmed.startsWith('- ') ||
+            trimmed.startsWith('* ') ||
+            RegExp(r'^\d+\.\s').hasMatch(trimmed)) {
+          result.add(trimmed);
+        } else if (trimmed.isNotEmpty) {
+          // 非空行
+          result.add(trimmed);
+        } else {
+          // 空行
+          result.add('');
+        }
+      }
+
+      return result.join('\n');
+    } catch (e) {
+      Log.error('❌ 列表格式修复失败: $e');
+      return content;
+    }
+  }
+  
+}

@@ -1,0 +1,62 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flutter/material.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+
+class SidebarFileLibraryButton extends StatelessWidget {
+  const SidebarFileLibraryButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: AFGhostIconTextButton.primary(
+        text: '文件库', // 临时使用硬编码文本
+        mainAxisAlignment: MainAxisAlignment.start,
+        size: AFButtonSize.l,
+        onTap: () => _openFileLibrary(context),
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 11,
+        ),
+        borderRadius: theme.borderRadius.s,
+        iconBuilder: (context, isHover, disabled) => FlowySvg(
+          FlowySvgs.icon_file_library_s,
+          size: const Size.square(18.0),
+          color: Theme.of(context).textTheme.bodyMedium?.color,
+        ),
+      ),
+    );
+  }
+
+  void _openFileLibrary(BuildContext context) {
+    try {
+      // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+      CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+        // 创建文件库插件
+        final fileLibraryPlugin = makePlugin(
+          pluginType: PluginType.fileLibrary,
+          data: null,
+        );
+
+        // 在新标签页中打开文件库
+        getIt<TabsBloc>().add(
+          TabsEvent.openPlugin(
+            plugin: fileLibraryPlugin,
+          ),
+        );
+      });
+    } catch (e) {
+      _showMessage('打开文件库时发生错误: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    showToastNotification(message: message);
+  }
+}
