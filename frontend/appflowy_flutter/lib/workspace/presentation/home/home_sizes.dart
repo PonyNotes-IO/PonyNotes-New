@@ -20,6 +20,22 @@ class HomeSizes {
   static const double maximumSidebarResizeOffset = 112;
   static const double maximumSidebarWidth =
       minimumSidebarWidth + maximumSidebarResizeOffset;
+  static const double minimumSpaceHubMiddlePaneWidth = 260;
+  static const double spaceHubDividerWidth = 4;
+  static const double minimumThirdPaneActionPeekWidth = 640;
+  static const double minimumWindowShellSafetyWidth = 200;
+  static const double minimumSpaceHubContentPeekWidth =
+      minimumThirdPaneActionPeekWidth;
+  // App-level minimum width: first sidebar + second pane + enough third-pane
+  // room for the top-right action icons, plus dividers and title-bar slack.
+  // App zhengti zuixiao kuandu: di yi lan + di er lan + di san lan you shang
+  // jiao an niu qu + fenge xian he bianju yuliang.
+  static const double minimumAppWindowWidth = maximumSidebarWidth +
+      minimumSpaceHubMiddlePaneWidth +
+      minimumThirdPaneActionPeekWidth +
+      spaceHubDividerWidth +
+      minimumWindowShellSafetyWidth;
+  static const double minimumThreePaneWindowWidth = minimumAppWindowWidth;
 }
 
 class HomeInsets {

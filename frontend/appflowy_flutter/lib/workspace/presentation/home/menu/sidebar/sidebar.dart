@@ -960,7 +960,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
-                    if (!Platform.isWindows ||
+                    if ((!Platform.isWindows && !Platform.isMacOS) ||
                         widget.isDrawerMenu ||
                         isFullWindow) {
                       return const SizedBox.shrink();
@@ -986,7 +986,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                               child: SizedBox(
                                 width: 24,
                                 child: FlowySvg(
-                                  FlowySvgs.double_back_arrow_m,
+                                  FlowySvgs.sidebar_collapse_custom_m,
                                   color: AppFlowyTheme.of(context)
                                       .iconColorScheme
                                       .secondary,

@@ -1,3 +1,4 @@
+import 'package:appflowy/ai/service/ai_usage_summary.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -5,8 +6,10 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/user/settings_user_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/about/app_version.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/account.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/email/email_section.dart';
@@ -159,6 +162,8 @@ class _AccountQuickActionsSection extends StatelessWidget {
     required this.isLoadingSubscription,
   });
 
+  static const String _aiUsageTrailingSentinel = '__AI_USAGE__';
+
   final CurrentSubscription? currentSubscription;
   final bool isLoadingSubscription;
 
@@ -166,7 +171,6 @@ class _AccountQuickActionsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final storageUsage = _buildStorageUsageSubtitle();
-    final aiUsage = _buildAiUsageSubtitle();
     final isCloudSignedIn =
         context.read<SettingsDialogBloc>().state.userProfile.userAuthType ==
             AuthTypePB.Server;
@@ -183,7 +187,8 @@ class _AccountQuickActionsSection extends StatelessWidget {
         _buildRow(
           context,
           title: 'AI使用次数',
-          trailing: isLoadingSubscription ? '--' : aiUsage,
+          trailing:
+              isLoadingSubscription ? '--' : _buildUnifiedAiUsageSubtitle(),
           showArrow: false,
         ),
         GestureDetector(
@@ -231,7 +236,21 @@ class _AccountQuickActionsSection extends StatelessWidget {
     const rightColumnWidth = 360.0;
     const arrowSlotWidth = 28.0;
     const trailingSlotWidth = rightColumnWidth - arrowSlotWidth;
-    final trailingText = trailing.isEmpty
+    final trailingText = trailing == _aiUsageTrailingSentinel
+        ? FutureBuilder<String>(
+            future: _loadAiUsageSubtitle(context),
+            builder: (context, snapshot) {
+              return FlowyText(
+                snapshot.data ?? '--',
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                maxLines: 1,
+              );
+            },
+          )
+        : trailing.isEmpty
         ? const SizedBox.shrink()
         : FlowyText(
             trailing,
@@ -281,6 +300,25 @@ class _AccountQuickActionsSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  String _buildUnifiedAiUsageSubtitle() => _aiUsageTrailingSentinel;
+
+  Future<String> _loadAiUsageSubtitle(BuildContext context) async {
+    final workspaceState = context.read<UserWorkspaceBloc>().state;
+    final currentWorkspaceId = workspaceState.currentWorkspace?.workspaceId;
+    if (currentWorkspaceId == null) {
+      return '--';
+    }
+
+    final result = await WorkspaceService(
+      workspaceId: currentWorkspaceId,
+      userId: workspaceState.userProfile.id,
+    ).getWorkspaceUsage();
+    return result.fold(
+      (usage) => AiUsageSummary.fromUsage(usage).monthlyRemainingText(),
+      (_) => '--',
     );
   }
 

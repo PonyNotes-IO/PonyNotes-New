@@ -17,7 +17,10 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   final String title;
   final windowSizeManager = WindowSizeManager();
-  static const Size _windowsSafeStartupSize = Size(1280, 720);
+  static const Size _windowsSafeStartupSize = Size(
+    WindowSizeManager.minWindowWidth,
+    WindowSizeManager.minWindowHeight,
+  );
 
   @override
   Future<void> initialize(LaunchContext context) async {
@@ -60,6 +63,12 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     final position = await windowSizeManager.getPosition();
 
     if (UniversalPlatform.isWindows) {
+      await windowManager.setMinimumSize(
+        const Size(
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.minWindowHeight,
+        ),
+      );
       await windowManager.setTitleBarStyle(
         useCustomWindowTitleBar ? TitleBarStyle.hidden : TitleBarStyle.normal,
       );
@@ -74,6 +83,12 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
         await windowManager.focus();
       });
     } else {
+      await windowManager.setMinimumSize(
+        const Size(
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.minWindowHeight,
+        ),
+      );
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
         await windowManager.focus();

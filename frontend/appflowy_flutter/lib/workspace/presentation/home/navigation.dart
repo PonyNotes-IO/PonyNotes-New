@@ -104,7 +104,7 @@ class FlowyNavigation extends StatelessWidget {
                             width: 24,
                             onPressed: () {},
                             icon: FlowySvg(
-                              FlowySvgs.double_back_arrow_m,
+                              FlowySvgs.sidebar_collapse_custom_m,
                               color: theme.iconColorScheme.secondary,
                             ),
                           ),

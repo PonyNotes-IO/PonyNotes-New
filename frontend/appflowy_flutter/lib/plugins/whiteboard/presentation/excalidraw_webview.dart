@@ -133,6 +133,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         '❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
   }
 
+  Future<void> notifyContainerResized() async {
+    await _safeEvalJs('''
+      (function() {
+        window.dispatchEvent(new Event('resize'));
+        setTimeout(function() {
+          window.dispatchEvent(new Event('resize'));
+        }, 80);
+        const api = window.excalidrawAPI || window.excalidrawAppRef;
+        if (api && typeof api.refresh === 'function') {
+          api.refresh();
+        }
+      })();
+    ''', tag: 'notifyContainerResized');
+  }
+
   void _initializeSettings() {
     _settings = InAppWebViewSettings(
       // 开发者工具

@@ -1,7 +1,8 @@
+import 'package:appflowy/ai/service/ai_usage_summary.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flutter/material.dart';
 
-/// AI会话使用情况显示组件
+/// AI chat usage indicator / AI 会话使用情况显示组件
 class AIChatUsageIndicator extends StatelessWidget {
   const AIChatUsageIndicator({
     super.key,
@@ -12,25 +13,16 @@ class AIChatUsageIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (usage == null) {
-      // 数据未加载，不显示
+    final summary = AiUsageSummary.fromUsage(usage);
+    if (!summary.hasUsage || summary.isUnlimited) {
       return const SizedBox.shrink();
     }
 
-    // 如果无限制，不显示
-    if (usage!.aiResponsesUnlimited) {
-      return const SizedBox.shrink();
-    }
-
-    final used = usage!.aiResponsesCount.toInt();
-    final total = usage!.aiResponsesCountLimit.toInt();
-
-    // 检测未订阅状态：total == -1 表示用户未订阅
-    if (total == -1) {
+    if (summary.isUnsubscribed) {
       return Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 4),
         child: Text(
-          '未订阅，不可用',
+          summary.remainingAvailableText(),
           style: TextStyle(
             fontSize: 12,
             color: Theme.of(context).colorScheme.error,
@@ -40,46 +32,30 @@ class AIChatUsageIndicator extends StatelessWidget {
       );
     }
 
-    final remaining = total - used;
-
-    // 验证数据有效性（确保不是默认值）
-    if (total == 0) {
-      // 限制为0且非无限制，可能是数据未正确加载，不显示
+    if (!summary.hasLimitedQuota || summary.total == 0) {
       return const SizedBox.shrink();
     }
-
-    // 根据剩余次数选择颜色
-    final textColor = _getTextColor(context, remaining);
 
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 4),
       child: Text(
-        _getDisplayText(used, total, remaining),
+        summary.remainingAvailableText(),
         style: TextStyle(
           fontSize: 12,
-          color: textColor,
+          color: _getTextColor(context, summary.remaining),
         ),
         textAlign: TextAlign.center,
       ),
     );
   }
 
-  String _getDisplayText(int used, int total, int remaining) {
-    // PonyNotes: 只显示剩余可用次数，不显示已用/总数
-    if (remaining <= 0) {
-      return '0次可用';
-    }
-    return '$remaining次可用';
-  }
-
   Color _getTextColor(BuildContext context, int remaining) {
     if (remaining <= 0) {
       return Theme.of(context).colorScheme.error;
-    } else if (remaining <= 5) {
-      return Colors.orange.shade700;
-    } else {
-      return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
     }
+    if (remaining <= 5) {
+      return Colors.orange.shade700;
+    }
+    return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
   }
 }
-

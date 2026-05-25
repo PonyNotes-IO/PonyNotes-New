@@ -1,43 +1,53 @@
-import 'package:appflowy/util/log_utils.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/notification_service.dart';
-
-import '../../user/application/reminder/notification_settings_service.dart';
+import 'package:appflowy/user/application/reminder/notification_settings_service.dart';
+import 'package:appflowy/util/log_utils.dart';
+import 'package:appflowy_backend/log.dart';
 
 class NotificationServiceTask extends LaunchTask {
   const NotificationServiceTask();
 
   @override
   Future<void> initialize(LaunchContext context) async {
-    LogUtils.info('NotificationServiceTask: Initializing notification service...');
-    // 检查是否已经显示过并且用户点击了取消
-
+    await super.initialize(context);
+    LogUtils.info(
+      'NotificationServiceTask: Initializing notification service...',
+    );
 
     try {
-      // 初始化通知服务
       final notificationService = NotificationService();
-      
-      // 检查并请求通知权限
-      final hasPermission = await notificationService.checkAndRequestPermission();
-      LogUtils.info('NotificationServiceTask: Permission status: $hasPermission');
-      
+      final hasPermission =
+          await notificationService.checkAndRequestPermission();
+      LogUtils.info(
+        'NotificationServiceTask: Permission status: $hasPermission',
+      );
+
       if (!hasPermission) {
-        LogUtils.warning('NotificationServiceTask: Notification permission not granted');
-        // 这里可以添加逻辑，在应用启动后显示一个提示，引导用户开启权限
-        final notificationSettingsService = const NotificationSettingsService();
+        LogUtils.warning(
+          'NotificationServiceTask: Notification permission not granted',
+        );
+        const notificationSettingsService = NotificationSettingsService();
         await notificationSettingsService.resetNotificationPermissionStatus();
       }
 
-      LogUtils.info('NotificationServiceTask: Notification service initialized successfully');
+      LogUtils.info(
+        'NotificationServiceTask: Notification service initialized successfully',
+      );
     } catch (e, stackTrace) {
-      LogUtils.error('NotificationServiceTask: Failed to initialize notification service: $e');
+      Log.error(
+        'NotificationServiceTask: Failed to initialize notification service: $e',
+        stackTrace,
+      );
     }
   }
 
   @override
   Future<void> dispose() async {
-    LogUtils.info('NotificationServiceTask: Disposing notification service task');
-    // 通知服务是单例，不需要在这里销毁
+    LogUtils.info(
+      'NotificationServiceTask: Disposing notification service task',
+    );
+    // Notification service is singleton-based, no explicit teardown here.
+    // 通知服务为单例，这里不做额外销毁。
+    await super.dispose();
   }
 }

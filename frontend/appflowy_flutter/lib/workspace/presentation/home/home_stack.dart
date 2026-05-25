@@ -100,7 +100,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                         UniversalPlatform.isWindows &&
                         useCustomWindowTitleBar)
                       WindowTitleBar(
-                        leftChildren: [_buildTitleBarControls(context)],
+                        leftChildren: [_buildTitleBarControls(context, state)],
                       ),
                     if (!isFullWindow)
                       Padding(
@@ -225,7 +225,20 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  Widget _buildTitleBarControls(BuildContext context) {
+  Widget _buildTitleBarControls(BuildContext context, TabsState state) {
+    final currentIndex = state.currentIndex;
+    final currentBuilder =
+        currentIndex >= 0 && currentIndex < state.pageManagers.length
+            ? state.pageManagers[currentIndex].plugin.widgetBuilder
+            : null;
+    final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+      (bloc) => bloc.state.menuStatus,
+    );
+    if (menuStatus == MenuStatus.hidden &&
+        (currentBuilder?.handlesInlineSidebarToggle ?? false)) {
+      return const SizedBox.shrink();
+    }
+
     return SizedBox(
       height: HomeSizes.topBarHeight,
       child: Row(
@@ -242,9 +255,12 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     TabsState state,
   ) {
     Widget? fullWindowMoreItem;
+    var handlesFullWindowOverlayActionsInternally = false;
     if (state.currentIndex >= 0 &&
         state.currentIndex < state.pageManagers.length) {
       final pm = state.pageManagers[state.currentIndex];
+      handlesFullWindowOverlayActionsInternally =
+          pm.plugin.widgetBuilder.handlesFullWindowOverlayActionsInternally;
       final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
       if (currentMoreItem != null) {
         fullWindowMoreItem = ChangeNotifierProvider.value(
@@ -256,6 +272,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           ),
         );
       }
+    }
+
+    // Whiteboard and other canvas-like plugins can render the full-window
+    // actions inside their own floating capsule.
+    // 白板等画布页可在内部统一承载应用内全屏动作，宿主层不再重复插入。
+    if (handlesFullWindowOverlayActionsInternally) {
+      return const SizedBox.shrink();
     }
 
     return Positioned(
@@ -332,10 +355,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           child: Container(
             width: 24,
             padding: const EdgeInsets.all(4),
-            child: RotatedBox(
-              quarterTurns:
-                  context.read<HomeSettingBloc>().isMenuExpanded ? 0 : 2,
-              child: const FlowySvg(FlowySvgs.hide_menu_s),
+            child: FlowySvg(
+              FlowySvgs.sidebar_collapse_custom_m,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -817,6 +839,8 @@ abstract mixin class NavigationItem {
   Widget get leftBarItem;
   Widget? get rightBarItem => null;
   Widget? get fullWindowMoreItem => null;
+  bool get handlesFullWindowOverlayActionsInternally => false;
+  bool get handlesInlineSidebarToggle => false;
   Widget tabBarItem(String pluginId, [bool shortForm = false]);
 
   NavigationCallback get action => (id) => throw UnimplementedError();

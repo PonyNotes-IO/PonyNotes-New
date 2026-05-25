@@ -63,7 +63,7 @@ class SidebarTopMenu extends StatelessWidget {
   // }
 
   Widget _buildCollapseMenuButton(BuildContext context) {
-    if (Platform.isWindows) return const SizedBox.shrink();
+    if (Platform.isWindows || Platform.isMacOS) return const SizedBox.shrink();
     final theme = AppFlowyTheme.of(context);
 
     return ValueListenableBuilder(
@@ -81,9 +81,7 @@ class SidebarTopMenu extends StatelessWidget {
                 width: 24,
                 height: 24,
                 child: FlowySvg(
-                  Platform.isMacOS
-                      ? FlowySvgs.sidebar_toggle_macos_m
-                      : FlowySvgs.double_back_arrow_m,
+                  FlowySvgs.sidebar_collapse_custom_m,
                   color: theme.iconColorScheme.secondary,
                 ),
               ),

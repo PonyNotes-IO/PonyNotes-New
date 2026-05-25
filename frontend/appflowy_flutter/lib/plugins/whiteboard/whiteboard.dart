@@ -44,6 +44,7 @@ const _whiteboardActionSurfaceColorLight = Color(0xF7FFFFFF);
 const _whiteboardActionSurfaceColorDark = Color(0xE61B1C20);
 const _whiteboardActionBorderColorLight = Color(0x16000000);
 const _whiteboardActionBorderColorDark = Color(0x22FFFFFF);
+const _whiteboardCanvasFallbackColor = Color(0xFFFFFFFF);
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -185,6 +186,9 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
   Widget? get fullWindowMoreItem => null;
 
   @override
+  bool get handlesFullWindowOverlayActionsInternally => true;
+
+  @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
 }
@@ -266,7 +270,23 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
 
+    FullWindowController.isFullWindow.addListener(_handleFullWindowChanged);
     _loadInitialData();
+  }
+
+  void _handleFullWindowChanged() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _webViewKey.currentState?.notifyContainerResized();
+      Future<void>.delayed(const Duration(milliseconds: 120), () {
+        if (!mounted) {
+          return;
+        }
+        _webViewKey.currentState?.notifyContainerResized();
+      });
+    });
   }
 
   /// 注册导出和导入控制器到 GetIt
@@ -453,6 +473,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
+    FullWindowController.isFullWindow.removeListener(_handleFullWindowChanged);
     final adapter = _collabAdapter;
 
     // 注销所有控制器（同步操作）
@@ -843,11 +864,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
+      backgroundColor: _whiteboardCanvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
         builder: (context, isFullWindow, _) {
           return Stack(
             children: [
+              const Positioned.fill(
+                child: ColoredBox(color: _whiteboardCanvasFallbackColor),
+              ),
               _buildExcalidrawView(),
               Positioned(
                 top: isFullWindow ? 12 : 14,
@@ -896,7 +921,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       return const SizedBox.shrink();
     }
 
-    final rightPadding = isFullWindow ? 116.0 : 18.0;
+    final rightPadding = isFullWindow ? 12.0 : 18.0;
     final topPadding = isFullWindow ? 12.0 : 8.0;
     final hideInternalMoreButton = isFullWindow &&
         (widget.preferHostFullWindowMoreItem ||
@@ -953,10 +978,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                       const SizedBox(width: 6),
                       _buildHeaderAction(_buildFavoriteAction(context)),
                       const SizedBox(width: 6),
-                      if (!isFullWindow) ...[
-                        _buildHeaderAction(_buildFullWindowAction(context)),
-                        const SizedBox(width: 6),
-                      ],
+                      _buildHeaderAction(_buildFullWindowAction(context)),
+                      const SizedBox(width: 6),
                       if (!hideInternalMoreButton)
                         _buildHeaderAction(_buildMoreActionsButton(context)),
                     ],

@@ -467,17 +467,18 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                 padding: const EdgeInsets.only(top: 12.0, right: 14.0),
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
-                        const HomeSettingEvent.changeMenuStatus(
-                          MenuStatus.expanded,
-                        ),
-                      ),
+                  onPointerDown: (_) =>
+                      buildContext.read<HomeSettingBloc>().add(
+                            const HomeSettingEvent.changeMenuStatus(
+                              MenuStatus.expanded,
+                            ),
+                          ),
                   child: FlowyHover(
                     child: SizedBox(
                       width: 24,
                       height: 24,
                       child: FlowySvg(
-                        FlowySvgs.sidebar_toggle_macos_m,
+                        FlowySvgs.sidebar_collapse_custom_m,
                         color: AppFlowyTheme.of(buildContext)
                             .iconColorScheme
                             .secondary,

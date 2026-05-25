@@ -1,6 +1,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -252,6 +253,17 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
       },
     );
   }
+
+  @override
+  bool get handlesFullWindowOverlayActionsInternally {
+    // When Space Hub is rendering a selected whiteboard, the whiteboard page
+    // owns the full-window capsule internally.
+    // 当 Space Hub 右侧选中的是白板时，由白板页面内部统一承载应用内全屏动作区。
+    return selectedViewNotifier.value?.layout == ViewLayoutPB.Whiteboard;
+  }
+
+  @override
+  bool get handlesInlineSidebarToggle => true;
 
   @override
   Widget buildWidget({
@@ -583,6 +595,16 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         );
         final useFloatingDocumentList =
             !isFullWindow && menuStatus != MenuStatus.expanded;
+        final availableContentWidth = MediaQuery.sizeOf(context).width;
+        final maxLeftPanelWidth = (availableContentWidth -
+                HomeSizes.minimumSpaceHubContentPeekWidth -
+                HomeSizes.spaceHubDividerWidth)
+            .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity)
+            .toDouble();
+        final effectiveLeftPanelWidth = _leftPanelWidth.clamp(
+          HomeSizes.minimumSpaceHubMiddlePaneWidth,
+          maxLeftPanelWidth,
+        );
         final documentListPanel = Padding(
           padding: useFloatingDocumentList
               ? EdgeInsets.only(top: HomeSizes.topBarHeight, bottom: 12)
@@ -595,7 +617,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 : BorderRadius.zero,
             child: Container(
               color: homeContentBackgroundColor(context),
-              width: _leftPanelWidth,
+              width: effectiveLeftPanelWidth,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -643,10 +665,15 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   !isFullWindow &&
                   !useFloatingDocumentList,
               child: ResizableDivider(
-                initialLeftWidth: _leftPanelWidth,
+                minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                maxLeftWidth: maxLeftPanelWidth,
+                initialLeftWidth: effectiveLeftPanelWidth,
                 onResize: (newWidth) {
                   setState(() {
-                    _leftPanelWidth = newWidth;
+                    _leftPanelWidth = newWidth.clamp(
+                      HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                      maxLeftPanelWidth,
+                    );
                   });
                 },
               ),
@@ -928,6 +955,11 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
+    final isSidebarHidden = context.select<HomeSettingBloc, bool>(
+      (bloc) => bloc.isMenuHidden,
+    );
+    final theme = AppFlowyTheme.of(context);
+
     return Container(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
       // decoration: BoxDecoration(
@@ -1054,6 +1086,25 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
+          if (isSidebarHidden) ...[
+            if (Platform.isMacOS)
+              SizedBox(
+                width: 28,
+                height: 24,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      right: 0,
+                      top: -18,
+                      child: _SpaceHubSidebarToggleButton(
+                        color: theme.iconColorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
@@ -1282,6 +1333,32 @@ class _SpaceDocumentList extends StatelessWidget {
       (error) {
         Log.error('Failed to create new note: $error');
       },
+    );
+  }
+}
+
+class _SpaceHubSidebarToggleButton extends StatelessWidget {
+  const _SpaceHubSidebarToggleButton({
+    required this.color,
+  });
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return FlowyTooltip(
+      message: LocaleKeys.sideBar_openSidebar.tr(),
+      child: FlowyIconButton(
+        width: 24,
+        icon: FlowySvg(
+          FlowySvgs.sidebar_collapse_custom_m,
+          size: const Size.square(16),
+          color: color,
+        ),
+        onPressed: () => context.read<HomeSettingBloc>().add(
+              const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+            ),
+      ),
     );
   }
 }

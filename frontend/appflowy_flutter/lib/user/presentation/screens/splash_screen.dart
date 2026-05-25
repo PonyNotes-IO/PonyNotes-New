@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -19,7 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class SplashScreen extends StatefulWidget {
-  /// Root Page of the app.
+  /// Root page of the app.
   const SplashScreen({super.key, required this.isAnon});
 
   final bool isAnon;
@@ -29,7 +31,7 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  bool _hasHandledAuth = false; // 防止重复处理
+  bool _hasHandledAuth = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,89 +42,61 @@ class _SplashScreenState extends State<SplashScreen> {
           if (snapshot.connectionState != ConnectionState.done) {
             return const SizedBox.shrink();
           }
-          return _buildChild(context);
+          return _buildChild();
         },
       );
-    } else {
-      return _buildChild(context);
     }
+
+    return _buildChild();
   }
 
-  BlocProvider<SplashBloc> _buildChild(BuildContext context) {
+  Widget _buildChild() {
     return BlocProvider(
       create: (context) =>
           getIt<SplashBloc>()..add(const SplashEvent.getUser()),
       child: Scaffold(
         body: BlocListener<SplashBloc, SplashState>(
-          listenWhen: (previous, current) {
-            // 只在状态变化时触发，但确保 authenticated 状态会被处理
-            return previous.auth != current.auth;
-          },
+          listenWhen: (previous, current) => previous.auth != current.auth,
           listener: (context, state) {
-            if (_hasHandledAuth) {
-              return;
-            }
-            state.auth.map(
-              authenticated: (r) {
-                _hasHandledAuth = true;
-                _handleAuthenticated(context, r);
-              },
-              unauthenticated: (r) {
-                _hasHandledAuth = true;
-                _handleUnauthenticated(context, r);
-              },
-              initial: (r) {},
-            );
+            _handleAuthState(context, state.auth);
           },
-          child: BlocBuilder<SplashBloc, SplashState>(
-            builder: (context, state) {
-              // 在首次 build 时也检查状态（如果已经是 authenticated）
-              if (!_hasHandledAuth) {
-                state.auth.map(
-                  authenticated: (r) {
-                    // 使用 WidgetsBinding.instance.addPostFrameCallback 确保在 build 完成后执行
-                    // 只执行一次，避免重复调用
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      // 检查是否已经处理过（通过检查 context 是否仍然 mounted）
-                      if (mounted && !_hasHandledAuth) {
-                        _hasHandledAuth = true;
-                        _handleAuthenticated(context, r);
-                      }
-                    });
-                  },
-                  unauthenticated: (r) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted && !_hasHandledAuth) {
-                        _hasHandledAuth = true;
-                        _handleUnauthenticated(context, r);
-                      }
-                    });
-                  },
-                  initial: (r) {},
-                );
-              }
-              return const Body();
-            },
-          ),
+          child: const Body(),
         ),
       ),
     );
   }
 
-  /// 检查 tempUserSave 字段
+  void _handleAuthState(BuildContext context, AuthState auth) {
+    if (_hasHandledAuth || !mounted || !context.mounted) {
+      return;
+    }
+
+    auth.map(
+      authenticated: (result) {
+        _hasHandledAuth = true;
+        _handleAuthenticated(context, result);
+      },
+      unauthenticated: (result) {
+        _hasHandledAuth = true;
+        _handleUnauthenticated(context, result);
+      },
+      initial: (_) {},
+    );
+  }
+
+  /// Check the temporary user flag directly from SharedPreferences.
+  /// 直接从 SharedPreferences 检查临时用户标记。
   Future<bool> _checkTempUserSave() async {
     try {
-      Log.info('🔵 [SplashScreen] 开始检查 tempUserSave 字段');
-      // 直接使用 SharedPreferences 读取，不通过 TempUserCache
+      Log.info('[SplashScreen] Start checking tempUserSave');
       final prefs = await SharedPreferences.getInstance();
       final value = prefs.getString('tempUserSave');
-      Log.info('🔵 [SplashScreen] 直接读取 tempUserSave 值: $value');
+      Log.info('[SplashScreen] tempUserSave raw value: $value');
       final tempUserSave = value == 'true';
-      Log.info('🔵 [SplashScreen] tempUserSave 结果: $tempUserSave');
-      // 不再在这里清除字段，而是在登录成功后清除
+      Log.info('[SplashScreen] tempUserSave result: $tempUserSave');
       return tempUserSave;
     } catch (e, stack) {
-      Log.error('🔵 [SplashScreen] 检查 tempUserSave 字段失败: $e', stack);
+      Log.error('[SplashScreen] Failed to check tempUserSave: $e', stack);
       return false;
     }
   }
@@ -139,111 +113,116 @@ class _SplashScreenState extends State<SplashScreen> {
     BuildContext context,
     Authenticated authenticated,
   ) async {
-    // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
-    // 必须在进入主界面之前检查
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
+    // Check whether a third-party login still needs phone binding before
+    // entering the main workspace.
+    // 在进入主界面前，先检查第三方登录用户是否仍需绑定手机号。
     if (isAppFlowyCloudEnabled) {
       try {
         final profileResult = await UserBackendService.getCurrentUserProfile();
         final profile = profileResult.fold(
           (profile) => profile,
           (error) {
-            Log.error('[SplashScreen] Failed to get user profile: ${error.msg}');
+            Log.error(
+              '[SplashScreen] Failed to get user profile: ${error.msg}',
+            );
             return null;
           },
         );
-        
-        if (profile != null) {
-          // 检查是否需要绑定手机号
-          final needBindPhone = _needBindPhone(profile.phone);
-          
-          if (needBindPhone) {
-            // 用户需要绑定手机号，跳转到绑定手机号页面
-            // 使用同步方式，确保在进入主界面之前执行
-            final rootContext = AppGlobals.rootNavKey.currentState?.context;
-            if (rootContext != null && rootContext.mounted) {
+
+        if (profile != null && _needBindPhone(profile.phone)) {
+          final rootContext = AppGlobals.rootNavKey.currentState?.context;
+          if (rootContext != null && rootContext.mounted) {
+            unawaited(
               Navigator.of(rootContext, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (context) => const PhoneBindScreen(
                     logoutOnBack: true,
                   ),
                 ),
-              );
-              // 不进入主界面
-              return;
-            } else {
-              Log.error('[SplashScreen] Root context not available for PhoneBindScreen navigation');
-              // 如果 context 不可用，退出登录并重启应用
-              try {
-                await getIt<AuthService>().signOut();
-                await runAppFlowy();
-              } catch (e, stack) {
-                Log.error('[SplashScreen] Failed to sign out: $e', stack);
-              }
-              return;
-            }
+              ),
+            );
+            return;
           }
+
+          Log.error(
+            '[SplashScreen] Root context not available for PhoneBindScreen navigation',
+          );
+          try {
+            await getIt<AuthService>().signOut();
+            await runAppFlowy();
+          } catch (e, stack) {
+            Log.error('[SplashScreen] Failed to sign out: $e', stack);
+          }
+          return;
         }
       } catch (e, stack) {
         Log.error('[SplashScreen] Error checking phone binding: $e', stack);
-        // 如果检查失败，继续正常流程
       }
     }
-    
-    // 🔧 修复登录后卡住问题：添加重试逻辑，等待 Folder 初始化完成
-    // 原因：runAppFlowy() 重新初始化应用时，Folder 可能还未完全初始化
-    int retryCount = 0;
-    const maxRetries = 30; // 最多等待15秒（每次500ms），慢机器上需要更长时间
+
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
+    // Retry until Folder is fully initialized after app relaunch.
+    // 应用重启后等待 Folder 初始化完成，避免首帧卡住。
+    var retryCount = 0;
+    const maxRetries = 30;
     const retryDelay = Duration(milliseconds: 500);
-    
+
     while (retryCount < maxRetries) {
       final result = await FolderEventGetCurrentWorkspaceSetting().send();
-      
       final success = result.fold(
         (workspaceSetting) {
-          // After login, replace Splash screen by corresponding home screen
-          getIt<SplashRouter>().goHomeScreen(
-            context,
-          );
+          if (!mounted || !context.mounted) {
+            return true;
+          }
+          getIt<SplashRouter>().goHomeScreen(context);
           return true;
         },
         (error) {
-          // 如果是 "Folder not initialized" 错误，继续重试
-          if (error.msg.contains('Folder not initialized') && retryCount < maxRetries - 1) {
+          if (!mounted || !context.mounted) {
+            return true;
+          }
+          if (error.msg.contains('Folder not initialized') &&
+              retryCount < maxRetries - 1) {
             return false;
           }
-          // 其他错误或重试次数耗尽，显示错误
           handleOpenWorkspaceError(context, error);
           return true;
         },
       );
-      
+
       if (success) {
         break;
       }
-      
+
       retryCount++;
       await Future.delayed(retryDelay);
     }
   }
 
-  // 检查是否需要绑定手机号
-  // 只有第三方登录（微信、抖音）的用户才有临时手机号（+86temp...），需要绑定
-  // 邮箱注册的用户手机号为空，不需要绑定
-  // 手机号注册的用户有正常手机号，不需要绑定
+  // Only temporary phone numbers from third-party login need binding.
+  // 只有第三方登录生成的临时手机号需要绑定。
   bool _needBindPhone(String? phone) {
     if (phone == null || phone.isEmpty) {
       return false;
     }
-    // 只有临时手机号（第三方登录）才需要绑定
     return phone.startsWith('+86temp');
   }
 
   void _handleUnauthenticated(BuildContext context, Unauthenticated result) {
-    // replace Splash screen as root page
+    if (!mounted || !context.mounted) {
+      return;
+    }
+
     if (isAuthEnabled || UniversalPlatform.isMobile) {
       context.go(SignInScreen.routeName);
     } else {
-      // if the env is not configured, we will skip to the 'skip login screen'.
       context.go(SkipLogInScreen.routeName);
     }
   }
@@ -251,6 +230,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
 class Body extends StatelessWidget {
   const Body({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Container(

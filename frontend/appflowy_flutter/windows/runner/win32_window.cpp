@@ -28,6 +28,11 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
+// Keep in sync with HomeSizes.minimumAppWindowWidth / WindowSizeManager.
+// Yu Flutter ceng de app zhengti zuixiao chuangkou kuandu baochi yizhi.
+constexpr int kMinimumWindowWidth = 1440;
+constexpr int kMinimumWindowHeight = 720;
+
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
@@ -202,6 +207,16 @@ Win32Window::MessageHandler(HWND hwnd,
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 
+      return 0;
+    }
+    case WM_GETMINMAXINFO: {
+      auto minmax_info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const UINT dpi = GetDpiForWindow(hwnd);
+      const double scale_factor = dpi / 96.0;
+      minmax_info->ptMinTrackSize.x =
+          Scale(kMinimumWindowWidth, scale_factor);
+      minmax_info->ptMinTrackSize.y =
+          Scale(kMinimumWindowHeight, scale_factor);
       return 0;
     }
     case WM_SIZE: {
