@@ -6,10 +6,86 @@ import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart'
 import 'package:appflowy/mobile/presentation/database/mobile_repeat_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+
+class MobileConfirmDialog extends StatelessWidget {
+  final String title;
+  final String content;
+  final String confirmText;
+  final String cancelText;
+
+  const MobileConfirmDialog({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.confirmText,
+    required this.cancelText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              content,
+              style: TextStyle(
+                fontSize: 15,
+                color: theme.textTheme.bodyMedium?.color,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: Text(
+                    cancelText,
+                    style: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: Text(
+                    confirmText,
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class MobileNewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -39,6 +115,17 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   String _repeatLabel = '任务重复';
   String? _repeatCustomSummary;
 
+  // 初始状态快照，用于检测未保存更改
+  TimeOfDay _initialStartTime = const TimeOfDay(hour: 0, minute: 0);
+  TimeOfDay _initialEndTime = const TimeOfDay(hour: 0, minute: 0);
+  DateTime _initialStartDate = DateTime.now();
+  DateTime _initialEndDate = DateTime.now();
+  bool _initialIsAllDay = false;
+  String _initialDescription = '';
+  ReminderOption _initialReminderOption = ReminderOption.none;
+  int _initialRepeatType = 0;
+  String? _initialRepeatCustomSummary;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +133,105 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
     _endTime = TimeOfDay(hour: _startTime.hour + 1, minute: _startTime.minute);
     _startDate = widget.selectedDate;
     _endDate = widget.selectedDate;
+    _captureInitialSnapshot();
+  }
+
+  void _captureInitialSnapshot() {
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialIsAllDay = _isAllDay;
+    _initialDescription = _description;
+    _initialReminderOption = _reminderOption;
+    _initialRepeatType = _repeatType;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
+  }
+
+  bool _hasUnsavedChanges() {
+    final startTimeChanged = _startTime.hour != _initialStartTime.hour ||
+        _startTime.minute != _initialStartTime.minute;
+    final endTimeChanged = _endTime.hour != _initialEndTime.hour ||
+        _endTime.minute != _initialEndTime.minute;
+    final startDateChanged = _startDate.year != _initialStartDate.year ||
+        _startDate.month != _initialStartDate.month ||
+        _startDate.day != _initialStartDate.day;
+    final endDateChanged = _endDate.year != _initialEndDate.year ||
+        _endDate.month != _initialEndDate.month ||
+        _endDate.day != _initialEndDate.day;
+
+    return _description != _initialDescription ||
+        _repeatType != _initialRepeatType ||
+        (_repeatCustomSummary ?? '') != (_initialRepeatCustomSummary ?? '') ||
+        _reminderOption != _initialReminderOption ||
+        startDateChanged ||
+        endDateChanged ||
+        startTimeChanged ||
+        endTimeChanged ||
+        _isAllDay != _initialIsAllDay;
+  }
+
+  void _handleClose() async {
+    if (_hasUnsavedChanges()) {
+      final theme = AppFlowyTheme.of(context);
+      await showDialog(
+        context: context,
+        barrierColor: theme.surfaceColorScheme.overlay,
+        builder: (ctx) {
+          return AFModal(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AFModalHeader(
+                  leading: const Text(
+                    '确认退出',
+                  ),
+                  trailing: [
+                    AFGhostButton.normal(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      padding: EdgeInsets.all(theme.spacing.xs),
+                      builder: (context, isHovering, disabled) {
+                        return FlowySvg(
+                          FlowySvgs.toast_close_s,
+                          size: const Size.square(20),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                AFModalBody(
+                  child: Text(
+                    '还有未保存的设置，确定要退出吗？',
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.primary,
+                    ),
+                  ),
+                ),
+                AFModalFooter(
+                  trailing: [
+                    AFOutlinedTextButton.normal(
+                      text: '取消',
+                      onTap: () => Navigator.of(ctx).pop(),
+                    ),
+                    const SizedBox(width: 8),
+                    AFFilledTextButton.primary(
+                      text: '确定',
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   String _formatTime(TimeOfDay time) {
@@ -199,7 +385,7 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
             Icons.close,
             color: AppFlowyTheme.of(context).iconColorScheme.primary,
           ),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => _handleClose(),
         ),
         leadingWidth: 56,
         automaticallyImplyLeading: false,
