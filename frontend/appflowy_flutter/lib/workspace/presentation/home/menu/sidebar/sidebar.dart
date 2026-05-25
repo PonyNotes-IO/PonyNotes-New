@@ -854,21 +854,18 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ),
                 const HSpace(6),
                 // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
-                Flexible(
+                Expanded(
                   child: Tooltip(
                     message: LocaleKeys.sidebar_appName.tr(),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 28),
-                            child: FlowyText.medium(
-                              LocaleKeys.sidebar_appName.tr(),
-                              color: Theme.of(context).colorScheme.tertiary,
-                              overflow: TextOverflow.ellipsis,
-                              fontSize: 15.0,
-                            ),
+                          child: FlowyText.medium(
+                            LocaleKeys.sidebar_appName.tr(),
+                            color: Theme.of(context).colorScheme.tertiary,
+                            overflow: TextOverflow.ellipsis,
+                            fontSize: 15.0,
                           ),
                         ),
                         const HSpace(2),
@@ -880,7 +877,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     ),
                   ),
                 ),
-                const Spacer(), // 鎺ㄩ€佹寜閽埌鍙宠竟
+                const HSpace(8), // 文字与右侧按钮的间距
                 // 浜戝悓姝ユ寜閽?(fill header height)
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
