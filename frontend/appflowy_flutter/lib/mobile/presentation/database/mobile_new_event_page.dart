@@ -68,9 +68,9 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
 
   String _getReminderOptionLabel() {
     if (_reminderOption == ReminderOption.none) {
-      return '准时提醒';
+      return '无';
     }
-    return _reminderOption.name;
+    return _reminderOption.label;
   }
 
   String _getRepeatLabel() {

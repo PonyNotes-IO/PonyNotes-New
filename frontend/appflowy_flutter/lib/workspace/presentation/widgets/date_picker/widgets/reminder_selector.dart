@@ -118,7 +118,7 @@ enum ReminderOption {
   oneDayBefore(time: Duration(hours: 15), withoutTime: true),
   twoDaysBefore(time: Duration(days: 1, hours: 15), withoutTime: true),
   oneWeekBefore(time: Duration(days: 6, hours: 15), withoutTime: true),
-  custom(time: Duration());
+  custom(time: Duration(minutes: 30));
 
   const ReminderOption({
     required this.time,
@@ -137,7 +137,25 @@ enum ReminderOption {
   bool get timeExempt =>
       [ReminderOption.none, ReminderOption.custom].contains(this);
 
-  String get label => switch (this) {
+  /// 存储自定义提醒的分钟数（仅用于 custom 选项）
+  static int _customMinutes = 30;
+
+  /// 设置自定义提醒时间（分钟数）
+  static void setCustomMinutes(int minutes) {
+    _customMinutes = minutes;
+  }
+
+  /// 获取当前自定义提醒时间（分钟数）
+  static int get customMinutes => _customMinutes;
+
+  String get label {
+    if (this == ReminderOption.custom) {
+      return _getCustomLabel();
+    }
+    return _getLabel();
+  }
+
+  String _getLabel() => switch (this) {
         ReminderOption.none => LocaleKeys.datePicker_reminderOptions_none.tr(),
         ReminderOption.atTimeOfEvent =>
           LocaleKeys.datePicker_reminderOptions_atTimeOfEvent.tr(),
@@ -165,6 +183,28 @@ enum ReminderOption {
           LocaleKeys.datePicker_reminderOptions_custom.tr(),
       };
 
+  String _getCustomLabel() {
+    int days = _customMinutes ~/ (24 * 60);
+    int hours = (_customMinutes % (24 * 60)) ~/ 60;
+    int minutes = _customMinutes % 60;
+
+    List<String> parts = [];
+    if (days > 0) {
+      parts.add('${days}天');
+    }
+    if (hours > 0) {
+      parts.add('${hours}小时');
+    }
+    if (minutes > 0) {
+      parts.add('${minutes}分钟');
+    }
+
+    if (parts.isEmpty) {
+      return '提前0分钟';
+    }
+    return '提前${parts.join('')}';
+  }
+
   static ReminderOption fromDateDifference(
     DateTime eventDate,
     DateTime reminderDate,
@@ -178,7 +218,16 @@ enum ReminderOption {
     return fromMinutes(diff);
   }
 
-  static ReminderOption fromMinutes(int minutes) => switch (minutes) {
+  static ReminderOption fromMinutes(int minutes) {
+    final option = _fromMinutesImpl(minutes);
+    // 如果返回 custom 选项，设置自定义时间
+    if (option == ReminderOption.custom) {
+      _customMinutes = minutes;
+    }
+    return option;
+  }
+
+  static ReminderOption _fromMinutesImpl(int minutes) => switch (minutes) {
         0 => ReminderOption.atTimeOfEvent,
         5 => ReminderOption.fiveMinsBefore,
         10 => ReminderOption.tenMinsBefore,
@@ -195,6 +244,10 @@ enum ReminderOption {
       };
 
   DateTime getNotificationDateTime(DateTime date) {
+    // 如果是 custom 选项，使用存储的自定义时间
+    if (this == ReminderOption.custom) {
+      return date.subtract(Duration(minutes: _customMinutes));
+    }
     return withoutTime
         ? requiresNoTime
             ? date.withoutTime.add(time)
