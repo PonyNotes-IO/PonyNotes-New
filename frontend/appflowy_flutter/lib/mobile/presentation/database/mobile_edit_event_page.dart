@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_repeat_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
@@ -64,7 +65,8 @@ class _MobileEditEventPageState extends State<MobileEditEventPage> {
     _startDate = schedule.startTime;
     _endDate = schedule.endTime;
     _isAllDay = schedule.isAllDay;
-    _description = schedule.description.isNotEmpty ? schedule.description : '';
+    // 如果 title 为空则显示"添加说明"，否则显示 title
+    _description = schedule.title.isNotEmpty ? schedule.title : '';
     _reminderOption = schedule.reminderOption;
     _repeatType = schedule.repeatType;
     _repeatCustomSummary = schedule.repeatRuleJson;
@@ -107,27 +109,60 @@ class _MobileEditEventPageState extends State<MobileEditEventPage> {
 
   void _handleClose() async {
     if (_hasUnsavedChanges()) {
-      final confirmed = await showDialog<bool>(
+      final theme = AppFlowyTheme.of(context);
+      await showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: const Text('确认退出'),
-          content: const Text('还有未保存的设置，确定要退出吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('取消'),
+        barrierColor: theme.surfaceColorScheme.overlay,
+        builder: (ctx) {
+          return AFModal(
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AFModalHeader(
+                  leading: const Text('确认退出'),
+                  trailing: [
+                    AFGhostButton.normal(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      padding: EdgeInsets.all(theme.spacing.xs),
+                      builder: (context, isHovering, disabled) {
+                        return FlowySvg(
+                          FlowySvgs.toast_close_s,
+                          size: const Size.square(20),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                AFModalBody(
+                  child: Text(
+                    '还有未保存的设置，确定要退出吗？',
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.primary,
+                    ),
+                  ),
+                ),
+                AFModalFooter(
+                  trailing: [
+                    AFOutlinedTextButton.normal(
+                      text: '取消',
+                      onTap: () => Navigator.of(ctx).pop(),
+                    ),
+                    const SizedBox(width: 8),
+                    AFFilledTextButton.primary(
+                      text: '确定',
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('确定'),
-            ),
-          ],
-        ),
+          );
+        },
       );
-      if (confirmed == true && mounted) {
-        Navigator.of(context).pop();
-      }
     } else {
       Navigator.of(context).pop();
     }
@@ -270,73 +305,86 @@ class _MobileEditEventPageState extends State<MobileEditEventPage> {
   }
 
   Future<void> _deleteEvent() async {
-    final confirmed = await showDialog<bool>(
+    await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Text('删除日程'),
-        content: const Text('确定要删除这个日程吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
+      builder: (ctx) {
+        final theme = AppFlowyTheme.of(ctx);
+        return AFModal(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AFModalHeader(
+                leading: const Text('删除日程'),
+                trailing: [
+                  AFGhostButton.normal(
+                    onTap: () => Navigator.of(ctx).pop(),
+                    padding: EdgeInsets.all(theme.spacing.xs),
+                    builder: (context, isHovering, disabled) {
+                      return FlowySvg(
+                        FlowySvgs.toast_close_s,
+                        size: const Size.square(20),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              AFModalBody(
+                child: Text(
+                  '确定要删除这个日程吗？',
+                  style: theme.textStyle.body.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              AFModalFooter(
+                trailing: [
+                  AFOutlinedTextButton.normal(
+                    text: '取消',
+                    onTap: () => Navigator.of(ctx).pop(),
+                  ),
+                  const SizedBox(width: 8),
+                  AFFilledTextButton.destructive(
+                    text: '删除',
+                    onTap: () async {
+                      Navigator.of(ctx).pop();
+                      try {
+                        await widget.scheduleModel.deleteSchedule(widget.schedule.id);
+                        if (mounted) {
+                          showToastNotification(
+                            message: '日程已删除',
+                            type: ToastificationType.success,
+                          );
+                          widget.onEventDeleted?.call();
+                          Navigator.of(context).pop();
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          showToastNotification(
+                            message: '删除日程失败',
+                            type: ToastificationType.error,
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('删除', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+        );
+      },
     );
-
-    if (confirmed == true && mounted) {
-      try {
-        await widget.scheduleModel.deleteSchedule(widget.schedule.id);
-        if (mounted) {
-          showToastNotification(
-            message: '日程已删除',
-            type: ToastificationType.success,
-          );
-          widget.onEventDeleted?.call();
-          Navigator.of(context).pop();
-        }
-      } catch (e) {
-        if (mounted) {
-          showToastNotification(
-            message: '删除日程失败',
-            type: ToastificationType.error,
-          );
-        }
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.close,
-            color: AppFlowyTheme.of(context).iconColorScheme.primary,
-          ),
-          onPressed: () => _handleClose(),
-        ),
-        leadingWidth: 56,
-        automaticallyImplyLeading: false,
-        title: Text(
-          '编辑日程',
-          style: AppFlowyTheme.of(context).textStyle.heading4.standard(
-            color: AppFlowyTheme.of(context).textColorScheme.primary,
-          ),
-        ),
-        centerTitle: true,
+      appBar: MobileAppBar(
+        title: '编辑日程',
+        showBackButton: true,
+        onBackPressed: _handleClose,
       ),
       body: SafeArea(
         child: Column(
