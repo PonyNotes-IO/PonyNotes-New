@@ -271,9 +271,16 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     final editPanel = _buildEditPanel(context, layout: layout);
 
     return BlocBuilder<TabsBloc, TabsState>(
-      buildWhen: (previous, current) =>
-          previous.currentPageManager.plugin.pluginType !=
-          current.currentPageManager.plugin.pluginType,
+      buildWhen: (previous, current) {
+        final previousManager = previous.currentPageManager;
+        final currentManager = current.currentPageManager;
+        return previous.currentIndex != current.currentIndex ||
+            previousManager.plugin.pluginType !=
+                currentManager.plugin.pluginType ||
+            previousManager.plugin.id != currentManager.plugin.id ||
+            previousManager.plugin.widgetBuilder.handlesInlineSidebarToggle !=
+                currentManager.plugin.widgetBuilder.handlesInlineSidebarToggle;
+      },
       builder: (context, state) {
         final handlesInlineSidebarToggle = state
             .currentPageManager.plugin.widgetBuilder.handlesInlineSidebarToggle;

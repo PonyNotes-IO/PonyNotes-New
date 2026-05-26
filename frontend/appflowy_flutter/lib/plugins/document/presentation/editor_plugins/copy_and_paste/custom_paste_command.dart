@@ -114,6 +114,15 @@ Future<void> doPaste(EditorState editorState) async {
     }
   }
 
+  // PonyNotes whiteboard copies SVG as rich HTML plus a PNG fallback.
+  // PonyNotes 白板会同时写入 SVG HTML 与 PNG 兜底，这里先保留矢量路径。
+  if (_isPonyNotesWhiteboardSvgHtml(html)) {
+    await editorState.deleteSelectionIfNeeded();
+    if (await editorState.pasteHtml(html!)) {
+      return Log.info('Pasted PonyNotes whiteboard SVG html');
+    }
+  }
+
   // if the image data is not null, we should handle it first
   // because the image URL in the HTML may not be reachable due to permission issues
   // For example, when pasting an image from Slack, the image URL provided is not public.
@@ -144,6 +153,10 @@ Future<void> doPaste(EditorState editorState) async {
     }
   }
 
+  if (_isRawSvgPlainText(plainText)) {
+    return Log.info('Skipped raw SVG plain text clipboard content');
+  }
+
   if (plainText != null && plainText.isNotEmpty) {
     final currentSelection = editorState.selection;
     if (currentSelection == null) {
@@ -157,6 +170,23 @@ Future<void> doPaste(EditorState editorState) async {
   }
 
   return Log.info('unable to parse the clipboard content');
+}
+
+bool _isPonyNotesWhiteboardSvgHtml(String? html) {
+  if (html == null || html.isEmpty) {
+    return false;
+  }
+  final normalized = html.toLowerCase();
+  return normalized.contains('data-ponynotes-whiteboard-svg') ||
+      (normalized.contains('data:image/svg+xml') &&
+          normalized.contains('<img'));
+}
+
+bool _isRawSvgPlainText(String? text) {
+  if (text == null || text.isEmpty) {
+    return false;
+  }
+  return text.trimLeft().toLowerCase().startsWith('<svg');
 }
 
 Future<bool> _pasteAsLinkPreview(

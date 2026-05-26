@@ -17,6 +17,7 @@ import '../../../generated/flowy_svgs.g.dart';
 class QuickEventCreator extends StatefulWidget {
   /// 当前展示的日期（左侧日历图标与右侧待办列表同步）
   final DateTime? displayDate;
+
   /// 用户通过左侧日历选择新日期时回调
   final ValueChanged<DateTime>? onDisplayDateChanged;
   final Function(TodoItem)? onEventCreated;
@@ -106,7 +107,7 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -126,7 +127,8 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                 "创建待办计划、创建日记，记录你的每个点滴故事……",
                 style: TextStyle(
                   fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 ),
               ),
               const SizedBox(height: 42),
@@ -266,11 +268,14 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                   ),
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withOpacity(0.3),
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(6),
-                    color: _isAllDay 
+                    color: _isAllDay
                         ? Theme.of(context).colorScheme.surfaceContainerHighest
                         : Theme.of(context).colorScheme.surface,
                   ),
@@ -278,8 +283,11 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                     DateFormat('MM/dd').format(_selectedDate),
                     style: TextStyle(
                       fontSize: 13,
-                      color: _isAllDay 
-                          ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
+                      color: _isAllDay
+                          ? Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5)
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
@@ -298,11 +306,14 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                   ),
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .outline
+                          .withOpacity(0.3),
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(6),
-                    color: _isAllDay 
+                    color: _isAllDay
                         ? Theme.of(context).colorScheme.surfaceContainerHighest
                         : Theme.of(context).colorScheme.surface,
                   ),
@@ -310,8 +321,11 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                     _isAllDay ? "全天" : _selectedTime.format(context),
                     style: TextStyle(
                       fontSize: 13,
-                      color: _isAllDay 
-                          ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
+                      color: _isAllDay
+                          ? Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5)
                           : Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
@@ -425,8 +439,8 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFFFF8D69),
-            ),
+                  primary: const Color(0xFFFF8D69),
+                ),
           ),
           child: child!,
         );
@@ -449,8 +463,8 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
       // 在新标签页中打开日历
       context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(plugin: calendarPlugin),
-      );
+            TabsEvent.openPlugin(plugin: calendarPlugin),
+          );
 
       // 显示成功消息
       if (mounted) {
@@ -531,11 +545,11 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
     try {
       // 构建 TodoItem 对象
-      final dueDate = _isAllDay 
+      final dueDate = _isAllDay
           ? DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day)
           : DateTime(
               _selectedDate.year,
-              _selectedDate.month, 
+              _selectedDate.month,
               _selectedDate.day,
               _selectedTime.hour,
               _selectedTime.minute,
@@ -554,7 +568,7 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
       // 实际保存到数据库
       await TodoService.instance.addTodo(todoItem);
-      
+
       print('待办事项已保存: ${todoItem.title}, 截止时间: ${todoItem.dueDate}');
 
       // 清空输入
@@ -592,4 +606,3 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
     }
   }
 }
-

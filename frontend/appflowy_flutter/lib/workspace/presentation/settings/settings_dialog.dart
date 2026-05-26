@@ -126,13 +126,14 @@ class SettingsDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          flex: 3,
+                          flex: 2,
                           child: SettingsMenu(
                             userProfile: state.userProfile,
                             changeSelectedPage: (index) => context
                                 .read<SettingsDialogBloc>()
                                 .add(
-                                    SettingsDialogEvent.setSelectedPage(index)),
+                                  SettingsDialogEvent.setSelectedPage(index),
+                                ),
                             currentPage:
                                 context.read<SettingsDialogBloc>().state.page,
                             currentUserRole: currentWorkspaceMemberRole,
@@ -151,7 +152,7 @@ class SettingsDialog extends StatelessWidget {
                           color: theme.borderColorScheme.primary,
                         ),
                         Expanded(
-                          flex: 5,
+                          flex: 6,
                           child: Container(
                             // Ensure right pane fully covers dialog area to avoid tiny gap
                             // caused by rounding or inner padding of children.
@@ -341,7 +342,8 @@ class _SimpleSettingsDialogState extends State<SimpleSettingsDialog> {
               // Users cannot change server settings at runtime
               // 服务器配置现在在编译时确定，用户无法在运行时更改
               _ServerInfoDisplay(
-                  key: ValueKey('serverinfo${settings.hashCode}')),
+                key: ValueKey('serverinfo${settings.hashCode}'),
+              ),
               const VSpace(22.0),
 
               // support

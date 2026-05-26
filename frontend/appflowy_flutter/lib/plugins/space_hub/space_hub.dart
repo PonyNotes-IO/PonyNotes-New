@@ -433,7 +433,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   ViewPB? _selectedView;
 
   /// 左侧文档列表的宽度
-  double _leftPanelWidth = 260.0;
+  double _leftPanelWidth = HomeSizes.defaultSpaceHubMiddlePaneWidth;
 
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
@@ -605,9 +605,33 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           HomeSizes.minimumSpaceHubMiddlePaneWidth,
           maxLeftPanelWidth,
         );
+        final floatingDocumentListTopInset =
+            Platform.isWindows ? 0.0 : HomeSizes.topBarHeight;
+        final passiveFloatingDivider = Padding(
+          padding: EdgeInsets.only(
+            top: floatingDocumentListTopInset,
+            bottom: 12,
+          ),
+          child: SizedBox(
+            width: HomeSizes.spaceHubDividerWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 1,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(0.5),
+                ),
+              ),
+            ),
+          ),
+        );
         final documentListPanel = Padding(
           padding: useFloatingDocumentList
-              ? EdgeInsets.only(top: HomeSizes.topBarHeight, bottom: 12)
+              ? EdgeInsets.only(
+                  top: floatingDocumentListTopInset,
+                  bottom: 12,
+                )
               : EdgeInsets.zero,
           child: ClipRRect(
             borderRadius: useFloatingDocumentList
@@ -677,6 +701,12 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   });
                 },
               ),
+            ),
+            Visibility(
+              visible: _isDocumentListVisible &&
+                  !isFullWindow &&
+                  useFloatingDocumentList,
+              child: passiveFloatingDivider,
             ),
             rightPanel,
           ],

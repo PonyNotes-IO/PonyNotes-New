@@ -251,6 +251,324 @@
         files: api.getFiles?.() || {},
     });
 
+    const getRenderableElements = (elements) =>
+        (elements || []).filter((element) => element && !element.isDeleted);
+
+    const getExportScale = () => {
+        const ratio = Number(window.devicePixelRatio || 1);
+        return Math.max(2, Math.min(4, ratio || 1));
+    };
+
+    const buildExportOptions = (sceneData, scale = getExportScale()) => ({
+        elements: getRenderableElements(sceneData.elements),
+        appState: {
+            ...(sceneData.appState || {}),
+            exportBackground: true,
+            shouldAddWatermark: false,
+        },
+        files: sceneData.files || {},
+        exportPadding: 16,
+        getDimensions: (width, height) => ({
+            width: Math.ceil(width * scale),
+            height: Math.ceil(height * scale),
+            scale,
+        }),
+    });
+
+    const blobToDataUrl = (blob) =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsDataURL(blob);
+        });
+
+    const canvasToBlob = (canvas, mimeType = 'image/png', quality = 1) =>
+        new Promise((resolve, reject) => {
+            if (!canvas) {
+                reject(new Error('Canvas is empty'));
+                return;
+            }
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('Canvas toBlob returned empty result'));
+                }
+            }, mimeType, quality);
+        });
+
+    const serializeSvgResult = async (svg) => {
+        if (!svg) {
+            return null;
+        }
+        if (typeof svg === 'string') {
+            return svg.includes('<svg') ? svg : null;
+        }
+        if (svg instanceof SVGSVGElement || svg instanceof Element) {
+            return new XMLSerializer().serializeToString(svg);
+        }
+        if (svg instanceof Blob) {
+            const text = await svg.text();
+            return text.includes('<svg') ? text : null;
+        }
+        return null;
+    };
+
+    const createHighQualityPngBlob = async (sceneData) => {
+        const scale = getExportScale();
+        const options = buildExportOptions(sceneData, scale);
+
+        if (!options.elements.length) {
+            throw new Error('No renderable elements to export');
+        }
+
+        if (window.ExcalidrawLib?.exportToCanvas) {
+            const canvas = await window.ExcalidrawLib.exportToCanvas(options);
+            return canvasToBlob(canvas, 'image/png', 1);
+        }
+
+        if (typeof window.exportToPng === 'function') {
+            const result = await window.exportToPng(options);
+            if (result instanceof Blob) {
+                return result;
+            }
+        }
+
+        if (typeof window.exportToImage === 'function') {
+            const result = await window.exportToImage({
+                ...options,
+                mimeType: 'image/png',
+            });
+            if (result instanceof Blob) {
+                return result;
+            }
+            if (typeof result === 'string' && result.startsWith('data:image/png')) {
+                return await (await fetch(result)).blob();
+            }
+        }
+
+        const visibleCanvas = document.querySelector('canvas.excalidraw__canvas');
+        if (!visibleCanvas) {
+            throw new Error('No visible canvas fallback available');
+        }
+
+        const fallbackScale = getExportScale();
+        const scaledCanvas = document.createElement('canvas');
+        scaledCanvas.width = Math.ceil(visibleCanvas.width * fallbackScale);
+        scaledCanvas.height = Math.ceil(visibleCanvas.height * fallbackScale);
+        const context = scaledCanvas.getContext('2d');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(visibleCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+        return canvasToBlob(scaledCanvas, 'image/png', 1);
+    };
+
+    const createHighQualitySvgString = async (sceneData) => {
+        const options = buildExportOptions(sceneData, 1);
+
+        if (!options.elements.length) {
+            throw new Error('No renderable elements to export');
+        }
+
+        if (typeof window.exportToSvg === 'function') {
+            const svg = await window.exportToSvg(options);
+            const svgString = await serializeSvgResult(svg);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        if (window.ExcalidrawLib?.exportToSvg) {
+            const svg = await window.ExcalidrawLib.exportToSvg(options);
+            const svgString = await serializeSvgResult(svg);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        if (typeof window.exportToImage === 'function') {
+            const result = await window.exportToImage({
+                ...options,
+                mimeType: 'image/svg+xml',
+            });
+            const svgString = await serializeSvgResult(result);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        throw new Error('True SVG export is not available');
+    };
+
+    const clipboardSupports = (mimeType) =>
+        !window.ClipboardItem?.supports || window.ClipboardItem.supports(mimeType);
+
+    const writePngBlobToClipboard = async (blob, originalWrite) => {
+        if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
+            throw new Error('Clipboard image write is not available');
+        }
+        const item = new ClipboardItem({ 'image/png': blob });
+        await originalWrite([item]);
+    };
+
+    const bytesToBase64 = (bytes) => {
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let index = 0; index < bytes.length; index += chunkSize) {
+            const chunk = bytes.subarray(index, index + chunkSize);
+            binary += String.fromCharCode(...chunk);
+        }
+        return btoa(binary);
+    };
+
+    const svgStringToDataUrl = (svgString) => {
+        const encoded = new TextEncoder().encode(svgString);
+        return `data:image/svg+xml;base64,${bytesToBase64(encoded)}`;
+    };
+
+    const buildSvgClipboardHtml = (svgString) => {
+        const dataUrl = svgStringToDataUrl(svgString);
+        return [
+            '<!doctype html>',
+            '<html><body>',
+            `<img data-ponynotes-whiteboard-svg="true" src="${dataUrl}" />`,
+            '</body></html>',
+        ].join('');
+    };
+
+    const writeSvgStringToClipboard = async (
+        svgString,
+        originalWrite,
+        sceneData,
+    ) => {
+        if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
+            throw new Error('Clipboard SVG write is not available');
+        }
+
+        const clipboardPayload = {};
+
+        if (clipboardSupports('image/svg+xml')) {
+            clipboardPayload['image/svg+xml'] = new Blob([svgString], {
+                type: 'image/svg+xml',
+            });
+        }
+
+        if (clipboardSupports('text/html')) {
+            clipboardPayload['text/html'] = new Blob(
+                [buildSvgClipboardHtml(svgString)],
+                { type: 'text/html' },
+            );
+        }
+
+        if (clipboardSupports('image/png')) {
+            try {
+                clipboardPayload['image/png'] = await createHighQualityPngBlob(sceneData);
+            } catch (error) {
+                console.warn('[PonyNotes] SVG clipboard PNG fallback failed:', error);
+            }
+        }
+
+        if (!Object.keys(clipboardPayload).length) {
+            throw new Error('No supported clipboard format for SVG export');
+        }
+
+        await originalWrite([new ClipboardItem(clipboardPayload)]);
+    };
+
+    const installHighQualityClipboardPatch = () => {
+        const clipboard = navigator.clipboard;
+        if (!clipboard || window.__ponynotesClipboardQualityPatchInstalled) {
+            return;
+        }
+
+        const originalWrite = clipboard.write?.bind(clipboard);
+        const originalWriteText = clipboard.writeText?.bind(clipboard);
+
+        try {
+            if (originalWrite) {
+                clipboard.write = async function (items) {
+                    if (window.__ponynotesClipboardQualityWriteActive) {
+                        return originalWrite(items);
+                    }
+
+                    const types = (items || []).flatMap((item) =>
+                        Array.from(item?.types || []),
+                    );
+                    const shouldUpgradePng = types.includes('image/png');
+                    const shouldUpgradeSvg = types.includes('image/svg+xml');
+
+                    if (!shouldUpgradePng && !shouldUpgradeSvg) {
+                        return originalWrite(items);
+                    }
+
+                    try {
+                        window.__ponynotesClipboardQualityWriteActive = true;
+                        const api = await waitForExcalidrawAPI(12, 50);
+                        const sceneData = getSceneData(api);
+
+                        if (shouldUpgradeSvg) {
+                            const svgString = await createHighQualitySvgString(sceneData);
+                            return await writeSvgStringToClipboard(
+                                svgString,
+                                originalWrite,
+                                sceneData,
+                            );
+                        }
+
+                        const pngBlob = await createHighQualityPngBlob(sceneData);
+                        return await writePngBlobToClipboard(pngBlob, originalWrite);
+                    } catch (error) {
+                        console.warn('[PonyNotes] High quality clipboard write failed:', error);
+                        if (shouldUpgradeSvg) {
+                            throw error;
+                        }
+                        return originalWrite(items);
+                    } finally {
+                        window.__ponynotesClipboardQualityWriteActive = false;
+                    }
+                };
+            }
+
+            if (originalWriteText) {
+                clipboard.writeText = async function (text) {
+                    const isSvgText =
+                        typeof text === 'string' &&
+                        text.trimStart().startsWith('<svg');
+                    if (!isSvgText || window.__ponynotesClipboardQualityWriteActive) {
+                        return originalWriteText(text);
+                    }
+
+                    try {
+                        window.__ponynotesClipboardQualityWriteActive = true;
+                        const api = await waitForExcalidrawAPI(12, 50);
+                        const sceneData = getSceneData(api);
+                        const svgString = await createHighQualitySvgString(sceneData);
+                        return await writeSvgStringToClipboard(
+                            svgString,
+                            originalWrite,
+                            sceneData,
+                        );
+                    } catch (error) {
+                        console.warn('[PonyNotes] High quality SVG clipboard failed:', error);
+                        throw error;
+                    } finally {
+                        window.__ponynotesClipboardQualityWriteActive = false;
+                    }
+                };
+            }
+
+            window.__ponynotesClipboardQualityPatchInstalled = true;
+            console.log('[PonyNotes] High quality clipboard patch installed');
+        } catch (error) {
+            console.warn('[PonyNotes] Failed to install clipboard quality patch:', error);
+        }
+    };
+
+    installHighQualityClipboardPatch();
+    setTimeout(installHighQualityClipboardPatch, 500);
+    setTimeout(installHighQualityClipboardPatch, 1500);
+
     const stableAppStateKeys = new Set([
         'gridModeEnabled',
         'gridSize',
@@ -308,6 +626,19 @@
                 });
 
                 // 方案1: 使用 window.exportToPng
+                try {
+                    const pngBlob = await createHighQualityPngBlob(sceneData);
+                    const dataUrl = await blobToDataUrl(pngBlob);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'png',
+                        data: dataUrl,
+                    });
+                    console.log('[PonyNotes] High quality PNG export succeeded');
+                    return;
+                } catch (e) {
+                    console.warn('[PonyNotes] High quality PNG export failed:', e);
+                }
+
                 if (typeof window.exportToPng === 'function') {
                     console.log('[PonyNotes] 方案1: 使用 window.exportToPng');
                     try {
@@ -422,6 +753,18 @@
                 const sceneData = getSceneData(api);
 
                 // 检查是否有全局的exportToSvg函数
+                try {
+                    const svgString = await createHighQualitySvgString(sceneData);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'svg',
+                        data: svgString,
+                    });
+                    console.log('[PonyNotes] High quality SVG export succeeded');
+                    return;
+                } catch (e) {
+                    console.warn('[PonyNotes] High quality SVG export failed:', e);
+                }
+
                 if (typeof window.exportToSvg === 'function') {
                     console.log('[PonyNotes] 使用 window.exportToSvg');
                     const svg = await window.exportToSvg({

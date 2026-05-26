@@ -56,7 +56,7 @@ class AIWelcomeTheme {
 
   /// 尺寸配置（基于设计图CSS）
   static const double avatarSize = 60.0; // group_1: 60x60
-  static const double containerBorderRadius = 18.0; // block_3: border-radius
+  static const double containerBorderRadius = 24.0; // block_3: border-radius
   static const double buttonBorderRadius = 4.0; // block_4: border-radius: 4px
   static const double iconSize = 30.0; // label_5-8: 25x25
   static const double sendButtonSize = 35.0; // label_9: 35x35

@@ -564,6 +564,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
+      await _improveContextMenuTextRendering();
       await _installResizeGuard();
 
       // 设置主题
@@ -807,6 +808,178 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         hideElements();
       })();
     ''', tag: 'hideUnwantedUI');
+  }
+
+  /// 优化右键菜单中文渲染；Improve Excalidraw context-menu text rendering.
+  Future<void> _improveContextMenuTextRendering() async {
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+    final menuFontFamily = isWindows
+        ? '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", '
+            '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+        : '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", '
+            '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
+    final fontSmoothing = isWindows ? 'antialiased' : 'antialiased';
+    final mozFontSmoothing = isWindows ? 'grayscale' : 'grayscale';
+    final menuFontSize = isWindows ? '15' : '13';
+    final shortcutFontSize = isWindows ? '13' : '11';
+    final menuFontWeight = isWindows ? 600 : 500;
+    final shortcutFontWeight = isWindows ? 500 : 500;
+
+    await _safeEvalJs(
+      '''
+      (function() {
+        const style = document.createElement('style');
+        style.id = 'ponynotes-context-menu-font-style';
+        style.textContent = `
+          .excalidraw,
+          .excalidraw .context-menu-popover,
+          .excalidraw .context-menu,
+          .excalidraw .Island:has(.context-menu) {
+            --ui-font: $menuFontFamily !important;
+          }
+
+          .excalidraw .context-menu-popover,
+          .excalidraw .context-menu,
+          .excalidraw .context-menu *,
+          .excalidraw .Island:has(.context-menu),
+          .excalidraw .Island:has(.context-menu) * {
+            font-family: $menuFontFamily !important;
+            -webkit-font-smoothing: $fontSmoothing !important;
+            -moz-osx-font-smoothing: $mozFontSmoothing !important;
+            text-rendering: auto !important;
+            font-synthesis: none !important;
+            font-kerning: normal !important;
+            letter-spacing: 0 !important;
+          }
+
+          .excalidraw .context-menu,
+          .excalidraw .context-menu-popover,
+          .excalidraw .Island:has(.context-menu) {
+            filter: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            opacity: 1 !important;
+            backface-visibility: visible !important;
+            perspective: none !important;
+            will-change: auto !important;
+            contain: paint !important;
+          }
+
+          .excalidraw .context-menu {
+            border: 1px solid rgba(90, 104, 122, 0.32) !important;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18) !important;
+            background-clip: padding-box !important;
+          }
+
+          .excalidraw .context-menu-item {
+            font-size: ${menuFontSize}px !important;
+            line-height: 1.45 !important;
+            font-weight: $menuFontWeight !important;
+            min-height: 30px !important;
+            color: rgba(17, 24, 39, 0.96) !important;
+            text-shadow: 0 0 0 currentColor !important;
+          }
+
+          .excalidraw .context-menu-item .context-menu-item__shortcut {
+            font-size: ${shortcutFontSize}px !important;
+            font-weight: $shortcutFontWeight !important;
+            color: rgba(55, 65, 81, 0.88) !important;
+          }
+
+          .excalidraw.theme--dark .context-menu-item {
+            color: rgba(243, 244, 246, 0.96) !important;
+          }
+
+          .excalidraw.theme--dark .context-menu-item .context-menu-item__shortcut {
+            color: rgba(209, 213, 219, 0.88) !important;
+          }
+        `;
+
+        const existingStyle =
+          document.getElementById('ponynotes-context-menu-font-style');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+
+        document.head.appendChild(style);
+
+        const menuSelectors = [
+          '.excalidraw .context-menu-popover',
+          '.excalidraw .context-menu',
+          '.excalidraw [role="menu"]',
+        ];
+
+        const snapContextMenuToPixels = () => {
+          const menus = document.querySelectorAll(menuSelectors.join(','));
+          for (const menu of menus) {
+            const computed = window.getComputedStyle(menu);
+            if (computed.display === 'none' || computed.visibility === 'hidden') {
+              continue;
+            }
+
+            const left = parseFloat(menu.style.left || computed.left);
+            const top = parseFloat(menu.style.top || computed.top);
+            if (Number.isFinite(left) && computed.position !== 'static') {
+              menu.style.setProperty('left', Math.round(left) + 'px', 'important');
+            }
+            if (Number.isFinite(top) && computed.position !== 'static') {
+              menu.style.setProperty('top', Math.round(top) + 'px', 'important');
+            }
+
+            if (computed.transform && computed.transform !== 'none') {
+              try {
+                const matrix = new DOMMatrixReadOnly(computed.transform);
+                const roundedX = Math.round(matrix.m41);
+                const roundedY = Math.round(matrix.m42);
+                menu.style.setProperty(
+                  'transform',
+                  `matrix(\${matrix.a}, \${matrix.b}, \${matrix.c}, \${matrix.d}, \${roundedX}, \${roundedY})`,
+                  'important',
+                );
+              } catch (_) {
+                // Keep the original transform if the browser cannot parse it.
+              }
+            }
+
+            menu.style.setProperty('filter', 'none', 'important');
+            menu.style.setProperty('backdrop-filter', 'none', 'important');
+            menu.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+            menu.style.setProperty('will-change', 'auto', 'important');
+          }
+        };
+
+        const scheduleSnap = () => {
+          cancelAnimationFrame(window.__ponynotesContextMenuSnapFrame);
+          window.__ponynotesContextMenuSnapFrame =
+            requestAnimationFrame(snapContextMenuToPixels);
+          setTimeout(snapContextMenuToPixels, 40);
+          setTimeout(snapContextMenuToPixels, 120);
+        };
+
+        if (window.__ponynotesContextMenuObserver) {
+          window.__ponynotesContextMenuObserver.disconnect();
+        }
+        window.__ponynotesContextMenuObserver =
+          new MutationObserver(scheduleSnap);
+        window.__ponynotesContextMenuObserver.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'style'],
+        });
+
+        document.removeEventListener(
+          'contextmenu',
+          window.__ponynotesContextMenuSnapHandler || scheduleSnap,
+          true,
+        );
+        window.__ponynotesContextMenuSnapHandler = scheduleSnap;
+        document.addEventListener('contextmenu', scheduleSnap, true);
+        scheduleSnap();
+      })();
+    ''',
+      tag: 'improveContextMenuTextRendering',
+    );
   }
 
   /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
@@ -1226,6 +1399,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
+      await _improveContextMenuTextRendering();
 
       // 设置主题
       final theme =

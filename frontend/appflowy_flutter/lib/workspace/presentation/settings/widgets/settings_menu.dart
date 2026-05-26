@@ -344,7 +344,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
 
     return Container(
-      padding: EdgeInsets.all(theme.spacing.l),
+      padding: EdgeInsets.all(theme.spacing.m),
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(theme.spacing.m),
@@ -358,63 +358,60 @@ class _SettingsMenuState extends State<SettingsMenu> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           buildAvatar(),
-          const HSpace(12),
+          const HSpace(8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const VSpace(6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FlowyText(
-                        _getUserDisplayName(),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: theme.textColorScheme.primary,
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                    const HSpace(8),
-                    Flexible(
-                      child: Builder(
-                        builder: (context) {
-                          final primaryColor =
-                              Theme.of(context).colorScheme.primary;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withOpacity(0.11),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: primaryColor,
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              planName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: primaryColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                FlowyText(
+                  _getUserDisplayName(),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: theme.textColorScheme.primary,
+                  overflow: TextOverflow.visible,
+                  maxLines: 3,
                 ),
-                const VSpace(6),
+                const VSpace(4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Builder(
+                    builder: (context) {
+                      final primaryColor =
+                          Theme.of(context).colorScheme.primary;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withValues(alpha: 0.11),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: primaryColor,
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          planName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: primaryColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const VSpace(4),
                 if (hasValidity)
-                  _buildValidityPeriod(context,
-                      start: summary?.startDate, end: summary?.endDate)
+                  _buildValidityPeriod(
+                    context,
+                    start: summary?.startDate,
+                    end: summary?.endDate,
+                  )
                 else
                   SizedBox(height: 24),
               ],

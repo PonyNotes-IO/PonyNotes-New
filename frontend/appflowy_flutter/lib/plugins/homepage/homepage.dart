@@ -251,129 +251,129 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
             child: Column(
               children: [
-              // 问候语区域 - 右对齐，与头像一起
-              _buildGreetingSection(greeting, userName),
-              const SizedBox(height: 50),
+                // 问候语区域 - 右对齐，与头像一起
+                _buildGreetingSection(greeting, userName),
+                const SizedBox(height: 50),
 
-              // 问AI区域标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    FlowySvg(
-                      FlowySvgs.home_ai_icon_s,
-                      size: Size(22, 18),
-                      blendMode: null,
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "问AI",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
+                // 问AI区域标题
+                Container(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Row(
                     children: [
-                      AIInputArea(
-                        onMessageSent: _handleMessageSent,
-                        customWidth: constraints.maxWidth,
-                        // 使用几乎全部可用宽度，只留8px左右边距
-                        customMargin:
-                            const EdgeInsets.symmetric(horizontal: 0.0),
-                        // 最小边距
-                        customToolbarPadding: const EdgeInsets.fromLTRB(
-                          20,
-                          15,
-                          20,
-                          13,
+                      FlowySvg(
+                        FlowySvgs.home_ai_icon_s,
+                        size: Size(22, 18),
+                        blendMode: null,
+                      ),
+                      const SizedBox(width: 8.0),
+                      Text(
+                        "问AI",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: appTheme.textColorScheme.primary,
                         ),
-                        // 左右边距各20px
-                        customToolbarWidth: constraints.maxWidth -
-                            40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
                       ),
                     ],
-                  );
-                },
-              ),
-              const SizedBox(height: 50),
-
-              // 最近访问标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 18,
-                      color: appTheme.iconColorScheme.primary,
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "最近访问",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
 
-              // 最近访问
-              _buildRecentSection(),
-              const SizedBox(height: 50),
-
-              // 待办计划标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    FlowySvg(
-                      FlowySvgs.home_to_do_m,
-                      size: const Size.square(18),
-                      color: appTheme.iconColorScheme.primary,
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "待办计划",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
+                // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AIInputArea(
+                          onMessageSent: _handleMessageSent,
+                          customWidth: constraints.maxWidth,
+                          // 使用几乎全部可用宽度，只留8px左右边距
+                          customMargin:
+                              const EdgeInsets.symmetric(horizontal: 0.0),
+                          // 最小边距
+                          customToolbarPadding: const EdgeInsets.fromLTRB(
+                            20,
+                            15,
+                            20,
+                            13,
+                          ),
+                          // 左右边距各20px
+                          customToolbarWidth: constraints.maxWidth -
+                              40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                        ),
+                      ],
+                    );
+                  },
                 ),
-              ),
+                const SizedBox(height: 50),
 
-              // 待办计划
-              TodoPlanSection(
-                workspaceId: context
-                    .read<UserWorkspaceBloc>()
-                    .state
-                    .currentWorkspace
-                    ?.workspaceId,
-              ),
-            ],
+                // 最近访问标题
+                Container(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 18,
+                        color: appTheme.iconColorScheme.primary,
+                      ),
+                      const SizedBox(width: 8.0),
+                      Text(
+                        "最近访问",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: appTheme.textColorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 最近访问
+                _buildRecentSection(),
+                const SizedBox(height: 50),
+
+                // 待办计划标题
+                Container(
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: Row(
+                    children: [
+                      FlowySvg(
+                        FlowySvgs.home_to_do_m,
+                        size: const Size.square(18),
+                        color: appTheme.iconColorScheme.primary,
+                      ),
+                      const SizedBox(width: 8.0),
+                      Text(
+                        "待办计划",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: appTheme.textColorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 待办计划
+                TodoPlanSection(
+                  workspaceId: context
+                      .read<UserWorkspaceBloc>()
+                      .state
+                      .currentWorkspace
+                      ?.workspaceId,
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildGreetingSection(String greeting, String userName) {
@@ -614,7 +614,7 @@ class _HomePageState extends State<HomePage> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
-            borderRadius: BorderRadius.circular(12.0),
+            borderRadius: BorderRadius.circular(16.0),
             border: Border.all(
               color: theme.borderColorScheme.primary,
               width: 1,
@@ -632,8 +632,8 @@ class _HomePageState extends State<HomePage> {
                   decoration: BoxDecoration(
                     color: topHeaderColor.withValues(alpha: 0.15),
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(11),
-                      topRight: Radius.circular(11),
+                      topLeft: Radius.circular(15),
+                      topRight: Radius.circular(15),
                     ),
                   ),
                 ),
@@ -806,7 +806,7 @@ class _HomePageState extends State<HomePage> {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
-            borderRadius: BorderRadius.circular(10.0),
+            borderRadius: BorderRadius.circular(16.0),
             border: Border.all(
               color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
               width: 1,
