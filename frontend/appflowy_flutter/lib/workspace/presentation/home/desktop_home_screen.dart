@@ -274,7 +274,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       buildWhen: (previous, current) =>
           previous.currentPageManager.plugin.pluginType !=
           current.currentPageManager.plugin.pluginType,
-      builder: (context, _) {
+      builder: (context, state) {
+        final handlesInlineSidebarToggle = state
+            .currentPageManager.plugin.widgetBuilder.handlesInlineSidebarToggle;
         return ValueListenableBuilder<bool>(
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
@@ -287,6 +289,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               homeMenuResizer: homeMenuResizer,
               notificationPanel: notificationPanel,
               sliderHoverTrigger: sliderHoverTrigger,
+              handlesInlineSidebarToggle: handlesInlineSidebarToggle,
               isFullWindow: isFullWindow,
             );
           },
@@ -346,6 +349,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     required Widget homeMenuResizer,
     required Widget notificationPanel,
     required Widget sliderHoverTrigger,
+    required bool handlesInlineSidebarToggle,
     bool isFullWindow = false,
   }) {
     final isSliderbarShowing = layout.showMenu && !isFullWindow;
@@ -448,14 +452,20 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           ),
         ),
         // Windows: floating slider button
-        if (!isSliderbarShowing && !isFullWindow && Platform.isWindows)
+        if (!isSliderbarShowing &&
+            !isFullWindow &&
+            Platform.isWindows &&
+            !handlesInlineSidebarToggle)
           Positioned(
             left: 6,
             top: 56,
             child: sliderHoverTrigger,
           ),
         // macOS: sidebar toggle icon in traffic-lights row (same position as collapse button)
-        if (!isSliderbarShowing && !isFullWindow && Platform.isMacOS)
+        if (!isSliderbarShowing &&
+            !isFullWindow &&
+            Platform.isMacOS &&
+            !handlesInlineSidebarToggle)
           Positioned(
             left: 0,
             top: 0,

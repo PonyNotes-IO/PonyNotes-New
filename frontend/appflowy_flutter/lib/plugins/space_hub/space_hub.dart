@@ -1104,6 +1104,16 @@ class _SpaceDocumentList extends StatelessWidget {
                   ],
                 ),
               ),
+            if (Platform.isWindows) ...[
+              const HSpace(4),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: _SpaceHubSidebarToggleButton(
+                  color: theme.iconColorScheme.secondary,
+                ),
+              ),
+            ],
           ],
         ],
       ),

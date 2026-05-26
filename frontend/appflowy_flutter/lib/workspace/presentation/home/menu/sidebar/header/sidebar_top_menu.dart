@@ -63,13 +63,14 @@ class SidebarTopMenu extends StatelessWidget {
   // }
 
   Widget _buildCollapseMenuButton(BuildContext context) {
-    if (Platform.isWindows || Platform.isMacOS) return const SizedBox.shrink();
+    if (Platform.isWindows) return const SizedBox.shrink();
     final theme = AppFlowyTheme.of(context);
+    final shouldAlwaysShow = Platform.isMacOS;
 
     return ValueListenableBuilder(
       valueListenable: isSidebarOnHover,
       builder: (_, value, ___) => Opacity(
-        opacity: value ? 1 : 0,
+        opacity: shouldAlwaysShow || value ? 1 : 0,
         child: Padding(
           padding: const EdgeInsets.only(top: 12.0, right: 6.0),
           child: Listener(
