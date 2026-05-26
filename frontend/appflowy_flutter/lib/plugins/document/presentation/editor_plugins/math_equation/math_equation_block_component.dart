@@ -228,9 +228,14 @@ class MathEquationBlockComponentWidgetState
 
   Widget _buildMathEquation(BuildContext context) {
     return Center(
-      child: Math.tex(
-        formula,
-        textStyle: const TextStyle(fontSize: 20),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          child: Math.tex(
+            formula,
+            textStyle: const TextStyle(fontSize: 20),
+          ),
+        ),
       ),
     );
   }

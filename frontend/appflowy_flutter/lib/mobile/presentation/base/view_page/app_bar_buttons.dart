@@ -227,6 +227,7 @@ class _ImmersiveAppBarButton extends StatelessWidget {
     // if the immersive mode is on, the icon should be white and add a black background
     //  also, the icon opacity will change based on the app bar opacity
     return UnconstrainedBox(
+      constrainedAxis: Axis.vertical,
       child: SizedBox.square(
         dimension: dimension,
         child: ValueListenableBuilder(

@@ -495,7 +495,22 @@ GoRoute _mobileEmojiPickerPageRoute() {
       try {
         tabs = selectTabs
             .split('-')
-            .map((e) => PickerTabType.values.byName(e))
+            .where((e) => e.isNotEmpty)
+            .map((e) {
+              try {
+                return PickerTabType.values.byName(e);
+              } on ArgumentError {
+                try {
+                  return PickerTabType.values.byName(
+                    e[0].toUpperCase() + e.substring(1).toLowerCase(),
+                  );
+                } catch (_) {
+                  Log.error('Unknown picker tab type: $e');
+                  return null;
+                }
+              }
+            })
+            .whereType<PickerTabType>()
             .toList();
       } on ArgumentError catch (e) {
         Log.error('convert selectTabs to pickerTab error', e);
@@ -726,7 +741,22 @@ GoRoute _mobileEditorScreenRoute() {
       try {
         tabs = selectTabs
             .split('-')
-            .map((e) => PickerTabType.values.byName(e))
+            .where((e) => e.isNotEmpty)
+            .map((e) {
+              try {
+                return PickerTabType.values.byName(e);
+              } on ArgumentError {
+                try {
+                  return PickerTabType.values.byName(
+                    e[0].toUpperCase() + e.substring(1).toLowerCase(),
+                  );
+                } catch (_) {
+                  Log.error('Unknown picker tab type: $e');
+                  return null;
+                }
+              }
+            })
+            .whereType<PickerTabType>()
             .toList();
       } on ArgumentError catch (e) {
         Log.error('convert selectTabs to pickerTab error', e);

@@ -2,6 +2,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
+import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
@@ -185,7 +186,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _onNoteTap(ViewPB note) {
-    context.push('/editor/${note.id}');
+    context.push('${MobileDocumentScreen.routeName}?${MobileDocumentScreen.viewId}=${note.id}');
   }
 
   void _onScheduleTap(ScheduleItem schedule) {
