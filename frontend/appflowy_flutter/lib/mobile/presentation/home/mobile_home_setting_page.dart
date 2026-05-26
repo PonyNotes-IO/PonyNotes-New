@@ -8,6 +8,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/about/mobile_about_xiaoma_page.dart';
 import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
 import 'package:appflowy/workspace/application/settings/ai/settings_ai_bloc.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
@@ -322,6 +323,20 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   }
 
   Widget _buildSettingsSection() {
+    // 关于小马页面需要特殊处理，跳转到独立页面
+    if (_currentSection == MobileSettingsSection.about) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (ctx) => const MobileAboutXiaomaPage(),
+          ),
+        );
+        // 重置回菜单
+        setState(() => _currentSection = MobileSettingsSection.menu);
+      });
+      return const SizedBox.shrink();
+    }
+
     final isServerWorkspace =
         _userProfile!.workspaceType == WorkspaceTypePB.ServerW;
     final isBillingEnabled = isServerWorkspace &&
@@ -377,7 +392,8 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                   title: LocaleKeys.settings_billingPage_menuLabel.tr(),
                   description: '账单功能开发中',
                 ),
-              MobileSettingsSection.about => const AboutSettingGroup(),
+              MobileSettingsSection.about =>
+                const SizedBox.shrink(), // handled above with navigation
               MobileSettingsSection.accountManagement =>
                 UserSessionSettingGroup(
                   userProfile: _userProfile!,
