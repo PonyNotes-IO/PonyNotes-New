@@ -1,4 +1,5 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_edit_event_page.dart';
@@ -7,12 +8,19 @@ import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/date_picker.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/uuid.dart';
+import 'package:nanoid/nanoid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -392,7 +400,229 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   Future<void> _createNewNote() async {
-    // TODO: 实现新建日记页的逻辑
+    // 先关闭底部菜单
+    Navigator.of(context).pop();
+
+    // 显示输入标题对话框
+    final theme = AppFlowyTheme.of(context);
+    String documentTitle = '';
+    bool isCreating = false;
+
+    final result = await showDialog<String>(
+      context: context,
+      barrierColor: theme.surfaceColorScheme.overlay,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AFModal(
+            constraints: const BoxConstraints(maxWidth: 340),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AFModalHeader(
+                  leading: const Text('新建日记页'),
+                  trailing: [
+                    AFGhostButton.normal(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      padding: EdgeInsets.all(theme.spacing.xs),
+                      builder: (context, isHovering, disabled) {
+                        return FlowySvg(
+                          FlowySvgs.toast_close_s,
+                          size: const Size.square(20),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  child: TextField(
+                    autofocus: true,
+                    onChanged: (value) {
+                      documentTitle = value;
+                    },
+                    enabled: !isCreating,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Theme.of(ctx).textTheme.bodyLarge?.color,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '输入日记标题',
+                      filled: true,
+                      fillColor: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Theme.of(ctx).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                AFModalFooter(
+                  trailing: [
+                    AFOutlinedTextButton.normal(
+                      text: '取消',
+                      onTap: () {
+                        if (!isCreating) {
+                          Navigator.of(ctx).pop();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    AFFilledTextButton.primary(
+                      text: isCreating ? '创建中...' : '创建',
+                      onTap: () {
+                        if (isCreating || documentTitle.trim().isEmpty) {
+                          return;
+                        }
+                        if (documentTitle.length > 256) {
+                          showToastNotification(
+                            message: '日记标题过长，请控制在256个字符以内',
+                            type: ToastificationType.error,
+                          );
+                          return;
+                        }
+
+                        setDialogState(() {
+                          isCreating = true;
+                        });
+
+                        Navigator.of(ctx).pop(documentTitle.trim());
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    // 创建日记
+    try {
+      // 获取当前用户和工作空间信息
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final workspaceResult = await FolderEventGetCurrentWorkspaceSetting().send();
+
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => null,
+      );
+      final workspaceId = workspaceResult.fold(
+        (setting) => setting.workspaceId,
+        (error) => '',
+      );
+
+      if (userProfile == null || workspaceId.isEmpty) {
+        showToastNotification(
+          message: '无法获取当前用户或工作空间信息',
+          type: ToastificationType.error,
+        );
+        return;
+      }
+
+      // 使用 WorkspaceService 创建文档视图
+      final workspaceService = WorkspaceService(
+        workspaceId: workspaceId,
+        userId: userProfile.id,
+      );
+
+      // 创建/获取日历空间
+      ViewPB externalCalendarView;
+      try {
+        externalCalendarView = await _buildCalendarSpace(workspaceService);
+      } catch (e) {
+        showToastNotification(
+          message: '创建日记失败：无法访问日历空间',
+          type: ToastificationType.error,
+        );
+        return;
+      }
+
+      // 在"日历"空间下创建 Document 类型的视图
+      final createResult = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Document,
+        name: result,
+        section: ViewSectionPB.Private,
+        parentViewId: externalCalendarView.id,
+        openAfterCreate: false,
+      );
+
+      createResult.fold(
+        (view) {
+          showToastNotification(
+            message: '日记创建成功',
+            type: ToastificationType.success,
+          );
+
+          // 延迟刷新日历内容以显示新创建的日记
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) {
+              _loadNotesForDate();
+            }
+          });
+        },
+        (error) {
+          String errorMsg = '创建日记失败';
+          if (error.msg.contains('ViewNameTooLong')) {
+            errorMsg = '日记标题过长';
+          } else if (error.msg.contains('Folder not initialized')) {
+            errorMsg = '系统未完全初始化，请稍后重试';
+          } else {
+            errorMsg = '创建日记失败: ${error.msg}';
+          }
+          showToastNotification(
+            message: errorMsg,
+            type: ToastificationType.error,
+          );
+        },
+      );
+    } catch (e) {
+      showToastNotification(
+        message: '创建日记失败',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
+  Future<ViewPB> _buildCalendarSpace(WorkspaceService workspaceService) async {
+    // 检查私有空间下是否存在"日历"空间
+    final privateViewsResult = await workspaceService.getPrivateViews();
+    final privateViews = privateViewsResult.fold(
+      (views) => views,
+      (error) => <ViewPB>[],
+    );
+
+    // 查找是否已存在"日历"空间
+    final calendarSpace = privateViews.firstWhere(
+      (view) => view.name == LocaleKeys.calendar_menuName.tr(),
+      orElse: () => ViewPB(),
+    );
+
+    if (calendarSpace.id.isNotEmpty) {
+      // 已存在"日历"空间，使用其ID
+      return calendarSpace;
+    } else {
+      // 不存在"日历"空间，创建新的
+      final createSpaceResult = await workspaceService.createView(
+        name: LocaleKeys.calendar_menuName.tr(),
+        viewSection: ViewSectionPB.Private,
+        layout: ViewLayoutPB.Document,
+      );
+
+      return createSpaceResult.fold(
+        (view) => view,
+        (error) => throw Exception('创建日历空间失败'),
+      );
+    }
   }
 
   Widget _buildAddMenuItem({
