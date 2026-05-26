@@ -239,21 +239,64 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         title: '日历',
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildMonthHeader(),
-            _buildCalendar(),
-            Expanded(
-              child: _buildContentCard(),
-            ),
-          ],
-        ),
+        child: _buildScrollableContent(),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddMenu,
         backgroundColor: const Color(0xFFFF6B35),
         elevation: 4,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+    );
+  }
+
+  Widget _buildScrollableContent() {
+    if (_isLoadingNotes) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final schedules = _getSchedulesForDate();
+
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          // 月份标题
+          _buildMonthHeader(),
+          // 日期选择器
+          _buildCalendar(),
+          // 笔记和日程列表
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDateTitle(),
+                  if (_notesForDate.isEmpty && schedules.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: _buildEmptyState(),
+                    )
+                  else ...[
+                    if (_notesForDate.isNotEmpty) ...[
+                      ..._notesForDate.map((note) => _buildNoteItem(note)),
+                      if (schedules.isNotEmpty) const Divider(height: 1),
+                    ],
+                    ...schedules.map((schedule) => _buildScheduleItem(schedule)),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -510,48 +553,6 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildContentCard() {
-    if (_isLoadingNotes) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final schedules = _getSchedulesForDate();
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDateTitle(),
-              if (_notesForDate.isEmpty && schedules.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: _buildEmptyState(),
-                )
-              else ...[
-                if (_notesForDate.isNotEmpty) ...[
-                  ..._notesForDate.map((note) => _buildNoteItem(note)),
-                  if (schedules.isNotEmpty) const Divider(height: 1),
-                ],
-                ...schedules.map((schedule) => _buildScheduleItem(schedule)),
-              ],
-            ],
-          ),
-        ),
-      ],
     );
   }
 
