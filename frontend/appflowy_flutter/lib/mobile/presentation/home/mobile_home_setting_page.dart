@@ -471,13 +471,6 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                   label: '存储设置',
                   onTap: () => onNavigate(MobileSettingsSection.storage),
                 ),
-                if (isServerWorkspace &&
-                    currentWorkspace?.role != null &&
-                    currentWorkspace?.role != AFRolePB.Guest)
-                  _SettingsItem(
-                    label: LocaleKeys.settings_sites_title.tr(),
-                    onTap: () => onNavigate(MobileSettingsSection.sites),
-                  ),
                 if (isBillingEnabled)
                   _SettingsItem(
                     label: LocaleKeys.settings_planPage_menuLabel.tr(),
@@ -491,15 +484,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 _SettingsItem(
                   label: LocaleKeys.legal_aboutXiaoma.tr(),
                   onTap: () => onNavigate(MobileSettingsSection.about),
+                  showBottomDivider: false,
                 ),
-                if (userProfile.userAuthType == AuthTypePB.Server)
-                  _SettingsItem(
-                    label:
-                        LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
-                    onTap: () =>
-                        onNavigate(MobileSettingsSection.accountManagement),
-                    showBottomDivider: false,
-                  ),
               ],
             ),
             const VSpace(16),
