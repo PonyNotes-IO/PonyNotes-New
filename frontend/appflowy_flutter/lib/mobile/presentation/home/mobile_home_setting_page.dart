@@ -359,7 +359,9 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                 const SizedBox.shrink(), // handled above
               MobileSettingsSection.workspaceManagement =>
                 const MobileSpaceManagementPage(showAppBar: false),
-              MobileSettingsSection.member => WorkspaceSettingGroup(),
+              MobileSettingsSection.member => WorkspaceSettingGroup(
+                memberCount: widget.workspaceState?.currentWorkspace?.memberCount,
+              ),
               MobileSettingsSection.sharing => _ComingSoonGroup(
                   title: '共享发布',
                   description: '分享与发布功能开发中',
