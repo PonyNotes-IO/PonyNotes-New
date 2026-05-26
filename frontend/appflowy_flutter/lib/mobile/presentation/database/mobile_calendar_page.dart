@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_edit_event_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
 import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
@@ -190,35 +191,19 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _onScheduleTap(ScheduleItem schedule) {
-    _showScheduleDetail(schedule);
-  }
-
-  void _showScheduleDetail(ScheduleItem schedule) {
-    showMobileBottomSheet(
-      context,
-      showDragHandle: true,
-      showHeader: true,
-      title: schedule.title.isNotEmpty ? schedule.title : '日程详情',
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (schedule.description.isNotEmpty) ...[
-              Text(schedule.description),
-              const SizedBox(height: 16),
-            ],
-            Text(
-              '开始: ${_formatTime(schedule.startTime)}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            Text(
-              '结束: ${_formatTime(schedule.endTime)}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-          ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => MobileEditEventPage(
+          schedule: schedule,
+          scheduleModel: _scheduleModel,
+          onEventUpdated: () {
+            // 刷新数据
+            setState(() {});
+          },
+          onEventDeleted: () {
+            // 刷新数据
+            setState(() {});
+          },
         ),
       ),
     );
