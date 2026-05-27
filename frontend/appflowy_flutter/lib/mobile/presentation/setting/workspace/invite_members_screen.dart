@@ -20,6 +20,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 import 'member_list.dart';
 
@@ -108,6 +109,11 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
           child: BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
             listener: _onListener,
             builder: (context, state) {
+              // 云同步未启用时显示提示
+              if (state.dataSyncRequired) {
+                return _buildCloudSyncRequiredView(context);
+              }
+
               return SingleChildScrollView(
                 child: Column(
                   children: [
@@ -129,7 +135,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                       ),
                     ],
                     if (state.myRole.isMember) ...[
-                      Spacer(),
+                      const SizedBox(height: 24),
                       const _LeaveWorkspaceButton(),
                     ],
                     const VSpace(48),
@@ -141,6 +147,61 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
         );
       },
     );
+  }
+
+  Widget _buildCloudSyncRequiredView(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.cloud_off_outlined,
+              size: 64,
+              color: theme.textColorScheme.secondary,
+            ),
+            const VSpace(24),
+            FlowyText.medium(
+              '云同步未启用',
+              fontSize: 18.0,
+              textAlign: TextAlign.center,
+            ),
+            const VSpace(12),
+            FlowyText.regular(
+              '请启用云同步以使用人员管理功能',
+              fontSize: 14.0,
+              maxLines: 3,
+              textAlign: TextAlign.center,
+              color: theme.textColorScheme.secondary,
+            ),
+            const VSpace(24),
+            AFOutlinedTextButton.normal(
+              text: '启用数据同步',
+              onTap: () => _enableCloudSync(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _enableCloudSync(BuildContext context) async {
+    try {
+      context.read<UserWorkspaceBloc>().add(
+            UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
+          );
+      showToastNotification(
+        message: '已请求启用数据同步，请稍候重试',
+      );
+    } catch (e) {
+      Log.error('Failed to request enable sync: $e');
+      showToastNotification(
+        type: ToastificationType.error,
+        message: '无法启用数据同步，请联系管理员',
+      );
+    }
   }
 
   Widget _buildError(BuildContext context) {

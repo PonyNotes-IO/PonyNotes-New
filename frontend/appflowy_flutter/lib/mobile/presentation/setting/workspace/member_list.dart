@@ -4,6 +4,7 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/shared/af_role_pb_extension.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/user_avatar.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -12,8 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:universal_platform/universal_platform.dart';
-import 'package:flowy_infra/platform_extension.dart';
 
 class MobileMemberList extends StatelessWidget {
   const MobileMemberList({
@@ -30,33 +29,70 @@ class MobileMemberList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return SingleChildScrollView(
-      child: SlidableAutoCloseBehavior(
-        child: SeparatedColumn(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          separatorBuilder: () => SizedBox.shrink(),
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16.0,
-                vertical: 8.0,
-              ),
-              child: Text(
-                'Joined',
-                style: theme.textStyle.heading4.enhanced(
-                  color: theme.textColorScheme.primary,
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SingleChildScrollView(
+        child: SlidableAutoCloseBehavior(
+          child: SeparatedColumn(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            separatorBuilder: () => Divider(
+              color: theme.borderColorScheme.primary,
+              height: 1,
+            ),
+            children: [
+              // 表头
+              _MemberListHeader(),
+              ...members.map(
+                (member) => _MemberItem(
+                  member: member,
+                  myRole: myRole,
+                  userProfile: userProfile,
                 ),
               ),
-            ),
-            ...members.map(
-              (member) => _MemberItem(
-                member: member,
-                myRole: myRole,
-                userProfile: userProfile,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MemberListHeader extends StatelessWidget {
+  const _MemberListHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.spacing.xl,
+        vertical: theme.spacing.m,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Text(
+              LocaleKeys.settings_appearance_members_user.tr(),
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.secondary,
               ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              LocaleKeys.settings_appearance_members_role.tr(),
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.secondary,
+              ),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -76,61 +112,65 @@ class _MemberItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isSelf = member.uid.toInt() != 0 && member.uid.toInt() == userProfile.id.toInt();
     final canDelete = myRole.canDelete && member.name != userProfile.name;
+    final canUpdateRole = myRole.canUpdate && !isSelf;
 
-    Widget child;
-
-    if (PlatformInfo.isDesktopOrTablet) {
-      child = Row(
-        children: [
-          Expanded(
-            child: Text(
-              member.name,
-              style: theme.textStyle.heading4.standard(
-                color: theme.textColorScheme.primary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              member.role.description,
-              style: theme.textStyle.heading4.standard(
-                color: theme.textColorScheme.secondary,
-              ),
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      );
-    } else {
-      child = Row(
-        children: [
-          Expanded(
-            child: Text(
-              member.name,
-              style: theme.textStyle.heading4.standard(
-                color: theme.textColorScheme.primary,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(
-            member.role.description,
-            style: theme.textStyle.heading4.standard(
-              color: theme.textColorScheme.secondary,
-            ),
-            textAlign: TextAlign.end,
-          ),
-        ],
-      );
-    }
-
-    child = Container(
+    Widget child = Container(
       padding: EdgeInsets.symmetric(
         horizontal: theme.spacing.xl,
-        vertical: theme.spacing.l,
+        vertical: theme.spacing.m,
       ),
-      child: child,
+      child: Row(
+        children: [
+          // 用户头像
+          UserAvatar(
+            iconUrl: member.avatarUrl,
+            name: member.name,
+            size: AFAvatarSize.s,
+          ),
+          HSpace(12),
+          // 用户名和邮箱
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  member.name,
+                  style: theme.textStyle.body.enhanced(
+                    color: theme.textColorScheme.primary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (member.email.isNotEmpty)
+                  Text(
+                    member.email,
+                    style: theme.textStyle.caption.standard(
+                      color: theme.textColorScheme.secondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          // 角色
+          Expanded(
+            flex: 2,
+            child: canUpdateRole
+                ? _MemberRoleActionList(member: member)
+                : Text(
+                    _getRoleDisplayName(member.role),
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.primary,
+                    ),
+                    textAlign: TextAlign.end,
+                  ),
+          ),
+        ],
+      ),
     );
 
     if (canDelete) {
@@ -166,6 +206,18 @@ class _MemberItem extends StatelessWidget {
     return child;
   }
 
+  String _getRoleDisplayName(AFRolePB role) {
+    switch (role) {
+      case AFRolePB.Owner:
+        return '工作空间所有者';
+      case AFRolePB.Member:
+        return '成员';
+      case AFRolePB.Guest:
+        return '受限成员';
+    }
+    return "";
+  }
+
   void _showDeleteMenu(BuildContext context) {
     final workspaceMemberBloc = context.read<WorkspaceMemberBloc>();
     showMobileBottomSheet(
@@ -187,13 +239,117 @@ class _MemberItem extends StatelessWidget {
           showTopBorder: false,
           showBottomBorder: false,
           onTap: () {
+            final memberIdentifier = member.uid.toInt() != 0
+                ? member.uid.toString()
+                : (member.email.isNotEmpty ? member.email : member.name);
             workspaceMemberBloc.add(
-              WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-                member.name,
-              ),
+              WorkspaceMemberEvent.removeWorkspaceMemberByEmail(memberIdentifier),
             );
             Navigator.of(context).pop();
           },
+        );
+      },
+    );
+  }
+}
+
+class _MemberRoleActionList extends StatelessWidget {
+  const _MemberRoleActionList({
+    required this.member,
+  });
+
+  final WorkspaceMemberPB member;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return GestureDetector(
+      onTap: () => _showRoleSelector(context, theme),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(
+            _getRoleDisplayName(member.role),
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
+            ),
+          ),
+          HSpace(4),
+          FlowySvg(
+            FlowySvgs.arrow_down_s,
+            size: const Size.square(16),
+            color: theme.textColorScheme.secondary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getRoleDisplayName(AFRolePB role) {
+    switch (role) {
+      case AFRolePB.Owner:
+        return '工作空间所有者';
+      case AFRolePB.Member:
+        return '成员';
+      case AFRolePB.Guest:
+        return '受限成员';
+    }
+    return "";
+  }
+
+  void _showRoleSelector(BuildContext context, AppFlowyThemeData theme) {
+    final workspaceMemberBloc = context.read<WorkspaceMemberBloc>();
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showDivider: false,
+      useRootNavigator: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.all(theme.spacing.l),
+                child: Text(
+                  '选择角色',
+                  style: theme.textStyle.heading4.enhanced(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              ...AFRolePB.values.map((role) {
+                final isSelected = role == member.role;
+                return FlowyOptionTile.text(
+                  text: _getRoleDisplayName(role) + (isSelected ? ' ✓' : ''),
+                  height: 52.0,
+                  textColor: isSelected
+                      ? theme.textColorScheme.primary
+                      : theme.textColorScheme.primary,
+                  showTopBorder: false,
+                  showBottomBorder: false,
+                  onTap: () {
+                    if (!isSelected) {
+                      final memberIdentifier = member.uid.toInt() != 0
+                          ? member.uid.toString()
+                          : (member.email.isNotEmpty ? member.email : member.name);
+                      workspaceMemberBloc.add(
+                        WorkspaceMemberEvent.updateWorkspaceMember(
+                          memberIdentifier,
+                          role,
+                        ),
+                      );
+                    }
+                    Navigator.of(ctx).pop();
+                  },
+                );
+              }),
+              SizedBox(height: theme.spacing.m),
+            ],
+          ),
         );
       },
     );

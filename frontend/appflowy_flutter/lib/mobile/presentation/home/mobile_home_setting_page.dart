@@ -360,7 +360,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
               MobileSettingsSection.workspaceManagement =>
                 const MobileSpaceManagementPage(showAppBar: false),
               MobileSettingsSection.member => WorkspaceSettingGroup(
-                memberCount: widget.workspaceState?.currentWorkspace?.memberCount,
+                memberCount: widget.workspaceState?.currentWorkspace?.memberCount?.toInt(),
               ),
               MobileSettingsSection.sharing => _ComingSoonGroup(
                   title: '共享发布',
@@ -459,7 +459,10 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 ),
                 _SettingsItem(
                   label: '人员管理',
-                  onTap: () => onNavigate(MobileSettingsSection.member),
+                  onTap: () {
+                    // 直接跳转到人员管理页面
+                    context.push('/invite_member');
+                  },
                 ),
                 _SettingsItem(
                   label: '共享发布',

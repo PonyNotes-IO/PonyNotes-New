@@ -10,82 +10,20 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:universal_platform/universal_platform.dart';
-import 'package:flowy_infra/platform_extension.dart';
 
-class MInviteMemberByLink extends StatelessWidget {
+class MInviteMemberByLink extends StatefulWidget {
   const MInviteMemberByLink({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Title(),
-        VSpace(theme.spacing.l),
-        _CopyLinkButton(),
-        VSpace(theme.spacing.l),
-        _Description(),
-      ],
-    );
-  }
+  State<MInviteMemberByLink> createState() => _MInviteMemberByLinkState();
 }
 
-class _Title extends StatelessWidget {
-  const _Title();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return Text(
-      LocaleKeys.settings_appearance_members_inviteLinkToAddMember.tr(),
-      style: theme.textStyle.heading4.enhanced(
-        color: theme.textColorScheme.primary,
-      ),
-    );
-  }
-}
-
-class _Description extends StatelessWidget {
-  const _Description();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: LocaleKeys.settings_appearance_members_clickToCopyLink.tr(),
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-          ),
-          TextSpan(
-            text: ' ${LocaleKeys.settings_appearance_members_or.tr()} ',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-          ),
-          TextSpan(
-            text: LocaleKeys.settings_appearance_members_generateANewLink.tr(),
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.action,
-            ),
-            mouseCursor: SystemMouseCursors.click,
-            recognizer: TapGestureRecognizer()
-              ..onTap = () => _onGenerateInviteLink(context),
-          ),
-        ],
-      ),
-    );
-  }
+class _MInviteMemberByLinkState extends State<MInviteMemberByLink> {
+  bool _linkEnabled = true;
 
   Future<void> _onGenerateInviteLink(BuildContext context) async {
     final inviteLink = context.read<WorkspaceMemberBloc>().state.inviteLink;
     if (inviteLink != null) {
-      // show a dialog to confirm if the user wants to copy the link to the clipboard
       await showConfirmDialog(
         context: context,
         style: ConfirmPopupStyle.cancelAndOk,
@@ -100,7 +38,7 @@ class _Description extends StatelessWidget {
               );
         },
         confirmButtonBuilder: (dialogContext) => AFFilledTextButton.destructive(
-          size: PlatformInfo.isDesktopOrTablet ? AFButtonSize.m : AFButtonSize.l,
+          size: AFButtonSize.l,
           text: LocaleKeys.settings_appearance_members_reset.tr(),
           onTap: () {
             context.read<WorkspaceMemberBloc>().add(
@@ -117,6 +55,84 @@ class _Description extends StatelessWidget {
           );
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Container(
+      padding: EdgeInsets.all(theme.spacing.m),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  LocaleKeys.settings_appearance_members_inviteLinkToAddMember.tr(),
+                  style: theme.textStyle.heading4.enhanced(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+                VSpace(theme.spacing.s),
+                if (_linkEnabled)
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '只有拥有邀请成员权限的人员才能查看此内容。你也可以 ',
+                          style: theme.textStyle.caption.standard(
+                            color: theme.textColorScheme.primary,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '创建新链接',
+                          style: theme.textStyle.caption.standard(
+                            color: theme.textColorScheme.action,
+                          ),
+                          recognizer: TapGestureRecognizer()
+                            ..onTap = () => _onGenerateInviteLink(context),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Text(
+                    '只有拥有邀请成员权限的人员才能查看此内容。',
+                    style: theme.textStyle.caption.standard(
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Switch(
+                value: _linkEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _linkEnabled = value;
+                  });
+                },
+                activeColor: theme.textColorScheme.primary,
+              ),
+              if (_linkEnabled) ...[
+                VSpace(theme.spacing.s),
+                _CopyLinkButton(),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CopyLinkButton extends StatelessWidget {
@@ -126,11 +142,13 @@ class _CopyLinkButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return AFOutlinedTextButton.normal(
-      size: AFButtonSize.l,
-      alignment: Alignment.center,
       text: LocaleKeys.button_copyLink.tr(),
-      textStyle: theme.textStyle.heading4.enhanced(
+      textStyle: theme.textStyle.body.standard(
         color: theme.textColorScheme.primary,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.spacing.l,
+        vertical: theme.spacing.s,
       ),
       onTap: () {
         final link = context.read<WorkspaceMemberBloc>().state.inviteLink;
