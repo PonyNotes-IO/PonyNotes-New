@@ -176,7 +176,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
       final viewId = Uri.encodeQueryComponent(widget.viewId);
-      const cacheVersion = 'ponynotes-whiteboard-v2';
+      const cacheVersion = 'ponynotes-whiteboard-v4';
       final url = '$baseUrl/index.html?viewId=$viewId&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
@@ -814,12 +814,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> _improveContextMenuTextRendering() async {
     final isWindows = defaultTargetPlatform == TargetPlatform.windows;
     final menuFontFamily = isWindows
-        ? '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", '
+        ? '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", '
             '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
         : '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", '
             '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
     final fontSmoothing = isWindows ? 'antialiased' : 'antialiased';
     final mozFontSmoothing = isWindows ? 'grayscale' : 'grayscale';
+    final textRendering =
+        isWindows ? 'geometricPrecision' : 'optimizeLegibility';
     final menuFontSize = isWindows ? '15' : '13';
     final shortcutFontSize = isWindows ? '13' : '11';
     final menuFontWeight = isWindows ? 600 : 500;
@@ -832,29 +834,30 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         style.id = 'ponynotes-context-menu-font-style';
         style.textContent = `
           .excalidraw,
-          .excalidraw .context-menu-popover,
           .excalidraw .context-menu,
-          .excalidraw .Island:has(.context-menu) {
+          .excalidraw [role="menu"] {
             --ui-font: $menuFontFamily !important;
           }
 
-          .excalidraw .context-menu-popover,
           .excalidraw .context-menu,
           .excalidraw .context-menu *,
-          .excalidraw .Island:has(.context-menu),
-          .excalidraw .Island:has(.context-menu) * {
+          .excalidraw [role="menu"],
+          .excalidraw [role="menu"] *,
+          .excalidraw .context-menu-item,
+          .excalidraw .context-menu-item *,
+          .excalidraw .context-menu-item__label,
+          .excalidraw .context-menu-item__shortcut {
             font-family: $menuFontFamily !important;
             -webkit-font-smoothing: $fontSmoothing !important;
             -moz-osx-font-smoothing: $mozFontSmoothing !important;
-            text-rendering: auto !important;
+            text-rendering: $textRendering !important;
             font-synthesis: none !important;
             font-kerning: normal !important;
             letter-spacing: 0 !important;
           }
 
           .excalidraw .context-menu,
-          .excalidraw .context-menu-popover,
-          .excalidraw .Island:has(.context-menu) {
+          .excalidraw [role="menu"] {
             filter: none !important;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
@@ -862,13 +865,27 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             backface-visibility: visible !important;
             perspective: none !important;
             will-change: auto !important;
-            contain: paint !important;
+            contain: none !important;
+            transform-style: flat !important;
           }
 
-          .excalidraw .context-menu {
+          .excalidraw .context-menu,
+          .excalidraw [role="menu"] {
             border: 1px solid rgba(90, 104, 122, 0.32) !important;
             box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18) !important;
             background-clip: padding-box !important;
+          }
+
+          .excalidraw .popover.context-menu-popover,
+          .excalidraw .context-menu-popover,
+          .excalidraw .Island:has(.context-menu) {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: auto !important;
+            height: auto !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
           }
 
           .excalidraw .context-menu-item {
@@ -877,7 +894,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             font-weight: $menuFontWeight !important;
             min-height: 30px !important;
             color: rgba(17, 24, 39, 0.96) !important;
-            text-shadow: 0 0 0 currentColor !important;
+            text-shadow: none !important;
           }
 
           .excalidraw .context-menu-item .context-menu-item__shortcut {
@@ -904,7 +921,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         document.head.appendChild(style);
 
         const menuSelectors = [
-          '.excalidraw .context-menu-popover',
           '.excalidraw .context-menu',
           '.excalidraw [role="menu"]',
         ];
@@ -917,20 +933,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               continue;
             }
 
+            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            const snap = (value) => Math.round(value * dpr) / dpr;
             const left = parseFloat(menu.style.left || computed.left);
             const top = parseFloat(menu.style.top || computed.top);
             if (Number.isFinite(left) && computed.position !== 'static') {
-              menu.style.setProperty('left', Math.round(left) + 'px', 'important');
+              menu.style.setProperty('left', snap(left) + 'px', 'important');
             }
             if (Number.isFinite(top) && computed.position !== 'static') {
-              menu.style.setProperty('top', Math.round(top) + 'px', 'important');
+              menu.style.setProperty('top', snap(top) + 'px', 'important');
             }
 
             if (computed.transform && computed.transform !== 'none') {
               try {
                 const matrix = new DOMMatrixReadOnly(computed.transform);
-                const roundedX = Math.round(matrix.m41);
-                const roundedY = Math.round(matrix.m42);
+                const roundedX = snap(matrix.m41);
+                const roundedY = snap(matrix.m42);
                 menu.style.setProperty(
                   'transform',
                   `matrix(\${matrix.a}, \${matrix.b}, \${matrix.c}, \${matrix.d}, \${roundedX}, \${roundedY})`,
@@ -945,6 +963,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             menu.style.setProperty('backdrop-filter', 'none', 'important');
             menu.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
             menu.style.setProperty('will-change', 'auto', 'important');
+            menu.style.setProperty('contain', 'none', 'important');
+            menu.style.setProperty('translate', 'none', 'important');
           }
         };
 

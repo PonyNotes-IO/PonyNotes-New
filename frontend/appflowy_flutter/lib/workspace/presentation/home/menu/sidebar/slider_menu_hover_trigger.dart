@@ -1,3 +1,5 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 
 class SliderMenuHoverTrigger extends StatefulWidget {
@@ -48,14 +50,15 @@ class _SliderMenuHoverTriggerState extends State<SliderMenuHoverTrigger> {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(999),
                     onTap: widget.onOpen,
-                    child: SizedBox(
-                      width: visualSize,
-                      height: visualSize,
-                      child: Icon(
-                        Icons.keyboard_double_arrow_right_rounded,
-                        size: widget.touchOptimized ? 24 : 21,
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.74),
+                    child: SizedBox.square(
+                      dimension: visualSize,
+                      child: Center(
+                        child: FlowySvg(
+                          FlowySvgs.sidebar_collapse_custom_m,
+                          size: Size.square(widget.touchOptimized ? 24 : 21),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.74),
+                        ),
                       ),
                     ),
                   ),

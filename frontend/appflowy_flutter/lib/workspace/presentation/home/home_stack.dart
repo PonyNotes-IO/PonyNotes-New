@@ -18,6 +18,7 @@ import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/navigation.dart';
 import 'package:appflowy/workspace/presentation/home/tabs/tabs_manager.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/draggable_floating_actions_overlay.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
@@ -65,8 +66,6 @@ class HomeStack extends StatefulWidget {
 }
 
 class _HomeStackState extends State<HomeStack> with WindowListener {
-  int selectedIndex = 0;
-
   @override
   void initState() {
     super.initState();
@@ -108,14 +107,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             EdgeInsets.only(left: widget.layout.menuSpacing),
                         child: TabsManager(
                           onIndexChanged: (index) {
-                            if (selectedIndex != index) {
+                            if (state.currentIndex != index) {
                               // Unfocus editor to hide selection toolbar
                               FocusScope.of(context).unfocus();
 
                               context
                                   .read<TabsBloc>()
                                   .add(TabsEvent.selectTab(index));
-                              setState(() => selectedIndex = index);
                             }
                           },
                         ),
@@ -124,7 +122,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                       child: Stack(
                         children: [
                           IndexedStack(
-                            index: selectedIndex,
+                            index: state.currentIndex,
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
@@ -166,48 +164,12 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                 )
                                 .toList(),
                           ),
-                          // Overlay original right-side actions for folder/fileLibrary plugins
-                          if (!isFullWindow && state.pageManagers.isNotEmpty)
-                            Builder(
-                              builder: (ctx) {
-                                final currentIndex = state.currentIndex;
-                                if (currentIndex < 0 ||
-                                    currentIndex >= state.pageManagers.length) {
-                                  return const SizedBox.shrink();
-                                }
-                                final pm = state.pageManagers[currentIndex];
-                                final pluginType = pm.plugin.pluginType;
-                                if (pluginType != PluginType.fileLibrary &&
-                                    pluginType != PluginType.folder &&
-                                    pluginType != PluginType.calendar) {
-                                  return const SizedBox.shrink();
-                                }
-
-                                return Positioned(
-                                  top: HomeSizes.topBarHeight +
-                                      HomeInsets.topBarTitleVerticalPadding -
-                                      (HomeSizes.topBarHeight +
-                                          HomeInsets
-                                              .topBarTitleVerticalPadding) /*0*/,
-                                  right:
-                                      HomeInsets.topBarTitleHorizontalPadding,
-                                  child: ChangeNotifierProvider.value(
-                                    value: pm.notifier,
-                                    child: Consumer<PageNotifier>(
-                                      builder: (_, notifier, __) =>
-                                          notifier.plugin.widgetBuilder
-                                              .rightBarItem ??
-                                          const SizedBox.shrink(),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
                         ],
                       ),
                     ),
                   ],
                 ),
+                if (!isFullWindow) _buildFloatingRightBarOverlay(context, state),
                 if (!isFullWindow && UniversalPlatform.isMacOS)
                   Positioned(
                     top: 0,
@@ -223,6 +185,44 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
         ),
       ),
     );
+  }
+
+  Widget _buildFloatingRightBarOverlay(BuildContext context, TabsState state) {
+    final currentIndex = state.currentIndex;
+    if (currentIndex < 0 || currentIndex >= state.pageManagers.length) {
+      return const SizedBox.shrink();
+    }
+
+    final pm = state.pageManagers[currentIndex];
+    if (pm.plugin.widgetBuilder.rightBarItem == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned.fill(
+      child: DraggableFloatingActionsOverlay(
+        edgeInsets: EdgeInsets.fromLTRB(
+          widget.layout.menuSpacing + 8,
+          _floatingActionsTopInset(),
+          HomeInsets.topBarTitleHorizontalPadding + 8,
+          HomeInsets.topBarTitleHorizontalPadding,
+        ),
+        child: ChangeNotifierProvider.value(
+          value: pm.notifier,
+          child: Consumer<PageNotifier>(
+            builder: (_, notifier, __) =>
+                notifier.plugin.widgetBuilder.rightBarItem ??
+                const SizedBox.shrink(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _floatingActionsTopInset() {
+    final titleBarHeight =
+        UniversalPlatform.isWindows && useCustomWindowTitleBar ? 40.0 : 0.0;
+    return titleBarHeight +
+        (HomeSizes.tabBarHeight - HomeSizes.topActionBarHeight) / 2;
   }
 
   Widget _buildTitleBarControls(BuildContext context, TabsState state) {
@@ -276,7 +276,6 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
 
     // Whiteboard and other canvas-like plugins can render the full-window
     // actions inside their own floating capsule.
-    // 白板等画布页可在内部统一承载应用内全屏动作，宿主层不再重复插入。
     if (handlesFullWindowOverlayActionsInternally) {
       return const SizedBox.shrink();
     }
@@ -300,7 +299,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                 fullWindowMoreItem,
               ],
               FlowyTooltip(
-                message: '退出应用内全屏',
+                message: 'Exit full window',
                 child: SizedBox(
                   width: 40,
                   height: 40,
@@ -331,7 +330,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           style: context.tooltipTextStyle(),
         ),
         TextSpan(
-          text: Platform.isMacOS ? '⌘+.' : 'Ctrl+\\',
+          text: Platform.isMacOS ? 'Cmd+.' : 'Ctrl+\\',
           style: context
               .tooltipTextStyle()
               ?.copyWith(color: Theme.of(context).hintColor),
@@ -370,7 +369,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
         return FlowyTooltip(
-          message: isFullWindow ? '退出应用内全屏' : '应用内全屏',
+          message: isFullWindow ? 'Exit full window' : 'Enter full window',
           child: FlowyHover(
             child: SizedBox(
               width: 28,
@@ -792,7 +791,7 @@ class FadingIndexedStack extends StatefulWidget {
     super.key,
     required this.index,
     required this.children,
-    // 性能优化：减少切换动画时间，从 250ms 降到 100ms
+    // 鎬ц兘浼樺寲锛氬噺灏戝垏鎹㈠姩鐢绘椂闂达紝浠?250ms 闄嶅埌 100ms
     this.duration = const Duration(milliseconds: 100),
   });
 
@@ -1085,35 +1084,7 @@ class _HomeTopBarState extends State<HomeTopBar>
         child: Row(
           children: [
             HSpace(widget.layout.menuSpacing),
-            // 插件自带的右侧工具区域
-            Expanded(
-              child: Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: FullWindowController.isFullWindow,
-                  builder: (context, isFullWindow, _) {
-                    if (isFullWindow) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return Material(
-                      type: MaterialType.transparency,
-                      child: ChangeNotifierProvider.value(
-                        value: Provider.of<PageNotifier>(
-                          context,
-                          listen: false,
-                        ),
-                        child: Consumer(
-                          builder: (_, PageNotifier notifier, __) =>
-                              notifier.plugin.widgetBuilder.rightBarItem ??
-                              const SizedBox.shrink(),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
+            const Expanded(child: SizedBox.shrink()),
           ],
         ),
       ),
@@ -1166,31 +1137,7 @@ class HomeSecondaryTopBar extends StatelessWidget {
                 getIt<TabsBloc>().add(const TabsEvent.expandSecondaryPlugin());
               },
             ),
-            Expanded(
-              child: Align(
-                alignment: AlignmentDirectional.centerEnd,
-                child: ValueListenableBuilder<bool>(
-                  valueListenable: FullWindowController.isFullWindow,
-                  builder: (context, isFullWindow, _) {
-                    if (isFullWindow) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return ChangeNotifierProvider.value(
-                      value: Provider.of<PageNotifier>(
-                        context,
-                        listen: false,
-                      ),
-                      child: Consumer(
-                        builder: (_, PageNotifier notifier, __) =>
-                            notifier.plugin.widgetBuilder.rightBarItem ??
-                            const SizedBox.shrink(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
+            const Expanded(child: SizedBox.shrink()),
           ],
         ),
       ),

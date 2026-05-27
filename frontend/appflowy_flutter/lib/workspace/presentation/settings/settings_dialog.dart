@@ -75,6 +75,7 @@ class SettingsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     const goldenRatio = 1.618;
+    const settingsMenuWidthRatio = 0.275;
     final horizontalMargin = screenSize.width < 900 ? 24.0 : 80.0;
     final verticalMargin = screenSize.height < 720 ? 24.0 : 80.0;
     final availableWidth = math.max(360.0, screenSize.width - horizontalMargin);
@@ -90,6 +91,10 @@ class SettingsDialog extends StatelessWidget {
     final height = math.min(
       maxHeight,
       math.max(minHeight, width / goldenRatio),
+    );
+    final settingsMenuWidth = math.min(
+      360.0,
+      math.max(300.0, width * settingsMenuWidthRatio),
     );
     final theme = AppFlowyTheme.of(context);
     final currentWorkspaceMemberRole =
@@ -125,8 +130,8 @@ class SettingsDialog extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 2,
+                        SizedBox(
+                          width: settingsMenuWidth,
                           child: SettingsMenu(
                             userProfile: state.userProfile,
                             changeSelectedPage: (index) => context

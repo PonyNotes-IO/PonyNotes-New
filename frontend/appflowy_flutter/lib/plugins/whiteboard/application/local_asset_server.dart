@@ -135,9 +135,12 @@ class LocalAssetServer {
   String _cacheControlForPath(String requestPath) {
     final normalizedPath = requestPath.replaceAll('\\', '/');
     if (normalizedPath == 'index.html' ||
+        normalizedPath == 'flutter_bridge.js' ||
         normalizedPath == 'sw.js' ||
         normalizedPath == 'service-worker.js') {
-      return 'public, max-age=300';
+      return normalizedPath == 'flutter_bridge.js'
+          ? 'no-store, no-cache, must-revalidate, max-age=0'
+          : 'public, max-age=300';
     }
 
     if (normalizedPath.startsWith('assets/') ||

@@ -254,6 +254,110 @@
     const getRenderableElements = (elements) =>
         (elements || []).filter((element) => element && !element.isDeleted);
 
+    const getSelectedElementIds = (appState) => {
+        const selectedElementIds = appState?.selectedElementIds;
+        if (!selectedElementIds || typeof selectedElementIds !== 'object') {
+            return new Set();
+        }
+        return new Set(
+            Object.entries(selectedElementIds)
+                .filter(([, selected]) => Boolean(selected))
+                .map(([id]) => id),
+        );
+    };
+
+    const getSelectedGroupIds = (appState) => {
+        const selectedGroupIds = appState?.selectedGroupIds;
+        if (!selectedGroupIds || typeof selectedGroupIds !== 'object') {
+            return new Set();
+        }
+        return new Set(
+            Object.entries(selectedGroupIds)
+                .filter(([, selected]) => Boolean(selected))
+                .map(([id]) => id),
+        );
+    };
+
+    const getActiveLinearElementId = (appState) =>
+        appState?.selectedLinearElement?.elementId ||
+        appState?.editingLinearElement?.elementId ||
+        null;
+
+    const isElementInSelectedGroup = (element, selectedGroupIds) =>
+        (element?.groupIds || []).some((groupId) => selectedGroupIds.has(groupId));
+
+    const collectSelectedElements = (appState, allElements) => {
+        const selectedIds = getSelectedElementIds(appState);
+        const activeLinearElementId = getActiveLinearElementId(appState);
+        if (activeLinearElementId) {
+            selectedIds.add(activeLinearElementId);
+        }
+
+        const selectedGroupIds = getSelectedGroupIds(appState);
+        return allElements.filter(
+            (element) =>
+                selectedIds.has(element.id) ||
+                isElementInSelectedGroup(element, selectedGroupIds),
+        );
+    };
+
+    const collectElementDependencies = (element, exportIds) => {
+        if (!element) {
+            return;
+        }
+        if (element.containerId) {
+            exportIds.add(element.containerId);
+        }
+        for (const boundElement of element.boundElements || []) {
+            if (boundElement?.id) {
+                exportIds.add(boundElement.id);
+            }
+        }
+    };
+
+    const expandSelectionDependencies = (selectedElements, allElements) => {
+        const exportIds = new Set(selectedElements.map((element) => element.id));
+
+        for (const element of selectedElements) {
+            collectElementDependencies(element, exportIds);
+        }
+
+        for (const element of allElements) {
+            if (exportIds.has(element.id)) {
+                collectElementDependencies(element, exportIds);
+            }
+        }
+
+        return allElements.filter((element) => exportIds.has(element.id));
+    };
+
+    const getClipboardSceneData = (api) => {
+        const sceneData = getSceneData(api);
+        const allElements = getRenderableElements(sceneData.elements);
+        const selectedElements = collectSelectedElements(
+            sceneData.appState,
+            allElements,
+        );
+
+        if (!selectedElements.length) {
+            return {
+                ...sceneData,
+                __ponynotesHasSelection: false,
+                __ponynotesExportScope: 'all',
+            };
+        }
+
+        return {
+            ...sceneData,
+            elements: expandSelectionDependencies(selectedElements, allElements),
+            __ponynotesHasSelection: true,
+            __ponynotesExportScope: 'selection',
+        };
+    };
+
+    const hasConfirmedSelection = (sceneData) =>
+        Boolean(sceneData?.__ponynotesHasSelection);
+
     const getExportScale = () => {
         const ratio = Number(window.devicePixelRatio || 1);
         return Math.max(2, Math.min(4, ratio || 1));
@@ -315,7 +419,9 @@
         return null;
     };
 
-    const createHighQualityPngBlob = async (sceneData) => {
+    const createHighQualityPngBlob = async (sceneData, exportSettings = {}) => {
+        const allowVisibleCanvasFallback =
+            exportSettings.allowVisibleCanvasFallback !== false;
         const scale = getExportScale();
         const options = buildExportOptions(sceneData, scale);
 
@@ -346,6 +452,10 @@
             if (typeof result === 'string' && result.startsWith('data:image/png')) {
                 return await (await fetch(result)).blob();
             }
+        }
+
+        if (!allowVisibleCanvasFallback) {
+            throw new Error('Selected export canvas fallback is disabled');
         }
 
         const visibleCanvas = document.querySelector('canvas.excalidraw__canvas');
@@ -441,6 +551,7 @@
         svgString,
         originalWrite,
         sceneData,
+        exportSettings = {},
     ) => {
         if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
             throw new Error('Clipboard SVG write is not available');
@@ -463,7 +574,10 @@
 
         if (clipboardSupports('image/png')) {
             try {
-                clipboardPayload['image/png'] = await createHighQualityPngBlob(sceneData);
+                clipboardPayload['image/png'] = await createHighQualityPngBlob(
+                    sceneData,
+                    exportSettings,
+                );
             } catch (error) {
                 console.warn('[PonyNotes] SVG clipboard PNG fallback failed:', error);
             }
@@ -474,6 +588,93 @@
         }
 
         await originalWrite([new ClipboardItem(clipboardPayload)]);
+    };
+
+    const installContextMenuFontPatch = () => {
+        if (window.__ponynotesContextMenuFontPatchInstalled) {
+            return;
+        }
+
+        const isWindows = /Windows/i.test(window.navigator?.userAgent || '');
+        const menuFontFamily = isWindows
+            ? '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
+            : '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", Arial, sans-serif';
+        const smoothingRules = isWindows
+            ? `
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    text-rendering: auto;
+`
+            : `
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+`;
+
+        const style = document.createElement('style');
+        style.setAttribute('data-ponynotes-context-menu-font-patch', 'true');
+        style.textContent = `
+.excalidraw [role="menu"],
+.excalidraw [role="menu"] *,
+.excalidraw [role="menuitem"],
+.excalidraw [role="menuitem"] *,
+.excalidraw .context-menu,
+.excalidraw .context-menu *,
+.excalidraw .context-menu-item,
+.excalidraw .context-menu-item *,
+.excalidraw .context-menu-item__label,
+.excalidraw .context-menu-item__shortcut,
+.excalidraw .dropdown-menu,
+.excalidraw .dropdown-menu * {
+    ${smoothingRules}
+    font-family: ${menuFontFamily};
+    font-size: ${isWindows ? '15px' : '13px'};
+    font-weight: ${isWindows ? 600 : 500};
+    line-height: 1.45;
+    letter-spacing: 0;
+    text-shadow: none;
+}
+
+.excalidraw .popover.context-menu-popover,
+.excalidraw .context-menu-popover {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+.excalidraw .context-menu,
+.excalidraw [role="menu"] {
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important;
+    backface-visibility: visible !important;
+    perspective: none !important;
+    will-change: auto !important;
+    contain: none !important;
+    transform-style: flat !important;
+}
+
+.excalidraw .context-menu-item {
+    color: rgba(17, 24, 39, 0.96);
+}
+
+.excalidraw .context-menu-item .context-menu-item__shortcut {
+    font-size: ${isWindows ? '13px' : '11px'};
+    font-weight: ${isWindows ? 500 : 500};
+    color: rgba(55, 65, 81, 0.88);
+}
+`;
+        document.head.appendChild(style);
+        window.__ponynotesContextMenuFontPatchInstalled = true;
     };
 
     const installHighQualityClipboardPatch = () => {
@@ -505,7 +706,11 @@
                     try {
                         window.__ponynotesClipboardQualityWriteActive = true;
                         const api = await waitForExcalidrawAPI(12, 50);
-                        const sceneData = getSceneData(api);
+                        const sceneData = getClipboardSceneData(api);
+
+                        if (!hasConfirmedSelection(sceneData)) {
+                            return originalWrite(items);
+                        }
 
                         if (shouldUpgradeSvg) {
                             const svgString = await createHighQualitySvgString(sceneData);
@@ -513,10 +718,13 @@
                                 svgString,
                                 originalWrite,
                                 sceneData,
+                                { allowVisibleCanvasFallback: false },
                             );
                         }
 
-                        const pngBlob = await createHighQualityPngBlob(sceneData);
+                        const pngBlob = await createHighQualityPngBlob(sceneData, {
+                            allowVisibleCanvasFallback: false,
+                        });
                         return await writePngBlobToClipboard(pngBlob, originalWrite);
                     } catch (error) {
                         console.warn('[PonyNotes] High quality clipboard write failed:', error);
@@ -542,12 +750,16 @@
                     try {
                         window.__ponynotesClipboardQualityWriteActive = true;
                         const api = await waitForExcalidrawAPI(12, 50);
-                        const sceneData = getSceneData(api);
+                        const sceneData = getClipboardSceneData(api);
+                        if (!hasConfirmedSelection(sceneData)) {
+                            return originalWriteText(text);
+                        }
                         const svgString = await createHighQualitySvgString(sceneData);
                         return await writeSvgStringToClipboard(
                             svgString,
                             originalWrite,
                             sceneData,
+                            { allowVisibleCanvasFallback: false },
                         );
                     } catch (error) {
                         console.warn('[PonyNotes] High quality SVG clipboard failed:', error);
@@ -565,8 +777,11 @@
         }
     };
 
+    installContextMenuFontPatch();
     installHighQualityClipboardPatch();
+    setTimeout(installContextMenuFontPatch, 500);
     setTimeout(installHighQualityClipboardPatch, 500);
+    setTimeout(installContextMenuFontPatch, 1500);
     setTimeout(installHighQualityClipboardPatch, 1500);
 
     const stableAppStateKeys = new Set([

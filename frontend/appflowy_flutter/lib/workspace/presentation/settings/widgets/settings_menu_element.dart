@@ -58,6 +58,7 @@ class SettingsMenuElement extends StatelessWidget {
           : theme.textColorScheme.secondary.withValues(alpha: 0.5),
       fontSize: 12,
     );
+    final hasTrailingText = trailingText != null && trailingText!.isNotEmpty;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),
@@ -89,6 +90,7 @@ class SettingsMenuElement extends StatelessWidget {
                 const HSpace(4),
               ],
               Expanded(
+                flex: hasTrailingText ? 2 : 1,
                 child: Text(
                   label,
                   maxLines: 1,
@@ -98,9 +100,10 @@ class SettingsMenuElement extends StatelessWidget {
                   textHeightBehavior: _textHeightBehavior,
                 ),
               ),
-              if (trailingText != null && trailingText!.isNotEmpty) ...[
-                const HSpace(8),
-                Flexible(
+              if (hasTrailingText) ...[
+                const HSpace(6),
+                Expanded(
+                  flex: 3,
                   child: Text(
                     trailingText!,
                     maxLines: 1,

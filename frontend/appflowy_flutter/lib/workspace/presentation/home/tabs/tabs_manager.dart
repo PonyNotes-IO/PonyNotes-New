@@ -32,8 +32,8 @@ class _TabsManagerState extends State<TabsManager> {
           prev.currentIndex != curr.currentIndex || prev.pages != curr.pages,
       listener: (context, state) {
         widget.onIndexChanged(state.currentIndex);
-        
-        // 当添加新选项卡时，滚动到最新的选项卡位置
+
+        // Scroll to the newest tab when tab count increases.
         if (state.pages > _previousPageCount) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _scrollController.animateTo(
@@ -43,14 +43,10 @@ class _TabsManagerState extends State<TabsManager> {
             );
           });
         }
-        
+
         _previousPageCount = state.pages;
       },
       builder: (context, state) {
-        if (state.pages == 1) {
-          return const SizedBox.shrink();
-        }
-
         final isAllPinned = state.isAllPinned;
 
         return Container(

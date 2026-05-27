@@ -829,6 +829,12 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final workspaceName = context.select<UserWorkspaceBloc, String>(
+      (bloc) => bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
+          ? bloc.state.currentWorkspace!.name.trim()
+          : LocaleKeys.sidebar_appName.tr(),
+    );
+
     return AppFlowyPopover(
       direction: PopoverDirection.bottomWithCenterAligned,
       offset: const Offset(0, 5),
@@ -905,17 +911,17 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ),
                 const HSpace(6),
                 // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
-                Flexible(
+                Expanded(
+                  flex: 100,
                   child: Tooltip(
-                    message: LocaleKeys.sidebar_appName.tr(),
+                    message: workspaceName,
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 28),
+                            constraints: const BoxConstraints(minWidth: 78),
                             child: FlowyText.medium(
-                              LocaleKeys.sidebar_appName.tr(),
+                              workspaceName,
                               color: Theme.of(context).colorScheme.tertiary,
                               overflow: TextOverflow.ellipsis,
                               fontSize: 15.0,
@@ -975,25 +981,20 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         HSpace(shouldCollapseSyncActions ? 4.0 : 8.0),
-                        SizedBox(
-                          height: HomeSizes.workspaceSectionHeight + 8,
-                          child: Center(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () => context
-                                  .read<HomeSettingBloc>()
-                                  .collapseMenu(),
-                              child: SizedBox(
-                                width: 24,
-                                child: FlowySvg(
-                                  FlowySvgs.sidebar_collapse_custom_m,
-                                  color: AppFlowyTheme.of(context)
-                                      .iconColorScheme
-                                      .secondary,
-                                ),
-                              ),
+                        _buildHeaderActionSlot(
+                          GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: () =>
+                                context.read<HomeSettingBloc>().collapseMenu(),
+                            child: FlowySvg(
+                              FlowySvgs.sidebar_collapse_custom_m,
+                              size: const Size.square(24),
+                              color: AppFlowyTheme.of(context)
+                                  .iconColorScheme
+                                  .secondary,
                             ),
                           ),
+                          size: 28,
                         ),
                       ],
                     );

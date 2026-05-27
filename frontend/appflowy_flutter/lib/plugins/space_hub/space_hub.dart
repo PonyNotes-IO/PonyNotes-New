@@ -84,6 +84,7 @@ class SpaceHubPlugin extends Plugin {
   SpaceHubPlugin({
     required this.view,
     ViewPB? initialSelectedView,
+    this.tabView,
   })  : notifier = ViewPluginNotifier(view: view),
         _viewInfoBloc = ViewInfoBloc(view: view)
           ..add(const ViewInfoEvent.started()),
@@ -96,6 +97,7 @@ class SpaceHubPlugin extends Plugin {
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier;
+  final ViewPB? tabView;
   final ValueNotifier<ViewInfoBloc?>
       _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
 
@@ -110,13 +112,14 @@ class SpaceHubPlugin extends Plugin {
         selectedViewNotifier: _selectedViewNotifier,
         currentViewInfoBlocNotifier: _currentViewInfoBlocNotifier,
         initialSelectedView: _selectedViewNotifier.value,
+        tabView: tabView,
       );
 
   @override
   PluginType get pluginType => PluginType.folder;
 
   @override
-  PluginId get id => notifier.view.id;
+  PluginId get id => tabView?.id ?? notifier.view.id;
 
   @override
   void init() {
@@ -144,6 +147,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.selectedViewNotifier,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewInfoBloc bloc;
@@ -153,6 +157,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   ViewPB get view => notifier.view;
 
@@ -285,13 +290,17 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           pageAccessLevelBloc: pageAccessLevelBloc,
           currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
           initialSelectedView: initialSelectedView,
+          tabView: tabView,
         );
       },
     );
   }
 
   @override
-  String? get viewName => notifier.view.nameOrDefault;
+  String? get viewName =>
+      tabView?.nameOrDefault ??
+      selectedViewNotifier.value?.nameOrDefault ??
+      notifier.view.nameOrDefault;
 
   @override
   Widget get leftBarItem {
@@ -314,7 +323,10 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
-      ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+      ViewTabBarItem(
+        view: tabView ?? selectedViewNotifier.value ?? notifier.view,
+        shortForm: shortForm,
+      );
 
   @override
   List<NavigationItem> get navigationItems => [this];
@@ -332,6 +344,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.pageAccessLevelBloc,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewPB spaceView;
@@ -343,6 +356,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   @override
   State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
@@ -403,6 +417,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         onDeleted: widget.onDeleted,
         currentViewInfoBlocNotifier: widget.currentViewInfoBlocNotifier,
         initialSelectedView: widget.initialSelectedView,
+        tabView: widget.tabView,
       ),
     );
   }
@@ -416,6 +431,7 @@ class _SpaceHubContent extends StatefulWidget {
     required this.onDeleted,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewPB spaceView;
@@ -424,6 +440,7 @@ class _SpaceHubContent extends StatefulWidget {
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   @override
   State<_SpaceHubContent> createState() => _SpaceHubContentState();
@@ -539,6 +556,25 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
   }
 
+  void _openSelectedViewInSpaceTab(ViewPB view) {
+    if (!mounted || view.id.isEmpty) {
+      return;
+    }
+
+    final plugin = SpaceHubPlugin(
+      view: widget.spaceView,
+      initialSelectedView: view,
+      tabView: view,
+    );
+
+    context.read<TabsBloc>().add(
+          TabsEvent.openTab(
+            plugin: plugin,
+            view: view,
+          ),
+        );
+  }
+
   void _hideDocumentList() {
     if (!_isDocumentListVisible) {
       return;
@@ -649,24 +685,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
                       selectedView: _selectedView,
-                      onViewSelectedWithRecent: (view) {
-                        setState(() {
-                          _selectedView = view;
-                        });
-                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                        widget.selectedViewNotifier.value = view;
-                        // 添加到最近访问
-                        _addToRecentViews(view.id);
-                      },
-                      onViewCreated: (view) {
-                        setState(() {
-                          _selectedView = view;
-                        });
-                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                        widget.selectedViewNotifier.value = view;
-                        // 添加到最近访问
-                        _addToRecentViews(view.id);
-                      },
+                      onViewSelectedWithRecent: _openSelectedViewInSpaceTab,
+                      onViewCreated: _openSelectedViewInSpaceTab,
                     ),
                   ),
                 ],
