@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:http/http.dart' as http;
@@ -211,6 +212,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   void _setupJavaScriptHandlers(InAppWebViewController controller) {
     // ✅ 新增：初始化完成器
     _initializationCompleter = Completer<void>();
+
+    controller.addJavaScriptHandler(
+      handlerName: "readWhiteboardClipboard",
+      callback: (args) async {
+        try {
+          final data = await ClipboardService().getData();
+          final image = data.image;
+          final imageBytes = image?.$2;
+          final imageFormat = image?.$1;
+          final imageMimeType =
+              imageFormat == null ? null : 'image/$imageFormat';
+
+          return {
+            'plainText': data.plainText,
+            'html': data.html,
+            'imageMimeType':
+                imageBytes?.isNotEmpty == true ? imageMimeType : null,
+            'imageBase64': imageBytes?.isNotEmpty == true
+                ? base64Encode(imageBytes!)
+                : null,
+          };
+        } catch (e, stack) {
+          Log.error(
+            '[ExcalidrawWebView] readWhiteboardClipboard failed: $e\n$stack',
+          );
+          return {
+            'plainText': null,
+            'html': null,
+            'imageMimeType': null,
+            'imageBase64': null,
+            'error': e.toString(),
+          };
+        }
+      },
+    );
 
     controller.addJavaScriptHandler(
         handlerName: "initData",

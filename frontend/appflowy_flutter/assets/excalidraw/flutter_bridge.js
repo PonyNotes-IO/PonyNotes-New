@@ -511,8 +511,12 @@
         throw new Error('True SVG export is not available');
     };
 
-    const clipboardSupports = (mimeType) =>
-        !window.ClipboardItem?.supports || window.ClipboardItem.supports(mimeType);
+    const clipboardSupports = (mimeType) => {
+        if (typeof window.ClipboardItem?.supports === 'function') {
+            return window.ClipboardItem.supports(mimeType);
+        }
+        return mimeType === 'image/png' || mimeType === 'text/html';
+    };
 
     const writePngBlobToClipboard = async (blob, originalWrite) => {
         if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
@@ -559,19 +563,6 @@
 
         const clipboardPayload = {};
 
-        if (clipboardSupports('image/svg+xml')) {
-            clipboardPayload['image/svg+xml'] = new Blob([svgString], {
-                type: 'image/svg+xml',
-            });
-        }
-
-        if (clipboardSupports('text/html')) {
-            clipboardPayload['text/html'] = new Blob(
-                [buildSvgClipboardHtml(svgString)],
-                { type: 'text/html' },
-            );
-        }
-
         if (clipboardSupports('image/png')) {
             try {
                 clipboardPayload['image/png'] = await createHighQualityPngBlob(
@@ -581,6 +572,19 @@
             } catch (error) {
                 console.warn('[PonyNotes] SVG clipboard PNG fallback failed:', error);
             }
+        }
+
+        if (clipboardSupports('text/html')) {
+            clipboardPayload['text/html'] = new Blob(
+                [buildSvgClipboardHtml(svgString)],
+                { type: 'text/html' },
+            );
+        }
+
+        if (clipboardSupports('image/svg+xml')) {
+            clipboardPayload['image/svg+xml'] = new Blob([svgString], {
+                type: 'image/svg+xml',
+            });
         }
 
         if (!Object.keys(clipboardPayload).length) {
@@ -677,9 +681,110 @@
         window.__ponynotesContextMenuFontPatchInstalled = true;
     };
 
+    const base64ToBlob = (base64, mimeType) => {
+        const binary = atob(base64 || '');
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+        return new Blob([bytes], { type: mimeType });
+    };
+
+    const buildClipboardReadItem = (payload) => {
+        const entries = {};
+
+        if (payload?.imageBase64 && payload?.imageMimeType) {
+            entries[payload.imageMimeType] = base64ToBlob(
+                payload.imageBase64,
+                payload.imageMimeType,
+            );
+        }
+
+        if (payload?.html) {
+            entries['text/html'] = new Blob([payload.html], {
+                type: 'text/html',
+            });
+        }
+
+        if (payload?.plainText) {
+            entries['text/plain'] = new Blob([payload.plainText], {
+                type: 'text/plain',
+            });
+        }
+
+        const types = Object.keys(entries);
+        if (!types.length) {
+            return null;
+        }
+
+        return {
+            types,
+            async getType(type) {
+                const blob = entries[type];
+                if (!blob) {
+                    throw new DOMException(
+                        `Clipboard item does not contain ${type}`,
+                        'NotFoundError',
+                    );
+                }
+                return blob;
+            },
+        };
+    };
+
+    const installSafeClipboardReadPatch = (clipboard, originalRead) => {
+        if (
+            !clipboard ||
+            !originalRead ||
+            window.__ponynotesClipboardReadPatchInstalled
+        ) {
+            return;
+        }
+
+        const isWindows = /Windows/i.test(window.navigator?.userAgent || '');
+        if (!isWindows || !window.flutter_inappwebview?.callHandler) {
+            return;
+        }
+
+        clipboard.read = async function () {
+            if (window.__ponynotesClipboardReadActive) {
+                throw new DOMException('Clipboard read is already active', 'AbortError');
+            }
+
+            try {
+                window.__ponynotesClipboardReadActive = true;
+                const payload = await window.flutter_inappwebview.callHandler(
+                    'readWhiteboardClipboard',
+                );
+                const item = buildClipboardReadItem(payload);
+                if (!item) {
+                    throw new DOMException('Clipboard is empty', 'NotFoundError');
+                }
+                return [item];
+            } catch (error) {
+                console.warn('[PonyNotes] Safe clipboard read failed:', error);
+                throw error instanceof DOMException
+                    ? error
+                    : new DOMException('Safe clipboard read failed', 'NotAllowedError');
+            } finally {
+                window.__ponynotesClipboardReadActive = false;
+            }
+        };
+
+        window.__ponynotesClipboardReadPatchInstalled = true;
+        console.log('[PonyNotes] Safe clipboard read patch installed');
+    };
+
     const installHighQualityClipboardPatch = () => {
         const clipboard = navigator.clipboard;
-        if (!clipboard || window.__ponynotesClipboardQualityPatchInstalled) {
+        if (!clipboard) {
+            return;
+        }
+
+        const originalRead = clipboard.read?.bind(clipboard);
+        installSafeClipboardReadPatch(clipboard, originalRead);
+
+        if (window.__ponynotesClipboardQualityPatchInstalled) {
             return;
         }
 
