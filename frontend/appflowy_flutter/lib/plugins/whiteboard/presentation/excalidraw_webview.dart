@@ -49,11 +49,12 @@ class ExcalidrawWebView extends StatefulWidget {
 
 /// ExcalidrawWebView的State类，暴露公共方法供外部调用
 class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+  // scrollX/scrollY 已从稳定键中移除：
+  // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
+  // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
-    'scrollX',
-    'scrollY',
     'theme',
     'viewBackgroundColor',
     'zoom',
@@ -799,16 +800,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> _installResizeGuard() async {
     await _safeEvalJs('''
       (function() {
+        // 仅派发 resize 事件，不调用 api.refresh()
+        // 原因：api.refresh() 会导致 .excalidraw 容器尺寸微小变化，
+        // 触发 ResizeObserver → 再次 dispatchStableResize → 无限循环
+        // 每次循环中 Excalidraw 调整 scrollX（负方向），导致画布持续向左漂移
         const dispatchStableResize = () => {
           window.dispatchEvent(new Event('resize'));
           requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
-            const api = window.excalidrawAPI ||
-              window.__EXCALIDRAW_API__ ||
-              window._excalidrawAPI;
-            if (api && typeof api.refresh === 'function') {
-              api.refresh();
-            }
           });
         };
 
@@ -821,27 +820,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
         let lastWidth = 0;
         let lastHeight = 0;
+        // 连续分派计数器，防止反馈循环失控
+        let _resizeDispatchCount = 0;
+        const _MAX_RESIZE_DISPATCHES = 8;
+
         const onContainerResize = () => {
-          const root = document.querySelector('.excalidraw') || document.body;
-          const rect = root.getBoundingClientRect();
-          if (Math.abs(rect.width - lastWidth) < 0.5 &&
-              Math.abs(rect.height - lastHeight) < 0.5) {
+          // 仅以 document.body 为参考，不用 .excalidraw
+          // 原因：.excalidraw 在每次 resize 事件处理后自身尺寸会变化，
+          // 如果监听它会形成反馈循环
+          const rect = document.body.getBoundingClientRect();
+          // 提高阈值到 2px，防止亚像素级别的抖动触发重复派发
+          if (Math.abs(rect.width - lastWidth) < 2 &&
+              Math.abs(rect.height - lastHeight) < 2) {
             return;
           }
           lastWidth = rect.width;
           lastHeight = rect.height;
+
+          if (_resizeDispatchCount >= _MAX_RESIZE_DISPATCHES) {
+            return;
+          }
+          _resizeDispatchCount++;
+
           clearTimeout(window._ponynotesResizeTimer);
-          window._ponynotesResizeTimer = setTimeout(dispatchStableResize, 40);
+          window._ponynotesResizeTimer = setTimeout(() => {
+            dispatchStableResize();
+            // 2 秒后重置计数器，允许后续真实 resize 事件继续处理
+            setTimeout(() => { _resizeDispatchCount = 0; }, 2000);
+          }, 40);
         };
 
         window._ponynotesResizeHandler = onContainerResize;
         window.addEventListener('resize', onContainerResize, { passive: true });
         window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
+        // 只监听 document.body，不监听 .excalidraw（防止反馈循环）
         window._ponynotesResizeObserver.observe(document.body);
-        const root = document.querySelector('.excalidraw');
-        if (root) {
-          window._ponynotesResizeObserver.observe(root);
-        }
 
         onContainerResize();
         setTimeout(dispatchStableResize, 120);

@@ -251,11 +251,12 @@
         files: api.getFiles?.() || {},
     });
 
+    // scrollX/scrollY 已从稳定键中移除：
+    // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
+    // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
     const stableAppStateKeys = new Set([
         'gridModeEnabled',
         'gridSize',
-        'scrollX',
-        'scrollY',
         'theme',
         'viewBackgroundColor',
         'zoom',

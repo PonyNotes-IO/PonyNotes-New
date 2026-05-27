@@ -386,7 +386,7 @@ class _SideBarSwitchWorkspaceButtonChild extends StatelessWidget {
                     ),
               ),
               const HSpace(6),
-              Flexible(
+              Expanded(
                 child: FlowyText.medium(
                   currentWorkspace.name,
                   color:
