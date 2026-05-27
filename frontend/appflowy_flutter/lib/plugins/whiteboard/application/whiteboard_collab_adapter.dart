@@ -42,11 +42,12 @@ class WhiteboardCollabAdapter {
   // ✅ 减少防抖延迟：从 500ms 改为 100ms，更及时保存
   static const _debounceDuration = Duration(milliseconds: 100);
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
+  // scrollX/scrollY 已从稳定键中移除：
+  // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
+  // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
-    'scrollX',
-    'scrollY',
     'theme',
     'viewBackgroundColor',
     'zoom',
