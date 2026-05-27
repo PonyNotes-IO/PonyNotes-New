@@ -37,10 +37,7 @@ class InviteMembersScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: MobileAppBar(
-        title: LocaleKeys.settings_appearance_members_label.tr(),
-        actions: [
-          _buildAddMemberButton(context),
-        ],
+        title: '空间成员',
       ),
       body: const _InviteMemberPage(
         workspaceName: null,
@@ -73,6 +70,8 @@ class _InviteMemberPage extends StatefulWidget {
 
 class _InviteMemberPageState extends State<_InviteMemberPage> {
   final emailController = TextEditingController();
+  final searchController = TextEditingController();
+  String _searchQuery = '';
   late final Future<UserProfilePB?> userProfile;
   bool exceededLimit = false;
 
@@ -88,6 +87,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
   @override
   void dispose() {
     emailController.dispose();
+    searchController.dispose();
     super.dispose();
   }
 
@@ -121,10 +121,32 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                 return _buildCloudSyncRequiredView(context);
               }
 
+              // 过滤成员列表
+              final filteredMembers = _searchQuery.isEmpty
+                  ? state.members
+                  : state.members.where((m) {
+                      final q = _searchQuery.toLowerCase();
+                      return m.name.toLowerCase().contains(q) ||
+                          m.email.toLowerCase().contains(q);
+                    }).toList();
+
               return SingleChildScrollView(
                 child: Column(
                   children: [
                     VSpace(theme.spacing.xl),
+                    // 搜索框
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                      child: _MemberSearchBar(
+                        controller: searchController,
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                          });
+                        },
+                      ),
+                    ),
+                    VSpace(theme.spacing.m),
                     if (state.myRole.isOwner) ...[
                       Padding(
                         padding: EdgeInsets.symmetric(
@@ -134,17 +156,30 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                       ),
                       VSpace(theme.spacing.m),
                     ],
-                    if (state.members.isNotEmpty) ...[
+                    if (filteredMembers.isNotEmpty) ...[
                       const VSpace(4),
                       Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: theme.spacing.xl,
                         ),
                         child: MobileMemberList(
-                          members: state.members,
+                          members: filteredMembers,
                           userProfile: userProfile,
                           myRole: state.myRole,
                           workspaceName: workspaceName,
+                        ),
+                      ),
+                    ] else if (_searchQuery.isNotEmpty) ...[
+                      // 搜索无结果
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          vertical: theme.spacing.xl * 2,
+                        ),
+                        child: Center(
+                          child: FlowyText(
+                            '未找到匹配的成员',
+                            color: theme.textColorScheme.secondary,
+                          ),
                         ),
                       ),
                     ],
@@ -380,6 +415,80 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
         },
       );
     }
+  }
+}
+
+class _MemberSearchBar extends StatelessWidget {
+  const _MemberSearchBar({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10.0)),
+      borderSide: BorderSide(color: theme.borderColorScheme.primary),
+    );
+    final enableBorder = border.copyWith(
+      borderSide: BorderSide(color: theme.borderColorScheme.themeThick),
+    );
+    final hintStyle = theme.textStyle.heading4.standard(
+      color: theme.textColorScheme.tertiary,
+    );
+
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, child) {
+        return TextField(
+          controller: controller,
+          onChanged: onChanged,
+          style: theme.textStyle.heading4.standard(
+            color: theme.textColorScheme.primary,
+          ),
+          decoration: InputDecoration(
+            hintText: '搜索姓名或联系方式',
+            hintStyle: hintStyle,
+            isDense: true,
+            contentPadding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+            border: border,
+            enabledBorder: border,
+            focusedBorder: enableBorder,
+            prefixIconConstraints: BoxConstraints.loose(const Size(38, 40)),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              child: FlowySvg(
+                FlowySvgs.m_home_search_icon_m,
+                color: theme.iconColorScheme.secondary,
+                size: const Size.square(20),
+              ),
+            ),
+            suffixIconConstraints:
+                controller.text.isNotEmpty ? BoxConstraints.loose(const Size(34, 40)) : null,
+            suffixIcon: controller.text.isNotEmpty
+                ? GestureDetector(
+                    onTap: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
+                      child: FlowySvg(
+                        FlowySvgs.search_clear_m,
+                        color: theme.iconColorScheme.tertiary,
+                        size: const Size.square(20),
+                      ),
+                    ),
+                  )
+                : null,
+          ),
+        );
+      },
+    );
   }
 }
 
