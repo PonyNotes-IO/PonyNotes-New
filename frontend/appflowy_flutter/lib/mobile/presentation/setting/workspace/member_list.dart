@@ -20,16 +20,22 @@ class MobileMemberList extends StatelessWidget {
     required this.members,
     required this.myRole,
     required this.userProfile,
+    required this.workspaceName,
   });
 
   final List<WorkspaceMemberPB> members;
   final AFRolePB myRole;
   final UserProfilePB userProfile;
+  final String? workspaceName;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.spacing.m,
+        vertical: theme.spacing.m,
+      ),
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
@@ -50,6 +56,7 @@ class MobileMemberList extends StatelessWidget {
                   member: member,
                   myRole: myRole,
                   userProfile: userProfile,
+                  workspaceName: workspaceName,
                 ),
               ),
             ],
@@ -68,7 +75,6 @@ class _MemberListHeader extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: theme.spacing.xl,
         vertical: theme.spacing.m,
       ),
       child: Row(
@@ -80,6 +86,16 @@ class _MemberListHeader extends StatelessWidget {
               style: theme.textStyle.body.standard(
                 color: theme.textColorScheme.secondary,
               ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '团队协作区',
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.secondary,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
           Expanded(
@@ -103,11 +119,13 @@ class _MemberItem extends StatelessWidget {
     required this.member,
     required this.myRole,
     required this.userProfile,
+    required this.workspaceName,
   });
 
   final WorkspaceMemberPB member;
   final AFRolePB myRole;
   final UserProfilePB userProfile;
+  final String? workspaceName;
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +136,6 @@ class _MemberItem extends StatelessWidget {
 
     Widget child = Container(
       padding: EdgeInsets.symmetric(
-        horizontal: theme.spacing.xl,
         vertical: theme.spacing.m,
       ),
       child: Row(
@@ -129,31 +146,30 @@ class _MemberItem extends StatelessWidget {
             name: member.name,
             size: AFAvatarSize.s,
           ),
-          HSpace(12),
+          HSpace(8),
           // 用户名和邮箱
           Expanded(
             flex: 3,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  member.name,
-                  style: theme.textStyle.body.enhanced(
-                    color: theme.textColorScheme.primary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (member.email.isNotEmpty)
-                  Text(
-                    member.email,
-                    style: theme.textStyle.caption.standard(
-                      color: theme.textColorScheme.secondary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
+            child: Text(
+              member.name,
+              style: theme.textStyle.body.enhanced(
+                color: theme.textColorScheme.primary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // 团队协作区
+          Expanded(
+            flex: 2,
+            child: Text(
+              workspaceName ?? '—',
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.primary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
           // 角色

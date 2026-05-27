@@ -33,14 +33,18 @@ class AddMembersScreen extends StatelessWidget {
       appBar: MobileAppBar(
         title: 'Add members',
       ),
-      body: const _InviteMemberPage(),
+      body: _InviteMemberPage(
+        workspaceName: null,
+      ),
       resizeToAvoidBottomInset: false,
     );
   }
 }
 
 class _InviteMemberPage extends StatefulWidget {
-  const _InviteMemberPage();
+  const _InviteMemberPage({required this.workspaceName});
+
+  final String? workspaceName;
 
   @override
   State<_InviteMemberPage> createState() => _InviteMemberPageState();
@@ -69,6 +73,9 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    // workspaceName 从 widget 属性获取
+    final workspaceName = widget.workspaceName;
+
     return FutureBuilder(
       future: userProfile,
       builder: (context, snapshot) {
@@ -105,6 +112,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                       members: state.members,
                       userProfile: userProfile,
                       myRole: state.myRole,
+                      workspaceName: workspaceName,
                     ),
                   ],
                   if (state.myRole.isMember) ...[

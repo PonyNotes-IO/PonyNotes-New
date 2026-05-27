@@ -42,7 +42,9 @@ class InviteMembersScreen extends StatelessWidget {
           _buildAddMemberButton(context),
         ],
       ),
-      body: const _InviteMemberPage(),
+      body: const _InviteMemberPage(
+        workspaceName: null,
+      ),
       resizeToAvoidBottomInset: false,
     );
   }
@@ -61,7 +63,9 @@ class InviteMembersScreen extends StatelessWidget {
 }
 
 class _InviteMemberPage extends StatefulWidget {
-  const _InviteMemberPage();
+  const _InviteMemberPage({required this.workspaceName});
+
+  final String? workspaceName;
 
   @override
   State<_InviteMemberPage> createState() => _InviteMemberPageState();
@@ -90,6 +94,9 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    // workspaceName 从 widget 属性获取
+    final workspaceName = widget.workspaceName;
+
     return FutureBuilder(
       future: userProfile,
       builder: (context, snapshot) {
@@ -117,21 +124,28 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
               return SingleChildScrollView(
                 child: Column(
                   children: [
+                    VSpace(theme.spacing.xl),
                     if (state.myRole.isOwner) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.all(theme.spacing.xl),
-                        child: const MInviteMemberByLink(),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: theme.spacing.xl,
+                        ),
+                        child: MInviteMemberByLink(),
                       ),
                       VSpace(theme.spacing.m),
                     ],
                     if (state.members.isNotEmpty) ...[
-                      const AFDivider(),
-                      VSpace(theme.spacing.xl),
-                      MobileMemberList(
-                        members: state.members,
-                        userProfile: userProfile,
-                        myRole: state.myRole,
+                      const VSpace(4),
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: theme.spacing.xl,
+                        ),
+                        child: MobileMemberList(
+                          members: state.members,
+                          userProfile: userProfile,
+                          myRole: state.myRole,
+                          workspaceName: workspaceName,
+                        ),
                       ),
                     ],
                     if (state.myRole.isMember) ...[
