@@ -109,6 +109,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                             members: state.members,
                             userProfile: userProfile,
                             myRole: state.myRole,
+                            workspaceName: state.members.single.name,
                           ),
                         ],
                       ],

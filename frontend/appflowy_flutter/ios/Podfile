@@ -64,4 +64,14 @@ post_install do |installer|
       end
     end
   end
+
+  # Fix DYOpenCore.bundle CFBundleExecutable issue
+  dyopen_core_bundle_path = installer.pods_project.path.dirname + 'DouyinOpenSDK' + 'DouyinOpenSDK.framework' + 'Resources' + 'DYOpenCore.bundle' + 'Info.plist'
+  if File.exist?(dyopen_core_bundle_path)
+    puts "Fixing DYOpenCore.bundle Info.plist..."
+    # Use plutil to convert binary plist to xml, remove CFBundleExecutable, then convert back
+    system("plutil -convert xml1 '#{dyopen_core_bundle_path}'")
+    system("sed -i '' '/<key>CFBundleExecutable<\\/key>/,/<\\/string>/d' '#{dyopen_core_bundle_path}'")
+    system("plutil -convert binary1 '#{dyopen_core_bundle_path}'")
+  end
 end
