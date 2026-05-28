@@ -16,6 +16,9 @@ class TabsManager extends StatefulWidget {
 }
 
 class _TabsManagerState extends State<TabsManager> {
+  static const double _pinnedTabWidth = 54;
+  static const double _minUnpinnedTabWidth = 72;
+
   final ScrollController _scrollController = ScrollController();
   int _previousPageCount = 0;
 
@@ -36,11 +39,13 @@ class _TabsManagerState extends State<TabsManager> {
         // Scroll to the newest tab when tab count increases.
         if (state.pages > _previousPageCount) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
           });
         }
 
@@ -55,35 +60,61 @@ class _TabsManagerState extends State<TabsManager> {
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
           ),
-          child: MoveWindowDetector(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: state.pageManagers.map((pm) {
-                  return ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: HomeSizes.tabBarWidth,
-                    ),
-                    child: FlowyTab(
-                      key: ValueKey('tab-${pm.plugin.id}'),
-                      pageManager: pm,
-                      isCurrent: state.currentPageManager == pm,
-                      isAllPinned: isAllPinned,
-                      onTap: () {
-                        if (state.currentPageManager != pm) {
-                          final index = state.pageManagers.indexOf(pm);
-                          widget.onIndexChanged(index);
-                        }
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final unpinnedTabWidth = _resolveUnpinnedTabWidth(
+                maxWidth: constraints.maxWidth,
+                state: state,
+              );
+
+              return MoveWindowDetector(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: state.pageManagers.map((pm) {
+                      return FlowyTab(
+                        key: ValueKey('tab-${pm.plugin.id}'),
+                        pageManager: pm,
+                        width: pm.isPinned ? _pinnedTabWidth : unpinnedTabWidth,
+                        isCurrent: state.currentPageManager == pm,
+                        isAllPinned: isAllPinned,
+                        onTap: () {
+                          if (state.currentPageManager != pm) {
+                            final index = state.pageManagers.indexOf(pm);
+                            widget.onIndexChanged(index);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
     );
+  }
+
+  double _resolveUnpinnedTabWidth({
+    required double maxWidth,
+    required TabsState state,
+  }) {
+    final pageManagers = state.pageManagers;
+    final pinnedCount = pageManagers.where((pm) => pm.isPinned).length;
+    final unpinnedCount = pageManagers.length - pinnedCount;
+    if (unpinnedCount <= 0) {
+      return HomeSizes.tabBarWidth;
+    }
+
+    final availableForUnpinned = maxWidth - pinnedCount * _pinnedTabWidth;
+    final rawWidth = availableForUnpinned / unpinnedCount;
+    return rawWidth
+        .clamp(
+          _minUnpinnedTabWidth,
+          HomeSizes.tabBarWidth,
+        )
+        .toDouble();
   }
 }

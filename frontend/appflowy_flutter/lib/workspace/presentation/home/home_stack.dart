@@ -105,17 +105,24 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                       Padding(
                         padding:
                             EdgeInsets.only(left: widget.layout.menuSpacing),
-                        child: TabsManager(
-                          onIndexChanged: (index) {
-                            if (state.currentIndex != index) {
-                              // Unfocus editor to hide selection toolbar
-                              FocusScope.of(context).unfocus();
+                        child: Row(
+                          children: [
+                            _buildTopTabsLeadingPane(context, state),
+                            Expanded(
+                              child: TabsManager(
+                                onIndexChanged: (index) {
+                                  if (state.currentIndex != index) {
+                                    // Unfocus editor to hide selection toolbar
+                                    FocusScope.of(context).unfocus();
 
-                              context
-                                  .read<TabsBloc>()
-                                  .add(TabsEvent.selectTab(index));
-                            }
-                          },
+                                    context
+                                        .read<TabsBloc>()
+                                        .add(TabsEvent.selectTab(index));
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     Expanded(
@@ -169,7 +176,8 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                     ),
                   ],
                 ),
-                if (!isFullWindow) _buildFloatingRightBarOverlay(context, state),
+                if (!isFullWindow)
+                  _buildFloatingRightBarOverlay(context, state),
                 if (!isFullWindow && UniversalPlatform.isMacOS)
                   Positioned(
                     top: 0,
@@ -223,6 +231,29 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
         UniversalPlatform.isWindows && useCustomWindowTitleBar ? 40.0 : 0.0;
     return titleBarHeight +
         (HomeSizes.tabBarHeight - HomeSizes.topActionBarHeight) / 2;
+  }
+
+  double _topTabsLeadingWidth(TabsState state) {
+    final currentIndex = state.currentIndex;
+    if (currentIndex < 0 || currentIndex >= state.pageManagers.length) {
+      return 0;
+    }
+
+    return state
+        .pageManagers[currentIndex].plugin.widgetBuilder.topTabsLeadingWidth;
+  }
+
+  Widget _buildTopTabsLeadingPane(BuildContext context, TabsState state) {
+    final width = _topTabsLeadingWidth(state);
+    if (width <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: width,
+      height: HomeSizes.tabBarHeight,
+      color: homeContentBackgroundColor(context),
+    );
   }
 
   Widget _buildTitleBarControls(BuildContext context, TabsState state) {
@@ -838,6 +869,7 @@ abstract mixin class NavigationItem {
   Widget get leftBarItem;
   Widget? get rightBarItem => null;
   Widget? get fullWindowMoreItem => null;
+  double get topTabsLeadingWidth => 0;
   bool get handlesFullWindowOverlayActionsInternally => false;
   bool get handlesInlineSidebarToggle => false;
   Widget tabBarItem(String pluginId, [bool shortForm = false]);

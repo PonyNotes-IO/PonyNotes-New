@@ -26,7 +26,7 @@ class UnifiedViewTopRightActions extends StatelessWidget {
     this.pageAccessLevelBloc,
     this.showCollaborators = false,
     this.useFloatingSurface = false,
-    this.trailingSpacing = 8,
+    this.trailingSpacing = 4,
     this.showShareButton = true,
     this.showFavoriteButton = true,
     this.showFullWindowButton = true,
@@ -169,7 +169,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
             minHeight: HomeSizes.topActionBarHeight,
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: themedChild,
           ),
         ),
@@ -188,7 +188,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
             height: HomeSizes.topActionBarItemExtent,
             view: view,
           ),
-          const HSpace(12),
+          const HSpace(8),
         ] else
           const HSpace(2),
         if (showShareButton) ...[
@@ -196,7 +196,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
             key: ValueKey('share_button_${view.id}'),
             view: view,
           ),
-          const HSpace(6),
+          const HSpace(4),
         ],
         if (showFavoriteButton) ...[
           ViewFavoriteButton(
@@ -204,7 +204,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
             view: view,
             inactiveColor: iconColor,
           ),
-          const HSpace(6),
+          const HSpace(4),
         ],
         if (showFullWindowButton) ...[
           ValueListenableBuilder<bool>(
@@ -231,7 +231,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
               );
             },
           ),
-          const HSpace(6),
+          const HSpace(4),
         ],
         MoreViewActions(
           view: view,

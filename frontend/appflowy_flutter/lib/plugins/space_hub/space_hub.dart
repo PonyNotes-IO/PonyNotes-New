@@ -41,7 +41,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../generated/locale_keys.g.dart';
-import '../../workspace/application/tabs/tabs_bloc.dart';
 
 class SpaceHubMiddlePanelController {
   SpaceHubMiddlePanelController._();
@@ -119,7 +118,7 @@ class SpaceHubPlugin extends Plugin {
   PluginType get pluginType => PluginType.folder;
 
   @override
-  PluginId get id => tabView?.id ?? notifier.view.id;
+  PluginId get id => notifier.view.id;
 
   @override
   void init() {
@@ -175,12 +174,6 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           return const SizedBox.shrink();
         }
 
-        // Whiteboard renders its own floating top-right actions internally.
-        // 白板页面内部已自带右上角悬浮动作区，这里不再重复渲染宿主动作区。
-        if (selectedView.layout == ViewLayoutPB.Whiteboard) {
-          return const SizedBox.shrink();
-        }
-
         try {
           // ✅ 使用 currentViewInfoBlocNotifier 来获取当前文档的 ViewInfoBloc
           return ValueListenableBuilder<ViewInfoBloc?>(
@@ -198,8 +191,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                   viewInfoBloc: effectiveViewInfoBloc,
                   showCollaborators: FeatureFlag.syncDocument.isOn &&
                       selectedView.layout != ViewLayoutPB.Whiteboard,
-                  useFloatingSurface:
-                      selectedView.layout == ViewLayoutPB.Whiteboard,
+                  useFloatingSurface: true,
                 ),
               );
             },
@@ -297,10 +289,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
-  String? get viewName =>
-      tabView?.nameOrDefault ??
-      selectedViewNotifier.value?.nameOrDefault ??
-      notifier.view.nameOrDefault;
+  String? get viewName => notifier.view.nameOrDefault;
 
   @override
   Widget get leftBarItem {
@@ -322,9 +311,12 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
+  double get topTabsLeadingWidth => HomeSizes.spaceHubTopTabsLeadingWidth;
+
+  @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
       ViewTabBarItem(
-        view: tabView ?? selectedViewNotifier.value ?? notifier.view,
+        view: notifier.view,
         shortForm: shortForm,
       );
 
@@ -556,23 +548,16 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
   }
 
-  void _openSelectedViewInSpaceTab(ViewPB view) {
+  void _selectViewInMiddlePanel(ViewPB view) {
     if (!mounted || view.id.isEmpty) {
       return;
     }
 
-    final plugin = SpaceHubPlugin(
-      view: widget.spaceView,
-      initialSelectedView: view,
-      tabView: view,
-    );
-
-    context.read<TabsBloc>().add(
-          TabsEvent.openTab(
-            plugin: plugin,
-            view: view,
-          ),
-        );
+    setState(() {
+      _selectedView = view;
+    });
+    widget.selectedViewNotifier.value = view;
+    _addToRecentViews(view.id);
   }
 
   void _hideDocumentList() {
@@ -685,8 +670,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
                       selectedView: _selectedView,
-                      onViewSelectedWithRecent: _openSelectedViewInSpaceTab,
-                      onViewCreated: _openSelectedViewInSpaceTab,
+                      onViewSelectedWithRecent: _selectViewInMiddlePanel,
+                      onViewCreated: _selectViewInMiddlePanel,
                     ),
                   ),
                 ],

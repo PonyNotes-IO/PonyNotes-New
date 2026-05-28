@@ -19,6 +19,7 @@ class FlowyTab extends StatefulWidget {
     required this.isCurrent,
     required this.onTap,
     required this.isAllPinned,
+    this.width,
   });
 
   final PageManager pageManager;
@@ -28,6 +29,7 @@ class FlowyTab extends StatefulWidget {
   /// Signifies whether all tabs are pinned
   ///
   final bool isAllPinned;
+  final double? width;
 
   @override
   State<FlowyTab> createState() => _FlowyTabState();
@@ -39,7 +41,7 @@ class _FlowyTabState extends State<FlowyTab> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: widget.pageManager.isPinned ? 54 : null,
+      width: widget.pageManager.isPinned ? 54 : widget.width,
       child: _wrapInTooltip(
         widget.pageManager.plugin.widgetBuilder.viewName,
         child: FlowyHover(
@@ -84,8 +86,8 @@ class _FlowyTabState extends State<FlowyTab> {
                       onPanStart: (_) {},
                       child: Container(
                         constraints: BoxConstraints(
-                          maxWidth: HomeSizes.tabBarWidth,
-                          minWidth: widget.pageManager.isPinned ? 54 : 100,
+                          maxWidth: widget.width ?? HomeSizes.tabBarWidth,
+                          minWidth: widget.pageManager.isPinned ? 54 : 0,
                         ),
                         height: HomeSizes.tabBarHeight,
                         child: Row(

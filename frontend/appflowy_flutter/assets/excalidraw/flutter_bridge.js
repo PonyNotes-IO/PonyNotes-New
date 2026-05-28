@@ -732,6 +732,132 @@
         };
     };
 
+    const installContextMenuPastePositionPatch = () => {
+        if (window.__ponynotesContextMenuPastePositionPatchInstalled) {
+            return;
+        }
+
+        const maxAgeMs = 15000;
+
+        const isInsideExcalidraw = (target) =>
+            !!target?.closest?.('.excalidraw, .excalidraw-container');
+
+        const saveContextMenuPosition = (event) => {
+            if (!isInsideExcalidraw(event.target)) {
+                return;
+            }
+
+            window.__ponynotesContextMenuPastePosition = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                time: Date.now(),
+            };
+        };
+
+        const isPasteMenuItem = (target) => {
+            const item = target?.closest?.(
+                '[role="menuitem"], .context-menu-item, button, [data-testid]',
+            );
+            if (!item) {
+                return false;
+            }
+
+            const text = (item.textContent || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+
+            if (!text) {
+                return false;
+            }
+
+            const looksLikePaste =
+                text.startsWith('粘贴') ||
+                text.startsWith('paste') ||
+                (text.includes('ctrl+v') && !text.includes('style'));
+
+            const isOtherPasteCommand =
+                text.includes('style') ||
+                text.includes('样式') ||
+                text.includes('plaintext') ||
+                text.includes('纯文本');
+
+            return looksLikePaste && !isOtherPasteCommand;
+        };
+
+        const restoreContextMenuPastePosition = () => {
+            const position = window.__ponynotesContextMenuPastePosition;
+            if (!position || Date.now() - position.time > maxAgeMs) {
+                return;
+            }
+
+            const canvas = document.querySelector('.excalidraw canvas');
+            const target =
+                canvas ||
+                document.querySelector('.excalidraw') ||
+                document.elementFromPoint(position.clientX, position.clientY) ||
+                document;
+            const eventInit = {
+                bubbles: true,
+                cancelable: true,
+                clientX: position.clientX,
+                clientY: position.clientY,
+                screenX: position.clientX,
+                screenY: position.clientY,
+            };
+
+            try {
+                target.dispatchEvent(new PointerEvent('pointermove', {
+                    ...eventInit,
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    isPrimary: true,
+                }));
+            } catch (error) {
+                target.dispatchEvent(new MouseEvent('mousemove', eventInit));
+            }
+
+            target.dispatchEvent(new MouseEvent('mousemove', eventInit));
+
+            if (canvas && !window.__ponynotesElementFromPointForPasteActive) {
+                const originalElementFromPoint =
+                    document.elementFromPoint.bind(document);
+                window.__ponynotesElementFromPointForPasteActive = true;
+                document.elementFromPoint = function (x, y) {
+                    const isContextPastePoint =
+                        Math.abs(x - position.clientX) <= 1 &&
+                        Math.abs(y - position.clientY) <= 1;
+                    if (isContextPastePoint) {
+                        const element = originalElementFromPoint(x, y);
+                        if (!(element instanceof HTMLCanvasElement)) {
+                            return canvas;
+                        }
+                    }
+                    return originalElementFromPoint(x, y);
+                };
+
+                setTimeout(() => {
+                    document.elementFromPoint = originalElementFromPoint;
+                    window.__ponynotesElementFromPointForPasteActive = false;
+                }, 1500);
+            }
+        };
+
+        const handleMenuPointerDown = (event) => {
+            if (!isPasteMenuItem(event.target)) {
+                return;
+            }
+            restoreContextMenuPastePosition();
+        };
+
+        document.addEventListener('contextmenu', saveContextMenuPosition, true);
+        document.addEventListener('pointerdown', handleMenuPointerDown, true);
+        document.addEventListener('mousedown', handleMenuPointerDown, true);
+
+        window.__ponynotesContextMenuPastePositionPatchInstalled = true;
+        console.log('[PonyNotes] Context menu paste position patch installed');
+    };
+
     const installSafeClipboardReadPatch = (clipboard, originalRead) => {
         if (
             !clipboard ||
@@ -883,10 +1009,13 @@
     };
 
     installContextMenuFontPatch();
+    installContextMenuPastePositionPatch();
     installHighQualityClipboardPatch();
     setTimeout(installContextMenuFontPatch, 500);
+    setTimeout(installContextMenuPastePositionPatch, 500);
     setTimeout(installHighQualityClipboardPatch, 500);
     setTimeout(installContextMenuFontPatch, 1500);
+    setTimeout(installContextMenuPastePositionPatch, 1500);
     setTimeout(installHighQualityClipboardPatch, 1500);
 
     const stableAppStateKeys = new Set([

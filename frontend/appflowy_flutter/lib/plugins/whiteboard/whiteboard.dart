@@ -17,6 +17,7 @@ import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -157,8 +158,6 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
         key: ValueKey('whiteboard_page_${notifier.view.id}'),
         view: notifier.view,
         onViewChanged: (view) => notifier.view = view,
-        preferHostFullWindowMoreItem: false,
-        preferHostTopRightActions: false,
       ),
     );
     // debug log removed
@@ -181,7 +180,22 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
       );
 
   @override
-  Widget? get rightBarItem => null;
+  Widget? get rightBarItem => MultiBlocProvider(
+        providers: [
+          BlocProvider<ViewInfoBloc>.value(
+            value: bloc,
+          ),
+          BlocProvider<PageAccessLevelBloc>.value(
+            value: pageAccessLevelBloc,
+          ),
+        ],
+        child: UnifiedViewTopRightActions(
+          view: view,
+          viewInfoBloc: bloc,
+          pageAccessLevelBloc: pageAccessLevelBloc,
+          useFloatingSurface: true,
+        ),
+      );
 
   @override
   Widget? get fullWindowMoreItem => null;

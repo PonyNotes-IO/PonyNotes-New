@@ -23,6 +23,8 @@ class HomeSizes {
   static const double minimumSpaceHubMiddlePaneWidth = 182;
   static const double defaultSpaceHubMiddlePaneWidth = 220;
   static const double spaceHubDividerWidth = 4;
+  static const double spaceHubTopTabsLeadingWidth =
+      defaultSpaceHubMiddlePaneWidth + spaceHubDividerWidth;
   static const double minimumThirdPaneActionPeekWidth = 640;
   static const double minimumWindowShellSafetyWidth = 200;
   static const double minimumSpaceHubContentPeekWidth =
