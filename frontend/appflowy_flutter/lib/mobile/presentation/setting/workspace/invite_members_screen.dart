@@ -146,7 +146,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                         },
                       ),
                     ),
-                    VSpace(theme.spacing.m),
+                    VSpace(8),
                     if (state.myRole.isOwner) ...[
                       Padding(
                         padding: EdgeInsets.symmetric(
@@ -154,10 +154,9 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                         ),
                         child: MInviteMemberByLink(),
                       ),
-                      VSpace(theme.spacing.m),
                     ],
                     if (filteredMembers.isNotEmpty) ...[
-                      const VSpace(4),
+                      VSpace(8),
                       Padding(
                         padding: EdgeInsets.symmetric(
                           horizontal: theme.spacing.xl,

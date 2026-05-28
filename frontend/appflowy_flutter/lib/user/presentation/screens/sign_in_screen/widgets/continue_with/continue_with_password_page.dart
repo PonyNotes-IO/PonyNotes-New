@@ -86,31 +86,34 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
                 });
               }
             },
-            child: Column(
-              children: [
-                VSpace(120),
-                // Logo and title
-                _buildLogoAndTitle(),
-                Align(
-                  alignment: Alignment.centerLeft,
-                    child: FlowyText.semibold(
-                  "使用已经注册过的手机号登录",
-                  fontSize: 14,
-                  color: theme.textColorScheme.secondary,
-                )),
-                VSpace(20),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  VSpace(120),
+                  // Logo and title
+                  _buildLogoAndTitle(),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                      child: FlowyText.semibold(
+                    "使用已经注册过的手机号登录",
+                    fontSize: 14,
+                    color: theme.textColorScheme.secondary,
+                  )),
+                  VSpace(20),
 
-                // account show
-                _buildAccountSection(),
-                VSpace(12),
-                // Password input and buttons
-                ..._buildPasswordSection(),
+                  // account show
+                  _buildAccountSection(),
+                  VSpace(12),
+                  // Password input and buttons
+                  ..._buildPasswordSection(),
 
-                // Back to login
-                BackToLoginButton(
-                  onTap: widget.backToLogin,
-                ),
-              ],
+                  // Back to login
+                  BackToLoginButton(
+                    onTap: widget.backToLogin,
+                  ),
+                  VSpace(48),
+                ],
+              ),
             ),
           ),
         ),
