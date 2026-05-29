@@ -15,6 +15,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,6 +29,7 @@ class SectionFolder extends StatefulWidget {
     this.isHoverEnabled = true,
     required this.expandButtonTooltip,
     required this.addButtonTooltip,
+    this.isTablet = false,
   });
 
   final String title;
@@ -36,6 +38,7 @@ class SectionFolder extends StatefulWidget {
   final bool isHoverEnabled;
   final String expandButtonTooltip;
   final String addButtonTooltip;
+  final bool isTablet;
 
   @override
   State<SectionFolder> createState() => _SectionFolderState();
@@ -52,6 +55,9 @@ class _SectionFolderState extends State<SectionFolder> {
 
   @override
   Widget build(BuildContext context) {
+    // 自动检测平板设备，如果没有显式传递 isTablet 参数
+    final bool isTablet = widget.isTablet || PlatformInfo.isTablet;
+
     return MouseRegion(
       onEnter: (_) => isHovered.value = true,
       onExit: (_) => isHovered.value = false,
@@ -319,6 +325,7 @@ class _SectionFolderState extends State<SectionFolder> {
           onTertiarySelected: (viewContext, view) =>
               context.read<TabsBloc>().openTab(view),
           isHoverEnabled: widget.isHoverEnabled,
+          isTablet: PlatformInfo.isTablet,
         );
       },
     );

@@ -80,6 +80,7 @@ class ViewItem extends StatelessWidget {
     this.shouldIgnoreView,
     this.engagedInExpanding = false,
     this.enableRightClickContext = false,
+    this.isTablet = false,
   });
 
   final ViewPB view;
@@ -149,6 +150,9 @@ class ViewItem extends StatelessWidget {
   /// to record the ViewBlock which is expanded or collapsed
   final bool engagedInExpanding;
 
+  /// Whether the device is a tablet (no hover effect)
+  final bool isTablet;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -214,6 +218,7 @@ class ViewItem extends StatelessWidget {
             extendBuilder: extendBuilder,
             shouldIgnoreView: shouldIgnoreView,
             engagedInExpanding: engagedInExpanding,
+            isTablet: isTablet,
           );
 
           if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
@@ -268,6 +273,7 @@ class InnerViewItem extends StatefulWidget {
     this.disableSelectedStatus,
     this.engagedInExpanding = false,
     required this.shouldIgnoreView,
+    this.isTablet = false,
   });
 
   final ViewPB view;
@@ -304,6 +310,9 @@ class InnerViewItem extends StatefulWidget {
   final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
   final bool engagedInExpanding;
 
+  /// Whether the device is a tablet (no hover effect)
+  final bool isTablet;
+
   @override
   State<InnerViewItem> createState() => _InnerViewItemState();
 }
@@ -337,6 +346,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           disableSelectedStatus: widget.disableSelectedStatus,
           shouldIgnoreView: widget.shouldIgnoreView,
           isSelected: isSelected,
+          isTablet: widget.isTablet,
         );
       },
     );
@@ -367,6 +377,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           extendBuilder: widget.extendBuilder,
           shouldIgnoreView: widget.shouldIgnoreView,
           engagedInExpanding: widget.engagedInExpanding,
+          isTablet: widget.isTablet,
         );
       }).toList();
 
@@ -458,6 +469,7 @@ class SingleInnerViewItem extends StatefulWidget {
     required this.disableSelectedStatus,
     required this.shouldIgnoreView,
     required this.isSelected,
+    this.isTablet = false,
   });
 
   final ViewPB view;
@@ -488,6 +500,9 @@ class SingleInnerViewItem extends StatefulWidget {
   final List<Widget> Function(ViewPB view)? extendBuilder;
   final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
   final bool isSelected;
+
+  /// Whether the device is a tablet (no hover effect)
+  final bool isTablet;
 
   @override
   State<SingleInnerViewItem> createState() => _SingleInnerViewItemState();
@@ -568,7 +583,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     ];
 
     // hover action
-    if (widget.showActions || onHover) {
+    // 在平板端，始终显示右侧按钮（因为没有鼠标悬停）
+    if (widget.showActions || onHover || widget.isTablet) {
       if (widget.rightIconsBuilder != null) {
         children.addAll(widget.rightIconsBuilder!(context, widget.view));
       } else {

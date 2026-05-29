@@ -35,6 +35,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/resizable_divider.dart';
 import 'package:flutter/foundation.dart';
@@ -1180,6 +1181,7 @@ class _SpaceDocumentList extends StatelessWidget {
                 enableRightClickContext: true, // 保持右键菜单功能
                 isHoverEnabled: true,
                 disableSelectedStatus: false, // 允许显示选中状态
+                isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
               );
             },
           );
@@ -1240,6 +1242,7 @@ class _SpaceDocumentList extends StatelessWidget {
               enableRightClickContext: true,
               isHoverEnabled: true,
               disableSelectedStatus: false, // 允许显示选中状态
+              isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
             );
           },
         );

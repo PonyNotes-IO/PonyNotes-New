@@ -31,7 +31,8 @@ class NotificationService {
       tz.initializeTimeZones();
 
       // 配置初始化设置
-      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('app_icon');
+      // 使用已存在的 ic_launcher 图标作为通知图标
+      const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const DarwinInitializationSettings iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
