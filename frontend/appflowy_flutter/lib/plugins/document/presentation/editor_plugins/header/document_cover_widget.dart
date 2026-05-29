@@ -393,7 +393,7 @@ class DocumentHeaderToolbar extends StatefulWidget {
 class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
   final _popoverController = PopoverController();
 
-  bool isHidden = PlatformInfo.isDesktopOrWeb; // 仅在桌面端隐藏（需要鼠标悬停），平板端始终显示
+  bool isHidden = PlatformInfo.isDesktopOrTabletOrWeb; // 需要鼠标悬停，平板端始终显示
   bool isPopoverOpen = false;
 
   @override
@@ -419,8 +419,7 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
       ),
     );
 
-    // 仅在桌面端使用鼠标悬停控制显示/隐藏，平板端始终显示
-    if (PlatformInfo.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = MouseRegion(
         opaque: false,
         onEnter: (event) => setHidden(false),
@@ -561,7 +560,7 @@ class DocumentCoverState extends State<DocumentCover> {
   @override
   Widget build(BuildContext context) {
     // 桌面端使用鼠标悬停显示按钮，平板和移动端始终显示按钮
-    return PlatformInfo.isDesktopOrWeb
+    return PlatformInfo.isDesktopOrTabletOrWeb
         ? _buildDesktopCover()
         : _buildMobileCover();
   }
