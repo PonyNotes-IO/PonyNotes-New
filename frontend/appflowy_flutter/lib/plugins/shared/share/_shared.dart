@@ -1,6 +1,7 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
@@ -23,9 +24,12 @@ Future<void> openShareSettingsDialog({
   DatabaseTabBarBloc? databaseBloc,
   PageAccessLevelBloc? pageAccessLevelBloc,
 }) async {
+  Log.info('openShareSettingsDialog: viewId=${shareBloc.view.id}, tabs=${tabs.length}, pageAccessLevelBloc=${pageAccessLevelBloc != null}');
+
   if (pageAccessLevelBloc != null &&
       !pageAccessLevelBloc.state.isLoadingLockStatus &&
       pageAccessLevelBloc.state.isReadOnly) {
+    Log.info('openShareSettingsDialog: blocked by pageAccessLevelBloc.isReadOnly');
     showToastNotification(
       message: '该文档为只读内容，不能再次共享或发布',
       type: ToastificationType.warning,
@@ -37,6 +41,7 @@ Future<void> openShareSettingsDialog({
     final isGuestMode =
         userWorkspaceBloc.state.currentWorkspace?.workspaceType ==
             WorkspaceTypePB.LocalW;
+    Log.info('openShareSettingsDialog: blocked by empty tabs, isGuestMode=$isGuestMode');
     showToastNotification(
       message:
           isGuestMode ? '快速开始，无法分享和发布。如需分享和发布，请登录/注册' : '该文档为只读内容，不能再次共享或发布',
@@ -46,16 +51,25 @@ Future<void> openShareSettingsDialog({
   }
 
   shareBloc.add(const ShareEvent.updatePublishStatus());
+
+  // 如果当前状态的 viewId 已与当前视图匹配（说明初始化已完成），等待最新刷新结果
+  // 添加 5 秒超时，防止后端请求挂起（网络超时等）导致分享对话框无法打开
   try {
     await shareBloc.stream
-        .firstWhere((state) => state.viewId == shareBloc.view.id);
-  } catch (_) {
-    // Keep current state when the refresh stream is interrupted.
+        .firstWhere((state) => state.viewId == shareBloc.view.id)
+        .timeout(const Duration(seconds: 5));
+    Log.info('openShareSettingsDialog: firstWhere completed, viewId=${shareBloc.state.viewId}');
+  } catch (e) {
+    // 后端请求超时或流被中断时，继续使用当前状态
+    Log.warn('openShareSettingsDialog: firstWhere timeout/error: $e, using current state');
   }
 
   if (!context.mounted) {
+    Log.warn('openShareSettingsDialog: context unmounted after await, aborting');
     return;
   }
+
+  Log.info('openShareSettingsDialog: enablePublish=${shareBloc.state.enablePublish}');
 
   if (!shareBloc.state.enablePublish) {
     showToastNotification(
@@ -117,6 +131,7 @@ class ShareMenuButton extends StatelessWidget {
   }
 
   Future<void> _openShareSettings(BuildContext context) async {
+    Log.info('ShareMenuButton._openShareSettings: button clicked, tabs=${tabs.length}');
     final shareBloc = context.read<ShareBloc>();
     final databaseBloc = context.read<DatabaseTabBarBloc?>();
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
