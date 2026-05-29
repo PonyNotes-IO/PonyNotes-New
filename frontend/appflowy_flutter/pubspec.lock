@@ -1075,7 +1075,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "90bde5de768a01f1aded058ae662cfb9383a7320"
+      resolved-ref: "6814dbd48e1be24b6428c6e9ada94449dd74bd24"
       url: "https://github.com/PonyNotes-IO/flutter_math_fixed.git"
     source: git
     version: "0.7.4"
