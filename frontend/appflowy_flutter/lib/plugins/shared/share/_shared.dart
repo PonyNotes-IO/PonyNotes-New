@@ -123,7 +123,11 @@ class ShareMenuButton extends StatelessWidget {
     final shareWithUserBloc = context.read<ShareTabBloc>();
     PageAccessLevelBloc? pageAccessLevelBloc;
     try {
-      pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+      final bloc = context.read<PageAccessLevelBloc>();
+      // 只使用与当前视图 ID 严格匹配的 bloc，避免误用父级（如空间）的 bloc
+      if (bloc.view.id == shareBloc.view.id) {
+        pageAccessLevelBloc = bloc;
+      }
     } catch (_) {
       pageAccessLevelBloc = null;
     }

@@ -34,7 +34,12 @@ class ShareButton extends StatelessWidget {
     final workspaceType = workspaceBloc.state.currentWorkspace?.workspaceType;
     PageAccessLevelBloc? pageAccessLevelBloc;
     try {
-      pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+      final bloc = context.read<PageAccessLevelBloc>();
+      // 只使用与当前视图 ID 严格匹配的 bloc，避免读取到父级（如空间）的 bloc，
+      // 否则空间级别的 readOnly 会导致 AbsorbPointer 遮蔽按钮，点击无反应。
+      if (bloc.view.id == view.id) {
+        pageAccessLevelBloc = bloc;
+      }
     } catch (_) {
       pageAccessLevelBloc = null;
     }
