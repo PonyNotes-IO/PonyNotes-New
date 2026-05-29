@@ -535,7 +535,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         _selectedView = null;
         _isDocumentListVisible = true;
       });
-      widget.selectedViewNotifier.value = null;
+      // didUpdateWidget 处于 build 阶段，直接修改 ValueNotifier 会触发
+      // ValueListenableBuilder.markNeedsBuild()，导致 "called during build" 错误。
+      // 延迟到当前帧结束后再设置，避免在 build 阶段修改 ValueNotifier。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          widget.selectedViewNotifier.value = null;
+        }
+      });
       // 重新尝试选中新空间的第一个文档
       _trySelectFirstDocument();
     }
