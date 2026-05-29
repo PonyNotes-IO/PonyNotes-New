@@ -16,12 +16,13 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
-import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
@@ -36,6 +37,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
+
+const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
+const _preferHostTopRightActionsKey = 'preferHostTopRightActions';
+const _whiteboardHostActionIconColorLight = Color(0xFF111111);
+const _whiteboardHostActionIconColorDark = Color(0xFFF3F4F6);
+const _whiteboardActionSurfaceColorLight = Color(0xF7FFFFFF);
+const _whiteboardActionSurfaceColorDark = Color(0xE61B1C20);
+const _whiteboardActionBorderColorLight = Color(0x16000000);
+const _whiteboardActionBorderColorDark = Color(0x22FFFFFF);
+const _whiteboardCanvasFallbackColor = Color(0xFFFFFFFF);
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -124,7 +135,6 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
   final PageAccessLevelBloc pageAccessLevelBloc;
 
   ViewPB get view => notifier.view;
-
   @override
   EdgeInsets get contentPadding => EdgeInsets.zero;
 
@@ -170,10 +180,28 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
       );
 
   @override
-  Widget? get rightBarItem => null;
+  Widget? get rightBarItem => MultiBlocProvider(
+        providers: [
+          BlocProvider<ViewInfoBloc>.value(
+            value: bloc,
+          ),
+          BlocProvider<PageAccessLevelBloc>.value(
+            value: pageAccessLevelBloc,
+          ),
+        ],
+        child: UnifiedViewTopRightActions(
+          view: view,
+          viewInfoBloc: bloc,
+          pageAccessLevelBloc: pageAccessLevelBloc,
+          useFloatingSurface: true,
+        ),
+      );
 
   @override
   Widget? get fullWindowMoreItem => null;
+
+  @override
+  bool get handlesFullWindowOverlayActionsInternally => true;
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
@@ -185,12 +213,16 @@ class WhiteboardPage extends StatefulWidget {
     super.key,
     required this.view,
     required this.onViewChanged,
+    this.preferHostFullWindowMoreItem = false,
+    this.preferHostTopRightActions = true,
   }) {
     // debug log removed
   }
 
   final ViewPB view;
   final Function(ViewPB) onViewChanged;
+  final bool preferHostFullWindowMoreItem;
+  final bool preferHostTopRightActions;
 
   @override
   State<WhiteboardPage> createState() {
@@ -253,7 +285,23 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
 
+    FullWindowController.isFullWindow.addListener(_handleFullWindowChanged);
     _loadInitialData();
+  }
+
+  void _handleFullWindowChanged() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _webViewKey.currentState?.notifyContainerResized();
+      Future<void>.delayed(const Duration(milliseconds: 120), () {
+        if (!mounted) {
+          return;
+        }
+        _webViewKey.currentState?.notifyContainerResized();
+      });
+    });
   }
 
   /// 注册导出和导入控制器到 GetIt
@@ -440,6 +488,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
+    FullWindowController.isFullWindow.removeListener(_handleFullWindowChanged);
     final adapter = _collabAdapter;
 
     // 注销所有控制器（同步操作）
@@ -830,12 +879,34 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
+      backgroundColor: _whiteboardCanvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
         builder: (context, isFullWindow, _) {
           return Stack(
             children: [
+              const Positioned.fill(
+                child: ColoredBox(color: _whiteboardCanvasFallbackColor),
+              ),
               _buildExcalidrawView(),
+              if (_shouldRenderTopActionsBar(isFullWindow))
+                Positioned.fill(
+                  child: _WhiteboardFloatingActionsOverlay(
+                    key: ValueKey(
+                      'whiteboard_top_actions_${widget.view.id}',
+                    ),
+                    edgeInsets: EdgeInsets.fromLTRB(
+                      12,
+                      isFullWindow ? 12 : 14,
+                      isFullWindow ? 12 : 18,
+                      12,
+                    ),
+                    child: _buildTopActionsBar(
+                      context,
+                      isFullWindow: isFullWindow,
+                    ),
+                  ),
+                ),
               if (_isLoadingData)
                 Positioned.fill(
                   child: IgnorePointer(
@@ -864,32 +935,71 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     );
   }
 
+  bool _shouldRenderTopActionsBar(bool isFullWindow) {
+    return isFullWindow || !widget.preferHostTopRightActions;
+  }
+
   Widget _buildTopActionsBar(
     BuildContext context, {
     required bool isFullWindow,
   }) {
-    final rightPadding = isFullWindow ? 84.0 : 18.0;
-    final topPadding = isFullWindow ? 12.0 : 8.0;
+    final hideInternalMoreButton = isFullWindow &&
+        (widget.preferHostFullWindowMoreItem ||
+            widget.preferHostTopRightActions);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark
+        ? _whiteboardActionSurfaceColorDark
+        : _whiteboardActionSurfaceColorLight;
+    final borderColor = isDark
+        ? _whiteboardActionBorderColorDark
+        : _whiteboardActionBorderColorLight;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(18.0, topPadding, rightPadding, 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Spacer(),
-          // Whiteboard actions: share, favorite, more.
-          _buildHeaderAction(
-            ShareButton(
-              key: ValueKey('share_button_${widget.view.id}'),
-              view: widget.view,
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: Theme.of(context).colorScheme.copyWith(
+              onSurface: _whiteboardActionIconColor(context),
             ),
-            width: 36,
+      ),
+      child: IconTheme(
+        data: IconThemeData(color: _whiteboardActionIconColor(context)),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: BorderRadius.zero,
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          _buildHeaderAction(_buildFavoriteAction(context), width: 36),
-          const SizedBox(width: 8),
-          _buildHeaderAction(_buildMoreActionsButton(context), width: 36),
-        ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildHeaderAction(
+                  ShareButton(
+                    key: ValueKey('share_button_${widget.view.id}'),
+                    view: widget.view,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _buildHeaderAction(_buildFavoriteAction(context)),
+                const SizedBox(width: 6),
+                _buildHeaderAction(_buildFullWindowAction(context)),
+                const SizedBox(width: 6),
+                if (!hideInternalMoreButton)
+                  _buildHeaderAction(_buildMoreActionsButton(context)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -897,8 +1007,42 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Widget _buildHeaderAction(Widget child, {double width = 36}) {
     return SizedBox(
       width: width,
-      height: 36,
+      height: width,
       child: Center(child: child),
+    );
+  }
+
+  Color _whiteboardActionIconColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? _whiteboardHostActionIconColorDark
+        : _whiteboardHostActionIconColorLight;
+  }
+
+  Widget _buildFullWindowAction(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return FlowyTooltip(
+          message: isFullWindow
+              ? '\u9000\u51fa\u5e94\u7528\u5185\u5168\u5c4f'
+              : '\u5e94\u7528\u5185\u5168\u5c4f',
+          child: SizedBox.square(
+            dimension: 36,
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: Icon(
+                isFullWindow
+                    ? Icons.fullscreen_exit_rounded
+                    : Icons.fullscreen_rounded,
+                size: 20,
+                color: _whiteboardActionIconColor(context),
+              ),
+              onTap: FullWindowController.toggle,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -906,6 +1050,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     return BlocBuilder<FavoriteBloc, FavoriteState>(
       builder: (context, state) {
         final isFavorite = state.views.any((v) => v.item.id == widget.view.id);
+        final inactiveIconColor = _whiteboardActionIconColor(context);
         return Listener(
           onPointerDown: (_) => context
               .read<FavoriteBloc>()
@@ -922,6 +1067,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                   child: FlowySvg(
                     isFavorite ? FlowySvgs.favorited_s : FlowySvgs.favorite_s,
                     size: const Size.square(18),
+                    color: isFavorite ? null : inactiveIconColor,
                     blendMode: isFavorite ? null : BlendMode.srcIn,
                   ),
                 ),
@@ -955,9 +1101,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
           child: FlowyButton(
             useIntrinsicWidth: true,
             margin: EdgeInsets.zero,
-            text: const FlowySvg(
+            text: FlowySvg(
               FlowySvgs.workspace_three_dots_s,
-              size: Size.square(18),
+              size: const Size.square(18),
+              color: _whiteboardActionIconColor(context),
             ),
           ),
         ),
@@ -1115,5 +1262,141 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         data['type'] == 'excalidraw' &&
         data.containsKey('elements') &&
         data['elements'] is List;
+  }
+}
+
+class _WhiteboardFloatingActionsOverlay extends StatefulWidget {
+  const _WhiteboardFloatingActionsOverlay({
+    super.key,
+    required this.child,
+    required this.edgeInsets,
+  });
+
+  final Widget child;
+  final EdgeInsets edgeInsets;
+
+  @override
+  State<_WhiteboardFloatingActionsOverlay> createState() =>
+      _WhiteboardFloatingActionsOverlayState();
+}
+
+class _WhiteboardFloatingActionsOverlayState
+    extends State<_WhiteboardFloatingActionsOverlay> {
+  static const Size _fallbackChildSize = Size(188, 52);
+
+  Size _childSize = _fallbackChildSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final viewportSize = constraints.biggest;
+        final insets = _effectiveInsets(context);
+        final resolvedTopLeft = _resolveTopLeft(
+          viewportSize: viewportSize,
+          insets: insets,
+        );
+
+        return Stack(
+          children: [
+            Positioned(
+              left: resolvedTopLeft.dx,
+              top: resolvedTopLeft.dy,
+              child: _MeasureSize(
+                onChange: _handleChildSizeChanged,
+                child: widget.child,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  EdgeInsets _effectiveInsets(BuildContext context) {
+    final safePadding = MediaQuery.paddingOf(context);
+    return EdgeInsets.fromLTRB(
+      widget.edgeInsets.left + safePadding.left,
+      widget.edgeInsets.top + safePadding.top,
+      widget.edgeInsets.right + safePadding.right,
+      widget.edgeInsets.bottom + safePadding.bottom,
+    );
+  }
+
+  void _handleChildSizeChanged(Size size) {
+    if (!mounted || size == Size.zero || size == _childSize) {
+      return;
+    }
+
+    setState(() {
+      _childSize = size;
+    });
+  }
+
+  Offset _resolveTopLeft({
+    required Size viewportSize,
+    required EdgeInsets insets,
+  }) {
+    final movementRect = _movementRect(
+      viewportSize: viewportSize,
+      insets: insets,
+    );
+    return Offset(movementRect.right, movementRect.top);
+  }
+
+  Rect _movementRect({
+    required Size viewportSize,
+    required EdgeInsets insets,
+  }) {
+    final left = insets.left;
+    final top = insets.top;
+    final right = (viewportSize.width - insets.right - _childSize.width)
+        .clamp(left, double.infinity)
+        .toDouble();
+    final bottom = (viewportSize.height - insets.bottom - _childSize.height)
+        .clamp(top, double.infinity)
+        .toDouble();
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+}
+
+class _MeasureSize extends SingleChildRenderObjectWidget {
+  const _MeasureSize({
+    required this.onChange,
+    required super.child,
+  });
+
+  final ValueChanged<Size> onChange;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _MeasureSizeRenderObject(onChange);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _MeasureSizeRenderObject renderObject,
+  ) {
+    renderObject.onChange = onChange;
+  }
+}
+
+class _MeasureSizeRenderObject extends RenderProxyBox {
+  _MeasureSizeRenderObject(this.onChange);
+
+  ValueChanged<Size> onChange;
+  Size? _lastSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    final nextSize = child?.size;
+    if (nextSize == null || nextSize == _lastSize) {
+      return;
+    }
+
+    _lastSize = nextSize;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onChange(nextSize));
   }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:http/http.dart' as http;
@@ -49,12 +50,11 @@ class ExcalidrawWebView extends StatefulWidget {
 
 /// ExcalidrawWebView的State类，暴露公共方法供外部调用
 class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
-  // scrollX/scrollY 已从稳定键中移除：
-  // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
-  // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
+    'scrollX',
+    'scrollY',
     'theme',
     'viewBackgroundColor',
     'zoom',
@@ -134,6 +134,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         '❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
   }
 
+  Future<void> notifyContainerResized() async {
+    await _safeEvalJs('''
+      (function() {
+        window.dispatchEvent(new Event('resize'));
+        setTimeout(function() {
+          window.dispatchEvent(new Event('resize'));
+        }, 80);
+        const api = window.excalidrawAPI || window.excalidrawAppRef;
+        if (api && typeof api.refresh === 'function') {
+          api.refresh();
+        }
+      })();
+    ''', tag: 'notifyContainerResized');
+  }
+
   void _initializeSettings() {
     _settings = InAppWebViewSettings(
       // 开发者工具
@@ -162,7 +177,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
       final viewId = Uri.encodeQueryComponent(widget.viewId);
-      const cacheVersion = 'ponynotes-whiteboard-v2';
+      const cacheVersion = 'ponynotes-whiteboard-v4';
       final url = '$baseUrl/index.html?viewId=$viewId&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
@@ -197,6 +212,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   void _setupJavaScriptHandlers(InAppWebViewController controller) {
     // ✅ 新增：初始化完成器
     _initializationCompleter = Completer<void>();
+
+    controller.addJavaScriptHandler(
+      handlerName: "readWhiteboardClipboard",
+      callback: (args) async {
+        try {
+          final data = await ClipboardService().getData();
+          final image = data.image;
+          final imageBytes = image?.$2;
+          final imageFormat = image?.$1;
+          final imageMimeType =
+              imageFormat == null ? null : 'image/$imageFormat';
+
+          return {
+            'plainText': data.plainText,
+            'html': data.html,
+            'imageMimeType':
+                imageBytes?.isNotEmpty == true ? imageMimeType : null,
+            'imageBase64': imageBytes?.isNotEmpty == true
+                ? base64Encode(imageBytes!)
+                : null,
+          };
+        } catch (e, stack) {
+          Log.error(
+            '[ExcalidrawWebView] readWhiteboardClipboard failed: $e\n$stack',
+          );
+          return {
+            'plainText': null,
+            'html': null,
+            'imageMimeType': null,
+            'imageBase64': null,
+            'error': e.toString(),
+          };
+        }
+      },
+    );
 
     controller.addJavaScriptHandler(
         handlerName: "initData",
@@ -550,6 +600,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
+      await _improveContextMenuTextRendering();
       await _installResizeGuard();
 
       // 设置主题
@@ -795,19 +846,213 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     ''', tag: 'hideUnwantedUI');
   }
 
+  /// 优化右键菜单中文渲染；Improve Excalidraw context-menu text rendering.
+  Future<void> _improveContextMenuTextRendering() async {
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+    final menuFontFamily = isWindows
+        ? '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", '
+            '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+        : '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", '
+            '"Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
+    final fontSmoothing = isWindows ? 'antialiased' : 'antialiased';
+    final mozFontSmoothing = isWindows ? 'grayscale' : 'grayscale';
+    final textRendering =
+        isWindows ? 'geometricPrecision' : 'optimizeLegibility';
+    final menuFontSize = isWindows ? '15' : '13';
+    final shortcutFontSize = isWindows ? '13' : '11';
+    final menuFontWeight = isWindows ? 600 : 500;
+    final shortcutFontWeight = isWindows ? 500 : 500;
+
+    await _safeEvalJs(
+      '''
+      (function() {
+        const style = document.createElement('style');
+        style.id = 'ponynotes-context-menu-font-style';
+        style.textContent = `
+          .excalidraw,
+          .excalidraw .context-menu,
+          .excalidraw [role="menu"] {
+            --ui-font: $menuFontFamily !important;
+          }
+
+          .excalidraw .context-menu,
+          .excalidraw .context-menu *,
+          .excalidraw [role="menu"],
+          .excalidraw [role="menu"] *,
+          .excalidraw .context-menu-item,
+          .excalidraw .context-menu-item *,
+          .excalidraw .context-menu-item__label,
+          .excalidraw .context-menu-item__shortcut {
+            font-family: $menuFontFamily !important;
+            -webkit-font-smoothing: $fontSmoothing !important;
+            -moz-osx-font-smoothing: $mozFontSmoothing !important;
+            text-rendering: $textRendering !important;
+            font-synthesis: none !important;
+            font-kerning: normal !important;
+            letter-spacing: 0 !important;
+          }
+
+          .excalidraw .context-menu,
+          .excalidraw [role="menu"] {
+            filter: none !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            opacity: 1 !important;
+            backface-visibility: visible !important;
+            perspective: none !important;
+            will-change: auto !important;
+            contain: none !important;
+            transform-style: flat !important;
+          }
+
+          .excalidraw .context-menu,
+          .excalidraw [role="menu"] {
+            border: 1px solid rgba(90, 104, 122, 0.32) !important;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18) !important;
+            background-clip: padding-box !important;
+          }
+
+          .excalidraw .popover.context-menu-popover,
+          .excalidraw .context-menu-popover,
+          .excalidraw .Island:has(.context-menu) {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: auto !important;
+            height: auto !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+          }
+
+          .excalidraw .context-menu-item {
+            font-size: ${menuFontSize}px !important;
+            line-height: 1.45 !important;
+            font-weight: $menuFontWeight !important;
+            min-height: 30px !important;
+            color: rgba(17, 24, 39, 0.96) !important;
+            text-shadow: none !important;
+          }
+
+          .excalidraw .context-menu-item .context-menu-item__shortcut {
+            font-size: ${shortcutFontSize}px !important;
+            font-weight: $shortcutFontWeight !important;
+            color: rgba(55, 65, 81, 0.88) !important;
+          }
+
+          .excalidraw.theme--dark .context-menu-item {
+            color: rgba(243, 244, 246, 0.96) !important;
+          }
+
+          .excalidraw.theme--dark .context-menu-item .context-menu-item__shortcut {
+            color: rgba(209, 213, 219, 0.88) !important;
+          }
+        `;
+
+        const existingStyle =
+          document.getElementById('ponynotes-context-menu-font-style');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+
+        document.head.appendChild(style);
+
+        const menuSelectors = [
+          '.excalidraw .context-menu',
+          '.excalidraw [role="menu"]',
+        ];
+
+        const snapContextMenuToPixels = () => {
+          const menus = document.querySelectorAll(menuSelectors.join(','));
+          for (const menu of menus) {
+            const computed = window.getComputedStyle(menu);
+            if (computed.display === 'none' || computed.visibility === 'hidden') {
+              continue;
+            }
+
+            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            const snap = (value) => Math.round(value * dpr) / dpr;
+            const left = parseFloat(menu.style.left || computed.left);
+            const top = parseFloat(menu.style.top || computed.top);
+            if (Number.isFinite(left) && computed.position !== 'static') {
+              menu.style.setProperty('left', snap(left) + 'px', 'important');
+            }
+            if (Number.isFinite(top) && computed.position !== 'static') {
+              menu.style.setProperty('top', snap(top) + 'px', 'important');
+            }
+
+            if (computed.transform && computed.transform !== 'none') {
+              try {
+                const matrix = new DOMMatrixReadOnly(computed.transform);
+                const roundedX = snap(matrix.m41);
+                const roundedY = snap(matrix.m42);
+                menu.style.setProperty(
+                  'transform',
+                  `matrix(\${matrix.a}, \${matrix.b}, \${matrix.c}, \${matrix.d}, \${roundedX}, \${roundedY})`,
+                  'important',
+                );
+              } catch (_) {
+                // Keep the original transform if the browser cannot parse it.
+              }
+            }
+
+            menu.style.setProperty('filter', 'none', 'important');
+            menu.style.setProperty('backdrop-filter', 'none', 'important');
+            menu.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+            menu.style.setProperty('will-change', 'auto', 'important');
+            menu.style.setProperty('contain', 'none', 'important');
+            menu.style.setProperty('translate', 'none', 'important');
+          }
+        };
+
+        const scheduleSnap = () => {
+          cancelAnimationFrame(window.__ponynotesContextMenuSnapFrame);
+          window.__ponynotesContextMenuSnapFrame =
+            requestAnimationFrame(snapContextMenuToPixels);
+          setTimeout(snapContextMenuToPixels, 40);
+          setTimeout(snapContextMenuToPixels, 120);
+        };
+
+        if (window.__ponynotesContextMenuObserver) {
+          window.__ponynotesContextMenuObserver.disconnect();
+        }
+        window.__ponynotesContextMenuObserver =
+          new MutationObserver(scheduleSnap);
+        window.__ponynotesContextMenuObserver.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'style'],
+        });
+
+        document.removeEventListener(
+          'contextmenu',
+          window.__ponynotesContextMenuSnapHandler || scheduleSnap,
+          true,
+        );
+        window.__ponynotesContextMenuSnapHandler = scheduleSnap;
+        document.addEventListener('contextmenu', scheduleSnap, true);
+        scheduleSnap();
+      })();
+    ''',
+      tag: 'improveContextMenuTextRendering',
+    );
+  }
+
   /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
   /// 注意：只隐藏欢迎界面中心的LOGO，不隐藏工具栏和其他功能元素
   Future<void> _installResizeGuard() async {
     await _safeEvalJs('''
       (function() {
-        // 仅派发 resize 事件，不调用 api.refresh()
-        // 原因：api.refresh() 会导致 .excalidraw 容器尺寸微小变化，
-        // 触发 ResizeObserver → 再次 dispatchStableResize → 无限循环
-        // 每次循环中 Excalidraw 调整 scrollX（负方向），导致画布持续向左漂移
         const dispatchStableResize = () => {
           window.dispatchEvent(new Event('resize'));
           requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
+            const api = window.excalidrawAPI ||
+              window.__EXCALIDRAW_API__ ||
+              window._excalidrawAPI;
+            if (api && typeof api.refresh === 'function') {
+              api.refresh();
+            }
           });
         };
 
@@ -820,41 +1065,27 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
         let lastWidth = 0;
         let lastHeight = 0;
-        // 连续分派计数器，防止反馈循环失控
-        let _resizeDispatchCount = 0;
-        const _MAX_RESIZE_DISPATCHES = 8;
-
         const onContainerResize = () => {
-          // 仅以 document.body 为参考，不用 .excalidraw
-          // 原因：.excalidraw 在每次 resize 事件处理后自身尺寸会变化，
-          // 如果监听它会形成反馈循环
-          const rect = document.body.getBoundingClientRect();
-          // 提高阈值到 2px，防止亚像素级别的抖动触发重复派发
-          if (Math.abs(rect.width - lastWidth) < 2 &&
-              Math.abs(rect.height - lastHeight) < 2) {
+          const root = document.querySelector('.excalidraw') || document.body;
+          const rect = root.getBoundingClientRect();
+          if (Math.abs(rect.width - lastWidth) < 0.5 &&
+              Math.abs(rect.height - lastHeight) < 0.5) {
             return;
           }
           lastWidth = rect.width;
           lastHeight = rect.height;
-
-          if (_resizeDispatchCount >= _MAX_RESIZE_DISPATCHES) {
-            return;
-          }
-          _resizeDispatchCount++;
-
           clearTimeout(window._ponynotesResizeTimer);
-          window._ponynotesResizeTimer = setTimeout(() => {
-            dispatchStableResize();
-            // 2 秒后重置计数器，允许后续真实 resize 事件继续处理
-            setTimeout(() => { _resizeDispatchCount = 0; }, 2000);
-          }, 40);
+          window._ponynotesResizeTimer = setTimeout(dispatchStableResize, 40);
         };
 
         window._ponynotesResizeHandler = onContainerResize;
         window.addEventListener('resize', onContainerResize, { passive: true });
         window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
-        // 只监听 document.body，不监听 .excalidraw（防止反馈循环）
         window._ponynotesResizeObserver.observe(document.body);
+        const root = document.querySelector('.excalidraw');
+        if (root) {
+          window._ponynotesResizeObserver.observe(root);
+        }
 
         onContainerResize();
         setTimeout(dispatchStableResize, 120);
@@ -1224,6 +1455,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
+      await _improveContextMenuTextRendering();
 
       // 设置主题
       final theme =

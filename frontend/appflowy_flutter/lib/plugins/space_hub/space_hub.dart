@@ -1,13 +1,12 @@
 library;
 
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/document.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
-import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
-import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
@@ -17,10 +16,10 @@ import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
-import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
@@ -29,6 +28,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -42,7 +42,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../generated/locale_keys.g.dart';
-import '../../workspace/application/tabs/tabs_bloc.dart';
 
 class SpaceHubMiddlePanelController {
   SpaceHubMiddlePanelController._();
@@ -85,6 +84,7 @@ class SpaceHubPlugin extends Plugin {
   SpaceHubPlugin({
     required this.view,
     ViewPB? initialSelectedView,
+    this.tabView,
   })  : notifier = ViewPluginNotifier(view: view),
         _viewInfoBloc = ViewInfoBloc(view: view)
           ..add(const ViewInfoEvent.started()),
@@ -97,6 +97,7 @@ class SpaceHubPlugin extends Plugin {
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier;
+  final ViewPB? tabView;
   final ValueNotifier<ViewInfoBloc?>
       _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
 
@@ -111,13 +112,14 @@ class SpaceHubPlugin extends Plugin {
         selectedViewNotifier: _selectedViewNotifier,
         currentViewInfoBlocNotifier: _currentViewInfoBlocNotifier,
         initialSelectedView: _selectedViewNotifier.value,
+        tabView: tabView,
       );
 
   @override
   PluginType get pluginType => PluginType.folder;
 
   @override
-  PluginId get id => notifier.view.id;
+  PluginId get id => tabView?.id ?? notifier.view.id;
 
   @override
   void init() {
@@ -145,6 +147,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.selectedViewNotifier,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewInfoBloc bloc;
@@ -154,6 +157,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   ViewPB get view => notifier.view;
 
@@ -183,55 +187,12 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                     value: effectiveViewInfoBloc,
                   ),
                 ],
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (FeatureFlag.syncDocument.isOn) ...[
-                      DocumentCollaborators(
-                        key: ValueKey('collaborators_${selectedView.id}'),
-                        width: 120,
-                        height: 32,
-                        view: selectedView,
-                      ),
-                      const HSpace(16),
-                    ] else
-                      const HSpace(8),
-                    ShareButton(
-                      key: ValueKey('share_button_${selectedView.id}'),
-                      view: selectedView,
-                    ),
-                    const HSpace(4),
-                    ViewFavoriteButton(
-                      key: ValueKey('favorite_button_${selectedView.id}'),
-                      view: selectedView,
-                    ),
-                    const HSpace(4),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: FullWindowController.isFullWindow,
-                      builder: (context, isFullWindow, _) {
-                        return SizedBox.square(
-                          dimension: 28,
-                          child: FlowyButton(
-                            margin: EdgeInsets.zero,
-                            text: Icon(
-                              isFullWindow
-                                  ? Icons.fullscreen_exit_rounded
-                                  : Icons.fullscreen_rounded,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                            onTap: FullWindowController.toggle,
-                          ),
-                        );
-                      },
-                    ),
-                    const HSpace(4),
-                    MoreViewActions(
-                      view: selectedView,
-                      viewInfoBloc: effectiveViewInfoBloc,
-                    ),
-                    const HSpace(10),
-                  ],
+                child: UnifiedViewTopRightActions(
+                  view: selectedView,
+                  viewInfoBloc: effectiveViewInfoBloc,
+                  showCollaborators: FeatureFlag.syncDocument.isOn &&
+                      selectedView.layout != ViewLayoutPB.Whiteboard,
+                  useFloatingSurface: true,
                 ),
               );
             },
@@ -253,20 +214,33 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
       builder: (context, selectedView, _) {
         final effectiveView = selectedView ?? view;
 
+        if (effectiveView.layout == ViewLayoutPB.Whiteboard) {
+          return const SizedBox.shrink();
+        }
+
         try {
           return ValueListenableBuilder<ViewInfoBloc?>(
             valueListenable: currentViewInfoBlocNotifier,
             builder: (context, currentViewInfoBloc, _) {
               final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
+              final effectiveAccessBloc =
+                  pageAccessLevelBloc.view.id == effectiveView.id
+                      ? pageAccessLevelBloc
+                      : null;
               return MultiBlocProvider(
                 providers: [
                   BlocProvider<ViewInfoBloc>.value(
                     value: effectiveViewInfoBloc,
                   ),
+                  if (effectiveAccessBloc != null)
+                    BlocProvider<PageAccessLevelBloc>.value(
+                      value: effectiveAccessBloc,
+                    ),
                 ],
                 child: MoreViewActions(
                   view: effectiveView,
                   viewInfoBloc: effectiveViewInfoBloc,
+                  pageAccessLevelBloc: effectiveAccessBloc,
                 ),
               );
             },
@@ -277,6 +251,17 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
       },
     );
   }
+
+  @override
+  bool get handlesFullWindowOverlayActionsInternally {
+    // When Space Hub is rendering a selected whiteboard, the whiteboard page
+    // owns the full-window capsule internally.
+    // 当 Space Hub 右侧选中的是白板时，由白板页面内部统一承载应用内全屏动作区。
+    return selectedViewNotifier.value?.layout == ViewLayoutPB.Whiteboard;
+  }
+
+  @override
+  bool get handlesInlineSidebarToggle => true;
 
   @override
   Widget buildWidget({
@@ -298,6 +283,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           pageAccessLevelBloc: pageAccessLevelBloc,
           currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
           initialSelectedView: initialSelectedView,
+          tabView: tabView,
         );
       },
     );
@@ -326,8 +312,42 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
-  Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
-      ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+  double get topTabsLeadingWidth => HomeSizes.spaceHubTopTabsLeadingWidth;
+
+  @override
+  Widget? topTabsLeadingPane(BuildContext context) {
+    SpaceBloc? spaceBloc;
+    try {
+      spaceBloc = BlocProvider.of<SpaceBloc>(context);
+    } catch (_) {
+      spaceBloc = null;
+    }
+
+    // Move the SpaceHub list header into HomeStack's tab-leading slot.
+    // 将 SpaceHub 列表头部放进顶部预留区，避免中间栏上方出现空白。
+    return _SpaceDocumentList(
+      spaceView: view,
+      selectedView: null,
+      showHeader: true,
+      onViewCreated: (view) {
+        selectedViewNotifier.value = view;
+      },
+      onViewSelectedWithRecent: (_) {},
+    )._buildHeader(context, spaceBloc);
+  }
+
+  @override
+  Widget tabBarItem(String pluginId, [bool shortForm = false]) {
+    // A SpaceHub child tab keeps the middle-pane shell, but uses the child
+    // view as its tab identity/title so different documents do not collapse
+    // into the single workspace tab.
+    // SpaceHub 子文档 tab 保留中间栏壳，但用子文档作为 tab 身份和标题，
+    // 避免多个文档都合并成同一个工作空间 tab。
+    return ViewTabBarItem(
+      view: tabView ?? notifier.view,
+      shortForm: shortForm,
+    );
+  }
 
   @override
   List<NavigationItem> get navigationItems => [this];
@@ -345,6 +365,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.pageAccessLevelBloc,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewPB spaceView;
@@ -356,6 +377,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   @override
   State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
@@ -416,6 +438,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         onDeleted: widget.onDeleted,
         currentViewInfoBlocNotifier: widget.currentViewInfoBlocNotifier,
         initialSelectedView: widget.initialSelectedView,
+        tabView: widget.tabView,
       ),
     );
   }
@@ -429,6 +452,7 @@ class _SpaceHubContent extends StatefulWidget {
     required this.onDeleted,
     required this.currentViewInfoBlocNotifier,
     this.initialSelectedView,
+    this.tabView,
   });
 
   final ViewPB spaceView;
@@ -437,6 +461,7 @@ class _SpaceHubContent extends StatefulWidget {
   final ValueNotifier<ViewInfoBloc?>
       currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
+  final ViewPB? tabView;
 
   @override
   State<_SpaceHubContent> createState() => _SpaceHubContentState();
@@ -446,7 +471,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   ViewPB? _selectedView;
 
   /// 左侧文档列表的宽度
-  double _leftPanelWidth = 260.0;
+  double _leftPanelWidth = HomeSizes.defaultSpaceHubMiddlePaneWidth;
 
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
@@ -455,7 +480,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   final List<ViewInfoBloc> _childViewInfoBlocs = [];
 
   bool _isDocumentListVisible = true;
-  bool? _documentListVisibleBeforeFullWindow;
 
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
@@ -481,8 +505,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.initState();
     SpaceHubMiddlePanelController.revealRequest
         .addListener(_handleRevealDocumentList);
-    FullWindowController.isFullWindow.addListener(_handleFullWindowChanged);
-    _handleFullWindowChanged();
     // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
     if (widget.initialSelectedView != null) {
       _selectedView = widget.initialSelectedView;
@@ -497,7 +519,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   void dispose() {
     SpaceHubMiddlePanelController.revealRequest
         .removeListener(_handleRevealDocumentList);
-    FullWindowController.isFullWindow.removeListener(_handleFullWindowChanged);
     for (final bloc in _childViewInfoBlocs) {
       bloc.close();
     }
@@ -512,7 +533,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     if (oldWidget.spaceView.id != widget.spaceView.id) {
       setState(() {
         _selectedView = null;
-        _isDocumentListVisible = !FullWindowController.isFullWindow.value;
+        _isDocumentListVisible = true;
       });
       widget.selectedViewNotifier.value = null;
       // 重新尝试选中新空间的第一个文档
@@ -531,25 +552,26 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     setState(() => _isDocumentListVisible = true);
   }
 
-  void _handleFullWindowChanged() {
-    if (!mounted) {
+  void _selectViewInMiddlePanel(ViewPB view) {
+    if (!mounted || view.id.isEmpty) {
       return;
     }
 
-    final isFullWindow = FullWindowController.isFullWindow.value;
-    if (isFullWindow) {
-      _documentListVisibleBeforeFullWindow ??= _isDocumentListVisible;
-      if (_isDocumentListVisible) {
-        setState(() => _isDocumentListVisible = false);
-      }
-      return;
-    }
-
-    final restoreVisible = _documentListVisibleBeforeFullWindow;
-    _documentListVisibleBeforeFullWindow = null;
-    if (restoreVisible != null && restoreVisible != _isDocumentListVisible) {
-      setState(() => _isDocumentListVisible = restoreVisible);
-    }
+    setState(() {
+      _selectedView = view;
+    });
+    widget.selectedViewNotifier.value = view;
+    _addToRecentViews(view.id);
+    context.read<TabsBloc>().add(
+          TabsEvent.openTab(
+            plugin: SpaceHubPlugin(
+              view: widget.spaceView,
+              initialSelectedView: view,
+              tabView: view,
+            ),
+            view: view,
+          ),
+        );
   }
 
   void _hideDocumentList() {
@@ -608,9 +630,43 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         );
         final useFloatingDocumentList =
             !isFullWindow && menuStatus != MenuStatus.expanded;
+        final availableContentWidth = MediaQuery.sizeOf(context).width;
+        final maxLeftPanelWidth = (availableContentWidth -
+                HomeSizes.minimumSpaceHubContentPeekWidth -
+                HomeSizes.spaceHubDividerWidth)
+            .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity)
+            .toDouble();
+        final effectiveLeftPanelWidth = _leftPanelWidth.clamp(
+          HomeSizes.minimumSpaceHubMiddlePaneWidth,
+          maxLeftPanelWidth,
+        );
+        final floatingDocumentListTopInset =
+            Platform.isWindows ? 0.0 : HomeSizes.topBarHeight;
+        final passiveFloatingDivider = Padding(
+          padding: EdgeInsets.only(
+            top: floatingDocumentListTopInset,
+            bottom: 12,
+          ),
+          child: SizedBox(
+            width: HomeSizes.spaceHubDividerWidth,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                width: 0.8,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(0.4),
+                ),
+              ),
+            ),
+          ),
+        );
         final documentListPanel = Padding(
           padding: useFloatingDocumentList
-              ? EdgeInsets.only(top: HomeSizes.topBarHeight, bottom: 12)
+              ? EdgeInsets.only(
+                  top: floatingDocumentListTopInset,
+                  bottom: 12,
+                )
               : EdgeInsets.zero,
           child: ClipRRect(
             borderRadius: useFloatingDocumentList
@@ -620,7 +676,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 : BorderRadius.zero,
             child: Container(
               color: homeContentBackgroundColor(context),
-              width: _leftPanelWidth,
+              width: effectiveLeftPanelWidth,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -628,24 +684,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
                       selectedView: _selectedView,
-                      onViewSelectedWithRecent: (view) {
-                        setState(() {
-                          _selectedView = view;
-                        });
-                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                        widget.selectedViewNotifier.value = view;
-                        // 添加到最近访问
-                        _addToRecentViews(view.id);
-                      },
-                      onViewCreated: (view) {
-                        setState(() {
-                          _selectedView = view;
-                        });
-                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                        widget.selectedViewNotifier.value = view;
-                        // 添加到最近访问
-                        _addToRecentViews(view.id);
-                      },
+                      showHeader: isFullWindow,
+                      onViewSelectedWithRecent: _selectViewInMiddlePanel,
+                      onViewCreated: _selectViewInMiddlePanel,
                     ),
                   ),
                 ],
@@ -659,22 +700,29 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           children: [
             // 左侧：空间文档列表
             Visibility(
-              visible: _isDocumentListVisible && !isFullWindow,
+              visible: _isDocumentListVisible,
               child: documentListPanel,
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
             Visibility(
-              visible: _isDocumentListVisible &&
-                  !isFullWindow &&
-                  !useFloatingDocumentList,
+              visible: _isDocumentListVisible && !useFloatingDocumentList,
               child: ResizableDivider(
-                initialLeftWidth: _leftPanelWidth,
+                minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                maxLeftWidth: maxLeftPanelWidth,
+                initialLeftWidth: effectiveLeftPanelWidth,
                 onResize: (newWidth) {
                   setState(() {
-                    _leftPanelWidth = newWidth;
+                    _leftPanelWidth = newWidth.clamp(
+                      HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                      maxLeftPanelWidth,
+                    );
                   });
                 },
               ),
+            ),
+            Visibility(
+              visible: _isDocumentListVisible && useFloatingDocumentList,
+              child: passiveFloatingDivider,
             ),
             rightPanel,
           ],
@@ -789,6 +837,12 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           userProfile: userProfile, // 传入用户配置
         ),
         shrinkWrap: false,
+        data: view.layout == ViewLayoutPB.Whiteboard
+            ? const {
+                'preferHostFullWindowMoreItem': true,
+                'preferHostTopRightActions': true,
+              }
+            : null,
       );
     } catch (e) {
       return Center(
@@ -907,12 +961,14 @@ class _SpaceDocumentList extends StatelessWidget {
   const _SpaceDocumentList({
     required this.spaceView,
     required this.selectedView,
+    required this.showHeader,
     required this.onViewCreated,
     required this.onViewSelectedWithRecent,
   });
 
   final ViewPB spaceView;
   final ViewPB? selectedView;
+  final bool showHeader;
   final ValueChanged<ViewPB> onViewCreated;
   final void Function(ViewPB view) onViewSelectedWithRecent;
 
@@ -933,8 +989,12 @@ class _SpaceDocumentList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 头部：空间名称 + 新增文档按钮
-          _buildHeader(context, spaceBloc),
-          VSpace(4),
+          if (showHeader) ...[
+            // Header stays here only in fullscreen, where HomeStack has no tabs.
+            // 仅在应用内全屏保留列表头部；普通模式下由顶部预留区承载。
+            _buildHeader(context, spaceBloc),
+            VSpace(4),
+          ],
           // 文档列表
           Expanded(
             child: spaceBloc != null
@@ -947,6 +1007,11 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
+    final isSidebarHidden = context.select<HomeSettingBloc, bool>(
+      (bloc) => bloc.isMenuHidden,
+    );
+    final theme = AppFlowyTheme.of(context);
+
     return Container(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
       // decoration: BoxDecoration(
@@ -1073,6 +1138,35 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
+          if (isSidebarHidden) ...[
+            if (Platform.isMacOS)
+              SizedBox(
+                width: 28,
+                height: 24,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      right: 0,
+                      top: -18,
+                      child: _SpaceHubSidebarToggleButton(
+                        color: theme.iconColorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (Platform.isWindows) ...[
+              const HSpace(4),
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: _SpaceHubSidebarToggleButton(
+                  color: theme.iconColorScheme.secondary,
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -1301,6 +1395,32 @@ class _SpaceDocumentList extends StatelessWidget {
       (error) {
         Log.error('Failed to create new note: $error');
       },
+    );
+  }
+}
+
+class _SpaceHubSidebarToggleButton extends StatelessWidget {
+  const _SpaceHubSidebarToggleButton({
+    required this.color,
+  });
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return FlowyTooltip(
+      message: LocaleKeys.sideBar_openSidebar.tr(),
+      child: FlowyIconButton(
+        width: 24,
+        icon: FlowySvg(
+          FlowySvgs.sidebar_collapse_custom_m,
+          size: const Size.square(16),
+          color: color,
+        ),
+        onPressed: () => context.read<HomeSettingBloc>().add(
+              const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+            ),
+      ),
     );
   }
 }

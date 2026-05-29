@@ -251,12 +251,778 @@
         files: api.getFiles?.() || {},
     });
 
-    // scrollX/scrollY 已从稳定键中移除：
-    // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
-    // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
+    const getRenderableElements = (elements) =>
+        (elements || []).filter((element) => element && !element.isDeleted);
+
+    const getSelectedElementIds = (appState) => {
+        const selectedElementIds = appState?.selectedElementIds;
+        if (!selectedElementIds || typeof selectedElementIds !== 'object') {
+            return new Set();
+        }
+        return new Set(
+            Object.entries(selectedElementIds)
+                .filter(([, selected]) => Boolean(selected))
+                .map(([id]) => id),
+        );
+    };
+
+    const getSelectedGroupIds = (appState) => {
+        const selectedGroupIds = appState?.selectedGroupIds;
+        if (!selectedGroupIds || typeof selectedGroupIds !== 'object') {
+            return new Set();
+        }
+        return new Set(
+            Object.entries(selectedGroupIds)
+                .filter(([, selected]) => Boolean(selected))
+                .map(([id]) => id),
+        );
+    };
+
+    const getActiveLinearElementId = (appState) =>
+        appState?.selectedLinearElement?.elementId ||
+        appState?.editingLinearElement?.elementId ||
+        null;
+
+    const isElementInSelectedGroup = (element, selectedGroupIds) =>
+        (element?.groupIds || []).some((groupId) => selectedGroupIds.has(groupId));
+
+    const collectSelectedElements = (appState, allElements) => {
+        const selectedIds = getSelectedElementIds(appState);
+        const activeLinearElementId = getActiveLinearElementId(appState);
+        if (activeLinearElementId) {
+            selectedIds.add(activeLinearElementId);
+        }
+
+        const selectedGroupIds = getSelectedGroupIds(appState);
+        return allElements.filter(
+            (element) =>
+                selectedIds.has(element.id) ||
+                isElementInSelectedGroup(element, selectedGroupIds),
+        );
+    };
+
+    const collectElementDependencies = (element, exportIds) => {
+        if (!element) {
+            return;
+        }
+        if (element.containerId) {
+            exportIds.add(element.containerId);
+        }
+        for (const boundElement of element.boundElements || []) {
+            if (boundElement?.id) {
+                exportIds.add(boundElement.id);
+            }
+        }
+    };
+
+    const expandSelectionDependencies = (selectedElements, allElements) => {
+        const exportIds = new Set(selectedElements.map((element) => element.id));
+
+        for (const element of selectedElements) {
+            collectElementDependencies(element, exportIds);
+        }
+
+        for (const element of allElements) {
+            if (exportIds.has(element.id)) {
+                collectElementDependencies(element, exportIds);
+            }
+        }
+
+        return allElements.filter((element) => exportIds.has(element.id));
+    };
+
+    const getClipboardSceneData = (api) => {
+        const sceneData = getSceneData(api);
+        const allElements = getRenderableElements(sceneData.elements);
+        const selectedElements = collectSelectedElements(
+            sceneData.appState,
+            allElements,
+        );
+
+        if (!selectedElements.length) {
+            return {
+                ...sceneData,
+                __ponynotesHasSelection: false,
+                __ponynotesExportScope: 'all',
+            };
+        }
+
+        return {
+            ...sceneData,
+            elements: expandSelectionDependencies(selectedElements, allElements),
+            __ponynotesHasSelection: true,
+            __ponynotesExportScope: 'selection',
+        };
+    };
+
+    const hasConfirmedSelection = (sceneData) =>
+        Boolean(sceneData?.__ponynotesHasSelection);
+
+    const getExportScale = () => {
+        const ratio = Number(window.devicePixelRatio || 1);
+        return Math.max(2, Math.min(4, ratio || 1));
+    };
+
+    const buildExportOptions = (sceneData, scale = getExportScale()) => ({
+        elements: getRenderableElements(sceneData.elements),
+        appState: {
+            ...(sceneData.appState || {}),
+            exportBackground: true,
+            shouldAddWatermark: false,
+        },
+        files: sceneData.files || {},
+        exportPadding: 16,
+        getDimensions: (width, height) => ({
+            width: Math.ceil(width * scale),
+            height: Math.ceil(height * scale),
+            scale,
+        }),
+    });
+
+    const blobToDataUrl = (blob) =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error('FileReader failed'));
+            reader.readAsDataURL(blob);
+        });
+
+    const canvasToBlob = (canvas, mimeType = 'image/png', quality = 1) =>
+        new Promise((resolve, reject) => {
+            if (!canvas) {
+                reject(new Error('Canvas is empty'));
+                return;
+            }
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('Canvas toBlob returned empty result'));
+                }
+            }, mimeType, quality);
+        });
+
+    const serializeSvgResult = async (svg) => {
+        if (!svg) {
+            return null;
+        }
+        if (typeof svg === 'string') {
+            return svg.includes('<svg') ? svg : null;
+        }
+        if (svg instanceof SVGSVGElement || svg instanceof Element) {
+            return new XMLSerializer().serializeToString(svg);
+        }
+        if (svg instanceof Blob) {
+            const text = await svg.text();
+            return text.includes('<svg') ? text : null;
+        }
+        return null;
+    };
+
+    const createHighQualityPngBlob = async (sceneData, exportSettings = {}) => {
+        const allowVisibleCanvasFallback =
+            exportSettings.allowVisibleCanvasFallback !== false;
+        const scale = getExportScale();
+        const options = buildExportOptions(sceneData, scale);
+
+        if (!options.elements.length) {
+            throw new Error('No renderable elements to export');
+        }
+
+        if (window.ExcalidrawLib?.exportToCanvas) {
+            const canvas = await window.ExcalidrawLib.exportToCanvas(options);
+            return canvasToBlob(canvas, 'image/png', 1);
+        }
+
+        if (typeof window.exportToPng === 'function') {
+            const result = await window.exportToPng(options);
+            if (result instanceof Blob) {
+                return result;
+            }
+        }
+
+        if (typeof window.exportToImage === 'function') {
+            const result = await window.exportToImage({
+                ...options,
+                mimeType: 'image/png',
+            });
+            if (result instanceof Blob) {
+                return result;
+            }
+            if (typeof result === 'string' && result.startsWith('data:image/png')) {
+                return await (await fetch(result)).blob();
+            }
+        }
+
+        if (!allowVisibleCanvasFallback) {
+            throw new Error('Selected export canvas fallback is disabled');
+        }
+
+        const visibleCanvas = document.querySelector('canvas.excalidraw__canvas');
+        if (!visibleCanvas) {
+            throw new Error('No visible canvas fallback available');
+        }
+
+        const fallbackScale = getExportScale();
+        const scaledCanvas = document.createElement('canvas');
+        scaledCanvas.width = Math.ceil(visibleCanvas.width * fallbackScale);
+        scaledCanvas.height = Math.ceil(visibleCanvas.height * fallbackScale);
+        const context = scaledCanvas.getContext('2d');
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(visibleCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+        return canvasToBlob(scaledCanvas, 'image/png', 1);
+    };
+
+    const createHighQualitySvgString = async (sceneData) => {
+        const options = buildExportOptions(sceneData, 1);
+
+        if (!options.elements.length) {
+            throw new Error('No renderable elements to export');
+        }
+
+        if (typeof window.exportToSvg === 'function') {
+            const svg = await window.exportToSvg(options);
+            const svgString = await serializeSvgResult(svg);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        if (window.ExcalidrawLib?.exportToSvg) {
+            const svg = await window.ExcalidrawLib.exportToSvg(options);
+            const svgString = await serializeSvgResult(svg);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        if (typeof window.exportToImage === 'function') {
+            const result = await window.exportToImage({
+                ...options,
+                mimeType: 'image/svg+xml',
+            });
+            const svgString = await serializeSvgResult(result);
+            if (svgString) {
+                return svgString;
+            }
+        }
+
+        throw new Error('True SVG export is not available');
+    };
+
+    const clipboardSupports = (mimeType) => {
+        if (typeof window.ClipboardItem?.supports === 'function') {
+            return window.ClipboardItem.supports(mimeType);
+        }
+        return mimeType === 'image/png' || mimeType === 'text/html';
+    };
+
+    const writePngBlobToClipboard = async (blob, originalWrite) => {
+        if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
+            throw new Error('Clipboard image write is not available');
+        }
+        const item = new ClipboardItem({ 'image/png': blob });
+        await originalWrite([item]);
+    };
+
+    const bytesToBase64 = (bytes) => {
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let index = 0; index < bytes.length; index += chunkSize) {
+            const chunk = bytes.subarray(index, index + chunkSize);
+            binary += String.fromCharCode(...chunk);
+        }
+        return btoa(binary);
+    };
+
+    const svgStringToDataUrl = (svgString) => {
+        const encoded = new TextEncoder().encode(svgString);
+        return `data:image/svg+xml;base64,${bytesToBase64(encoded)}`;
+    };
+
+    const buildSvgClipboardHtml = (svgString) => {
+        const dataUrl = svgStringToDataUrl(svgString);
+        return [
+            '<!doctype html>',
+            '<html><body>',
+            `<img data-ponynotes-whiteboard-svg="true" src="${dataUrl}" />`,
+            '</body></html>',
+        ].join('');
+    };
+
+    const writeSvgStringToClipboard = async (
+        svgString,
+        originalWrite,
+        sceneData,
+        exportSettings = {},
+    ) => {
+        if (!navigator.clipboard || !window.ClipboardItem || !originalWrite) {
+            throw new Error('Clipboard SVG write is not available');
+        }
+
+        const clipboardPayload = {};
+
+        if (clipboardSupports('image/png')) {
+            try {
+                clipboardPayload['image/png'] = await createHighQualityPngBlob(
+                    sceneData,
+                    exportSettings,
+                );
+            } catch (error) {
+                console.warn('[PonyNotes] SVG clipboard PNG fallback failed:', error);
+            }
+        }
+
+        if (clipboardSupports('text/html')) {
+            clipboardPayload['text/html'] = new Blob(
+                [buildSvgClipboardHtml(svgString)],
+                { type: 'text/html' },
+            );
+        }
+
+        if (clipboardSupports('image/svg+xml')) {
+            clipboardPayload['image/svg+xml'] = new Blob([svgString], {
+                type: 'image/svg+xml',
+            });
+        }
+
+        if (!Object.keys(clipboardPayload).length) {
+            throw new Error('No supported clipboard format for SVG export');
+        }
+
+        await originalWrite([new ClipboardItem(clipboardPayload)]);
+    };
+
+    const installContextMenuFontPatch = () => {
+        if (window.__ponynotesContextMenuFontPatchInstalled) {
+            return;
+        }
+
+        const isWindows = /Windows/i.test(window.navigator?.userAgent || '');
+        const menuFontFamily = isWindows
+            ? '"Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif'
+            : '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", Arial, sans-serif';
+        const smoothingRules = isWindows
+            ? `
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+    text-rendering: auto;
+`
+            : `
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+`;
+
+        const style = document.createElement('style');
+        style.setAttribute('data-ponynotes-context-menu-font-patch', 'true');
+        style.textContent = `
+.excalidraw [role="menu"],
+.excalidraw [role="menu"] *,
+.excalidraw [role="menuitem"],
+.excalidraw [role="menuitem"] *,
+.excalidraw .context-menu,
+.excalidraw .context-menu *,
+.excalidraw .context-menu-item,
+.excalidraw .context-menu-item *,
+.excalidraw .context-menu-item__label,
+.excalidraw .context-menu-item__shortcut,
+.excalidraw .dropdown-menu,
+.excalidraw .dropdown-menu * {
+    ${smoothingRules}
+    font-family: ${menuFontFamily};
+    font-size: ${isWindows ? '15px' : '13px'};
+    font-weight: ${isWindows ? 600 : 500};
+    line-height: 1.45;
+    letter-spacing: 0;
+    text-shadow: none;
+}
+
+.excalidraw .popover.context-menu-popover,
+.excalidraw .context-menu-popover {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+.excalidraw .context-menu,
+.excalidraw [role="menu"] {
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    opacity: 1 !important;
+    backface-visibility: visible !important;
+    perspective: none !important;
+    will-change: auto !important;
+    contain: none !important;
+    transform-style: flat !important;
+}
+
+.excalidraw .context-menu-item {
+    color: rgba(17, 24, 39, 0.96);
+}
+
+.excalidraw .context-menu-item .context-menu-item__shortcut {
+    font-size: ${isWindows ? '13px' : '11px'};
+    font-weight: ${isWindows ? 500 : 500};
+    color: rgba(55, 65, 81, 0.88);
+}
+`;
+        document.head.appendChild(style);
+        window.__ponynotesContextMenuFontPatchInstalled = true;
+    };
+
+    const base64ToBlob = (base64, mimeType) => {
+        const binary = atob(base64 || '');
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) {
+            bytes[index] = binary.charCodeAt(index);
+        }
+        return new Blob([bytes], { type: mimeType });
+    };
+
+    const buildClipboardReadItem = (payload) => {
+        const entries = {};
+
+        if (payload?.imageBase64 && payload?.imageMimeType) {
+            entries[payload.imageMimeType] = base64ToBlob(
+                payload.imageBase64,
+                payload.imageMimeType,
+            );
+        }
+
+        if (payload?.html) {
+            entries['text/html'] = new Blob([payload.html], {
+                type: 'text/html',
+            });
+        }
+
+        if (payload?.plainText) {
+            entries['text/plain'] = new Blob([payload.plainText], {
+                type: 'text/plain',
+            });
+        }
+
+        const types = Object.keys(entries);
+        if (!types.length) {
+            return null;
+        }
+
+        return {
+            types,
+            async getType(type) {
+                const blob = entries[type];
+                if (!blob) {
+                    throw new DOMException(
+                        `Clipboard item does not contain ${type}`,
+                        'NotFoundError',
+                    );
+                }
+                return blob;
+            },
+        };
+    };
+
+    const installContextMenuPastePositionPatch = () => {
+        if (window.__ponynotesContextMenuPastePositionPatchInstalled) {
+            return;
+        }
+
+        const maxAgeMs = 15000;
+
+        const isInsideExcalidraw = (target) =>
+            !!target?.closest?.('.excalidraw, .excalidraw-container');
+
+        const saveContextMenuPosition = (event) => {
+            if (!isInsideExcalidraw(event.target)) {
+                return;
+            }
+
+            window.__ponynotesContextMenuPastePosition = {
+                clientX: event.clientX,
+                clientY: event.clientY,
+                time: Date.now(),
+            };
+        };
+
+        const isPasteMenuItem = (target) => {
+            const item = target?.closest?.(
+                '[role="menuitem"], .context-menu-item, button, [data-testid]',
+            );
+            if (!item) {
+                return false;
+            }
+
+            const text = (item.textContent || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+
+            if (!text) {
+                return false;
+            }
+
+            const looksLikePaste =
+                text.startsWith('粘贴') ||
+                text.startsWith('paste') ||
+                (text.includes('ctrl+v') && !text.includes('style'));
+
+            const isOtherPasteCommand =
+                text.includes('style') ||
+                text.includes('样式') ||
+                text.includes('plaintext') ||
+                text.includes('纯文本');
+
+            return looksLikePaste && !isOtherPasteCommand;
+        };
+
+        const restoreContextMenuPastePosition = () => {
+            const position = window.__ponynotesContextMenuPastePosition;
+            if (!position || Date.now() - position.time > maxAgeMs) {
+                return;
+            }
+
+            const canvas = document.querySelector('.excalidraw canvas');
+            const target =
+                canvas ||
+                document.querySelector('.excalidraw') ||
+                document.elementFromPoint(position.clientX, position.clientY) ||
+                document;
+            const eventInit = {
+                bubbles: true,
+                cancelable: true,
+                clientX: position.clientX,
+                clientY: position.clientY,
+                screenX: position.clientX,
+                screenY: position.clientY,
+            };
+
+            try {
+                target.dispatchEvent(new PointerEvent('pointermove', {
+                    ...eventInit,
+                    pointerId: 1,
+                    pointerType: 'mouse',
+                    isPrimary: true,
+                }));
+            } catch (error) {
+                target.dispatchEvent(new MouseEvent('mousemove', eventInit));
+            }
+
+            target.dispatchEvent(new MouseEvent('mousemove', eventInit));
+
+            if (canvas && !window.__ponynotesElementFromPointForPasteActive) {
+                const originalElementFromPoint =
+                    document.elementFromPoint.bind(document);
+                window.__ponynotesElementFromPointForPasteActive = true;
+                document.elementFromPoint = function (x, y) {
+                    const isContextPastePoint =
+                        Math.abs(x - position.clientX) <= 1 &&
+                        Math.abs(y - position.clientY) <= 1;
+                    if (isContextPastePoint) {
+                        const element = originalElementFromPoint(x, y);
+                        if (!(element instanceof HTMLCanvasElement)) {
+                            return canvas;
+                        }
+                    }
+                    return originalElementFromPoint(x, y);
+                };
+
+                setTimeout(() => {
+                    document.elementFromPoint = originalElementFromPoint;
+                    window.__ponynotesElementFromPointForPasteActive = false;
+                }, 1500);
+            }
+        };
+
+        const handleMenuPointerDown = (event) => {
+            if (!isPasteMenuItem(event.target)) {
+                return;
+            }
+            restoreContextMenuPastePosition();
+        };
+
+        document.addEventListener('contextmenu', saveContextMenuPosition, true);
+        document.addEventListener('pointerdown', handleMenuPointerDown, true);
+        document.addEventListener('mousedown', handleMenuPointerDown, true);
+
+        window.__ponynotesContextMenuPastePositionPatchInstalled = true;
+        console.log('[PonyNotes] Context menu paste position patch installed');
+    };
+
+    const installSafeClipboardReadPatch = (clipboard, originalRead) => {
+        if (
+            !clipboard ||
+            !originalRead ||
+            window.__ponynotesClipboardReadPatchInstalled
+        ) {
+            return;
+        }
+
+        const isWindows = /Windows/i.test(window.navigator?.userAgent || '');
+        if (!isWindows || !window.flutter_inappwebview?.callHandler) {
+            return;
+        }
+
+        clipboard.read = async function () {
+            if (window.__ponynotesClipboardReadActive) {
+                throw new DOMException('Clipboard read is already active', 'AbortError');
+            }
+
+            try {
+                window.__ponynotesClipboardReadActive = true;
+                const payload = await window.flutter_inappwebview.callHandler(
+                    'readWhiteboardClipboard',
+                );
+                const item = buildClipboardReadItem(payload);
+                if (!item) {
+                    throw new DOMException('Clipboard is empty', 'NotFoundError');
+                }
+                return [item];
+            } catch (error) {
+                console.warn('[PonyNotes] Safe clipboard read failed:', error);
+                throw error instanceof DOMException
+                    ? error
+                    : new DOMException('Safe clipboard read failed', 'NotAllowedError');
+            } finally {
+                window.__ponynotesClipboardReadActive = false;
+            }
+        };
+
+        window.__ponynotesClipboardReadPatchInstalled = true;
+        console.log('[PonyNotes] Safe clipboard read patch installed');
+    };
+
+    const installHighQualityClipboardPatch = () => {
+        const clipboard = navigator.clipboard;
+        if (!clipboard) {
+            return;
+        }
+
+        const originalRead = clipboard.read?.bind(clipboard);
+        installSafeClipboardReadPatch(clipboard, originalRead);
+
+        if (window.__ponynotesClipboardQualityPatchInstalled) {
+            return;
+        }
+
+        const originalWrite = clipboard.write?.bind(clipboard);
+        const originalWriteText = clipboard.writeText?.bind(clipboard);
+
+        try {
+            if (originalWrite) {
+                clipboard.write = async function (items) {
+                    if (window.__ponynotesClipboardQualityWriteActive) {
+                        return originalWrite(items);
+                    }
+
+                    const types = (items || []).flatMap((item) =>
+                        Array.from(item?.types || []),
+                    );
+                    const shouldUpgradePng = types.includes('image/png');
+                    const shouldUpgradeSvg = types.includes('image/svg+xml');
+
+                    if (!shouldUpgradePng && !shouldUpgradeSvg) {
+                        return originalWrite(items);
+                    }
+
+                    try {
+                        window.__ponynotesClipboardQualityWriteActive = true;
+                        const api = await waitForExcalidrawAPI(12, 50);
+                        const sceneData = getClipboardSceneData(api);
+
+                        if (!hasConfirmedSelection(sceneData)) {
+                            return originalWrite(items);
+                        }
+
+                        if (shouldUpgradeSvg) {
+                            const svgString = await createHighQualitySvgString(sceneData);
+                            return await writeSvgStringToClipboard(
+                                svgString,
+                                originalWrite,
+                                sceneData,
+                                { allowVisibleCanvasFallback: false },
+                            );
+                        }
+
+                        const pngBlob = await createHighQualityPngBlob(sceneData, {
+                            allowVisibleCanvasFallback: false,
+                        });
+                        return await writePngBlobToClipboard(pngBlob, originalWrite);
+                    } catch (error) {
+                        console.warn('[PonyNotes] High quality clipboard write failed:', error);
+                        if (shouldUpgradeSvg) {
+                            throw error;
+                        }
+                        return originalWrite(items);
+                    } finally {
+                        window.__ponynotesClipboardQualityWriteActive = false;
+                    }
+                };
+            }
+
+            if (originalWriteText) {
+                clipboard.writeText = async function (text) {
+                    const isSvgText =
+                        typeof text === 'string' &&
+                        text.trimStart().startsWith('<svg');
+                    if (!isSvgText || window.__ponynotesClipboardQualityWriteActive) {
+                        return originalWriteText(text);
+                    }
+
+                    try {
+                        window.__ponynotesClipboardQualityWriteActive = true;
+                        const api = await waitForExcalidrawAPI(12, 50);
+                        const sceneData = getClipboardSceneData(api);
+                        if (!hasConfirmedSelection(sceneData)) {
+                            return originalWriteText(text);
+                        }
+                        const svgString = await createHighQualitySvgString(sceneData);
+                        return await writeSvgStringToClipboard(
+                            svgString,
+                            originalWrite,
+                            sceneData,
+                            { allowVisibleCanvasFallback: false },
+                        );
+                    } catch (error) {
+                        console.warn('[PonyNotes] High quality SVG clipboard failed:', error);
+                        throw error;
+                    } finally {
+                        window.__ponynotesClipboardQualityWriteActive = false;
+                    }
+                };
+            }
+
+            window.__ponynotesClipboardQualityPatchInstalled = true;
+            console.log('[PonyNotes] High quality clipboard patch installed');
+        } catch (error) {
+            console.warn('[PonyNotes] Failed to install clipboard quality patch:', error);
+        }
+    };
+
+    installContextMenuFontPatch();
+    installContextMenuPastePositionPatch();
+    installHighQualityClipboardPatch();
+    setTimeout(installContextMenuFontPatch, 500);
+    setTimeout(installContextMenuPastePositionPatch, 500);
+    setTimeout(installHighQualityClipboardPatch, 500);
+    setTimeout(installContextMenuFontPatch, 1500);
+    setTimeout(installContextMenuPastePositionPatch, 1500);
+    setTimeout(installHighQualityClipboardPatch, 1500);
+
     const stableAppStateKeys = new Set([
         'gridModeEnabled',
         'gridSize',
+        'scrollX',
+        'scrollY',
         'theme',
         'viewBackgroundColor',
         'zoom',
@@ -309,6 +1075,19 @@
                 });
 
                 // 方案1: 使用 window.exportToPng
+                try {
+                    const pngBlob = await createHighQualityPngBlob(sceneData);
+                    const dataUrl = await blobToDataUrl(pngBlob);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'png',
+                        data: dataUrl,
+                    });
+                    console.log('[PonyNotes] High quality PNG export succeeded');
+                    return;
+                } catch (e) {
+                    console.warn('[PonyNotes] High quality PNG export failed:', e);
+                }
+
                 if (typeof window.exportToPng === 'function') {
                     console.log('[PonyNotes] 方案1: 使用 window.exportToPng');
                     try {
@@ -423,6 +1202,18 @@
                 const sceneData = getSceneData(api);
 
                 // 检查是否有全局的exportToSvg函数
+                try {
+                    const svgString = await createHighQualitySvgString(sceneData);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'svg',
+                        data: svgString,
+                    });
+                    console.log('[PonyNotes] High quality SVG export succeeded');
+                    return;
+                } catch (e) {
+                    console.warn('[PonyNotes] High quality SVG export failed:', e);
+                }
+
                 if (typeof window.exportToSvg === 'function') {
                     console.log('[PonyNotes] 使用 window.exportToSvg');
                     const svg = await window.exportToSvg({

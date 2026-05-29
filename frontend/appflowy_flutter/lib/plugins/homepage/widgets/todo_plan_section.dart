@@ -34,7 +34,7 @@ class TodoPlanSection extends StatelessWidget {
           // 当工作区切换时，重新初始化待办计划
           context.read<TodoBloc>().add(const TodoEvent.initial());
         },
-      child: TodoPlanSectionContent(workspaceId: workspaceId),
+        child: TodoPlanSectionContent(workspaceId: workspaceId),
       ),
     );
   }
@@ -51,6 +51,7 @@ class TodoPlanSectionContent extends StatefulWidget {
 
 class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
   late Future<List<TodoItem>> _eventsFuture;
+
   /// 当前选中的展示日期，左侧日历图标与右侧待办列表均以此为准
   DateTime _displayDate = DateTime.now();
 
@@ -135,9 +136,10 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
   }
 
   Widget _buildScheduleCard(BuildContext context, CalendarEvent event) {
+    final appTheme = AppFlowyTheme.of(context);
     final now = DateTime.now();
     final isToday = _isSameDay(now, event.start);
-    final textColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.72);
+    final textColor = appTheme.textColorScheme.secondary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -175,7 +177,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
             width: 4,
             height: 64,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              color: appTheme.borderColorScheme.primary,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -225,9 +227,9 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
-        borderRadius: BorderRadius.circular(10.0),
+        borderRadius: BorderRadius.circular(16.0),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          color: theme.borderColorScheme.primary,
           width: 1,
         ),
       ),
@@ -271,135 +273,144 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-              Expanded(
-                flex: 1,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: QuickEventCreator(
-                      displayDate: _displayDate,
-                      onDisplayDateChanged: _onDisplayDateChanged,
-                      onEventCreated: (todoItem) {
-                        // 创建成功后仅刷新右侧日程，避免整块区域重复 loading 闪动。
-                        _refreshEvents();
-                      },
+                Expanded(
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: QuickEventCreator(
+                        displayDate: _displayDate,
+                        onDisplayDateChanged: _onDisplayDateChanged,
+                        onEventCreated: (todoItem) {
+                          // 创建成功后仅刷新右侧日程，避免整块区域重复 loading 闪动。
+                          _refreshEvents();
+                        },
+                      ),
                     ),
                   ),
                 ),
-              ),
-              // Divider
-              Container(
-                width: dividerWidth,
-                margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
-                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              ),
-              Expanded(
-                flex: 1,
-                child: Container(
-                  padding: EdgeInsets.all(16),
-                  constraints: const BoxConstraints(maxHeight: 320),
-                  child: FutureBuilder<List<TodoItem>>(
-                    future: _eventsFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const SizedBox(
-                          height: 120,
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        Log.error('[Homepage Calendar] load error: ${snapshot.error}');
-                        return Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '无法加载日程',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed: () {
-                                  _refreshEvents();
-                                },
-                                child: const Text('重试'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      final todos = snapshot.data ?? [];
-                      final calendarEvents = todos
-                          .where((t) => t.source == TodoSource.calendar && t.dueDate != null)
-                          .map((t) => CalendarEvent(
-                                id: t.id,
-                                title: t.title,
-                                start: t.dueDate!,
-                                end: t.dueDate!.add(const Duration(hours: 1)),
-                                isAllDay: t.isAllDay,
-                              ))
-                          .toList();
-                      final displayEvents = _withDemoEventIfEmpty(calendarEvents);
-                      final isToday = _isSameDay(DateTime.now(), _displayDate);
-                      final dateLabel = isToday
-                          ? '今天 ${_formatMonthDay(_displayDate)}'
-                          : _formatMonthDay(_displayDate);
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              dateLabel,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withOpacity(0.72),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _buildScheduleList(context, displayEvents),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: InkWell(
-                              onTap: () => _openCalendar(_displayDate),
-                              borderRadius: BorderRadius.circular(6),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: const Color.fromRGBO(255, 106, 77, 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  "创建待办计划",
+                // Divider
+                Container(
+                  width: dividerWidth,
+                  margin: const EdgeInsets.symmetric(
+                      horizontal: dividerHorizontalMargin),
+                  color: theme.borderColorScheme.primary,
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: FutureBuilder<List<TodoItem>>(
+                      future: _eventsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const SizedBox(
+                            height: 120,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        if (snapshot.hasError) {
+                          Log.error(
+                              '[Homepage Calendar] load error: ${snapshot.error}');
+                          return Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '无法加载日程',
                                   style: TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFFFF6A4D),
-                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.7),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    _refreshEvents();
+                                  },
+                                  child: const Text('重试'),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final todos = snapshot.data ?? [];
+                        final calendarEvents = todos
+                            .where((t) =>
+                                t.source == TodoSource.calendar &&
+                                t.dueDate != null)
+                            .map((t) => CalendarEvent(
+                                  id: t.id,
+                                  title: t.title,
+                                  start: t.dueDate!,
+                                  end: t.dueDate!.add(const Duration(hours: 1)),
+                                  isAllDay: t.isAllDay,
+                                ))
+                            .toList();
+                        final displayEvents =
+                            _withDemoEventIfEmpty(calendarEvents);
+                        final isToday =
+                            _isSameDay(DateTime.now(), _displayDate);
+                        final dateLabel = isToday
+                            ? '今天 ${_formatMonthDay(_displayDate)}'
+                            : _formatMonthDay(_displayDate);
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                dateLabel,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textColorScheme.secondary,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child:
+                                    _buildScheduleList(context, displayEvents),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: InkWell(
+                                onTap: () => _openCalendar(_displayDate),
+                                borderRadius: BorderRadius.circular(6),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    // Theme-aware color keeps the task card readable in dark mode.
+                                    color: theme.fillColorScheme.themeSelect,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    "创建待办计划",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: theme.fillColorScheme.themeThick,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
               ],
             ),
           );
@@ -423,8 +434,8 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
 
       // 在新标签页中打开日历
       context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(plugin: calendarPlugin),
-      );
+            TabsEvent.openPlugin(plugin: calendarPlugin),
+          );
 
       // 显示成功消息
       if (mounted) {
@@ -494,8 +505,8 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFFFF8D69),
-            ),
+                  primary: const Color(0xFFFF8D69),
+                ),
           ),
           child: child!,
         );
@@ -514,8 +525,8 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: const Color(0xFFFF8D69),
-            ),
+                  primary: const Color(0xFFFF8D69),
+                ),
           ),
           child: child!,
         );
@@ -724,4 +735,3 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
     );
   }
 }
-

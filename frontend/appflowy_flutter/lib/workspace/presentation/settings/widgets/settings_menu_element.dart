@@ -6,17 +6,18 @@ import 'package:flutter/material.dart';
 import '../../../../generated/flowy_svgs.g.dart';
 
 class SettingsMenuElement extends StatelessWidget {
-  const SettingsMenuElement(
-      {super.key,
-      required this.page,
-      required this.label,
-      required this.changeSelectedPage,
-      required this.selectedPage,
-      this.showArrow = true, // 默认显示箭头
-      this.trailingText,
-      this.isEnabled = true,
-      this.showIcon = false,
-      this.svg});
+  const SettingsMenuElement({
+    super.key,
+    required this.page,
+    required this.label,
+    required this.changeSelectedPage,
+    required this.selectedPage,
+    this.showArrow = true, // 默认显示箭头
+    this.trailingText,
+    this.isEnabled = true,
+    this.showIcon = false,
+    this.svg,
+  });
 
   final SettingsPage page;
   final SettingsPage selectedPage;
@@ -28,77 +29,133 @@ class SettingsMenuElement extends StatelessWidget {
   final bool showIcon;
   final FlowySvgData? svg;
 
+  static const _fontFamilyFallback = [
+    'SimHei',
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Noto Sans CJK SC',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'Segoe UI',
+  ];
+
+  static const _textHeightBehavior = TextHeightBehavior(
+    applyHeightToFirstAscent: false,
+    applyHeightToLastDescent: false,
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return AFBaseButton(
-      onTap: () {
-        if (!isEnabled) return;
-        changeSelectedPage(page);
-      },
-      padding: EdgeInsets.all(theme.spacing.m),
-      borderRadius: theme.borderRadius.m,
-      borderColor: (_, __, ___, ____) => Colors.transparent,
-      backgroundColor: (_, isHovering, __) {
-        if (isHovering && isEnabled) {
-          return theme.fillColorScheme.contentHover;
-        } else if (page == selectedPage) {
-          return theme.fillColorScheme.themeSelect;
-        }
-        return Colors.transparent;
-      },
-      builder: (_, __, ___) {
-        return Row(
-          children: [
-            if (showIcon) ...[
-              FlowySvg(
-                svg ?? FlowySvgs.icon_setting_upgrade_s,
-                blendMode: null,
-                size: Size(18, 18),
-              ),
-              const HSpace(4),
-            ],
-            Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textStyle.body.standard(
-                  color: theme.textColorScheme.primary,
+    final labelStyle = _menuTextStyle(
+      theme,
+      color: theme.textColorScheme.primary,
+    );
+    final trailingStyle = _menuTextStyle(
+      theme,
+      color: isEnabled
+          ? theme.textColorScheme.secondary
+          : theme.textColorScheme.secondary.withValues(alpha: 0.5),
+      fontSize: 12,
+    );
+    final hasTrailingText = trailingText != null && trailingText!.isNotEmpty;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: AFBaseButton(
+        onTap: () {
+          if (!isEnabled) return;
+          changeSelectedPage(page);
+        },
+        padding: EdgeInsets.all(theme.spacing.m),
+        borderRadius: theme.borderRadius.m,
+        borderColor: (_, __, ___, ____) => Colors.transparent,
+        backgroundColor: (_, isHovering, __) {
+          if (isHovering && isEnabled) {
+            return theme.fillColorScheme.contentHover;
+          } else if (page == selectedPage) {
+            return theme.fillColorScheme.themeSelect;
+          }
+          return Colors.transparent;
+        },
+        builder: (_, __, ___) {
+          return Row(
+            children: [
+              if (showIcon) ...[
+                FlowySvg(
+                  svg ?? FlowySvgs.icon_setting_upgrade_s,
+                  blendMode: null,
+                  size: Size(18, 18),
                 ),
-              ),
-            ),
-            if (trailingText != null && trailingText!.isNotEmpty) ...[
-              const HSpace(8),
-              Flexible(
+                const HSpace(4),
+              ],
+              Expanded(
+                flex: hasTrailingText ? 2 : 1,
                 child: Text(
-                  trailingText!,
+                  label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: theme.textStyle.body
-                      .standard(
-                        color: isEnabled
-                            ? theme.textColorScheme.secondary
-                            : theme.textColorScheme.secondary.withOpacity(0.5),
-                      )
-                      .copyWith(fontSize: 12),
+                  style: labelStyle,
+                  strutStyle: _menuStrutStyle(labelStyle),
+                  textHeightBehavior: _textHeightBehavior,
                 ),
               ),
+              if (hasTrailingText) ...[
+                const HSpace(6),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    trailingText!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: trailingStyle,
+                    strutStyle: _menuStrutStyle(trailingStyle),
+                    textHeightBehavior: _textHeightBehavior,
+                  ),
+                ),
+              ],
+              if (showArrow) ...[
+                const HSpace(8),
+                Icon(
+                  Icons.chevron_right,
+                  size: 16,
+                  color: isEnabled
+                      ? theme.textColorScheme.secondary
+                      : theme.textColorScheme.secondary.withValues(alpha: 0.5),
+                ),
+              ],
             ],
-            if (showArrow) ...[
-              const HSpace(8),
-              Icon(
-                Icons.chevron_right,
-                size: 16,
-                color: isEnabled
-                    ? theme.textColorScheme.secondary
-                    : theme.textColorScheme.secondary.withOpacity(0.5),
-              ),
-            ],
-          ],
+          );
+        },
+      ),
+    );
+  }
+
+  TextStyle _menuTextStyle(
+    AppFlowyThemeData theme, {
+    required Color color,
+    double? fontSize,
+  }) {
+    return theme.textStyle.body.standard(color: color).copyWith(
+          // Settings menu only: SimHei avoids uneven Chinese glyph weight on
+          // Windows; Microsoft YaHei remains as a stable fallback.
+          // 仅设置页菜单使用黑体优先，微软雅黑保留为兜底字体。
+          fontFamily: 'SimHei',
+          fontFamilyFallback: _fontFamilyFallback,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w400,
         );
-      },
+  }
+
+  StrutStyle _menuStrutStyle(TextStyle style) {
+    return StrutStyle(
+      fontFamily: style.fontFamily,
+      fontFamilyFallback: style.fontFamilyFallback,
+      fontSize: style.fontSize ?? 14,
+      height: style.height ?? 1.35,
+      leading: 0,
+      forceStrutHeight: true,
     );
   }
 

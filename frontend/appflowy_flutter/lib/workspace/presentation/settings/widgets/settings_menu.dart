@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
-import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu_element.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
@@ -65,21 +65,26 @@ class _SettingsMenuState extends State<SettingsMenu> {
   }
 
   Future<void> _loadSubscriptionInfo() async {
-    final result = await UserBackendService.getWorkspaceSubscriptionInfo(
-        widget.workspaceId);
+    final subscriptionService = SubscriptionService();
+    final cachedInfo = subscriptionService.cachedWorkspaceSubscriptionInfo;
+    if (cachedInfo != null && mounted) {
+      setState(() {
+        _subscriptionInfo = cachedInfo;
+      });
+    }
 
-    result.fold(
-      (info) {
-        if (mounted) {
-          setState(() {
-            _subscriptionInfo = info;
-          });
-        }
-      },
-      (error) {
-        Log.error('Failed to load subscription info: ${error.msg}');
-      },
+    final info = await subscriptionService.getWorkspaceSubscriptionInfo(
+      workspaceId: widget.workspaceId,
+      forceRefresh: cachedInfo != null,
+      caller: 'SettingsMenu._loadSubscriptionInfo',
     );
+    if (info != null && mounted) {
+      setState(() {
+        _subscriptionInfo = info;
+      });
+    } else if (info == null) {
+      Log.error('Failed to load subscription info');
+    }
   }
 
   // 按枚举数值判断，兼容旧/新生成的 Dart 枚举名。0=Free, 1=Stand/Standard, 2=Pro/Student, 3=Hiclass/Team
@@ -220,15 +225,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
               changeSelectedPage: widget.changeSelectedPage,
             ),
 
-            if (widget.userProfile.workspaceType == WorkspaceTypePB.ServerW &&
-                widget.currentUserRole != null &&
-                widget.currentUserRole != AFRolePB.Guest)
-              SettingsMenuElement(
-                page: SettingsPage.sites,
-                selectedPage: widget.currentPage,
-                label: LocaleKeys.settings_sites_title.tr(),
-                changeSelectedPage: widget.changeSelectedPage,
-              ),
+            // Keep backend/site capability intact, but hide the menu entry.
+            // 保留站点能力代码，仅隐藏设置菜单入口，避免牵动发布链路。
             if (!isQuickEntryUser &&
                 FeatureFlag.planBilling.isOn &&
                 widget.isBillingEnabled) ...[
@@ -300,13 +298,18 @@ class _SettingsMenuState extends State<SettingsMenu> {
     final planDetails = sub?.planDetails;
 
     final currentPlan = _subscriptionInfo?.plan;
-    final planName = summary?.planNameCn?.isNotEmpty == true
+    final planNameFromSummary = summary?.planNameCn?.isNotEmpty == true
         ? summary!.planNameCn!
-        : (summary?.planCode?.isNotEmpty == true
-            ? summary!.planCode!
-            : (planDetails?.planNameCn?.isNotEmpty == true
-                ? planDetails!.planNameCn!
-                : _getPlanName(currentPlan)));
+        : (summary?.planCode?.isNotEmpty == true ? summary!.planCode! : null);
+    final planNameFromDetails = planDetails?.planNameCn?.isNotEmpty == true
+        ? planDetails!.planNameCn!
+        : null;
+    // Unknown plan is loading, not free. This prevents the first-frame
+    // settings dialog from flashing the wrong "free" badge.
+    // 中文: 订阅未知时显示加载中，不把空数据误判为免费版。
+    final planName = planNameFromSummary ??
+        planNameFromDetails ??
+        (currentPlan == null ? '加载中' : _getPlanName(currentPlan));
 
     final hasValidity = summary?.endDate != null ||
         (_subscriptionInfo?.planSubscription.endDate != null &&
@@ -351,7 +354,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
 
     return Container(
-      padding: EdgeInsets.all(theme.spacing.l),
+      padding: EdgeInsets.all(theme.spacing.m),
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(theme.spacing.m),
@@ -365,63 +368,66 @@ class _SettingsMenuState extends State<SettingsMenu> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           buildAvatar(),
-          const HSpace(12),
+          const HSpace(8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const VSpace(6),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
+                    Flexible(
                       child: FlowyText(
                         _getUserDisplayName(),
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: theme.textColorScheme.primary,
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
                     ),
-                    const HSpace(8),
-                    Flexible(
-                      child: Builder(
-                        builder: (context) {
-                          final primaryColor =
-                              Theme.of(context).colorScheme.primary;
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 2,
+                    const HSpace(4),
+                    // Keep plan badge beside the user name under compression.
+                    // 版本徽标固定跟随用户名右侧，窗口挤压时优先保留徽标。
+                    Builder(
+                      builder: (context) {
+                        final primaryColor =
+                            Theme.of(context).colorScheme.primary;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: primaryColor.withValues(alpha: 0.11),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: primaryColor,
+                              width: 1,
                             ),
-                            decoration: BoxDecoration(
-                              color: primaryColor.withOpacity(0.11),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: primaryColor,
-                                width: 1,
-                              ),
+                          ),
+                          child: Text(
+                            planName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: primaryColor,
+                              fontWeight: FontWeight.w600,
                             ),
-                            child: Text(
-                              planName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: primaryColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
-                const VSpace(6),
+                const VSpace(4),
                 if (hasValidity)
-                  _buildValidityPeriod(context,
-                      start: summary?.startDate, end: summary?.endDate)
+                  _buildValidityPeriod(
+                    context,
+                    start: summary?.startDate,
+                    end: summary?.endDate,
+                  )
                 else
                   SizedBox(height: 24),
               ],

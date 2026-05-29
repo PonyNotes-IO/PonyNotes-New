@@ -571,7 +571,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     if (spacePermission != SpacePermission.private) {
       tabs.add(ShareMenuTab.share);
     }
-    tabs.add(ShareMenuTab.publish);
     return tabs;
   }
 
@@ -742,7 +741,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
             onTap: () {
               CalendarUnsavedGuard.instance.maybeConfirmLeave(
                 context,
-                () => context.read<TabsBloc>().openPlugin(view),
+                () => context.read<TabsBloc>().openTab(view),
               );
             },
             child: Padding(

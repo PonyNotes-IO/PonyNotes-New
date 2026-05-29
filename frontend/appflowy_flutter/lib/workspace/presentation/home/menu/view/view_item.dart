@@ -8,6 +8,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
+import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/rename_view/rename_view_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -19,6 +20,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_item.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
@@ -384,11 +386,8 @@ class _InnerViewItemState extends State<InnerViewItem> {
         view: widget.view,
         onDragging: (isDragging) => _isDragging = isDragging,
         onMove: widget.isPlaceholder
-            ? (from, to) => moveViewCrossSpace(
+            ? (from, to) => moveViewToSectionPlaceholder(
                   context,
-                  null,
-                  widget.view,
-                  widget.parentView,
                   widget.spaceType,
                   from,
                   to.parentViewId,
@@ -1355,6 +1354,37 @@ void moveViewCrossSpace(
   }
 
   context.read<ViewBloc>().add(ViewEvent.move(from, toId, null, null, null));
+}
+
+void moveViewToSectionPlaceholder(
+  BuildContext context,
+  FolderSpaceType spaceType,
+  ViewPB from,
+  String newParentId,
+) {
+  if (from.id == newParentId ||
+      (spaceType != FolderSpaceType.private &&
+          spaceType != FolderSpaceType.public)) {
+    return;
+  }
+
+  ViewSectionPB? fromSection;
+  try {
+    fromSection = context.read<SidebarSectionsBloc>().getViewSection(from);
+  } catch (_) {
+    fromSection = null;
+  }
+
+  context.read<ViewBloc>().add(
+        ViewEvent.move(
+          from,
+          newParentId,
+          null,
+          fromSection,
+          spaceType.toViewSectionPB,
+        ),
+      );
+  refreshSidebarMoveState(context);
 }
 
 class ViewItemDefaultLeftIcon extends StatelessWidget {

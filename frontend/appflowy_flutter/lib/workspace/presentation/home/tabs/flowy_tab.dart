@@ -19,6 +19,7 @@ class FlowyTab extends StatefulWidget {
     required this.isCurrent,
     required this.onTap,
     required this.isAllPinned,
+    this.width,
   });
 
   final PageManager pageManager;
@@ -28,29 +29,41 @@ class FlowyTab extends StatefulWidget {
   /// Signifies whether all tabs are pinned
   ///
   final bool isAllPinned;
+  final double? width;
 
   @override
   State<FlowyTab> createState() => _FlowyTabState();
 }
 
 class _FlowyTabState extends State<FlowyTab> {
+  static const Color _lightModeTabColor = Color(0xFFF9F9F9);
+  static const Color _darkModeTabColor = Color(0xFF2C2C2C);
+  static const Color _darkModeTabForegroundColor = Color(0xFFF9F9F9);
+
   final controller = PopoverController();
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tabBackgroundColor = theme.brightness == Brightness.dark
+        ? _darkModeTabColor
+        : _lightModeTabColor;
+    final tabHoverColor = theme.brightness == Brightness.dark
+        ? _darkModeTabColor
+        : widget.isCurrent
+            ? tabBackgroundColor
+            : null;
+
     return SizedBox(
-      width: widget.pageManager.isPinned ? 54 : null,
+      width: widget.pageManager.isPinned ? 54 : widget.width,
       child: _wrapInTooltip(
         widget.pageManager.plugin.widgetBuilder.viewName,
         child: FlowyHover(
           resetHoverOnRebuild: false,
           style: HoverStyle(
             borderRadius: BorderRadius.zero,
-            backgroundColor: widget.isCurrent
-                ? Theme.of(context).colorScheme.surface
-                : Theme.of(context).colorScheme.surfaceContainerHighest,
-            hoverColor:
-                widget.isCurrent ? Theme.of(context).colorScheme.surface : null,
+            backgroundColor: tabBackgroundColor,
+            hoverColor: tabHoverColor,
           ),
           builder: (context, isHovering) => AppFlowyPopover(
             controller: controller,
@@ -84,36 +97,39 @@ class _FlowyTabState extends State<FlowyTab> {
                       onPanStart: (_) {},
                       child: Container(
                         constraints: BoxConstraints(
-                          maxWidth: HomeSizes.tabBarWidth,
-                          minWidth: widget.pageManager.isPinned ? 54 : 100,
+                          maxWidth: widget.width ?? HomeSizes.tabBarWidth,
+                          minWidth: widget.pageManager.isPinned ? 54 : 0,
                         ),
                         height: HomeSizes.tabBarHeight,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: widget.pageManager.notifier.tabBarWidget(
-                                widget.pageManager.plugin.id,
-                                widget.pageManager.isPinned,
+                        child: _wrapReadableDarkModeContent(
+                          context,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: widget.pageManager.notifier.tabBarWidget(
+                                  widget.pageManager.plugin.id,
+                                  widget.pageManager.isPinned,
+                                ),
                               ),
-                            ),
-                            if (!widget.pageManager.isPinned) ...[
-                              Visibility(
-                                visible: isHovering,
-                                child: SizedBox(
-                                  width: 26,
-                                  height: 26,
-                                  child: FlowyIconButton(
-                                    onPressed: () => _closeTab(context),
-                                    icon: const FlowySvg(
-                                      FlowySvgs.close_s,
-                                      size: Size.square(22),
+                              if (!widget.pageManager.isPinned) ...[
+                                Visibility(
+                                  visible: isHovering,
+                                  child: SizedBox(
+                                    width: 26,
+                                    height: 26,
+                                    child: FlowyIconButton(
+                                      onPressed: () => _closeTab(context),
+                                      icon: const FlowySvg(
+                                        FlowySvgs.close_s,
+                                        size: Size.square(22),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -130,6 +146,36 @@ class _FlowyTabState extends State<FlowyTab> {
   void _closeTab(BuildContext context) => context
       .read<TabsBloc>()
       .add(TabsEvent.closeTab(widget.pageManager.plugin.id));
+
+  Widget _wrapReadableDarkModeContent(
+    BuildContext context, {
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    if (theme.brightness != Brightness.dark) {
+      return child;
+    }
+
+    // Keep the requested dark tab strip readable in dark mode.
+    // Dark mode uses #2C2C2C tabs with light text/icons.
+    // 深色模式选项卡使用 #2C2C2C，并切换为浅色文字和图标。
+    return Theme(
+      data: theme.copyWith(
+        iconTheme: theme.iconTheme.copyWith(
+          color: _darkModeTabForegroundColor,
+        ),
+        textTheme: theme.textTheme.apply(
+          bodyColor: _darkModeTabForegroundColor,
+          displayColor: _darkModeTabForegroundColor,
+        ),
+        colorScheme: theme.colorScheme.copyWith(
+          onSurface: _darkModeTabForegroundColor,
+          onSurfaceVariant: _darkModeTabForegroundColor.withValues(alpha: 0.72),
+        ),
+      ),
+      child: child,
+    );
+  }
 
   Widget _wrapInTooltip(String? viewName, {required Widget child}) {
     if (viewName != null) {

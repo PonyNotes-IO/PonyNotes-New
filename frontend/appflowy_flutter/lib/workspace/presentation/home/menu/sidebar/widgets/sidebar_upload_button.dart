@@ -12,9 +12,19 @@ class SidebarUploadButton extends StatefulWidget {
   const SidebarUploadButton({
     super.key,
     this.isHover = false,
+    this.useHighContrastForeground = false,
+    this.foregroundColorOverride,
+    this.onBeforeAction,
+    this.buttonSize = 28.0,
+    this.iconSize = 24.0,
   });
 
   final bool isHover;
+  final bool useHighContrastForeground;
+  final Color? foregroundColorOverride;
+  final VoidCallback? onBeforeAction;
+  final double buttonSize;
+  final double iconSize;
 
   @override
   State<SidebarUploadButton> createState() => _SidebarUploadButtonState();
@@ -25,7 +35,10 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
   Widget build(BuildContext context) {
     return _buildUploadIcon(
       context,
-      () => _openImportPage(context),
+      () {
+        widget.onBeforeAction?.call();
+        _openImportPage(context);
+      },
     );
   }
 
@@ -56,20 +69,30 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
     VoidCallback onTap,
   ) {
     return SizedBox.square(
-      dimension: 28.0,
+      dimension: widget.buttonSize,
       child: FlowyButton(
         useIntrinsicWidth: true,
         margin: EdgeInsets.zero,
         text: SvgPicture.asset(
           'assets/images/icons/sidebar_upload_custom.svg',
-          width: 24,
-          height: 24,
-          colorFilter: widget.isHover
+          width: widget.iconSize,
+          height: widget.iconSize,
+          colorFilter: widget.foregroundColorOverride != null
               ? ColorFilter.mode(
-                  Colors.white,
+                  widget.foregroundColorOverride!,
                   BlendMode.srcIn,
                 )
-              : null,
+              : widget.useHighContrastForeground
+                  ? ColorFilter.mode(
+                      Theme.of(context).colorScheme.onSurface,
+                      BlendMode.srcIn,
+                    )
+                  : widget.isHover
+                      ? ColorFilter.mode(
+                          Colors.white,
+                          BlendMode.srcIn,
+                        )
+                      : null,
         ),
         onTap: onTap,
       ),

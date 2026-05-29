@@ -1,4 +1,3 @@
-import 'package:appflowy/util/theme_extension.dart';
 import 'package:flutter/material.dart';
 
 /// 可拖动的分界线组件
@@ -11,7 +10,7 @@ class ResizableDivider extends StatefulWidget {
     this.maxLeftWidth = 500.0,
     this.initialLeftWidth = 260.0,
     this.dividerWidth = 4.0,
-    this.dividerLineWidth = 2.0,
+    this.dividerLineWidth = 1.6,
   });
 
   /// 当拖动时的回调，参数为新的左侧宽度
@@ -49,9 +48,11 @@ class _ResizableDividerState extends State<ResizableDivider> {
 
   @override
   Widget build(BuildContext context) {
+    final idleDividerColor =
+        Theme.of(context).dividerColor.withValues(alpha: 0.9);
     final dividerColor = _isHovered || _isDragging
         ? Theme.of(context).colorScheme.primary
-        : Colors.transparent;
+        : idleDividerColor;
 
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,
@@ -86,7 +87,8 @@ class _ResizableDividerState extends State<ResizableDivider> {
               width: widget.dividerLineWidth,
               decoration: BoxDecoration(
                 color: dividerColor,
-                borderRadius: BorderRadius.circular(widget.dividerLineWidth / 2),
+                borderRadius:
+                    BorderRadius.circular(widget.dividerLineWidth / 2),
               ),
             ),
           ),
@@ -95,12 +97,3 @@ class _ResizableDividerState extends State<ResizableDivider> {
     );
   }
 }
-
-
-
-
-
-
-
-
-

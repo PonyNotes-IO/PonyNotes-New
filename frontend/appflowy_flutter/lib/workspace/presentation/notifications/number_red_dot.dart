@@ -1,4 +1,5 @@
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
+import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -37,7 +38,13 @@ class NumberedRedDot extends StatelessWidget {
       builder: (context, state) {
         int unreadReminder = 0;
         for (final reminder in state.reminders) {
-          if (!reminder.isRead) unreadReminder++;
+          // Count only visible system notifications after the UI fake-delete.
+          // 通知栏隐藏非系统通知后，红点也只统计系统通知，避免隐藏数据继续冒红点。
+          if (!reminder.isRead &&
+              !reminder.isArchived &&
+              reminder.notificationType == 'system') {
+            unreadReminder++;
+          }
         }
         if (unreadReminder == 0) return SizedBox.shrink();
         final overNumber = unreadReminder > 99;

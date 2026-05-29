@@ -10,6 +10,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/common_view_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/database_export_action.dart';
@@ -30,18 +31,15 @@ class MoreViewActions extends StatefulWidget {
     required this.view,
     this.customActions = const [],
     this.viewInfoBloc,
+    this.pageAccessLevelBloc,
+    this.iconColor,
   });
 
-  /// The view to show the actions for.
-  ///
   final ViewPB view;
-
-  /// Custom actions to show in the popover, will be laid out at the top.
-  ///
   final List<Widget> customActions;
-
-  /// 可选：外部传入的 ViewInfoBloc，避免 context 中有多个 ViewInfoBloc 实例的问题
   final ViewInfoBloc? viewInfoBloc;
+  final PageAccessLevelBloc? pageAccessLevelBloc;
+  final Color? iconColor;
 
   @override
   State<MoreViewActions> createState() => _MoreViewActionsState();
@@ -49,57 +47,129 @@ class MoreViewActions extends StatefulWidget {
 
 class _MoreViewActionsState extends State<MoreViewActions> {
   final popoverMutex = PopoverMutex();
+  final PopoverController _popoverController = PopoverController();
+  ViewInfoBloc? _fallbackViewInfoBloc;
+  PageAccessLevelBloc? _fallbackPageAccessLevelBloc;
+  bool _showPopoverWhenAccessReady = false;
 
   @override
   void dispose() {
     popoverMutex.dispose();
+    _fallbackViewInfoBloc?.close();
+    _fallbackPageAccessLevelBloc?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 优先使用传入的 ViewInfoBloc，否则从 context 中获取
-    ViewInfoBloc viewInfoBloc;
-    PageAccessLevelBloc? pageAccessLevelBloc;
-    if (widget.viewInfoBloc != null) {
-      viewInfoBloc = widget.viewInfoBloc!;
-    } else {
-      try {
-        viewInfoBloc = context.read<ViewInfoBloc>();
-      } catch (e) {
-        return const _ThreeDots();
-      }
-    }
+    final viewInfoBloc = _resolveViewInfoBloc(context);
+    final pageAccessLevelBloc = _resolvePageAccessLevelBloc(context);
 
-    // 尝试从 context 获取 PageAccessLevelBloc（如果存在）
-    try {
-      pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
-    } catch (_) {
-      // PageAccessLevelBloc 不在 context 中，popup 中会自己创建
-    }
-
-    return BlocBuilder<ViewInfoBloc, ViewInfoState>(
+    final child = BlocBuilder<ViewInfoBloc, ViewInfoState>(
       bloc: viewInfoBloc,
       builder: (context, state) {
         return AppFlowyPopover(
+          controller: _popoverController,
           mutex: popoverMutex,
-          constraints: const BoxConstraints(maxWidth: 245),
+          constraints: const BoxConstraints(maxWidth: 264),
           direction: PopoverDirection.bottomWithRightAligned,
-          offset: const Offset(0, 12),
+          offset: const Offset(0, 14),
+          triggerActions: PopoverTriggerFlags.none,
           popupBuilder: (_) => _buildPopup(state, pageAccessLevelBloc),
-          child: const _ThreeDots(),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: SizedBox.square(
+              dimension: HomeSizes.topActionBarItemExtent,
+              child: FlowyButton(
+                margin: EdgeInsets.zero,
+                onTap: () => _handleOpenRequest(pageAccessLevelBloc),
+                text: _ThreeDots(iconColor: widget.iconColor),
+              ),
+            ),
+          ),
         );
       },
     );
+
+    if (pageAccessLevelBloc == null) {
+      return child;
+    }
+
+    return BlocListener<PageAccessLevelBloc, PageAccessLevelState>(
+      bloc: pageAccessLevelBloc,
+      listenWhen: (previous, current) =>
+          previous.isLoadingLockStatus && !current.isLoadingLockStatus,
+      listener: (_, __) {
+        if (!_showPopoverWhenAccessReady) {
+          return;
+        }
+        _showPopoverWhenAccessReady = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _popoverController.show();
+          }
+        });
+      },
+      child: child,
+    );
   }
 
-  Widget _buildPopup(ViewInfoState viewInfoState, PageAccessLevelBloc? pageAccessLevelBloc) {
-    // 使用传入的 context（MoreViewActions 的 context），因为它有 UserWorkspaceBloc
+  ViewInfoBloc _resolveViewInfoBloc(BuildContext context) {
+    if (widget.viewInfoBloc != null) {
+      return widget.viewInfoBloc!;
+    }
+
+    try {
+      return context.read<ViewInfoBloc>();
+    } catch (_) {
+      final fallbackBloc = _fallbackViewInfoBloc;
+      if (fallbackBloc == null || fallbackBloc.view.id != widget.view.id) {
+        fallbackBloc?.close();
+        _fallbackViewInfoBloc = ViewInfoBloc(view: widget.view)
+          ..add(const ViewInfoEvent.started());
+      }
+      return _fallbackViewInfoBloc!;
+    }
+  }
+
+  PageAccessLevelBloc? _resolvePageAccessLevelBloc(BuildContext context) {
+    if (widget.pageAccessLevelBloc != null) {
+      return widget.pageAccessLevelBloc;
+    }
+
+    try {
+      return context.read<PageAccessLevelBloc>();
+    } catch (_) {
+      final fallbackBloc = _fallbackPageAccessLevelBloc;
+      if (fallbackBloc == null || fallbackBloc.view.id != widget.view.id) {
+        fallbackBloc?.close();
+        _fallbackPageAccessLevelBloc = PageAccessLevelBloc(view: widget.view)
+          ..add(const PageAccessLevelEvent.initial());
+      }
+      return _fallbackPageAccessLevelBloc;
+    }
+  }
+
+  void _handleOpenRequest(PageAccessLevelBloc? pageAccessLevelBloc) {
+    if (pageAccessLevelBloc != null &&
+        pageAccessLevelBloc.state.isLoadingLockStatus) {
+      _showPopoverWhenAccessReady = true;
+      return;
+    }
+
+    _showPopoverWhenAccessReady = false;
+    _popoverController.show();
+  }
+
+  Widget _buildPopup(
+    ViewInfoState viewInfoState,
+    PageAccessLevelBloc? pageAccessLevelBloc,
+  ) {
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
     final userProfile = userWorkspaceBloc.state.userProfile;
-    final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+    final workspaceId =
+        userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
 
-    // 在这里创建所有 providers
     return _MoreViewActionsPopupContent(
       view: widget.view,
       userProfile: userProfile,
@@ -112,7 +182,6 @@ class _MoreViewActionsState extends State<MoreViewActions> {
   }
 }
 
-/// 分离出来的 popup 内容组件，避免 provider context 问题
 class _MoreViewActionsPopupContent extends StatelessWidget {
   const _MoreViewActionsPopupContent({
     required this.view,
@@ -134,6 +203,15 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accessBloc =
+        pageAccessLevelBloc?.view.id == view.id ? pageAccessLevelBloc : null;
+    final accessProvider = accessBloc != null
+        ? BlocProvider<PageAccessLevelBloc>.value(value: accessBloc)
+        : BlocProvider<PageAccessLevelBloc>(
+            create: (_) => PageAccessLevelBloc(view: view)
+              ..add(const PageAccessLevelEvent.initial()),
+          );
+
     return MultiBlocProvider(
       providers: [
         BlocProvider(
@@ -145,13 +223,10 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
             workspaceId: workspaceId,
           )..add(const SpaceEvent.initial(openFirstPage: false)),
         ),
-        BlocProvider<PageAccessLevelBloc>(
-          create: (_) => pageAccessLevelBloc ?? PageAccessLevelBloc(view: view)
-            ..add(const PageAccessLevelEvent.initial()),
-        ),
+        accessProvider,
       ],
       child: BlocBuilder<ViewBloc, ViewState>(
-        builder: (context, viewState) {
+        builder: (context, _) {
           return BlocBuilder<SpaceBloc, SpaceState>(
             builder: (context, state) {
               if (state.spaces.isEmpty &&
@@ -185,25 +260,20 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
     final timeFormat = appearanceSettings.timeFormat;
 
     final viewMoreActionTypes = switch (pageAccessLevelState.accessLevel) {
-      ShareAccessLevel.readOnly => [],
-      _ => [
-          if (view.layout != ViewLayoutPB.Chat)
-            ViewMoreActionType.duplicate,
+      ShareAccessLevel.readOnly => <ViewMoreActionType>[],
+      _ => <ViewMoreActionType>[
+          if (view.layout != ViewLayoutPB.Chat) ViewMoreActionType.duplicate,
           ViewMoreActionType.moveTo,
           ViewMoreActionType.delete,
           ViewMoreActionType.divider,
         ],
     };
 
-    // 检测是否是手写笔记类型
     final isHandwriting = isHandwritingNote(view);
-
-    // 检测是否是白板类型
     final isWhiteboard = isWhiteboardView(view);
 
-    final actions = [
+    return [
       ...customActions,
-      // 手写笔记不显示字体大小选项
       if (view.isDocument && !isHandwriting) ...[
         const FontSizeAction(),
         ViewAction(
@@ -216,45 +286,31 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
           (view.isDocument || view.isDatabase) &&
           !pageAccessLevelState.isReadOnly &&
           !isHandwriting) ...[
-        LockPageAction(
-          view: viewFromState,
-        ),
+        LockPageAction(view: viewFromState),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,
           mutex: popoverMutex,
         ),
       ],
-      // 手写笔记使用专用的导出/导入组件
       if (isHandwriting) ...[
-        HandwritingExportAction(
-          view: viewFromState,
-        ),
-        HandwritingImportAction(
-          view: viewFromState,
-        ),
+        HandwritingExportAction(view: viewFromState),
+        HandwritingImportAction(view: viewFromState),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,
           mutex: popoverMutex,
         ),
       ] else if (isWhiteboard) ...[
-        // 白板使用专用的导出/导入组件
-        WhiteboardImportAction(
-          view: viewFromState,
-        ),
-        WhiteboardExportAction(
-          view: viewFromState,
-        ),
+        WhiteboardImportAction(view: viewFromState),
+        WhiteboardExportAction(view: viewFromState),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,
           mutex: popoverMutex,
         ),
       ] else if (view.isDocument) ...[
-        ExportAction(
-          view: viewFromState,
-        ),
+        ExportAction(view: viewFromState),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,
@@ -262,9 +318,7 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
         ),
       ],
       if (view.isDatabase) ...[
-        DatabaseExportAction(
-          view: viewFromState,
-        ),
+        DatabaseExportAction(view: viewFromState),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,
@@ -289,12 +343,13 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
         const VSpace(4.0),
       ],
     ];
-    return actions;
   }
 }
 
 class _ThreeDots extends StatelessWidget {
-  const _ThreeDots();
+  const _ThreeDots({this.iconColor});
+
+  final Color? iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -308,8 +363,8 @@ class _ThreeDots extends StatelessWidget {
           FlowySvgs.three_dots_s,
           size: const Size.square(18),
           color: isHovering
-              ? Theme.of(context).colorScheme.onSurface
-              : Theme.of(context).iconTheme.color,
+              ? (iconColor ?? Theme.of(context).colorScheme.onSurface)
+              : (iconColor ?? Theme.of(context).iconTheme.color),
         ),
       ),
     );
