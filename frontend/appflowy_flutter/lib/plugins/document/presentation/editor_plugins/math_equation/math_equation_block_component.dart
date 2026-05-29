@@ -277,7 +277,6 @@ class MathEquationBlockComponentWidgetState
       offsetY = position.dy - editorHeight - 8;
     }
 
-    _overlayFocusNode.requestFocus();
     _overlayEntry = OverlayEntry(
       builder: (_) => Material(
         type: MaterialType.transparency,
