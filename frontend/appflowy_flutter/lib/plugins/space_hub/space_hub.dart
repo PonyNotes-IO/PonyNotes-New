@@ -45,6 +45,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../generated/locale_keys.g.dart';
 
+class SpaceHubMiddlePanelController {
+  SpaceHubMiddlePanelController._();
+
+  static final ValueNotifier<String?> _revealRequest = ValueNotifier(null);
+
+  static ValueListenable<String?> get revealRequest => _revealRequest;
+
+  static void reveal(String spaceId) {
+    _revealRequest.value = null;
+    _revealRequest.value = spaceId;
+  }
+}
+
 /// SpaceHubPluginBuilder 用于创建空间统一页面插件
 /// 左侧显示空间下的文档/文件夹列表，右侧显示选中文档的详情
 class SpaceHubPluginBuilder extends PluginBuilder {
