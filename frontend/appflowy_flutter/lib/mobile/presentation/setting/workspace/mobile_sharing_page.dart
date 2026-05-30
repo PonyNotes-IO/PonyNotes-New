@@ -56,7 +56,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   @override
   Widget build(BuildContext context) {
     final subscriptionInfo =
-        context.read<UserWorkspaceBloc>().state.workspaceSubscriptionInfo;
+        getIt<UserWorkspaceBloc>().state.workspaceSubscriptionInfo;
     final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
 
     return Scaffold(
