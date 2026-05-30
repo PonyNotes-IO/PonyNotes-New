@@ -54,7 +54,10 @@ class ShareMenu extends StatefulWidget {
 }
 
 class _ShareMenuState extends State<ShareMenu> {
-  late ShareMenuTab selectedTab = widget.tabs.first;
+  // 固定为"分享"标签页；"发布"入口已隐藏，但代码保留
+  late ShareMenuTab selectedTab = widget.tabs.contains(ShareMenuTab.share)
+      ? ShareMenuTab.share
+      : widget.tabs.first;
 
   @override
   Widget build(BuildContext context) {
@@ -68,8 +71,7 @@ class _ShareMenuState extends State<ShareMenu> {
       mainAxisSize: MainAxisSize.min,
       children: [
         VSpace(theme.spacing.xs),
-        _buildTabBar(context),
-        const VSpace(12),
+        // 选项卡栏已隐藏：_buildTabBar(context)
         Padding(
           padding: EdgeInsets.symmetric(horizontal: theme.spacing.m),
           child: _buildTab(context),
