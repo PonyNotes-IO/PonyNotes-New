@@ -493,7 +493,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
         ),
         const SizedBox(height: 8),
         Text(
-          '点击即表示同意《小马笔记用户协议》和《会员服务协议》',
+          '开通前请确认《会员服务协议》',
           style: theme.textStyle.body.standard(
             color: theme.textColorScheme.secondary,
           ).copyWith(fontSize: 10),
