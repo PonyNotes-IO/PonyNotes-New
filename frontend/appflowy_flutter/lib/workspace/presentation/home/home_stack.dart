@@ -124,6 +124,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                           ],
                         ),
                       ),
+                    // 工具栏行：在选项卡行下方、文档内容上方，右对齐显示当前标签页的操作按钮。
+                    // 必须在 IndexedStack 外部构建，避免同帧内与 SpaceHub 内容并发触发
+                    // ValueListenableBuilder 重建导致 "setState during build" 异常。
+                    if (!isFullWindow)
+                      _buildCurrentTabTrailingActionsRow(context, state),
                     Expanded(
                       child: Stack(
                         children: [
@@ -138,8 +143,6 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                           Expanded(
                                             child: Column(
                                               children: [
-                                                if (!isFullWindow)
-                                                  _buildPageTrailingActionsRow(pm),
                                                 Expanded(
                                                   child: PageStack(
                                                     pageManager: pm,
@@ -190,9 +193,19 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  // 在文档视图区域顶部渲染右侧工具栏（头像、分享、收藏等按钮），
-  // 独占一行，位于选项卡行下方、文档内容上方，右对齐。
-  Widget _buildPageTrailingActionsRow(PageManager pm) {
+  // 在选项卡行下方、文档内容上方渲染当前标签页的右侧工具栏行。
+  // 只构建当前激活标签页的 rightBarItem，且位于 IndexedStack 外部，
+  // 避免与 SpaceHub 内容在同一帧并发触发 ValueListenableBuilder 重建。
+  Widget _buildCurrentTabTrailingActionsRow(
+    BuildContext context,
+    TabsState state,
+  ) {
+    final currentIndex = state.currentIndex;
+    if (currentIndex < 0 || currentIndex >= state.pageManagers.length) {
+      return const SizedBox.shrink();
+    }
+
+    final pm = state.pageManagers[currentIndex];
     return ChangeNotifierProvider.value(
       value: pm.notifier,
       child: Consumer<PageNotifier>(
