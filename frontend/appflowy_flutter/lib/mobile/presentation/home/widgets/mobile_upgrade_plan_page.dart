@@ -1,9 +1,7 @@
-import 'dart:math' as math;
-
+import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
-import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -158,7 +156,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   Future<void> _confirmAndPay() async {
     final plan = _plans[_selectedPlanIndex];
     final isYearly = widget.billingPeriod == _BillingPeriod.yearly;
-    final price = isYearly ? plan.priceAnnual : plan.priceMonthly;
     final billingType = isYearly ? 'yearly' : 'monthly';
 
     setState(() => _isProcessingPayment = true);
@@ -167,43 +164,20 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       final userProfile = await UserBackendService.getCurrentUserProfile();
       final userUuid = userProfile.fold((p) => p.id.toString(), (_) => '');
 
-      final request = PaymentCreateRequest(
-        amount: price.toString(),
-        paymentType: PaymentType.alipay,
-        userInfo: userUuid,
-        productName: 'QR_CODE_OFFLINE',
-        planId: plan.id,
-        billingType: billingType,
-      );
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
+      final payUrl =
+          '$baseUrl/price?planId=${plan.id}&billingType=$billingType&userInfo=$userUuid';
 
-      final result = await PaymentApi.createPaymentOrder(request);
-
-      if (!mounted) return;
-
-      result.fold(
-        (order) async {
-          final payUrl = order.payUrl ?? '';
-          if (payUrl.isNotEmpty) {
-            await PaymentUtil.webPay(payUrl);
-          }
-          if (mounted) setState(() => _isProcessingPayment = false);
-        },
-        (error) {
-          if (mounted) {
-            setState(() => _isProcessingPayment = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(error.msg)),
-            );
-          }
-        },
-      );
+      await PaymentUtil.webPay(payUrl);
     } catch (e) {
       if (mounted) {
-        setState(() => _isProcessingPayment = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('支付失败: $e')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isProcessingPayment = false);
     }
   }
 

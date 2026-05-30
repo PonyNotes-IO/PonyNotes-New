@@ -413,17 +413,8 @@ class PaymentUtil {
       // }
       final uri = Uri.parse(payUrl);
 
-      if (PlatformInfo.isTablet) {
-        await _showTabletPaymentWebView(uri.toString());
-        Log.info('[PaymentUtil] Opened payment URL in in-app webview: $payUrl');
-      } else {
-        if (!await canLaunchUrl(uri)) {
-          Log.error('[PaymentUtil] Cannot launch URL: $payUrl');
-          return;
-        }
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
-      }
+      await _showTabletPaymentWebView(uri.toString());
+      Log.info('[PaymentUtil] Opened payment URL in in-app webview: $payUrl');
     } catch (e, s) {
       Log.error('[PaymentUtil] Failed to open payment in browser: $e\n$s');
     }
