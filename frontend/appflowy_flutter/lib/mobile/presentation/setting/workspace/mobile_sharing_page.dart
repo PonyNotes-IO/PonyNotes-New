@@ -55,24 +55,27 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final subscriptionInfo =
-        getIt<UserWorkspaceBloc>().state.workspaceSubscriptionInfo;
-    final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
+    return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+      builder: (context, state) {
+        final subscriptionInfo = state.workspaceSubscriptionInfo;
+        final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
 
-    return Scaffold(
-      appBar: MobileAppBar(
-        title: '共享发布',
-      ),
-      body: isFree
-          ? _buildUpgradePrompt()
-          : Column(
-              children: [
-                _buildTabSection(),
-                Expanded(
-                  child: _buildTabContent(),
+        return Scaffold(
+          appBar: MobileAppBar(
+            title: '共享发布',
+          ),
+          body: isFree
+              ? _buildUpgradePrompt()
+              : Column(
+                  children: [
+                    _buildTabSection(),
+                    Expanded(
+                      child: _buildTabContent(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+        );
+      },
     );
   }
 
