@@ -117,25 +117,42 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     final theme = AppFlowyTheme.of(context);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.only(top: 24, bottom: 40),
+      padding: const EdgeInsets.only(top: 12, bottom: 40),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '解锁全部高级功能',
-            style: theme.textStyle.heading2.standard(
-              color: theme.textColorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '选择一个适合您的方案',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.secondary,
-            ),
-          ),
-          const SizedBox(height: 20),
           _buildBillingToggle(theme),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '手机 / 电脑 / 平板 均可使用',
+                  style: theme.textStyle.body.standard(
+                    color: theme.textColorScheme.secondary,
+                  ).copyWith(fontSize: 12),
+                ),
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '充值记录',
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.secondary,
+                    ).copyWith(fontSize: 12),
+                  ),
+                  const SizedBox(width: 4),
+                  FlowySvg(
+                    FlowySvgs.top_up_records_s,
+                    size: const Size(4, 8),
+                    color: theme.iconColorScheme.secondary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           _buildUpgradePlanCards(),
           const SizedBox(height: 24),
           _buildBenefitIcons(),
