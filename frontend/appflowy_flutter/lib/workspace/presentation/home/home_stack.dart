@@ -137,6 +137,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
+                                    // ObjectKey(pm) 确保每个 LayoutBuilder 及其子树
+                                    // （包括 _PageStackState wantKeepAlive=true）始终与
+                                    // 同一个 PageManager 对象绑定。
+                                    // 若无此 key，关闭/pin/unpin 标签导致列表位置变化时，
+                                    // Flutter 按位置复用状态，旧 pm 的 notifier 被保留
+                                    // 在新位置，出现标签名与内容不匹配的错乱问题。
+                                    key: ObjectKey(pm),
                                     builder: (context, constraints) {
                                       return Row(
                                         children: [
@@ -1012,6 +1019,10 @@ class PageManager {
           }
 
           return FadingIndexedStack(
+            // ValueKey(plugin.id) 确保切换到同一类型但不同视图时
+            // （如文档→文档），FadingIndexedStack 状态重置，
+            // 触发淡入动画且不保留旧视图的渲染状态。
+            key: ValueKey(notifier.plugin.id),
             index: pluginSandbox.indexOf(notifier.plugin.pluginType),
             children: pluginSandbox.supportPluginTypes.map(
               (pluginType) {
