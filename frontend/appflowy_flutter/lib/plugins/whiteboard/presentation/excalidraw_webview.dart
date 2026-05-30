@@ -50,11 +50,14 @@ class ExcalidrawWebView extends StatefulWidget {
 
 /// ExcalidrawWebView的State类，暴露公共方法供外部调用
 class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+  // scrollX/scrollY 故意不包含在此集合中。
+  // 原因：每次触发 resize 事件时 Excalidraw 会根据新旧视口尺寸之差调整
+  // scrollX/scrollY 以保持视口中心点不变；若视口尺寸与保存时不一致，
+  // 每次 resize 都会产生偏移量，导致画布持续漂移。
+  // 与 whiteboard_collab_adapter.dart 中的同名常量保持一致。
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
-    'scrollX',
-    'scrollY',
     'theme',
     'viewBackgroundColor',
     'zoom',
@@ -137,14 +140,31 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> notifyContainerResized() async {
     await _safeEvalJs('''
       (function() {
+        // 保存 resize 前的滚动位置，防止 resize 引发画布漂移
+        const _api = window.excalidrawAPI || window.excalidrawAppRef ||
+          window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+        let _sx = null, _sy = null;
+        if (_api && typeof _api.getAppState === 'function') {
+          const _st = _api.getAppState();
+          _sx = _st.scrollX;
+          _sy = _st.scrollY;
+        }
         window.dispatchEvent(new Event('resize'));
         setTimeout(function() {
           window.dispatchEvent(new Event('resize'));
+          // resize 后恢复滚动位置，消除因视口尺寸变化引起的漂移
+          const _apiNow = window.excalidrawAPI || window.excalidrawAppRef ||
+            window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+          if (_apiNow != null && _sx != null && _sy != null) {
+            _apiNow.updateScene({
+              appState: { scrollX: _sx, scrollY: _sy },
+              commitToHistory: false,
+            });
+          }
+          if (_apiNow && typeof _apiNow.refresh === 'function') {
+            _apiNow.refresh();
+          }
         }, 80);
-        const api = window.excalidrawAPI || window.excalidrawAppRef;
-        if (api && typeof api.refresh === 'function') {
-          api.refresh();
-        }
       })();
     ''', tag: 'notifyContainerResized');
   }
@@ -1044,14 +1064,34 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     await _safeEvalJs('''
       (function() {
         const dispatchStableResize = () => {
+          // 在 resize 前保存滚动坐标。
+          // Excalidraw 处理 resize 事件时会根据 (新宽度-旧宽度)/2 调整 scrollX/scrollY
+          // 以保持视口中心对应同一世界坐标点；若视口尺寸与上次保存时不一致，
+          // 每次触发都会产生漂移量。通过 resize 后立即还原坐标，
+          // 让视口尺寸更新生效的同时避免画布位置偏移。
+          const _api = window.excalidrawAPI ||
+            window.__EXCALIDRAW_API__ ||
+            window._excalidrawAPI;
+          let _sx = null, _sy = null;
+          if (_api && typeof _api.getAppState === 'function') {
+            const _st = _api.getAppState();
+            _sx = _st.scrollX;
+            _sy = _st.scrollY;
+          }
           window.dispatchEvent(new Event('resize'));
           requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
-            const api = window.excalidrawAPI ||
+            const _apiNow = window.excalidrawAPI ||
               window.__EXCALIDRAW_API__ ||
               window._excalidrawAPI;
-            if (api && typeof api.refresh === 'function') {
-              api.refresh();
+            if (_apiNow != null && _sx != null && _sy != null) {
+              _apiNow.updateScene({
+                appState: { scrollX: _sx, scrollY: _sy },
+                commitToHistory: false,
+              });
+            }
+            if (_apiNow && typeof _apiNow.refresh === 'function') {
+              _apiNow.refresh();
             }
           });
         };
