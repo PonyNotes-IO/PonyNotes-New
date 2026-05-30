@@ -19,9 +19,19 @@ class SidebarCloudSyncButton extends StatefulWidget {
   const SidebarCloudSyncButton({
     super.key,
     this.isHover = false,
+    this.useHighContrastForeground = false,
+    this.foregroundColorOverride,
+    this.onBeforeAction,
+    this.buttonSize = 28.0,
+    this.iconSize = 24.0,
   });
 
   final bool isHover;
+  final bool useHighContrastForeground;
+  final Color? foregroundColorOverride;
+  final VoidCallback? onBeforeAction;
+  final double buttonSize;
+  final double iconSize;
 
   @override
   State<SidebarCloudSyncButton> createState() => _SidebarCloudSyncButtonState();
@@ -31,6 +41,23 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     with SingleTickerProviderStateMixin {
   final GlobalKey _buttonKey = GlobalKey(); // 用于获取按钮位置
   late final AnimationController _rotationController;
+
+  Color? _neutralForeground(BuildContext context) {
+    if (widget.foregroundColorOverride != null) {
+      return widget.foregroundColorOverride;
+    }
+    if (widget.useHighContrastForeground) {
+      return Theme.of(context).colorScheme.onSurface;
+    }
+    return widget.isHover ? Colors.white : null;
+  }
+
+  double _neutralOpacity() {
+    if (widget.useHighContrastForeground || widget.isHover) {
+      return 1.0;
+    }
+    return 0.7;
+  }
 
   @override
   void initState() {
@@ -89,6 +116,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
           return _buildCloudSyncIcon(
             context,
             () {
+              widget.onBeforeAction?.call();
               if (isQuickEntryUser) {
                 MembershipCheckerService().showFeatureRestrictedDialog(
                   context,
@@ -114,12 +142,15 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
       Log.warn('[云同步按钮] UserWorkspaceBloc 不可用: $e');
       return _buildCloudSyncIcon(
         context,
-        () => _showCloudSyncSettings(
-          context,
-          subscriptionInfo: null,
-          currentSubscription: null,
-          isCloudSyncEnabled: false,
-        ),
+        () {
+          widget.onBeforeAction?.call();
+          _showCloudSyncSettings(
+            context,
+            subscriptionInfo: null,
+            currentSubscription: null,
+            isCloudSyncEnabled: false,
+          );
+        },
         folderSyncState: null,
         isCloudSyncEnabled: false,
         membershipStatus: CloudSyncMembershipStatus.notSubscribed,
@@ -352,14 +383,15 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     if (hideSyncState) {
       return SizedBox.square(
         key: _buttonKey,
-        dimension: 28.0,
+        dimension: widget.buttonSize,
         child: FlowyButton(
           useIntrinsicWidth: true,
           margin: EdgeInsets.zero,
           text: FlowySvg(
             FlowySvgs.cloud_sync_m,
-            color: widget.isHover ? Colors.white : null,
-            opacity: widget.isHover ? 1.0 : 0.7,
+            size: Size.square(widget.iconSize),
+            color: _neutralForeground(context),
+            opacity: _neutralOpacity(),
           ),
           onTap: onTap,
         ),
@@ -375,7 +407,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     if (!isCloudSyncEnabled) {
       return SizedBox.square(
         key: _buttonKey,
-        dimension: 28.0,
+        dimension: widget.buttonSize,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -384,8 +416,9 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               margin: EdgeInsets.zero,
               text: FlowySvg(
                 FlowySvgs.cloud_sync_m,
-                color: widget.isHover ? Colors.white : null,
-                opacity: widget.isHover ? 1.0 : 0.7,
+                size: Size.square(widget.iconSize),
+                color: _neutralForeground(context),
+                opacity: _neutralOpacity(),
               ),
               onTap: onTap,
             ),
@@ -437,12 +470,11 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
 
     return SizedBox.square(
       key: _buttonKey,
-      dimension: 28.0,
+      dimension: widget.buttonSize,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Positioned(
-            left: 0,
+          Center(
             child: FlowyButton(
               useIntrinsicWidth: true,
               margin: EdgeInsets.zero,
@@ -451,13 +483,19 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                       turns: _rotationController,
                       child: FlowySvg(
                         iconData,
-                        color: widget.isHover ? Colors.white : iconColor,
+                        size: Size.square(widget.iconSize),
+                        color: widget.useHighContrastForeground
+                            ? iconColor
+                            : (widget.isHover ? Colors.white : iconColor),
                         opacity: 1.0,
                       ),
                     )
                   : FlowySvg(
                       iconData,
-                      color: widget.isHover ? Colors.white : iconColor,
+                      size: Size.square(widget.iconSize),
+                      color: widget.useHighContrastForeground
+                          ? iconColor
+                          : (widget.isHover ? Colors.white : iconColor),
                       opacity: 1.0,
                     ),
               onTap: onTap,

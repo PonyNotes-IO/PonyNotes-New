@@ -16,6 +16,11 @@ class TabsManager extends StatefulWidget {
 }
 
 class _TabsManagerState extends State<TabsManager> {
+  static const double _pinnedTabWidth = 54;
+  static const double _minUnpinnedTabWidth = 72;
+  static const Color _lightModeTabStripColor = Color(0xFFF9F9F9);
+  static const Color _darkModeTabStripColor = Color(0xFF2C2C2C);
+
   final ScrollController _scrollController = ScrollController();
   int _previousPageCount = 0;
 
@@ -32,62 +37,90 @@ class _TabsManagerState extends State<TabsManager> {
           prev.currentIndex != curr.currentIndex || prev.pages != curr.pages,
       listener: (context, state) {
         widget.onIndexChanged(state.currentIndex);
-        
-        // 当添加新选项卡时，滚动到最新的选项卡位置
+
+        // Scroll to the newest tab when tab count increases.
         if (state.pages > _previousPageCount) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
+            if (_scrollController.hasClients) {
+              _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
           });
         }
-        
+
         _previousPageCount = state.pages;
       },
       builder: (context, state) {
-        if (state.pages == 1) {
-          return const SizedBox.shrink();
-        }
-
         final isAllPinned = state.isAllPinned;
+        final theme = Theme.of(context);
+        final tabStripColor = theme.brightness == Brightness.dark
+            ? _darkModeTabStripColor
+            : _lightModeTabStripColor;
 
         return Container(
           alignment: Alignment.bottomLeft,
           height: HomeSizes.tabBarHeight,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            color: tabStripColor,
           ),
-          child: MoveWindowDetector(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: state.pageManagers.map((pm) {
-                  return ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: HomeSizes.tabBarWidth,
-                    ),
-                    child: FlowyTab(
-                      key: ValueKey('tab-${pm.plugin.id}'),
-                      pageManager: pm,
-                      isCurrent: state.currentPageManager == pm,
-                      isAllPinned: isAllPinned,
-                      onTap: () {
-                        if (state.currentPageManager != pm) {
-                          final index = state.pageManagers.indexOf(pm);
-                          widget.onIndexChanged(index);
-                        }
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final unpinnedTabWidth = _resolveUnpinnedTabWidth(
+                maxWidth: constraints.maxWidth,
+                state: state,
+              );
+
+              return MoveWindowDetector(
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: state.pageManagers.map((pm) {
+                      return FlowyTab(
+                        key: ValueKey('tab-${pm.plugin.id}'),
+                        pageManager: pm,
+                        width: pm.isPinned ? _pinnedTabWidth : unpinnedTabWidth,
+                        isCurrent: state.currentPageManager == pm,
+                        isAllPinned: isAllPinned,
+                        onTap: () {
+                          if (state.currentPageManager != pm) {
+                            final index = state.pageManagers.indexOf(pm);
+                            widget.onIndexChanged(index);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
           ),
         );
       },
     );
+  }
+
+  double _resolveUnpinnedTabWidth({
+    required double maxWidth,
+    required TabsState state,
+  }) {
+    final pageManagers = state.pageManagers;
+    final pinnedCount = pageManagers.where((pm) => pm.isPinned).length;
+    final unpinnedCount = pageManagers.length - pinnedCount;
+    if (unpinnedCount <= 0) {
+      return HomeSizes.tabBarWidth;
+    }
+
+    final availableForUnpinned = maxWidth - pinnedCount * _pinnedTabWidth;
+    final rawWidth = availableForUnpinned / unpinnedCount;
+    return rawWidth
+        .clamp(
+          _minUnpinnedTabWidth,
+          HomeSizes.tabBarWidth,
+        )
+        .toDouble();
   }
 }

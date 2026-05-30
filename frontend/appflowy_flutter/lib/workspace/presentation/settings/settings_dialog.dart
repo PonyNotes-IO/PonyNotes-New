@@ -75,6 +75,7 @@ class SettingsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     const goldenRatio = 1.618;
+    const settingsMenuWidthRatio = 0.275;
     final horizontalMargin = screenSize.width < 900 ? 24.0 : 80.0;
     final verticalMargin = screenSize.height < 720 ? 24.0 : 80.0;
     final availableWidth = math.max(360.0, screenSize.width - horizontalMargin);
@@ -90,6 +91,10 @@ class SettingsDialog extends StatelessWidget {
     final height = math.min(
       maxHeight,
       math.max(minHeight, width / goldenRatio),
+    );
+    final settingsMenuWidth = math.min(
+      360.0,
+      math.max(300.0, width * settingsMenuWidthRatio),
     );
     final theme = AppFlowyTheme.of(context);
     final currentWorkspaceMemberRole =
@@ -125,14 +130,15 @@ class SettingsDialog extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 3,
+                        SizedBox(
+                          width: settingsMenuWidth,
                           child: SettingsMenu(
                             userProfile: state.userProfile,
                             changeSelectedPage: (index) => context
                                 .read<SettingsDialogBloc>()
                                 .add(
-                                    SettingsDialogEvent.setSelectedPage(index)),
+                                  SettingsDialogEvent.setSelectedPage(index),
+                                ),
                             currentPage:
                                 context.read<SettingsDialogBloc>().state.page,
                             currentUserRole: currentWorkspaceMemberRole,
@@ -151,7 +157,7 @@ class SettingsDialog extends StatelessWidget {
                           color: theme.borderColorScheme.primary,
                         ),
                         Expanded(
-                          flex: 5,
+                          flex: 6,
                           child: Container(
                             // Ensure right pane fully covers dialog area to avoid tiny gap
                             // caused by rounding or inner padding of children.
@@ -341,7 +347,8 @@ class _SimpleSettingsDialogState extends State<SimpleSettingsDialog> {
               // Users cannot change server settings at runtime
               // 服务器配置现在在编译时确定，用户无法在运行时更改
               _ServerInfoDisplay(
-                  key: ValueKey('serverinfo${settings.hashCode}')),
+                key: ValueKey('serverinfo${settings.hashCode}'),
+              ),
               const VSpace(22.0),
 
               // support

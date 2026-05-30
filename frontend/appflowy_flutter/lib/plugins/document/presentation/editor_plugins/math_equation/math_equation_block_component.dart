@@ -127,10 +127,13 @@ class MathEquationBlockComponentWidgetState
   late final controller = TextEditingController(text: formula);
 
   OverlayEntry? _overlayEntry;
+  final FocusNode _overlayFocusNode = FocusNode();
 
   @override
   void dispose() {
     _overlayEntry?.remove();
+    _overlayEntry = null;
+    _overlayFocusNode.dispose();
     controller.dispose();
     super.dispose();
   }
@@ -252,10 +255,11 @@ class MathEquationBlockComponentWidgetState
   }
 
   void showEditingOverlay() {
+    if (!mounted) return;
     dismissOverlay();
 
     final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) return;
+    if (renderBox == null || !renderBox.hasSize) return;
 
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
@@ -286,7 +290,7 @@ class MathEquationBlockComponentWidgetState
           height: editorSize.height,
           width: editorSize.width,
           child: KeyboardListener(
-            focusNode: FocusNode()..requestFocus(),
+            focusNode: _overlayFocusNode,
             onKeyEvent: (key) {
               if (key.logicalKey == LogicalKeyboardKey.escape) {
                 dismissOverlay();

@@ -20,7 +20,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SharedSection extends StatelessWidget {
@@ -129,10 +128,7 @@ class SharedSection extends StatelessWidget {
                     }
                   },
                   onSelected: (context, view) {
-                    if (HardwareKeyboard.instance.isControlPressed) {
-                      context.read<TabsBloc>().openTab(view);
-                    }
-                    context.read<TabsBloc>().openPlugin(view);
+                    context.read<TabsBloc>().openTab(view);
                   },
                   onTertiarySelected: (context, view) {
                     context.read<TabsBloc>().openTab(view);

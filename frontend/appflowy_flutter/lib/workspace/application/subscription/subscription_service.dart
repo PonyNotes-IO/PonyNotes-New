@@ -23,6 +23,12 @@ class SubscriptionService {
 
   SubscriptionService._internal();
 
+  CurrentSubscription? get cachedCurrentSubscription =>
+      _isCacheValid() ? _cachedSubscription : null;
+
+  WorkspaceSubscriptionInfoPB? get cachedWorkspaceSubscriptionInfo =>
+      _isCacheValid() ? _cachedWorkspaceSubscriptionInfo : null;
+
   // 缓存的订阅信息
   CurrentSubscription? _cachedSubscription;
   WorkspaceSubscriptionInfoPB? _cachedWorkspaceSubscriptionInfo;
@@ -38,22 +44,29 @@ class SubscriptionService {
   static const Duration _retryDelay = Duration(seconds: 1);
 
   /// 获取当前订阅信息（包含使用量）
-  /// 
+  ///
   /// [userProfile] 用户信息
   /// [forceRefresh] 是否强制刷新，忽略缓存
   /// [caller] 调用来源，用于日志追踪
   Future<CurrentSubscription?> getCurrentSubscription({
     required UserProfilePB userProfile,
     String? caller,
+    bool forceRefresh = false,
   }) async {
     final callerInfo = caller != null ? ' (from: $caller)' : '';
+
+    if (!forceRefresh && cachedCurrentSubscription != null) {
+      Log.info('Using cached subscription info$callerInfo');
+      return _cachedSubscription;
+    }
 
     // Fast path: if cloud URL is not configured, skip network request entirely
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       if (cloudEnv.appflowyCloudConfig.base_url.isEmpty) {
         if (_cachedSubscription != null) {
-          Log.info('Cloud URL not configured, returning cached subscription$callerInfo');
+          Log.info(
+              'Cloud URL not configured, returning cached subscription$callerInfo');
           return _cachedSubscription;
         }
         Log.warn('Cloud URL not configured, no cached subscription$callerInfo');
@@ -81,7 +94,8 @@ class SubscriptionService {
       Log.info('Subscription plan: ${subscription.subscription?.planCode}');
       Log.info('Subscription status: ${subscription.subscription?.status}');
     } else {
-      Log.warn('Failed to fetch subscription info, using cached value if available$callerInfo');
+      Log.warn(
+          'Failed to fetch subscription info, using cached value if available$callerInfo');
       Log.info('Cached subscription available: ${_cachedSubscription != null}');
     }
 
@@ -89,7 +103,7 @@ class SubscriptionService {
   }
 
   /// 获取工作区订阅信息
-  /// 
+  ///
   /// [workspaceId] 工作区ID
   /// [forceRefresh] 是否强制刷新，忽略缓存
   /// [caller] 调用来源，用于日志追踪
@@ -99,29 +113,37 @@ class SubscriptionService {
     String? caller,
   }) async {
     final callerInfo = caller != null ? ' (from: $caller)' : '';
-    
+
     // 检查缓存是否有效
-    if (!forceRefresh && _isCacheValid() && _cachedWorkspaceSubscriptionInfo != null) {
-      Log.info('Using cached workspace subscription info for workspace: $workspaceId$callerInfo');
-      Log.info('Cache age: ${DateTime.now().difference(_lastFetchTime!).inSeconds}s');
+    if (!forceRefresh &&
+        _isCacheValid() &&
+        _cachedWorkspaceSubscriptionInfo != null) {
+      Log.info(
+          'Using cached workspace subscription info for workspace: $workspaceId$callerInfo');
+      Log.info(
+          'Cache age: ${DateTime.now().difference(_lastFetchTime!).inSeconds}s');
       return _cachedWorkspaceSubscriptionInfo;
     }
 
-    Log.info('Fetching workspace subscription info for workspace: $workspaceId$callerInfo');
+    Log.info(
+        'Fetching workspace subscription info for workspace: $workspaceId$callerInfo');
     Log.info('Force refresh: $forceRefresh, Cache valid: ${_isCacheValid()}');
-    Log.info('Cached workspace subscription info available: ${_cachedWorkspaceSubscriptionInfo != null}');
+    Log.info(
+        'Cached workspace subscription info available: ${_cachedWorkspaceSubscriptionInfo != null}');
     Log.info('Last fetch time: $_lastFetchTime');
     Log.info('Current time: ${DateTime.now()}');
-    
+
     // 尝试获取工作区订阅信息，带重试机制
     WorkspaceSubscriptionInfoPB? subscriptionInfo;
     for (int attempt = 1; attempt <= _maxRetries; attempt++) {
       try {
-        final result = await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+        final result =
+            await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
         subscriptionInfo = result.fold(
           (info) => info,
           (error) {
-            Log.error('Failed to fetch workspace subscription info: ${error.msg}');
+            Log.error(
+                'Failed to fetch workspace subscription info: ${error.msg}');
             return null;
           },
         );
@@ -129,7 +151,8 @@ class SubscriptionService {
           break;
         }
       } catch (e) {
-        Log.error('Attempt $attempt failed to fetch workspace subscription info: $e');
+        Log.error(
+            'Attempt $attempt failed to fetch workspace subscription info: $e');
         if (attempt < _maxRetries) {
           Log.info('Retrying in $_retryDelay...');
           await Future.delayed(_retryDelay);
@@ -148,7 +171,7 @@ class SubscriptionService {
   }
 
   /// 刷新所有订阅信息
-  /// 
+  ///
   /// [userProfile] 用户信息
   /// [workspaceId] 工作区ID
   /// [caller] 调用来源，用于日志追踪
@@ -159,15 +182,16 @@ class SubscriptionService {
   }) async {
     final callerInfo = caller != null ? ' (from: $caller)' : '';
     Log.info('Refreshing all subscription info$callerInfo');
-    
+
     // 并行获取订阅信息
     final futures = <Future>[];
-    
+
     futures.add(getCurrentSubscription(
       userProfile: userProfile,
       caller: 'refreshAllSubscriptionInfo$callerInfo',
+      forceRefresh: true,
     ));
-    
+
     if (workspaceId != null) {
       futures.add(getWorkspaceSubscriptionInfo(
         workspaceId: workspaceId,
@@ -175,9 +199,9 @@ class SubscriptionService {
         caller: 'refreshAllSubscriptionInfo$callerInfo',
       ));
     }
-    
+
     await Future.wait(futures);
-    
+
     Log.info('All subscription info refreshed$callerInfo');
   }
 
@@ -190,7 +214,8 @@ class SubscriptionService {
   }
 
   /// 从后端获取当前订阅信息
-  Future<CurrentSubscription?> _fetchCurrentSubscriptionData(UserProfilePB userProfile) async {
+  Future<CurrentSubscription?> _fetchCurrentSubscriptionData(
+      UserProfilePB userProfile) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
@@ -234,13 +259,14 @@ class SubscriptionService {
 
       // 处理其他错误
       if (response.statusCode != 200) {
-        Log.error('Failed to fetch subscription info: ${response.statusCode}, ${response.body}');
+        Log.error(
+            'Failed to fetch subscription info: ${response.statusCode}, ${response.body}');
         return null;
       }
 
       // 解析响应
       final json = jsonDecode(response.body);
-      if(json['data'] == null) return null;
+      if (json['data'] == null) return null;
       final subscription = CurrentSubscription.fromJson(json['data']);
       return subscription;
     } catch (e, stackTrace) {

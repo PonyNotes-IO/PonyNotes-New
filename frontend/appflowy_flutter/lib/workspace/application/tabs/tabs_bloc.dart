@@ -123,25 +123,26 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             if (pm != null) {
               final index = state._pageManagers.indexOf(pm);
 
+              // 创建副本，避免原地修改旧 State 的列表
+              final newPageManagers = [...state._pageManagers];
               int newIndex = state.currentIndex;
+
               if (pm.isPinned) {
                 // Unpinning logic
                 final indexOfFirstUnpinnedTab =
                     state._pageManagers.indexWhere((tab) => !tab.isPinned);
 
-                // Determine the correct insertion point
                 final newUnpinnedIndex = indexOfFirstUnpinnedTab != -1
-                    ? indexOfFirstUnpinnedTab // Insert before the first unpinned tab
-                    : state._pageManagers
-                        .length; // Append at the end if no unpinned tabs exist
+                    ? indexOfFirstUnpinnedTab
+                    : state._pageManagers.length;
 
-                state._pageManagers.removeAt(index);
+                newPageManagers.removeAt(index);
 
                 final adjustedUnpinnedIndex = newUnpinnedIndex > index
                     ? newUnpinnedIndex - 1
                     : newUnpinnedIndex;
 
-                state._pageManagers.insert(adjustedUnpinnedIndex, pm);
+                newPageManagers.insert(adjustedUnpinnedIndex, pm);
                 newIndex = _adjustCurrentIndex(
                   currentIndex: state.currentIndex,
                   tabIndex: index,
@@ -153,13 +154,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
                     state._pageManagers.lastIndexWhere((tab) => tab.isPinned);
                 final newPinnedIndex = indexOfLastPinnedTab + 1;
 
-                state._pageManagers.removeAt(index);
+                newPageManagers.removeAt(index);
 
                 final adjustedPinnedIndex = newPinnedIndex > index
                     ? newPinnedIndex - 1
                     : newPinnedIndex;
 
-                state._pageManagers.insert(adjustedPinnedIndex, pm);
+                newPageManagers.insert(adjustedPinnedIndex, pm);
                 newIndex = _adjustCurrentIndex(
                   currentIndex: state.currentIndex,
                   tabIndex: index,
@@ -172,7 +173,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               emit(
                 state.copyWith(
                   currentIndex: newIndex,
-                  pageManagers: [...state._pageManagers],
+                  pageManagers: newPageManagers,
                 ),
               );
             }
@@ -327,19 +328,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       }
 
       // 同步检查当前 Tab 是否为 SpaceHub，若是则复用同一空间的 SpaceHub 三栏布局
-      if (!view.isSpace) {
-        final currentPlugin = state.currentPageManager.plugin;
-        if (currentPlugin.pluginType == PluginType.folder) {
-          final notifier = currentPlugin.notifier;
-          if (notifier is ViewPluginNotifier && notifier.view.isSpace) {
-            final spaceHubPlugin =
-                notifier.view.plugin(initialSelectedView: view);
-            add(TabsEvent.openTab(plugin: spaceHubPlugin, view: view));
-            return;
-          }
-        }
-      }
-
       final plugin = view.plugin();
       add(TabsEvent.openTab(plugin: plugin, view: view));
     } catch (e, stackTrace) {
@@ -388,8 +376,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       );
     } catch (e, stackTrace) {
       Log.error(
-          'Failed to open plugin for view: ${view.id}, layout: ${view.layout}',
-          e);
+        'Failed to open plugin for view: ${view.id}, layout: ${view.layout}',
+        e,
+      );
       Log.error('Stack trace:', stackTrace);
 
       // 显示错误提示
@@ -488,11 +477,15 @@ class TabsState {
     final selectExistingPlugin = _selectPluginIfOpen(plugin.id);
 
     if (selectExistingPlugin == null) {
-      _pageManagers.add(PageManager()..setPlugin(plugin, true));
+      // 创建新列表而非原地修改，避免旧 State 对象的列表被污染
+      final newPageManagers = [
+        ..._pageManagers,
+        PageManager()..setPlugin(plugin, true),
+      ];
 
       return copyWith(
-        currentIndex: pages - 1,
-        pageManagers: [..._pageManagers],
+        currentIndex: newPageManagers.length - 1,
+        pageManagers: newPageManagers,
       );
     }
 
@@ -505,19 +498,18 @@ class TabsState {
       return this;
     }
 
-    _pageManagers.removeWhere((pm) => pm.plugin.id == pluginId);
+    // 创建新列表而非原地修改，避免旧 State 对象的列表被污染（会导致 currentIndex 越界崩溃）
+    final newPageManagers = [..._pageManagers]
+      ..removeWhere((pm) => pm.plugin.id == pluginId);
 
-    /// If currentIndex is greater than the amount of allowed indices
-    /// And the current selected tab isn't the first (index 0)
-    ///   as currentIndex cannot be -1
-    /// Then decrease currentIndex by 1
-    final newIndex = currentIndex > pages - 1 && currentIndex > 0
-        ? currentIndex - 1
-        : currentIndex;
+    final newIndex =
+        currentIndex > newPageManagers.length - 1 && currentIndex > 0
+            ? currentIndex - 1
+            : currentIndex;
 
     return copyWith(
       currentIndex: newIndex,
-      pageManagers: [..._pageManagers],
+      pageManagers: newPageManagers,
     );
   }
 

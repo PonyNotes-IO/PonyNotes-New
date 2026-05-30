@@ -15,10 +15,14 @@ class NotificationButton extends StatefulWidget {
     super.key,
     this.isHover = false,
     this.alwaysShow = false,
+    this.useHighContrastForeground = false,
+    this.foregroundColorOverride,
   });
 
   final bool isHover;
   final bool alwaysShow;
+  final bool useHighContrastForeground;
+  final Color? foregroundColorOverride;
 
   @override
   State<NotificationButton> createState() => _NotificationButtonState();
@@ -90,9 +94,12 @@ class _NotificationButtonState extends State<NotificationButton> {
                   'assets/images/icons/sidebar_notification_custom.svg',
                   width: 24,
                   height: 24,
-                  colorFilter: widget.isHover
+                  colorFilter: widget.foregroundColorOverride != null ||
+                          widget.useHighContrastForeground ||
+                          widget.isHover
                       ? ColorFilter.mode(
-                          Theme.of(context).colorScheme.onSurface,
+                          widget.foregroundColorOverride ??
+                              Theme.of(context).colorScheme.onSurface,
                           BlendMode.srcIn,
                         )
                       : null,

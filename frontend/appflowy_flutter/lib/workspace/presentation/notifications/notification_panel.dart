@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
-import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -25,13 +24,15 @@ class NotificationPanel extends StatefulWidget {
 
 class _NotificationPanelState extends State<NotificationPanel>
     with TickerProviderStateMixin {
+  static const _visibleTabs = [NotificationTabType.system];
+
   TabController? _tabController;
   final PopoverController moreActionController = PopoverController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: _visibleTabs.length, vsync: this);
   }
 
   @override
@@ -62,24 +63,15 @@ class _NotificationPanelState extends State<NotificationPanel>
               ),
               padding: EdgeInsets.symmetric(vertical: 14),
               child: BlocBuilder<ReminderBloc, ReminderState>(
-                builder: (context, state) {
-                  final hasArchived = state.archivedReminders.isNotEmpty;
-                  final tabs = hasArchived
-                      ? [
-                          NotificationTabType.mention,
-                          NotificationTabType.reminder,
-                          NotificationTabType.system,
-                          NotificationTabType.archived,
-                        ]
-                      : [
-                          NotificationTabType.mention,
-                          NotificationTabType.reminder,
-                          NotificationTabType.system,
-                        ];
+                builder: (context, _) {
+                  // Fake-delete non-system notification tabs in the desktop panel.
+                  // 桌面通知栏只保留系统通知，其他分类仅做 UI 假删除，不动底层提醒数据。
+                  const tabs = _visibleTabs;
 
                   if (_tabController?.length != tabs.length) {
                     _tabController?.dispose();
-                    _tabController = TabController(length: tabs.length, vsync: this);
+                    _tabController =
+                        TabController(length: tabs.length, vsync: this);
                   }
 
                   return Column(
@@ -99,8 +91,9 @@ class _NotificationPanelState extends State<NotificationPanel>
                       Expanded(
                         child: TabBarView(
                           controller: _tabController!,
-                          children:
-                              tabs.map((e) => NotificationTab(tabType: e)).toList(),
+                          children: tabs
+                              .map((e) => NotificationTab(tabType: e))
+                              .toList(),
                         ),
                       ),
                     ],

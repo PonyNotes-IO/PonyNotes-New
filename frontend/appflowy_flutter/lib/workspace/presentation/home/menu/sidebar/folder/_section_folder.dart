@@ -1,9 +1,11 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -11,8 +13,8 @@ import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_folder_header.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:flowy_infra/platform_extension.dart';
@@ -68,10 +70,8 @@ class _SectionFolderState extends State<SectionFolder> {
           builder: (context, state) => Column(
             children: [
               _buildHeader(context),
-              // Pages
               ..._buildViews(context, state, isHovered),
-              // Add a placeholder if there are no views
-              // _buildDraggablePlaceholder(context),
+              _buildDraggablePlaceholder(context, state, isHovered),
             ],
           ),
         ),
@@ -80,12 +80,9 @@ class _SectionFolderState extends State<SectionFolder> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    // 获取当前工作空间ID作为parentViewId
     final parentViewId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
 
-    // 根据 spaceType 判断是否显示创建空间按钮
-    // private 和 public 都支持创建空间
     final showCreateSpaceButton = widget.spaceType == FolderSpaceType.private ||
         widget.spaceType == FolderSpaceType.public;
 
@@ -104,12 +101,10 @@ class _SectionFolderState extends State<SectionFolder> {
                 viewSection: widget.spaceType.toViewSectionPB,
               ),
             );
-
         context
             .read<FolderBloc>()
             .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
       },
-      // 只为"我的空间"提供选择菜单功能
       parentViewId: parentViewId,
       onViewSelected: _onViewSelected,
       showCreateSpaceButton: showCreateSpaceButton,
@@ -119,7 +114,6 @@ class _SectionFolderState extends State<SectionFolder> {
   }
 
   void _showCreateSpaceDialog(BuildContext context) {
-    // 根据 spaceType 确定初始的 SpacePermission
     final initialPermission = widget.spaceType == FolderSpaceType.private
         ? SpacePermission.private
         : SpacePermission.publicToAll;
@@ -149,14 +143,12 @@ class _SectionFolderState extends State<SectionFolder> {
     bool openAfterCreated,
     bool createNewView,
   ) async {
-    // 获取当前工作空间ID作为parentViewId
     final parentViewId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
+    if (parentViewId == null) {
+      return;
+    }
 
-    if (parentViewId == null) return;
-
-    // 视图默认名称
-    // 普通 Document 使用通用的默认名称；手写笔记（Saber）使用"未命名手记"
     final String viewName;
     if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
       viewName = '未命名手记';
@@ -164,72 +156,54 @@ class _SectionFolderState extends State<SectionFolder> {
       viewName = pluginBuilder.layoutType?.defaultName ?? '';
     }
 
-    try {
-      // 准备 extra 参数
-      Map<String, String> ext = {};
-      if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
-        ext['view_type'] = 'handwriting_saber';
-      }
-
-      // 使用ViewBackendService创建指定类型的视图
-      final result = await ViewBackendService.createView(
-        layoutType: pluginBuilder.layoutType!,
-        parentViewId: parentViewId,
-        name: viewName,
-        openAfterCreate: openAfterCreated,
-        initialDataBytes: initialDataBytes,
-        index: 0,
-        section: widget.spaceType.toViewSectionPB,
-        ext: ext,
-      );
-
-      await result.fold(
-        (view) async {
-          // 创建成功，展开文件夹以显示新创建的视图
-
-          // 创建成功，展开文件夹以显示新创建的视图
-
-          // 创建成功，展开文件夹以显示新创建的视图
-          context
-              .read<FolderBloc>()
-              .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
-
-          // 为 Folder、Notebook、手写笔记等设置 extra 字段和默认图标
-          if (pluginBuilder.layoutType == ViewLayoutPB.Folder) {
-            // 设置文件夹的 extra 字段
-            await ViewBackendService.updateView(
-              viewId: view.id,
-              extra: '{"view_type": "folder"}',
-            );
-            // 设置文件夹的默认 emoji 图标 📂
-            await ViewBackendService.updateViewIcon(
-              view: view,
-              viewIcon: EmojiIconData.emoji('📂'),
-            );
-          } else if (pluginBuilder.layoutType == ViewLayoutPB.Notebook) {
-            // 设置笔记本的 extra 字段
-            await ViewBackendService.updateView(
-              viewId: view.id,
-              extra: '{"view_type": "notebook"}',
-            );
-            // 设置笔记本的默认 emoji 图标 📓
-            await ViewBackendService.updateViewIcon(
-              view: view,
-              viewIcon: EmojiIconData.emoji('📓'),
-            );
-          }
-
-          // 不需要手动刷新，系统会自动更新侧边栏
-        },
-        (error) {
-          // 处理错误，可以显示错误消息
-          // TODO: 可以添加错误提示
-        },
-      );
-    } catch (e) {
-      // 处理异常
-      // TODO: 可以添加异常处理
+    final ext = <String, String>{};
+    if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+      ext['view_type'] = 'handwriting_saber';
     }
+
+    final result = await ViewBackendService.createView(
+      layoutType: pluginBuilder.layoutType!,
+      parentViewId: parentViewId,
+      name: viewName,
+      openAfterCreate: openAfterCreated,
+      initialDataBytes: initialDataBytes,
+      index: 0,
+      section: widget.spaceType.toViewSectionPB,
+      ext: ext,
+    );
+
+    await result.fold(
+      (view) async {
+        if (!mounted) {
+          return;
+        }
+
+        context
+            .read<FolderBloc>()
+            .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
+
+        if (pluginBuilder.layoutType == ViewLayoutPB.Folder) {
+          await ViewBackendService.updateView(
+            viewId: view.id,
+            extra: '{"view_type": "folder"}',
+          );
+          await ViewBackendService.updateViewIcon(
+            view: view,
+            viewIcon: EmojiIconData.emoji('📂'),
+          );
+        } else if (pluginBuilder.layoutType == ViewLayoutPB.Notebook) {
+          await ViewBackendService.updateView(
+            viewId: view.id,
+            extra: '{"view_type": "notebook"}',
+          );
+          await ViewBackendService.updateViewIcon(
+            view: view,
+            viewIcon: EmojiIconData.emoji('📓'),
+          );
+        }
+      },
+      (_) async {},
+    );
   }
 
   Iterable<Widget> _buildViews(
@@ -238,96 +212,114 @@ class _SectionFolderState extends State<SectionFolder> {
     ValueNotifier<bool> isHovered,
   ) {
     if (!state.isExpanded) {
-      return [];
+      return const <Widget>[];
     }
 
-    // 为协作/个人空间的子项目设置统一缩进：私有空间和工作区都缩进一级
-    final bool isIndentedSection =
-        widget.spaceType == FolderSpaceType.private ||
-            widget.spaceType == FolderSpaceType.public;
-    final int itemLevel = isIndentedSection ? 1 : 0;
+    final isIndentedSection = widget.spaceType == FolderSpaceType.private ||
+        widget.spaceType == FolderSpaceType.public;
+    final itemLevel = isIndentedSection ? 1 : 0;
 
-    return widget.views.map(
-      (view) {
-        // 识别 Space 类型和文档类型
-        final bool isSpace = view.isSpace;
-        final bool isDocument = view.isDocument;
-
-        // 根据类型做不同的处理逻辑
-        if (isSpace) {
-          // Space 类型的特殊处理
-          // 可以在这里添加 Space 类型的特殊逻辑
-          // 例如：不同的样式、不同的点击行为等
-        } else if (isDocument) {
-          // 文档类型的特殊处理
-          // 可以在这里添加文档类型的特殊逻辑
-        }
-
-        // 创建 ViewItem（可以根据类型传入不同的参数）
-        return ViewItem(
-          key: ValueKey('${widget.spaceType.name} ${view.id}'),
-          spaceType: widget.spaceType,
-          engagedInExpanding: !isSpace, // 空间类型不展开子集
-          isFirstChild: view.id == widget.views.first.id,
-          view: view,
-          level: itemLevel, // 使用计算得出的缩进级别
-          leftPadding: HomeSpaceViewSizes.leftPadding,
-          isFeedback: false,
-          isHovered: isHovered,
-          isDraggable: false,
-          enableRightClickContext: true,
-          shouldRenderChildren: !isSpace, // 空间类型不渲染子视图
-          shouldLoadChildViews: !isSpace, // 空间类型不加载子视图
-          // 为空间类型提供自定义左侧图标，不显示展开/折叠图标
-          leftIconBuilder: isSpace
-              ? (context, view) =>
-                  SizedBox(width: HomeSpaceViewSizes.leftPadding)
-              : null,
-          onSelected: (viewContext, view) {
-            // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
-            if (view.isSpace) {
-              // 先检查日历守卫，若有未保存则弹窗确认
-              CalendarUnsavedGuard.instance.maybeConfirmLeave(
-                viewContext,
-                () {
-                  // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
-                  final spaceBloc = context.read<SpaceBloc>();
-                  spaceBloc.add(SpaceEvent.open(space: view));
-
-                  // 打开空间统一页面插件
-                  if (HardwareKeyboard.instance.isControlPressed) {
-                    viewContext.read<TabsBloc>().openTab(view);
-                  } else {
-                    viewContext.read<TabsBloc>().openPlugin(view);
-                  }
-                },
-              );
-              return;
-            }
-
-            // 文档类型的点击处理：先检查日历守卫
-            CalendarUnsavedGuard.instance.maybeConfirmLeave(
-              viewContext,
-              () {
+    return widget.views.map((view) {
+      final isSpace = view.isSpace;
+      final shouldEnableTreeDrag =
+          _supportsTreeDrag(widget.spaceType) && !isSpace;
+      return ViewItem(
+        key: ValueKey('${widget.spaceType.name} ${view.id}'),
+        spaceType: widget.spaceType,
+        engagedInExpanding: !isSpace,
+        isFirstChild: view.id == widget.views.first.id,
+        view: view,
+        level: itemLevel,
+        leftPadding: HomeSpaceViewSizes.leftPadding,
+        isFeedback: false,
+        isHovered: isHovered,
+        isDraggable: shouldEnableTreeDrag,
+        enableRightClickContext: true,
+        shouldRenderChildren: !isSpace,
+        shouldLoadChildViews: !isSpace,
+        leftIconBuilder: isSpace
+            ? (context, view) => SizedBox(width: HomeSpaceViewSizes.leftPadding)
+            : null,
+        onSelected: (viewContext, selectedView) {
+          CalendarUnsavedGuard.instance.maybeConfirmLeave(
+            viewContext,
+            () {
+              if (selectedView.isSpace) {
+                final spaceBloc = context.read<SpaceBloc>();
+                spaceBloc.add(SpaceEvent.open(space: selectedView));
+                SpaceHubMiddlePanelController.reveal(selectedView.id);
                 if (HardwareKeyboard.instance.isControlPressed) {
-                  context.read<TabsBloc>().openTab(view);
-                }
-
-                // Defensive: ensure view has a valid id before attempting to open plugin.
-                if (view.id.isEmpty) {
-                  // 空 view.id 的错误处理
+                  viewContext.read<TabsBloc>().openTab(selectedView);
                 } else {
-                  context.read<TabsBloc>().openPlugin(view);
+                  viewContext.read<TabsBloc>().openPlugin(selectedView);
                 }
-              },
-            );
-          },
-          onTertiarySelected: (viewContext, view) =>
-              context.read<TabsBloc>().openTab(view),
-          isHoverEnabled: widget.isHoverEnabled,
-          isTablet: PlatformInfo.isTablet,
-        );
-      },
+                return;
+              }
+
+              if (selectedView.id.isEmpty) {
+                return;
+              }
+
+              // Open second-pane document items as tabs.
+              viewContext.read<TabsBloc>().openTab(selectedView);
+            },
+          );
+        },
+        onTertiarySelected: (viewContext, selectedView) =>
+            viewContext.read<TabsBloc>().openTab(selectedView),
+        isHoverEnabled: widget.isHoverEnabled,
+      );
+    });
+  }
+
+  Widget _buildDraggablePlaceholder(
+    BuildContext context,
+    FolderState state,
+    ValueNotifier<bool> isHovered,
+  ) {
+    if (!state.isExpanded ||
+        !_supportsTreeDrag(widget.spaceType) ||
+        widget.views.isNotEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final parentViewId =
+        context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
+    if (parentViewId == null || parentViewId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final placeholderView = ViewPB()
+      ..id = '__section_placeholder_${widget.spaceType.name}_$parentViewId'
+      ..name = ''
+      ..parentViewId = parentViewId
+      ..layout = ViewLayoutPB.Document;
+
+    final isIndentedSection = widget.spaceType == FolderSpaceType.private ||
+        widget.spaceType == FolderSpaceType.public;
+    final itemLevel = isIndentedSection ? 1 : 0;
+
+    return ViewItem(
+      key: ValueKey('placeholder_${widget.spaceType.name}_$parentViewId'),
+      view: placeholderView,
+      parentView: null,
+      spaceType: widget.spaceType,
+      level: itemLevel,
+      leftPadding: HomeSpaceViewSizes.leftPadding,
+      isFeedback: false,
+      isHovered: isHovered,
+      isDraggable: false,
+      isPlaceholder: true,
+      enableRightClickContext: false,
+      shouldRenderChildren: false,
+      shouldLoadChildViews: false,
+      onSelected: (_, __) {},
+      isHoverEnabled: false,
     );
+  }
+
+  bool _supportsTreeDrag(FolderSpaceType spaceType) {
+    return spaceType == FolderSpaceType.private ||
+        spaceType == FolderSpaceType.public;
   }
 }

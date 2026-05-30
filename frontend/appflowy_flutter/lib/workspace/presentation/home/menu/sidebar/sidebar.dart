@@ -38,10 +38,12 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sideba
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_button.dart';
+import 'package:appflowy/workspace/presentation/notifications/number_red_dot.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/shared/version_checker/version_checker.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
+import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
@@ -58,6 +60,10 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import '../../../../../startup/plugin/plugin.dart';
 
 Loading? _duplicateSpaceLoading;
+const _sidebarFullWindowIcon =
+    FlowySvgData('assets/images/icons/app_full_window.svg');
+const _sidebarExitFullWindowIcon =
+    FlowySvgData('assets/images/icons/app_exit_full_window.svg');
 
 /// Home Sidebar is the left side bar of the home page.
 ///
@@ -461,7 +467,9 @@ class _SidebarState extends State<_Sidebar> {
 
   @override
   Widget build(BuildContext context) {
-    const menuHorizontalInset = EdgeInsets.symmetric(horizontal: 8);
+    const menuHorizontalInset = EdgeInsets.symmetric(
+      horizontal: HomeInsets.sidebarHorizontalPadding,
+    );
     return MouseRegion(
       onEnter: (_) => _isHovered.value = true,
       onExit: (_) => _isHovered.value = false,
@@ -483,11 +491,11 @@ class _SidebarState extends State<_Sidebar> {
                       isSidebarOnHover: _isHovered,
                     ),
                   )
-                : HSpace(12),
+                : HSpace(HomeInsets.topBarTitleHorizontalPadding),
             // PonyNotes custom header
             Container(
               height: Platform.isWindows
-                  ? HomeSizes.workspaceSectionHeight + 8
+                  ? HomeSizes.workspaceSectionHeight + 6
                   : HomeSizes.workspaceSectionHeight,
               padding: menuHorizontalInset - const EdgeInsets.only(right: 6),
               child: _PonyNotesHeader(
@@ -499,7 +507,7 @@ class _SidebarState extends State<_Sidebar> {
               const VSpace(sidebarSearchTopGap),
               Container(
                 padding: menuHorizontalInset,
-                height: 34,
+                height: HomeSizes.searchSectionHeight,
                 child: const _SidebarSearchButton(),
               ),
             ],
@@ -513,8 +521,10 @@ class _SidebarState extends State<_Sidebar> {
             const VSpace(14),
             // Fixed bottom actions (trash, settings) - keep outside the scrollable area
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: HomeInsets.sidebarHorizontalPadding,
+                vertical: HomeInsets.sidebarBottomPadding,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
@@ -707,41 +717,46 @@ class _SidebarSearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final shortcut =
         Platform.isMacOS ? '${String.fromCharCode(0x2318)}+P' : 'Ctrl+P';
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final searchBackgroundColor =
+        isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    final searchBorderColor =
+        isDarkMode ? const Color(0xFF3A3A3A) : const Color(0xFFE9E9E9);
     return MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openSearch(context),
-          child: Container(
-            width: double.infinity,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(
-                color: const Color(0xFFE9E9E9),
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                const FlowySvg(
-                  FlowySvgs.search_s,
-                  size: Size.square(16),
-                ),
-                const HSpace(8),
-                Expanded(
-                  child: FlowyText.regular(
-                    '${LocaleKeys.search_label.tr()} ($shortcut)',
-                    fontSize: 14,
-                    color: Theme.of(context).hintColor,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openSearch(context),
+        child: Container(
+          width: double.infinity,
+          height: HomeSizes.searchSectionHeight,
+          decoration: BoxDecoration(
+            color: searchBackgroundColor,
+            borderRadius: BorderRadius.circular(HomeRadii.input),
+            border: Border.all(
+              color: searchBorderColor,
             ),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              const FlowySvg(
+                FlowySvgs.search_s,
+                size: Size.square(16),
+              ),
+              const HSpace(8),
+              Expanded(
+                child: FlowyText.regular(
+                  '${LocaleKeys.search_label.tr()} ($shortcut)',
+                  fontSize: 14,
+                  color: const Color(0xFF7A7A7A),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
     );
   }
 }
@@ -763,9 +778,49 @@ class _PonyNotesHeader extends StatefulWidget {
 class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   static const double _syncActionCollapseWidth =
       HomeSizes.maximumSidebarWidth - 32.0;
+  static const Duration _headerActionsCloseDelay = Duration(milliseconds: 650);
+  static const Color _headerActionsPopupDarkBackgroundColor = Color(0xFF111111);
+  static const Color _headerActionsPopupDarkForegroundColor = Color(0xFFF5F5F5);
+  static const Color _headerActionsPopupLightForegroundColor =
+      Color(0xFF2B2B2B);
+  static const double _headerActionsPopupWidth = 148.0;
+  static const double _headerActionsPopupHeight = 50.0;
+  static const double _headerActionsPopupButtonSize = 30.0;
+  static const double _headerActionsPopupIconSize = 20.0;
+  static const double _headerActionsPopupGap = 12.0;
 
   final PopoverController _popoverController = PopoverController();
   final PopoverController _headerActionsPopoverController = PopoverController();
+  Timer? _headerActionsCloseTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure reminder state is warm before the compact popup renders badges.
+    // 预热提醒状态，避免紧凑悬浮条首次渲染时徽标链路缺失。
+    getIt<ReminderBloc>().add(const ReminderEvent.started());
+  }
+
+  void _cancelHeaderActionsCloseTimer() {
+    _headerActionsCloseTimer?.cancel();
+    _headerActionsCloseTimer = null;
+  }
+
+  void _scheduleHeaderActionsClose() {
+    _cancelHeaderActionsCloseTimer();
+    _headerActionsCloseTimer = Timer(_headerActionsCloseDelay, () {
+      if (!mounted) {
+        return;
+      }
+      _headerActionsPopoverController.close();
+    });
+  }
+
+  @override
+  void dispose() {
+    _cancelHeaderActionsCloseTimer();
+    super.dispose();
+  }
 
   bool _shouldCollapseSyncActions(HomeSettingState state) {
     if (widget.isDrawerMenu) {
@@ -778,6 +833,12 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final workspaceName = context.select<UserWorkspaceBloc, String>(
+      (bloc) => bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
+          ? bloc.state.currentWorkspace!.name.trim()
+          : LocaleKeys.sidebar_appName.tr(),
+    );
+
     return AppFlowyPopover(
       direction: PopoverDirection.bottomWithCenterAligned,
       offset: const Offset(0, 5),
@@ -855,17 +916,20 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 const HSpace(6),
                 // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
                 Expanded(
+                  flex: 100,
                   child: Tooltip(
-                    message: LocaleKeys.sidebar_appName.tr(),
+                    message: workspaceName,
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Flexible(
-                          child: FlowyText.medium(
-                            LocaleKeys.sidebar_appName.tr(),
-                            color: Theme.of(context).colorScheme.tertiary,
-                            overflow: TextOverflow.ellipsis,
-                            fontSize: 15.0,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 78),
+                            child: FlowyText.medium(
+                              workspaceName,
+                              color: Theme.of(context).colorScheme.tertiary,
+                              overflow: TextOverflow.ellipsis,
+                              fontSize: 15.0,
+                            ),
                           ),
                         ),
                         const HSpace(2),
@@ -877,7 +941,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     ),
                   ),
                 ),
-                const HSpace(8), // 文字与右侧按钮的间距
+                const Spacer(), // 鎺ㄩ€佹寜閽埌鍙宠竟
                 // 浜戝悓姝ユ寜閽?(fill header height)
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
@@ -893,22 +957,11 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                       children: [
                         if (shouldCollapseSyncActions)
                           _buildHeaderActionsMoreButton(context)
-                        else ...[
-                          _buildHeaderActionSlot(
-                            const SidebarCloudSyncButton(),
+                        else
+                          _buildHeaderSyncActionsRow(
+                            context,
+                            highContrastOnDarkBackground: false,
                           ),
-                          const HSpace(4.0),
-                          _buildHeaderActionSlot(
-                            const SidebarUploadButton(),
-                          ),
-                          const HSpace(4.0),
-                          _buildHeaderActionSlot(
-                            NotificationButton(
-                              key: ValueKey(widget.userProfile.id),
-                              alwaysShow: true,
-                            ),
-                          ),
-                        ],
                       ],
                     );
                   },
@@ -932,25 +985,20 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         HSpace(shouldCollapseSyncActions ? 4.0 : 8.0),
-                        SizedBox(
-                          height: HomeSizes.workspaceSectionHeight + 8,
-                          child: Center(
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () => context
-                                  .read<HomeSettingBloc>()
-                                  .collapseMenu(),
-                              child: SizedBox(
-                                width: 24,
-                                child: FlowySvg(
-                                  FlowySvgs.double_back_arrow_m,
-                                  color: AppFlowyTheme.of(context)
-                                      .iconColorScheme
-                                      .secondary,
-                                ),
-                              ),
+                        _buildHeaderActionSlot(
+                          GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: () =>
+                                context.read<HomeSettingBloc>().collapseMenu(),
+                            child: FlowySvg(
+                              FlowySvgs.sidebar_collapse_custom_m,
+                              size: const Size.square(24),
+                              color: AppFlowyTheme.of(context)
+                                  .iconColorScheme
+                                  .secondary,
                             ),
                           ),
+                          size: 28,
                         ),
                       ],
                     );
@@ -965,7 +1013,14 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     );
   }
 
-  Widget _buildHeaderActionSlot(Widget child) {
+  Widget _buildHeaderActionSlot(Widget child, {double? size}) {
+    if (size != null) {
+      return SizedBox.square(
+        dimension: size,
+        child: Center(child: child),
+      );
+    }
+
     return SizedBox(
       height: Platform.isWindows
           ? HomeSizes.workspaceSectionHeight + 8
@@ -974,91 +1029,226 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     );
   }
 
-  Widget _buildHeaderNotificationActionButton(
+  Widget _buildHeaderSyncActionsRow(
     BuildContext context, {
-    Color? iconColor,
+    required bool highContrastOnDarkBackground,
+    Color? foregroundColorOverride,
   }) {
-    return SizedBox.square(
-      dimension: 28,
-      child: FlowyButton(
-        useIntrinsicWidth: true,
-        margin: EdgeInsets.zero,
-        text: SvgPicture.asset(
-          'assets/images/icons/sidebar_notification_custom.svg',
-          width: 24,
-          height: 24,
-          colorFilter: ColorFilter.mode(
-            iconColor ?? Theme.of(context).colorScheme.onSurface,
-            BlendMode.srcIn,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildHeaderActionSlot(
+          SidebarCloudSyncButton(
+            useHighContrastForeground: highContrastOnDarkBackground,
+            foregroundColorOverride: foregroundColorOverride,
           ),
         ),
-        onTap: () => context.read<HomeSettingBloc>().add(
-              HomeSettingEvent.collapseNotificationPanel(),
+        HSpace(highContrastOnDarkBackground ? 18.0 : 4.0),
+        _buildHeaderActionSlot(
+          SidebarUploadButton(
+            useHighContrastForeground: highContrastOnDarkBackground,
+            foregroundColorOverride: foregroundColorOverride,
+          ),
+        ),
+        HSpace(highContrastOnDarkBackground ? 18.0 : 4.0),
+        _buildHeaderActionSlot(
+          NotificationButton(
+            key: ValueKey(
+              '${widget.userProfile.id}_${highContrastOnDarkBackground ? 'popup' : 'inline'}',
             ),
-      ),
+            alwaysShow: true,
+            useHighContrastForeground: highContrastOnDarkBackground,
+            foregroundColorOverride: foregroundColorOverride,
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildHeaderActionsMoreButton(BuildContext context) {
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
     return AppFlowyPopover(
       controller: _headerActionsPopoverController,
       direction: PopoverDirection.bottomWithCenterAligned,
-      triggerActions: PopoverTriggerFlags.hover | PopoverTriggerFlags.click,
+      triggerActions: PopoverTriggerFlags.none,
       clickHandler: PopoverClickHandler.gestureDetector,
-      constraints: const BoxConstraints(maxWidth: 180, maxHeight: 72),
+      constraints: const BoxConstraints.tightFor(
+        width: _headerActionsPopupWidth,
+        height: _headerActionsPopupHeight,
+      ),
       margin: EdgeInsets.zero,
       offset: const Offset(0, 8),
       popupBuilder: (_) {
+        final popupBackgroundColor =
+            _headerActionsPopupBackgroundColor(context);
+        final popupForegroundColor =
+            _headerActionsPopupForegroundColor(context);
+        final popupBorderColor = _headerActionsPopupBorderColor(context);
         final colorScheme = Theme.of(context).colorScheme;
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: colorScheme.copyWith(onSurface: Colors.white),
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.24),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+        return BlocProvider<UserWorkspaceBloc>.value(
+          value: workspaceBloc,
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme:
+                  colorScheme.copyWith(onSurface: popupForegroundColor),
+              iconTheme: IconThemeData(color: popupForegroundColor),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SidebarCloudSyncButton(isHover: true),
-                  const HSpace(18),
-                  const SidebarUploadButton(isHover: true),
-                  const HSpace(18),
-                  _buildHeaderNotificationActionButton(
+            child: MouseRegion(
+              onEnter: (_) => _cancelHeaderActionsCloseTimer(),
+              onExit: (_) => _scheduleHeaderActionsClose(),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: popupBackgroundColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: popupBorderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.20),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  child: _buildHeaderActionsPopupRow(
                     context,
-                    iconColor: Colors.white,
+                    foregroundColor: popupForegroundColor,
                   ),
-                ],
+                ),
               ),
             ),
           ),
         );
       },
-      child: FlowyTooltip(
-        message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
-        child: SizedBox.square(
-          dimension: 28,
-          child: FlowyButton(
-            useIntrinsicWidth: true,
-            margin: EdgeInsets.zero,
-            text: FlowySvg(
-              FlowySvgs.workspace_three_dots_s,
-              color: Theme.of(context).colorScheme.onSurface,
+      child: MouseRegion(
+        onEnter: (_) => _showHeaderActionsPopover(),
+        onExit: (_) => _scheduleHeaderActionsClose(),
+        child: FlowyTooltip(
+          message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+          child: SizedBox.square(
+            dimension: 28,
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: FlowySvg(
+                FlowySvgs.workspace_three_dots_s,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              onTap: () {
+                _showHeaderActionsPopover();
+              },
             ),
-            onTap: () => _headerActionsPopoverController.show(),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showHeaderActionsPopover() {
+    _cancelHeaderActionsCloseTimer();
+    _headerActionsPopoverController.show();
+  }
+
+  Color _headerActionsPopupBackgroundColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? _headerActionsPopupDarkBackgroundColor
+        : Theme.of(context).colorScheme.surface;
+  }
+
+  Color _headerActionsPopupForegroundColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? _headerActionsPopupDarkForegroundColor
+        : _headerActionsPopupLightForegroundColor;
+  }
+
+  Color _headerActionsPopupBorderColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.08);
+  }
+
+  Widget _buildHeaderActionsPopupRow(
+    BuildContext context, {
+    required Color foregroundColor,
+  }) {
+    return BlocProvider<ReminderBloc>.value(
+      value: getIt<ReminderBloc>(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeaderActionSlot(
+            SidebarCloudSyncButton(
+              foregroundColorOverride: foregroundColor,
+              onBeforeAction: _headerActionsPopoverController.close,
+              buttonSize: _headerActionsPopupButtonSize,
+              iconSize: _headerActionsPopupIconSize,
+            ),
+            size: _headerActionsPopupButtonSize,
+          ),
+          const HSpace(_headerActionsPopupGap),
+          _buildHeaderActionSlot(
+            SidebarUploadButton(
+              foregroundColorOverride: foregroundColor,
+              onBeforeAction: _headerActionsPopoverController.close,
+              buttonSize: _headerActionsPopupButtonSize,
+              iconSize: _headerActionsPopupIconSize,
+            ),
+            size: _headerActionsPopupButtonSize,
+          ),
+          const HSpace(_headerActionsPopupGap),
+          _buildHeaderActionSlot(
+            _buildHeaderPopupNotificationButton(
+              context,
+              foregroundColor: foregroundColor,
+            ),
+            size: _headerActionsPopupButtonSize,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderPopupNotificationButton(
+    BuildContext context, {
+    required Color foregroundColor,
+  }) {
+    return SizedBox.square(
+      dimension: _headerActionsPopupButtonSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(
+            child: SizedBox.square(
+              dimension: _headerActionsPopupButtonSize,
+              child: FlowyButton(
+                useIntrinsicWidth: true,
+                margin: EdgeInsets.zero,
+                text: SvgPicture.asset(
+                  'assets/images/icons/sidebar_notification_custom.svg',
+                  width: _headerActionsPopupIconSize,
+                  height: _headerActionsPopupIconSize,
+                  colorFilter: ColorFilter.mode(
+                    foregroundColor,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                onTap: () {
+                  _headerActionsPopoverController.close();
+                  context.read<HomeSettingBloc>().add(
+                        HomeSettingEvent.collapseNotificationPanel(),
+                      );
+                },
+              ),
+            ),
+          ),
+          const Positioned(
+            top: 0,
+            right: -2,
+            child: NumberedRedDot.desktop(),
+          ),
+        ],
       ),
     );
   }
@@ -1072,11 +1262,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       child: FlowyButton(
         useIntrinsicWidth: true,
         margin: EdgeInsets.zero,
-        text: Icon(
-          isFullWindow
-              ? Icons.fullscreen_exit_rounded
-              : Icons.fullscreen_rounded,
-          size: 20,
+        text: FlowySvg(
+          isFullWindow ? _sidebarExitFullWindowIcon : _sidebarFullWindowIcon,
+          size: const Size.square(20),
           color: Theme.of(context).colorScheme.onSurface,
         ),
         onTap: () {

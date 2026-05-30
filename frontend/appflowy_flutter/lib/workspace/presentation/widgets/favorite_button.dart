@@ -12,9 +12,11 @@ class ViewFavoriteButton extends StatelessWidget {
   const ViewFavoriteButton({
     super.key,
     required this.view,
+    this.inactiveColor,
   });
 
   final ViewPB view;
+  final Color? inactiveColor;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +37,7 @@ class ViewFavoriteButton extends StatelessWidget {
                 child: FlowySvg(
                   isFavorite ? FlowySvgs.favorited_s : FlowySvgs.favorite_s,
                   size: const Size.square(18),
+                  color: isFavorite ? null : inactiveColor,
                   blendMode: isFavorite ? null : BlendMode.srcIn,
                 ),
               ),

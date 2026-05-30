@@ -82,7 +82,7 @@ class SettingsDialogBloc
         await event.when(
           initial: () async {
             if (!_listenerStarted) {
-            _userListener.start(onProfileUpdated: _profileUpdated);
+              _userListener.start(onProfileUpdated: _profileUpdated);
               _listenerStarted = true;
             }
 
@@ -160,22 +160,30 @@ class SettingsDialogBloc
     Emitter<SettingsDialogState> emit,
     UserProfilePB userProfile,
   ) async {
+    final subscriptionService = SubscriptionService();
+    final cachedSubscription = subscriptionService.cachedCurrentSubscription;
+
+    // Use cached data for the first frame, then refresh in background.
+    // 中文: 设置页首帧先使用缓存，避免短暂显示“免费版/--”的错误状态。
     emit(
       state.copyWith(
-        isLoadingCurrentSubscription: true,
+        isLoadingCurrentSubscription: cachedSubscription == null,
+        currentSubscription: cachedSubscription,
       ),
     );
 
     try {
       // 使用 SubscriptionService 获取订阅信息，利用缓存机制
-      final currentSubscription = await SubscriptionService().getCurrentSubscription(
+      final currentSubscription =
+          await subscriptionService.getCurrentSubscription(
         userProfile: userProfile,
         caller: 'SettingsDialogBloc._fetchCurrentSubscription',
+        forceRefresh: cachedSubscription != null,
       );
       emit(
         state.copyWith(
           isLoadingCurrentSubscription: false,
-          currentSubscription: currentSubscription,
+          currentSubscription: currentSubscription ?? cachedSubscription,
         ),
       );
     } catch (e, stackTrace) {
@@ -183,7 +191,7 @@ class SettingsDialogBloc
       emit(
         state.copyWith(
           isLoadingCurrentSubscription: false,
-          currentSubscription: null,
+          currentSubscription: cachedSubscription,
         ),
       );
     }
@@ -276,14 +284,15 @@ class SubscriptionSummary {
   }
 
   factory SubscriptionSummary.fromJson(Map<String, dynamic>? json) {
-    if (json == null) return const SubscriptionSummary(
-      planCode: null,
-      planNameCn: null,
-      billingType: null,
-      status: null,
-      startDate: null,
-      endDate: null,
-    );
+    if (json == null)
+      return const SubscriptionSummary(
+        planCode: null,
+        planNameCn: null,
+        billingType: null,
+        status: null,
+        startDate: null,
+        endDate: null,
+      );
     DateTime? _parseDate(String? v) {
       if (v == null || v.isEmpty) return null;
       return DateTime.tryParse(v);
