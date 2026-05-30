@@ -1,10 +1,41 @@
+import 'dart:math' as math;
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/payment/payment_api.dart';
+import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 
+import 'mobile_recharge_records_page.dart';
 import 'mobile_upgrade_plan_card.dart';
+
+class _PlanConfig {
+  const _PlanConfig(
+    this.id,
+    this.name,
+    this.priceMonthly,
+    this.priceAnnual,
+    this.storage,
+    this.workspaces,
+    this.aiQuota,
+    this.priceColor,
+    this.priceBgColor,
+  );
+
+  final String id;
+  final String name;
+  final double priceMonthly;
+  final double priceAnnual;
+  final String storage;
+  final String workspaces;
+  final String aiQuota;
+  final Color priceColor;
+  final Color priceBgColor;
+}
 
 enum _BillingPeriod { monthly, yearly }
 
@@ -111,6 +142,70 @@ class _UpgradePlanBody extends StatefulWidget {
 
 class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   int _selectedPlanIndex = 2; // 默认选中专业版（第3个）
+  bool _isProcessingPayment = false;
+
+  static const _plans = [
+    _PlanConfig('student', '学生版', 5.0, 50.0, '1GB', '3个', '50次/月',
+        Color(0xFFFFFFFF), Color(0xFF2EACB2)),
+    _PlanConfig('standard', '标准版', 9.0, 99.0, '10GB', '5个工作区', '300次/月',
+        Color(0xFFF9D8A7), Color(0xFF343543)),
+    _PlanConfig('pro', '专业版', 15.0, 158.0, '50GB', '10个工作区', '1200次/月',
+        Color(0xFFFFE4C4), Color(0xFF371A0D)),
+    _PlanConfig('premium', '高级版', 29.0, 298.0, '150GB', '18个工作区', '3000次/月',
+        Color(0xFFADD8E6), Color(0xFF1E3A5F)),
+  ];
+
+  Future<void> _confirmAndPay() async {
+    final plan = _plans[_selectedPlanIndex];
+    final isYearly = widget.billingPeriod == _BillingPeriod.yearly;
+    final price = isYearly ? plan.priceAnnual : plan.priceMonthly;
+    final billingType = isYearly ? 'yearly' : 'monthly';
+
+    setState(() => _isProcessingPayment = true);
+
+    try {
+      final userProfile = await UserBackendService.getCurrentUserProfile();
+      final userUuid = userProfile.fold((p) => p.id.toString(), (_) => '');
+
+      final request = PaymentCreateRequest(
+        amount: price.toString(),
+        paymentType: PaymentType.alipay,
+        userInfo: userUuid,
+        productName: 'QR_CODE_OFFLINE',
+        planId: plan.id,
+        billingType: billingType,
+      );
+
+      final result = await PaymentApi.createPaymentOrder(request);
+
+      if (!mounted) return;
+
+      result.fold(
+        (order) async {
+          final payUrl = order.payUrl ?? '';
+          if (payUrl.isNotEmpty) {
+            await PaymentUtil.webPay(payUrl);
+          }
+          if (mounted) setState(() => _isProcessingPayment = false);
+        },
+        (error) {
+          if (mounted) {
+            setState(() => _isProcessingPayment = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(error.msg)),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isProcessingPayment = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('支付失败: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,17 +231,32 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '充值记录',
-                    style: theme.textStyle.body.standard(
-                      color: theme.textColorScheme.secondary,
-                    ).copyWith(fontSize: 12),
-                  ),
-                  const SizedBox(width: 4),
-                  FlowySvg(
-                    FlowySvgs.top_up_records_s,
-                    size: const Size(4, 8),
-                    color: theme.iconColorScheme.secondary,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const MobileRechargeRecordsPage(),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '充值记录',
+                          style: theme.textStyle.body.standard(
+                            color: theme.textColorScheme.secondary,
+                          ).copyWith(fontSize: 12),
+                        ),
+                        const SizedBox(width: 4),
+                        FlowySvg(
+                          FlowySvgs.top_up_records_s,
+                          size: const Size(4, 8),
+                          color: theme.iconColorScheme.secondary,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -154,6 +264,8 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
           ),
           const SizedBox(height: 16),
           _buildUpgradePlanCards(),
+          const SizedBox(height: 24),
+          _buildConfirmPayButton(theme),
           const SizedBox(height: 24),
           _buildBenefitIcons(),
         ],
@@ -335,6 +447,59 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildConfirmPayButton(AppFlowyThemeData theme) {
+    final plan = _plans[_selectedPlanIndex];
+    final isYearly = widget.billingPeriod == _BillingPeriod.yearly;
+    final price = isYearly ? plan.priceAnnual : plan.priceMonthly;
+    final periodText = isYearly ? '/年' : '/月';
+
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton(
+            onPressed: _isProcessingPayment ? null : _confirmAndPay,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF3800),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFFF3800).withValues(alpha: 0.6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              alignment: Alignment.center,
+            ),
+            child: _isProcessingPayment
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    '确认协议并支付',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '点击即表示同意《小马笔记用户协议》和《会员服务协议》',
+          style: theme.textStyle.body.standard(
+            color: theme.textColorScheme.secondary,
+          ).copyWith(fontSize: 10),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 
