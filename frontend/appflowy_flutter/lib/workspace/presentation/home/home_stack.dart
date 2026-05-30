@@ -121,7 +121,6 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                 },
                               ),
                             ),
-                            _buildTopTabsTrailingActions(context, state),
                           ],
                         ),
                       ),
@@ -140,9 +139,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                             child: Column(
                                               children: [
                                                 if (!isFullWindow)
-                                                  pm.stackTopBar(
-                                                    layout: widget.layout,
-                                                  ),
+                                                  _buildPageTrailingActionsRow(pm),
                                                 Expanded(
                                                   child: PageStack(
                                                     pageManager: pm,
@@ -193,36 +190,31 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  Widget _buildTopTabsTrailingActions(BuildContext context, TabsState state) {
-    final currentIndex = state.currentIndex;
-    if (currentIndex < 0 || currentIndex >= state.pageManagers.length) {
-      return const SizedBox.shrink();
-    }
-
-    final pm = state.pageManagers[currentIndex];
-    if (pm.plugin.widgetBuilder.rightBarItem == null) {
-      return const SizedBox.shrink();
-    }
-
-    // Non-fullscreen actions participate in the tab row layout so page
-    // content, especially right-aligned AI messages, cannot be covered.
-    // 非全屏动作区进入顶部选项卡行真实布局，避免覆盖右对齐的 AI 消息。
-    return Padding(
-      padding: EdgeInsets.only(
-        right: HomeInsets.topBarTitleHorizontalPadding + 8,
-      ),
-      child: SizedBox(
-        height: HomeSizes.tabBarHeight,
-        child: Center(
-          child: ChangeNotifierProvider.value(
-            value: pm.notifier,
-            child: Consumer<PageNotifier>(
-              builder: (_, notifier, __) =>
-                  notifier.plugin.widgetBuilder.rightBarItem ??
-                  const SizedBox.shrink(),
+  // 在文档视图区域顶部渲染右侧工具栏（头像、分享、收藏等按钮），
+  // 独占一行，位于选项卡行下方、文档内容上方，右对齐。
+  Widget _buildPageTrailingActionsRow(PageManager pm) {
+    return ChangeNotifierProvider.value(
+      value: pm.notifier,
+      child: Consumer<PageNotifier>(
+        builder: (context, notifier, __) {
+          final rightBarItem = notifier.plugin.widgetBuilder.rightBarItem;
+          if (rightBarItem == null) {
+            return const SizedBox.shrink();
+          }
+          return Container(
+            color: homeContentBackgroundColor(context),
+            height: HomeSizes.tabBarHeight,
+            child: Row(
+              children: [
+                const Spacer(),
+                Center(child: rightBarItem),
+                const SizedBox(
+                  width: HomeInsets.topBarTitleHorizontalPadding + 8,
+                ),
+              ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
