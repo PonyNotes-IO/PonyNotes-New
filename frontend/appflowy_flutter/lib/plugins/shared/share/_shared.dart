@@ -52,16 +52,22 @@ Future<void> openShareSettingsDialog({
 
   shareBloc.add(const ShareEvent.updatePublishStatus());
 
-  // 如果当前状态的 viewId 已与当前视图匹配（说明初始化已完成），等待最新刷新结果
-  // 添加 5 秒超时，防止后端请求挂起（网络超时等）导致分享对话框无法打开
-  try {
-    await shareBloc.stream
-        .firstWhere((state) => state.viewId == shareBloc.view.id)
-        .timeout(const Duration(seconds: 5));
-    Log.info('openShareSettingsDialog: firstWhere completed, viewId=${shareBloc.state.viewId}');
-  } catch (e) {
-    // 后端请求超时或流被中断时，继续使用当前状态
-    Log.warn('openShareSettingsDialog: firstWhere timeout/error: $e, using current state');
+  // 仅当状态未初始化时才等待（viewId 为空或不匹配说明 ShareEvent.initial() 尚未完成）
+  // 正常情况下初始化已完成，直接使用当前状态立即显示对话框
+  // updatePublishStatus 在后台异步刷新，对话框内 BlocBuilder 会自动更新
+  if (shareBloc.state.viewId != shareBloc.view.id) {
+    Log.info('openShareSettingsDialog: waiting for initial state, current viewId=${shareBloc.state.viewId}');
+    try {
+      await shareBloc.stream
+          .firstWhere((state) => state.viewId == shareBloc.view.id)
+          .timeout(const Duration(seconds: 5));
+      Log.info('openShareSettingsDialog: firstWhere completed, viewId=${shareBloc.state.viewId}');
+    } catch (e) {
+      // 后端请求超时或流被中断时，继续使用当前状态
+      Log.warn('openShareSettingsDialog: firstWhere timeout/error: $e, using current state');
+    }
+  } else {
+    Log.info('openShareSettingsDialog: state already initialized, skipping wait, viewId=${shareBloc.state.viewId}');
   }
 
   if (!context.mounted) {
