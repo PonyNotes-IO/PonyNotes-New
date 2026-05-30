@@ -393,7 +393,7 @@ class DocumentHeaderToolbar extends StatefulWidget {
 class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
   final _popoverController = PopoverController();
 
-  bool isHidden = PlatformInfo.isDesktopOrTabletOrWeb; // 需要鼠标悬停，平板端始终显示
+  bool isHidden = PlatformInfo.isDesktopOrWeb; // 需要鼠标悬停，平板端始终显示
   bool isPopoverOpen = false;
 
   @override
@@ -585,7 +585,8 @@ class DocumentCoverState extends State<DocumentCover> {
                 coverDetails: widget.coverDetails,
               ),
             ),
-            if (!isOverlayButtonsHidden) _buildCoverOverlayButtons(context),
+            //如果是pad需要一直展示修改封面和删除按钮
+            if (!isOverlayButtonsHidden || PlatformInfo.isTablet) _buildCoverOverlayButtons(context),
           ],
         ),
       ),
