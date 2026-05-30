@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'mobile_upgrade_plan_card.dart';
 
-enum _BillingPeriod { yearly }
+enum _BillingPeriod { monthly, yearly }
 
 class MobileUpgradePlanPage extends StatefulWidget {
   const MobileUpgradePlanPage({
@@ -23,7 +23,7 @@ class MobileUpgradePlanPage extends StatefulWidget {
 }
 
 class _MobileUpgradePlanPageState extends State<MobileUpgradePlanPage> {
-  _BillingPeriod _billingPeriod = _BillingPeriod.yearly;
+  _BillingPeriod _billingPeriod = _BillingPeriod.monthly;
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +133,8 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
               color: theme.textColorScheme.secondary,
             ),
           ),
+          const SizedBox(height: 20),
+          _buildBillingToggle(theme),
           const SizedBox(height: 24),
           _buildUpgradePlanCards(),
           const SizedBox(height: 24),
@@ -206,6 +208,113 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
             isYearly: widget.billingPeriod == _BillingPeriod.yearly,
             isSelected: _selectedPlanIndex == 3,
             onTap: () => setState(() => _selectedPlanIndex = 3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBillingToggle(AppFlowyThemeData theme) {
+    final isYearly = widget.billingPeriod == _BillingPeriod.yearly;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? const Color(0xFF2A2A2A)
+            : const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => widget.onBillingPeriodChanged(_BillingPeriod.monthly),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: !isYearly
+                      ? (isDarkMode
+                          ? const Color(0xFF3A3A3A)
+                          : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: !isYearly
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '月付',
+                  style: theme.textStyle.body.standard(
+                    color: !isYearly
+                        ? theme.textColorScheme.primary
+                        : theme.textColorScheme.secondary,
+                  ).copyWith(fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => widget.onBillingPeriodChanged(_BillingPeriod.yearly),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isYearly
+                      ? (isDarkMode
+                          ? const Color(0xFF3A3A3A)
+                          : Colors.white)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: isYearly
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '年付',
+                      style: theme.textStyle.body.standard(
+                        color: isYearly
+                            ? theme.textColorScheme.primary
+                            : theme.textColorScheme.secondary,
+                      ).copyWith(fontWeight: isYearly ? FontWeight.w600 : FontWeight.normal),
+                    ),
+                    if (isYearly) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B6B),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '省15%',
+                          style: theme.textStyle.body.standard(color: Colors.white).copyWith(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
