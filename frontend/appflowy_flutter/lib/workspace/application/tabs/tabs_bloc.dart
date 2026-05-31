@@ -81,13 +81,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView(view);
           },
           openPlugin: (Plugin plugin, ViewPB? view, bool setLatest) {
+            // 协作空间是侧边栏容器，不是可编辑内容视图；不能替换当前标签页。
+            if (view != null && view.isSpace) return;
             state.currentPageManager
               ..hideSecondaryPlugin()
               ..setSecondaryPlugin(BlankPagePlugin());
             emit(state.openPlugin(plugin: plugin, setLatest: setLatest));
             if (setLatest) {
-              // 协作空间只做内容展示，不加入最近访问、不展开祖先
-              if (view != null && view.isSpace) return;
               _setLatestOpenView(view);
               if (view != null) _expandAncestors(view);
             }
@@ -358,6 +358,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     ViewPB view, {
     Map<String, dynamic> arguments = const {},
   }) {
+    // 协作空间只负责承载下级内容，点击它不应生成/替换标签页。
+    if (view.isSpace) return;
     try {
       if (view.id.isEmpty) {
         Log.error('openPlugin called with empty view.id, aborting openPlugin');

@@ -1018,16 +1018,19 @@ class PageManager {
             return const BlankPage();
           }
 
+          final activePlugin = notifier.plugin;
+          final activePluginKey =
+              ValueKey('${activePlugin.pluginType.name}:${activePlugin.id}');
+
           return FadingIndexedStack(
-            // ValueKey(plugin.id) 确保切换到同一类型但不同视图时
-            // （如文档→文档），FadingIndexedStack 状态重置，
-            // 触发淡入动画且不保留旧视图的渲染状态。
-            key: ValueKey(notifier.plugin.id),
-            index: pluginSandbox.indexOf(notifier.plugin.pluginType),
+            // 同类型不同视图（如多个文档）必须用业务视图 id 隔离整棵子树，
+            // 避免 Flutter 在 IndexedStack 内复用旧文档状态而造成标签和内容串线。
+            key: activePluginKey,
+            index: pluginSandbox.indexOf(activePlugin.pluginType),
             children: pluginSandbox.supportPluginTypes.map(
               (pluginType) {
-                if (pluginType == notifier.plugin.pluginType) {
-                  final builder = notifier.plugin.widgetBuilder;
+                if (pluginType == activePlugin.pluginType) {
+                  final builder = activePlugin.widgetBuilder;
                   final pluginWidget = builder.buildWidget(
                     context: PluginContext(
                       onDeleted: onDeleted,
@@ -1037,6 +1040,7 @@ class PageManager {
                   );
 
                   return Padding(
+                    key: activePluginKey,
                     padding: builder.contentPadding,
                     child: pluginWidget,
                   );
