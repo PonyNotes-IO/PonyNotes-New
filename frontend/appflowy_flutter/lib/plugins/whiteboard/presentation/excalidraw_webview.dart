@@ -1058,17 +1058,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     );
   }
 
-  /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
-  /// 注意：只隐藏欢迎界面中心的LOGO，不隐藏工具栏和其他功能元素
+  /// 安装容器尺寸变化守护，确保 Excalidraw 在 Flutter 布局完成后正确知晓视口尺寸。
   Future<void> _installResizeGuard() async {
     await _safeEvalJs('''
       (function() {
+        // isDispatchingResize 标志：在我们主动触发 resize 期间为 true，
+        // 防止 Excalidraw React 重渲染引起容器尺寸细微变化时 ResizeObserver
+        // 再次排队 dispatchStableResize，消除累积漂移的反馈循环。
+        let isDispatchingResize = false;
+
         const dispatchStableResize = () => {
-          // 在 resize 前保存滚动坐标。
-          // Excalidraw 处理 resize 事件时会根据 (新宽度-旧宽度)/2 调整 scrollX/scrollY
-          // 以保持视口中心对应同一世界坐标点；若视口尺寸与上次保存时不一致，
-          // 每次触发都会产生漂移量。通过 resize 后立即还原坐标，
-          // 让视口尺寸更新生效的同时避免画布位置偏移。
+          if (isDispatchingResize) return; // 防止重入
+          isDispatchingResize = true;
+
+          // 保存 resize 前滚动坐标，防止 Excalidraw 的 resize 处理
+          // 按 (新宽度-旧宽度)/2 调整 scroll 导致画布漂移。
           const _api = window.excalidrawAPI ||
             window.__EXCALIDRAW_API__ ||
             window._excalidrawAPI;
@@ -1078,9 +1082,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             _sx = _st.scrollX;
             _sy = _st.scrollY;
           }
+
           window.dispatchEvent(new Event('resize'));
           requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
+
             const _apiNow = window.excalidrawAPI ||
               window.__EXCALIDRAW_API__ ||
               window._excalidrawAPI;
@@ -1093,6 +1099,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             if (_apiNow && typeof _apiNow.refresh === 'function') {
               _apiNow.refresh();
             }
+
+            // resize 处理完成后更新 lastWidth/lastHeight 至实际尺寸，
+            // 同时重置标志位，让后续真实容器尺寸变化（如侧边栏展开）
+            // 仍能被 ResizeObserver 捕获。
+            setTimeout(() => {
+              const _r = document.querySelector('.excalidraw') || document.body;
+              const _rc = _r.getBoundingClientRect();
+              lastWidth = _rc.width;
+              lastHeight = _rc.height;
+              isDispatchingResize = false;
+            }, 150);
           });
         };
 
@@ -1106,6 +1123,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         let lastWidth = 0;
         let lastHeight = 0;
         const onContainerResize = () => {
+          // 我们主动触发 resize 期间忽略 ResizeObserver 回调，防止反馈循环
+          if (isDispatchingResize) return;
           const root = document.querySelector('.excalidraw') || document.body;
           const rect = root.getBoundingClientRect();
           if (Math.abs(rect.width - lastWidth) < 0.5 &&
@@ -1119,7 +1138,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         };
 
         window._ponynotesResizeHandler = onContainerResize;
-        window.addEventListener('resize', onContainerResize, { passive: true });
+        // 注意：不再将 onContainerResize 注册为 resize 事件监听器，
+        // 避免 dispatchStableResize 触发的合成 resize 事件被自身捕获。
         window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
         window._ponynotesResizeObserver.observe(document.body);
         const root = document.querySelector('.excalidraw');
@@ -1127,9 +1147,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window._ponynotesResizeObserver.observe(root);
         }
 
+        // 立即检查当前容器尺寸（初始化时 lastWidth=0 故必然触发一次）
         onContainerResize();
-        setTimeout(dispatchStableResize, 120);
-        setTimeout(dispatchStableResize, 360);
       })();
     ''', tag: 'installResizeGuard');
   }
