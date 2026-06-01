@@ -167,46 +167,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   EdgeInsets get contentPadding => EdgeInsets.zero;
 
   @override
-  Widget? get rightBarItem {
-    // 当有选中文档时，返回该文档的右侧工具栏
-    // 注意：ValueListenableBuilder 的 builder 不能返回 null，因此这里用 SizedBox.shrink 占位
-    return ValueListenableBuilder<ViewPB?>(
-      valueListenable: selectedViewNotifier,
-      builder: (context, selectedView, _) {
-        if (selectedView == null) {
-          return const SizedBox.shrink();
-        }
-
-        try {
-          // ✅ 使用 currentViewInfoBlocNotifier 来获取当前文档的 ViewInfoBloc
-          return ValueListenableBuilder<ViewInfoBloc?>(
-            valueListenable: currentViewInfoBlocNotifier,
-            builder: (context, currentViewInfoBloc, _) {
-              final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
-              return MultiBlocProvider(
-                providers: [
-                  BlocProvider<ViewInfoBloc>.value(
-                      value: effectiveViewInfoBloc),
-                ],
-                child: UnifiedViewTopRightActions(
-                  view: selectedView,
-                  viewInfoBloc: effectiveViewInfoBloc,
-                  showCollaborators: FeatureFlag.syncDocument.isOn &&
-                      selectedView.layout != ViewLayoutPB.Whiteboard,
-                  useFloatingSurface: true,
-                ),
-              );
-            },
-          );
-        } catch (e) {
-          // 静默处理错误
-        }
-
-        // 没有可用的工具栏时，返回一个空占位，避免报错
-        return const SizedBox.shrink();
-      },
-    );
-  }
+  Widget? get rightBarItem => null;
 
   @override
   Widget? get fullWindowMoreItem {
@@ -313,29 +274,10 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
-  double get topTabsLeadingWidth => HomeSizes.spaceHubTopTabsLeadingWidth;
+  double get topTabsLeadingWidth => 0;
 
   @override
-  Widget? topTabsLeadingPane(BuildContext context) {
-    SpaceBloc? spaceBloc;
-    try {
-      spaceBloc = BlocProvider.of<SpaceBloc>(context);
-    } catch (_) {
-      spaceBloc = null;
-    }
-
-    // Move the SpaceHub list header into HomeStack's tab-leading slot.
-    // 将 SpaceHub 列表头部放进顶部预留区，避免中间栏上方出现空白。
-    return _SpaceDocumentList(
-      spaceView: view,
-      selectedView: null,
-      showHeader: true,
-      onViewCreated: (view) {
-        selectedViewNotifier.value = view;
-      },
-      onViewSelectedWithRecent: (_) {},
-    )._buildHeader(context, spaceBloc);
-  }
+  Widget? topTabsLeadingPane(BuildContext context) => null;
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) {
@@ -648,8 +590,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           HomeSizes.minimumSpaceHubMiddlePaneWidth,
           maxLeftPanelWidth,
         );
-        final floatingDocumentListTopInset =
-            Platform.isWindows ? 0.0 : HomeSizes.topBarHeight;
+        final floatingDocumentListTopInset = 0.0;
         final passiveFloatingDivider = Padding(
           padding: EdgeInsets.only(
             top: floatingDocumentListTopInset,
@@ -692,7 +633,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
                       selectedView: _selectedView,
-                      showHeader: isFullWindow,
+                      showHeader: true,
                       onViewSelectedWithRecent: _selectViewInMiddlePanel,
                       onViewCreated: _selectViewInMiddlePanel,
                     ),
@@ -783,72 +724,77 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         // 静默处理
       }
 
+      // 为所有类型的视图创建 ViewInfoBloc（复用已有或创建新的）
+      ViewInfoBloc? viewInfoBloc;
+      try {
+        for (final bloc in _childViewInfoBlocs) {
+          if (bloc.view.id == view.id) {
+            viewInfoBloc = bloc;
+            break;
+          }
+        }
+
+        if (viewInfoBloc == null) {
+          viewInfoBloc = ViewInfoBloc(view: view)
+            ..add(const ViewInfoEvent.started());
+          _childViewInfoBlocs.add(viewInfoBloc);
+        }
+
+        // ✅ 在 build 完成后更新 currentViewInfoBlocNotifier
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            widget.currentViewInfoBlocNotifier.value = viewInfoBloc;
+          }
+        });
+      } catch (e) {
+        // 静默处理 ViewInfoBloc 创建错误
+      }
+
       // 为文档、文件夹和笔记本类型的视图添加 isInSpaceHub 参数
       try {
         final plugin = view.plugin();
         if (plugin.pluginType == PluginType.document ||
             plugin.pluginType == PluginType.folder ||
             plugin.pluginType == PluginType.notebook) {
-          // 检查是否已经为这个 view 创建过 ViewInfoBloc
-          // 如果是（用户切换视图后又切回来），复用已有的 bloc
-          ViewInfoBloc? existingBloc;
-          for (final bloc in _childViewInfoBlocs) {
-            if (bloc.view.id == view.id) {
-              existingBloc = bloc;
-              break;
-            }
-          }
-
-          ViewInfoBloc viewInfoBloc;
-          if (existingBloc != null) {
-            Log.debug(
-                'SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
-            viewInfoBloc = existingBloc;
-          } else {
-            viewInfoBloc = ViewInfoBloc(view: view)
-              ..add(const ViewInfoEvent.started());
-            Log.debug(
-                'SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
-            _childViewInfoBlocs.add(viewInfoBloc);
-          }
-
-          // ✅ 在 build 完成后更新 currentViewInfoBlocNotifier，避免 setState() called during build 错误
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              widget.currentViewInfoBlocNotifier.value = viewInfoBloc;
-            }
-          });
-
-          // 将 viewInfoBloc 作为参数传给 DocumentPage，确保正确传递
-          return DocumentPage(
-            key: ValueKey(view.id),
+          // 将 viewInfoBloc 作为参数传给 DocumentPage
+          return _buildContentWithToolbar(
             view: view,
-            onDeleted: () => _onChildViewDeleted(view, null),
-            tabs: const [
-              PickerTabType.emoji,
-              PickerTabType.icon,
-              PickerTabType.custom,
-            ],
-            isInSpaceHub: true, // 在 Space Hub 中打开
-            viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
+            viewInfoBloc: viewInfoBloc,
+            child: DocumentPage(
+              key: ValueKey(view.id),
+              view: view,
+              onDeleted: () => _onChildViewDeleted(view, null),
+              tabs: const [
+                PickerTabType.emoji,
+                PickerTabType.icon,
+                PickerTabType.custom,
+              ],
+              isInSpaceHub: true, // 在 Space Hub 中打开
+              viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
+            ),
           );
         }
       } catch (e) {
         // 静默处理错误
       }
 
-      return plugin.widgetBuilder.buildWidget(
-        context: PluginContext(
-          onDeleted: _onChildViewDeleted,
-          userProfile: userProfile, // 传入用户配置
+      // 其他类型的视图（如 AI Chat、白板等）
+      return _buildContentWithToolbar(
+        view: view,
+        viewInfoBloc: viewInfoBloc,
+        child: plugin.widgetBuilder.buildWidget(
+          context: PluginContext(
+            onDeleted: _onChildViewDeleted,
+            userProfile: userProfile, // 传入用户配置
+          ),
+          shrinkWrap: false,
+          data: view.layout == ViewLayoutPB.Whiteboard
+              ? const {
+                  'preferHostFullWindowMoreItem': true,
+                  'preferHostTopRightActions': true,
+                }
+              : null,
         ),
-        shrinkWrap: false,
-        data: view.layout == ViewLayoutPB.Whiteboard
-            ? const {
-                'preferHostFullWindowMoreItem': true,
-                'preferHostTopRightActions': true,
-              }
-            : null,
       );
     } catch (e, stackTrace) {
       return Center(
@@ -870,6 +816,35 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         ),
       );
     }
+  }
+
+  Widget _buildContentWithToolbar({
+    required ViewPB view,
+    ViewInfoBloc? viewInfoBloc,
+    required Widget child,
+  }) {
+    if (viewInfoBloc == null) {
+      return child;
+    }
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: BlocProvider<ViewInfoBloc>.value(
+            value: viewInfoBloc,
+            child: UnifiedViewTopRightActions(
+              view: view,
+              viewInfoBloc: viewInfoBloc,
+              showCollaborators: FeatureFlag.syncDocument.isOn &&
+                  view.layout != ViewLayoutPB.Whiteboard,
+              useFloatingSurface: true,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _onChildViewDeleted(ViewPB deletedView, int? index) {

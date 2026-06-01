@@ -615,10 +615,6 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(12.0),
-            border: Border.all(
-              color: theme.borderColorScheme.primary,
-              width: 1,
-            ),
           ),
           child: Stack(
             children: [
@@ -807,10 +803,6 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(10.0),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              width: 1,
-            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

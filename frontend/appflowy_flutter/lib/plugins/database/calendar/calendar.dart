@@ -243,12 +243,10 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   }
 
   @override
-  double get topTabsLeadingWidth => _calendarSidebarExpandedWidth;
+  double get topTabsLeadingWidth => 0;
 
   @override
-  Widget? topTabsLeadingPane(BuildContext context) {
-    return _CalendarTopTabsLeadingPane(widgetBuilder: this);
-  }
+  Widget? topTabsLeadingPane(BuildContext context) => null;
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) {

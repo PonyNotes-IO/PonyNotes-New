@@ -95,7 +95,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                       WindowTitleBar(
                         leftChildren: [_buildTitleBarControls(context, state)],
                       ),
-                    if (!isFullWindow)
+                    if (!isFullWindow && _shouldShowTabBar(state))
                       Padding(
                         padding:
                             EdgeInsets.only(left: widget.layout.menuSpacing),
@@ -211,6 +211,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           if (rightBarItem == null) {
             return const SizedBox.shrink();
           }
+          if (rightBarItem is SizedBox && rightBarItem.width == 0 && rightBarItem.height == 0) {
+            return const SizedBox.shrink();
+          }
           return Container(
             color: homeContentBackgroundColor(context),
             height: HomeSizes.tabBarHeight,
@@ -237,6 +240,17 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
 
     return state
         .pageManagers[currentIndex].plugin.widgetBuilder.topTabsLeadingWidth;
+  }
+
+  bool _shouldShowTabBar(TabsState state) {
+    final currentIndex = state.currentIndex;
+    if (currentIndex < 0 || currentIndex >= state.pageManagers.length) {
+      return true;
+    }
+
+    final width = state
+        .pageManagers[currentIndex].plugin.widgetBuilder.topTabsLeadingWidth;
+    return width > 0;
   }
 
   Widget _buildTopTabsLeadingPane(BuildContext context, TabsState state) {
