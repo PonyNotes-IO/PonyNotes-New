@@ -1018,11 +1018,13 @@
     setTimeout(installContextMenuPastePositionPatch, 1500);
     setTimeout(installHighQualityClipboardPatch, 1500);
 
+    // scrollX/scrollY 故意不包含在此集合中。
+    // 原因同 whiteboard_collab_adapter.dart：每次 resize 反馈循环都会调整
+    // scrollX/scrollY，若将其纳入 stableAppStateKeys，远端 appState 推送
+    // 会把旧的坐标覆写到当前画布，造成漂移。
     const stableAppStateKeys = new Set([
         'gridModeEnabled',
         'gridSize',
-        'scrollX',
-        'scrollY',
         'theme',
         'viewBackgroundColor',
         'zoom',
@@ -1386,9 +1388,18 @@
 
                 if (elementsToRestore || appStateToRestore) {
                     console.log('[PonyNotes] 🎨 Applying scene from payload');
+                    // 读取 Excalidraw 当前的滚动坐标（由 initData 阶段通过 localStorage 写入），
+                    // 并在 updateScene 中显式传入，防止加载 elements 时 Excalidraw 触发
+                    // 自动居中逻辑覆盖用户保存的视口位置。
+                    const _curState = (typeof api.getAppState === 'function')
+                        ? api.getAppState() : {};
                     api.updateScene({
                         elements: elementsToRestore || [],
-                        appState: appStateToRestore || {},
+                        appState: {
+                            ...(appStateToRestore || {}),
+                            scrollX: _curState.scrollX,
+                            scrollY: _curState.scrollY,
+                        },
                         commitToHistory: false
                     });
                 }

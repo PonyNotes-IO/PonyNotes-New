@@ -130,6 +130,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
+                                    // ObjectKey(pm) 确保每个 LayoutBuilder 及其子树
+                                    // （包括 _PageStackState wantKeepAlive=true）始终与
+                                    // 同一个 PageManager 对象绑定。
+                                    // 若无此 key，关闭/pin/unpin 标签导致列表位置变化时，
+                                    // Flutter 按位置复用状态，旧 pm 的 notifier 被保留
+                                    // 在新位置，出现标签名与内容不匹配的错乱问题。
+                                    key: ObjectKey(pm),
                                     builder: (context, constraints) {
                                       return Row(
                                         children: [
@@ -999,12 +1006,19 @@ class PageManager {
             return const BlankPage();
           }
 
+          final activePlugin = notifier.plugin;
+          final activePluginKey =
+              ValueKey('${activePlugin.pluginType.name}:${activePlugin.id}');
+
           return FadingIndexedStack(
-            index: pluginSandbox.indexOf(notifier.plugin.pluginType),
+            // 同类型不同视图（如多个文档）必须用业务视图 id 隔离整棵子树，
+            // 避免 Flutter 在 IndexedStack 内复用旧文档状态而造成标签和内容串线。
+            key: activePluginKey,
+            index: pluginSandbox.indexOf(activePlugin.pluginType),
             children: pluginSandbox.supportPluginTypes.map(
               (pluginType) {
-                if (pluginType == notifier.plugin.pluginType) {
-                  final builder = notifier.plugin.widgetBuilder;
+                if (pluginType == activePlugin.pluginType) {
+                  final builder = activePlugin.widgetBuilder;
                   final pluginWidget = builder.buildWidget(
                     context: PluginContext(
                       onDeleted: onDeleted,
@@ -1014,6 +1028,7 @@ class PageManager {
                   );
 
                   return Padding(
+                    key: activePluginKey,
                     padding: builder.contentPadding,
                     child: pluginWidget,
                   );

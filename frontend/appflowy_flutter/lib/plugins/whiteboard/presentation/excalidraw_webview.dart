@@ -50,11 +50,14 @@ class ExcalidrawWebView extends StatefulWidget {
 
 /// ExcalidrawWebView的State类，暴露公共方法供外部调用
 class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+  // scrollX/scrollY 故意不包含在此集合中。
+  // 原因：每次触发 resize 事件时 Excalidraw 会根据新旧视口尺寸之差调整
+  // scrollX/scrollY 以保持视口中心点不变；若视口尺寸与保存时不一致，
+  // 每次 resize 都会产生偏移量，导致画布持续漂移。
+  // 与 whiteboard_collab_adapter.dart 中的同名常量保持一致。
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
-    'scrollX',
-    'scrollY',
     'theme',
     'viewBackgroundColor',
     'zoom',
@@ -137,13 +140,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> notifyContainerResized() async {
     await _safeEvalJs('''
       (function() {
-        window.dispatchEvent(new Event('resize'));
-        setTimeout(function() {
-          window.dispatchEvent(new Event('resize'));
-        }, 80);
-        const api = window.excalidrawAPI || window.excalidrawAppRef;
-        if (api && typeof api.refresh === 'function') {
-          api.refresh();
+        const _api = window.excalidrawAPI || window.excalidrawAppRef ||
+          window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+        if (_api && typeof _api.refresh === 'function') {
+          requestAnimationFrame(function() { _api.refresh(); });
         }
       })();
     ''', tag: 'notifyContainerResized');
@@ -1038,22 +1038,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     );
   }
 
-  /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
-  /// 注意：只隐藏欢迎界面中心的LOGO，不隐藏工具栏和其他功能元素
+  /// 安装容器尺寸变化守护，确保 Excalidraw 在 Flutter 布局完成后正确知晓视口尺寸。
   Future<void> _installResizeGuard() async {
     await _safeEvalJs('''
       (function() {
-        const dispatchStableResize = () => {
-          window.dispatchEvent(new Event('resize'));
-          requestAnimationFrame(() => {
-            window.dispatchEvent(new Event('resize'));
-            const api = window.excalidrawAPI ||
-              window.__EXCALIDRAW_API__ ||
-              window._excalidrawAPI;
-            if (api && typeof api.refresh === 'function') {
-              api.refresh();
-            }
-          });
+        const refreshAfterStableResize = () => {
+          const _api = window.excalidrawAPI ||
+            window.__EXCALIDRAW_API__ ||
+            window._excalidrawAPI;
+          if (_api && typeof _api.refresh === 'function') {
+            _api.refresh();
+          }
         };
 
         if (window._ponynotesResizeObserver) {
@@ -1068,18 +1063,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         const onContainerResize = () => {
           const root = document.querySelector('.excalidraw') || document.body;
           const rect = root.getBoundingClientRect();
-          if (Math.abs(rect.width - lastWidth) < 0.5 &&
-              Math.abs(rect.height - lastHeight) < 0.5) {
+          if (rect.width <= 0 || rect.height <= 0) {
+            return;
+          }
+          if (Math.abs(rect.width - lastWidth) < 1 &&
+              Math.abs(rect.height - lastHeight) < 1) {
             return;
           }
           lastWidth = rect.width;
           lastHeight = rect.height;
           clearTimeout(window._ponynotesResizeTimer);
-          window._ponynotesResizeTimer = setTimeout(dispatchStableResize, 40);
+          window._ponynotesResizeTimer = setTimeout(refreshAfterStableResize, 120);
         };
 
         window._ponynotesResizeHandler = onContainerResize;
-        window.addEventListener('resize', onContainerResize, { passive: true });
+        // 不再主动派发 window.resize。Excalidraw 自身已有 ResizeObserver，
+        // 这里仅在 Flutter 容器稳定后调用 refresh，避免合成 resize 反复改写 scroll。
         window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
         window._ponynotesResizeObserver.observe(document.body);
         const root = document.querySelector('.excalidraw');
@@ -1087,9 +1086,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window._ponynotesResizeObserver.observe(root);
         }
 
+        // 立即检查当前容器尺寸（初始化时 lastWidth=0 故必然触发一次）
         onContainerResize();
-        setTimeout(dispatchStableResize, 120);
-        setTimeout(dispatchStableResize, 360);
       })();
     ''', tag: 'installResizeGuard');
   }
