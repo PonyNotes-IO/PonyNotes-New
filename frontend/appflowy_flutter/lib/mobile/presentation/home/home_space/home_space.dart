@@ -1,5 +1,6 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/mobile/presentation/home/mobile_folders.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ class _MobileHomeSpaceState extends State<MobileHomeSpace>
     final workspaceId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
             '';
+    final favoriteBloc = context.read<FavoriteBloc>();
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
@@ -36,6 +38,7 @@ class _MobileHomeSpaceState extends State<MobileHomeSpace>
           user: widget.userProfile,
           workspaceId: workspaceId,
           showFavorite: false,
+          favoriteBloc: favoriteBloc,
         ),
       ),
     );

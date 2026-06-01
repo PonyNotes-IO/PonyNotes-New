@@ -7,6 +7,8 @@ import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/shared/list_extension.dart';
+import 'package:appflowy/util/theme_extension.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -20,7 +22,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileSpace extends StatelessWidget {
-  const MobileSpace({super.key});
+  const MobileSpace({super.key, required this.favoriteBloc});
+
+  final FavoriteBloc favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +57,7 @@ class MobileSpace extends StatelessWidget {
                           ? publicSpaces.first
                           : state.currentSpace ?? state.spaces.first,
                 ),
+                favoriteBloc: favoriteBloc,
               ),
               const VSpace(4.0),
               // 协作区 / 公共空间（仅 Space）
@@ -67,6 +72,7 @@ class MobileSpace extends StatelessWidget {
                       ? publicSpaces.first
                       : state.currentSpace ?? state.spaces.first,
                 ),
+                favoriteBloc: favoriteBloc,
               ),
             ] else ...[
               // 非协作工作区：个人空间仅使用公共空间中的 Space
@@ -81,6 +87,7 @@ class MobileSpace extends StatelessWidget {
                       ? publicSpaces.first
                       : state.currentSpace ?? state.spaces.first,
                 ),
+                favoriteBloc: favoriteBloc,
               ),
             ],
           ],
@@ -156,6 +163,7 @@ class MobileSpaceSection extends StatelessWidget {
     required this.isExpanded,
     required this.onHeaderPressed,
     required this.onAddPressed,
+    required this.favoriteBloc,
   });
 
   final String title;
@@ -163,12 +171,17 @@ class MobileSpaceSection extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onHeaderPressed;
   final VoidCallback onAddPressed;
+  final FavoriteBloc favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
     if (spaces.isEmpty) {
       return const SizedBox.shrink();
     }
+
+    final borderColor = Theme.of(context).isLightMode
+        ? const Color(0xFFE9E9EC)
+        : const Color(0x1AFFFFFF);
 
     return Column(
       children: [
@@ -178,7 +191,34 @@ class MobileSpaceSection extends StatelessWidget {
           onAdded: onAddPressed,
         ),
         if (isExpanded)
-          ...spaces.map((space) => _SpaceItem(space: space)),
+          Container(
+            margin: const EdgeInsets.symmetric(
+              horizontal: HomeSpaceViewSizes.mHorizontalPadding,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor, width: 0.5),
+            ),
+            child: Column(
+              children: [
+                for (int i = 0; i < spaces.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 0.5,
+                      thickness: 0.5,
+                      color: borderColor,
+                      indent: HomeSpaceViewSizes.mHorizontalPadding,
+                      endIndent: HomeSpaceViewSizes.mHorizontalPadding,
+                    ),
+                  _SpaceItem(
+                    space: spaces[i],
+                    favoriteBloc: favoriteBloc,
+                  ),
+                ],
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -241,9 +281,10 @@ class _MobileSpaceSectionHeaderState extends State<MobileSpaceSectionHeader> {
 }
 
 class _SpaceItem extends StatelessWidget {
-  const _SpaceItem({required this.space});
+  const _SpaceItem({required this.space, required this.favoriteBloc});
 
   final ViewPB space;
+  final FavoriteBloc favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -264,9 +305,19 @@ class _SpaceItem extends StatelessWidget {
             Log.error('some view id are duplicated: $duplicatedViews');
           }
           return Column(
-            children: childViews
-                .map(
-                  (view) => MobileViewItem(
+            children: childViews.asMap().entries.map((entry) {
+              final index = entry.key;
+              final view = entry.value;
+              return Column(
+                children: [
+                  if (index > 0)
+                    const Divider(
+                      height: 0.5,
+                      thickness: 0.5,
+                      indent: HomeSpaceViewSizes.mHorizontalPadding,
+                      endIndent: HomeSpaceViewSizes.mHorizontalPadding,
+                    ),
+                  MobileViewItem(
                     key: ValueKey(
                       '${space.id} ${view.id}',
                     ),
@@ -276,6 +327,7 @@ class _SpaceItem extends StatelessWidget {
                     level: 0,
                     leftPadding: HomeSpaceViewSizes.leftPadding,
                     isFeedback: false,
+                    favoriteBloc: favoriteBloc,
                     onSelected: (v) => context.pushView(
                       v,
                       tabs: [
@@ -299,8 +351,9 @@ class _SpaceItem extends StatelessWidget {
                       );
                     },
                   ),
-                )
-                .toList(),
+                ],
+              );
+            }).toList(),
           );
         },
       ),

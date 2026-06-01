@@ -2,8 +2,13 @@ import 'dart:io';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
+import 'package:appflowy/mobile/presentation/page_item/mobile_view_item_add_button.dart';
+import 'package:appflowy/mobile/presentation/page_item/mobile_view_item_more_sheet.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -32,6 +37,7 @@ class MobileViewItem extends StatelessWidget {
     required this.isFeedback,
     this.startActionPane,
     this.endActionPane,
+    this.favoriteBloc,
   });
 
   final ViewPB view;
@@ -63,6 +69,7 @@ class MobileViewItem extends StatelessWidget {
   // the actions of the view item, such as favorite, rename, delete, etc.
   final ActionPaneBuilder? startActionPane;
   final ActionPaneBuilder? endActionPane;
+  final FavoriteBloc? favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +96,7 @@ class MobileViewItem extends StatelessWidget {
             isFeedback: isFeedback,
             startActionPane: startActionPane,
             endActionPane: endActionPane,
+            favoriteBloc: favoriteBloc,
           );
         },
       ),
@@ -113,6 +121,7 @@ class InnerMobileViewItem extends StatelessWidget {
     required this.isFeedback,
     this.startActionPane,
     this.endActionPane,
+    this.favoriteBloc,
   });
 
   final ViewPB view;
@@ -135,6 +144,7 @@ class InnerMobileViewItem extends StatelessWidget {
 
   final ActionPaneBuilder? startActionPane;
   final ActionPaneBuilder? endActionPane;
+  final FavoriteBloc? favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +161,7 @@ class InnerMobileViewItem extends StatelessWidget {
       isFeedback: isFeedback,
       startActionPane: startActionPane,
       endActionPane: endActionPane,
+      favoriteBloc: favoriteBloc,
     );
 
     // if the view is expanded and has child views, render its child views
@@ -170,6 +181,7 @@ class InnerMobileViewItem extends StatelessWidget {
             isFeedback: isFeedback,
             startActionPane: startActionPane,
             endActionPane: endActionPane,
+            favoriteBloc: favoriteBloc,
           );
         }).toList();
 
@@ -203,6 +215,7 @@ class InnerMobileViewItem extends StatelessWidget {
             isFeedback: true,
             startActionPane: startActionPane,
             endActionPane: endActionPane,
+            favoriteBloc: favoriteBloc,
           );
         },
         child: child,
@@ -228,6 +241,7 @@ class SingleMobileInnerViewItem extends StatefulWidget {
     required this.isFeedback,
     this.startActionPane,
     this.endActionPane,
+    this.favoriteBloc,
   });
 
   final ViewPB view;
@@ -246,6 +260,7 @@ class SingleMobileInnerViewItem extends StatefulWidget {
   final FolderSpaceType spaceType;
   final ActionPaneBuilder? startActionPane;
   final ActionPaneBuilder? endActionPane;
+  final FavoriteBloc? favoriteBloc;
 
   @override
   State<SingleMobileInnerViewItem> createState() =>
@@ -270,10 +285,21 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
           overflow: TextOverflow.ellipsis,
         ),
       ),
+      // ··· more action button
+      MobileViewMoreButton(
+        onPressed: () => _showMoreActionSheet(context),
+      ),
+      // + button (only for document, folder, and notebook)
+      if (widget.view.layout == ViewLayoutPB.Document ||
+          widget.view.layout == ViewLayoutPB.Folder ||
+          widget.view.layout == ViewLayoutPB.Notebook)
+        MobileViewAddButton(
+          onPressed: () => _showAddPageSheet(context),
+        ),
     ];
 
-    Widget child = InkWell(
-      borderRadius: BorderRadius.circular(4.0),
+    Widget child = GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => widget.onSelected(widget.view),
       child: SizedBox(
         height: HomeSpaceViewSizes.mViewHeight,
@@ -288,7 +314,6 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
 
     if (widget.startActionPane != null || widget.endActionPane != null) {
       child = Slidable(
-        // Specify a key if the Slidable is dismissible.
         key: ValueKey(widget.view.hashCode),
         startActionPane: widget.startActionPane?.call(context),
         endActionPane: widget.endActionPane?.call(context),
@@ -297,6 +322,56 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
     }
 
     return child;
+  }
+
+  void _showMoreActionSheet(BuildContext context) {
+    final favoriteBloc = widget.favoriteBloc ?? context.read<FavoriteBloc>();
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showDivider: false,
+      useRootNavigator: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return MobileViewItemMoreSheet(
+          view: widget.view,
+          spaceType: widget.spaceType,
+          favoriteBloc: favoriteBloc,
+        );
+      },
+    );
+  }
+
+  void _showAddPageSheet(BuildContext context) {
+    final title = widget.view.name;
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      title: title,
+      showDragHandle: true,
+      showCloseButton: true,
+      useRootNavigator: true,
+      showDivider: false,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return AddNewPageWidgetBottomSheet(
+          view: widget.view,
+          onAction: (layout) {
+            Navigator.of(sheetContext).pop();
+            context.read<ViewBloc>().add(
+                  ViewEvent.createView(
+                    layout.defaultName,
+                    layout,
+                    section: widget.spaceType.toViewSectionPB,
+                  ),
+                );
+            context
+                .read<ViewBloc>()
+                .add(const ViewEvent.setIsExpanded(true));
+          },
+        );
+      },
+    );
   }
 
   Widget _buildViewIcon() {

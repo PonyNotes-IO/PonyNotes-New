@@ -2,6 +2,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/home/section_folder/mobile_home_section_folder.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -19,11 +20,13 @@ class MobileFolders extends StatelessWidget {
     required this.user,
     required this.workspaceId,
     required this.showFavorite,
+    required this.favoriteBloc,
   });
 
   final UserProfilePB user;
   final String workspaceId;
   final bool showFavorite;
+  final FavoriteBloc favoriteBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +52,15 @@ class MobileFolders extends StatelessWidget {
               ),
             );
       },
-      child: const _MobileFolder(),
+      child: _MobileFolder(favoriteBloc: favoriteBloc),
     );
   }
 }
 
 class _MobileFolder extends StatefulWidget {
-  const _MobileFolder();
+  const _MobileFolder({required this.favoriteBloc});
+
+  final FavoriteBloc favoriteBloc;
 
   @override
   State<_MobileFolder> createState() => _MobileFolderState();
@@ -84,7 +89,7 @@ class _MobileFolderState extends State<_MobileFolder> {
   ) {
     if (context.watch<SpaceBloc>().state.spaces.isNotEmpty) {
       return [
-        const MobileSpace(),
+        MobileSpace(favoriteBloc: widget.favoriteBloc),
       ];
     }
 

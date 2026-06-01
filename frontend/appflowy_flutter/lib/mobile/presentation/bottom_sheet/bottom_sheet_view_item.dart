@@ -24,11 +24,13 @@ class MobileViewItemBottomSheet extends StatefulWidget {
     required this.view,
     required this.actions,
     this.defaultType = MobileBottomSheetType.view,
+    this.favoriteBloc,
   });
 
   final ViewPB view;
   final MobileBottomSheetType defaultType;
   final List<MobileViewItemBottomSheetBodyAction> actions;
+  final FavoriteBloc? favoriteBloc;
 
   @override
   State<MobileViewItemBottomSheet> createState() =>
@@ -79,8 +81,7 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
               case MobileViewItemBottomSheetBodyAction.addToFavorites:
               case MobileViewItemBottomSheetBodyAction.removeFromFavorites:
                 Navigator.pop(context);
-                context
-                    .read<FavoriteBloc>()
+                _getFavoriteBloc(context)
                     .add(FavoriteEvent.toggle(widget.view));
                 showToastNotification(
                   message: !widget.view.isFavorite
@@ -107,6 +108,10 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
           },
         );
     }
+  }
+
+  FavoriteBloc _getFavoriteBloc(BuildContext context) {
+    return widget.favoriteBloc ?? context.read<FavoriteBloc>();
   }
 
   Future<void> _removeFromRecent(BuildContext context) async {
