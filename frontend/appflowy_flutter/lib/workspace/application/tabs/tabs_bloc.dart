@@ -72,6 +72,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView();
           },
           openTab: (Plugin plugin, ViewPB view) {
+            // 协作空间（isSpace=true）只做侧边栏导航，不生成选项卡
+            if (view.isSpace) return;
             state.currentPageManager
               ..hideSecondaryPlugin()
               ..setSecondaryPlugin(BlankPagePlugin());
@@ -84,10 +86,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               ..setSecondaryPlugin(BlankPagePlugin());
             emit(state.openPlugin(plugin: plugin, setLatest: setLatest));
             if (setLatest) {
-              // the space view should be filtered out.
-              if (view != null && view.isSpace) {
-                return;
-              }
               _setLatestOpenView(view);
               if (view != null) _expandAncestors(view);
             }
@@ -315,8 +313,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
-  /// 如果当前 Tab 是 SpaceHub，新 Tab 也使用同一空间的 SpaceHub 三栏布局打开
   void openTab(ViewPB view) {
+    // 协作空间不生成选项卡
+    if (view.isSpace) return;
     try {
       if (view.id.isEmpty) {
         Log.error('openTab called with empty view.id, aborting openTab');
@@ -327,7 +326,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         return;
       }
 
-      // 同步检查当前 Tab 是否为 SpaceHub，若是则复用同一空间的 SpaceHub 三栏布局
       final plugin = view.plugin();
       add(TabsEvent.openTab(plugin: plugin, view: view));
     } catch (e, stackTrace) {

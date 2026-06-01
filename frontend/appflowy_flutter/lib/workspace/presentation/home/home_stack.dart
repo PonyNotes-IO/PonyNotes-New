@@ -6,6 +6,7 @@ import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -13,6 +14,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/navigation.dart';
 import 'package:appflowy/workspace/presentation/home/tabs/tabs_manager.dart';
@@ -130,6 +132,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
+                                    // ObjectKey(pm) 确保每个 LayoutBuilder 及其子树
+                                    // （包括 _PageStackState wantKeepAlive=true）始终与
+                                    // 同一个 PageManager 对象绑定。
+                                    // 若无此 key，关闭/pin/unpin 标签导致列表位置变化时，
+                                    // Flutter 按位置复用状态，旧 pm 的 notifier 被保留
+                                    // 在新位置，出现标签名与内容不匹配的错乱问题。
+                                    key: ObjectKey(pm),
                                     builder: (context, constraints) {
                                       return Row(
                                         children: [
@@ -884,8 +893,16 @@ class PageNotifier extends ChangeNotifier {
   Widget tabBarWidget(
     String pluginId, [
     bool shortForm = false,
-  ]) =>
-      _plugin.widgetBuilder.tabBarItem(pluginId, shortForm);
+  ]) {
+    if (_plugin.notifier is ViewPluginNotifier) {
+      final view = (_plugin.notifier as ViewPluginNotifier).view;
+      if (view.isSpace) {
+        return const SizedBox.shrink();
+      }
+    }
+
+    return _plugin.widgetBuilder.tabBarItem(pluginId, shortForm);
+  }
 
   void setPlugin(
     Plugin newPlugin, {
@@ -923,6 +940,11 @@ class PageManager {
   final showSecondaryPluginNotifier = ValueNotifier(false);
 
   Plugin get plugin => _notifier.plugin;
+
+  bool get shouldShowInTabBar {
+    final notifier = plugin.notifier;
+    return notifier is! ViewPluginNotifier || !notifier.view.isSpace;
+  }
 
   void setPlugin(Plugin newPlugin, bool setLatest, [bool init = true]) {
     if (init) {
@@ -999,12 +1021,19 @@ class PageManager {
             return const BlankPage();
           }
 
+          final activePlugin = notifier.plugin;
+          final activePluginKey =
+              ValueKey('${activePlugin.pluginType.name}:${activePlugin.id}');
+
           return FadingIndexedStack(
-            index: pluginSandbox.indexOf(notifier.plugin.pluginType),
+            // 同类型不同视图（如多个文档）必须用业务视图 id 隔离整棵子树，
+            // 避免 Flutter 在 IndexedStack 内复用旧文档状态而造成标签和内容串线。
+            key: activePluginKey,
+            index: pluginSandbox.indexOf(activePlugin.pluginType),
             children: pluginSandbox.supportPluginTypes.map(
               (pluginType) {
-                if (pluginType == notifier.plugin.pluginType) {
-                  final builder = notifier.plugin.widgetBuilder;
+                if (pluginType == activePlugin.pluginType) {
+                  final builder = activePlugin.widgetBuilder;
                   final pluginWidget = builder.buildWidget(
                     context: PluginContext(
                       onDeleted: onDeleted,
@@ -1014,6 +1043,7 @@ class PageManager {
                   );
 
                   return Padding(
+                    key: activePluginKey,
                     padding: builder.contentPadding,
                     child: pluginWidget,
                   );
