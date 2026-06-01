@@ -6,6 +6,7 @@ import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -13,6 +14,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/navigation.dart';
 import 'package:appflowy/workspace/presentation/home/tabs/tabs_manager.dart';
@@ -891,8 +893,16 @@ class PageNotifier extends ChangeNotifier {
   Widget tabBarWidget(
     String pluginId, [
     bool shortForm = false,
-  ]) =>
-      _plugin.widgetBuilder.tabBarItem(pluginId, shortForm);
+  ]) {
+    if (_plugin.notifier is ViewPluginNotifier) {
+      final view = (_plugin.notifier as ViewPluginNotifier).view;
+      if (view.isSpace) {
+        return const SizedBox.shrink();
+      }
+    }
+
+    return _plugin.widgetBuilder.tabBarItem(pluginId, shortForm);
+  }
 
   void setPlugin(
     Plugin newPlugin, {
@@ -930,6 +940,11 @@ class PageManager {
   final showSecondaryPluginNotifier = ValueNotifier(false);
 
   Plugin get plugin => _notifier.plugin;
+
+  bool get shouldShowInTabBar {
+    final notifier = plugin.notifier;
+    return notifier is! ViewPluginNotifier || !notifier.view.isSpace;
+  }
 
   void setPlugin(Plugin newPlugin, bool setLatest, [bool init = true]) {
     if (init) {
