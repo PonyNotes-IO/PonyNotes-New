@@ -1,4 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -40,12 +42,22 @@ class MobileSpaceHeader extends StatelessWidget {
               cornerRadius: 6.0,
             ),
             const HSpace(8),
-            FlowyText.medium(
-              space.name,
-              lineHeight: 1.15,
-              fontSize: 16.0,
+            Expanded(
+              child: FlowyText.medium(
+                space.name,
+                lineHeight: 1.15,
+                fontSize: 16.0,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-            const HSpace(4.0),
+            if (space.spacePermission == SpacePermission.private)
+              const Padding(
+                padding: EdgeInsets.only(right: 4.0),
+                child: FlowySvg(
+                  FlowySvgs.space_lock_s,
+                  size: Size.square(12),
+                ),
+              ),
             const FlowySvg(
               FlowySvgs.workspace_drop_down_menu_show_s,
             ),

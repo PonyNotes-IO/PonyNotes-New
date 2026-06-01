@@ -1,3 +1,4 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/animated_gesture.dart';
@@ -35,19 +36,57 @@ class MobileSpaceMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SpaceBloc, SpaceState>(
       builder: (context, state) {
+        final spaceBloc = context.read<SpaceBloc>();
+        final privateSpaces = spaceBloc.privateSpaces;
+        final publicSpaces = spaceBloc.publicSpaces;
+        final isCollaborativeWorkspace =
+            context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+
         return SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const VSpace(4.0),
-              for (final space in state.spaces)
-                SizedBox(
-                  height: SpaceUIConstants.itemHeight,
-                  child: MobileSpaceMenuItem(
-                    space: space,
-                    isSelected: state.currentSpace?.id == space.id,
+              if (isCollaborativeWorkspace) ...[
+                // 私有空间
+                if (privateSpaces.isNotEmpty) ...[
+                  _SpaceSectionHeader(
+                    title: LocaleKeys.space_privateSpace.tr(),
                   ),
-                ),
+                  for (final space in privateSpaces)
+                    SizedBox(
+                      height: SpaceUIConstants.itemHeight,
+                      child: MobileSpaceMenuItem(
+                        space: space,
+                        isSelected: state.currentSpace?.id == space.id,
+                      ),
+                    ),
+                ],
+                // 协作区 / 公共空间
+                if (publicSpaces.isNotEmpty) ...[
+                  _SpaceSectionHeader(
+                    title: LocaleKeys.sideBar_workspace.tr(),
+                  ),
+                  for (final space in publicSpaces)
+                    SizedBox(
+                      height: SpaceUIConstants.itemHeight,
+                      child: MobileSpaceMenuItem(
+                        space: space,
+                        isSelected: state.currentSpace?.id == space.id,
+                      ),
+                    ),
+                ],
+              ] else ...[
+                // 非协作工作区：显示所有公共空间
+                for (final space in publicSpaces)
+                  SizedBox(
+                    height: SpaceUIConstants.itemHeight,
+                    child: MobileSpaceMenuItem(
+                      space: space,
+                      isSelected: state.currentSpace?.id == space.id,
+                    ),
+                  ),
+              ],
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8.0),
                 child: Divider(
@@ -62,6 +101,28 @@ class MobileSpaceMenu extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _SpaceSectionHeader extends StatelessWidget {
+  const _SpaceSectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          FlowyText.medium(
+            title,
+            fontSize: 13.0,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+          ),
+        ],
+      ),
     );
   }
 }
