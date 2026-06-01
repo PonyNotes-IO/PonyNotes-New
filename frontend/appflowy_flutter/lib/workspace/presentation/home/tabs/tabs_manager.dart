@@ -59,6 +59,8 @@ class _TabsManagerState extends State<TabsManager> {
         final tabStripColor = theme.brightness == Brightness.dark
             ? _darkModeTabStripColor
             : _lightModeTabStripColor;
+        final visiblePageManagers =
+            state.pageManagers.where((pm) => pm.shouldShowInTabBar).toList();
 
         return Container(
           alignment: Alignment.bottomLeft,
@@ -78,7 +80,7 @@ class _TabsManagerState extends State<TabsManager> {
                   controller: _scrollController,
                   scrollDirection: Axis.horizontal,
                   child: Row(
-                    children: state.pageManagers.map((pm) {
+                    children: visiblePageManagers.map((pm) {
                       return FlowyTab(
                         key: ValueKey('tab-${pm.plugin.id}'),
                         pageManager: pm,
@@ -107,7 +109,8 @@ class _TabsManagerState extends State<TabsManager> {
     required double maxWidth,
     required TabsState state,
   }) {
-    final pageManagers = state.pageManagers;
+    final pageManagers =
+        state.pageManagers.where((pm) => pm.shouldShowInTabBar).toList();
     final pinnedCount = pageManagers.where((pm) => pm.isPinned).length;
     final unpinnedCount = pageManagers.length - pinnedCount;
     if (unpinnedCount <= 0) {
