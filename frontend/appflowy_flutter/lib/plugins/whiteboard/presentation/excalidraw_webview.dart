@@ -738,9 +738,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 确保工具栏始终正常显示和响应点击 */
-          .App-toolbar,
-          .App-toolbar * {
+          /* 确保工具栏容器可以接收点击（不要用 * 通配符，会影响隐藏的 radio input） */
+          .App-toolbar {
             pointer-events: auto !important;
           }
 
@@ -753,8 +752,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
           }
-          
-          /* 确保工具栏按钮可以正常点击 */
+
+          /* 确保工具栏按钮（label）可以正常点击 */
           .App-toolbar .ToolIcon,
           .App-toolbar .Shape,
           .App-toolbar label.ToolIcon {
@@ -767,6 +766,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             border-radius: 7px !important;
             align-items: center !important;
             justify-content: center !important;
+          }
+
+          /* 关键修复：恢复隐藏 radio/checkbox input 的 pointer-events:none。
+             Excalidraw 原始 CSS 将这些 input 设为 position:absolute + pointer-events:none，
+             若被 * 选择器强制为 auto，绝对定位的不可见 input 会拦截相邻按钮的点击，
+             导致点击工具 A 却激活工具 B，造成工具与光标不匹配。 */
+          .App-toolbar .ToolIcon_type_radio,
+          .App-toolbar .ToolIcon_type_checkbox {
+            pointer-events: none !important;
           }
 
           .App-toolbar svg {
