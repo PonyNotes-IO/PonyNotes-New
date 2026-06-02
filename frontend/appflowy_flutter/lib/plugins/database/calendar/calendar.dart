@@ -1302,7 +1302,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                       Visibility(
                         visible: shouldApplyTopPadding,
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.only(top: 16.0,right: 16),
                           child: UniversalPlatform.isMacOS ? _buildSidebarToggleButton(context) : Spacer(),
                         ),
                       ),
@@ -1404,7 +1404,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         // 日历标题区域
         Container(
           width: double.infinity,
-          padding: EdgeInsets.only(left: 16, right: 16, bottom: 8),
+          padding: EdgeInsets.only(left: 16, right: 16, top:12,bottom: 8),
           child: Row(
             children: [
               Expanded(
@@ -1439,6 +1439,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   popupBuilder: (context) => _buildAddMenu(),
                 ),
               ),
+              if(!UniversalPlatform.isMacOS) _buildSidebarToggleButton(context)
             ],
           ),
         ),
