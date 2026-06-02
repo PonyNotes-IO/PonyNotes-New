@@ -1124,9 +1124,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               padding: EdgeInsets.symmetric(horizontal: 10),
               child: Row(
                 children: [
-                  Icon(Icons.book, size: 18),
+                  Icon(Icons.edit_note, size: 18),
                   SizedBox(width: 8),
-                  Text('新建笔记页', style: TextStyle(fontSize: 14)),
+                  Text('新建日记', style: TextStyle(fontSize: 14)),
                 ],
               ),
             ),
@@ -1530,7 +1530,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               child: CalendarContent(
                 selectedDate: _selectedDay ?? _focusedDay,
                 viewId: _currentViewId,
-                onScheduleTap: _onScheduleTap,
                 onNoteTap: _onNoteTap,
                 selectedNoteId: _selectedNote?.id,
                 spaceType: FolderSpaceType.private,

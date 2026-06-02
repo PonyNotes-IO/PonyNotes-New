@@ -55,10 +55,14 @@ class _EditEventPageState extends State<EditEventPage> {
   int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   String? _repeatCustomSummary;
   late String _calendar;
+  late String _title;
   late String _description;
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
   ReminderOption _reminderOption = ReminderOption.none;
 
   /// 用于判断是否有未保存的配置变更（与初始加载值对比）
+  late String _initialTitle;
   late String _initialDescription;
   late int _initialRepeatType;
   late ReminderOption _initialReminderOption;
@@ -96,6 +100,8 @@ class _EditEventPageState extends State<EditEventPage> {
     // 当 schedule 发生变化时，重新初始化表单数据并触发 UI 更新
     if (oldWidget.schedule.id != widget.schedule.id) {
       Log.debug('🔄 [EditEventPage] schedule 发生变化: ${oldWidget.schedule.id} -> ${widget.schedule.id}');
+      _titleController.dispose();
+      _descriptionController.dispose();
       setState(() {
         _initializeFromSchedule();
       });
@@ -107,7 +113,7 @@ class _EditEventPageState extends State<EditEventPage> {
   // 从传入的日程初始化表单数据
   void _initializeFromSchedule() {
     final schedule = widget.schedule;
-    
+
     _startDate = schedule.startTime;
     _endDate = schedule.endTime;
     _startTime = TimeOfDay.fromDateTime(schedule.startTime);
@@ -122,8 +128,12 @@ class _EditEventPageState extends State<EditEventPage> {
             ? _extractSummaryFromJson(_repeatCustomSummary ?? '自定义')
             : _repeatTypeName(_repeatType));
     _calendar = schedule.category;
-    _description = schedule.title; // 使用title作为description
+    _title = schedule.title;
+    _description = schedule.description;
+    _titleController = TextEditingController(text: _title);
+    _descriptionController = TextEditingController(text: _description);
     _reminderOption = schedule.reminderOption;
+    _initialTitle = _title;
     _initialDescription = _description;
     _initialRepeatType = _repeatType;
     _initialReminderOption = _reminderOption;
@@ -136,7 +146,7 @@ class _EditEventPageState extends State<EditEventPage> {
     _initialRepeatCustomSummary = _repeatCustomSummary;
   }
 
-  /// 是否有未保存的日程配置变更（说明、重复、提醒、时间、重要与初始值不同）
+  /// 是否有未保存的日程配置变更（标题、说明、重复、提醒、时间、重要与初始值不同）
   bool _hasUnsavedConfigChanges() {
     // 手动比较 TimeOfDay 的 hour 和 minute，避免 == 比较引用问题
     final startTimeChanged = _startTime.hour != _initialStartTime.hour ||
@@ -144,7 +154,8 @@ class _EditEventPageState extends State<EditEventPage> {
     final endTimeChanged = _endTime.hour != _initialEndTime.hour ||
         _endTime.minute != _initialEndTime.minute;
 
-    return _description != _initialDescription ||
+    return _title != _initialTitle ||
+        _description != _initialDescription ||
         _repeatType != _initialRepeatType ||
         (_repeatCustomSummary ?? '') != (_initialRepeatCustomSummary ?? '') ||
         _reminderOption != _initialReminderOption ||
@@ -163,6 +174,7 @@ class _EditEventPageState extends State<EditEventPage> {
 
   /// 保存成功后调用：将当前表单视为已保存，后续只有用户再次改动才标记为有未保存
   void _markCurrentStateAsSaved() {
+    _initialTitle = _title;
     _initialDescription = _description;
     _initialRepeatType = _repeatType;
     _initialReminderOption = _reminderOption;
@@ -264,14 +276,16 @@ class _EditEventPageState extends State<EditEventPage> {
 
   @override
   void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
   bool saveEvent() {
     // 验证输入
-    if (_description.trim().isEmpty) {
+    if (_title.trim().isEmpty) {
       showToastNotification(
-        message: '请添加日程描述',
+        message: '请输入日程标题',
         type: ToastificationType.error,
       );
       return false;
@@ -368,7 +382,7 @@ class _EditEventPageState extends State<EditEventPage> {
       // 创建更新后的ScheduleItem
       // 重要：显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
       final updatedSchedule = widget.schedule.copyWith(
-        title: _description.isNotEmpty ? _description : '无标题日程',
+        title: _title.isNotEmpty ? _title : '无标题日程',
         description: _description,
         startTime: startDateTime,
         endTime: endDateTime,
@@ -401,6 +415,7 @@ class _EditEventPageState extends State<EditEventPage> {
           'isAllDay': _isAllDay,
           'isImportant': _isImportant,
           'calendar': _calendar,
+          'title': _title,
           'description': _description,
         };
 
@@ -747,30 +762,154 @@ class _EditEventPageState extends State<EditEventPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部时间选择区域
+            // 顶部返回按钮栏
             Container(
-              padding: EdgeInsets.all(20),
-              child: Column(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
                 children: [
-                  SizedBox(height: 20),
-                  // 时间选择器
-                  _isAllDay ? _buildAllDayDatePicker(theme, isDark) : _buildTimeRangePicker(theme, isDark),
-                  SizedBox(height: 40),
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: theme.iconTheme.color,
+                      size: 24,
+                    ),
+                    onPressed: widget.onCancel,
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints.tightFor(width: 36, height: 36),
+                  ),
+                  Spacer(),
+                  TextButton(
+                    onPressed: () => saveEvent(),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      '保存',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-            
+
+            // 顶部时间选择区域
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  SizedBox(height: 8),
+                  // 时间选择器
+                  _isAllDay ? _buildAllDayDatePicker(theme, isDark) : _buildTimeRangePicker(theme, isDark),
+                  SizedBox(height: 24),
+                ],
+              ),
+            ),
+
             // 选项列表
             Expanded(
               child: ListView(
                 padding: EdgeInsets.symmetric(horizontal: 20),
                 children: [
+                  // 标题输入
+                  TextField(
+                    controller: _titleController,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: theme.textTheme.bodyLarge?.color,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '日程标题',
+                      hintStyle: TextStyle(
+                        color: theme.hintColor,
+                        fontSize: 16,
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: theme.dividerColor.withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                    onChanged: (value) {
+                      _title = value;
+                      _notifyUnsavedConfig();
+                    },
+                  ),
+
+                  SizedBox(height: 12),
+
+                  // 描述输入
+                  TextField(
+                    controller: _descriptionController,
+                    maxLines: 3,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: '添加说明...',
+                      hintStyle: TextStyle(
+                        color: theme.hintColor,
+                        fontSize: 15,
+                      ),
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: theme.dividerColor.withOpacity(0.5),
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                    onChanged: (value) {
+                      _description = value;
+                      _notifyUnsavedConfig();
+                    },
+                  ),
+
+                  SizedBox(height: 16),
+
                   // 全天选项
                   ListTile(
                     leading: FlowySvg(
@@ -810,7 +949,7 @@ class _EditEventPageState extends State<EditEventPage> {
                     horizontalTitleGap: 8.0,
                     minLeadingWidth: 0,
                   ),
-                  
+
                   // 提醒选项
                   ListTile(
                     leading: FlowySvg(
@@ -831,7 +970,7 @@ class _EditEventPageState extends State<EditEventPage> {
                     horizontalTitleGap: 8.0,
                     minLeadingWidth: 0,
                   ),
-                  
+
                   // 日程重复选项
                   ListTile(
                     leading: FlowySvg(
@@ -850,48 +989,6 @@ class _EditEventPageState extends State<EditEventPage> {
                     ),
                     onTap: () {
                       _showRepeatPage();
-                    },
-                    horizontalTitleGap: 8.0,
-                    minLeadingWidth: 0,
-                  ),
-                  
-                  // 我的日历选项
-                  // ListTile(
-                  //   leading: FlowySvg(
-                  //     FlowySvgs.icon_calendar_m,
-                  //     color: theme.iconTheme.color,
-                  //     size: const Size.square(24),
-                  //   ),
-                  //   title: Text(
-                  //     '我的日历',
-                  //     style: TextStyle(
-                  //       fontSize: 16,
-                  //       color: theme.textTheme.bodyLarge?.color,
-                  //     ),
-                  //   ),
-                  //   onTap: () {
-                  //     // 显示日历选择器
-                  //   },
-                  //   horizontalTitleGap: 8.0,
-                  //   minLeadingWidth: 0,
-                  // ),
-                  
-                  // 添加说明选项
-                  ListTile(
-                    leading: FlowySvg(
-                      FlowySvgs.icon_edit_m,
-                      color: theme.iconTheme.color,
-                      size: const Size.square(24),
-                    ),
-                    title: Text(
-                      '添加说明',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    onTap: () {
-                      _showDescriptionDialog();
                     },
                     horizontalTitleGap: 8.0,
                     minLeadingWidth: 0,

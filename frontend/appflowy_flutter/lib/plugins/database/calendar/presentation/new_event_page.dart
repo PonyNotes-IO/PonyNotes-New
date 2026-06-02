@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flowy_infra/theme_extension.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import '../models/schedule_model.dart';
@@ -965,28 +966,32 @@ class CustomTimePickerBottomSheet extends StatefulWidget {
   final DateTime initialDate;
   final TimeOfDay initialTime;
   final String title;
-  final bool showTimePicker; // 新增参数控制是否显示时间选择器
+  final bool showTimePicker;
 
   const CustomTimePickerBottomSheet({
     Key? key,
     required this.initialDate,
     required this.initialTime,
     required this.title,
-    this.showTimePicker = true, // 默认显示时间选择器
+    this.showTimePicker = true,
   }) : super(key: key);
 
   @override
-  State<CustomTimePickerBottomSheet> createState() => _CustomTimePickerBottomSheetState();
+  State<CustomTimePickerBottomSheet> createState() =>
+      _CustomTimePickerBottomSheetState();
 }
 
-class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomSheet> {
+class _CustomTimePickerBottomSheetState
+    extends State<CustomTimePickerBottomSheet> {
   late DateTime selectedDate;
   late int selectedHour;
   late int selectedMinute;
   late DateTime currentMonth;
-  
-  final FixedExtentScrollController hourController = FixedExtentScrollController();
-  final FixedExtentScrollController minuteController = FixedExtentScrollController();
+
+  final FixedExtentScrollController hourController =
+      FixedExtentScrollController();
+  final FixedExtentScrollController minuteController =
+      FixedExtentScrollController();
 
   @override
   void initState() {
@@ -995,16 +1000,13 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     selectedHour = widget.initialTime.hour;
     selectedMinute = widget.initialTime.minute;
     currentMonth = DateTime(selectedDate.year, selectedDate.month, 1);
-    
-    // 设置初始滚动位置
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       hourController.jumpToItem(selectedHour);
       minuteController.jumpToItem(selectedMinute);
     });
   }
 
-  // 允许鼠标滚轮和拖拽的滚动行为，提升桌面端可用性
-  // 并开启常用指针设备支持
   static const Set<PointerDeviceKind> _pointerKinds = <PointerDeviceKind>{
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
@@ -1012,8 +1014,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     PointerDeviceKind.invertedStylus,
     PointerDeviceKind.trackpad,
   };
-  
-  ScrollBehavior get _pickerScrollBehavior => const _CupertinoPickerScrollBehavior();
+
+  ScrollBehavior get _pickerScrollBehavior =>
+      const _CupertinoPickerScrollBehavior();
 
   @override
   void dispose() {
@@ -1022,29 +1025,25 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     super.dispose();
   }
 
-  // 获取月份的天数
-  int getDaysInMonth(DateTime date) {
-    return DateTime(date.year, date.month + 1, 0).day;
-  }
+  int getDaysInMonth(DateTime date) =>
+      DateTime(date.year, date.month + 1, 0).day;
 
-  // 获取月份第一天是星期几（0=周日，1=周一，...，6=周六）
-  int getFirstDayOfWeek(DateTime date) {
-    return DateTime(date.year, date.month, 1).weekday % 7;
-  }
+  int getFirstDayOfWeek(DateTime date) =>
+      DateTime(date.year, date.month, 1).weekday % 7;
 
-  // 生成日历网格
+  // ---------- 日历网格 ----------
+
   Widget buildCalendar() {
+    final af = AFThemeExtension.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
     final daysInMonth = getDaysInMonth(currentMonth);
     final firstDayOfWeek = getFirstDayOfWeek(currentMonth);
     final today = DateTime.now();
-    
+
     return Column(
       children: [
         // 月份导航
-        Container(
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1052,54 +1051,59 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
               IconButton(
                 onPressed: () {
                   setState(() {
-                    currentMonth = DateTime(currentMonth.year, currentMonth.month - 1, 1);
+                    currentMonth = DateTime(
+                      currentMonth.year,
+                      currentMonth.month - 1,
+                      1,
+                    );
                   });
                 },
-                icon: Icon(
-                  Icons.chevron_left,
-                  color: isDark ? Colors.white : Colors.black87,
-                  size: 20,
-                ),
+                icon: Icon(Icons.chevron_left, color: af.onBackground, size: 20),
               ),
               Text(
                 '${currentMonth.year}年${currentMonth.month}月',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: af.onBackground,
                 ),
               ),
               IconButton(
                 onPressed: () {
                   setState(() {
-                    currentMonth = DateTime(currentMonth.year, currentMonth.month + 1, 1);
+                    currentMonth = DateTime(
+                      currentMonth.year,
+                      currentMonth.month + 1,
+                      1,
+                    );
                   });
                 },
                 icon: Icon(
                   Icons.chevron_right,
-                  color: isDark ? Colors.white : Colors.black87,
+                  color: af.onBackground,
                   size: 20,
                 ),
               ),
             ],
           ),
         ),
-        
+
         // 星期标题
-        Container(
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: ['日', '一', '二', '三', '四', '五', '六'].map((day) {
               return Expanded(
-                child: Container(
+                child: SizedBox(
                   height: 25,
-                  alignment: Alignment.center,
-                  child: Text(
-                    day,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      fontWeight: FontWeight.w500,
+                  child: Center(
+                    child: Text(
+                      day,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: af.secondaryTextColor,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -1107,9 +1111,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
             }).toList(),
           ),
         ),
-        
+
         // 日历网格
-        Container(
+        Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: GridView.builder(
             shrinkWrap: true,
@@ -1120,43 +1124,40 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
               crossAxisSpacing: 4,
               mainAxisSpacing: 4,
             ),
-            itemCount: 42, // 6周 x 7天
+            itemCount: 42,
             itemBuilder: (context, index) {
               final dayNumber = index - firstDayOfWeek + 1;
-              
+
               if (dayNumber < 1 || dayNumber > daysInMonth) {
-                return Container(); // 空白日期
+                return const SizedBox.shrink();
               }
-              
-              final date = DateTime(currentMonth.year, currentMonth.month, dayNumber);
-              final isSelected = date.year == selectedDate.year && 
-                                date.month == selectedDate.month && 
-                                date.day == selectedDate.day;
-              final isToday = date.year == today.year && 
-                             date.month == today.month && 
-                             date.day == today.day;
-              
+
+              final date = DateTime(
+                currentMonth.year,
+                currentMonth.month,
+                dayNumber,
+              );
+              final isSelected = date.year == selectedDate.year &&
+                  date.month == selectedDate.month &&
+                  date.day == selectedDate.day;
+              final isToday = date.year == today.year &&
+                  date.month == today.month &&
+                  date.day == today.day;
+
               return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    selectedDate = date;
-                  });
-                },
+                onTap: () => setState(() => selectedDate = date),
                 child: Container(
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isSelected 
-                      ? const Color(0xFFFF6B35)
-                      : isToday
-                        ? (isDark ? Colors.grey[700] : Colors.grey[200])
-                        : Colors.transparent,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : isToday
+                            ? af.lightGreyHover
+                            : Colors.transparent,
                     border: isToday && !isSelected
-                      ? Border.all(
-                          color: isDark ? Colors.grey[600]! : Colors.grey[400]!,
-                          width: 1,
-                        )
-                      : null,
+                        ? Border.all(color: af.borderColor, width: 1)
+                        : null,
                   ),
                   child: Center(
                     child: Text(
@@ -1164,9 +1165,10 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                       style: TextStyle(
                         fontSize: 16,
                         color: isSelected
-                          ? Colors.white
-                          : (isDark ? Colors.white : Colors.black87),
-                        fontWeight: isSelected || isToday ? FontWeight.w600 : FontWeight.normal,
+                            ? theme.colorScheme.onPrimary
+                            : af.onBackground,
+                        fontWeight:
+                            isSelected || isToday ? FontWeight.w600 : FontWeight.normal,
                       ),
                     ),
                   ),
@@ -1179,24 +1181,20 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     );
   }
 
+  // ---------- build ----------
+
   @override
   Widget build(BuildContext context) {
+    final af = AFThemeExtension.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
+
     return Container(
-      height: widget.showTimePicker ? 700 : 500, // 根据是否显示时间选择器调整高度
-      width: 400,  // 增加宽度给日历更多空间
+      height: widget.showTimePicker ? 700 : 500,
+      width: 400,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+        color: af.background,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: af.borderColor, width: 0.5),
       ),
       child: Column(
         children: [
@@ -1206,80 +1204,74 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                  width: 0.5,
-                ),
+                bottom: BorderSide(color: af.borderColor, width: 0.5),
               ),
             ),
             child: Stack(
               children: [
-                // 居中的标题
                 Center(
                   child: Text(
                     widget.title,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white : Colors.black87,
+                      color: af.onBackground,
                     ),
                   ),
                 ),
-                // 左上角的关闭按钮
+                // 关闭按钮
                 Positioned(
                   left: 0,
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: IconButton(
-                      onPressed: () {
-                        Navigator.pop(context); // 关闭弹窗，不返回任何数据
-                      },
-                      icon: Icon(
-                        Icons.close,
-                        color: isDark ? Colors.white : Colors.black87,
-                        size: 20,
-                      ),
-                      splashColor: Colors.transparent, // 禁用点击波纹效果
-                      highlightColor: Colors.transparent, // 禁用高亮效果
-                      hoverColor: Colors.transparent, // 禁用悬停效果
-                      style: IconButton.styleFrom(
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(4),
+                      hoverColor: af.lightGreyHover,
+                      child: Padding(
                         padding: const EdgeInsets.all(8),
-                        minimumSize: Size.zero,
+                        child: Icon(Icons.close, color: af.lightIconColor, size: 20),
                       ),
                     ),
                   ),
                 ),
-                
-                // 右侧的确认按钮
+                // 确认按钮
                 Positioned(
                   right: 0,
                   top: 0,
                   bottom: 0,
                   child: Center(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B35),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pop(context, {
-                            'date': selectedDate,
-                            'time': TimeOfDay(hour: selectedHour, minute: selectedMinute),
-                          });
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          minimumSize: Size.zero,
-                        ),
-                        child: const Text(
-                          '确认',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context, {
+                          'date': selectedDate,
+                          'time': TimeOfDay(
+                            hour: selectedHour,
+                            minute: selectedMinute,
                           ),
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: Text(
+                        '确认',
+                        style: TextStyle(
+                          color: theme.colorScheme.onPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -1288,60 +1280,54 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
               ],
             ),
           ),
-          
+
           // 日历和时间选择器
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // 日历部分
                   Expanded(
-                    flex: widget.showTimePicker ? 4 : 1, // 根据是否显示时间选择器调整比例
+                    flex: widget.showTimePicker ? 4 : 1,
                     child: buildCalendar(),
                   ),
-                  
-                  // 只有在显示时间选择器时才显示时间相关部分
+
                   if (widget.showTimePicker) ...[
                     const SizedBox(height: 12),
-                    
-                    // 时间标签
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
                         '时间',
                         style: TextStyle(
                           fontSize: 14,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                          color: af.secondaryTextColor,
                         ),
                       ),
                     ),
-                    
                     const SizedBox(height: 8),
-                    
-                    // 时间选择器
                     SizedBox(
                       height: 140,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF8F9FA),
+                          color: af.calloutBGColor,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           children: [
-                            // 小时选择器
+                            // 小时
                             Expanded(
                               child: Column(
                                 children: [
-                                  Container(
+                                  SizedBox(
                                     height: 30,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '时',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white : Colors.black87,
+                                    child: Center(
+                                      child: Text(
+                                        '时',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: af.onBackground,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1349,51 +1335,50 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     child: ScrollConfiguration(
                                       behavior: _pickerScrollBehavior,
                                       child: CupertinoPicker(
-                                      scrollController: hourController,
-                                      itemExtent: 28,
-                                      onSelectedItemChanged: (index) {
-                                        setState(() {
-                                          selectedHour = index;
-                                        });
-                                      },
-                                      children: List.generate(24, (index) {
-                                        return Center(
-                                          child: Text(
-                                            index.toString().padLeft(2, '0'),
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              color: isDark ? Colors.white : Colors.black87,
+                                        scrollController: hourController,
+                                        itemExtent: 28,
+                                        onSelectedItemChanged: (index) {
+                                          setState(() => selectedHour = index);
+                                        },
+                                        children: List.generate(24, (index) {
+                                          return Center(
+                                            child: Text(
+                                              index.toString().padLeft(2, '0'),
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                color: af.onBackground,
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      }),
+                                          );
+                                        }),
                                       ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            
+
                             // 分隔线
                             Container(
                               width: 1,
                               height: 60,
-                              color: isDark ? Colors.grey[600] : Colors.grey[300],
+                              color: af.borderColor,
                             ),
-                            
-                            // 分钟选择器
+
+                            // 分钟
                             Expanded(
                               child: Column(
                                 children: [
-                                  Container(
+                                  SizedBox(
                                     height: 30,
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '分',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: isDark ? Colors.white : Colors.black87,
+                                    child: Center(
+                                      child: Text(
+                                        '分',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: af.onBackground,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1401,24 +1386,24 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     child: ScrollConfiguration(
                                       behavior: _pickerScrollBehavior,
                                       child: CupertinoPicker(
-                                      scrollController: minuteController,
-                                      itemExtent: 28,
-                                      onSelectedItemChanged: (index) {
-                                        setState(() {
-                                          selectedMinute = index;
-                                        });
-                                      },
-                                      children: List.generate(60, (index) {
-                                        return Center(
-                                          child: Text(
-                                            index.toString().padLeft(2, '0'),
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              color: isDark ? Colors.white : Colors.black87,
+                                        scrollController: minuteController,
+                                        itemExtent: 28,
+                                        onSelectedItemChanged: (index) {
+                                          setState(
+                                            () => selectedMinute = index,
+                                          );
+                                        },
+                                        children: List.generate(60, (index) {
+                                          return Center(
+                                            child: Text(
+                                              index.toString().padLeft(2, '0'),
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                color: af.onBackground,
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      }),
+                                          );
+                                        }),
                                       ),
                                     ),
                                   ),

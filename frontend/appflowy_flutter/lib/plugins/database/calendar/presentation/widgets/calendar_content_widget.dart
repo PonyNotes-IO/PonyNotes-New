@@ -1,6 +1,5 @@
-// 统一的日记和日程展示组件
+// 统一的日记展示组件
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/plugins/database/calendar/presentation/widgets/schedule_sidebar_content.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -15,12 +14,10 @@ import '../../../../../workspace/application/view/view_ext.dart';
 import '../../../../../workspace/presentation/home/menu/view/view_item.dart';
 import '../../../../../workspace/presentation/home/home_sizes.dart';
 import '../../application/calendar_content_cubit.dart';
-import '../../models/schedule_model.dart';
 
 class CalendarContent extends StatefulWidget {
   final DateTime selectedDate;
   final String? viewId;
-  final Function(ScheduleItem)? onScheduleTap; // 点击日程的回调
   final Function(ViewPB)? onNoteTap; // 点击笔记的回调
   final String? selectedNoteId; // 当前选中的笔记ID
   final FolderSpaceType spaceType; // 空间类型
@@ -29,7 +26,6 @@ class CalendarContent extends StatefulWidget {
     Key? key,
     required this.selectedDate,
     this.viewId,
-    this.onScheduleTap,
     this.onNoteTap,
     this.selectedNoteId,
     required this.spaceType,
@@ -124,7 +120,7 @@ class _CalendarContentState extends State<CalendarContent> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           if (_isLoading) ...[
             Center(
               child: Padding(
@@ -133,7 +129,6 @@ class _CalendarContentState extends State<CalendarContent> {
               ),
             ),
           ] else ...[
-            // 优先展示笔记
             if (_realNotes.isNotEmpty) ...[
               ListView(
                 shrinkWrap: true,
@@ -141,40 +136,8 @@ class _CalendarContentState extends State<CalendarContent> {
                 padding: EdgeInsets.zero,
                 children: _buildNoteTree(context),
               ),
-              const SizedBox(height: 16),
-              // 有笔记时也显示日程（如果有）
-              if (widget.viewId != null) ...[
-                ScheduleSidebarContent(
-                  databaseViewId: widget.viewId,
-                  onScheduleTap: widget.onScheduleTap,
-                  selectedDate: widget.selectedDate,
-                ),
-              ],
             ] else ...[
-              // 没有笔记，显示"当天暂无笔记"提示
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  '当天暂无笔记',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.6),
-                  ),
-                ),
-              ),
-              // 显示日程（如果有）
-              if (widget.viewId != null) ...[
-                ScheduleSidebarContent(
-                  databaseViewId: widget.viewId,
-                  onScheduleTap: widget.onScheduleTap,
-                  selectedDate: widget.selectedDate,
-                ),
-              ] else ...[
-                // 既没有笔记也没有日程（没有viewId），显示空布局
-                _buildEmptyState(context),
-              ],
+              _buildEmptyState(context),
             ],
           ],
         ],
@@ -185,33 +148,23 @@ class _CalendarContentState extends State<CalendarContent> {
   Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48.0),
+        padding: const EdgeInsets.symmetric(vertical: 32.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.calendar_today_outlined,
-              size: 64,
+              Icons.note_alt_outlined,
+              size: 48,
               color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
-              '当天暂无笔记和日程',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              '当天暂无笔记',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Theme.of(context)
                     .colorScheme
                     .onSurface
-                    .withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '点击日历创建新日程',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withOpacity(0.4),
+                    .withOpacity(0.5),
               ),
             ),
           ],
@@ -342,13 +295,6 @@ class _CalendarContentState extends State<CalendarContent> {
             _realNotes = notesForDate;
             _isLoading = false;
           });
-
-          // 如果有笔记且没有当前选中的笔记，自动选择第一条笔记
-          if (_realNotes.isNotEmpty && widget.selectedNoteId == null) {
-            if (widget.onNoteTap != null) {
-              widget.onNoteTap!(_realNotes.first);
-            }
-          }
         },
             (error) {
           if (!mounted) return;
