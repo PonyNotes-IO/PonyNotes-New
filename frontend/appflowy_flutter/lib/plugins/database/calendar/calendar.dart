@@ -265,33 +265,6 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   }
 }
 
-class _CalendarTopTabsLeadingPane extends StatelessWidget {
-  const _CalendarTopTabsLeadingPane({required this.widgetBuilder});
-
-  final CalendarMainWidgetBuilder widgetBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: widgetBuilder.topTabsLeadingRevision,
-      builder: (context, _, __) {
-        final panelState = widgetBuilder._panelKey.currentState;
-        if (panelState == null) {
-          return const SizedBox.shrink();
-        }
-
-        // Put the calendar middle-pane header into HomeStack's leading slot,
-        // not into the tab strip itself.
-        // 将日历中间栏头部放进 HomeStack 预留区，而不是作为普通选项卡。
-        return panelState._buildTopWidget(
-          height: HomeSizes.tabBarHeight,
-          inTopTabs: true,
-        );
-      },
-    );
-  }
-}
-
 // 主日历面板骨架
 class CalendarMainPanel extends StatefulWidget {
   const CalendarMainPanel({
@@ -1317,33 +1290,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                       Visibility(
                         visible: shouldApplyTopPadding,
                         child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: FlowyIconButton(
-                            width: 24,
-                            tooltipText: LocaleKeys.sideBar_openSidebar.tr(),
-                            radius:
-                                const BorderRadius.all(Radius.circular(8.0)),
-                            icon: const FlowySvg(
-                              FlowySvgs.show_menu_s,
-                              size: Size.square(16),
-                            ),
-                            onPressed: () {
-                              if (FullWindowController.isFullWindow.value) {
-                                FullWindowController.exit();
-                              }
-                              try {
-                                context.read<HomeSettingBloc>().add(
-                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                                );
-                              } catch (_) {
-                                // HomeSettingBloc not available (mobile mode)
-                              }
-                            },
-                          ),
+                          padding: const EdgeInsets.all(16.0),
                         ),
                       ),
                       // 顶部工具栏，包含收起/展开按钮和其他操作按钮
-                      if (isFullWindow) _buildTopWidget(),
+                      // if (isFullWindow) _buildTopWidget(),
                       // 右侧工具栏 - 已移除三个按钮
                       // 侧边栏内容
                       Expanded(
@@ -2442,8 +2393,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               ),
       ),
       child: ClipRect(
-        child: _isSidebarExpanded
-            ? Row(
+        child: Row(
                 children: [
                   Expanded(
                     child: Padding(
@@ -2498,13 +2448,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   //   ),
                   // ),
                 ],
-              )
-            : Center(
-                child: IconButton(
-                  icon: Icon(Icons.keyboard_double_arrow_right, size: 22),
-                  onPressed: () => _setSidebarExpanded(!_isSidebarExpanded),
-                  tooltip: '展开侧边栏',
-                ),
               ),
       ),
     );

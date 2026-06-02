@@ -979,7 +979,6 @@ class _SpaceDocumentList extends StatelessWidget {
       // 仅保留左侧留白，避免右侧产生与分割线之间的空白带
       margin: const EdgeInsets.only(left: 12),
       child: Column(
-        mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 头部：空间名称 + 新增文档按钮
@@ -1010,7 +1009,7 @@ class _SpaceDocumentList extends StatelessWidget {
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: isSidebarHidden && Platform.isMacOS ? 32 : 10,
+        top: isSidebarHidden && Platform.isMacOS ? 42 : 10,
         bottom: 4,
       ),
       // decoration: BoxDecoration(
@@ -1129,16 +1128,16 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          if (isSidebarHidden) ...[
-            const HSpace(4),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: _SpaceHubSidebarToggleButton(
-                color: theme.iconColorScheme.secondary,
-              ),
-            ),
-          ],
+          // if (isSidebarHidden) ...[
+          //   const HSpace(4),
+          //   SizedBox(
+          //     width: 32,
+          //     height: 32,
+          //     child: _SpaceHubSidebarToggleButton(
+          //       color: theme.iconColorScheme.secondary,
+          //     ),
+          //   ),
+          // ],
         ],
       ),
     );
