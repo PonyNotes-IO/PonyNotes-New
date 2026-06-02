@@ -331,6 +331,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 避免异步加载分批完成时，在 `_showEditEventPage` 已短暂不一致的情况下仍被切走。
   int _skipDetailPanelSyncCount = 0;
 
+  /// 用户主动点击小日历日期时为 true，用于跳过自动选中第一条笔记/日程。
+  bool _isUserDaySelection = false;
+
   // Right-side event detail panel
   ScheduleItem? _detailPanelSchedule;
 
@@ -927,11 +930,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 执行选择日期后的逻辑（抽取为独立方法）
   void _performSelectDay(DateTime selected, DateTime focused) {
     _skipDetailPanelSyncCount = 0;
+    _isUserDaySelection = true; // 标记为用户主动选择日期，跳过自动选中
     _disposeNewEventScheduleModel();
     setState(() {
       _selectedDay = selected;
       _focusedDay = focused;
-      // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
+      // 切换日期时清空右侧区域，显示大日历视图
       _selectedNote = null;
       widget.selectedViewNotifier.value = null;
       getIt<MenuSharedState>().latestOpenView = null;
@@ -1743,11 +1747,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 1) 有笔记：显示第一条笔记并展示工具栏；
   /// 2) 无笔记但有日程：自动打开第一条日程并隐藏工具栏；
   /// 3) 都没有：清空右侧选中并隐藏工具栏。
+  ///
+  /// 当 [_isUserDaySelection] 为 true 时（用户点击小日历日期），
+  /// 跳过自动选中，保持大日历视图。
   void _syncDetailPanelWithLoadedContent(
     List<ViewPB> notes,
     List<ScheduleItem> schedules,
   ) {
     if (!mounted) return;
+
+    // 用户主动点击小日历日期时，不自动选中第一条笔记/日程，保持大日历视图
+    if (_isUserDaySelection) {
+      _isUserDaySelection = false;
+      return;
+    }
 
     // 正在新建或编辑日程时，不要用「当天第一条笔记/日程」覆盖右侧。
     // 否则保存后未保存标记已清除，异步加载完成时会误切到未命名文档等其它视图。
