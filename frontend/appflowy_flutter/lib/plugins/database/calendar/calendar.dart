@@ -1601,7 +1601,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
           ),
         ],
-        ),
       ],
     );
   }
