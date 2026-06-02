@@ -1007,6 +1007,18 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     });
   }
 
+  /// 保存成功后直接关闭编辑页，不弹窗（不检查未保存状态）
+  void _hideEditEventPageAfterSave() {
+    _skipDetailPanelSyncCount = 0;
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    setState(() {
+      _showEditEventPage = false;
+      _editingSchedule = null;
+      _saveEventCallback = null;
+      _editEventHasUnsavedConfig = false;
+    });
+  }
+
   /// 检查并隐藏编辑日程页，如果有未保存配置则弹窗确认
   void _checkAndHideEditEventPage({VoidCallback? onHidden}) {
     final hide = () {
@@ -1021,15 +1033,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _editEventHasUnsavedConfig = false; // 关闭后清除未保存标记
       });
       onHidden?.call();
-      // 仅「直接关闭编辑页」（取消/离开）时同步右侧面板，与侧边栏点击日程一致进入 _buildEditEventView；
-      // 若带 onHidden（如切换去点其它日程）则由回调负责，避免覆盖。
-      // 若不调用此处同步，会落在 _buildDefaultView → 旧版 _buildScheduleEditArea（「编辑日程: xxx」），与点击日程不一致。
-      if (onHidden == null && mounted) {
-        final data = _cachedContent ?? {};
-        final notes = data['notes'] as List<ViewPB>? ?? [];
-        final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
-        _syncDetailPanelWithLoadedContent(notes, schedules);
-      }
     };
 
     if (_editEventHasUnsavedConfig) {
@@ -2347,6 +2350,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               onEventUpdated: _onEventUpdated,
               onEventDeleted: _onEventDeleted,
               onCancel: _checkAndHideEditEventPage,
+              onSaved: _hideEditEventPageAfterSave,
               onSaveRequested: (saveCallback) {
                 _saveEventCallback = saveCallback;
               },

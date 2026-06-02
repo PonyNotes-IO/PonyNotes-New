@@ -24,6 +24,7 @@ class EditEventPage extends StatefulWidget {
   final Function(Map<String, dynamic>) onEventUpdated;
   final Function(String) onEventDeleted; // 删除回调
   final VoidCallback onCancel;
+  final VoidCallback? onSaved; // 保存成功后回调，用于关闭编辑页
   final Function(bool Function())? onSaveRequested;
   final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
   /// 当「日程配置」是否有未保存变更发生变化时回调（用于离开前弹窗提示）
@@ -36,6 +37,7 @@ class EditEventPage extends StatefulWidget {
     required this.onEventDeleted,
     required this.onCancel,
     required this.scheduleModel,
+    this.onSaved,
     this.onSaveRequested,
     this.onHasUnsavedConfigChanged,
   }) : super(key: key);
@@ -430,6 +432,8 @@ class _EditEventPageState extends State<EditEventPage> {
             message: '✅ 日程更新成功！',
             type: ToastificationType.success,
           );
+          // 保存成功后关闭编辑页，返回大日历视图
+          widget.onSaved?.call();
         }
       } else {
         throw Exception('更新日程失败');
