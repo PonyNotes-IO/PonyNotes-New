@@ -207,40 +207,7 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   Widget get leftBarItem => const FlowyText.medium('日历'); // 显示左侧标题
 
   @override
-  Widget? get rightBarItem {
-    return ValueListenableBuilder<bool>(
-      valueListenable: _isViewingSchedule,
-      builder: (context, isViewingSchedule, _) {
-        if (isViewingSchedule) {
-          return const SizedBox.shrink();
-        }
-
-        return ValueListenableBuilder<ViewPB?>(
-          valueListenable: selectedViewNotifier,
-          builder: (context, selectedView, _) {
-            if (selectedView == null) {
-              return const SizedBox.shrink();
-            }
-
-            try {
-              final plugin = selectedView.plugin();
-              plugin.init();
-              final toolbar = plugin.widgetBuilder.rightBarItem;
-              if (toolbar != null) {
-                return toolbar;
-              }
-            } catch (e) {
-              debugPrint(
-                '[Calendar] Error getting rightBarItem for ${selectedView.name}: $e',
-              );
-            }
-
-            return const SizedBox.shrink();
-          },
-        );
-      },
-    );
-  }
+  Widget? get rightBarItem => null;
 
   @override
   double get topTabsLeadingWidth => 0;
@@ -1389,29 +1356,40 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 ),
               ),
             ),
+            VerticalDivider(width: 1,),
             // 右侧详情区 - 分为日历视图和编辑区域
             Expanded(
               child: Padding(
                 padding: EdgeInsets.only(
                   top: contentTopPadding,
                 ),
-                child: _selectedNote != null ||
-                        _showNewEventPage ||
-                        _showEditEventPage
-                    ? Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
-                        color: Theme.of(context).colorScheme.surface, // 添加背景色设置
-                        child: _showNewEventPage
-                            ? _buildNewEventView()
-                            : _showEditEventPage && _editingSchedule != null
-                                ? _buildEditEventView()
-                                : _selectedNote != null
-                                    ? _buildNoteEditArea()
-                                    : Container(),
-                      )
-                    : _buildDefaultView(),
+                child: Stack(
+                  children: [
+                    _selectedNote != null ||
+                            _showNewEventPage ||
+                            _showEditEventPage
+                        ? Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
+                            color: Theme.of(context).colorScheme.surface,
+                            child: _showNewEventPage
+                                ? _buildNewEventView()
+                                : _showEditEventPage && _editingSchedule != null
+                                    ? _buildEditEventView()
+                                    : _selectedNote != null
+                                        ? _buildNoteEditArea()
+                                        : Container(),
+                          )
+                        : _buildDefaultView(),
+                    // 右侧内容区工具栏
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _buildRightContentToolbar(),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1420,23 +1398,97 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     );
   }
 
+  Widget _buildRightContentToolbar() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: widget.calendarWidgetBuilder._isViewingSchedule,
+      builder: (context, isViewingSchedule, _) {
+        if (isViewingSchedule) {
+          return const SizedBox.shrink();
+        }
+
+        return ValueListenableBuilder<ViewPB?>(
+          valueListenable: widget.selectedViewNotifier,
+          builder: (context, selectedView, _) {
+            if (selectedView == null) {
+              return const SizedBox.shrink();
+            }
+
+            try {
+              final plugin = selectedView.plugin();
+              plugin.init();
+              final toolbar = plugin.widgetBuilder.rightBarItem;
+              if (toolbar != null) {
+                return toolbar;
+              }
+            } catch (e) {
+              debugPrint(
+                '[Calendar] Error getting rightBarItem for ${selectedView.name}: $e',
+              );
+            }
+
+            return const SizedBox.shrink();
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildExpandedSidebar() {
     return Column(
       children: [
-        // 顶部月份标题与左右切换箭头
+        // 日历标题区域
         Container(
           width: double.infinity,
-          padding: EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 4),
+          padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '日历',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                          ),
+                    ),
+                    SizedBox(height: 2),
+                  ],
+                ),
+              ),
+              // 添加按钮
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: AppFlowyPopover(
+                  controller: _addPopoverController,
+                  direction: PopoverDirection.bottomWithCenterAligned,
+                  child: IconButton(
+                    icon: Icon(Icons.add, size: 18),
+                    onPressed: () => _addPopoverController.show(),
+                    tooltip: '添加新内容',
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints.tightFor(width: 32, height: 32),
+                  ),
+                  popupBuilder: (context) => _buildAddMenu(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // 月份切换控制栏
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.only(left: 16, right: 8, bottom: 4),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   '${_focusedDay.year}年${_focusedDay.month}月',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w400, fontSize: 16),
-                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).hintColor,
+                  ),
                 ),
               ),
               SizedBox(

@@ -1007,7 +1007,12 @@ class _SpaceDocumentList extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
 
     return Container(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: isSidebarHidden && Platform.isMacOS ? 32 : 10,
+        bottom: 4,
+      ),
       // decoration: BoxDecoration(
       //   border: Border(
       //     bottom: BorderSide(color: Theme.of(context).dividerColor),
@@ -1125,33 +1130,14 @@ class _SpaceDocumentList extends StatelessWidget {
             ),
           ),
           if (isSidebarHidden) ...[
-            if (Platform.isMacOS)
-              SizedBox(
-                width: 28,
-                height: 24,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned(
-                      right: 0,
-                      top: -18,
-                      child: _SpaceHubSidebarToggleButton(
-                        color: theme.iconColorScheme.secondary,
-                      ),
-                    ),
-                  ],
-                ),
+            const HSpace(4),
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: _SpaceHubSidebarToggleButton(
+                color: theme.iconColorScheme.secondary,
               ),
-            if (Platform.isWindows) ...[
-              const HSpace(4),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: _SpaceHubSidebarToggleButton(
-                  color: theme.iconColorScheme.secondary,
-                ),
-              ),
-            ],
+            ),
           ],
         ],
       ),
