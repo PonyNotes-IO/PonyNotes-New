@@ -33,13 +33,11 @@ class CalendarEventItem {
   const CalendarEventItem({
     required this.id,
     required this.title,
-    this.color,
     this.schedule,
   });
 
   final String id;
   final String title;
-  final Color? color;
   final ScheduleItem? schedule;
 }
 
