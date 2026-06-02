@@ -1584,6 +1584,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   Widget _buildDefaultView() {
     return Row(
       children: [
+        // Main calendar grid
         Expanded(
           child: CalendarGridView(
             key: _gridViewKey,
@@ -1603,25 +1604,43 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             onEventTap: _onGridEventTap,
           ),
         ),
-        if (_detailPanelSchedule != null) ...[
-          VerticalDivider(width: 1),
-          SizedBox(
-            width: 320,
-            child: EventDetailPanel(
-              schedule: _detailPanelSchedule!,
-              onClose: _closeDetailPanel,
-              onEdit: () {
-                _performScheduleTap(_detailPanelSchedule!);
-                _closeDetailPanel();
-              },
-              onDelete: () async {
-                await _scheduleModel.deleteSchedule(_detailPanelSchedule!.id);
-                _closeDetailPanel();
-                context.read<CalendarContentCubit>().refresh();
-              },
-            ),
+        // Right-side panels
+        VerticalDivider(width: 1),
+        SizedBox(
+          width: 320,
+          child: Column(
+            children: [
+              // Event detail (if selected)
+              if (_detailPanelSchedule != null)
+                Expanded(
+                  flex: 2,
+                  child: EventDetailPanel(
+                    schedule: _detailPanelSchedule!,
+                    onClose: _closeDetailPanel,
+                    onEdit: () {
+                      _performScheduleTap(_detailPanelSchedule!);
+                      _closeDetailPanel();
+                    },
+                    onDelete: () async {
+                      await _scheduleModel.deleteSchedule(_detailPanelSchedule!.id);
+                      _closeDetailPanel();
+                      context.read<CalendarContentCubit>().refresh();
+                    },
+                  ),
+                ),
+              // Todo list (always visible)
+              Expanded(
+                flex: 1,
+                child: TodoListPanel(
+                  todos: _todoItems,
+                  onAdd: _addTodo,
+                  onToggle: _toggleTodo,
+                  onDelete: _deleteTodo,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }
