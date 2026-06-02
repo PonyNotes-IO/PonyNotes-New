@@ -19,12 +19,16 @@ class CalendarGridView extends StatefulWidget {
     required this.selectedDate,
     this.onEventCreated,
     this.onEventDeleted,
+    this.onMonthChanged,
+    this.onEventTap,
   });
 
   final ScheduleModel scheduleModel;
   final DateTime selectedDate;
   final VoidCallback? onEventCreated;
   final VoidCallback? onEventDeleted;
+  final ValueChanged<DateTime>? onMonthChanged;
+  final ValueChanged<ScheduleItem>? onEventTap;
 
   @override
   State<CalendarGridView> createState() => CalendarGridViewState();
@@ -141,6 +145,9 @@ class CalendarGridViewState extends State<CalendarGridView> {
       }
     });
     _loadEvents();
+    if (widget.onMonthChanged != null) {
+      widget.onMonthChanged!(_currentDate);
+    }
     // Reset animation direction after transition
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) setState(() => _animationDirection = 0);
@@ -153,6 +160,9 @@ class CalendarGridViewState extends State<CalendarGridView> {
       _currentDate = DateTime.now();
     });
     _loadEvents();
+    if (widget.onMonthChanged != null) {
+      widget.onMonthChanged!(_currentDate);
+    }
   }
 
   String get _dateTitle {
@@ -473,7 +483,7 @@ class CalendarGridViewState extends State<CalendarGridView> {
       onDateTap: _onDateTap,
       onEventTap: (ev) {
         if (ev.schedule != null) {
-          _onEventTap(ev.schedule!);
+          widget.onEventTap?.call(ev.schedule!);
         }
       },
     );

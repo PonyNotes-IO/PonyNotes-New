@@ -42,6 +42,9 @@ import '../../../workspace/presentation/widgets/tab_bar_item.dart';
 import '../../../plugins/shared/share/share_button.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
+import 'presentation/calendar_grid_view.dart';
+import 'presentation/event_detail_panel.dart';
+import 'presentation/todo_list_panel.dart';
 import 'models/schedule_model.dart';
 import 'application/calendar_content_cubit.dart';
 import 'application/calendar_unsaved_guard.dart';
@@ -294,6 +297,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late ScheduleModel _scheduleModel; // 主日历列表用，与当前视图绑定
   /// 新建日程专用模型，避免与主日历 setViewId 异步初始化互相 dispose 控制器导致初始化失败
   ScheduleModel? _newEventScheduleModel;
+  /// 网格日历的 GlobalKey，用于从父级调用 showCreateMenuForDate
+  final GlobalKey<CalendarGridViewState> _gridViewKey = GlobalKey<CalendarGridViewState>();
   late ScheduleItem? _editingSchedule; // 正在编辑的日程
   late Function()? _saveEventCallback;
   late String? _currentViewId; // 添加当前视图ID
@@ -325,6 +330,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 新建/编辑日程保存成功后，忽略接下来若干次右侧面板「按当天首条笔记/日程」同步。
   /// 避免异步加载分批完成时，在 `_showEditEventPage` 已短暂不一致的情况下仍被切走。
   int _skipDetailPanelSyncCount = 0;
+
+  // Right-side event detail panel
+  ScheduleItem? _detailPanelSchedule;
+  // Todo list for selected date
+  final List<CalendarTodoItem> _todoItems = [];
 
   @override
   void initState() {
@@ -1126,13 +1136,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           InkWell(
             onTap: () {
               _addPopoverController.close();
-              if (_showNewEventPage && _newEventHasUnsavedConfig) {
-                _checkAndHideNewEventPage(onHidden: _showCreateScheduleDialog);
-              } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
-                _checkAndHideEditEventPage(onHidden: _showCreateScheduleDialog);
-              } else {
-                _showCreateScheduleDialog();
-              }
+              // 直接在网格日历中弹出新建日程菜单
+              final date = _selectedDay ?? _focusedDay;
+              _gridViewKey.currentState?.showCreateMenuForDate(date);
             },
             child: Container(
               height: 38,
@@ -1542,10 +1548,81 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     return const SizedBox.shrink();
   }
 
+  void _onGridEventTap(ScheduleItem schedule) {
+    setState(() {
+      _detailPanelSchedule = schedule;
+    });
+  }
+
+  void _closeDetailPanel() {
+    setState(() {
+      _detailPanelSchedule = null;
+    });
+  }
+
+  void _addTodo(String title) {
+    setState(() {
+      _todoItems.add(CalendarTodoItem(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+      ));
+    });
+  }
+
+  void _toggleTodo(CalendarTodoItem todo) {
+    setState(() {
+      todo.isCompleted = !todo.isCompleted;
+    });
+  }
+
+  void _deleteTodo(CalendarTodoItem todo) {
+    setState(() {
+      _todoItems.remove(todo);
+    });
+  }
+
   Widget _buildDefaultView() {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: _buildContentBasedOnDate(),
+    return Row(
+      children: [
+        Expanded(
+          child: CalendarGridView(
+            key: _gridViewKey,
+            scheduleModel: _scheduleModel,
+            selectedDate: _selectedDay ?? _focusedDay,
+            onEventCreated: () {
+              context.read<CalendarContentCubit>().refresh();
+            },
+            onEventDeleted: () {
+              context.read<CalendarContentCubit>().refresh();
+            },
+            onMonthChanged: (newDate) {
+              setState(() {
+                _focusedDay = newDate;
+              });
+            },
+            onEventTap: _onGridEventTap,
+          ),
+        ),
+        if (_detailPanelSchedule != null) ...[
+          VerticalDivider(width: 1),
+          SizedBox(
+            width: 320,
+            child: EventDetailPanel(
+              schedule: _detailPanelSchedule!,
+              onClose: _closeDetailPanel,
+              onEdit: () {
+                _performScheduleTap(_detailPanelSchedule!);
+                _closeDetailPanel();
+              },
+              onDelete: () async {
+                await _scheduleModel.deleteSchedule(_detailPanelSchedule!.id);
+                _closeDetailPanel();
+                context.read<CalendarContentCubit>().refresh();
+              },
+            ),
+          ),
+        ],
+      ],
     );
   }
 
