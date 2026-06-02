@@ -91,10 +91,6 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
-                    if (UniversalPlatform.isWindows && useCustomWindowTitleBar)
-                      WindowTitleBar(
-                        leftChildren: [_buildTitleBarControls(context, state)],
-                      ),
                     if (!isFullWindow && _shouldShowTabBar(state))
                       Padding(
                         padding:
@@ -271,31 +267,6 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
       height: HomeSizes.tabBarHeight,
       color: homeContentBackgroundColor(context),
       child: leadingPane,
-    );
-  }
-
-  Widget _buildTitleBarControls(BuildContext context, TabsState state) {
-    final currentIndex = state.currentIndex;
-    final currentBuilder =
-        currentIndex >= 0 && currentIndex < state.pageManagers.length
-            ? state.pageManagers[currentIndex].plugin.widgetBuilder
-            : null;
-    final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
-      (bloc) => bloc.state.menuStatus,
-    );
-    if (menuStatus == MenuStatus.hidden &&
-        (currentBuilder?.handlesInlineSidebarToggle ?? false)) {
-      return const SizedBox.shrink();
-    }
-
-    return SizedBox(
-      height: HomeSizes.topBarHeight,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildToggleMenuButton(context),
-        ],
-      ),
     );
   }
 

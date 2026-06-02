@@ -970,7 +970,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
-                    if (!Platform.isWindows ||
+                    if (Platform.isMacOS ||
                         widget.isDrawerMenu ||
                         isFullWindow) {
                       return const SizedBox.shrink();

@@ -63,7 +63,6 @@ class SidebarTopMenu extends StatelessWidget {
   // }
 
   Widget _buildCollapseMenuButton(BuildContext context) {
-    if (Platform.isWindows) return const SizedBox.shrink();
     final theme = AppFlowyTheme.of(context);
 
     return ValueListenableBuilder(

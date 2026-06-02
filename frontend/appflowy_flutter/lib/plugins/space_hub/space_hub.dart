@@ -558,7 +558,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     } catch (_) {
       spaceBloc = null;
     }
-
+    final isSidebarHidden = context.select<HomeSettingBloc, bool>(
+          (bloc) => bloc.isMenuHidden,
+    );
+    final theme = AppFlowyTheme.of(context);
     final rightPanel = Expanded(
       child: _selectedView != null
           ? _buildSelectedViewContent(_selectedView!)
@@ -629,6 +632,18 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  if (isSidebarHidden && PlatformInfo.isMacOS) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top:16,right:16),
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: _SpaceHubSidebarToggleButton(
+                          color: theme.iconColorScheme.secondary,
+                        ),
+                      ),
+                    ),
+                  ],
                   Expanded(
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
@@ -1009,7 +1024,7 @@ class _SpaceDocumentList extends StatelessWidget {
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top: isSidebarHidden && Platform.isMacOS ? 42 : 10,
+        top:  10,
         bottom: 4,
       ),
       // decoration: BoxDecoration(
@@ -1128,16 +1143,16 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          // if (isSidebarHidden) ...[
-          //   const HSpace(4),
-          //   SizedBox(
-          //     width: 32,
-          //     height: 32,
-          //     child: _SpaceHubSidebarToggleButton(
-          //       color: theme.iconColorScheme.secondary,
-          //     ),
-          //   ),
-          // ],
+          if (isSidebarHidden && !PlatformInfo.isMacOS) ...[
+            const HSpace(4),
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: _SpaceHubSidebarToggleButton(
+                color: theme.iconColorScheme.secondary,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1393,7 +1408,7 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
         width: 24,
         icon: FlowySvg(
           FlowySvgs.sidebar_collapse_custom_m,
-          size: const Size.square(16),
+          size: const Size.square(24),
           color: color,
         ),
         onPressed: () => context.read<HomeSettingBloc>().add(

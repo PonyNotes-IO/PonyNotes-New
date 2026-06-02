@@ -25,6 +25,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/uuid.dart';
+import 'package:universal_platform/universal_platform.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import '../../../features/workspace/logic/workspace_bloc.dart';
 import '../../../generated/locale_keys.g.dart';
@@ -1302,6 +1303,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                         visible: shouldApplyTopPadding,
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
+                          child: UniversalPlatform.isMacOS ? _buildSidebarToggleButton(context) : Spacer(),
                         ),
                       ),
                       // 顶部工具栏，包含收起/展开按钮和其他操作按钮
@@ -1313,6 +1315,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                             ? _buildExpandedSidebar()
                             : _buildCollapsedSidebar(),
                       ),
+                      if(!UniversalPlatform.isMacOS) _buildSidebarToggleButton(context)
                     ],
                   ),
                 ),
@@ -1401,7 +1404,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         // 日历标题区域
         Container(
           width: double.infinity,
-          padding: EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 8),
+          padding: EdgeInsets.only(left: 16, right: 16, bottom: 8),
           child: Row(
             children: [
               Expanded(
@@ -2567,6 +2570,51 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         },
       );
     }
+  }
+
+  Widget _buildSidebarToggleButton(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        if (isFullWindow) {
+          return const SizedBox.shrink();
+        }
+
+        MenuStatus menuStatus = MenuStatus.expanded;
+        try {
+          menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+                (bloc) => bloc.state.menuStatus,
+          );
+        } catch (_) {
+          // HomeSettingBloc not available
+        }
+
+        if (menuStatus == MenuStatus.expanded) {
+          return const SizedBox.shrink();
+        }
+
+        final color = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
+
+        return FlowyTooltip(
+          message: LocaleKeys.sideBar_openSidebar.tr(),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: FlowyIconButton(
+              width: 24,
+              icon: FlowySvg(
+                FlowySvgs.sidebar_collapse_custom_m,
+                size: const Size.square(24),
+                color: color,
+              ),
+              onPressed: () => context.read<HomeSettingBloc>().add(
+                const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
