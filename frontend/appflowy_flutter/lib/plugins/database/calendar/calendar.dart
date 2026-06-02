@@ -44,7 +44,7 @@ import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'presentation/calendar_grid_view.dart';
 import 'presentation/event_detail_panel.dart';
-import 'presentation/todo_list_panel.dart';
+
 import 'models/schedule_model.dart';
 import 'application/calendar_content_cubit.dart';
 import 'application/calendar_unsaved_guard.dart';
@@ -333,8 +333,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // Right-side event detail panel
   ScheduleItem? _detailPanelSchedule;
-  // Todo list for selected date
-  final List<CalendarTodoItem> _todoItems = [];
 
   @override
   void initState() {
@@ -1560,27 +1558,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     });
   }
 
-  void _addTodo(String title) {
-    setState(() {
-      _todoItems.add(CalendarTodoItem(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: title,
-      ));
-    });
-  }
-
-  void _toggleTodo(CalendarTodoItem todo) {
-    setState(() {
-      todo.isCompleted = !todo.isCompleted;
-    });
-  }
-
-  void _deleteTodo(CalendarTodoItem todo) {
-    setState(() {
-      _todoItems.remove(todo);
-    });
-  }
-
   Widget _buildDefaultView() {
     return Row(
       children: [
@@ -1604,42 +1581,26 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             onEventTap: _onGridEventTap,
           ),
         ),
-        // Right-side panels
-        VerticalDivider(width: 1),
-        SizedBox(
-          width: 320,
-          child: Column(
-            children: [
-              // Event detail (if selected)
-              if (_detailPanelSchedule != null)
-                Expanded(
-                  flex: 2,
-                  child: EventDetailPanel(
-                    schedule: _detailPanelSchedule!,
-                    onClose: _closeDetailPanel,
-                    onEdit: () {
-                      _performScheduleTap(_detailPanelSchedule!);
-                      _closeDetailPanel();
-                    },
-                    onDelete: () async {
-                      await _scheduleModel.deleteSchedule(_detailPanelSchedule!.id);
-                      _closeDetailPanel();
-                      context.read<CalendarContentCubit>().refresh();
-                    },
-                  ),
-                ),
-              // Todo list (always visible)
-              Expanded(
-                flex: 1,
-                child: TodoListPanel(
-                  todos: _todoItems,
-                  onAdd: _addTodo,
-                  onToggle: _toggleTodo,
-                  onDelete: _deleteTodo,
-                ),
-              ),
-            ],
+        // Right-side event detail panel (only when event selected)
+        if (_detailPanelSchedule != null) ...[
+          VerticalDivider(width: 1),
+          SizedBox(
+            width: 320,
+            child: EventDetailPanel(
+              schedule: _detailPanelSchedule!,
+              onClose: _closeDetailPanel,
+              onEdit: () {
+                _performScheduleTap(_detailPanelSchedule!);
+                _closeDetailPanel();
+              },
+              onDelete: () async {
+                await _scheduleModel.deleteSchedule(_detailPanelSchedule!.id);
+                _closeDetailPanel();
+                context.read<CalendarContentCubit>().refresh();
+              },
+            ),
           ),
+        ],
         ),
       ],
     );
