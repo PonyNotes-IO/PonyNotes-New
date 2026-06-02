@@ -35,6 +35,8 @@ class CalendarGridViewState extends State<CalendarGridView> {
   late DateTime _currentDate;
   late final EventController<CalendarDayEvent> _eventController;
   Offset? _lastTapPosition;
+  // Animation for month transitions
+  int _animationDirection = 0; // -1 = left, 0 = none, 1 = right
 
   @override
   void initState() {
@@ -121,6 +123,7 @@ class CalendarGridViewState extends State<CalendarGridView> {
 
   void _navigateDate(int delta) {
     setState(() {
+      _animationDirection = delta;
       switch (_viewMode) {
         case CalendarViewMode.day:
           _currentDate = _currentDate.add(Duration(days: delta));
@@ -138,10 +141,15 @@ class CalendarGridViewState extends State<CalendarGridView> {
       }
     });
     _loadEvents();
+    // Reset animation direction after transition
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) setState(() => _animationDirection = 0);
+    });
   }
 
   void _goToToday() {
     setState(() {
+      _animationDirection = 0;
       _currentDate = DateTime.now();
     });
     _loadEvents();
@@ -336,7 +344,7 @@ class CalendarGridViewState extends State<CalendarGridView> {
         child: switch (_viewMode) {
           CalendarViewMode.day => _buildDayView(),
           CalendarViewMode.week => _buildWeekView(),
-          CalendarViewMode.month => _buildMonthView(),
+          CalendarViewMode.month => _buildAnimatedMonthView(),
         },
       ),
     );
@@ -419,6 +427,26 @@ class CalendarGridViewState extends State<CalendarGridView> {
         setState(() => _currentDate = date);
         _loadEvents();
       },
+    );
+  }
+
+  Widget _buildAnimatedMonthView() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      transitionBuilder: (child, animation) {
+        final offsetAnimation = Tween<Offset>(
+          begin: Offset(_animationDirection >= 0 ? 1.0 : -1.0, 0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        ));
+        return SlideTransition(
+          position: offsetAnimation,
+          child: child,
+        );
+      },
+      child: _buildMonthView(),
     );
   }
 
