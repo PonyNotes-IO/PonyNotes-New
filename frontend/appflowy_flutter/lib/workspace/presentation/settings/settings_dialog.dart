@@ -163,8 +163,7 @@ class SettingsDialog extends StatelessWidget {
                             // caused by rounding or inner padding of children.
                             color: theme.backgroundColorScheme.primary,
                             child: Padding(
-                              // Only reduce right padding to avoid visible gap on dialog edge.
-                              padding: const EdgeInsets.only(right: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
                               child: currentWorkspace == null
                                   ? const Center(
                                       child:
