@@ -55,7 +55,6 @@ import 'full_window_controller.dart';
 import 'home_layout.dart';
 import 'home_sizes.dart';
 import 'home_stack.dart';
-import 'menu/sidebar/slider_menu_hover_trigger.dart';
 import 'menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
@@ -266,12 +265,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       workspaceSetting: workspaceSetting,
     );
     final notificationPanel = NotificationPanel();
-    final sliderHoverTrigger = SliderMenuHoverTrigger(
-      touchOptimized: context.widthPx < PageBreaks.tabletLandscape,
-      onOpen: () => context.read<HomeSettingBloc>().add(
-            const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-          ),
-    );
     final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
         ? const SidebarResizer()
         : const SizedBox.shrink();
@@ -293,7 +286,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               editPanel: editPanel,
               homeMenuResizer: homeMenuResizer,
               notificationPanel: notificationPanel,
-              sliderHoverTrigger: sliderHoverTrigger,
               isFullWindow: isFullWindow,
             );
           },
@@ -352,7 +344,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     required Widget editPanel,
     required Widget homeMenuResizer,
     required Widget notificationPanel,
-    required Widget sliderHoverTrigger,
     bool isFullWindow = false,
   }) {
     final isSliderbarShowing = layout.showMenu && !isFullWindow;
@@ -454,47 +445,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             ),
           ),
         ),
-        // Windows: floating slider button
-        if (!isSliderbarShowing && !isFullWindow && Platform.isWindows)
-          Positioned(
-            left: 6,
-            top: 56,
-            child: sliderHoverTrigger,
-          ),
-        // macOS: sidebar toggle icon in traffic-lights row (same position as collapse button)
-        if (!isSliderbarShowing && !isFullWindow && Platform.isMacOS)
-          Positioned(
-            left: 0,
-            top: 0,
-            width: layout.menuWidth,
-            height: HomeSizes.topBarHeight,
-            child: Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12.0, right: 14.0),
-                child: Listener(
-                  behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
-                        const HomeSettingEvent.changeMenuStatus(
-                          MenuStatus.expanded,
-                        ),
-                      ),
-                  child: FlowyHover(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: FlowySvg(
-                        FlowySvgs.sidebar_toggle_macos_m,
-                        color: AppFlowyTheme.of(buildContext)
-                            .iconColorScheme
-                            .secondary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }
