@@ -3,6 +3,7 @@ import 'package:flowy_infra/theme_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 import '../models/schedule_model.dart';
 import 'calendar_context_menu.dart';
@@ -240,12 +241,13 @@ class CalendarGridViewState extends State<CalendarGridView> {
   Widget _buildToolbar(BuildContext context) {
     final af = AFThemeExtension.of(context);
     final theme = Theme.of(context);
+    final appflowyTheme = AppFlowyTheme.of(context);
 
     return Container(
       height: 48,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: af.background,
+        color: appflowyTheme.backgroundColorScheme.primary,
         border: Border(
           bottom: BorderSide(color: af.borderColor, width: 0.5),
         ),
@@ -437,6 +439,45 @@ class CalendarGridViewState extends State<CalendarGridView> {
         setState(() => _currentDate = date);
         _loadEvents();
       },
+      // 自定义周头部：使用主题色适配黑暗/白色模式
+      weekPageHeaderBuilder: (startDate, endDate) {
+        return Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
+            border: Border(
+              bottom: BorderSide(color: af.borderColor, width: 0.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              _NavButton(
+                icon: Icons.chevron_left,
+                tooltip: '上一周',
+                onTap: () => _navigateDate(-1),
+              ),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '${DateFormat('M月d日').format(startDate)} - ${DateFormat('M月d日').format(endDate)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ),
+              _NavButton(
+                icon: Icons.chevron_right,
+                tooltip: '下一周',
+                onTap: () => _navigateDate(1),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -575,7 +616,7 @@ class CalendarGridViewState extends State<CalendarGridView> {
           color: AFThemeExtension.of(context).tint1,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: theme.colorScheme.primary.withValues(alpha: 0.3),
+            color: AFThemeExtension.of(context).borderColor,
             width: 0.5,
           ),
         ),
@@ -583,7 +624,7 @@ class CalendarGridViewState extends State<CalendarGridView> {
           event.title,
           style: TextStyle(
             fontSize: 11,
-            color: theme.colorScheme.primary,
+            color: theme.colorScheme.onSurface,
             fontWeight: FontWeight.w500,
           ),
           overflow: TextOverflow.ellipsis,

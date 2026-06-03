@@ -118,7 +118,7 @@ class ScheduleItem {
     return ScheduleItem(
       id: eventPB.rowMeta.id,
       title: eventPB.title.isNotEmpty ? eventPB.title : '无标题事件',
-      description: '来自数据库的日程',
+      description: '',
       startTime: startTime,
       endTime: endTime,
       isAllDay: false,
@@ -758,6 +758,11 @@ class ScheduleModel extends ChangeNotifier {
             fieldType: FieldType.DateTime,
             fieldName: 'Date',
           );
+          await FieldBackendService.createField(
+            viewId: viewId,
+            fieldType: FieldType.RichText,
+            fieldName: '描述',
+          );
 
           // 等待后端落地
           await Future.delayed(const Duration(milliseconds: 200));
@@ -993,11 +998,17 @@ class ScheduleModel extends ChangeNotifier {
         fieldType: FieldType.RichText,
         fieldName: 'Title',
       );
-      
+
       await FieldBackendService.createField(
         viewId: viewId,
         fieldType: FieldType.DateTime,
         fieldName: 'Date',
+      );
+
+      await FieldBackendService.createField(
+        viewId: viewId,
+        fieldType: FieldType.RichText,
+        fieldName: '描述',
       );
     } catch (e) {
       // 忽略错误
@@ -1096,8 +1107,8 @@ class ScheduleModel extends ChangeNotifier {
 
       try {
         final name = field.name.toLowerCase();
-        if (field.fieldType == FieldType.RichText && 
-            name.contains('description') && 
+        if (field.fieldType == FieldType.RichText &&
+            (name.contains('description') || name.contains('描述')) &&
             description != null) {
           await CellBackendService.updateCell(
             viewId: viewId,

@@ -241,7 +241,7 @@ class CustomMonthGrid extends StatelessWidget {
                           ev.title,
                           style: TextStyle(
                             fontSize: 10,
-                            color: theme.colorScheme.primary,
+                            color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w500,
                           ),
                           overflow: TextOverflow.ellipsis,
