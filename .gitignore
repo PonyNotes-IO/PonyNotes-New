@@ -168,3 +168,4 @@ docs/calendar-module-status.md
 .codegraph/daemon.pid
 frontend/.codegraph/codegraph.lock
 frontend/.codegraph/daemon.pid
+frontend/docs/

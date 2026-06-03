@@ -6,7 +6,7 @@ class ColorSchemeConstants {
   static const white = Color(0xFFFFFFFF);
   static const lightHover = Color(0xFFe0f8FF);
   static const lightSelector = Color(0xFFf2fcFF);
-  static const lightBg1 = Color(0xFFf7f8fc);
+  static const lightBg1 = Color(0xFFf9f9f9);
   static const lightBg2 = Color(0x0F1F2329);
   static const lightShader1 = Color(0xFF333333);
   static const lightShader3 = Color(0xFF828282);
