@@ -1061,7 +1061,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: popupBackgroundColor,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: popupBorderColor),
                   boxShadow: [
                     BoxShadow(
@@ -1094,6 +1094,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             child: FlowyButton(
               useIntrinsicWidth: true,
               margin: EdgeInsets.zero,
+              radius: BorderRadius.circular(8),
+              backgroundColor: Colors.transparent,
               text: FlowySvg(
                 FlowySvgs.workspace_three_dots_s,
                 color: Theme.of(context).colorScheme.onSurface,
