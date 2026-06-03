@@ -33,6 +33,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_migration.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
@@ -893,25 +894,21 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               children: [
                 const HSpace(4),
                 // 浣跨敤灏忛┈emoji浣滀负鍥炬爣
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8.0),
-                    color: const Color(0xFFFBE8FB),
-                    border: Border.all(
-                      color: const Color(0x19171717),
-                    ),
+                WorkspaceIcon(
+                  workspaceIcon: context.select<UserWorkspaceBloc, String>(
+                    (bloc) => bloc.state.currentWorkspace?.icon ?? '',
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.asset(
-                      'assets/images/app_icon_m.jpg',
-                      width: 25,
-                      height: 25,
-                      fit: BoxFit.cover,
-                    ),
+                  workspaceName: context.select<UserWorkspaceBloc, String>(
+                    (bloc) => bloc.state.currentWorkspace?.name ?? '',
                   ),
+                  iconSize: 26,
+                  isEditable: false,
+                  fontSize: 12.0,
+                  onSelected: (_) {}, // Not editable in sidebar
+                  borderRadius: 8.0,
+                  emojiSize: 16.0,
+                  figmaLineHeight: 20.0,
+                  showBorder: true,
                 ),
                 const HSpace(6),
                 // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
