@@ -664,12 +664,12 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           children: [
             // 左侧：空间文档列表
             Visibility(
-              visible: _isDocumentListVisible,
+              visible: _isDocumentListVisible && !isFullWindow,
               child: documentListPanel,
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
             Visibility(
-              visible: _isDocumentListVisible && !useFloatingDocumentList,
+              visible: _isDocumentListVisible && !isFullWindow && !useFloatingDocumentList,
               child: ResizableDivider(
                 minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
                 maxLeftWidth: maxLeftPanelWidth,
@@ -685,7 +685,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               ),
             ),
             Visibility(
-              visible: _isDocumentListVisible && useFloatingDocumentList,
+              visible: _isDocumentListVisible && !isFullWindow && useFloatingDocumentList,
               child: passiveFloatingDivider,
             ),
             rightPanel,

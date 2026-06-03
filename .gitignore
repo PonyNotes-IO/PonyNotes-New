@@ -165,3 +165,4 @@ installer_output/
 # Linux/Android native shared libraries
 **/*.so
 docs/calendar-module-status.md
+.codegraph/daemon.pid
