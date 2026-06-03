@@ -11,7 +11,8 @@ class EmptyNotification extends StatelessWidget {
     required this.type,
   });
 
-  final NotificationTabType type;
+  /// When null, shows a generic empty message for all notifications.
+  final NotificationTabType? type;
 
   @override
   Widget build(BuildContext context) {
@@ -26,6 +27,7 @@ class EmptyNotification extends StatelessWidget {
         LocaleKeys.notificationHub_empty_system_title.tr(),
       NotificationTabType.archived =>
         LocaleKeys.notificationHub_empty_archived_title.tr(),
+      null => LocaleKeys.notificationHub_emptyTitle.tr(),
     };
     final desc = switch (type) {
       NotificationTabType.mention =>
@@ -38,29 +40,35 @@ class EmptyNotification extends StatelessWidget {
         LocaleKeys.notificationHub_empty_system_body.tr(),
       NotificationTabType.archived =>
         LocaleKeys.notificationHub_empty_archived_body.tr(),
+      null => LocaleKeys.notificationHub_emptyBody.tr(),
     };
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const FlowySvg(FlowySvgs.m_empty_notification_xl),
-        const VSpace(12.0),
-        FlowyText(
-          title,
-          fontSize: 16.0,
-          figmaLineHeight: 24.0,
-          fontWeight: FontWeight.w500,
-        ),
-        const VSpace(4.0),
-        Opacity(
-          opacity: 0.45,
-          child: FlowyText(
-            desc,
-            fontSize: 15.0,
-            figmaLineHeight: 22.0,
-            fontWeight: FontWeight.w400,
+    return SizedBox.expand(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const FlowySvg(FlowySvgs.m_empty_notification_xl),
+          const VSpace(12.0),
+          FlowyText(
+            title,
+            fontSize: 16.0,
+            figmaLineHeight: 24.0,
+            fontWeight: FontWeight.w500,
+            textAlign: TextAlign.center,
           ),
-        ),
-      ],
+          const VSpace(4.0),
+          Opacity(
+            opacity: 0.45,
+            child: FlowyText(
+              desc,
+              fontSize: 15.0,
+              figmaLineHeight: 22.0,
+              fontWeight: FontWeight.w400,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

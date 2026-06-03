@@ -106,9 +106,6 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            // Keep the inner task card one layer apart from the outer container.
-            // 内层任务卡使用下一层 surface，深色模式下层级更清楚。
-            color: theme.surfaceContainerColorScheme.layer02,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: theme.borderColorScheme.primary),
           ),

@@ -17,10 +17,11 @@ import 'notification_tab_bar.dart';
 class NotificationTab extends StatefulWidget {
   const NotificationTab({
     super.key,
-    required this.tabType,
+    this.tabType,
   });
 
-  final NotificationTabType tabType;
+  /// When null, shows all non-archived notifications without type filtering.
+  final NotificationTabType? tabType;
 
   @override
   State<NotificationTab> createState() => _NotificationTabState();
@@ -130,7 +131,14 @@ class _NotificationTabState extends State<NotificationTab>
           .toList()
           .unique((reminder) => reminder.id);
     }
-    final targetType = widget.tabType.value;
+    // When tabType is null, show all non-archived notifications.
+    if (widget.tabType == null) {
+      return reminders.reversed
+          .where((reminder) => !reminder.isArchived)
+          .toList()
+          .unique((reminder) => reminder.id);
+    }
+    final targetType = widget.tabType!.value;
     return reminders.reversed
         .where((reminder) {
           if (reminder.isArchived) return false;

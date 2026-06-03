@@ -5,7 +5,7 @@ class HomeSizes {
   static const double topBarHeight = 48;
   static const double editPanelTopBarHeight = 60;
   static const double editPanelWidth = 420;
-  static const double notificationPanelWidth = 392;
+  static const double notificationPanelWidth = 320;
   static const double tabBarHeight = 42;
   static const double tabBarWidth = 216;
   static const double dialogMaxWidth = 420;

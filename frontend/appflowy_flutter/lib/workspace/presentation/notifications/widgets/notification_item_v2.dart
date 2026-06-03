@@ -31,7 +31,7 @@ class NotificationItemV2 extends StatelessWidget {
     required this.reminder,
   });
 
-  final NotificationTabType tabType;
+  final NotificationTabType? tabType;
   final ReminderPB reminder;
 
   @override
@@ -267,7 +267,7 @@ class _InnerNotificationItem extends StatelessWidget {
     required this.tabType,
   });
 
-  final NotificationTabType tabType;
+  final NotificationTabType? tabType;
   final ReminderPB reminder;
 
   @override

@@ -13,7 +13,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'widgets/notification_tab.dart';
-import 'widgets/notification_tab_bar.dart';
 
 class NotificationPanel extends StatefulWidget {
   const NotificationPanel({super.key});
@@ -22,22 +21,11 @@ class NotificationPanel extends StatefulWidget {
   State<NotificationPanel> createState() => _NotificationPanelState();
 }
 
-class _NotificationPanelState extends State<NotificationPanel>
-    with TickerProviderStateMixin {
-  static const _visibleTabs = [NotificationTabType.system];
-
-  TabController? _tabController;
+class _NotificationPanelState extends State<NotificationPanel> {
   final PopoverController moreActionController = PopoverController();
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: _visibleTabs.length, vsync: this);
-  }
-
-  @override
   void dispose() {
-    _tabController?.dispose();
     moreActionController.close();
     super.dispose();
   }
@@ -56,49 +44,25 @@ class _NotificationPanelState extends State<NotificationPanel>
           child: GestureDetector(
             onTap: () {},
             child: Container(
-              width: 380,
+              width: 320,
               decoration: BoxDecoration(
                 color: theme.backgroundColorScheme.primary,
                 boxShadow: theme.shadow.small,
               ),
               padding: EdgeInsets.symmetric(vertical: 14),
-              child: BlocBuilder<ReminderBloc, ReminderState>(
-                builder: (context, _) {
-                  // Fake-delete non-system notification tabs in the desktop panel.
-                  // 桌面通知栏只保留系统通知，其他分类仅做 UI 假删除，不动底层提醒数据。
-                  const tabs = _visibleTabs;
-
-                  if (_tabController?.length != tabs.length) {
-                    _tabController?.dispose();
-                    _tabController =
-                        TabController(length: tabs.length, vsync: this);
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      buildTitle(
-                        context: context,
-                        onHide: () => settingBloc
-                            .add(HomeSettingEvent.collapseNotificationPanel()),
-                      ),
-                      const VSpace(12),
-                      NotificationTabBar(
-                        tabController: _tabController!,
-                        tabs: tabs,
-                      ),
-                      const VSpace(14),
-                      Expanded(
-                        child: TabBarView(
-                          controller: _tabController!,
-                          children: tabs
-                              .map((e) => NotificationTab(tabType: e))
-                              .toList(),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildTitle(
+                    context: context,
+                    onHide: () => settingBloc
+                        .add(HomeSettingEvent.collapseNotificationPanel()),
+                  ),
+                  const VSpace(14),
+                  Expanded(
+                    child: NotificationTab(),
+                  ),
+                ],
               ),
             ),
           ),
@@ -118,7 +82,7 @@ class _NotificationPanelState extends State<NotificationPanel>
       child: Row(
         children: [
           FlowyText.medium(
-            LocaleKeys.notificationHub_title.tr(),
+            LocaleKeys.notificationHub_tabs_system.tr(),
             fontSize: 16,
             figmaLineHeight: 24,
           ),
