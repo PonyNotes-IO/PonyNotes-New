@@ -1248,7 +1248,11 @@ class _SpaceDocumentList extends StatelessWidget {
           final displaySpace = currentSpace!;
           final childViews = displaySpace.childViews;
 
-          return ListView.builder(
+          return RawScrollbar(
+            thickness: 0.5,
+            radius: const Radius.circular(4),
+            thumbVisibility: false,
+            child: ListView.builder(
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
@@ -1293,6 +1297,7 @@ class _SpaceDocumentList extends StatelessWidget {
                 isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
               );
             },
+          ),
           );
         },
       ),
@@ -1310,7 +1315,11 @@ class _SpaceDocumentList extends StatelessWidget {
 
         final childViews = snapshot.data ?? const <ViewPB>[];
 
-        return ListView.builder(
+        return RawScrollbar(
+          thickness: 0.5,
+          radius: const Radius.circular(4),
+          thumbVisibility: false,
+          child: ListView.builder(
           itemCount: childViews.length + 1,
           itemBuilder: (context, index) {
             if (index == childViews.length) {
@@ -1354,6 +1363,7 @@ class _SpaceDocumentList extends StatelessWidget {
               isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
             );
           },
+        ),
         );
       },
     );
