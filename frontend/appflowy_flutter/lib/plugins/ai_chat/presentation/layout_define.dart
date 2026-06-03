@@ -38,6 +38,6 @@ class DesktopAIChatSizes {
       BorderRadius.all(Radius.circular(8.0));
 
   static const inputActionBarMargin =
-      EdgeInsetsDirectional.fromSTEB(8, 0, 8, 4);
+      EdgeInsetsDirectional.fromSTEB(8, 0, 8, 16);
   static const inputActionBarButtonSpacing = 4.0;
 }
