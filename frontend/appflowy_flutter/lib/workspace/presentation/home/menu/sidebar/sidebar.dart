@@ -834,12 +834,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final workspaceName = context.select<UserWorkspaceBloc, String>(
-      (bloc) => bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
-          ? bloc.state.currentWorkspace!.name.trim()
-          : LocaleKeys.sidebar_appName.tr(),
-    );
-
     return AppFlowyPopover(
       direction: PopoverDirection.bottomWithCenterAligned,
       offset: const Offset(0, 5),
@@ -884,32 +878,39 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             _popoverController.show();
           },
           behavior: HitTestBehavior.opaque,
-          child: Container(
-            margin: const EdgeInsets.only(right: 8.0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8.0),
-              color: Colors.transparent,
-            ),
-            child: Row(
-              children: [
-                const HSpace(4),
-                // 浣跨敤灏忛┈emoji浣滀负鍥炬爣
-                WorkspaceIcon(
-                  workspaceIcon: context.select<UserWorkspaceBloc, String>(
-                    (bloc) => bloc.state.currentWorkspace?.icon ?? '',
-                  ),
-                  workspaceName: context.select<UserWorkspaceBloc, String>(
-                    (bloc) => bloc.state.currentWorkspace?.name ?? '',
-                  ),
-                  iconSize: 26,
-                  isEditable: false,
-                  fontSize: 12.0,
-                  onSelected: (_) {}, // Not editable in sidebar
-                  borderRadius: 8.0,
-                  emojiSize: 16.0,
-                  figmaLineHeight: 20.0,
-                  showBorder: true,
+          child: Builder(
+            builder: (context) {
+              final (:icon, :name, :workspaceName) = context.select<UserWorkspaceBloc, ({String icon, String name, String workspaceName})>(
+                (bloc) => (
+                  icon: bloc.state.currentWorkspace?.icon ?? '',
+                  name: bloc.state.currentWorkspace?.name ?? '',
+                  workspaceName: bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
+                      ? bloc.state.currentWorkspace!.name.trim()
+                      : LocaleKeys.sidebar_appName.tr(),
                 ),
+              );
+              return Container(
+                margin: const EdgeInsets.only(right: 8.0),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8.0),
+                  color: Colors.transparent,
+                ),
+                child: Row(
+                  children: [
+                    const HSpace(4),
+                    // 浣跨敤灏忛┈emoji浣滀负鍥炬爣
+                    WorkspaceIcon(
+                      workspaceIcon: icon,
+                      workspaceName: name,
+                      iconSize: 26,
+                      isEditable: false,
+                      fontSize: 12.0,
+                      onSelected: (_) {}, // Not editable in sidebar
+                      borderRadius: 8.0,
+                      emojiSize: 16.0,
+                      figmaLineHeight: 20.0,
+                      showBorder: true,
+                    ),
                 const HSpace(6),
                 // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
                 Expanded(
@@ -966,6 +967,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 const HSpace(10.0),
               ],
             ),
+          );
+            },
           ),
         ),
       ),
