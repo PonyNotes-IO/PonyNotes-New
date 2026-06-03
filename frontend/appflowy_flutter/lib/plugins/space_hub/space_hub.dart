@@ -1015,9 +1015,6 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
-    final isSidebarHidden = context.select<HomeSettingBloc, bool>(
-      (bloc) => bloc.isMenuHidden,
-    );
     final theme = AppFlowyTheme.of(context);
 
     return Container(
@@ -1143,16 +1140,14 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          if (isSidebarHidden && !PlatformInfo.isMacOS) ...[
-            const HSpace(4),
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: _SpaceHubSidebarToggleButton(
-                color: theme.iconColorScheme.secondary,
-              ),
+          const HSpace(4),
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: _SpaceHubSidebarToggleButton(
+              color: theme.iconColorScheme.secondary,
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -1404,16 +1399,17 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FlowyTooltip(
       message: LocaleKeys.sideBar_openSidebar.tr(),
-      child: FlowyIconButton(
-        width: 24,
-        icon: FlowySvg(
-          FlowySvgs.sidebar_collapse_custom_m,
-          size: const Size.square(24),
-          color: color,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
+          child: FlowySvg(
+            FlowySvgs.sidebar_collapse_custom_m,
+            size: const Size.square(16),
+            color: color,
+          ),
         ),
-        onPressed: () => context.read<HomeSettingBloc>().add(
-              const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-            ),
       ),
     );
   }

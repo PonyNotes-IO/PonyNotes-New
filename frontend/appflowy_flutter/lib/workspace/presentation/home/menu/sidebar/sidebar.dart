@@ -966,44 +966,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     );
                   },
                 ),
-                // 鍦?Windows 涓婂皢鏀惰捣鎸夐挳鏀惧湪閫氱煡鍙充晶
-                ValueListenableBuilder<bool>(
-                  valueListenable: FullWindowController.isFullWindow,
-                  builder: (context, isFullWindow, _) {
-                    if (Platform.isMacOS ||
-                        widget.isDrawerMenu ||
-                        isFullWindow) {
-                      return const SizedBox.shrink();
-                    }
-                    final homeSettingState =
-                        context.select<HomeSettingBloc, HomeSettingState>(
-                      (bloc) => bloc.state,
-                    );
-                    final shouldCollapseSyncActions =
-                        _shouldCollapseSyncActions(homeSettingState);
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        HSpace(shouldCollapseSyncActions ? 4.0 : 8.0),
-                        _buildHeaderActionSlot(
-                          GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onTap: () =>
-                                context.read<HomeSettingBloc>().collapseMenu(),
-                            child: FlowySvg(
-                              FlowySvgs.sidebar_collapse_custom_m,
-                              size: const Size.square(24),
-                              color: AppFlowyTheme.of(context)
-                                  .iconColorScheme
-                                  .secondary,
-                            ),
-                          ),
-                          size: 28,
-                        ),
-                      ],
-                    );
-                  },
-                ),
                 const HSpace(10.0),
               ],
             ),
