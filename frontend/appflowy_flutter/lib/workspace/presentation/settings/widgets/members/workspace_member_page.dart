@@ -685,15 +685,6 @@ class _MemberItemState extends State<_MemberItem> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if ((_contact ?? '').isNotEmpty)
-                      Text(
-                        _contact!,
-                        style: theme.textStyle.caption.standard(
-                          color: theme.textColorScheme.secondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
                   ],
                 ),
               ),
