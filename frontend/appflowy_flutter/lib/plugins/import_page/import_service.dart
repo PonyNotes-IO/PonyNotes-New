@@ -102,7 +102,9 @@ class ImportService {
           content = 'Word document parsing not yet implemented';
         } else {
           // For text-based files (CSV, Markdown, HTML, TXT)
-          content = await file.readAsString();
+          // 先读字节再用系统编码解码，兼容 GBK 等非 UTF-8 文件
+          final bytes = await file.readAsBytes();
+          content = systemEncoding.decode(bytes);
         }
 
         return ImportResult(
