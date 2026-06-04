@@ -639,8 +639,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     Padding(
                       padding: const EdgeInsets.only(top:16,right:16),
                       child: SizedBox(
-                        width: 32,
-                        height: 32,
+                        width: 24,
+                        height: 24,
                         child: _SpaceHubSidebarToggleButton(
                           color: theme.iconColorScheme.secondary,
                         ),
@@ -1023,7 +1023,9 @@ class _SpaceDocumentList extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
     final theme = AppFlowyTheme.of(context);
-
+    final isSidebarHidden = context.select<HomeSettingBloc, bool>(
+          (bloc) => bloc.isMenuHidden,
+    );
     return Container(
       padding: EdgeInsets.only(
         left: 16,
@@ -1147,14 +1149,16 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          const HSpace(4),
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: _SpaceHubSidebarToggleButton(
-              color: theme.iconColorScheme.secondary,
+          if (isSidebarHidden && !PlatformInfo.isMacOS) ...[
+            const HSpace(4),
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: _SpaceHubSidebarToggleButton(
+                color: theme.iconColorScheme.secondary,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1427,7 +1431,7 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
           onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
           child: FlowySvg(
             FlowySvgs.sidebar_collapse_custom_m,
-            size: const Size.square(16),
+            size: const Size.square(24),
             color: color,
           ),
         ),
