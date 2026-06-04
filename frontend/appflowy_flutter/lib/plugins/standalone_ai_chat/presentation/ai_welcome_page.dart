@@ -6,11 +6,18 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
+import 'package:flowy_infra_ui/style_widget/icon_button.dart';
+import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 
+import '../../../generated/flowy_svgs.g.dart';
+import '../../../generated/locale_keys.g.dart';
+import '../../../workspace/application/home/home_setting_bloc.dart';
 import '../models/chat_image.dart';
 import 'ai_welcome_theme.dart';
 import 'widgets/ai_input_area.dart';
@@ -46,42 +53,85 @@ class AIWelcomePage extends StatelessWidget {
         color: AIWelcomeTheme.backgroundColor(context),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return SingleChildScrollView(
-              reverse: true,
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    children: [
-                      // 顶部头像和欢迎文字区域 / Header section.
-                      AIWelcomeHeader(
-                        onChatHistoryTap: onChatHistoryTap,
+            return Stack(
+              children: [
+                SingleChildScrollView(
+                  reverse: true,
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          // 顶部头像和欢迎文字区域 / Header section.
+                          AIWelcomeHeader(
+                            onChatHistoryTap: onChatHistoryTap,
+                          ),
+                          // 输入交互区域和使用提示 / Input area and usage hint.
+                          AIInputArea(
+                            onMessageSent: onMessageSent,
+                            onChatHistoryTap: onChatHistoryTap,
+                          ),
+                          const Spacer(),
+                          // 底部提示文字 / Footer disclaimer.
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 64),
+                            child: Text(
+                              '内容由 AI 生成，请仔细甄别',
+                              style: AIWelcomeTheme.tooltipStyle(context),
+                            ),
+                          ),
+                        ],
                       ),
-                      // 输入交互区域和使用提示 / Input area and usage hint.
-                      AIInputArea(
-                        onMessageSent: onMessageSent,
-                        onChatHistoryTap: onChatHistoryTap,
-                      ),
-                      const Spacer(),
-                      // 底部提示文字 / Footer disclaimer.
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 64),
-                        child: Text(
-                          '内容由 AI 生成，请仔细甄别',
-                          style: AIWelcomeTheme.tooltipStyle(context),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  top: 10,
+                  left: UniversalPlatform.isMacOS ? 75 : 16,
+                  child:
+                  // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
+                  BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                    builder: (context, state) {
+                      if (state.menuStatus != MenuStatus.hidden) {
+                        return const SizedBox.shrink();
+                      }
+                      final theme = AppFlowyTheme.of(context);
+                      return _AISidebarToggleButton(
+                        context: context,
+                        color: theme.iconColorScheme.primary,
+                      );
+                    },
+                  ),
+                ),
+              ]
             );
           },
+        ),
+      ),
+    );
+  }
+
+  /// AI页面侧边栏切换按钮，参考 SpaceHub 的实现
+  Widget _AISidebarToggleButton({
+    required BuildContext context,
+    required Color color,
+  }) {
+    return FlowyTooltip(
+      message: LocaleKeys.sideBar_openSidebar.tr(),
+      child: FlowyIconButton(
+        width: 24,
+        icon: FlowySvg(
+          FlowySvgs.sidebar_collapse_custom_m,
+          size: const Size.square(24),
+          color: color,
+        ),
+        onPressed: () => context.read<HomeSettingBloc>().add(
+          const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
         ),
       ),
     );

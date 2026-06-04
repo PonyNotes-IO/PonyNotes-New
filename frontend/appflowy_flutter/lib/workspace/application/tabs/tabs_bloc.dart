@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/database/calendar/calendar.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -25,7 +26,33 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     _recentService = getIt<CachedRecentService>();
     // 初始化 ExpandedViewsCache（异步，不阻塞）
     ExpandedViewsCache.instance.initialize();
+    // 尝试恢复上次打开的视图
+    _restoreLastOpenView();
     _dispatch();
+  }
+
+  /// 恢复上次打开的视图
+  Future<void> _restoreLastOpenView() async {
+    try {
+      // 从菜单共享状态获取上次打开的视图
+      final lastOpenView = menuSharedState.latestOpenView;
+      if (lastOpenView != null && lastOpenView.id.isNotEmpty) {
+        Log.info('[TabsBloc] Restoring last open view: ${lastOpenView.id}');
+        
+        // 如果上次打开的是日历视图，直接打开日历插件
+        if (lastOpenView.layout == ViewLayoutPB.Calendar) {
+          final calendarPlugin = CalendarMainPlugin();
+          add(TabsEvent.openPlugin(plugin: calendarPlugin, view: lastOpenView));
+          return;
+        }
+        
+        // 尝试打开普通视图
+        final plugin = lastOpenView.plugin();
+        add(TabsEvent.openPlugin(plugin: plugin, view: lastOpenView));
+      }
+    } catch (e) {
+      Log.error('[TabsBloc] Failed to restore last open view', e);
+    }
   }
 
   late final MenuSharedState menuSharedState;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar_content_widget.dart';
@@ -363,9 +364,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _cachedContent = null;
     _lastLoadedDate = null;
 
-    // 初始化时尝试创建或获取日历视图
-    _initializeCalendarView();
-
     // 初始化视图监听器，监听视图删除事件
     _setupViewListener();
 
@@ -375,31 +373,37 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       if (mounted) {
         widget.calendarWidgetBuilder.topTabsLeadingRevision.value++;
         _calendarContentCubit = context.read<CalendarContentCubit>();
-        // 初始化完成后加载当前日期的内容
-        final initialDate = widget.pluginData?.initialDate;
-        if (initialDate != null) {
-          // 切换到指定日期
-          setState(() {
-            _focusedDay = initialDate;
-            _selectedDay = initialDate;
-          });
-          _loadContentForDate(initialDate);
-          // 如果需要打开新建日程页面
-          if (widget.pluginData?.openNewEvent == true) {
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                _newEventScheduleModel?.dispose();
-                _newEventScheduleModel = ScheduleModel();
-                setState(() {
-                  _showNewEventPage = true;
-                  _newEventHasUnsavedConfig = false;
+        
+        // 确保日历视图初始化完成后再加载内容
+        // 修复：等待 _initializeCalendarView() 完成后再执行内容加载
+        _initializeCalendarView().then((_) {
+          if (mounted) {
+            final initialDate = widget.pluginData?.initialDate;
+            if (initialDate != null) {
+              // 切换到指定日期
+              setState(() {
+                _focusedDay = initialDate;
+                _selectedDay = initialDate;
+              });
+              _loadContentForDate(initialDate);
+              // 如果需要打开新建日程页面
+              if (widget.pluginData?.openNewEvent == true) {
+                Future.delayed(const Duration(milliseconds: 300), () {
+                  if (mounted) {
+                    _newEventScheduleModel?.dispose();
+                    _newEventScheduleModel = ScheduleModel();
+                    setState(() {
+                      _showNewEventPage = true;
+                      _newEventHasUnsavedConfig = false;
+                    });
+                  }
                 });
               }
-            });
+            } else {
+              _loadContentForDate(_selectedDay ?? _focusedDay);
+            }
           }
-        } else {
-          _loadContentForDate(_selectedDay ?? _focusedDay);
-        }
+        });
       }
     });
 
@@ -480,16 +484,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             setState(() {
               _currentViewId = view.id;
             });
-            // 同步将 viewId 注入到共享的 ScheduleModel，避免 ScheduleSidebarContent
-            // 在 _initializeCalendarView 完成前调用 refresh() 时读不到正确数据。
-            _scheduleModel.setViewId(view.id);
+            // ⚠️ 修复：使用同步等待版本，确保数据库初始化完成后再返回
+            await _scheduleModel.setViewIdAsync(view.id);
+            print('✅ [Calendar] 视图已存在，数据库初始化完成');
           }
-          // 视图就绪后主动加载当天内容，确保首次进入可自动选中日程/笔记
-          final selectedDate = _selectedDay ?? _focusedDay;
-          await _loadContentForDate(selectedDate);
         },
         (error) async {
           // 视图不存在，创建新视图
+          print('⚠️ [Calendar] 视图不存在，创建新视图: $fixedViewId');
 
           final createResult = await ViewBackendService.createOrphanView(
             viewId: fixedViewId,
@@ -497,42 +499,63 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             layoutType: ViewLayoutPB.Calendar,
           );
 
+          // 使用 Completer 确保等待 fold 内部的异步操作完成
+          final completer = Completer<void>();
+          
           createResult.fold(
             (view) async {
-              if (mounted) {
-                setState(() {
-                  _currentViewId = view.id;
-                });
-                _scheduleModel.setViewId(view.id);
+              try {
+                if (mounted) {
+                  setState(() {
+                    _currentViewId = view.id;
+                  });
+                  // ⚠️ 修复：使用同步等待版本，确保数据库初始化完成后再返回
+                  await _scheduleModel.setViewIdAsync(view.id);
+                  print('✅ [Calendar] 新视图创建成功，数据库初始化完成');
+                }
+                completer.complete();
+              } catch (e) {
+                completer.completeError(e);
               }
-              final selectedDate = _selectedDay ?? _focusedDay;
-              await _loadContentForDate(selectedDate);
             },
-            (createError) {
-              // 如果创建失败，使用固定ID作为后备
-              if (mounted) {
-                setState(() {
-                  _currentViewId = fixedViewId;
-                });
-                _scheduleModel.setViewId(fixedViewId);
+            (createError) async {
+              try {
+                // 如果创建失败，使用固定ID作为后备
+                print('⚠️ [Calendar] 创建视图失败，使用后备ID: $fixedViewId');
+                if (mounted) {
+                  setState(() {
+                    _currentViewId = fixedViewId;
+                  });
+                  await _scheduleModel.setViewIdAsync(fixedViewId);
+                }
+                completer.complete();
+              } catch (e) {
+                completer.completeError(e);
               }
             },
           );
+
+          // 等待 fold 内部的异步操作完成
+          await completer.future;
         },
       );
 
-      // 初始化完成后，等待一下让数据库初始化完成，然后刷新数据
-      Future.delayed(Duration(milliseconds: 500), () {
-        if (mounted) {
-          setState(() {}); // 触发重建以加载真实数据
-        }
-      });
+      // 初始化完成后，触发重建以加载真实数据
+      if (mounted) {
+        setState(() {});
+      }
     } catch (e) {
+      print('⚠️ [Calendar] _initializeCalendarView 异常: $e');
       // 使用固定ID作为后备
       if (mounted) {
         setState(() {
           _currentViewId = fixedUuid(12345, UuidType.privateSpace);
         });
+        try {
+          await _scheduleModel.setViewIdAsync(fixedUuid(12345, UuidType.privateSpace));
+        } catch (e2) {
+          print('⚠️ [Calendar] setViewIdAsync 后备失败: $e2');
+        }
       }
     }
   }
@@ -1662,14 +1685,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 异步加载内容数据
   Future<void> _loadContentForDate(DateTime date) async {
+    // 如果正在加载中，记录待加载日期并返回
     if (_isLoadingContent) {
-      // 首次进入时可能先发起了一次“无 viewId”的加载，这里把后续请求排队，
-      // 等当前加载结束后再用最新日期重跑，避免请求被吞掉。
       _pendingLoadDate = date;
       return;
     }
 
-    if (!mounted) return; // 组件已销毁，直接返回
+    if (!mounted) return;
 
     setState(() {
       _isLoadingContent = true;
@@ -1677,19 +1699,26 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     try {
       // 并行获取笔记和日程数据，提高加载速度
-      final notesFuture = _getNotesForDate(date);
-      final schedulesFuture = _getSchedulesForDate(date);
-
-      final notes = await notesFuture.timeout(
+      final notesFuture = _getNotesForDate(date).timeout(
         Duration(seconds: 10),
-        onTimeout: () => [],
+        onTimeout: () {
+          print('⚠️ [Calendar] _getNotesForDate 超时');
+          return [];
+        },
       );
-      final schedules = await schedulesFuture.timeout(
-        Duration(seconds: 10),
-        onTimeout: () => [],
+      final schedulesFuture = _getSchedulesForDate(date).timeout(
+        Duration(seconds: 15),
+        onTimeout: () {
+          print('⚠️ [Calendar] _getSchedulesForDate 超时');
+          return [];
+        },
       );
 
-      // 无论是否mounted，都尝试更新状态
+      final results = await Future.wait([notesFuture, schedulesFuture]);
+      final notes = results[0] as List<ViewPB>;
+      final schedules = results[1] as List<ScheduleItem>;
+
+      // 更新状态
       if (mounted) {
         setState(() {
           _cachedContent = {
@@ -1702,7 +1731,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _checkAndSyncDetailPanelWithLoadedContent(notes, schedules);
       }
     } catch (e) {
-      // 无论是否mounted，都尝试重置加载状态
+      print('⚠️ [Calendar] _loadContentForDate 异常: $e');
+      // 重置加载状态
       if (mounted) {
         setState(() {
           _cachedContent = {
@@ -2039,12 +2069,35 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   Future<List<ScheduleItem>> _getSchedulesForDate(DateTime date) async {
     try {
+      // 如果视图ID还未设置，等待初始化完成
+      if (_currentViewId == null) {
+        // 最多等待3秒，避免无限等待
+        final deadline = DateTime.now().add(Duration(seconds: 3));
+        while (_currentViewId == null && DateTime.now().isBefore(deadline)) {
+          await Future.delayed(Duration(milliseconds: 50));
+          if (!mounted) return [];
+        }
+        
+        // 如果还是没有设置，返回空列表
+        if (_currentViewId == null) {
+          print('⚠️ [Calendar] _getSchedulesForDate: viewId 仍未设置');
+          return [];
+        }
+      }
+
       // 确保视图ID已设置（只在未设置时设置一次，避免重复触发刷新）
-      if (_currentViewId != null &&
-          _scheduleModel.currentViewId != _currentViewId) {
-        _scheduleModel.setViewId(_currentViewId!);
-        // 首次绑定视图时等待一次刷新，避免首次进入拿到空列表。
-        await _scheduleModel.refresh();
+      // 注意：即使 currentViewId 已经等于 _currentViewId，也需要确保数据库已初始化
+      if (_scheduleModel.currentViewId != _currentViewId) {
+        // 同步等待 setViewId 完成（包括数据库初始化）
+        await _scheduleModel.setViewIdAsync(_currentViewId!);
+      } else if (!_scheduleModel.isDatabaseReady) {
+        // 如果视图ID已匹配但数据库还未准备好，等待初始化完成
+        print('⚠️ [Calendar] _getSchedulesForDate: 等待数据库初始化...');
+        final deadline = DateTime.now().add(Duration(seconds: 3));
+        while (!_scheduleModel.isDatabaseReady && DateTime.now().isBefore(deadline)) {
+          await Future.delayed(Duration(milliseconds: 50));
+          if (!mounted) return [];
+        }
       }
 
       // 如果是过去的日期，自动创建缺失的重复实例
