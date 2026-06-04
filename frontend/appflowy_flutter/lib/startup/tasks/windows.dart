@@ -213,6 +213,33 @@ Future<void> refreshWindowsSurfaceAfterNavigation({
   }
 }
 
+/// macOS 窗口恢复处理
+/// 当窗口最小化后长时间再打开时，确保窗口正确显示
+Future<void> refreshMacOSWindowAfterMinimize() async {
+  if (!Platform.isMacOS) {
+    return;
+  }
+
+  try {
+    // 检查窗口是否被最小化
+    if (await windowManager.isMinimized()) {
+      await windowManager.restore();
+    }
+
+    // 确保窗口可见并获得焦点
+    await windowManager.show();
+    await windowManager.focus();
+
+    Log.info('[macOS] refreshed window after minimize');
+  } catch (error, stackTrace) {
+    Log.warn(
+      '[macOS] failed to refresh window after minimize: $error',
+      error,
+      stackTrace,
+    );
+  }
+}
+
 double _surfaceRefreshNudgeDimension(
   double value,
   double minValue,

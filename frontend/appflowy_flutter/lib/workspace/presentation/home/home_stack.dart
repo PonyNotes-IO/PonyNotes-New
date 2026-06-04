@@ -11,6 +11,7 @@ import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -420,6 +421,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
     setState(() {});
+
+    // macOS 窗口最小化后长时间再打开时，需要确保窗口正确显示
+    if (Platform.isMacOS) {
+      refreshMacOSWindowAfterMinimize();
+    }
   }
 }
 
