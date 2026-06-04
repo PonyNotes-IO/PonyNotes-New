@@ -325,12 +325,36 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
 
       if (urls.isNotEmpty) {
         // Create new nodes for the rest of the images:
-        final paths = await Future.wait(urls.map(saveImageToLocalStorage));
-        paths.removeWhere((url) => url == null || url.isEmpty);
+        final imageData = await Future.wait(urls.map((url) async {
+          final savedPath = await saveImageToLocalStorage(url);
+          if (savedPath == null || savedPath.isEmpty) {
+            return null;
+          }
+          // 读取每张图片尺寸并等比缩放
+          final dims = await getImageDimensions(savedPath);
+          double? imgWidth;
+          double? imgHeight;
+          if (dims != null) {
+            final (origW, origH) = dims;
+            if (origW > 0 && origH > 0) {
+              final scale = (origW > _kImageEditorMaxWidth)
+                  ? _kImageEditorMaxWidth / origW
+                  : 1.0;
+              imgWidth = origW * scale;
+              imgHeight = origH * scale;
+            }
+          }
+          return (path: savedPath, width: imgWidth, height: imgHeight);
+        }));
+        imageData.removeWhere((data) => data == null);
 
         transaction.insertNodes(
           widget.node.path.next,
-          paths.map((url) => customImageNode(url: url!)).toList(),
+          imageData.map((data) => customImageNode(
+                url: data!.path,
+                width: data.width,
+                height: data.height,
+              )).toList(),
         );
       }
 
@@ -390,6 +414,8 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
               customImageNode(
                 url: path,
                 type: CustomImageType.internal,
+                width: targetWidth,
+                height: targetHeight,
               ),
             );
           }
