@@ -159,9 +159,12 @@ class _ImportPanelState extends State<ImportPanel> {
       }
       final name = p.basenameWithoutExtension(path);
 
+      // 先读字节再用系统编码解码，兼容 GBK 等非 UTF-8 文件
+      final fileBytes = await File(path).readAsBytes();
+      final data = systemEncoding.decode(fileBytes);
+
       switch (importType) {
         case ImportType.historyDatabase:
-          final data = await File(path).readAsString();
           importValues.add(
             ImportItemPayloadPB.create()
               ..name = name
@@ -172,7 +175,6 @@ class _ImportPanelState extends State<ImportPanel> {
           break;
         case ImportType.historyDocument:
         case ImportType.markdownOrText:
-          final data = await File(path).readAsString();
           final bytes = _documentDataFrom(importType, data);
           if (bytes != null) {
             importValues.add(
@@ -185,7 +187,6 @@ class _ImportPanelState extends State<ImportPanel> {
           }
           break;
         case ImportType.csv:
-          final data = await File(path).readAsString();
           importValues.add(
             ImportItemPayloadPB.create()
               ..name = name
@@ -195,7 +196,6 @@ class _ImportPanelState extends State<ImportPanel> {
           );
           break;
         case ImportType.afDatabase:
-          final data = await File(path).readAsString();
           importValues.add(
             ImportItemPayloadPB.create()
               ..name = name

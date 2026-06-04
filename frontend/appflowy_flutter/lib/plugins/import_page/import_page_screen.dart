@@ -314,17 +314,83 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
 
   Future<void> _handleMarkdownImport(BuildContext context) async {
     try {
+      // 显示进度对话框（必须非阻塞，立即返回让后续代码继续执行）
+      final progressNotifier = ValueNotifier<double>(0.0);
+      final completerContextRef = <BuildContext>[];
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) {
+            completerContextRef.add(ctx);
+            return ValueListenableBuilder<double>(
+              valueListenable: progressNotifier,
+              builder: (ctx2, value, child) {
+                String label;
+                if (value < 0.15) {
+                  label = '正在准备导入...';
+                } else if (value < 0.30) {
+                  label = '正在选择文件...';
+                } else if (value < 0.85) {
+                  label = '正在处理文件...';
+                } else {
+                  label = '正在写入文档...';
+                }
+                return AlertDialog(
+                  title: const Text('导入进度'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(label),
+                      const SizedBox(height: 16),
+                      LinearProgressIndicator(
+                        value: value > 0.05 ? value : null,
+                        minHeight: 8,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${(value * 100).toStringAsFixed(0)}%',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      });
+
+      void closeDialog() {
+        if (completerContextRef.isNotEmpty) {
+          try {
+            Navigator.of(completerContextRef.first).pop();
+          } catch (_) {}
+        }
+      }
+
+      // 立即更新进度为准备阶段
+      progressNotifier.value = 0.05;
+
       // 获取当前工作空间
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
         (workspace) => workspace,
-        (error) => throw Exception('获取当前工作空间失败: $error'),
+        (error) {
+          closeDialog();
+          throw Exception('获取当前工作空间失败: $error');
+        },
       );
 
-      // 直接在工作空间根目录下检查或创建"外部导入"项目
+      progressNotifier.value = 0.1;
+
+      // 在工作空间根目录下检查或创建"外部导入"项目
       Log.info('在工作空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
-      
+
+      progressNotifier.value = 0.15;
+
       // 选择并读取文本/Markdown文件
       final result = await getIt<FilePickerService>().pickFiles(
         type: FileType.custom,
@@ -332,188 +398,168 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         allowMultiple: true,
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final importValues = <ImportItemPayloadPB>[];
-        
-        // 先检查所有文件大小
-        bool hasValidFiles = false;
-        for (final file in result.files) {
-          final path = file.path;
-          if (path != null) {
-            final fileSize = await File(path).length();
-            const maxFileSize = 1024 * 1024; // 1MB
-            if (fileSize <= maxFileSize) {
-              hasValidFiles = true;
-              break;
-            }
-          }
+      if (result == null || result.files.isEmpty) {
+        closeDialog();
+        return;
+      }
+
+      final importValues = <ImportItemPayloadPB>[];
+      final totalFiles = result.files.length;
+      int processedFiles = 0;
+
+      // 计算每个文件在各阶段的权重：读取(15%) + Isolate解析(75%) + 导入(10%)
+      const readWeight = 0.15;
+      const computeWeight = 0.70;
+      const importWeight = 0.10;
+      const baseProgress = 0.15;
+
+      for (final file in result.files) {
+        final path = file.path;
+        if (path == null) {
+          processedFiles++;
+          progressNotifier.value = _calcProgress(processedFiles, totalFiles, baseProgress, readWeight);
+          continue;
         }
-        
-        // 只有有有效文件时才显示进度对话框
-        BuildContext? dialogContext;
-        ValueNotifier<double>? progressNotifier;
-        int totalFiles = result.files.length;
-        int processedFiles = 0;
-        
-        if (hasValidFiles) {
-          // 显示导入进度对话框
-          progressNotifier = ValueNotifier<double>(0.0);
-          
-          // 立即更新初始进度
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            progressNotifier!.value = 0.0;
-          });
-          
-          // 非阻塞显示对话框
+
+        final fileName = file.name;
+        final name = p.basenameWithoutExtension(fileName);
+
+        // 检查文件大小
+        final fileSize = await File(path).length();
+        const maxFileSize = 1024 * 1024; // 1MB
+        if (fileSize > maxFileSize) {
+          if (mounted) {
+            showToastNotification(
+              message: '文件 $fileName 过大（${(fileSize / 1024 / 1024).toStringAsFixed(1)}MB），最大支持 1MB',
+              type: ToastificationType.warning,
+            );
+          }
+          processedFiles++;
+          progressNotifier.value = _calcProgress(processedFiles, totalFiles, baseProgress, readWeight);
+          continue;
+        }
+
+        try {
+          // 读取文件内容（先读字节再用系统编码解码，兼容 GBK 等非 UTF-8 文件）
+          final bytes = await File(path).readAsBytes();
+          final data = systemEncoding.decode(bytes);
+          processedFiles++;
+          progressNotifier.value = _calcProgress(processedFiles, totalFiles, baseProgress, readWeight);
+
+          // 使用 Isolate 进行后台 Markdown → Document 转换
+          final documentBytes = await compute((Map<String, dynamic> params) {
+            final content = params['content'] as String;
+            final doc = customMarkdownToDocument(content);
+            return DocumentDataPBFromTo.fromDocument(doc)?.writeToBuffer();
+          }, {'content': data});
+
+          if (documentBytes != null) {
+            importValues.add(
+              ImportItemPayloadPB.create()
+                ..name = name
+                ..data = documentBytes
+                ..viewLayout = ViewLayoutPB.Document
+                ..importType = ImportTypePB.Markdown,
+            );
+          }
+          // 更新解析阶段进度（每次一个文件解析完都更新，让用户看到持续进展）
+          progressNotifier.value = _calcProgress(processedFiles, totalFiles, baseProgress, readWeight + computeWeight * (processedFiles / totalFiles));
+        } catch (e) {
+          Log.error('处理文件 $fileName 失败: $e');
+          if (mounted) {
+            showToastNotification(
+              message: '处理文件 $fileName 失败: $e',
+              type: ToastificationType.error,
+            );
+          }
+          processedFiles++;
+          progressNotifier.value = _calcProgress(processedFiles, totalFiles, baseProgress, readWeight);
+        }
+      }
+
+      closeDialog();
+
+      if (importValues.isNotEmpty) {
+        // 显示准备导入提示
+        if (mounted) {
+          showToastNotification(
+            message: '正在导入 ${importValues.length} 个文件...',
+            type: ToastificationType.info,
+          );
+        }
+
+        progressNotifier.value = 0.0; // 重置，准备下一阶段
+
+        // 显示导入中的对话框（同样非阻塞）
+        final importDialogContextRef = <BuildContext>[];
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) {
-              dialogContext = context;
-              return AlertDialog(
-                title: const Text('导入进度'),
+            builder: (ctx) {
+              importDialogContextRef.add(ctx);
+              return const AlertDialog(
+                title: Text('正在导入'),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('正在处理文件，请稍候...'),
-                    const SizedBox(height: 16),
-                    ValueListenableBuilder<double>(
-                      valueListenable: progressNotifier!,
-                      builder: (context, value, child) => LinearProgressIndicator(
-                        value: value,
-                        minHeight: 8,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ValueListenableBuilder<double>(
-                      valueListenable: progressNotifier!,
-                      builder: (context, value, child) => Text(
-                        '${(value * 100).toStringAsFixed(0)}%',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+                    SizedBox(height: 16),
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('正在写入文档...'),
                   ],
                 ),
               );
             },
           );
+        });
+
+        void closeImportDialog() {
+          if (importDialogContextRef.isNotEmpty) {
+            try {
+              Navigator.of(importDialogContextRef.first).pop();
+            } catch (_) {}
+          }
         }
-        
-        for (final file in result.files) {
-          final path = file.path;
-          if (path == null) {
-            if (progressNotifier != null) {
-              processedFiles++;
-              progressNotifier.value = processedFiles / totalFiles;
+
+        // 导入到"外部导入"子项目下
+        final importResult = await ImportBackendService.importPages(
+          externalImportView.id,
+          importValues,
+        );
+
+        closeImportDialog();
+
+        importResult.fold(
+          (views) {
+            if (mounted) {
+              final fileCount = importValues.length;
+              showToastNotification(
+                message: '成功导入 $fileCount 个文件到外部导入项目',
+                type: ToastificationType.success,
+              );
+
+              // 如果有导入的视图，打开第一个
+              if (views.items.isNotEmpty) {
+                context.read<TabsBloc>().openPlugin(views.items.first);
+              }
             }
-            continue;
-          }
-          
-          final fileName = file.name;
-          final name = p.basenameWithoutExtension(fileName);
-          
-          // 检查文件大小
-          final fileSize = await File(path).length();
-          const maxFileSize = 1024 * 1024; // 1MB
-          if (fileSize > maxFileSize) {
+          },
+          (error) {
             if (mounted) {
               showToastNotification(
-                message: '文件 $fileName 过大（${(fileSize / 1024 / 1024).toStringAsFixed(1)}MB），最大支持 1MB',
-                type: ToastificationType.warning,
-              );
-            }
-            if (progressNotifier != null) {
-              processedFiles++;
-              progressNotifier.value = processedFiles / totalFiles;
-            }
-            continue;
-          }
-          
-          try {
-            // 读取文件内容
-            final data = await File(path).readAsString();
-            
-            // 读取完成后更新进度
-            if (progressNotifier != null) {
-              processedFiles++;
-              progressNotifier.value = processedFiles / totalFiles;
-            }
-            
-            // 使用 Isolate 进行后台处理
-            final documentBytes = await compute((Map<String, dynamic> params) {
-              final content = params['content'] as String;
-              final doc = customMarkdownToDocument(content);
-              return DocumentDataPBFromTo.fromDocument(doc)?.writeToBuffer();
-            }, {'content': data});
-            
-            if (documentBytes != null) {
-              importValues.add(
-                ImportItemPayloadPB.create()
-                  ..name = name
-                  ..data = documentBytes
-                  ..viewLayout = ViewLayoutPB.Document
-                  ..importType = ImportTypePB.Markdown,
-              );
-            }
-          } catch (e) {
-            Log.error('处理文件 $fileName 失败: $e');
-            if (mounted) {
-              showToastNotification(
-                message: '处理文件 $fileName 失败: $e',
+                message: '导入失败: $error',
                 type: ToastificationType.error,
               );
             }
-            // 即使出错也要更新进度
-            if (progressNotifier != null) {
-              processedFiles++;
-              progressNotifier.value = processedFiles / totalFiles;
-            }
-          }
-        }
-
-        // 关闭进度对话框
-        if (dialogContext != null) {
-          Navigator.of(dialogContext!).pop();
-        }
-
-        if (importValues.isNotEmpty) {
-          // 导入到"外部导入"子项目下
-          final importResult = await ImportBackendService.importPages(
-            externalImportView.id,
-            importValues,
-          );
-
-          importResult.fold(
-            (views) {
-              if (mounted) {
-                final fileCount = importValues.length;
-                final fileNames = result.files.map((f) => f.name).join(', ');
-                showToastNotification(
-                  message: '成功导入 $fileCount 个文件到外部导入项目：$fileNames',
-                  type: ToastificationType.success,
-                );
-
-                // 如果有导入的视图，打开第一个
-                if (views.items.isNotEmpty) {
-                  context.read<TabsBloc>().openPlugin(views.items.first);
-                }
-              }
-            },
-            (error) {
-              if (mounted) {
-                showToastNotification(
-                  message: '导入失败: $error',
-                  type: ToastificationType.error,
-                );
-              }
-            },
-          );
-        } else if (mounted) {
-          showToastNotification(
-            message: '没有成功处理的文件',
-            type: ToastificationType.info,
-          );
-        }
+          },
+        );
+      } else if (mounted) {
+        showToastNotification(
+          message: '没有成功处理的文件',
+          type: ToastificationType.info,
+        );
       }
     } catch (e) {
       Log.error('Markdown导入失败: $e');
@@ -524,6 +570,12 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         );
       }
     }
+  }
+
+  /// 计算当前进度值
+  double _calcProgress(int processed, int total, double base, double maxOffset) {
+    if (total == 0) return base;
+    return (base + maxOffset * (processed / total)).clamp(0.0, 1.0);
   }
 
 
