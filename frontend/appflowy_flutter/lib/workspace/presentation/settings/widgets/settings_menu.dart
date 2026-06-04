@@ -367,7 +367,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
         mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          buildAvatar(),
+          GestureDetector(
+            onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
+            child: buildAvatar(),
+          ),
           const HSpace(8),
           Expanded(
             child: Column(
