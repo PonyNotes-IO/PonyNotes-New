@@ -145,7 +145,6 @@ class ViewMoreActionPopover extends StatelessWidget {
           ViewMoreActionType.changeIcon,
           ViewMoreActionType.duplicate,
         ],
-        ViewMoreActionType.openInNewTab,
       ]);
     } else {
       actionTypes.add(
@@ -176,7 +175,6 @@ class ViewMoreActionPopover extends StatelessWidget {
         ViewMoreActionType.divider,
       ]);
 
-      actionTypes.add(ViewMoreActionType.openInNewTab);
     }
 
     return actionTypes;
