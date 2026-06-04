@@ -171,7 +171,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (PlatformInfo.isMobile) const VSpace(12),
+                  VSpace(12) ,
                   ValueListenableBuilder<bool>(
                     valueListenable: state
                         .tabBarControllerByViewId[state.parentView.id]!
