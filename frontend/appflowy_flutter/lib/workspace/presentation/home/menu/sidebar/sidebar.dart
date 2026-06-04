@@ -519,13 +519,11 @@ class _SidebarState extends State<_Sidebar> {
             const VSpace(8),
             _renderUpgradeSpaceButton(menuHorizontalInset),
             _buildUpgradeApplicationButton(menuHorizontalInset),
-            const VSpace(14),
             // Fixed bottom actions (trash, settings) - keep outside the scrollable area
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: HomeInsets.sidebarHorizontalPadding,
-                vertical: HomeInsets.sidebarBottomPadding,
-              ),
+              ).copyWith(bottom: 4),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
