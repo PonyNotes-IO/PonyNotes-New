@@ -1,7 +1,10 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/plugins/homepage/widgets/todo_plan_section.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_input_area.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
@@ -9,6 +12,7 @@ import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_svg/flowy_svg.dart';
@@ -31,6 +35,7 @@ import 'package:appflowy/workspace/presentation/widgets/user_avatar.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:string_validator/string_validator.dart';
 
 import '../../workspace/application/sidebar/space/space_bloc.dart';
@@ -245,135 +250,153 @@ class _HomePageState extends State<HomePage> {
               .read<RecentViewsBloc>()
               .add(const RecentViewsEvent.resetRecentViews());
         },
-        child: Container(
-          color: theme.colorScheme.surface,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
-            child: Column(
-              children: [
-              // 问候语区域 - 右对齐，与头像一起
-              _buildGreetingSection(greeting, userName),
-              const SizedBox(height: 50),
-
-              // 问AI区域标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    FlowySvg(
-                      FlowySvgs.home_ai_icon_s,
-                      size: Size(22, 18),
-                      blendMode: null,
-                    ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "问AI",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AIInputArea(
-                        onMessageSent: _handleMessageSent,
-                        customWidth: constraints.maxWidth,
-                        // 使用几乎全部可用宽度，只留8px左右边距
-                        customMargin:
-                            const EdgeInsets.symmetric(horizontal: 0.0),
-                        // 最小边距
-                        customToolbarPadding: const EdgeInsets.fromLTRB(
-                          20,
-                          15,
-                          20,
-                          13,
+        child: Stack(children: [
+          Container(
+            color: theme.colorScheme.surface,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
+              child: Column(
+                children: [
+                  // 问候语区域 - 右对齐，与头像一起
+                  _buildGreetingSection(greeting, userName),
+                  const SizedBox(height: 50),
+                  // 问AI区域标题
+                  Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        FlowySvg(
+                          FlowySvgs.home_ai_icon_s,
+                          size: Size(22, 18),
+                          blendMode: null,
                         ),
-                        // 左右边距各20px
-                        customToolbarWidth: constraints.maxWidth -
-                            40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 50),
-
-              // 最近访问标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.access_time,
-                      size: 18,
-                      color: appTheme.iconColorScheme.primary,
+                        const SizedBox(width: 8.0),
+                        Text(
+                          "问AI",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: appTheme.textColorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "最近访问",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
 
-              // 最近访问
-              _buildRecentSection(),
-              const SizedBox(height: 50),
+                  // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AIInputArea(
+                            onMessageSent: _handleMessageSent,
+                            customWidth: constraints.maxWidth,
+                            // 使用几乎全部可用宽度，只留8px左右边距
+                            customMargin:
+                                const EdgeInsets.symmetric(horizontal: 0.0),
+                            // 最小边距
+                            customToolbarPadding: const EdgeInsets.fromLTRB(
+                              20,
+                              15,
+                              20,
+                              13,
+                            ),
+                            // 左右边距各20px
+                            customToolbarWidth: constraints.maxWidth -
+                                40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 50),
 
-              // 待办计划标题
-              Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(bottom: 16.0),
-                child: Row(
-                  children: [
-                    FlowySvg(
-                      FlowySvgs.home_to_do_m,
-                      size: const Size.square(18),
-                      color: appTheme.iconColorScheme.primary,
+                  // 最近访问标题
+                  Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 18,
+                          color: appTheme.iconColorScheme.primary,
+                        ),
+                        const SizedBox(width: 8.0),
+                        Text(
+                          "最近访问",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: appTheme.textColorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8.0),
-                    Text(
-                      "待办计划",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: appTheme.textColorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  ),
 
-              // 待办计划
-              TodoPlanSection(
-                workspaceId: context
-                    .read<UserWorkspaceBloc>()
-                    .state
-                    .currentWorkspace
-                    ?.workspaceId,
+                  // 最近访问
+                  _buildRecentSection(),
+                  const SizedBox(height: 50),
+
+                  // 待办计划标题
+                  Container(
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Row(
+                      children: [
+                        FlowySvg(
+                          FlowySvgs.home_to_do_m,
+                          size: const Size.square(18),
+                          color: appTheme.iconColorScheme.primary,
+                        ),
+                        const SizedBox(width: 8.0),
+                        Text(
+                          "待办计划",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: appTheme.textColorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 待办计划
+                  TodoPlanSection(
+                    workspaceId: context
+                        .read<UserWorkspaceBloc>()
+                        .state
+                        .currentWorkspace
+                        ?.workspaceId,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            top: 10,
+            left: UniversalPlatform.isMacOS ? 50 : 16,
+            child:
+                // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
+                BlocBuilder<HomeSettingBloc, HomeSettingState>(
+              builder: (context, state) {
+                if (state.menuStatus != MenuStatus.hidden) {
+                  return const SizedBox.shrink();
+                }
+                final theme = AppFlowyTheme.of(context);
+                return _HomePageSidebarToggleButton(
+                  color: theme.iconColorScheme.primary,
+                );
+              },
+            ),
+          )
+        ]),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildGreetingSection(String greeting, String userName) {
@@ -414,6 +437,26 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 主页侧边栏切换按钮，参考 SpaceHub 的实现
+  Widget _HomePageSidebarToggleButton({
+    required Color color,
+  }) {
+    return FlowyTooltip(
+      message: LocaleKeys.sideBar_openSidebar.tr(),
+      child: FlowyIconButton(
+        width: 24,
+        icon: FlowySvg(
+          FlowySvgs.sidebar_collapse_custom_m,
+          size: const Size.square(24),
+          color: color,
+        ),
+        onPressed: () => context.read<HomeSettingBloc>().add(
+              const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+            ),
       ),
     );
   }

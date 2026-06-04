@@ -163,18 +163,13 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                   listener: (context, state) {
                     final view = state.latestView;
                     if (view != null) {
-                      final currentPageManager =
-                          context.read<TabsBloc>().state.currentPageManager;
-
-                      if (currentPageManager.plugin.pluginType ==
-                          PluginType.blank) {
-                        if (view.id.isEmpty) {
-                          Log.error(
-                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
-                          );
-                        } else {
-                          getIt<TabsBloc>().openPlugin(view);
-                        }
+                      // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
+                      if (view.id.isEmpty) {
+                        Log.error(
+                          'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
+                        );
+                      } else {
+                        getIt<TabsBloc>().openPlugin(view);
                       }
 
                       _switchToSpace(view);

@@ -44,7 +44,18 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
     // 数据库回调会自动同步各自的列表，UI 自然一致。
     _scheduleModel = ScheduleModel();
     if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
-      _scheduleModel.setViewId(widget.databaseViewId!);
+      // ⚠️ 修复：使用同步等待版本，确保数据库初始化完成后再继续
+      _initializeScheduleModel(widget.databaseViewId!);
+    }
+  }
+
+  /// 异步初始化 ScheduleModel，确保数据库就绪后再使用
+  Future<void> _initializeScheduleModel(String viewId) async {
+    try {
+      await _scheduleModel.setViewIdAsync(viewId);
+      print('✅ [ScheduleSidebarContent] ScheduleModel 初始化完成');
+    } catch (e) {
+      print('⚠️ [ScheduleSidebarContent] ScheduleModel 初始化失败: $e');
     }
   }
 
@@ -92,7 +103,8 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
     // 如果视图ID变化，更新
     if (oldWidget.databaseViewId != widget.databaseViewId) {
       if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
-        _scheduleModel.setViewId(widget.databaseViewId!);
+        // ⚠️ 修复：使用同步等待版本
+        _initializeScheduleModel(widget.databaseViewId!);
       }
     }
     // 如果选中日期变化，回填该日期的重复日程

@@ -386,6 +386,7 @@ class ScheduleModel extends ChangeNotifier {
   String? _currentViewId; // 当前使用的视图ID
   DatabaseController? _databaseController; // 数据库控制器
   DatabaseCallbacks? _databaseCallbacks; // 数据库回调
+  bool _isDatabaseReady = false; // 数据库是否已准备就绪
   static const Duration _reminderUpdateWaitTimeout = Duration(seconds: 1);
   static const Duration _reminderUpdatePollInterval =
       Duration(milliseconds: 50);
@@ -397,6 +398,9 @@ class ScheduleModel extends ChangeNotifier {
   List<ScheduleItem> get schedules => List.unmodifiable(_schedules);
 
   bool get isLoading => _isLoading;
+  
+  // 数据库是否已准备就绪
+  bool get isDatabaseReady => _isDatabaseReady;
   
   // 获取当前选中的日程ID
   String? get selectedScheduleId => _selectedScheduleId;
@@ -439,7 +443,7 @@ class ScheduleModel extends ChangeNotifier {
     }
   }
   
-  // 设置视图ID
+  // 设置视图ID（异步版本，不等待完成）
   void setViewId(String viewId) {
     final viewIdChanged = _currentViewId != viewId;
     _currentViewId = viewId;
@@ -463,6 +467,33 @@ class ScheduleModel extends ChangeNotifier {
       Log.error('❌ [ScheduleModel] 数据库监听器初始化失败: $e');
       if (!_isDisposed) refresh();
     });
+  }
+
+  // 设置视图ID（同步等待版本，确保数据库初始化完成后再返回）
+  Future<void> setViewIdAsync(String viewId) async {
+    final viewIdChanged = _currentViewId != viewId;
+    _currentViewId = viewId;
+
+    // 视图ID未变化且已有数据，只通知UI更新
+    if (!viewIdChanged && _schedules.isNotEmpty) {
+      if (!_isDisposed) notifyListeners();
+      return;
+    }
+
+    // 数据为空或视图ID变化：清空旧数据并重新初始化
+    if (viewIdChanged || _schedules.isEmpty) {
+      _schedules.clear();
+      if (!_isDisposed) notifyListeners();
+    }
+
+    // 同步等待数据库监听器初始化完成
+    try {
+      await _initializeDatabaseListener(viewId);
+      if (!_isDisposed) await refresh();
+    } catch (e) {
+      Log.error('❌ [ScheduleModel] setViewIdAsync 数据库监听器初始化失败: $e');
+      if (!_isDisposed) await refresh();
+    }
   }
 
   // 等待 ReminderBloc 将指定提醒更新为目标时间（避免刷新读到旧值）
@@ -2240,10 +2271,22 @@ extension _ScheduleModelSetup on ScheduleModel {
           if (_isDisposed) return;
           await Future.delayed(const Duration(milliseconds: 200));
         }
+        // 数据库初始化完成，标记为就绪
+        _isDatabaseReady = true;
+        print('✅ [ScheduleModel] 数据库初始化完成');
       },
       (error) {
+        _isDatabaseReady = false;
         throw Exception('无法打开数据库连接: $error');
       },
     );
+  }
+
+  // 清理数据库监听器
+  void _disposeDatabaseListener() {
+    _isDatabaseReady = false;
+    _databaseCallbacks = null;
+    _databaseController?.removeListener();
+    _databaseController = null;
   }
 }

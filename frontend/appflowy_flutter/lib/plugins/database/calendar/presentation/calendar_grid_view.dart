@@ -48,7 +48,16 @@ class CalendarGridViewState extends State<CalendarGridView> {
     super.initState();
     _currentDate = widget.selectedDate;
     _eventController = EventController<CalendarDayEvent>();
-    _loadEvents();
+    
+    // 监听 ScheduleModel 的变化，当数据更新时自动重新加载事件
+    widget.scheduleModel.addListener(_onScheduleModelChanged);
+    
+    // 延迟加载，确保 ScheduleModel 已完成初始化
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (mounted) {
+        _loadEvents();
+      }
+    });
   }
 
   @override
@@ -57,12 +66,25 @@ class CalendarGridViewState extends State<CalendarGridView> {
     if (oldWidget.selectedDate != widget.selectedDate) {
       _currentDate = widget.selectedDate;
     }
+    // 如果 ScheduleModel 实例发生变化，更新监听器
+    if (oldWidget.scheduleModel != widget.scheduleModel) {
+      oldWidget.scheduleModel.removeListener(_onScheduleModelChanged);
+      widget.scheduleModel.addListener(_onScheduleModelChanged);
+    }
   }
 
   @override
   void dispose() {
     _eventController.dispose();
+    widget.scheduleModel.removeListener(_onScheduleModelChanged);
     super.dispose();
+  }
+
+  /// ScheduleModel 数据变化时的回调
+  void _onScheduleModelChanged() {
+    if (mounted) {
+      _loadEvents();
+    }
   }
 
   /// 供父级调用：在指定日期弹出新建日程菜单
@@ -75,6 +97,19 @@ class CalendarGridViewState extends State<CalendarGridView> {
 
   /// 从 ScheduleModel 加载当前日期范围内的日程
   Future<void> _loadEvents() async {
+    // ⚠️ 等待数据库初始化完成
+    if (!widget.scheduleModel.isDatabaseReady) {
+      final deadline = DateTime.now().add(Duration(seconds: 3));
+      while (!widget.scheduleModel.isDatabaseReady && DateTime.now().isBefore(deadline)) {
+        await Future.delayed(Duration(milliseconds: 50));
+        if (!mounted) return;
+      }
+      if (!widget.scheduleModel.isDatabaseReady) {
+        print('⚠️ [CalendarGridView] _loadEvents: 数据库仍未就绪');
+        return;
+      }
+    }
+
     DateTime start, end;
     switch (_viewMode) {
       case CalendarViewMode.day:
