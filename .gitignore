@@ -169,3 +169,4 @@ docs/calendar-module-status.md
 frontend/.codegraph/codegraph.lock
 frontend/.codegraph/daemon.pid
 frontend/docs/
+frontend/appflowy_flutter/docs/

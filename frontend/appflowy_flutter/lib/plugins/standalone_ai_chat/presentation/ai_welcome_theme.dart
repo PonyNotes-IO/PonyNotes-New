@@ -8,7 +8,7 @@ class AIWelcomeTheme {
   static Color backgroundColor(BuildContext context) =>
       Theme.of(context).brightness == Brightness.light
           ? const Color(0xFFFFFFFF)
-          : const Color(0xFF000000);
+          : const Color(0xFF2B2B2B); // match todo plan section surfaceContainerColorScheme.layer01
   static Color primaryTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
   static Color secondaryTextColor(BuildContext context) =>
