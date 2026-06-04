@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -54,7 +55,9 @@ class ChatUserAvatar extends StatelessWidget {
     if (iconUrl.isEmpty) {
       child = _buildEmptyAvatar(context);
     } else if (isURL(iconUrl)) {
-      child = _buildUrlAvatar(context);
+      child = _buildNetworkAvatar(context);
+    } else if (_isLocalFile(iconUrl)) {
+      child = _buildLocalAvatar(context);
     } else {
       child = _buildEmojiAvatar(context);
     }
@@ -69,6 +72,32 @@ class ChatUserAvatar extends StatelessWidget {
         ),
       ),
       child: child,
+    );
+  }
+
+  bool _isLocalFile(String url) {
+    return !isURL(url) && File(url).existsSync();
+  }
+
+  Widget _buildNetworkAvatar(BuildContext context) {
+    return Image.network(
+      iconUrl,
+      fit: BoxFit.cover,
+      width: DesktopAIChatSizes.avatarSize,
+      height: DesktopAIChatSizes.avatarSize,
+      errorBuilder: (context, error, stackTrace) =>
+          _buildEmptyAvatar(context),
+    );
+  }
+
+  Widget _buildLocalAvatar(BuildContext context) {
+    return Image.file(
+      File(iconUrl),
+      fit: BoxFit.cover,
+      width: DesktopAIChatSizes.avatarSize,
+      height: DesktopAIChatSizes.avatarSize,
+      errorBuilder: (context, error, stackTrace) =>
+          _buildEmptyAvatar(context),
     );
   }
 
@@ -97,34 +126,17 @@ class ChatUserAvatar extends StatelessWidget {
     );
   }
 
-  Widget _buildUrlAvatar(BuildContext context) {
-    return CircleAvatar(
-      backgroundColor: Colors.transparent,
-      radius: DesktopAIChatSizes.avatarSize / 2,
-      child: Image.network(
-        iconUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            _buildEmptyAvatar(context),
-      ),
-    );
-  }
-
   Widget _buildEmojiAvatar(BuildContext context) {
-    return CircleAvatar(
-      backgroundColor: Colors.transparent,
-      radius: DesktopAIChatSizes.avatarSize / 2,
-      child: builtInSVGIcons.contains(iconUrl)
-          ? FlowySvg(
-              FlowySvgData('emoji/$iconUrl'),
-              blendMode: null,
-            )
-          : FlowyText.emoji(
-              iconUrl,
-              fontSize: 24, // cannot reduce
-              optimizeEmojiAlign: true,
-            ),
-    );
+    return builtInSVGIcons.contains(iconUrl)
+        ? FlowySvg(
+            FlowySvgData('emoji/$iconUrl'),
+            blendMode: null,
+          )
+        : FlowyText.emoji(
+            iconUrl,
+            fontSize: 24, // cannot reduce
+            optimizeEmojiAlign: true,
+          );
   }
 
   /// Return the user name.
