@@ -1167,7 +1167,7 @@ class _AIInputAreaState extends State<AIInputArea> {
         ),
       ),
       child: Scrollbar(
-        controller: _attachmentScrollController,
+        controller: _attachmentScrollController.hasClients ? _attachmentScrollController : null,
         thumbVisibility: true,
         child: SingleChildScrollView(
           controller: _attachmentScrollController,

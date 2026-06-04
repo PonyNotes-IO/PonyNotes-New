@@ -429,6 +429,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
   bool _isDocumentListVisible = true;
 
+  /// 左侧文档列表的滚动控制器（用于 RawScrollbar）
+  final ScrollController _scrollController = ScrollController();
+
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
     // 防抖：如果是同一个视图，跳过
@@ -651,6 +654,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                       showHeader: true,
                       onViewSelectedWithRecent: _selectViewInMiddlePanel,
                       onViewCreated: _selectViewInMiddlePanel,
+                      scrollController: _scrollController,
                     ),
                   ),
                 ],
@@ -960,6 +964,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       bloc.close();
     }
     _childViewInfoBlocs.clear();
+    _scrollController.dispose();
     super.dispose();
   }
 }
@@ -972,6 +977,7 @@ class _SpaceDocumentList extends StatelessWidget {
     required this.showHeader,
     required this.onViewCreated,
     required this.onViewSelectedWithRecent,
+    required this.scrollController,
   });
 
   final ViewPB spaceView;
@@ -979,6 +985,7 @@ class _SpaceDocumentList extends StatelessWidget {
   final bool showHeader;
   final ValueChanged<ViewPB> onViewCreated;
   final void Function(ViewPB view) onViewSelectedWithRecent;
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -1252,7 +1259,9 @@ class _SpaceDocumentList extends StatelessWidget {
             thickness: 0.5,
             radius: const Radius.circular(4),
             thumbVisibility: false,
+            controller: scrollController,
             child: ListView.builder(
+            controller: scrollController,
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
@@ -1319,7 +1328,9 @@ class _SpaceDocumentList extends StatelessWidget {
           thickness: 0.5,
           radius: const Radius.circular(4),
           thumbVisibility: false,
+          controller: scrollController,
           child: ListView.builder(
+          controller: scrollController,
           itemCount: childViews.length + 1,
           itemBuilder: (context, index) {
             if (index == childViews.length) {

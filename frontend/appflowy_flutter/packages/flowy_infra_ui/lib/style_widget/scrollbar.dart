@@ -34,11 +34,18 @@ class _FlowyScrollbarState extends State<FlowyScrollbar> {
       child: ValueListenableBuilder(
         valueListenable: isHovered,
         builder: (context, isHovered, child) {
+          final controller = widget.controller;
+          // Only render the Scrollbar when the controller is attached to a scrollable.
+          // Otherwise the Scrollbar's internal animation crashes with
+          // "ScrollController has no ScrollPosition attached".
+          if (controller == null || !controller.hasClients) {
+            return child!;
+          }
           return Scrollbar(
             thumbVisibility: isHovered && widget.thumbVisibility,
             // the radius should be fixed to 12
             radius: const Radius.circular(12),
-            controller: widget.controller,
+            controller: controller,
             child: ScrollConfiguration(
               behavior: ScrollConfiguration.of(context).copyWith(
                 scrollbars: false,

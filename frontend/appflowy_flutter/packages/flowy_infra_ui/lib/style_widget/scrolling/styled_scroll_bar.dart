@@ -48,9 +48,11 @@ class ScrollbarState extends State<StyledScrollbar> {
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_onScrollChanged);
-    widget.controller.position.isScrollingNotifier
-        .addListener(_hideScrollbarInTime);
+    if (widget.controller.hasClients) {
+      widget.controller.addListener(_onScrollChanged);
+      widget.controller.position.isScrollingNotifier
+          .addListener(_hideScrollbarInTime);
+    }
   }
 
   @override
@@ -67,6 +69,9 @@ class ScrollbarState extends State<StyledScrollbar> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.controller.hasClients) {
+      return const SizedBox.shrink();
+    }
     return LayoutBuilder(
       builder: (_, BoxConstraints constraints) {
         double maxExtent;
@@ -184,6 +189,7 @@ class ScrollbarState extends State<StyledScrollbar> {
 
   void _hideScrollbarInTime() {
     if (!mounted || !widget.autoHideScrollbar) return;
+    if (!widget.controller.hasClients) return;
 
     _hideScrollbarOperation?.cancel();
 

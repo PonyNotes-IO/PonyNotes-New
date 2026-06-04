@@ -40,7 +40,7 @@ class _PromptInputFileState extends State<PromptInputFile> {
           return const SizedBox.shrink();
         }
         return Scrollbar(
-          controller: _scrollController,
+          controller: _scrollController.hasClients ? _scrollController : null,
           child: ListView.separated(
             controller: _scrollController,
             scrollDirection: Axis.horizontal,
