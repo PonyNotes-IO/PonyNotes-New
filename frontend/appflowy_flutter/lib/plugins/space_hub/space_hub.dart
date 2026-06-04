@@ -475,6 +475,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         _selectedView = null;
         _isDocumentListVisible = true;
       });
+      // 重置 MenuSharedState，避免显示旧空间的选中状态
+      getIt<MenuSharedState>().latestOpenView = null;
       // didUpdateWidget 处于 build 阶段，直接修改 ValueNotifier 会触发
       // ValueListenableBuilder.markNeedsBuild()，导致 "called during build" 错误。
       // 延迟到当前帧结束后再设置，避免在 build 阶段修改 ValueNotifier。
@@ -543,6 +545,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           });
           // 更新共享的选中视图状态
           widget.selectedViewNotifier.value = firstView;
+          // 更新 MenuSharedState，确保左侧列表显示正确的选中状态
+          getIt<MenuSharedState>().latestOpenView = firstView;
           // 添加到最近访问
           _addToRecentViews(firstView.id);
         }
@@ -928,31 +932,22 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           _selectedView = null;
         });
         widget.selectedViewNotifier.value = null;
+        getIt<MenuSharedState>().latestOpenView = null;
       }
       return;
     }
 
-    if (_selectedView == null) {
+    // 空间切换时强制选中第一条笔记，或当前选中的笔记不存在于列表中时
+    if (_selectedView == null || 
+        !childViews.any((v) => v.id == _selectedView!.id)) {
       final firstView = childViews.first;
       setState(() {
         _selectedView = firstView;
       });
       widget.selectedViewNotifier.value = firstView;
-      return;
+      getIt<MenuSharedState>().latestOpenView = firstView;
+      _addToRecentViews(firstView.id);
     }
-
-    final selectedId = _selectedView!.id;
-    final stillExists = childViews.any((v) => v.id == selectedId);
-    if (stillExists) {
-      return;
-    }
-
-    // Selected view was deleted or moved out; switch right panel to first available.
-    final fallbackView = childViews.first;
-    setState(() {
-      _selectedView = fallbackView;
-    });
-    widget.selectedViewNotifier.value = fallbackView;
   }
 
   @override
