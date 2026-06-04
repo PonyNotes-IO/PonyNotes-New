@@ -91,12 +91,6 @@ class NotificationService {
               sound: 'default',
             ),
           );
-          await _notificationsPlugin.show(
-            0,
-            '通知权限请求',
-            'PonyNotes 需要通知权限来提醒您的日程安排',
-            platformDetails,
-          );
         } catch (e) {
           LogUtils.error('Failed to request notification permissions on macOS: $e');
         }
