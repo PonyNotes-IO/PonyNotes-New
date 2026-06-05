@@ -4,7 +4,6 @@ import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-whiteboard/protobuf.dart';
 import 'package:flutter/foundation.dart';
 
 /// WhiteboardCollabAdapter
@@ -27,7 +26,7 @@ class WhiteboardCollabAdapter {
   }) {
     _service = WhiteboardDataService();
     _listener = WhiteboardListener(id: viewId);
-    _listener.start(onUpdate: _onRemoteUpdate);
+    _listener.start(onRemoteUpdate: _onRemoteUpdate);
     Log.info('[WhiteboardCollabAdapter] Listener started for view: $viewId');
   }
 
@@ -325,19 +324,12 @@ class WhiteboardCollabAdapter {
   }
 
   /// 处理来自远端（其他设备）的实时更新通知
-  void _onRemoteUpdate(WhiteboardDataPB data) {
+  /// 由 WhiteboardListener 回调，payload 已在 Listener 中从 JSON 解析完毕
+  void _onRemoteUpdate(String key, dynamic value) {
     if (_disposed) return;
 
     try {
-      final payload = jsonDecode(data.jsonData);
-      if (payload is! Map) return;
-
-      final key = payload['key'] as String?;
-      final value = payload['value'];
-
-      if (key == null || value == null) return;
-
-      Log.info('[WhiteboardCollabAdapter] 🔔 Remote update received: key=$key');
+      Log.info('[WhiteboardCollabAdapter] 🔔 Remote update: key=$key');
 
       // 解析值（如果是字符串 JSON 则解析）
       dynamic parsedValue = value;
@@ -362,7 +354,6 @@ class WhiteboardCollabAdapter {
       }
 
       // 通知 WebView 更新
-      // 注意：这里我们只发送变更的部分，WebView 内部会处理合并
       onDataChanged({key: parsedValue});
     } catch (e) {
       Log.error(
