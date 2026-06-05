@@ -410,6 +410,7 @@ class _SpaceHubContent extends StatefulWidget {
 }
 
 class _SpaceHubContentState extends State<_SpaceHubContent> {
+  /// 当前选中的视图
   ViewPB? _selectedView;
 
   /// 左侧文档列表的宽度
@@ -475,8 +476,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         _selectedView = null;
         _isDocumentListVisible = true;
       });
-      // 重置 MenuSharedState，避免显示旧空间的选中状态
-      getIt<MenuSharedState>().latestOpenView = null;
+      // 重置选中状态
       // didUpdateWidget 处于 build 阶段，直接修改 ValueNotifier 会触发
       // ValueListenableBuilder.markNeedsBuild()，导致 "called during build" 错误。
       // 延迟到当前帧结束后再设置，避免在 build 阶段修改 ValueNotifier。
@@ -507,20 +507,20 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
 
     setState(() {
-      _selectedView = view;
+      // 如果点击的是当前选中的笔记，则取消选中
+      if (_selectedView?.id == view.id) {
+        _selectedView = null;
+        widget.selectedViewNotifier.value = null;
+      } else {
+        // 否则选中新笔记
+        _selectedView = view;
+        widget.selectedViewNotifier.value = view;
+      }
     });
-    widget.selectedViewNotifier.value = view;
-    _addToRecentViews(view.id);
-    context.read<TabsBloc>().add(
-          TabsEvent.openTab(
-            plugin: SpaceHubPlugin(
-              view: widget.spaceView,
-              initialSelectedView: view,
-              tabView: view,
-            ),
-            view: view,
-          ),
-        );
+
+    if (_selectedView != null) {
+      _addToRecentViews(_selectedView!.id);
+    }
   }
 
   void _hideDocumentList() {
@@ -543,10 +543,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           setState(() {
             _selectedView = firstView;
           });
-          // 更新共享的选中视图状态
           widget.selectedViewNotifier.value = firstView;
-          // 更新 MenuSharedState，确保左侧列表显示正确的选中状态
-          getIt<MenuSharedState>().latestOpenView = firstView;
           // 添加到最近访问
           _addToRecentViews(firstView.id);
         }
@@ -569,6 +566,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           (bloc) => bloc.isMenuHidden,
     );
     final theme = AppFlowyTheme.of(context);
+    // 右侧内容区域使用本地的 _selectedView 变量
     final rightPanel = Expanded(
       child: _selectedView != null
           ? _buildSelectedViewContent(_selectedView!)
@@ -932,20 +930,18 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           _selectedView = null;
         });
         widget.selectedViewNotifier.value = null;
-        getIt<MenuSharedState>().latestOpenView = null;
       }
       return;
     }
 
     // 空间切换时强制选中第一条笔记，或当前选中的笔记不存在于列表中时
-    if (_selectedView == null || 
+    if (_selectedView == null ||
         !childViews.any((v) => v.id == _selectedView!.id)) {
       final firstView = childViews.first;
       setState(() {
         _selectedView = firstView;
       });
       widget.selectedViewNotifier.value = firstView;
-      getIt<MenuSharedState>().latestOpenView = firstView;
       _addToRecentViews(firstView.id);
     }
   }
@@ -1290,19 +1286,20 @@ class _SpaceDocumentList extends StatelessWidget {
                     : FolderSpaceType.public,
                 level: 0,
                 leftPadding: 10,
-                onSelected: (itemContext, selectedView) {
+                onSelected: (itemContext, clickedView) {
                   // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
-                  // 更新 MenuSharedState 以便 ViewItem 显示选中状态
-                  getIt<MenuSharedState>().latestOpenView = selectedView;
-                  onViewSelectedWithRecent(selectedView);
+                  // 直接调用回调，不更新全局状态，避免整个页面刷新
+                  onViewSelectedWithRecent(clickedView);
                 },
                 isFeedback: false,
                 shouldRenderChildren: true,
                 shouldLoadChildViews: true,
-                enableRightClickContext: true, // 保持右键菜单功能
+                enableRightClickContext: true,
                 isHoverEnabled: true,
-                disableSelectedStatus: false, // 允许显示选中状态
-                isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
+                disableSelectedStatus: false,
+                isTablet: PlatformInfo.isTablet,
+                // 使用外部传入的选中状态，避免监听全局状态
+                isExternallySelected: selectedView?.id == childView.id,
               );
             },
           ),
@@ -1359,18 +1356,20 @@ class _SpaceDocumentList extends StatelessWidget {
                   : FolderSpaceType.public,
               level: 0,
               leftPadding: 10,
-              onSelected: (itemContext, selectedView) {
-                // 更新 MenuSharedState 以便 ViewItem 显示选中状态
-                getIt<MenuSharedState>().latestOpenView = selectedView;
-                onViewSelectedWithRecent(selectedView);
+              onSelected: (itemContext, clickedView) {
+                // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
+                // 直接调用回调，不更新全局状态，避免整个页面刷新
+                onViewSelectedWithRecent(clickedView);
               },
               isFeedback: false,
               shouldRenderChildren: true,
               shouldLoadChildViews: true,
               enableRightClickContext: true,
               isHoverEnabled: true,
-              disableSelectedStatus: false, // 允许显示选中状态
-              isTablet: PlatformInfo.isTablet, // 平板端始终显示按钮
+              disableSelectedStatus: false,
+              isTablet: PlatformInfo.isTablet,
+              // 使用外部传入的选中状态，避免监听全局状态
+              isExternallySelected: selectedView?.id == childView.id,
             );
           },
         ),

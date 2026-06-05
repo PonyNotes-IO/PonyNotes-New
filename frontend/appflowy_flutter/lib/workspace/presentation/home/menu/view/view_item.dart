@@ -83,6 +83,8 @@ class ViewItem extends StatelessWidget {
     this.engagedInExpanding = false,
     this.enableRightClickContext = false,
     this.isTablet = false,
+    /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
+    this.isExternallySelected,
   });
 
   final ViewPB view;
@@ -155,6 +157,10 @@ class ViewItem extends StatelessWidget {
   /// Whether the device is a tablet (no hover effect)
   final bool isTablet;
 
+  /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
+  /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
+  final bool? isExternallySelected;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -221,6 +227,7 @@ class ViewItem extends StatelessWidget {
             shouldIgnoreView: shouldIgnoreView,
             engagedInExpanding: engagedInExpanding,
             isTablet: isTablet,
+            isExternallySelected: isExternallySelected,
           );
 
           if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
@@ -276,6 +283,7 @@ class InnerViewItem extends StatefulWidget {
     this.engagedInExpanding = false,
     required this.shouldIgnoreView,
     this.isTablet = false,
+    this.isExternallySelected,
   });
 
   final ViewPB view;
@@ -315,6 +323,10 @@ class InnerViewItem extends StatefulWidget {
   /// Whether the device is a tablet (no hover effect)
   final bool isTablet;
 
+  /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
+  /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
+  final bool? isExternallySelected;
+
   @override
   State<InnerViewItem> createState() => _InnerViewItemState();
 }
@@ -322,36 +334,66 @@ class InnerViewItem extends StatefulWidget {
 class _InnerViewItemState extends State<InnerViewItem> {
   @override
   Widget build(BuildContext context) {
-    Widget child = ValueListenableBuilder(
-      valueListenable: getIt<MenuSharedState>().notifier,
-      builder: (context, value, _) {
-        final isSelected = value?.id == widget.view.id;
-        return SingleInnerViewItem(
-          view: widget.view,
-          parentView: widget.parentView,
-          level: widget.level,
-          showActions: widget.showActions,
-          enableRightClickContext: widget.enableRightClickContext,
-          spaceType: widget.spaceType,
-          onSelected: widget.onSelected,
-          onTertiarySelected: widget.onTertiarySelected,
-          isExpanded: widget.isExpanded,
-          isDraggable: widget.isDraggable,
-          leftPadding: widget.leftPadding,
-          isFeedback: widget.isFeedback,
-          height: widget.height,
-          isPlaceholder: widget.isPlaceholder,
-          isHovered: widget.isHovered,
-          leftIconBuilder: widget.leftIconBuilder,
-          rightIconsBuilder: widget.rightIconsBuilder,
-          extendBuilder: widget.extendBuilder,
-          disableSelectedStatus: widget.disableSelectedStatus,
-          shouldIgnoreView: widget.shouldIgnoreView,
-          isSelected: isSelected,
-          isTablet: widget.isTablet,
-        );
-      },
-    );
+    // 如果外部传入了选中状态，则直接使用，不监听全局状态
+    Widget child;
+    if (widget.isExternallySelected != null) {
+      child = SingleInnerViewItem(
+        view: widget.view,
+        parentView: widget.parentView,
+        level: widget.level,
+        showActions: widget.showActions,
+        enableRightClickContext: widget.enableRightClickContext,
+        spaceType: widget.spaceType,
+        onSelected: widget.onSelected,
+        onTertiarySelected: widget.onTertiarySelected,
+        isExpanded: widget.isExpanded,
+        isDraggable: widget.isDraggable,
+        leftPadding: widget.leftPadding,
+        isFeedback: widget.isFeedback,
+        height: widget.height,
+        isPlaceholder: widget.isPlaceholder,
+        isHovered: widget.isHovered,
+        leftIconBuilder: widget.leftIconBuilder,
+        rightIconsBuilder: widget.rightIconsBuilder,
+        extendBuilder: widget.extendBuilder,
+        disableSelectedStatus: widget.disableSelectedStatus,
+        shouldIgnoreView: widget.shouldIgnoreView,
+        isSelected: widget.isExternallySelected!,
+        isTablet: widget.isTablet,
+      );
+    } else {
+      // 否则监听全局状态
+      child = ValueListenableBuilder(
+        valueListenable: getIt<MenuSharedState>().notifier,
+        builder: (context, value, _) {
+          final isSelected = value?.id == widget.view.id;
+          return SingleInnerViewItem(
+            view: widget.view,
+            parentView: widget.parentView,
+            level: widget.level,
+            showActions: widget.showActions,
+            enableRightClickContext: widget.enableRightClickContext,
+            spaceType: widget.spaceType,
+            onSelected: widget.onSelected,
+            onTertiarySelected: widget.onTertiarySelected,
+            isExpanded: widget.isExpanded,
+            isDraggable: widget.isDraggable,
+            leftPadding: widget.leftPadding,
+            isFeedback: widget.isFeedback,
+            height: widget.height,
+            isPlaceholder: widget.isPlaceholder,
+            isHovered: widget.isHovered,
+            leftIconBuilder: widget.leftIconBuilder,
+            rightIconsBuilder: widget.rightIconsBuilder,
+            extendBuilder: widget.extendBuilder,
+            disableSelectedStatus: widget.disableSelectedStatus,
+            shouldIgnoreView: widget.shouldIgnoreView,
+            isSelected: isSelected,
+            isTablet: widget.isTablet,
+          );
+        },
+      );
+    }
 
     // if the view is expanded and has child views, render its child views
     if (widget.isExpanded &&
