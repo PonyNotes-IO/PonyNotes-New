@@ -57,113 +57,121 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDark ? const Color(0xFF191919) : Colors.white;
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      backgroundColor: theme.surfaceColorScheme.layer01,
+      backgroundColor: backgroundColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       contentPadding: EdgeInsets.zero,
-      content: SizedBox(
-        width: 520,
-        height: 600,
-        child: Column(
-          children: [
-            _buildHeader(theme),
-            const Divider(height: 1),
-            Expanded(
-              child: Stack(
-                children: [
-                  InAppWebView(
-                    initialUrlRequest: URLRequest(url: WebUri(widget.authUrl)),
-                    initialSettings: InAppWebViewSettings(
-                      transparentBackground: true,
-                      mediaPlaybackRequiresUserGesture: false,
-                      javaScriptEnabled: true,
-                      supportZoom: false,
-                    ),
-                    onWebViewCreated: (c) => _controller = c,
-                    onLoadStop: (_, __) {
-                      setState(() => _isLoading = false);
-                    },
-                    onLoadStart: (_, __) {
-                      setState(() {
-                        _isLoading = true;
-                        _error = null;
-                      });
-                    },
-                    onLoadError: (controller, url, code, message) {
-                      Log.error('WeChat WebView load error: $code $message');
-                      setState(() {
-                        _isLoading = false;
-                        _error = '加载页面失败 ($code)';
-                      });
-                    },
-                    shouldOverrideUrlLoading: (controller, action) async {
-                      try {
-                      final uri = action.request.url;
-                      if (uri == null) {
-                        return NavigationActionPolicy.ALLOW;
-                      }
+      content: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: SizedBox(
+          width: 520,
+          height: 600,
+            child: Column(
+              children: [
+                _buildHeader(theme),
+                const Divider(height: 1),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      InAppWebView(
+                        initialUrlRequest: URLRequest(url: WebUri(widget.authUrl)),
+                        initialSettings: InAppWebViewSettings(
+                          transparentBackground: true,
+                          mediaPlaybackRequiresUserGesture: false,
+                          javaScriptEnabled: true,
+                          supportZoom: false,
+                        ),
+                        onWebViewCreated: (c) => _controller = c,
+                        onLoadStop: (_, __) {
+                          setState(() => _isLoading = false);
+                        },
+                        onLoadStart: (_, __) {
+                          setState(() {
+                            _isLoading = true;
+                            _error = null;
+                          });
+                        },
+                        onLoadError: (controller, url, code, message) {
+                          Log.error('WeChat WebView load error: $code $message');
+                          setState(() {
+                            _isLoading = false;
+                            _error = '加载页面失败 ($code)';
+                          });
+                        },
+                        shouldOverrideUrlLoading: (controller, action) async {
+                          try {
+                            final uri = action.request.url;
+                            if (uri == null) {
+                              return NavigationActionPolicy.ALLOW;
+                            }
 
-                      final uriString = uri.toString();
-                      final isCallback = uriString.contains('wechat/callback') ||
-                          uriString.startsWith('ponynotes://');
-                      if (!isCallback) {
-                        return NavigationActionPolicy.ALLOW;
-                      }
+                            final uriString = uri.toString();
+                            final isCallback = uriString.contains('wechat/callback') ||
+                                uriString.startsWith('ponynotes://');
+                            if (!isCallback) {
+                              return NavigationActionPolicy.ALLOW;
+                            }
 
-                      final code = uri.queryParameters['code'];
-                      final state = uri.queryParameters['state'];
-                      final hasValidCode = code != null && code.isNotEmpty;
+                            final code = uri.queryParameters['code'];
+                            final state = uri.queryParameters['state'];
+                            final hasValidCode = code != null && code.isNotEmpty;
 
-                      if (hasValidCode && state == widget.state) {
-                        if (mounted) {
-                          Navigator.of(context).pop(code);
-                        }
-                        return NavigationActionPolicy.CANCEL;
-                      }
+                            if (hasValidCode && state == widget.state) {
+                              if (mounted) {
+                                Navigator.of(context).pop(code);
+                              }
+                              return NavigationActionPolicy.CANCEL;
+                            }
 
-                      return NavigationActionPolicy.ALLOW;
-                      } catch (e) {
-                        Log.error('WeChat WebView shouldOverrideUrlLoading error: $e');
-                        return NavigationActionPolicy.ALLOW;
-                      }
-                    },
-                  ),
-                  if (_isLoading) const _LoadingMask(),
-                  if (_error != null)
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _error ?? '',
-                            style: TextStyle(color: theme.textColorScheme.primary),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: theme.textColorScheme.primary,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _isLoading = true;
-                                _error = null;
-                              });
-                              _controller?.loadUrl(
-                                urlRequest: URLRequest(url: WebUri(widget.authUrl)),
-                              );
-                            },
-                            child: const Text('重试'),
-                          )
-                        ],
+                            return NavigationActionPolicy.ALLOW;
+                          } catch (e) {
+                            Log.error('WeChat WebView shouldOverrideUrlLoading error: $e');
+                            return NavigationActionPolicy.ALLOW;
+                          }
+                        },
                       ),
-                    ),
-                ],
-              ),
+                      if (_isLoading) const _LoadingMask(),
+                      if (_error != null)
+                        Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _error ?? '',
+                                style: TextStyle(color: theme.textColorScheme.primary),
+                              ),
+                              const SizedBox(height: 12),
+                              TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: theme.textColorScheme.primary,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isLoading = true;
+                                    _error = null;
+                                  });
+                                  _controller?.loadUrl(
+                                    urlRequest: URLRequest(url: WebUri(widget.authUrl)),
+                                  );
+                                },
+                                child: const Text('重试'),
+                              )
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
