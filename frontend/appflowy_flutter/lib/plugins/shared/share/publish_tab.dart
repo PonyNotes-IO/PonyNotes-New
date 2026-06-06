@@ -277,13 +277,10 @@ class _PublishWidgetState extends State<_PublishWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // 使用 try-catch 处理 PageAccessLevelBloc 可能不存在的情况
     ShareAccessLevel accessLevel = ShareAccessLevel.fullAccess;
     try {
       accessLevel = context.read<PageAccessLevelBloc>().state.accessLevel;
-    } catch (_) {
-      // PageAccessLevelBloc 不存在，默认使用 owner 权限（允许发布）
-    }
+    } catch (_) {}
 
     Widget publishButton = PublishButton(
       onPublish: () {
