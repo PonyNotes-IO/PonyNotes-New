@@ -381,67 +381,69 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   child: Container(
                     width: PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const VSpace(20),
-                        // 标题
-                        Text(
-                          LocaleKeys.signIn_pleaseEnterVerificationCode.tr(),
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textColorScheme.primary,
-                          ),
-                        ),
-                        const VSpace(20),
-
-                        // 验证码发送信息
-                        RichText(
-                          text: TextSpan(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const VSpace(20),
+                          // 标题
+                          Text(
+                            LocaleKeys.signIn_pleaseEnterVerificationCode.tr(),
                             style: TextStyle(
-                              fontSize: 14,
-                              color: theme.textColorScheme.secondary,
-                              fontWeight: FontWeight.w600,
-                              height: 1.4,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textColorScheme.primary,
                             ),
-                            children: [
-                              const TextSpan(text: '6位验证码已发送至 '),
-                              TextSpan(
-                                text: widget.email,
+                          ),
+                          const VSpace(20),
+
+                          // 验证码发送信息
+                          RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: theme.textColorScheme.secondary,
+                                fontWeight: FontWeight.w600,
+                                height: 1.4,
+                              ),
+                              children: [
+                                const TextSpan(text: '6位验证码已发送至 '),
+                                TextSpan(
+                                  text: widget.email,
+                                  style: TextStyle(
+                                    color: theme.textColorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const TextSpan(text: '，有效期15分钟。'),
+                              ],
+                            ),
+                          ),
+                          const VSpace(40),
+                          // 验证码输入框
+                          _buildVerificationCodeInputs(),
+                          const VSpace(14),
+                          // 重新发送验证码
+                          _buildResendSection(),
+                          // 错误提示
+                          if (_errorMessage.isNotEmpty)
+                            SizedBox(
+                              width: double.infinity,
+                              child: Text(
+                                _errorMessage,
                                 style: TextStyle(
-                                  color: theme.textColorScheme.primary,
+                                  color: Colors.red,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const TextSpan(text: '，有效期15分钟。'),
-                            ],
-                          ),
-                        ),
-                        const VSpace(40),
-                        // 验证码输入框
-                        _buildVerificationCodeInputs(),
-                        const VSpace(14),
-                        // 重新发送验证码
-                        _buildResendSection(),
-                        // 错误提示
-                        if (_errorMessage.isNotEmpty)
-                          SizedBox(
-                            width: double.infinity,
-                            child: Text(
-                              _errorMessage,
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
                             ),
-                          ),
-                        const VSpace(42),
-                        // 下一步按钮
-                        _buildNextButton(),
-                        const Spacer(),
-                      ],
+                          const VSpace(42),
+                          // 下一步按钮
+                          _buildNextButton(),
+                          const VSpace(20),
+                        ],
+                      ),
                     ),
                   ),
                 ),
