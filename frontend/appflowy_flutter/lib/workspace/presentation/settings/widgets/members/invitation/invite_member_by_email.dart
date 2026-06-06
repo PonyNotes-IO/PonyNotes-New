@@ -211,7 +211,7 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
             ),
             child: SizedBox(
               width: 520,
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
