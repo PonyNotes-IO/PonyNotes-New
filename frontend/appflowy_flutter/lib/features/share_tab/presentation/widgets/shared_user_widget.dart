@@ -160,11 +160,11 @@ class SharedUserWidget extends StatelessWidget {
     }
 
     // Managing others
-    // if (currentAccessLevel == ShareAccessLevel.readOnly ||
-    //     currentAccessLevel == ShareAccessLevel.readAndWrite) {
-    //   // Cannot change others' access
-    //   return disabledAccessButton();
-    // } else {
+    if (currentAccessLevel == ShareAccessLevel.readOnly ||
+        currentAccessLevel == ShareAccessLevel.readAndWrite) {
+      // Cannot change others' access
+      return disabledAccessButton();
+    } else {
       // Full access user can manage others
       final supportedAccessLevels = [
         ShareAccessLevel.readOnly,
@@ -172,6 +172,6 @@ class SharedUserWidget extends StatelessWidget {
         ShareAccessLevel.fullAccess,
       ];
       return editAccessWidget(supportedAccessLevels);
-    // }
+    }
   }
 }

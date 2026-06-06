@@ -137,47 +137,50 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    // Non-Guest workspace members get fullAccess for public section documents.
-    // When sectionType is null (getSectionType failed because the folder collab
-    // hadn't finished initializing yet), we also grant fullAccess. This handles
-    // the timing issue where B opens A's old documents before the folder is ready:
-    //   - Private docs explicitly return PrivateSection when the folder IS loaded
-    //   - SharedSection docs (cross-workspace explicit shares) should go through
-    //     the explicit shared-users permission check below
-    //   - The backend Casbin enforces actual write access regardless of this flag
-    if (workspace.role != AFRolePB.Guest &&
-        (sectionType == SharedSectionType.public || sectionType == null)) {
-      return FlowyResult.success(ShareAccessLevel.fullAccess);
-    }
-
     final email = user.email;
 
+    // First, check the shared users list for explicit permission settings
+    // This ensures that explicit share permissions take precedence over
+    // default workspace member permissions
     final request = GetSharedUsersPayloadPB(
       viewId: pageId,
     );
     final result = await FolderEventGetSharedUsers(request).send();
-    return result.fold(
+    final sharedUsersAccessLevel = result.fold(
       (success) {
-        final accessLevel = success.items
+        return success.items
                 .firstWhereOrNull(
                   (item) => item.email == email,
                 )
                 ?.accessLevel
-                .shareAccessLevel ??
-            ShareAccessLevel.readOnly;
-
-        Log.debug('current user access level: $accessLevel, in page: $pageId');
-
-        return FlowyResult.success(accessLevel);
+                .shareAccessLevel;
       },
       (failure) {
         Log.error(
           'failed to get user access level: $failure, in page: $pageId',
         );
-
-        return FlowyResult.success(ShareAccessLevel.readOnly);
+        return null;
       },
     );
+
+    // If the user has an explicit permission in the shared users list, use it
+    if (sharedUsersAccessLevel != null) {
+      Log.debug('current user access level from shared list: $sharedUsersAccessLevel, in page: $pageId');
+      return FlowyResult.success(sharedUsersAccessLevel);
+    }
+
+    // Fall back to default permissions for workspace members in public section
+    // Non-Guest workspace members get fullAccess for public section documents.
+    // Private docs explicitly return PrivateSection when the folder IS loaded.
+    // SharedSection docs (cross-workspace explicit shares) should go through
+    // the explicit shared-users permission check above.
+    if (workspace.role != AFRolePB.Guest &&
+        sectionType == SharedSectionType.public) {
+      return FlowyResult.success(ShareAccessLevel.fullAccess);
+    }
+
+    // Default to readOnly if no permission is found
+    return FlowyResult.success(ShareAccessLevel.readOnly);
   }
 
   /// 查询接收的发布文档只读状态
