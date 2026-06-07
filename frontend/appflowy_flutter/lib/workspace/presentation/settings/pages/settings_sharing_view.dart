@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/features/share_tab/data/models/share_section_type.dart';
+import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/access_level_list_widget.dart';
@@ -1060,5 +1060,31 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
         ),
       );
     }
+  }
+
+  /// 判断 sharedUser 是否是当前登录用户
+  /// 优先用 email 匹配（非空时），其次用 phone 匹配（非空时）
+  bool _isCurrentUser(SharedUser user, UserProfilePB? currentUser) {
+    if (currentUser == null) return false;
+
+    // 优先用 email 匹配（两边都非空时才匹配，避免空字符串误匹配）
+    if (user.email.isNotEmpty &&
+        currentUser.email.isNotEmpty &&
+        user.email == currentUser.email) {
+      return true;
+    }
+
+    // 其次用 phone 匹配（两边都非空时才匹配）
+    final userPhone = user.phone;
+    final currentPhone = currentUser.phone;
+    if (userPhone != null &&
+        userPhone.isNotEmpty &&
+        currentPhone != null &&
+        currentPhone.isNotEmpty &&
+        userPhone == currentPhone) {
+      return true;
+    }
+
+    return false;
   }
 }
