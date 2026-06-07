@@ -52,9 +52,11 @@ class PageAccessLevelBloc
   // in the row details page, we don't need to check the page access level
   final bool ignorePageAccessLevel;
 
-  // DidUpdateSharedUsers 节流：最多每 5 分钟刷新一次访问级别
+  // DidUpdateSharedUsers 节流：避免短时间内重复刷新访问级别。
+  // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
+  // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
   DateTime? _lastRefreshAccessLevelTime;
-  static const Duration _refreshAccessLevelThrottle = Duration(minutes: 5);
+  static const Duration _refreshAccessLevelThrottle = Duration(seconds: 3);
 
   @override
   Future<void> close() async {
