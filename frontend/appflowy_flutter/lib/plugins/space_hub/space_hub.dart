@@ -680,6 +680,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
                 maxLeftWidth: maxLeftPanelWidth,
                 initialLeftWidth: effectiveLeftPanelWidth,
+                dividerLineWidth: 1,
                 onResize: (newWidth) {
                   setState(() {
                     _leftPanelWidth = newWidth.clamp(

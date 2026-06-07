@@ -791,6 +791,10 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   final PopoverController _popoverController = PopoverController();
   final PopoverController _headerActionsPopoverController = PopoverController();
   Timer? _headerActionsCloseTimer;
+  // 用于跟踪鼠标是否在按钮或弹出菜单区域内，避免闪烁
+  bool _isMouseInHeaderActionsArea = false;
+  // 用于跟踪头部操作弹出菜单是否正在显示
+  bool _isHeaderActionsPopoverVisible = false;
 
   @override
   void initState() {
@@ -1038,6 +1042,15 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       ),
       margin: EdgeInsets.zero,
       offset: const Offset(0, 8),
+      // 使用 asBarrier 防止鼠标事件穿透到侧边栏的 MouseRegion，避免 _isHovered 状态变化
+      asBarrier: true,
+      onOpen: () {
+        _isHeaderActionsPopoverVisible = true;
+      },
+      onClose: () {
+        _isHeaderActionsPopoverVisible = false;
+        _isMouseInHeaderActionsArea = false;
+      },
       popupBuilder: (_) {
         final popupBackgroundColor =
             _headerActionsPopupBackgroundColor(context);
@@ -1054,8 +1067,14 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               iconTheme: IconThemeData(color: popupForegroundColor),
             ),
             child: MouseRegion(
-              onEnter: (_) => _cancelHeaderActionsCloseTimer(),
-              onExit: (_) => _scheduleHeaderActionsClose(),
+              onEnter: (_) {
+                _isMouseInHeaderActionsArea = true;
+                _cancelHeaderActionsCloseTimer();
+              },
+              onExit: (_) {
+                _isMouseInHeaderActionsArea = false;
+                _scheduleHeaderActionsClose();
+              },
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: popupBackgroundColor,
@@ -1083,8 +1102,22 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         );
       },
       child: MouseRegion(
-        onEnter: (_) => _showHeaderActionsPopover(),
-        onExit: (_) => _scheduleHeaderActionsClose(),
+        onEnter: (_) {
+          _isMouseInHeaderActionsArea = true;
+          // 只在菜单未显示时才显示，防止重复触发
+          if (!_isHeaderActionsPopoverVisible) {
+            _showHeaderActionsPopover();
+          }
+        },
+        onExit: (_) {
+          _isMouseInHeaderActionsArea = false;
+          // 延迟检查，给弹出菜单的 onEnter 一个机会来取消关闭
+          Future.delayed(const Duration(milliseconds: 80), () {
+            if (!_isMouseInHeaderActionsArea && _isHeaderActionsPopoverVisible && mounted) {
+              _scheduleHeaderActionsClose();
+            }
+          });
+        },
         child: FlowyTooltip(
           message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
           child: SizedBox.square(
