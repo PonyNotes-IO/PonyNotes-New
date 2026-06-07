@@ -170,3 +170,4 @@ frontend/.codegraph/codegraph.lock
 frontend/.codegraph/daemon.pid
 frontend/docs/
 frontend/appflowy_flutter/docs/
+frontend/appflowy_flutter/.flyenv
