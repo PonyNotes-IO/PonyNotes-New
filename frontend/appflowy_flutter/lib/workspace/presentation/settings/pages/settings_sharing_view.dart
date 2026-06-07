@@ -860,7 +860,7 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
       builder: (context, state) {
         final sharedUsers = state.users;
         final currentSharedUser = sharedUsers.firstWhereOrNull(
-          (user) => user.userId == state.currentUser?.id.toString(),
+          (user) => _isCurrentUser(user, state.currentUser),
         );
         final isInitialLoading = sharedUsers.isEmpty &&
             state.errorMessage.isEmpty &&

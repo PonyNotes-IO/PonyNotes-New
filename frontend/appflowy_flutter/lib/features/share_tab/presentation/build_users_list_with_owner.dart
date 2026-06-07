@@ -37,7 +37,7 @@ List<SharedUser> buildUsersListWithOwner({
 
   // 检查当前用户是否已在列表中
   final currentUserInList = users.firstWhereOrNull(
-    (user) => user.userId == currentUser.id.toString(),
+    (user) => _isCurrentUser(user, currentUser),
   );
 
   if (currentUserInList != null) {
