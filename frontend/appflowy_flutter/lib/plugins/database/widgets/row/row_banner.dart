@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/database/application/cell/cell_controller.dart'
 import 'package:appflowy/plugins/database/application/database_controller.dart';
 import 'package:appflowy/plugins/database/application/row/row_banner_bloc.dart';
 import 'package:appflowy/plugins/database/application/row/row_controller.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
 import 'package:appflowy/plugins/database/widgets/cell/card_cell_skeleton/text_card_cell.dart';
 import 'package:appflowy/plugins/database/widgets/cell/editable_cell_builder.dart';
@@ -598,6 +599,7 @@ class _BannerTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<RowBannerBloc, RowBannerState>(
       builder: (context, state) {
+        final documentId = rowController.rowMeta.documentId;
         final children = [
           if (state.primaryField != null)
             Expanded(
@@ -606,7 +608,16 @@ class _BannerTitle extends StatelessWidget {
                   fieldId: state.primaryField!.id,
                   rowId: rowController.rowId,
                 ),
-                skinMap: EditableCellSkinMap(textSkin: _TitleSkin()),
+                skinMap: EditableCellSkinMap(
+                  textSkin: _TitleSkin(
+                    onTextChanged: documentId.isNotEmpty
+                        ? (newName) => ViewBackendService.updateView(
+                              viewId: documentId,
+                              name: newName,
+                            )
+                        : null,
+                  ),
+                ),
               ),
             ),
         ];
@@ -621,6 +632,11 @@ class _BannerTitle extends StatelessWidget {
 }
 
 class _TitleSkin extends IEditableTextCellSkin {
+  _TitleSkin({this.onTextChanged});
+
+  /// 当标题文本变化时回调（用于同步 view.name）
+  final void Function(String)? onTextChanged;
+
   @override
   Widget build(
     BuildContext context,
@@ -630,6 +646,15 @@ class _TitleSkin extends IEditableTextCellSkin {
     FocusNode focusNode,
     TextEditingController textEditingController,
   ) {
+    // 监听失焦，同步 view.name（用户点击外部区域完成编辑时触发）
+    if (onTextChanged != null) {
+      focusNode.addListener(() {
+        if (!focusNode.hasFocus) {
+          onTextChanged!(textEditingController.text);
+        }
+      });
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): () =>
@@ -656,6 +681,7 @@ class _TitleSkin extends IEditableTextCellSkin {
         ),
         onEditingComplete: () {
           bloc.add(TextCellEvent.updateText(textEditingController.text));
+          onTextChanged?.call(textEditingController.text);
         },
       ),
     );
