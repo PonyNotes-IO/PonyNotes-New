@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
@@ -16,10 +15,13 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+
+const _kImageEditorMaxWidth = 800.0;
 
 extension PasteFromImage on EditorState {
   Future<void> dropImages(
@@ -38,6 +40,21 @@ extension PasteFromImage on EditorState {
       String? path;
       String? errorMsg;
       CustomImageType? type;
+      double? targetWidth;
+      double? targetHeight;
+
+      final dims = await getImageDimensions(file.path);
+      if (dims != null) {
+        final (origW, origH) = dims;
+        if (origW > 0 && origH > 0) {
+          final scale = (origW > _kImageEditorMaxWidth)
+              ? _kImageEditorMaxWidth / origW
+              : 1.0;
+          targetWidth = origW * scale;
+          targetHeight = origH * scale;
+        }
+      }
+
       if (isLocalMode) {
         path = await saveImageToLocalStorage(file.path);
         type = CustomImageType.local;
@@ -61,7 +78,12 @@ extension PasteFromImage on EditorState {
       final t = transaction
         ..insertNode(
           dropPath,
-          customImageNode(url: path, type: type),
+          customImageNode(
+            url: path,
+            type: type,
+            width: targetWidth,
+            height: targetHeight,
+          ),
         );
       await apply(t);
     }
@@ -108,6 +130,21 @@ extension PasteFromImage on EditorState {
         'tmp_${uuid()}.$format',
       );
       await File(copyToPath).writeAsBytes(imageBytes);
+
+      double? targetWidth;
+      double? targetHeight;
+      final dims = await getImageDimensions(copyToPath);
+      if (dims != null) {
+        final (origW, origH) = dims;
+        if (origW > 0 && origH > 0) {
+          final scale = (origW > _kImageEditorMaxWidth)
+              ? _kImageEditorMaxWidth / origW
+              : 1.0;
+          targetWidth = origW * scale;
+          targetHeight = origH * scale;
+        }
+      }
+
       final String? path;
 
       CustomImageType type;
@@ -131,7 +168,8 @@ extension PasteFromImage on EditorState {
       }
 
       if (path != null) {
-        await insertImageNode(path, selection: selection, type: type);
+        await insertImageNode(path,
+            selection: selection, type: type, width: targetWidth, height: targetHeight);
       }
 
       return true;
@@ -151,6 +189,8 @@ extension PasteFromImage on EditorState {
     String src, {
     Selection? selection,
     required CustomImageType type,
+    double? width,
+    double? height,
   }) async {
     selection ??= this.selection;
     if (selection == null || !selection.isCollapsed) {
@@ -170,6 +210,8 @@ extension PasteFromImage on EditorState {
           customImageNode(
             url: src,
             type: type,
+            width: width,
+            height: height,
           ),
         )
         ..deleteNode(node);
@@ -179,6 +221,8 @@ extension PasteFromImage on EditorState {
         customImageNode(
           url: src,
           type: type,
+          width: width,
+          height: height,
         ),
       );
     }
