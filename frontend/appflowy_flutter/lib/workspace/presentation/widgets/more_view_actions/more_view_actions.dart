@@ -76,14 +76,12 @@ class _MoreViewActionsState extends State<MoreViewActions> {
           offset: const Offset(0, 14),
           triggerActions: PopoverTriggerFlags.none,
           popupBuilder: (_) => _buildPopup(state, pageAccessLevelBloc),
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: SizedBox.square(
-              dimension: HomeSizes.topActionBarItemExtent,
-              child: GestureDetector(
-                onTap: () => _handleOpenRequest(pageAccessLevelBloc),
-                child: _ThreeDots(iconColor: widget.iconColor),
-              ),
+          child: SizedBox.square(
+            dimension: HomeSizes.topActionBarItemExtent,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _handleOpenRequest(pageAccessLevelBloc),
+              child: _ThreeDots(iconColor: widget.iconColor),
             ),
           ),
         );
