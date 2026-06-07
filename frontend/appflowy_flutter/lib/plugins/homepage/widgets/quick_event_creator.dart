@@ -105,10 +105,10 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
       children: [
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.borderColorScheme.primary),
-          ),
+          // decoration: BoxDecoration(
+          //   borderRadius: BorderRadius.circular(16),
+          //   border: Border.all(color: theme.borderColorScheme.primary),
+          // ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

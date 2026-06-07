@@ -45,7 +45,8 @@ class SettingsSharingView extends StatefulWidget {
 }
 
 class _SettingsSharingViewState extends State<SettingsSharingView> {
-  final List<String> _tabs = ['共享', '发布'];
+  // final List<String> _tabs = ['共享', '发布'];
+  final List<String> _tabs = ['共享'];
   int _currentTab = 0;
 
   // 发布内容状态
@@ -77,7 +78,8 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   @override
   Widget build(BuildContext context) {
     return SettingsBody(
-      title: '共享发布',
+      // title: '共享发布',
+      title: '共享',
       description: '',
       autoSeparate: false,
       children: [

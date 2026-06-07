@@ -658,6 +658,10 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(
+              color: theme.borderColorScheme.primary,
+              width: 1,
+            ),
           ),
           child: Stack(
             children: [
