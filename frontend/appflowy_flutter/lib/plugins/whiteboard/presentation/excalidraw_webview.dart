@@ -616,9 +616,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         }
       ''', tag: 'setTheme');
       // 注入工具栏坐标修正 + 诊断
-      // 背景：在某些 macOS + WKWebView + Flutter 组合下，指针事件的命中测试坐标
-      // 与 CSS getBoundingClientRect 坐标不一致，导致点击工具栏偏左一位。
-      // 修正方案：在捕获阶段比较两者，不一致时强制点击视觉正确的工具。
+      // 根因：在该设备 macOS + WKWebView + Flutter 组合下，指针事件路由坐标与
+      // CSS 视觉坐标系存在偏移，导致点击工具偏左一位。
+      // 修正策略：用 CSS :hover（由 OS 层鼠标位置决定，不受坐标系偏移影响）
+      // 检测光标视觉上所在的 label，与 e.target 比较，不一致时修正。
       await _safeEvalJs('''
         (function() {
           setTimeout(function() {
@@ -633,52 +634,60 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               console.log('[PonyNotes] label[' + i + '] ' + tid + ' x=[' + Math.round(r.left) + ',' + Math.round(r.right) + ']');
             }
 
-            // ===== 诊断：点击拦截（60秒），区分事件路由目标 vs 视觉命中目标 =====
+            // ===== 诊断：点击拦截（60秒），三路对比 =====
             function clickDiag(e) {
+              var allLbl = document.querySelectorAll('.App-toolbar label.ToolIcon');
+              // byTarget: 事件路由目标
               var tLabel = e.target ? e.target.closest('label.ToolIcon') : null;
               var tInp = tLabel ? tLabel.querySelector('[data-testid]') : null;
               var byTarget = tInp ? tInp.getAttribute('data-testid') : 'none';
-              var allLbl = document.querySelectorAll('.App-toolbar label.ToolIcon');
-              var byRect = 'none';
+              // byHover: CSS :hover（视觉光标位置，最可靠）
+              var byHover = 'none';
               for (var j = 0; j < allLbl.length; j++) {
-                var lr = allLbl[j].getBoundingClientRect();
-                if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
-                  var li = allLbl[j].querySelector('[data-testid]');
-                  byRect = li ? (li.getAttribute('data-testid') || 'label-' + j) : 'label-' + j;
+                if (allLbl[j].matches(':hover')) {
+                  var hi = allLbl[j].querySelector('[data-testid]');
+                  byHover = hi ? hi.getAttribute('data-testid') : 'label-' + j;
                   break;
                 }
               }
-              var mismatch = byTarget !== byRect && byRect !== 'none' && byTarget !== 'none';
-              console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX) + ' pageX=' + Math.round(e.pageX) + ' byTarget=' + byTarget + ' byRect=' + byRect + (mismatch ? ' MISMATCH' : ''));
+              // byRect: getBoundingClientRect + e.clientX
+              var byRect = 'none';
+              for (var j2 = 0; j2 < allLbl.length; j2++) {
+                var lr = allLbl[j2].getBoundingClientRect();
+                if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
+                  var li = allLbl[j2].querySelector('[data-testid]');
+                  byRect = li ? li.getAttribute('data-testid') : 'label-' + j2;
+                  break;
+                }
+              }
+              var note = (byTarget !== byHover ? 'TARGET!=HOVER ' : '') + (byRect !== byHover ? 'RECT!=HOVER' : '');
+              console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX) + ' byTarget=' + byTarget + ' byHover=' + byHover + ' byRect=' + byRect + (note ? ' *** ' + note : ''));
             }
             document.addEventListener('pointerdown', clickDiag, true);
             setTimeout(function() { document.removeEventListener('pointerdown', clickDiag, true); }, 60000);
 
-            // ===== 坐标修正：永久拦截，确保工具栏点击准确 =====
+            // ===== 坐标修正：使用 CSS :hover 检测视觉光标位置，永久生效 =====
             function toolbarCorrector(e) {
               var toolbar = document.querySelector('.App-toolbar');
-              if (!toolbar) return;
-              var tbr = toolbar.getBoundingClientRect();
-              if (e.clientX < tbr.left || e.clientX >= tbr.right || e.clientY < tbr.top || e.clientY >= tbr.bottom) return;
+              if (!toolbar || !toolbar.matches(':hover')) return;
               var lbs = toolbar.querySelectorAll('label.ToolIcon');
-              var rectLabel = null;
+              var hoveredLabel = null;
               for (var k = 0; k < lbs.length; k++) {
-                var lr = lbs[k].getBoundingClientRect();
-                if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
-                  rectLabel = lbs[k];
-                  break;
-                }
+                if (lbs[k].matches(':hover')) { hoveredLabel = lbs[k]; break; }
               }
-              if (!rectLabel) return;
+              if (!hoveredLabel) return;
               var targetLabel = e.target ? e.target.closest('label.ToolIcon') : null;
-              if (targetLabel !== rectLabel) {
+              if (targetLabel !== hoveredLabel) {
                 e.stopImmediatePropagation();
                 e.preventDefault();
-                rectLabel.click();
+                hoveredLabel.click();
+                var hid = hoveredLabel.querySelector('[data-testid]');
+                var tid2 = targetLabel ? targetLabel.querySelector('[data-testid]') : null;
+                console.log('[PonyNotes] 坐标已修正: ' + (tid2 ? tid2.getAttribute('data-testid') : 'none') + ' -> ' + (hid ? hid.getAttribute('data-testid') : '?'));
               }
             }
             document.addEventListener('pointerdown', toolbarCorrector, true);
-            console.log('[PonyNotes] 工具栏坐标修正已启用，诊断60秒');
+            console.log('[PonyNotes] 工具栏坐标修正(hover)已启用，诊断60秒');
           }, 2500);
         })();
       ''', tag: 'toolbarCorrector',);
