@@ -77,22 +77,17 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
           'assets/images/icons/sidebar_upload_custom.svg',
           width: widget.iconSize,
           height: widget.iconSize,
-          colorFilter: widget.foregroundColorOverride != null
+          colorFilter: widget.foregroundColorOverride != null ||
+                  widget.useHighContrastForeground ||
+                  widget.isHover ||
+                  // ✅ 在暗黑模式下显示白色
+                  Theme.of(context).brightness == Brightness.dark
               ? ColorFilter.mode(
-                  widget.foregroundColorOverride!,
+                  widget.foregroundColorOverride ??
+                      Theme.of(context).colorScheme.onSurface,
                   BlendMode.srcIn,
                 )
-              : widget.useHighContrastForeground
-                  ? ColorFilter.mode(
-                      Theme.of(context).colorScheme.onSurface,
-                      BlendMode.srcIn,
-                    )
-                  : widget.isHover
-                      ? ColorFilter.mode(
-                          Colors.white,
-                          BlendMode.srcIn,
-                        )
-                      : null,
+              : null,
         ),
         onTap: onTap,
       ),

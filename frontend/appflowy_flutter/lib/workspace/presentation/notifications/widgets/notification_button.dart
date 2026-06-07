@@ -96,7 +96,9 @@ class _NotificationButtonState extends State<NotificationButton> {
                   height: 24,
                   colorFilter: widget.foregroundColorOverride != null ||
                           widget.useHighContrastForeground ||
-                          widget.isHover
+                          widget.isHover ||
+                          // ✅ 在暗黑模式下显示白色
+                          Theme.of(context).brightness == Brightness.dark
                       ? ColorFilter.mode(
                           widget.foregroundColorOverride ??
                               Theme.of(context).colorScheme.onSurface,
