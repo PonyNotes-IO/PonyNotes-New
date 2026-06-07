@@ -61,10 +61,6 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import '../../../../../startup/plugin/plugin.dart';
 
 Loading? _duplicateSpaceLoading;
-const _sidebarFullWindowIcon =
-    FlowySvgData('assets/images/icons/app_full_window.svg');
-const _sidebarExitFullWindowIcon =
-    FlowySvgData('assets/images/icons/app_exit_full_window.svg');
 
 /// Home Sidebar is the left side bar of the home page.
 ///
@@ -1258,7 +1254,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         useIntrinsicWidth: true,
         margin: EdgeInsets.zero,
         text: FlowySvg(
-          isFullWindow ? _sidebarExitFullWindowIcon : _sidebarFullWindowIcon,
+          isFullWindow ? FlowySvgs.app_exit_full_window_m : FlowySvgs.app_full_window_m,
           size: const Size.square(20),
           color: Theme.of(context).colorScheme.onSurface,
         ),
