@@ -34,7 +34,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     on<ShareTabEventLoadSharedUsers>(_onGetSharedUsers);
     on<ShareTabEventInviteUsers>(_onShare);
     on<ShareTabEventRemoveUsers>(_onRemove);
-    on<ShareTabEventUpdateUserAccessLevel>(_onUpdateAccessLevel);
     on<ShareTabEventUpdateGeneralAccessLevel>(_onUpdateGeneralAccess);
     on<ShareTabEventCopyShareLink>(_onCopyLink);
     on<ShareTabEventSearchAvailableUsers>(_onSearchAvailableUsers);
@@ -204,31 +203,65 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    final result = await repository.sharePageWithUser(
-      pageId: pageId,
-      accessLevel: event.accessLevel,
-      emails: event.emails,
-    );
+    // 检查哪些用户已经是成员，避免覆盖已有权限
+    final existingEmails = state.users
+        .map((u) => u.email.toLowerCase())
+        .toSet();
+    final newEmails = event.emails
+        .where((e) => !existingEmails.contains(e.toLowerCase()))
+        .toList();
+    final existingMemberEmails = event.emails
+        .where((e) => existingEmails.contains(e.toLowerCase()))
+        .toList();
 
-    await result.fold(
-      (_) async {
-        final users = await _getSharedUsers();
+    // 对已是成员的用户，更新其权限（如果新权限更高）
+    for (final email in existingMemberEmails) {
+      final existingUser = state.users.firstWhere(
+        (u) => u.email.toLowerCase() == email.toLowerCase(),
+        orElse: () => state.users.first,
+      );
+      // 只有当新权限与当前权限不同时才更新
+      if (existingUser.accessLevel != event.accessLevel) {
+        final permissionId = _accessLevelToPermissionId(event.accessLevel);
+        final (success, errorMsg) = await _updateMemberPermission(
+          workspaceId: workspaceId,
+          objectId: pageId,
+          memberUserId: existingUser.userId ?? '',
+          permissionId: permissionId,
+        );
+        if (!success) {
+          Log.warn('[ShareTabBloc] 更新已有成员权限失败: $email, $errorMsg');
+        }
+      }
+    }
 
-        emit(
-          state.copyWith(
-            shareResult: FlowySuccess(null),
-            users: users,
-          ),
-        );
-      },
-      (error) async {
-        emit(
-          state.copyWith(
-            errorMessage: error.msg,
-            shareResult: FlowyFailure(error),
-          ),
-        );
-      },
+    // 对新用户，调用正常的邀请流程
+    FlowyError? inviteError;
+    if (newEmails.isNotEmpty) {
+      final result = await repository.sharePageWithUser(
+        pageId: pageId,
+        accessLevel: event.accessLevel,
+        emails: newEmails,
+      );
+
+      result.fold(
+        (_) {},
+        (error) {
+          inviteError = error;
+        },
+      );
+    }
+
+    // 无论邀请是否成功，都刷新共享用户列表（已有成员的权限可能已更新）
+    final users = await _getSharedUsers();
+    emit(
+      state.copyWith(
+        shareResult: inviteError != null
+            ? FlowyFailure(inviteError!)
+            : FlowySuccess(null),
+        errorMessage: inviteError?.msg ?? '',
+        users: users,
+      ),
     );
   }
 
@@ -266,142 +299,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         );
       },
     );
-  }
-
-  Future<void> _onUpdateAccessLevel(
-    ShareTabEventUpdateUserAccessLevel event,
-    Emitter<ShareTabState> emit,
-  ) async {
-    emit(
-      state.copyWith(
-        errorMessage: '',
-        updateAccessLevelResult: null,
-      ),
-    );
-
-    final updated = await _updateWorkspaceMemberRole(
-      email: event.email,
-      accessLevel: event.accessLevel,
-    );
-
-    if (updated) {
-      final users = await _getSharedUsers();
-      emit(
-        state.copyWith(
-          updateAccessLevelResult: FlowySuccess(null),
-          users: users,
-        ),
-      );
-    } else {
-      emit(
-        state.copyWith(
-          errorMessage: '更新权限失败',
-          isLoading: false,
-          updateAccessLevelResult: FlowyFailure(
-            FlowyError()..msg = '更新权限失败',
-          ),
-        ),
-      );
-    }
-  }
-
-  /// 调用工作空间成员权限接口：PUT /api/workspace/{workspace_id}/member
-  /// 将 accessLevel 映射为 role（Owner/Member），更新成员权限
-  Future<bool> _updateWorkspaceMemberRole({
-    required String email,
-    required ShareAccessLevel accessLevel,
-  }) async {
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        Log.error('Base URL is empty');
-        return false;
-      }
-
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) {
-          Log.error('Failed to get user profile: $error');
-          return null;
-        },
-      );
-
-      if (userProfile == null) {
-        Log.error('User profile is null');
-        return false;
-      }
-
-      final rawToken = userProfile.token;
-      if (rawToken.isEmpty) {
-        Log.error('Auth token is empty');
-        return false;
-      }
-
-      // 提取 access_token（可能是 JSON 格式）
-      final accessToken = _extractAccessToken(rawToken);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.error('Failed to extract access_token from token');
-        return false;
-      }
-
-      // accessLevel 映射到 role：fullAccess -> Owner，其它 -> Member
-      final role =
-          accessLevel == ShareAccessLevel.fullAccess ? 'Owner' : 'Member';
-
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/member',
-      );
-
-      Log.info(
-          'Updating workspace member role: $uri, email=$email, role=$role');
-
-      final response = await http
-          .put(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode({
-          'email': email,
-          'role': role,
-        }),
-      )
-          .timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Request timeout');
-        },
-      );
-
-      if (response.statusCode == 200) {
-        // 尝试解析 code 字段（如果有）
-        if (response.body.isNotEmpty) {
-          try {
-            final body = jsonDecode(response.body) as Map<String, dynamic>;
-            final code = body['code'] as int?;
-            if (code != null && code != 0) {
-              Log.error(
-                  'Update member role failed, code: $code, body: ${response.body}');
-              return false;
-            }
-          } catch (_) {
-            // 如果不是 JSON，忽略
-          }
-        }
-        return true;
-      } else {
-        Log.error(
-            'Update member role failed: HTTP ${response.statusCode}, body: ${response.body}');
-        return false;
-      }
-    } catch (e, stackTrace) {
-      Log.error('Exception in _updateWorkspaceMemberRole: $e', e, stackTrace);
-      return false;
-    }
   }
 
   void _onUpdateGeneralAccess(

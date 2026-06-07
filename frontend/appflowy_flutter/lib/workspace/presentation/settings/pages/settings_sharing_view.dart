@@ -939,8 +939,8 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
                               callbacks: AccessLevelListCallbacks(
                                 onSelectAccessLevel: (accessLevel) {
                                   context.read<ShareTabBloc>().add(
-                                        ShareTabEvent.updateUserAccessLevel(
-                                          email: user.email,
+                                        ShareTabEvent.updateMemberPermission(
+                                          user: user,
                                           accessLevel: accessLevel,
                                         ),
                                       );

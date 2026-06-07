@@ -56,7 +56,7 @@ class PageAccessLevelBloc
   // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
   // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
   DateTime? _lastRefreshAccessLevelTime;
-  static const Duration _refreshAccessLevelThrottle = Duration(seconds: 3);
+  static const Duration _refreshAccessLevelThrottle = Duration(milliseconds: 500);
 
   @override
   Future<void> close() async {

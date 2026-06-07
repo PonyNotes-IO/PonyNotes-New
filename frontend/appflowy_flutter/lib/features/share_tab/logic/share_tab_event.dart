@@ -20,15 +20,6 @@ sealed class ShareTabEvent {
   }) =>
       ShareTabEventRemoveUsers(emails: emails);
 
-  factory ShareTabEvent.updateUserAccessLevel({
-    required String email,
-    required ShareAccessLevel accessLevel,
-  }) =>
-      ShareTabEventUpdateUserAccessLevel(
-        email: email,
-        accessLevel: accessLevel,
-      );
-
   factory ShareTabEvent.updateGeneralAccessLevel({
     required ShareAccessLevel accessLevel,
   }) =>
@@ -116,17 +107,6 @@ class ShareTabEventRemoveUsers extends ShareTabEvent {
   });
 
   final List<String> emails;
-}
-
-/// Updates the access level for a specific user.
-class ShareTabEventUpdateUserAccessLevel extends ShareTabEvent {
-  const ShareTabEventUpdateUserAccessLevel({
-    required this.email,
-    required this.accessLevel,
-  });
-
-  final String email;
-  final ShareAccessLevel accessLevel;
 }
 
 /// Updates the general access level for all users.
