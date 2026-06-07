@@ -4,18 +4,21 @@ import 'dart:convert';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:universal_platform/universal_platform.dart';
+
+import 'clipboard_image_reader.dart';
 
 // 通用类型定义
 class CustomValueFormat<T> {
-  final String applicationId;
-  final Future<T?> Function(Object, String) onDecode;
-  final Future<Object> Function(T, String) onEncode;
-
   const CustomValueFormat({
     required this.applicationId,
     required this.onDecode,
     required this.onEncode,
   });
+
+  final String applicationId;
+  final Future<T?> Function(Object, String) onDecode;
+  final Future<Object> Function(T, String) onEncode;
 
   dynamic call(T value) => value;
 }
@@ -60,7 +63,6 @@ class ClipboardService {
     if (_mockData != null) {
       return;
     }
-    // 所有平台：只支持纯文本（为了避免 native 库问题）
     if (data.plainText != null) {
       await Clipboard.setData(ClipboardData(text: data.plainText!));
     }
@@ -77,8 +79,55 @@ class ClipboardService {
     if (_mockData != null) {
       return _mockData!;
     }
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    return ClipboardServiceData(plainText: data?.text);
+
+    String? plainText;
+    String? html;
+    (String, Uint8List?)? image;
+
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      plainText = data?.text;
+    } catch (e) {
+      Log.error('Failed to get plain text from clipboard', e);
+    }
+
+    try {
+      html = await _getHtmlFromClipboard();
+    } catch (e) {
+      Log.error('Failed to get HTML from clipboard', e);
+    }
+
+    try {
+      image = await _getImageFromClipboard();
+    } catch (e) {
+      Log.error('Failed to get image from clipboard', e);
+    }
+
+    return ClipboardServiceData(
+      plainText: plainText,
+      html: html,
+      image: image,
+    );
+  }
+
+  Future<String?> _getHtmlFromClipboard() async {
+    if (UniversalPlatform.isWeb) {
+      return null;
+    }
+    try {
+      final clipboardData = await Clipboard.getData('text/html');
+      return clipboardData?.text;
+    } catch (e) {
+      Log.debug('Failed to read HTML from clipboard: $e');
+    }
+    return null;
+  }
+
+  Future<(String, Uint8List?)?> _getImageFromClipboard() async {
+    if (UniversalPlatform.isWeb) {
+      return null;
+    }
+    return readImageFromClipboard();
   }
 }
 

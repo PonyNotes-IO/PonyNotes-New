@@ -168,8 +168,13 @@ extension PasteFromImage on EditorState {
       }
 
       if (path != null) {
-        await insertImageNode(path,
-            selection: selection, type: type, width: targetWidth, height: targetHeight);
+        await insertImageNode(
+          path,
+          selection: selection,
+          type: type,
+          width: targetWidth,
+          height: targetHeight,
+        );
       }
 
       return true;
