@@ -5,21 +5,18 @@ import 'package:collection/collection.dart';
 import '../data/models/share_access_level.dart';
 
 /// 判断 sharedUser 是否是当前登录用户
-/// 优先用 email 匹配（非空时），其次用 phone 匹配（非空时）
+/// 优先用 email 匹配，其次用 phone 匹配
 bool _isCurrentUser(SharedUser user, UserProfilePB currentUser) {
-  // 优先用 email 匹配（两边都非空时才匹配，避免空字符串误匹配）
-  if (user.email.isNotEmpty &&
-      currentUser.email.isNotEmpty &&
-      user.email == currentUser.email) {
+  // 优先用 email 匹配
+  if (user.email == currentUser.email) {
     return true;
   }
 
-  // 其次用 phone 匹配（两边都非空时才匹配）
+  // 其次用 phone 匹配（两边都非空时）
   final userPhone = user.phone;
   final currentPhone = currentUser.phone;
   if (userPhone != null &&
       userPhone.isNotEmpty &&
-      currentPhone != null &&
       currentPhone.isNotEmpty &&
       userPhone == currentPhone) {
     return true;

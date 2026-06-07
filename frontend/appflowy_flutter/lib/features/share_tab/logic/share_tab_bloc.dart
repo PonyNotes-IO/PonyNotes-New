@@ -695,6 +695,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             final uuid = memberMap['uuid'] as String?;
             final email = memberMap['email'] as String? ?? '';
             final name = memberMap['name'] as String? ?? email;
+            final phone = memberMap['phone'] as String?;
             final avatarUrl = memberMap['avatar_url'] as String?;
             final permissionId = memberMap['permission_id'] as int? ?? 1;
 
@@ -729,6 +730,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
               accessLevel: accessLevel,
               avatarUrl: avatarUrl?.isNotEmpty == true ? avatarUrl : null,
               userId: uuid,
+              phone: phone?.isNotEmpty == true ? phone : null,
             );
           }).toList();
 
@@ -843,6 +845,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           errorMessage: '',
         ),
       );
+      // 通知侧边栏和 PageAccessLevelBloc 刷新
+      ShareSectionRefreshNotifier.notify();
     } else {
       emit(
         state.copyWith(
@@ -894,6 +898,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           users: users,
         ),
       );
+      // 通知侧边栏和 PageAccessLevelBloc 刷新
+      ShareSectionRefreshNotifier.notify();
     } else {
       emit(
         state.copyWith(
@@ -967,6 +973,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           addCollaboratorResult: FlowySuccess(null),
         ),
       );
+      // 通知侧边栏和 PageAccessLevelBloc 刷新
+      ShareSectionRefreshNotifier.notify();
     } else {
       emit(
         state.copyWith(
