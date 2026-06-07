@@ -23,6 +23,7 @@ import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -162,18 +163,50 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
         ),
       ],
       child: BlocBuilder<DocumentAppearanceCubit, DocumentAppearance>(
-        builder: (_, state) => DocumentPage(
-          key: ValueKey(view.id),
+        builder: (_, state) => _buildContentWithToolbar(
           view: view,
-          onDeleted: () => context.onDeleted?.call(view, deletedViewIndex),
-          initialSelection: initialSelection,
-          initialBlockId: blockId,
-          fixedTitle: fixedTitle,
-          tabs: tabs,
-          isInSpaceHub: false, // 默认为 false，单独打开时使用
-          viewInfoBloc: bloc, // 传入 ViewInfoBloc
+          viewInfoBloc: bloc,
+          pageAccessLevelBloc: pageAccessLevelBloc,
+          child: DocumentPage(
+            key: ValueKey(view.id),
+            view: view,
+            onDeleted: () => context.onDeleted?.call(view, deletedViewIndex),
+            initialSelection: initialSelection,
+            initialBlockId: blockId,
+            fixedTitle: fixedTitle,
+            tabs: tabs,
+            isInSpaceHub: false, // 默认为 false，单独打开时使用
+            viewInfoBloc: bloc, // 传入 ViewInfoBloc
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildContentWithToolbar({
+    required ViewPB view,
+    required ViewInfoBloc viewInfoBloc,
+    required PageAccessLevelBloc pageAccessLevelBloc,
+    required Widget child,
+  }) {
+    final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: UnifiedViewTopRightActions(
+            view: view,
+            viewInfoBloc: viewInfoBloc,
+            pageAccessLevelBloc: pageAccessLevelBloc,
+            showCollaborators: FeatureFlag.syncDocument.isOn && !isWhiteboard,
+            useFloatingSurface: true,
+            showShareButton: !isWhiteboard,
+            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+          ),
+        ),
+      ],
     );
   }
 
@@ -244,65 +277,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
 
   @override
-  Widget? get rightBarItem {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<ViewInfoBloc>.value(
-          value: bloc,
-        ),
-        BlocProvider<PageAccessLevelBloc>.value(
-          value: pageAccessLevelBloc,
-        ),
-      ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ...FeatureFlag.syncDocument.isOn
-              ? [
-                  DocumentCollaborators(
-                    key: ValueKey('collaborators_${view.id}'),
-                    width: 120,
-                    height: 32,
-                    view: view,
-                  ),
-                  const HSpace(16),
-                ]
-              : [const HSpace(8)],
-          ShareButton(
-            key: ValueKey('share_button_${view.id}'),
-            view: view,
-          ),
-          const HSpace(4),
-          ViewFavoriteButton(
-            key: ValueKey('favorite_button_${view.id}'),
-            view: view,
-          ),
-          const HSpace(4),
-          ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              return SizedBox.square(
-                dimension: 28,
-                child: FlowyButton(
-                  margin: EdgeInsets.zero,
-                  text: Icon(
-                    isFullWindow
-                        ? Icons.fullscreen_exit_rounded
-                        : Icons.fullscreen_rounded,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  onTap: FullWindowController.toggle,
-                ),
-              );
-            },
-          ),
-          const HSpace(4),
-          MoreViewActions(view: view, viewInfoBloc: bloc),
-        ],
-      ),
-    );
-  }
+  Widget? get rightBarItem => null;
 
   @override
   Widget? get fullWindowMoreItem => MultiBlocProvider(

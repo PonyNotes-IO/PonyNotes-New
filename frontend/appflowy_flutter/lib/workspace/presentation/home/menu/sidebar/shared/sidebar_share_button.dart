@@ -741,7 +741,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
             onTap: () {
               CalendarUnsavedGuard.instance.maybeConfirmLeave(
                 context,
-                () => context.read<TabsBloc>().openTab(view),
+                () => context.read<TabsBloc>().openPlugin(view),
               );
             },
             child: Padding(

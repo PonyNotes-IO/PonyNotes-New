@@ -23,6 +23,7 @@ import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -455,28 +456,6 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
         data?[kDatabasePluginWidgetBuilderShowActions] ?? false;
     final Node? node = data?[kDatabasePluginWidgetBuilderNode];
 
-    return Provider(
-      create: (context) => DatabasePluginWidgetBuilderSize(
-        horizontalPadding: horizontalPadding,
-      ),
-      child: DatabaseTabBarView(
-        key: ValueKey(notifier.view.id),
-        view: notifier.view,
-        shrinkWrap: shrinkWrap,
-        initialRowId: initialRowId,
-        actionBuilder: actionBuilder,
-        showActions: showActions,
-        node: node,
-      ),
-    );
-  }
-
-  @override
-  List<NavigationItem> get navigationItems => [this];
-
-  @override
-  Widget? get rightBarItem {
-    final view = notifier.view;
     return MultiBlocProvider(
       providers: [
         BlocProvider<ViewInfoBloc>.value(
@@ -486,37 +465,60 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
           value: pageAccessLevelBloc,
         ),
       ],
-      child: Row(
-        children: [
-          ShareButton(key: ValueKey(view.id), view: view),
-          const HSpace(10),
-          ViewFavoriteButton(view: view),
-          const HSpace(4),
-          ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              return SizedBox.square(
-                dimension: 28,
-                child: FlowyButton(
-                  margin: EdgeInsets.zero,
-                  text: Icon(
-                    isFullWindow
-                        ? Icons.fullscreen_exit_rounded
-                        : Icons.fullscreen_rounded,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  onTap: FullWindowController.toggle,
-                ),
-              );
-            },
+      child: Provider(
+        create: (context) => DatabasePluginWidgetBuilderSize(
+          horizontalPadding: horizontalPadding,
+        ),
+        child: _buildContentWithToolbar(
+          view: notifier.view,
+          viewInfoBloc: bloc,
+          pageAccessLevelBloc: pageAccessLevelBloc,
+          child: DatabaseTabBarView(
+            key: ValueKey(notifier.view.id),
+            view: notifier.view,
+            shrinkWrap: shrinkWrap,
+            initialRowId: initialRowId,
+            actionBuilder: actionBuilder,
+            showActions: showActions,
+            node: node,
           ),
-          const HSpace(4),
-          MoreViewActions(view: view),
-        ],
+        ),
       ),
     );
   }
+
+  Widget _buildContentWithToolbar({
+    required ViewPB view,
+    required ViewInfoBloc viewInfoBloc,
+    required PageAccessLevelBloc pageAccessLevelBloc,
+    required Widget child,
+  }) {
+    final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: UnifiedViewTopRightActions(
+            view: view,
+            viewInfoBloc: viewInfoBloc,
+            pageAccessLevelBloc: pageAccessLevelBloc,
+            showCollaborators: false,
+            useFloatingSurface: true,
+            showShareButton: !isWhiteboard,
+            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  List<NavigationItem> get navigationItems => [this];
+
+  @override
+  Widget? get rightBarItem => null;
 
   @override
   EdgeInsets get contentPadding => const EdgeInsets.only(top: 8);

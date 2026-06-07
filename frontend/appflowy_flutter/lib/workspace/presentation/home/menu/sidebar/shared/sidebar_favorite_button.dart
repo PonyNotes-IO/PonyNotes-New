@@ -142,13 +142,13 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
         onSelected: (viewContext, selectedView) {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
-            () => context.read<TabsBloc>().openTab(selectedView),
+            () => context.read<TabsBloc>().openPlugin(selectedView),
           );
         },
         onTertiarySelected: (viewContext, selectedView) {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
-            () => context.read<TabsBloc>().openTab(selectedView),
+            () => context.read<TabsBloc>().openPlugin(selectedView),
           );
         },
       );

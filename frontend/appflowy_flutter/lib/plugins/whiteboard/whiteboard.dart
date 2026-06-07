@@ -149,14 +149,46 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
           value: pageAccessLevelBloc,
         ),
       ],
-      child: WhiteboardPage(
-        key: ValueKey('whiteboard_page_${notifier.view.id}'),
-        view: notifier.view,
-        onViewChanged: (view) => notifier.view = view,
+      child: _buildContentWithToolbar(
+        view: view,
+        viewInfoBloc: bloc,
+        pageAccessLevelBloc: pageAccessLevelBloc,
+        child: WhiteboardPage(
+          key: ValueKey('whiteboard_page_${notifier.view.id}'),
+          view: notifier.view,
+          onViewChanged: (view) => notifier.view = view,
+        ),
       ),
     );
     // debug log removed
     return widget;
+  }
+
+  Widget _buildContentWithToolbar({
+    required ViewPB view,
+    required ViewInfoBloc viewInfoBloc,
+    required PageAccessLevelBloc pageAccessLevelBloc,
+    required Widget child,
+  }) {
+    final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: UnifiedViewTopRightActions(
+            view: view,
+            viewInfoBloc: viewInfoBloc,
+            pageAccessLevelBloc: pageAccessLevelBloc,
+            showCollaborators: false,
+            useFloatingSurface: true,
+            showShareButton: false,
+            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -175,23 +207,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
       );
 
   @override
-  Widget? get rightBarItem => MultiBlocProvider(
-        providers: [
-          BlocProvider<ViewInfoBloc>.value(
-            value: bloc,
-          ),
-          BlocProvider<PageAccessLevelBloc>.value(
-            value: pageAccessLevelBloc,
-          ),
-        ],
-        child: UnifiedViewTopRightActions(
-          view: view,
-          viewInfoBloc: bloc,
-          pageAccessLevelBloc: pageAccessLevelBloc,
-          useFloatingSurface: true,
-          showShareButton: false,
-        ),
-      );
+  Widget? get rightBarItem => null;
 
   @override
   Widget? get fullWindowMoreItem => null;

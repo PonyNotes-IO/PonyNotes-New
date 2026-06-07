@@ -771,7 +771,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         // 静默处理 ViewInfoBloc 创建错误
       }
 
-      // 为文档、文件夹和笔记本类型的视图添加 isInSpaceHub 参数
+      // 为文档、文件夹和笔记本类型的视图创建 DocumentPage
       try {
         final plugin = view.plugin();
         if (plugin.pluginType == PluginType.document ||
@@ -790,7 +790,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 PickerTabType.icon,
                 PickerTabType.custom,
               ],
-              isInSpaceHub: true, // 在 Space Hub 中打开
               viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
             ),
           );
