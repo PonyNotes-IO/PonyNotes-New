@@ -615,6 +615,73 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''', tag: 'setTheme');
+      // 注入工具栏坐标修正 + 诊断
+      // 背景：在某些 macOS + WKWebView + Flutter 组合下，指针事件的命中测试坐标
+      // 与 CSS getBoundingClientRect 坐标不一致，导致点击工具栏偏左一位。
+      // 修正方案：在捕获阶段比较两者，不一致时强制点击视觉正确的工具。
+      await _safeEvalJs('''
+        (function() {
+          setTimeout(function() {
+            // ===== 诊断：设备信息和工具栏按钮位置 =====
+            console.log('[PonyNotes] devicePixelRatio=' + window.devicePixelRatio + ' innerWidth=' + window.innerWidth + ' scrollX=' + window.scrollX);
+            var labels = document.querySelectorAll('.App-toolbar label.ToolIcon');
+            console.log('[PonyNotes] 工具按钮数量=' + labels.length);
+            for (var i = 0; i < labels.length; i++) {
+              var r = labels[i].getBoundingClientRect();
+              var inp = labels[i].querySelector('[data-testid]');
+              var tid = inp ? (inp.getAttribute('data-testid') || '?') : '?';
+              console.log('[PonyNotes] label[' + i + '] ' + tid + ' x=[' + Math.round(r.left) + ',' + Math.round(r.right) + ']');
+            }
+
+            // ===== 诊断：点击拦截（60秒），区分事件路由目标 vs 视觉命中目标 =====
+            function clickDiag(e) {
+              var tLabel = e.target ? e.target.closest('label.ToolIcon') : null;
+              var tInp = tLabel ? tLabel.querySelector('[data-testid]') : null;
+              var byTarget = tInp ? tInp.getAttribute('data-testid') : 'none';
+              var allLbl = document.querySelectorAll('.App-toolbar label.ToolIcon');
+              var byRect = 'none';
+              for (var j = 0; j < allLbl.length; j++) {
+                var lr = allLbl[j].getBoundingClientRect();
+                if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
+                  var li = allLbl[j].querySelector('[data-testid]');
+                  byRect = li ? (li.getAttribute('data-testid') || 'label-' + j) : 'label-' + j;
+                  break;
+                }
+              }
+              var mismatch = byTarget !== byRect && byRect !== 'none' && byTarget !== 'none';
+              console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX) + ' pageX=' + Math.round(e.pageX) + ' byTarget=' + byTarget + ' byRect=' + byRect + (mismatch ? ' MISMATCH' : ''));
+            }
+            document.addEventListener('pointerdown', clickDiag, true);
+            setTimeout(function() { document.removeEventListener('pointerdown', clickDiag, true); }, 60000);
+
+            // ===== 坐标修正：永久拦截，确保工具栏点击准确 =====
+            function toolbarCorrector(e) {
+              var toolbar = document.querySelector('.App-toolbar');
+              if (!toolbar) return;
+              var tbr = toolbar.getBoundingClientRect();
+              if (e.clientX < tbr.left || e.clientX >= tbr.right || e.clientY < tbr.top || e.clientY >= tbr.bottom) return;
+              var lbs = toolbar.querySelectorAll('label.ToolIcon');
+              var rectLabel = null;
+              for (var k = 0; k < lbs.length; k++) {
+                var lr = lbs[k].getBoundingClientRect();
+                if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
+                  rectLabel = lbs[k];
+                  break;
+                }
+              }
+              if (!rectLabel) return;
+              var targetLabel = e.target ? e.target.closest('label.ToolIcon') : null;
+              if (targetLabel !== rectLabel) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                rectLabel.click();
+              }
+            }
+            document.addEventListener('pointerdown', toolbarCorrector, true);
+            console.log('[PonyNotes] 工具栏坐标修正已启用，诊断60秒');
+          }, 2500);
+        })();
+      ''', tag: 'toolbarCorrector',);
       // debug log removed
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
@@ -794,6 +861,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           .excalidraw-container {
             width: 100% !important;
             height: 100% !important;
+          }
+          /* 防止页面发生水平滚动，避免点击坐标与视觉位置出现偏移 */
+          html, body {
+            overflow: hidden !important;
+            scroll-behavior: auto !important;
           }
         `;
         
