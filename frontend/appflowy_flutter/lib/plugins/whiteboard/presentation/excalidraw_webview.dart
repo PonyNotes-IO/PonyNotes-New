@@ -627,11 +627,18 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''', tag: 'setTheme');
-      // 注入滚动防护 + 工具栏诊断。
-      // 最新日志显示 scrollX=0/0 且 overscroll-behavior=none 后仍能复现，
-      // 真正的异常信号是工具栏中出现重复/重叠 ToolIcon。这里保留滚动防护，
-      // 同时输出可见按钮、隐藏按钮和重复 data-testid，方便验证注入样式没有
-      // 误激活 Excalidraw 自己的隐藏/响应式工具。
+      // 注入工具栏坐标修正 + 诊断。
+      // 根因分析（Apple Silicon macOS 专属）：
+      //   WKWebView 的 JS 事件坐标系（clientX / getBoundingClientRect）与
+      //   CSS :hover（由 OS 层 NSTrackingArea 决定）所在的坐标系存在偏移，
+      //   导致鼠标视觉所在的工具与实际命中的工具偏左 1-2 个位置。
+      //   overscroll-behavior:none 已在 CSS 和 UserScript 中注入（阻止新回弹），
+      //   但无法修正已发生的坐标系偏移；因此加入 :hover 修正作为永久保障。
+      // 修正策略：
+      //   1. CSS :hover — 由 OS 层鼠标位置更新，代表视觉正确的工具；
+      //   2. e.target — JS 命中测试结果，可能因坐标系偏移而指向错误工具；
+      //   3. 若两者不一致，阻止原事件并对 :hover 指向的工具 dispatch click。
+      final isMacOS = defaultTargetPlatform == TargetPlatform.macOS;
       await _safeEvalJs('''
         (function() {
           setTimeout(function() {
@@ -694,14 +701,20 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             }
             console.log('[PonyNotes] 可见工具按钮数量=' + visibleCount);
 
-            // 强制重置任何残留弹性偏移（overscroll-behavior 阻止新弹性，此处清除旧的）
-            window.scrollTo(0, 0);
-
-            // ===== 诊断：点击拦截（60秒），含 scrollX/pageX 对比 =====
+            // ===== 诊断：点击拦截（60秒），三路对比 byTarget/byHover/byRect =====
             function clickDiag(e) {
               var allLbl = getVisibleToolbarLabels();
               var tLabel = e.target && e.target.closest ? e.target.closest('label.ToolIcon') : null;
               var byTarget = tLabel ? getToolbarTestId(tLabel) : 'none';
+              // byHover: CSS :hover — OS 层鼠标位置，最可靠
+              var byHover = 'none';
+              for (var h = 0; h < allLbl.length; h++) {
+                if (allLbl[h].matches(':hover')) {
+                  byHover = getToolbarTestId(allLbl[h]);
+                  break;
+                }
+              }
+              // byRect: getBoundingClientRect + clientX（与 byTarget 在同一坐标系）
               var byRect = 'none';
               for (var j = 0; j < allLbl.length; j++) {
                 var lr = allLbl[j].getBoundingClientRect();
@@ -710,28 +723,63 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   break;
                 }
               }
-              // pageX - clientX = scrollX；若两者不等说明 JS 层有可见滚动
+              var note = '';
+              if (byTarget !== byHover && byHover !== 'none') note += 'TARGET!=HOVER ';
+              if (byRect !== byHover && byHover !== 'none') note += 'RECT!=HOVER ';
+              if (byTarget !== byRect && byRect !== 'none') note += 'TARGET!=RECT';
               console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX)
                 + ' pageX=' + Math.round(e.pageX)
                 + ' scrollX=' + Math.round(window.scrollX)
-                + ' byTarget=' + byTarget + ' byRect=' + byRect
-                + (byTarget !== byRect ? ' *** MISMATCH' : ''));
+                + ' byTarget=' + byTarget + ' byHover=' + byHover + ' byRect=' + byRect
+                + (note ? ' *** ' + note : ''));
             }
             document.addEventListener('pointerdown', clickDiag, true);
             setTimeout(function() { document.removeEventListener('pointerdown', clickDiag, true); }, 60000);
 
-            // 监控 JS 层面可见的滚动（NSScrollView 弹性偏移在此不可见，但作为保底）
+            // 监控 JS 层面可见的滚动
             window.addEventListener('scroll', function() {
               if (window.scrollX !== 0 || window.scrollY !== 0) {
-                console.log('[PonyNotes] ⚠️ JS滚动: scrollX=' + window.scrollX + ' scrollY=' + window.scrollY + '，已重置');
-                window.scrollTo(0, 0);
+                console.log('[PonyNotes] ⚠️ JS滚动: scrollX=' + window.scrollX + ' scrollY=' + window.scrollY);
               }
             }, true);
 
-            console.log('[PonyNotes] 弹性滚动防护 + 诊断已启用（60秒）');
+            ${isMacOS ? '''
+            // ===== macOS 专用：:hover 坐标修正（永久生效） =====
+            // 根因：Apple Silicon macOS WKWebView 中 JS 事件坐标系与视觉坐标系有偏移，
+            //       CSS :hover 由 OS 层 NSTrackingArea 决定，代表视觉正确的工具。
+            // 触发条件：toolbar 上存在 :hover（表示光标在工具栏上），
+            //           且 :hover 标签与 e.target 不一致（存在坐标偏移）。
+            // 安全性：若 :hover 与 e.target 一致，不干预（无副作用）；
+            //         若 toolbar 上无 :hover（光标不在工具栏），不干预。
+            function toolbarHoverCorrector(e) {
+              var toolbar = document.querySelector('.App-toolbar');
+              if (!toolbar) return;
+              // 通过 :hover 判断光标是否在工具栏上（不依赖 getBoundingClientRect）
+              if (!toolbar.matches(':hover')) return;
+              var lbs = toolbar.querySelectorAll('label.ToolIcon');
+              var hoveredLabel = null;
+              for (var k = 0; k < lbs.length; k++) {
+                if (lbs[k].matches(':hover')) { hoveredLabel = lbs[k]; break; }
+              }
+              if (!hoveredLabel) return;
+              var targetLabel = e.target && e.target.closest ? e.target.closest('label.ToolIcon') : null;
+              if (targetLabel === hoveredLabel) return; // 一致，无需修正
+              // 存在坐标偏移：阻止原事件，点击 :hover 所指工具
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              hoveredLabel.click();
+              var hid = getToolbarTestId(hoveredLabel);
+              var tid2 = getToolbarTestId(targetLabel);
+              console.log('[PonyNotes] 坐标修正: ' + tid2 + ' -> ' + hid);
+            }
+            document.addEventListener('pointerdown', toolbarHoverCorrector, true);
+            console.log('[PonyNotes] macOS 工具栏 :hover 坐标修正已启用');
+            ''' : '// 非 macOS 平台，跳过 :hover 修正'}
+
+            console.log('[PonyNotes] 诊断已启用（60秒）');
           }, 2500);
         })();
-      ''', tag: 'overscrollFix',);
+      ''', tag: 'toolbarCorrector',);
       // debug log removed
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
