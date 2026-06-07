@@ -334,7 +334,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   int _skipDetailPanelSyncCount = 0;
 
   /// 用户主动点击小日历日期时为 true，用于跳过自动选中第一条笔记/日程。
-  bool _isUserDaySelection = false;
+  bool _isUserDaySelection = true; // 首次加载时跳过自动打开笔记/日程，直接显示大日历视图
 
   // Right-side event detail panel
   ScheduleItem? _detailPanelSchedule;
