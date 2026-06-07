@@ -216,9 +216,8 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   bool get handlesFullWindowOverlayActionsInternally {
-    // When Space Hub is rendering a selected whiteboard, the whiteboard page
-    // owns the full-window capsule internally.
-    // 当 Space Hub 右侧选中的是白板时，由白板页面内部统一承载应用内全屏动作区。
+    // 白板在全屏模式下由白板页面内部渲染一个极简的退出全屏按钮，
+    // 宿主(home_stack)无需再渲染全屏动作区。
     return selectedViewNotifier.value?.layout == ViewLayoutPB.Whiteboard;
   }
 
@@ -848,6 +847,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     if (viewInfoBloc == null) {
       return child;
     }
+    final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
     return Stack(
       children: [
         child,
@@ -860,8 +860,12 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               view: view,
               viewInfoBloc: viewInfoBloc,
               showCollaborators: FeatureFlag.syncDocument.isOn &&
-                  view.layout != ViewLayoutPB.Whiteboard,
+                  !isWhiteboard,
               useFloatingSurface: true,
+              // 白板视图：隐藏分享按钮，并强制图标为黑色（不影响文档/数据库视图）。
+              showShareButton: !isWhiteboard,
+              iconColorOverride:
+                  isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
         ),

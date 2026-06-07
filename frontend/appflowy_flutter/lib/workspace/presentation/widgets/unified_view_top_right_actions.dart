@@ -30,6 +30,7 @@ class UnifiedViewTopRightActions extends StatelessWidget {
     this.showShareButton = true,
     this.showFavoriteButton = true,
     this.showFullWindowButton = true,
+    this.iconColorOverride,
     this.customActions,
   });
 
@@ -42,6 +43,7 @@ class UnifiedViewTopRightActions extends StatelessWidget {
   final bool showShareButton;
   final bool showFavoriteButton;
   final bool showFullWindowButton;
+  final Color? iconColorOverride;
   final List<Widget>? customActions;
 
   @override
@@ -60,6 +62,7 @@ class UnifiedViewTopRightActions extends StatelessWidget {
       showShareButton: showShareButton,
       showFavoriteButton: showFavoriteButton,
       showFullWindowButton: showFullWindowButton,
+      iconColorOverride: iconColorOverride,
       customActions: customActions,
     );
 
@@ -111,6 +114,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
     required this.showShareButton,
     required this.showFavoriteButton,
     required this.showFullWindowButton,
+    required this.iconColorOverride,
     required this.customActions,
   });
 
@@ -123,13 +127,15 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
   final bool showShareButton;
   final bool showFavoriteButton;
   final bool showFullWindowButton;
+  final Color? iconColorOverride;
   final List<Widget>? customActions;
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = useFloatingSurface
-        ? _floatingActionIconColor(context)
-        : Theme.of(context).colorScheme.onSurface;
+    final iconColor = iconColorOverride ??
+        (useFloatingSurface
+            ? _floatingActionIconColor(context)
+            : Theme.of(context).colorScheme.onSurface);
     final themedChild = Theme(
       data: Theme.of(context).copyWith(
         colorScheme: Theme.of(context).colorScheme.copyWith(

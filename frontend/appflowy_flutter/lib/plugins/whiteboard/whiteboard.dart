@@ -34,7 +34,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
 
@@ -42,10 +41,6 @@ const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
 const _preferHostTopRightActionsKey = 'preferHostTopRightActions';
 const _whiteboardHostActionIconColorLight = Color(0xFF111111);
 const _whiteboardHostActionIconColorDark = Color(0xFFF3F4F6);
-const _whiteboardActionSurfaceColorLight = Color(0xF7FFFFFF);
-const _whiteboardActionSurfaceColorDark = Color(0xE61B1C20);
-const _whiteboardActionBorderColorLight = Color(0x16000000);
-const _whiteboardActionBorderColorDark = Color(0x22FFFFFF);
 const _whiteboardCanvasFallbackColor = Color(0xFFFFFFFF);
 
 class WhiteboardPluginBuilder extends PluginBuilder {
@@ -194,6 +189,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
           viewInfoBloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
           useFloatingSurface: true,
+          showShareButton: false,
         ),
       );
 
@@ -946,13 +942,21 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     final hideInternalMoreButton = isFullWindow &&
         (widget.preferHostFullWindowMoreItem ||
             widget.preferHostTopRightActions);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surfaceColor = isDark
-        ? _whiteboardActionSurfaceColorDark
-        : _whiteboardActionSurfaceColorLight;
-    final borderColor = isDark
-        ? _whiteboardActionBorderColorDark
-        : _whiteboardActionBorderColorLight;
+
+    // 全屏模式：删除黑色方块与收藏/更多按钮，仅保留一个极简的“退出全屏”按钮，
+    // 否则全屏下侧边栏/标签栏均被隐藏，用户将无法退出全屏。
+    final List<Widget> children = isFullWindow
+        ? [
+            _buildHeaderAction(_buildFullWindowAction(context)),
+          ]
+        : [
+            _buildHeaderAction(_buildFavoriteAction(context)),
+            const SizedBox(width: 6),
+            _buildHeaderAction(_buildFullWindowAction(context)),
+            const SizedBox(width: 6),
+            if (!hideInternalMoreButton)
+              _buildHeaderAction(_buildMoreActionsButton(context)),
+          ];
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -962,42 +966,14 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       ),
       child: IconTheme(
         data: IconThemeData(color: _whiteboardActionIconColor(context)),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: surfaceColor,
-            borderRadius: BorderRadius.zero,
-            border: Border.all(color: borderColor, width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 6,
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 6,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildHeaderAction(
-                  ShareButton(
-                    key: ValueKey('share_button_${widget.view.id}'),
-                    view: widget.view,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                _buildHeaderAction(_buildFavoriteAction(context)),
-                const SizedBox(width: 6),
-                _buildHeaderAction(_buildFullWindowAction(context)),
-                const SizedBox(width: 6),
-                if (!hideInternalMoreButton)
-                  _buildHeaderAction(_buildMoreActionsButton(context)),
-              ],
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: children,
           ),
         ),
       ),
