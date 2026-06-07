@@ -565,7 +565,9 @@ class _CalendarContextMenuOverlayState
                 currentOption: _reminderOption,
                 hasTime: !_isAllDay,
                 timeFormat: TimeFormatPB.TwentyFourHour,
-                onSave: (option) => setState(() => _reminderOption = option),
+                onSave: (option) {
+                  if (mounted) setState(() => _reminderOption = option);
+                },
               ),
             );
           },

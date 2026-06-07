@@ -738,10 +738,23 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 确保工具栏始终正常显示和响应点击 */
-          .App-toolbar,
-          .App-toolbar * {
+          /* 确保工具栏及可见按钮响应点击。
+             重要：不对 .App-toolbar * 全量设置 pointer-events: auto，
+             否则会误启用工具按钮内部隐藏的 <input type="radio">（.ToolIcon_type_radio）
+             的点击响应，导致鼠标点击工具时选中相邻工具（偏移一位）。 */
+          .App-toolbar {
             pointer-events: auto !important;
+          }
+          .App-toolbar label.ToolIcon,
+          .App-toolbar .ToolIcon__icon,
+          .App-toolbar button,
+          .App-toolbar .DropdownMenu-trigger {
+            pointer-events: auto !important;
+          }
+          /* 明确保持隐藏 radio/checkbox input 的 pointer-events: none */
+          .App-toolbar .ToolIcon_type_radio,
+          .App-toolbar .ToolIcon_type_checkbox {
+            pointer-events: none !important;
           }
 
           .App-toolbar {
@@ -1109,10 +1122,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 确保工具栏始终显示 */
-          .App-toolbar,
-          [class*="App-toolbar"],
-          [data-testid*="toolbar"] {
+          /* 确保工具栏始终显示。
+             注意：只精确匹配 .App-toolbar，不使用 [class*="App-toolbar"]
+             （会误匹配 App-toolbar-container 并破坏其 grid 布局），
+             也不使用 [data-testid*="toolbar"]（会误匹配工具按钮内部
+             隐藏的 <input type="radio"> 元素）。 */
+          .App-toolbar {
             display: flex !important;
             visibility: visible !important;
           }
