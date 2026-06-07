@@ -12,10 +12,11 @@ import 'package:flowy_svg/flowy_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../generated/flowy_svgs.g.dart';
-
 const _floatingActionIconColorLight = Color(0xFF111111);
 const _floatingActionIconColorDark = Color(0xFFF3F4F6);
+const _fullWindowIcon = FlowySvgData('assets/images/icons/app_full_window.svg');
+const _exitFullWindowIcon =
+    FlowySvgData('assets/images/icons/app_exit_full_window.svg');
 
 class UnifiedViewTopRightActions extends StatelessWidget {
   const UnifiedViewTopRightActions({
@@ -207,7 +208,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
                   child: FlowyButton(
                     margin: EdgeInsets.zero,
                     text: FlowySvg(
-                      isFullWindow ? FlowySvgs.app_exit_full_window_m : FlowySvgs.app_full_window_m,
+                      isFullWindow ? _exitFullWindowIcon : _fullWindowIcon,
                       size: const Size.square(20),
                       color: iconColor,
                     ),

@@ -80,10 +80,9 @@ class _MoreViewActionsState extends State<MoreViewActions> {
             cursor: SystemMouseCursors.click,
             child: SizedBox.square(
               dimension: HomeSizes.topActionBarItemExtent,
-              child: FlowyButton(
-                margin: EdgeInsets.zero,
+              child: GestureDetector(
                 onTap: () => _handleOpenRequest(pageAccessLevelBloc),
-                text: _ThreeDots(iconColor: widget.iconColor),
+                child: _ThreeDots(iconColor: widget.iconColor),
               ),
             ),
           ),
@@ -358,7 +357,7 @@ class _ThreeDots extends StatelessWidget {
         foregroundColorOnHover: Theme.of(context).colorScheme.onPrimary,
       ),
       builder: (context, isHovering) => Padding(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(8),
         child: FlowySvg(
           FlowySvgs.three_dots_s,
           size: const Size.square(18),
