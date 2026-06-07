@@ -1253,9 +1253,11 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       child: FlowyButton(
         useIntrinsicWidth: true,
         margin: EdgeInsets.zero,
-        text: FlowySvg(
-          isFullWindow ? FlowySvgs.app_exit_full_window_m : FlowySvgs.app_full_window_m,
-          size: const Size.square(20),
+        text: Icon(
+          isFullWindow
+              ? Icons.fullscreen_exit_rounded
+              : Icons.fullscreen_rounded,
+          size: 20,
           color: Theme.of(context).colorScheme.onSurface,
         ),
         onTap: () {

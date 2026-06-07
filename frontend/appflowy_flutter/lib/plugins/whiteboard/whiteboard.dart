@@ -297,23 +297,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
 
-    FullWindowController.isFullWindow.addListener(_handleFullWindowChanged);
     _loadInitialData();
-  }
-
-  void _handleFullWindowChanged() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _webViewKey.currentState?.notifyContainerResized();
-      Future<void>.delayed(const Duration(milliseconds: 120), () {
-        if (!mounted) {
-          return;
-        }
-        _webViewKey.currentState?.notifyContainerResized();
-      });
-    });
   }
 
   /// 注册导出和导入控制器到 GetIt
@@ -500,7 +484,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
-    FullWindowController.isFullWindow.removeListener(_handleFullWindowChanged);
     final adapter = _collabAdapter;
 
     // 注销所有控制器（同步操作）

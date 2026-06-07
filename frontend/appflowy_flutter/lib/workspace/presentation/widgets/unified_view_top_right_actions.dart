@@ -8,15 +8,11 @@ import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_svg/flowy_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const _floatingActionIconColorLight = Color(0xFF111111);
 const _floatingActionIconColorDark = Color(0xFFF3F4F6);
-const _fullWindowIcon = FlowySvgData('assets/images/icons/app_full_window.svg');
-const _exitFullWindowIcon =
-    FlowySvgData('assets/images/icons/app_exit_full_window.svg');
 
 class UnifiedViewTopRightActions extends StatelessWidget {
   const UnifiedViewTopRightActions({
@@ -207,9 +203,11 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
                   dimension: HomeSizes.topActionBarItemExtent,
                   child: FlowyButton(
                     margin: EdgeInsets.zero,
-                    text: FlowySvg(
-                      isFullWindow ? _exitFullWindowIcon : _fullWindowIcon,
-                      size: const Size.square(20),
+                    text: Icon(
+                      isFullWindow
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                      size: 20,
                       color: iconColor,
                     ),
                     onTap: FullWindowController.toggle,
