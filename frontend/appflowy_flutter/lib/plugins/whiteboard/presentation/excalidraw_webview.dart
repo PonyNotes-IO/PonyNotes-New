@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -615,16 +616,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''', tag: 'setTheme');
-      // 注入工具栏坐标修正 + 诊断
-      // 根因：在该设备 macOS + WKWebView + Flutter 组合下，指针事件路由坐标与
-      // CSS 视觉坐标系存在偏移，导致点击工具偏左一位。
-      // 修正策略：用 CSS :hover（由 OS 层鼠标位置决定，不受坐标系偏移影响）
-      // 检测光标视觉上所在的 label，与 e.target 比较，不一致时修正。
+      // 注入弹性滚动防护 + 诊断
+      // 根因分析：macOS 26.x WKWebView 的 NSScrollView 发生弹性回弹（elastic bounce），
+      // 使内容视觉上偏右约 32px，但 JS 的 window.scrollX 始终报 0（弹性偏移在 native 层）。
+      // 所有 JS 坐标系（clientX、getBoundingClientRect、:hover）均在弹前坐标系中运算，
+      // 导致点击/hover 都偏左一位。
+      // 修复：CSS overscroll-behavior:none（映射 NSScrollView.elasticity=none）+
+      //       initialUserScript 在 document-start 早期生效，阻止弹性回弹产生。
       await _safeEvalJs('''
         (function() {
           setTimeout(function() {
-            // ===== 诊断：设备信息和工具栏按钮位置 =====
-            console.log('[PonyNotes] devicePixelRatio=' + window.devicePixelRatio + ' innerWidth=' + window.innerWidth + ' scrollX=' + window.scrollX);
+            // ===== 诊断：设备信息、弹性滚动状态和工具栏按钮位置 =====
+            var overscrollVal = getComputedStyle(document.documentElement).overscrollBehavior || 'N/A';
+            console.log('[PonyNotes] devicePixelRatio=' + window.devicePixelRatio
+              + ' innerWidth=' + window.innerWidth
+              + ' scrollX=' + window.scrollX + '/' + document.documentElement.scrollLeft
+              + ' overscroll-behavior=' + overscrollVal);
             var labels = document.querySelectorAll('.App-toolbar label.ToolIcon');
             console.log('[PonyNotes] 工具按钮数量=' + labels.length);
             for (var i = 0; i < labels.length; i++) {
@@ -634,63 +641,46 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               console.log('[PonyNotes] label[' + i + '] ' + tid + ' x=[' + Math.round(r.left) + ',' + Math.round(r.right) + ']');
             }
 
-            // ===== 诊断：点击拦截（60秒），三路对比 =====
+            // 强制重置任何残留弹性偏移（overscroll-behavior 阻止新弹性，此处清除旧的）
+            window.scrollTo(0, 0);
+
+            // ===== 诊断：点击拦截（60秒），含 scrollX/pageX 对比 =====
             function clickDiag(e) {
               var allLbl = document.querySelectorAll('.App-toolbar label.ToolIcon');
-              // byTarget: 事件路由目标
               var tLabel = e.target ? e.target.closest('label.ToolIcon') : null;
               var tInp = tLabel ? tLabel.querySelector('[data-testid]') : null;
               var byTarget = tInp ? tInp.getAttribute('data-testid') : 'none';
-              // byHover: CSS :hover（视觉光标位置，最可靠）
-              var byHover = 'none';
-              for (var j = 0; j < allLbl.length; j++) {
-                if (allLbl[j].matches(':hover')) {
-                  var hi = allLbl[j].querySelector('[data-testid]');
-                  byHover = hi ? hi.getAttribute('data-testid') : 'label-' + j;
-                  break;
-                }
-              }
-              // byRect: getBoundingClientRect + e.clientX
               var byRect = 'none';
-              for (var j2 = 0; j2 < allLbl.length; j2++) {
-                var lr = allLbl[j2].getBoundingClientRect();
+              for (var j = 0; j < allLbl.length; j++) {
+                var lr = allLbl[j].getBoundingClientRect();
                 if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
-                  var li = allLbl[j2].querySelector('[data-testid]');
-                  byRect = li ? li.getAttribute('data-testid') : 'label-' + j2;
+                  var li = allLbl[j].querySelector('[data-testid]');
+                  byRect = li ? li.getAttribute('data-testid') : 'label-' + j;
                   break;
                 }
               }
-              var note = (byTarget !== byHover ? 'TARGET!=HOVER ' : '') + (byRect !== byHover ? 'RECT!=HOVER' : '');
-              console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX) + ' byTarget=' + byTarget + ' byHover=' + byHover + ' byRect=' + byRect + (note ? ' *** ' + note : ''));
+              // pageX - clientX = scrollX；若两者不等说明 JS 层有可见滚动
+              console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX)
+                + ' pageX=' + Math.round(e.pageX)
+                + ' scrollX=' + Math.round(window.scrollX)
+                + ' byTarget=' + byTarget + ' byRect=' + byRect
+                + (byTarget !== byRect ? ' *** MISMATCH' : ''));
             }
             document.addEventListener('pointerdown', clickDiag, true);
             setTimeout(function() { document.removeEventListener('pointerdown', clickDiag, true); }, 60000);
 
-            // ===== 坐标修正：使用 CSS :hover 检测视觉光标位置，永久生效 =====
-            function toolbarCorrector(e) {
-              var toolbar = document.querySelector('.App-toolbar');
-              if (!toolbar || !toolbar.matches(':hover')) return;
-              var lbs = toolbar.querySelectorAll('label.ToolIcon');
-              var hoveredLabel = null;
-              for (var k = 0; k < lbs.length; k++) {
-                if (lbs[k].matches(':hover')) { hoveredLabel = lbs[k]; break; }
+            // 监控 JS 层面可见的滚动（NSScrollView 弹性偏移在此不可见，但作为保底）
+            window.addEventListener('scroll', function() {
+              if (window.scrollX !== 0 || window.scrollY !== 0) {
+                console.log('[PonyNotes] ⚠️ JS滚动: scrollX=' + window.scrollX + ' scrollY=' + window.scrollY + '，已重置');
+                window.scrollTo(0, 0);
               }
-              if (!hoveredLabel) return;
-              var targetLabel = e.target ? e.target.closest('label.ToolIcon') : null;
-              if (targetLabel !== hoveredLabel) {
-                e.stopImmediatePropagation();
-                e.preventDefault();
-                hoveredLabel.click();
-                var hid = hoveredLabel.querySelector('[data-testid]');
-                var tid2 = targetLabel ? targetLabel.querySelector('[data-testid]') : null;
-                console.log('[PonyNotes] 坐标已修正: ' + (tid2 ? tid2.getAttribute('data-testid') : 'none') + ' -> ' + (hid ? hid.getAttribute('data-testid') : '?'));
-              }
-            }
-            document.addEventListener('pointerdown', toolbarCorrector, true);
-            console.log('[PonyNotes] 工具栏坐标修正(hover)已启用，诊断60秒');
+            }, true);
+
+            console.log('[PonyNotes] 弹性滚动防护 + 诊断已启用（60秒）');
           }, 2500);
         })();
-      ''', tag: 'toolbarCorrector',);
+      ''', tag: 'overscrollFix',);
       // debug log removed
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
@@ -871,9 +861,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             width: 100% !important;
             height: 100% !important;
           }
-          /* 防止页面发生水平滚动，避免点击坐标与视觉位置出现偏移 */
+          /* 防止页面滚动及 NSScrollView 弹性回弹（macOS WKWebView 特有）
+             overscroll-behavior:none 会映射到 NSScrollView.horizontalScrollElasticity=.none
+             从而消除弹性偏移导致的点击坐标与视觉位置不一致 */
           html, body {
             overflow: hidden !important;
+            overscroll-behavior: none !important;
             scroll-behavior: auto !important;
           }
         `;
@@ -1637,6 +1630,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             url: WebUri(_whiteboardUrl!),
           ),
           initialSettings: _settings,
+          // 在 document-start 阶段就禁用弹性回弹，比 onLoadStop 注入 CSS 更早
+          initialUserScripts: UnmodifiableListView([
+            UserScript(
+              source: '''
+                document.documentElement.style.overscrollBehavior = 'none';
+                window.scrollTo(0, 0);
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
+          ]),
 
           onWebViewCreated: (controller) {
             _controller = controller;
