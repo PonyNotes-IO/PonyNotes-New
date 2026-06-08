@@ -600,7 +600,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           child: SizedBox(
             width: HomeSizes.spaceHubDividerWidth,
             child: Align(
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: Container(
                 width: 0.8,
                 decoration: BoxDecoration(
@@ -627,31 +627,51 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             child: Container(
               color: homeContentBackgroundColor(context),
               width: effectiveLeftPanelWidth,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Row(
                 children: [
-                  if (isSidebarHidden && PlatformInfo.isMacOS) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top:16,right:16),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: _SpaceHubSidebarToggleButton(
-                          color: theme.iconColorScheme.secondary,
-                        ),
-                      ),
-                    ),
-                  ],
                   Expanded(
-                    child: _SpaceDocumentList(
-                      spaceView: widget.spaceView,
-                      selectedView: _selectedView,
-                      showHeader: true,
-                      onViewSelectedWithRecent: _selectViewInMiddlePanel,
-                      onViewCreated: _selectViewInMiddlePanel,
-                      scrollController: _scrollController,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (isSidebarHidden && PlatformInfo.isMacOS) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top:16,right:16),
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: _SpaceHubSidebarToggleButton(
+                                color: theme.iconColorScheme.secondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                        Expanded(
+                          child: _SpaceDocumentList(
+                            spaceView: widget.spaceView,
+                            selectedView: _selectedView,
+                            showHeader: true,
+                            onViewSelectedWithRecent: _selectViewInMiddlePanel,
+                            onViewCreated: _selectViewInMiddlePanel,
+                            scrollController: _scrollController,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  if (_isDocumentListVisible && !isFullWindow && !useFloatingDocumentList)
+                    _SpaceHubResizableDivider(
+                      minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                      maxLeftWidth: maxLeftPanelWidth,
+                      currentLeftWidth: effectiveLeftPanelWidth,
+                      onResize: (newWidth) {
+                        setState(() {
+                          _leftPanelWidth = newWidth.clamp(
+                            HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                            maxLeftPanelWidth,
+                          );
+                        });
+                      },
+                    ),
                 ],
               ),
             ),
@@ -665,23 +685,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             Visibility(
               visible: _isDocumentListVisible && !isFullWindow,
               child: documentListPanel,
-            ),
-            // 可拖动分隔线 - 仿照侧边栏控件实现
-            Visibility(
-              visible: _isDocumentListVisible && !isFullWindow && !useFloatingDocumentList,
-              child: _SpaceHubResizableDivider(
-                minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
-                maxLeftWidth: maxLeftPanelWidth,
-                currentLeftWidth: effectiveLeftPanelWidth,
-                onResize: (newWidth) {
-                  setState(() {
-                    _leftPanelWidth = newWidth.clamp(
-                      HomeSizes.minimumSpaceHubMiddlePaneWidth,
-                      maxLeftPanelWidth,
-                    );
-                  });
-                },
-              ),
             ),
             Visibility(
               visible: _isDocumentListVisible && !isFullWindow && useFloatingDocumentList,
@@ -1486,7 +1489,7 @@ class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
         MouseRegion(
           cursor: SystemMouseCursors.resizeLeftRight,
           onEnter: (_) {
-            _showHoverTimer = Timer(const Duration(milliseconds: 500), () {
+            _showHoverTimer = Timer(const Duration(milliseconds: 100), () {
               setState(() => _isHover = true);
             });
           },
@@ -1504,24 +1507,25 @@ class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
             },
             onHorizontalDragEnd: (_) => _endDrag(),
             onHorizontalDragCancel: () => _endDrag(),
-            child: TweenAnimationBuilder(
-              tween: ColorTween(
-                end: _isHover || _isDragging
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).dividerColor.withValues(alpha: 0.9),
-              ),
-              duration: const Duration(milliseconds: 100),
-              builder: (context, color, child) {
-                return SizedBox(
-                  width: 11,
-                  child: Center(
-                    child: Container(
+            child: Container(
+              width: HomeSizes.spaceHubDividerWidth,
+              color: Colors.transparent,
+              child: Center(
+                child: TweenAnimationBuilder(
+                  tween: ColorTween(
+                    end: _isHover || _isDragging
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).dividerColor.withValues(alpha: 0.9),
+                  ),
+                  duration: const Duration(milliseconds: 50),
+                  builder: (context, color, child) {
+                    return Container(
                       color: color,
                       width: 1.6,
-                    ),
-                  ),
-                );
-              },
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
