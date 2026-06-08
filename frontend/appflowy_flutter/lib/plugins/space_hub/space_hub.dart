@@ -1,5 +1,6 @@
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
@@ -37,7 +38,6 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:appflowy/workspace/presentation/widgets/resizable_divider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -412,14 +412,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   /// 当前选中的视图
   ViewPB? _selectedView;
 
-  /// 左侧文档列表的宽度
+  /// 左侧文档列表的宽度（使用 HomeSizes 统一管理）
   double _leftPanelWidth = HomeSizes.defaultSpaceHubMiddlePaneWidth;
-
-  /// 左侧面板最小宽度
-  static const double _minLeftWidth = 200.0;
-
-  /// 左侧面板最大宽度
-  static const double _maxLeftWidth = 450.0;
 
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
@@ -672,14 +666,13 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               visible: _isDocumentListVisible && !isFullWindow,
               child: documentListPanel,
             ),
-            // 可拖动分隔线 - 增强对比度并支持拖动调整大小
+            // 可拖动分隔线 - 仿照侧边栏控件实现
             Visibility(
               visible: _isDocumentListVisible && !isFullWindow && !useFloatingDocumentList,
-              child: ResizableDivider(
+              child: _SpaceHubResizableDivider(
                 minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
                 maxLeftWidth: maxLeftPanelWidth,
-                initialLeftWidth: effectiveLeftPanelWidth,
-                dividerLineWidth: 1,
+                currentLeftWidth: effectiveLeftPanelWidth,
                 onResize: (newWidth) {
                   setState(() {
                     _leftPanelWidth = newWidth.clamp(
@@ -1434,6 +1427,119 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// SpaceHub 可拖动分隔线组件
+/// 仿照左侧侧边栏的分隔线实现，具有以下特点：
+/// - 默认透明分隔线
+/// - 鼠标悬停时显示主题色（带 500ms 延迟）
+/// - 拖动时显示主题色
+/// - 使用动画过渡效果
+class _SpaceHubResizableDivider extends StatefulWidget {
+  const _SpaceHubResizableDivider({
+    super.key,
+    required this.minLeftWidth,
+    required this.maxLeftWidth,
+    required this.currentLeftWidth,
+    required this.onResize,
+  });
+
+  final double minLeftWidth;
+  final double maxLeftWidth;
+  final double currentLeftWidth;
+  final ValueChanged<double> onResize;
+
+  @override
+  State<_SpaceHubResizableDivider> createState() => _SpaceHubResizableDividerState();
+}
+
+class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
+  bool _isHover = false;
+  bool _isDragging = false;
+  Timer? _showHoverTimer;
+  final GlobalKey _dividerKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _showHoverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _handleDragUpdate(double deltaX) {
+    final newWidth = widget.currentLeftWidth + deltaX;
+    if (newWidth >= widget.minLeftWidth && newWidth <= widget.maxLeftWidth) {
+      widget.onResize(newWidth);
+    }
+  }
+
+  void _endDrag() {
+    setState(() => _isDragging = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      key: _dividerKey,
+      children: [
+        MouseRegion(
+          cursor: SystemMouseCursors.resizeLeftRight,
+          onEnter: (_) {
+            _showHoverTimer = Timer(const Duration(milliseconds: 500), () {
+              setState(() => _isHover = true);
+            });
+          },
+          onExit: (_) {
+            _showHoverTimer?.cancel();
+            setState(() => _isHover = false);
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: (_) {
+              setState(() => _isDragging = true);
+            },
+            onHorizontalDragUpdate: (details) {
+              _handleDragUpdate(details.delta.dx);
+            },
+            onHorizontalDragEnd: (_) => _endDrag(),
+            onHorizontalDragCancel: () => _endDrag(),
+            child: TweenAnimationBuilder(
+              tween: ColorTween(
+                end: _isHover || _isDragging
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).dividerColor.withValues(alpha: 0.9),
+              ),
+              duration: const Duration(milliseconds: 100),
+              builder: (context, color, child) {
+                return SizedBox(
+                  width: 11,
+                  child: Center(
+                    child: Container(
+                      color: color,
+                      width: 1.6,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        if (_isDragging)
+          Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.opaque,
+              onPointerMove: (event) {
+                _handleDragUpdate(event.delta.dx);
+              },
+              onPointerUp: (_) => _endDrag(),
+              onPointerCancel: (_) => _endDrag(),
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
