@@ -14,7 +14,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:styled_widget/styled_widget.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 import '../notifications/number_red_dot.dart';
 
@@ -66,8 +65,7 @@ class FlowyNavigation extends StatelessWidget {
     return BlocBuilder<HomeSettingBloc, HomeSettingState>(
       buildWhen: (p, c) => p.menuStatus != c.menuStatus,
       builder: (context, state) {
-        if (!UniversalPlatform.isWindows &&
-            state.menuStatus == MenuStatus.hidden) {
+        if (state.menuStatus == MenuStatus.hidden) {
           final textSpan = TextSpan(
             children: [
               TextSpan(
@@ -90,24 +88,18 @@ class FlowyNavigation extends StatelessWidget {
               height: 24,
               child: Stack(
                 children: [
-                  RotationTransition(
-                    turns: const AlwaysStoppedAnimation(180 / 360),
-                    child: FlowyTooltip(
-                      richMessage: textSpan,
-                      child: Listener(
-                        onPointerDown: (event) =>
-                            context.read<HomeSettingBloc>().collapseMenu(),
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: FlowyIconButton(
-                            width: 24,
-                            onPressed: () {},
-                            icon: FlowySvg(
-                              FlowySvgs.double_back_arrow_m,
-                              color: theme.iconColorScheme.secondary,
-                            ),
-                          ),
+                  FlowyTooltip(
+                    richMessage: textSpan,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () =>
+                          context.read<HomeSettingBloc>().collapseMenu(),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: FlowySvg(
+                          FlowySvgs.sidebar_collapse_custom_m,
+                          color: theme.iconColorScheme.secondary,
                         ),
                       ),
                     ),

@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -53,6 +53,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -791,6 +792,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   bool _isMouseInHeaderActionsArea = false;
   // 用于跟踪头部操作弹出菜单是否正在显示
   bool _isHeaderActionsPopoverVisible = false;
+  // 用于标记收起按钮是否刚被点击，避免触发"..."按钮弹窗
+  bool _isCollapseButtonTapped = false;
 
   @override
   void initState() {
@@ -832,141 +835,177 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
 
   @override
   Widget build(BuildContext context) {
-    return AppFlowyPopover(
-      direction: PopoverDirection.bottomWithCenterAligned,
-      offset: const Offset(0, 5),
-      constraints: const BoxConstraints(maxWidth: 300, maxHeight: 600),
-      margin: EdgeInsets.zero,
-      animationDuration: Durations.short3,
-      beginScaleFactor: 1.0,
-      beginOpacity: 0.8,
-      controller: _popoverController,
-      triggerActions: PopoverTriggerFlags.none,
-      onOpen: () {
-        context
-            .read<UserWorkspaceBloc>()
-            .add(UserWorkspaceEvent.fetchWorkspaces());
-      },
-      popupBuilder: (_) {
-        return BlocProvider<UserWorkspaceBloc>.value(
-          value: context.read<UserWorkspaceBloc>(),
-          child: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
-            builder: (context, state) {
-              final currentWorkspace = state.currentWorkspace;
-              final workspaces = state.workspaces;
-              if (currentWorkspace == null) {
-                return const SizedBox.shrink();
-              }
-              return WorkspacesMenu(
-                userProfile: widget.userProfile,
-                currentWorkspace: currentWorkspace,
-                workspaces: workspaces,
-              );
+    return Row(
+      children: [
+        // 工作区切换弹出菜单
+        Expanded(
+          child: AppFlowyPopover(
+            direction: PopoverDirection.bottomWithCenterAligned,
+            offset: const Offset(0, 5),
+            constraints: const BoxConstraints(maxWidth: 300, maxHeight: 600),
+            margin: EdgeInsets.zero,
+            animationDuration: Durations.short3,
+            beginScaleFactor: 1.0,
+            beginOpacity: 0.8,
+            controller: _popoverController,
+            triggerActions: PopoverTriggerFlags.none,
+            onOpen: () {
+              context
+                  .read<UserWorkspaceBloc>()
+                  .add(UserWorkspaceEvent.fetchWorkspaces());
             },
-          ),
-        );
-      },
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () {
-            context.read<UserWorkspaceBloc>().add(
-                  UserWorkspaceEvent.fetchWorkspaces(),
-                );
-            _popoverController.show();
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Builder(
-            builder: (context) {
-              final (:icon, :name, :workspaceName) = context.select<UserWorkspaceBloc, ({String icon, String name, String workspaceName})>(
-                (bloc) => (
-                  icon: bloc.state.currentWorkspace?.icon ?? '',
-                  name: bloc.state.currentWorkspace?.name ?? '',
-                  workspaceName: bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
-                      ? bloc.state.currentWorkspace!.name.trim()
-                      : LocaleKeys.sidebar_appName.tr(),
-                ),
-              );
-              return Container(
-                margin: const EdgeInsets.only(right: 8.0),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8.0),
-                  color: Colors.transparent,
-                ),
-                child: Row(
-                  children: [
-                    const HSpace(4),
-                    // 浣跨敤灏忛┈emoji浣滀负鍥炬爣
-                    WorkspaceIcon(
-                      workspaceIcon: icon,
-                      workspaceName: name,
-                      iconSize: 26,
-                      isEditable: false,
-                      fontSize: 12.0,
-                      onSelected: (_) {}, // Not editable in sidebar
-                      borderRadius: 8.0,
-                      emojiSize: 16.0,
-                      figmaLineHeight: 20.0,
-                      showBorder: true,
-                    ),
-                const HSpace(6),
-                // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
-                Expanded(
-                  flex: 100,
-                  child: Tooltip(
-                    message: workspaceName,
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 78),
-                            child: FlowyText.medium(
-                              workspaceName,
-                              color: Theme.of(context).colorScheme.tertiary,
-                              overflow: TextOverflow.ellipsis,
-                              fontSize: 15.0,
-                            ),
-                          ),
-                        ),
-                        const HSpace(2),
-                        FlowySvg(
-                          FlowySvgs.drop_menu_show_s,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(), // 鎺ㄩ€佹寜閽埌鍙宠竟
-                // 浜戝悓姝ユ寜閽?(fill header height)
-                ValueListenableBuilder<bool>(
-                  valueListenable: FullWindowController.isFullWindow,
-                  builder: (context, isFullWindow, _) {
-                    final homeSettingState =
-                        context.select<HomeSettingBloc, HomeSettingState>(
-                      (bloc) => bloc.state,
-                    );
-                    final shouldCollapseSyncActions =
-                        _shouldCollapseSyncActions(homeSettingState);
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (shouldCollapseSyncActions)
-                          _buildHeaderActionsMoreButton(context)
-                        else
-                          _buildHeaderSyncActionsRow(
-                            context,
-                            highContrastOnDarkBackground: false,
-                          ),
-                      ],
+            popupBuilder: (_) {
+              return BlocProvider<UserWorkspaceBloc>.value(
+                value: context.read<UserWorkspaceBloc>(),
+                child: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+                  builder: (context, state) {
+                    final currentWorkspace = state.currentWorkspace;
+                    final workspaces = state.workspaces;
+                    if (currentWorkspace == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return WorkspacesMenu(
+                      userProfile: widget.userProfile,
+                      currentWorkspace: currentWorkspace,
+                      workspaces: workspaces,
                     );
                   },
                 ),
-                const HSpace(10.0),
-              ],
-            ),
-          );
+              );
             },
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () {
+                  context.read<UserWorkspaceBloc>().add(
+                        UserWorkspaceEvent.fetchWorkspaces(),
+                      );
+                  _popoverController.show();
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Builder(
+                  builder: (context) {
+                    final (:icon, :name, :workspaceName) = context.select<UserWorkspaceBloc, ({String icon, String name, String workspaceName})>(
+                      (bloc) => (
+                        icon: bloc.state.currentWorkspace?.icon ?? '',
+                        name: bloc.state.currentWorkspace?.name ?? '',
+                        workspaceName: bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
+                            ? bloc.state.currentWorkspace!.name.trim()
+                            : LocaleKeys.sidebar_appName.tr(),
+                      ),
+                    );
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8.0),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8.0),
+                        color: Colors.transparent,
+                      ),
+                      child: Row(
+                        children: [
+                          const HSpace(4),
+                          WorkspaceIcon(
+                            workspaceIcon: icon,
+                            workspaceName: name,
+                            iconSize: 26,
+                            isEditable: false,
+                            fontSize: 12.0,
+                            onSelected: (_) {},
+                            borderRadius: 8.0,
+                            emojiSize: 16.0,
+                            figmaLineHeight: 20.0,
+                            showBorder: true,
+                          ),
+                          const HSpace(6),
+                          Expanded(
+                            flex: 100,
+                            child: Tooltip(
+                              message: workspaceName,
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(minWidth: 78),
+                                      child: FlowyText.medium(
+                                        workspaceName,
+                                        color: Theme.of(context).colorScheme.tertiary,
+                                        overflow: TextOverflow.ellipsis,
+                                        fontSize: 15.0,
+                                      ),
+                                    ),
+                                  ),
+                                  const HSpace(2),
+                                  FlowySvg(
+                                    FlowySvgs.drop_menu_show_s,
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const HSpace(10.0),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Windows 侧边栏收起按钮（在 AppFlowyPopover 外面，独立响应点击）
+        if (Platform.isWindows) ...[
+          _buildCollapseButton(context),
+          const HSpace(4),
+        ],
+        // 同步/通知等操作按钮
+        ValueListenableBuilder<bool>(
+          valueListenable: FullWindowController.isFullWindow,
+          builder: (context, isFullWindow, _) {
+            final homeSettingState =
+                context.select<HomeSettingBloc, HomeSettingState>(
+              (bloc) => bloc.state,
+            );
+            final shouldCollapseSyncActions =
+                _shouldCollapseSyncActions(homeSettingState);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (shouldCollapseSyncActions)
+                  _buildHeaderActionsMoreButton(context)
+                else
+                  _buildHeaderSyncActionsRow(
+                    context,
+                    highContrastOnDarkBackground: false,
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCollapseButton(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) {
+        _isCollapseButtonTapped = true;
+        context.read<HomeSettingBloc>().collapseMenu();
+        // 300ms 后重置标志，允许"..."按钮的 hover 触发
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            setState(() => _isCollapseButtonTapped = false);
+          }
+        });
+      },
+      child: FlowyHover(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: FlowySvg(
+            FlowySvgs.sidebar_collapse_custom_m,
+            color: theme.iconColorScheme.secondary,
           ),
         ),
       ),
@@ -1101,8 +1140,13 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         onEnter: (_) {
           _isMouseInHeaderActionsArea = true;
           // 只在菜单未显示时才显示，防止重复触发
-          if (!_isHeaderActionsPopoverVisible) {
-            _showHeaderActionsPopover();
+          // 延迟一小段时间，避免从收起按钮移入时误触发
+          if (!_isHeaderActionsPopoverVisible && !_isCollapseButtonTapped) {
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted && !_isHeaderActionsPopoverVisible && !_isCollapseButtonTapped) {
+                _showHeaderActionsPopover();
+              }
+            });
           }
         },
         onExit: (_) {
