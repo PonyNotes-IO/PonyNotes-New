@@ -885,11 +885,16 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 behavior: HitTestBehavior.opaque,
                 child: Builder(
                   builder: (context) {
-                    final (:icon, :name, :workspaceName) = context.select<UserWorkspaceBloc, ({String icon, String name, String workspaceName})>(
+                    final (:icon, :name, :workspaceName) = context.select<
+                        UserWorkspaceBloc,
+                        ({String icon, String name, String workspaceName})>(
                       (bloc) => (
                         icon: bloc.state.currentWorkspace?.icon ?? '',
                         name: bloc.state.currentWorkspace?.name ?? '',
-                        workspaceName: bloc.state.currentWorkspace?.name.trim().isNotEmpty == true
+                        workspaceName: bloc.state.currentWorkspace?.name
+                                    .trim()
+                                    .isNotEmpty ==
+                                true
                             ? bloc.state.currentWorkspace!.name.trim()
                             : LocaleKeys.sidebar_appName.tr(),
                       ),
@@ -928,15 +933,22 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                                     Flexible(
                                       child: FlowyText.medium(
                                         workspaceName,
-                                        color: Theme.of(context).colorScheme.tertiary,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .tertiary,
                                         overflow: TextOverflow.ellipsis,
                                         fontSize: 15.0,
                                       ),
                                     ),
-                                    const HSpace(2),
-                                    FlowySvg(
-                                      FlowySvgs.drop_menu_show_s,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                    const HSpace(7),
+                                    Transform.translate(
+                                      offset: const Offset(0, 2),
+                                      child: FlowySvg(
+                                        FlowySvgs.drop_menu_show_s,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -947,8 +959,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                           ValueListenableBuilder<bool>(
                             valueListenable: FullWindowController.isFullWindow,
                             builder: (context, isFullWindow, _) {
-                              final homeSettingState =
-                                  context.select<HomeSettingBloc, HomeSettingState>(
+                              final homeSettingState = context
+                                  .select<HomeSettingBloc, HomeSettingState>(
                                 (bloc) => bloc.state,
                               );
                               final shouldCollapseSyncActions =
@@ -1151,7 +1163,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
           // 延迟一小段时间，避免从收起按钮移入时误触发
           if (!_isHeaderActionsPopoverVisible && !_isCollapseButtonTapped) {
             Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted && !_isHeaderActionsPopoverVisible && !_isCollapseButtonTapped) {
+              if (mounted &&
+                  !_isHeaderActionsPopoverVisible &&
+                  !_isCollapseButtonTapped) {
                 _showHeaderActionsPopover();
               }
             });
@@ -1161,7 +1175,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
           _isMouseInHeaderActionsArea = false;
           // 延迟检查，给弹出菜单的 onEnter 一个机会来取消关闭
           Future.delayed(const Duration(milliseconds: 80), () {
-            if (!_isMouseInHeaderActionsArea && _isHeaderActionsPopoverVisible && mounted) {
+            if (!_isMouseInHeaderActionsArea &&
+                _isHeaderActionsPopoverVisible &&
+                mounted) {
               _scheduleHeaderActionsClose();
             }
           });
