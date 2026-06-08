@@ -894,6 +894,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                             : LocaleKeys.sidebar_appName.tr(),
                       ),
                     );
+
                     return Container(
                       margin: const EdgeInsets.only(right: 8.0),
                       decoration: BoxDecoration(
@@ -917,14 +918,14 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                           ),
                           const HSpace(6),
                           Expanded(
-                            flex: 100,
-                            child: Tooltip(
-                              message: workspaceName,
-                              child: Row(
-                                children: [
-                                  Flexible(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(minWidth: 78),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Tooltip(
+                                message: workspaceName,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
                                       child: FlowyText.medium(
                                         workspaceName,
                                         color: Theme.of(context).colorScheme.tertiary,
@@ -932,15 +933,44 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                                         fontSize: 15.0,
                                       ),
                                     ),
-                                  ),
-                                  const HSpace(2),
-                                  FlowySvg(
-                                    FlowySvgs.drop_menu_show_s,
-                                    color: Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ],
+                                    const HSpace(2),
+                                    FlowySvg(
+                                      FlowySvgs.drop_menu_show_s,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          ),
+                          // 云同步按钮(fill header height)
+                          ValueListenableBuilder<bool>(
+                            valueListenable: FullWindowController.isFullWindow,
+                            builder: (context, isFullWindow, _) {
+                              final homeSettingState =
+                                  context.select<HomeSettingBloc, HomeSettingState>(
+                                (bloc) => bloc.state,
+                              );
+                              final shouldCollapseSyncActions =
+                                  _shouldCollapseSyncActions(homeSettingState);
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (shouldCollapseSyncActions) ...[
+                                    _buildHeaderActionsMoreButton(context),
+                                    // Windows 窄侧边栏时收起按钮在"..."按钮右侧
+                                    if (Platform.isWindows) ...[
+                                      const HSpace(4),
+                                      _buildInlineCollapseButton(context),
+                                    ],
+                                  ] else
+                                    _buildHeaderSyncActionsRow(
+                                      context,
+                                      highContrastOnDarkBackground: false,
+                                    ),
+                                ],
+                              );
+                            },
                           ),
                           const HSpace(10.0),
                         ],
@@ -951,35 +981,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               ),
             ),
           ),
-        ),
-        // Windows 侧边栏收起按钮（在 AppFlowyPopover 外面，独立响应点击）
-        if (Platform.isWindows) ...[
-          _buildCollapseButton(context),
-          const HSpace(4),
-        ],
-        // 同步/通知等操作按钮
-        ValueListenableBuilder<bool>(
-          valueListenable: FullWindowController.isFullWindow,
-          builder: (context, isFullWindow, _) {
-            final homeSettingState =
-                context.select<HomeSettingBloc, HomeSettingState>(
-              (bloc) => bloc.state,
-            );
-            final shouldCollapseSyncActions =
-                _shouldCollapseSyncActions(homeSettingState);
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (shouldCollapseSyncActions)
-                  _buildHeaderActionsMoreButton(context)
-                else
-                  _buildHeaderSyncActionsRow(
-                    context,
-                    highContrastOnDarkBackground: false,
-                  ),
-              ],
-            );
-          },
         ),
       ],
     );
