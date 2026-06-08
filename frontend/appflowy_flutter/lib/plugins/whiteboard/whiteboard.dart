@@ -916,7 +916,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                           children: [
                             CircularProgressIndicator(),
                             SizedBox(height: 16),
-                            Text('姝ｅ湪鍔犺浇鐧芥澘鏁版嵁...'),
+                            Text('正在加载白板编辑器...'),
                           ],
                         ),
                       ),
