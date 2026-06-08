@@ -151,8 +151,8 @@ pub struct SearchFullIndexConsumer {
 }
 
 impl SearchFullIndexConsumer {
-  pub fn new(workspace_id: &Uuid, data_path: PathBuf) -> FlowyResult<Self> {
-    let strong = get_or_init_document_tantivy_state(*workspace_id, data_path)?;
+  pub async fn new(workspace_id: &Uuid, data_path: PathBuf) -> FlowyResult<Self> {
+    let strong = get_or_init_document_tantivy_state(*workspace_id, data_path).await?;
     Ok(Self {
       workspace_id: *workspace_id,
       state: Arc::downgrade(&strong),
@@ -212,7 +212,7 @@ impl SearchInstantIndexImpl {
     folder_manager: Weak<FolderManager>,
     logged_user: Weak<dyn LoggedUser>,
   ) -> FlowyResult<Self> {
-    let state = get_or_init_document_tantivy_state(*workspace_id, data_path)?;
+    let state = get_or_init_document_tantivy_state(*workspace_id, data_path).await?;
     let folder_observer = FolderViewObserverImpl::new(workspace_id, Arc::downgrade(&state));
     if let Some(folder_manager) = folder_manager.upgrade() {
       if let Ok(rx) = folder_manager.subscribe_folder_change_rx().await {

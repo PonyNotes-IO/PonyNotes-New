@@ -138,7 +138,7 @@ impl AppLifeCycleImpl {
     user_paths: &UserPaths,
   ) -> Option<Weak<RwLock<DocumentTantivyState>>> {
     let data_path = user_paths.tanvity_index_path(uid);
-    let state = get_or_init_document_tantivy_state(*workspace_id, data_path).ok();
+    let state = get_or_init_document_tantivy_state(*workspace_id, data_path).await.ok();
     state.map(|state| Arc::downgrade(&state))
   }
 
@@ -186,7 +186,7 @@ impl AppLifeCycleImpl {
         }
       }
 
-      match SearchFullIndexConsumer::new(&workspace_id_cloned, user_paths.tanvity_index_path(uid)) {
+      match SearchFullIndexConsumer::new(&workspace_id_cloned, user_paths.tanvity_index_path(uid)).await {
         Ok(consumer) => {
           new_full_indexed_data_writer
             .register_full_indexed_consumer(Box::new(consumer))
