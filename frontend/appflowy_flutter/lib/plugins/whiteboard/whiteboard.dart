@@ -902,27 +902,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                     ),
                   ),
                 ),
-              if (_isLoadingData)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: ColoredBox(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.92),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('正在加载白板编辑器...'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
             ],
           );
         },
