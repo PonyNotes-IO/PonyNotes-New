@@ -725,14 +725,23 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
         final currentUid =
             _extractCurrentUserUuid(currentUser) ?? currentUser?.id.toString();
-        final currentEmail = currentUser?.email;
+        final currentEmail = currentUser?.email.trim().toLowerCase();
+        // 通过 userId 或 email 任一匹配定位当前登录用户。
+        // 仅靠 userId 容易失败：本地缓存返回的 user_id 可能为空，
+        // 或 JWT sub 与后端成员 uuid 格式不一致，导致找不到当前用户而
+        // 兜底成 readOnly，使权限下拉菜单整体不可操作。email 作为可靠回退。
         final currentSharedUser = currentUser == null
             ? null
             : allUsers.firstWhereOrNull(
-                (user) =>
-                    (currentUid != null &&
-                        currentUid.isNotEmpty &&
-                        user.userId == currentUid),
+                (user) {
+                  final idMatch = currentUid != null &&
+                      currentUid.isNotEmpty &&
+                      user.userId == currentUid;
+                  final emailMatch = currentEmail != null &&
+                      currentEmail.isNotEmpty &&
+                      user.email.trim().toLowerCase() == currentEmail;
+                  return idMatch || emailMatch;
+                },
               );
         // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
         // 这里使用最小权限(member + readOnly)作为安全默认值，防止误放权。
