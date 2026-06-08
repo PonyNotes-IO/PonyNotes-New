@@ -376,7 +376,7 @@ class _ShareTabState extends State<ShareTab> {
             pageId: widget.pageId,
             workspaceId: widget.workspaceId,
           )..add(ShareTabEvent.initialize()),
-          child: _CollaboratorsDialog(
+          child: CollaboratorsDialog(
             workspaceId: widget.workspaceId,
             pageId: widget.pageId,
           ),
@@ -575,8 +575,9 @@ class _ShareTabState extends State<ShareTab> {
   }
 }
 
-class _CollaboratorsDialog extends StatefulWidget {
-  const _CollaboratorsDialog({
+class CollaboratorsDialog extends StatefulWidget {
+  const CollaboratorsDialog({
+    super.key,
     required this.workspaceId,
     required this.pageId,
   });
@@ -585,10 +586,10 @@ class _CollaboratorsDialog extends StatefulWidget {
   final String pageId;
 
   @override
-  State<_CollaboratorsDialog> createState() => _CollaboratorsDialogState();
+  State<CollaboratorsDialog> createState() => _CollaboratorsDialogState();
 }
 
-class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
+class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
   late final TextEditingController _inviteController;
   late final ShareTabBloc _bloc;
 

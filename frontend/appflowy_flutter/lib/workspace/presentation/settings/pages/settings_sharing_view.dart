@@ -2,11 +2,9 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
-import 'package:appflowy/features/share_tab/presentation/widgets/access_level_list_widget.dart';
-import 'package:appflowy/features/share_tab/presentation/widgets/shared_user_widget.dart';
+import 'package:appflowy/features/share_tab/presentation/share_tab.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
@@ -18,7 +16,6 @@ import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -822,8 +819,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
             pageId: view.id,
             workspaceId: workspaceId,
           )..add(ShareTabEvent.initialize()),
-          child: _ViewInviteMembersDialog(
-            view: view,
+          child: CollaboratorsDialog(
+            workspaceId: workspaceId,
+            pageId: view.id,
           ),
         );
       },
@@ -840,250 +838,3 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   }
 }
 
-// 旧的占位模型已移除，改为直接使用 PublishInfoViewPB
-
-class _ViewInviteMembersDialog extends StatefulWidget {
-  const _ViewInviteMembersDialog({
-    required this.view,
-  });
-
-  final ViewPB view;
-
-  @override
-  State<_ViewInviteMembersDialog> createState() =>
-      _ViewInviteMembersDialogState();
-}
-
-class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
-  @override
-  Widget build(BuildContext context) {
-    return BlocConsumer<ShareTabBloc, ShareTabState>(
-      listener: _onShareStateChanged,
-      builder: (context, state) {
-        final sharedUsers = state.users;
-        final currentSharedUser = sharedUsers.firstWhereOrNull(
-          (user) => _isCurrentUser(user, state.currentUser),
-        );
-        final isInitialLoading = sharedUsers.isEmpty &&
-            state.errorMessage.isEmpty &&
-            state.currentUser == null;
-
-        return Dialog(
-          insetPadding: const EdgeInsets.all(24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context),
-                  const Divider(height: 24),
-                  if (isInitialLoading)
-                    SizedBox(
-                      height: 220,
-                      child: const Center(
-                        child: CircularProgressIndicator.adaptive(),
-                      ),
-                    )
-                  else if (state.errorMessage.isNotEmpty && sharedUsers.isEmpty)
-                    SizedBox(
-                      height: 220,
-                      child: Center(
-                        child: FlowyText(
-                          '加载失败：${state.errorMessage}',
-                          color: Colors.red,
-                        ),
-                      ),
-                    )
-                  else if (sharedUsers.isEmpty)
-                    SizedBox(
-                      height: 220,
-                      child: Center(
-                        child: FlowyText(
-                          '暂无邀请成员',
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    )
-                  else if (currentSharedUser == null)
-                    SizedBox(
-                      height: 220,
-                      child: Center(
-                        child: FlowyText(
-                          '无法获取当前成员信息',
-                          color: Colors.red,
-                        ),
-                      ),
-                    )
-                  else
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 320),
-                      child: Scrollbar(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: sharedUsers.length,
-                          separatorBuilder: (_, __) =>
-                              Divider(height: 1, color: Colors.grey[200]),
-                          itemBuilder: (context, index) {
-                            final user = sharedUsers[index];
-                            return SharedUserWidget(
-                              user: user,
-                              currentUser: currentSharedUser,
-                              isInPublicPage:
-                                  state.sectionType == SharedSectionType.public,
-                              callbacks: AccessLevelListCallbacks(
-                                onSelectAccessLevel: (accessLevel) {
-                                  context.read<ShareTabBloc>().add(
-                                        ShareTabEvent.updateMemberPermission(
-                                          user: user,
-                                          accessLevel: accessLevel,
-                                        ),
-                                      );
-                                },
-                                onTurnIntoMember: () {
-                                  context.read<ShareTabBloc>().add(
-                                        ShareTabEvent.convertToMember(
-                                          email: user.email,
-                                        ),
-                                      );
-                                },
-                                onRemoveAccess: () {
-                                  context.read<ShareTabBloc>().add(
-                                        ShareTabEvent.removeUsers(
-                                          emails: [user.email],
-                                        ),
-                                      );
-                                },
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('关闭'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final viewTitle = widget.view.name.isNotEmpty ? widget.view.name : '无标题';
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const FlowyText(
-                '查看邀请成员',
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-              const VSpace(4),
-              FlowyText(
-                viewTitle,
-                fontSize: 14,
-                color: Colors.grey[600],
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close),
-          visualDensity: VisualDensity.compact,
-          splashRadius: 20,
-        ),
-      ],
-    );
-  }
-
-  void _onShareStateChanged(BuildContext context, ShareTabState state) {
-    final shareResult = state.shareResult;
-    if (shareResult != null) {
-      shareResult.fold(
-        (_) => showToastNotification(message: '邀请已发送'),
-        (error) => showToastNotification(
-          message: error.msg,
-          type: ToastificationType.error,
-        ),
-      );
-    }
-
-    final removeResult = state.removeResult;
-    if (removeResult != null) {
-      removeResult.fold(
-        (_) => showToastNotification(message: '已移除成员'),
-        (error) => showToastNotification(
-          message: error.msg,
-          type: ToastificationType.error,
-        ),
-      );
-    }
-
-    final updateAccessLevelResult = state.updateAccessLevelResult;
-    if (updateAccessLevelResult != null) {
-      updateAccessLevelResult.fold(
-        (_) => showToastNotification(message: '权限已更新'),
-        (error) => showToastNotification(
-          message: error.msg,
-          type: ToastificationType.error,
-        ),
-      );
-    }
-
-    final turnIntoMemberResult = state.turnIntoMemberResult;
-    if (turnIntoMemberResult != null) {
-      turnIntoMemberResult.fold(
-        (_) => showToastNotification(message: '已升级为成员'),
-        (error) => showToastNotification(
-          message: error.msg,
-          type: ToastificationType.error,
-        ),
-      );
-    }
-  }
-
-  /// 判断 sharedUser 是否是当前登录用户
-  /// 优先用 email 匹配，其次用 phone 匹配
-  bool _isCurrentUser(SharedUser user, UserProfilePB? currentUser) {
-    if (currentUser == null) return false;
-
-    // 优先用 email 匹配
-    if (user.email == currentUser.email) {
-      return true;
-    }
-
-    // 其次用 phone 匹配（两边都非空时）
-    final userPhone = user.phone;
-    final currentPhone = currentUser.phone;
-    if (userPhone != null &&
-        userPhone.isNotEmpty &&
-        currentPhone.isNotEmpty &&
-        userPhone == currentPhone) {
-      return true;
-    }
-
-    return false;
-  }
-}
