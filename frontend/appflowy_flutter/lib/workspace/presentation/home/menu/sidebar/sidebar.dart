@@ -1060,6 +1060,13 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             foregroundColorOverride: foregroundColorOverride,
           ),
         ),
+        // Windows 侧边栏收起按钮
+        if (Platform.isWindows) ...[
+          HSpace(highContrastOnDarkBackground ? 18.0 : 4.0),
+          _buildHeaderActionSlot(
+            _buildInlineCollapseButton(context),
+          ),
+        ],
       ],
     );
   }
@@ -1284,6 +1291,51 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             child: NumberedRedDot.desktop(),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderPopupCollapseButton(
+    BuildContext context, {
+    required Color foregroundColor,
+  }) {
+    return SizedBox.square(
+      dimension: _headerActionsPopupButtonSize,
+      child: FlowyButton(
+        useIntrinsicWidth: true,
+        margin: EdgeInsets.zero,
+        text: FlowySvg(
+          FlowySvgs.sidebar_collapse_custom_m,
+          color: foregroundColor,
+          size: Size(_headerActionsPopupIconSize, _headerActionsPopupIconSize),
+        ),
+        onTap: () {
+          _headerActionsPopoverController.close();
+          context.read<HomeSettingBloc>().collapseMenu();
+        },
+      ),
+    );
+  }
+
+  Widget _buildInlineCollapseButton(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return FlowyTooltip(
+      message: LocaleKeys.sideBar_closeSidebar.tr(),
+      child: SizedBox.square(
+        dimension: 28,
+        child: FlowyButton(
+          useIntrinsicWidth: true,
+          margin: EdgeInsets.zero,
+          radius: BorderRadius.circular(8),
+          backgroundColor: Colors.transparent,
+          text: FlowySvg(
+            FlowySvgs.sidebar_collapse_custom_m,
+            color: theme.iconColorScheme.secondary,
+          ),
+          onTap: () {
+            context.read<HomeSettingBloc>().collapseMenu();
+          },
+        ),
       ),
     );
   }
