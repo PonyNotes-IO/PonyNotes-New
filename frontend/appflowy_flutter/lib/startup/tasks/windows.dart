@@ -31,7 +31,12 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     
     if (UniversalPlatform.isMobile) {
       final scale = await windowSizeManager.getScaleFactor();
-      ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => scale;
+      // 白板偏移修复后改用标准 WidgetsFlutterBinding，安全屏蔽缩放（缩放暂停用，不崩溃）。
+      try {
+        ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => scale;
+      } catch (_) {
+        Log.info('App 全局缩放暂停用（白板偏移修复改用标准 WidgetsFlutterBinding）');
+      }
       return;
     }
 
@@ -85,10 +90,15 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
       });
     }
 
+    // 白板偏移修复后改用标准 WidgetsFlutterBinding，安全屏蔽启动时的缩放恢复（缩放暂停用，不崩溃）。
     unawaited(
-      windowSizeManager.getScaleFactor().then(
-            (v) => ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => v,
-          ),
+      windowSizeManager.getScaleFactor().then((v) {
+        try {
+          ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => v;
+        } catch (_) {
+          Log.info('App 全局缩放暂停用（白板偏移修复改用标准 WidgetsFlutterBinding）');
+        }
+      }),
     );
   }
 

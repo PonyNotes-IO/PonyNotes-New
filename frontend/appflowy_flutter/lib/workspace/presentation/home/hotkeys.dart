@@ -260,7 +260,14 @@ class _HomeHotKeysState extends State<HomeHotKeys> {
       // #1      ScaledWidgetsFlutterBinding.instance (package:scaled_app/scaled_app.dart:66:62)
       appflowyScaleFactor = double.parse(scaleFactor.toStringAsFixed(2));
     } else {
-      ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => scaleFactor;
+      // 白板平台视图偏移修复后改用标准 WidgetsFlutterBinding，ScaledWidgetsFlutterBinding 不再初始化。
+      // 这里安全屏蔽：缩放暂不生效，但不抛 null 异常。
+      try {
+        ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => scaleFactor;
+      } catch (_) {
+        Log.info('App 全局缩放暂停用（白板偏移修复改用标准 WidgetsFlutterBinding）');
+        return;
+      }
     }
 
     await windowSizeManager.setScaleFactor(scaleFactor);

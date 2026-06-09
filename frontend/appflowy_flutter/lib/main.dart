@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy_backend/log.dart';
-import 'package:scaled_app/scaled_app.dart';
+import 'package:flutter/widgets.dart';
 
 import 'startup/startup.dart';
 
@@ -42,9 +42,11 @@ Future<void> main(List<String> args) async {
     await _cleanupLegacyLockFile();
   }
 
-  ScaledWidgetsFlutterBinding.ensureInitialized(
-    scaleFactor: (_) => 1.0,
-  );
+  // 白板平台视图偏移修复(2026-06-09)：scaled_app 的 ScaledWidgetsFlutterBinding 在
+  // Flutter 3.35 macOS 上会破坏平台视图(WKWebView)的显示↔事件坐标对齐，导致白板工具栏
+  // 鼠标选工具偏移、绘图轨迹错位、画布整体漂移。改用标准 WidgetsFlutterBinding 彻底修复。
+  // 代价：App 全局缩放(Cmd +/-)暂停用（相关调用已在 hotkeys/windows 中安全屏蔽，按键不再生效也不崩溃）。
+  WidgetsFlutterBinding.ensureInitialized();
 
   if (args.isNotEmpty) {
     final url = args.first;

@@ -331,7 +331,10 @@ class _DisplaySizeItemState extends State<_DisplaySizeItem> {
       // ignore: invalid_use_of_visible_for_testing_member
       appflowyScaleFactor = value;
     } else {
-      ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => value;
+      // 白板偏移修复后改用标准 WidgetsFlutterBinding，安全屏蔽缩放（暂不生效，不崩溃）。
+      try {
+        ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => value;
+      } catch (_) {}
     }
     if (mounted) {
       setState(() => scaleFactor = value);
