@@ -1,15 +1,24 @@
-use crate::entities::{WhiteboardData, WhiteboardDataPB};
-use crate::notification::{whiteboard_notification_builder, WhiteboardNotification};
+use crate::entities::WhiteboardData;
+use crate::notification::{whiteboard_notification_send_json, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Collab, CollabBuilder, DeepObservable, Map, MapRef};
+use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
 use collab::util::MapExt;
 use collab_entity::EncodedCollab;
 use collab_entity::define::DOCUMENT_ROOT;
 
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
+use tokio::sync::broadcast;
 use tracing::trace;
+
+/// 通知类型：数据变更
+#[derive(Debug, Clone)]
+pub struct WhiteboardChanged {
+  pub key: String,
+  pub value: String,
+  pub is_remote: bool,
+}
 
 /// Whiteboard Collab 对象
 /// 使用 CRDT (Yrs) 来管理白板数据
@@ -18,6 +27,8 @@ pub struct Whiteboard {
   collab: Collab,
   /// 数据 Map
   data: MapRef,
+  /// 变更通知 channel
+  notifier: broadcast::Sender<WhiteboardChanged>,
 }
 
 impl Whiteboard {
@@ -26,18 +37,18 @@ impl Whiteboard {
 
   /// 创建新白板（空白板）
   pub fn create(mut collab: Collab) -> Result<Self, Error> {
-    // 使用可变事务初始化和设置数据
     let mut txn = collab.context.transact_mut();
 
-    // ✅ 关键修复：初始化 Document 根节点
-    // 白板使用 CollabType::Document 类型，需要确保有 DOCUMENT_ROOT 根节点
-    // 这样 RocksDB 插件才能正确验证和保存数据
     let _document_root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
-
-    // 初始化白板数据 Map
     let data = collab.data.get_or_init_map(&mut txn, Self::DATA_KEY);
     drop(txn);
-    Ok(Self { collab, data })
+
+    let (notifier, _) = broadcast::channel(100);
+    Ok(Self {
+      collab,
+      data,
+      notifier,
+    })
   }
 
   /// 从现有 Collab 对象打开白板
@@ -48,7 +59,13 @@ impl Whiteboard {
       .get_with_txn(&txn, Self::DATA_KEY)
       .ok_or_else(|| anyhow!("Whiteboard data not found"))?;
     drop(txn);
-    Ok(Self { collab, data })
+
+    let (notifier, _) = broadcast::channel(100);
+    Ok(Self {
+      collab,
+      data,
+      notifier,
+    })
   }
 
   /// 从 WhiteboardData 创建白板
@@ -106,7 +123,6 @@ impl Whiteboard {
     let mut txn = self.collab.context.transact_mut();
     match wrapper.r#type.as_str() {
       "update" | "" => {
-        // 存储所有数据字段（elements, files, appState 等）
         for (key, value) in data_map.iter() {
           let json = serde_json::to_string(value)
             .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
@@ -123,6 +139,23 @@ impl Whiteboard {
       _ => {
         tracing::warn!("[Whiteboard] Unknown update type: {}", wrapper.r#type);
       },
+    }
+
+    // ✅ 广播所有变更给订阅者（手动通知模式）
+    // 不依赖 observe_deep（它只监听远程 sync 事件），改为在事务提交后主动通知
+    for (key, value) in data_map.iter() {
+      let event_json = serde_json::json!({
+        "key": key.to_string(),
+        "value": value.to_string(),
+        "is_remote": false,
+      })
+      .to_string();
+
+      let _ = self.notifier.send(WhiteboardChanged {
+        key: key.clone(),
+        value: event_json,
+        is_remote: false,
+      });
     }
 
     Ok(())
@@ -165,64 +198,23 @@ impl Whiteboard {
     &self.collab
   }
 
-  /// 订阅白板数据变更
-  pub fn subscribe_changed(&self) {
+  /// 获取变更通知的 receiver（用于 subscribe_changed）
+  pub fn subscribe_changed(&self) -> broadcast::Receiver<WhiteboardChanged> {
+    self.notifier.subscribe()
+  }
+
+  /// 启动监听任务：在 tokio spawn 中监听 channel，收到变更后发给 Dart
+  pub fn start_change_listener(&self) {
     let view_id = self.object_id();
-    let view_id_clone = view_id.clone();
-    
-    trace!("[Whiteboard] subscribing to data changes for view: {}", view_id);
-    
-    self.data.observe_deep(move |txn, events| {
-      let is_remote = txn.origin().is_some();
+    let mut rx = self.subscribe_changed();
 
-      // 我们只关心远程变更的实时通知，本地变更由前端自己维护 UI
-      if !is_remote {
-        return;
-      }
-
-      for event in events.iter() {
-        if let collab::preclude::Event::Map(map_event) = event {
-          for (key, change) in map_event.keys(txn) {
-            match change {
-              collab::preclude::EntryChange::Inserted(value)
-              | collab::preclude::EntryChange::Updated(_, value) => {
-                let new_value_str = value.to_string();
-
-                trace!(
-                  "[Whiteboard] 🔔 Remote change detected! key: {}, view: {}",
-                  key,
-                  view_id_clone
-                );
-
-                // 发送通知给前端
-                let event_json = serde_json::json!({
-                  "key": key.to_string(),
-                  "value": new_value_str,
-                  "is_remote": true,
-                })
-                .to_string();
-
-                whiteboard_notification_builder(
-                  view_id_clone.clone(),
-                  WhiteboardNotification::DidReceiveUpdate,
-                )
-                .payload(WhiteboardDataPB {
-                  view_id: view_id_clone.clone(),
-                  json_data: event_json,
-                })
-                .send();
-              },
-              collab::preclude::EntryChange::Removed(_) => {
-                trace!(
-                  "[Whiteboard] 🔔 Remote delete detected! key: {}, view: {}",
-                  key,
-                  view_id_clone
-                );
-                // 可以根据需要发送删除通知
-              },
-            }
-          }
-        }
+    tokio::spawn(async move {
+      while let Ok(changed) = rx.recv().await {
+        whiteboard_notification_send_json(
+          view_id.clone(),
+          WhiteboardNotification::DidReceiveUpdate,
+          changed.value,
+        );
       }
     });
   }

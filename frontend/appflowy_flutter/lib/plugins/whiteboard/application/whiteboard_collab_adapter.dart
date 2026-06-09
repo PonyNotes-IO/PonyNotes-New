@@ -38,8 +38,7 @@ class WhiteboardCollabAdapter {
   late final WhiteboardDataService _service;
   late final WhiteboardListener _listener;
 
-  // ✅ 减少防抖延迟：从 500ms 改为 100ms，更及时保存
-  static const _debounceDuration = Duration(milliseconds: 100);
+  static const _debounceDuration = Duration(milliseconds: 50);
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
   // scrollX/scrollY 已从稳定键中移除：
   // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
@@ -85,8 +84,6 @@ class WhiteboardCollabAdapter {
         _fullData['files'] =
             Map<String, dynamic>.from(normalized['files'] as Map);
       }
-      print(
-          '[WhiteboardCollabAdapter] setInitialData: keys=${_fullData.keys.toList()}');
     }
   }
 
@@ -171,9 +168,6 @@ class WhiteboardCollabAdapter {
     if (_disposed) {
       return;
     }
-
-    print(
-        '[WhiteboardCollabAdapter] onWhiteboardDataChanged called, type: $type, keys: ${data.keys.toList()}');
 
     // 更新全量数据缓存
     data.forEach((key, value) {
@@ -262,11 +256,11 @@ class WhiteboardCollabAdapter {
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
 
-        print(
+        Log.info(
             '[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
         if (_fullData.containsKey('files')) {
           final files = _fullData['files'] as Map<String, dynamic>;
-          print('[WhiteboardCollabAdapter] Files count: ${files.length}');
+          Log.info('[WhiteboardCollabAdapter] Files count: ${files.length}');
         }
 
         success = await _service.saveWhiteboardData(viewId, _fullData);
@@ -278,15 +272,15 @@ class WhiteboardCollabAdapter {
         _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
-        print('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+        Log.warn('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
-        print('[WhiteboardCollabAdapter] ✅ Sync completed successfully');
+        Log.info('[WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
       }
     } catch (e) {
       _hasUnsavedChanges = true;
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
-      print('[WhiteboardCollabAdapter] ❌ Sync error: $e');
+      Log.error('[WhiteboardCollabAdapter] ❌ Sync error: $e');
     } finally {
       _isSyncing = false;
       _syncData.clear();
@@ -323,13 +317,23 @@ class WhiteboardCollabAdapter {
     }
   }
 
-  /// 处理来自远端（其他设备）的实时更新通知
+  /// 处理来自实时通知的更新
   /// 由 WhiteboardListener 回调，payload 已在 Listener 中从 JSON 解析完毕
-  void _onRemoteUpdate(String key, dynamic value) {
+  void _onRemoteUpdate(String key, dynamic value, bool isRemote) {
     if (_disposed) return;
 
     try {
-      Log.info('[WhiteboardCollabAdapter] 🔔 Remote update: key=$key');
+      Log.info(
+        '[WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote',
+      );
+
+      // 本地写入回声不再推回 WebView，避免自触发循环
+      if (!isRemote) {
+        Log.debug(
+          '[WhiteboardCollabAdapter] Skip local echo notification for key=$key',
+        );
+        return;
+      }
 
       // 解析值（如果是字符串 JSON 则解析）
       dynamic parsedValue = value;
@@ -355,9 +359,10 @@ class WhiteboardCollabAdapter {
 
       // 通知 WebView 更新
       onDataChanged({key: parsedValue});
+      Log.info('[WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
     } catch (e) {
       Log.error(
-          '[WhiteboardCollabAdapter] Failed to process remote update: $e');
+          '[WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');
     }
   }
 

@@ -482,7 +482,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       },
     );
 
-    print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
+    Log.info('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
     final adapter = _collabAdapter;
 
@@ -493,7 +493,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     if (adapter != null) {
       adapter.forceSync().then((_) {
         _collabAdapter = null;
-        print('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
+        Log.info('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
         logDiagnosticEvent(
           'WhiteboardLoad',
           'page_dispose_force_sync_done',
@@ -508,7 +508,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         adapter.dispose();
       }).catchError((e) {
         _collabAdapter = null;
-        print('[WhiteboardPage] ❌ Force sync failed: $e');
+        Log.error('[WhiteboardPage] ❌ Force sync failed: $e');
         logDiagnosticEvent(
           'WhiteboardLoad',
           'page_dispose_force_sync_done',
@@ -533,17 +533,16 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         final service = WhiteboardDataService();
         final result = await service.closeWhiteboard(viewId: viewId);
         result.fold(
-          (_) => print('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
-          (error) => print(
-              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+          (_) => Log.info('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
+          (error) => Log.error('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
         );
       } catch (e) {
-        print('[WhiteboardPage] Exception closing whiteboard: $e');
+        Log.error('[WhiteboardPage] Exception closing whiteboard: $e');
       }
     });
 
     super.dispose();
-    print('[WhiteboardPage] ✅ Dispose completed (sync part)');
+    Log.info('[WhiteboardPage] ✅ Dispose completed (sync part)');
   }
 
   /// 注销所有控制器

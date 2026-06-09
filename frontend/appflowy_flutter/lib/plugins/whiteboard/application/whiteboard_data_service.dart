@@ -70,7 +70,8 @@ class WhiteboardDataService {
   }) async {
     try {
       final payload = ViewIdPB()..value = viewId;
-      return await WhiteboardEventOpenWhiteboard(payload).send();
+      final result = await WhiteboardEventOpenWhiteboard(payload).send();
+      return result;
     } catch (e, stackTrace) {
       Log.error('[Whiteboard] Exception in openWhiteboard: $e\n$stackTrace');
       return FlowyResult.failure(
@@ -87,9 +88,6 @@ class WhiteboardDataService {
     String source = 'collab-adapter',
   }) async {
     final stopwatch = Stopwatch()..start();
-    print('[Whiteboard] =====================================================');
-    print('[Whiteboard] saveWhiteboardData() called for viewId: $viewId');
-    print('[Whiteboard] Data keys: ${data.keys.toList()}');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'data_save_start',
@@ -106,24 +104,15 @@ class WhiteboardDataService {
 
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
-      print('[Whiteboard] Files count: ${files.length}');
-    } else {
-      print('[Whiteboard] No files in data');
-    }
-
-    if (data.containsKey('files') && data['files'] is Map) {
-      final files = data['files'] as Map<String, dynamic>;
       if (files.isNotEmpty) {
-        print('[Whiteboard] Step 0: Uploading images to cloud storage...');
         try {
           final processedFiles =
               await WhiteboardImageUploadService.processFilesForUpload(
             files,
           );
           data['files'] = processedFiles;
-          print('[Whiteboard] Images uploaded successfully');
         } catch (e) {
-          print('[Whiteboard] Image upload failed: $e');
+          Log.warn('[Whiteboard] Image upload failed: $e');
         }
       }
     }
@@ -131,13 +120,12 @@ class WhiteboardDataService {
     final collabData = _stripDataURLsForCollab(data);
     final collabPayloadBytes = _estimatePayloadBytes(collabData);
 
-    print('[Whiteboard] Step 1: Trying to save to Collab backend...');
+    Log.info('[Whiteboard] Saving whiteboard to collab: $viewId');
     final collabSuccess = await _saveToCollab(
       viewId,
       jsonEncode({'type': 'update', 'data': jsonEncode(collabData)}),
     );
     if (collabSuccess) {
-      print('[Whiteboard] Saved to Collab successfully: $viewId');
       logDiagnosticEvent(
         'WhiteboardLoad',
         'collab_sync_done',
@@ -157,7 +145,7 @@ class WhiteboardDataService {
       return true;
     }
 
-    print('[Whiteboard] Collab save failed, falling back to file system');
+    Log.warn('[Whiteboard] Collab save failed, falling back to file system');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'collab_sync_fallback',
@@ -175,7 +163,6 @@ class WhiteboardDataService {
       warning: true,
     );
     final fileSuccess = await _saveToFile(viewId, data);
-    print('[Whiteboard] File save result: $fileSuccess');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'collab_sync_done',
@@ -218,16 +205,8 @@ class WhiteboardDataService {
 
         if (hasCloudUrl) {
           fileDataMap.remove('dataURL');
-          slimFiles[fileId] = fileDataMap;
-          print(
-            '[Whiteboard] Storing file $fileId with cloud URL only (removed dataURL)',
-          );
-        } else {
-          slimFiles[fileId] = fileDataMap;
-          print(
-            '[Whiteboard] File $fileId has no cloud URL, keeping original data',
-          );
         }
+        slimFiles[fileId] = fileDataMap;
       }
 
       result['files'] = slimFiles;
@@ -267,25 +246,17 @@ class WhiteboardDataService {
         ..viewId = viewId
         ..jsonData = data;
 
-      print(
-        '[Whiteboard] _saveToCollab: Sending WhiteboardEventUpdateWhiteboard event...',
-      );
       final result = await WhiteboardEventUpdateWhiteboard(payload).send();
 
       return result.fold(
-        (_) {
-          print('[Whiteboard] _saveToCollab: Success');
-          return true;
-        },
+        (_) => true,
         (error) {
-          print('[Whiteboard] _saveToCollab: Error: ${error.msg}');
-          print('[Whiteboard] _saveToCollab: Error code: ${error.code}');
+          Log.error('[Whiteboard] _saveToCollab failed: ${error.msg}');
           return false;
         },
       );
     } catch (e, stackTrace) {
-      print('[Whiteboard] _saveToCollab: Exception: $e');
-      print('[Whiteboard] _saveToCollab: Stack trace: $stackTrace');
+      Log.error('[Whiteboard] _saveToCollab exception: $e\n$stackTrace');
       return false;
     }
   }
@@ -320,8 +291,6 @@ class WhiteboardDataService {
     String source = 'page-load',
   }) async {
     final stopwatch = Stopwatch()..start();
-    print('[Whiteboard] =====================================================');
-    print('[Whiteboard] loadWhiteboardData() called for viewId: $viewId');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'data_load_start',
@@ -337,14 +306,6 @@ class WhiteboardDataService {
 
     final collabData = await _loadFromCollab(viewId);
     if (collabData != null) {
-      print('[Whiteboard] Loaded from Collab: $viewId');
-      if (collabData.containsKey('files') && collabData['files'] is Map) {
-        final files = collabData['files'] as Map<String, dynamic>;
-        print('[Whiteboard] Loaded files count from Collab: ${files.length}');
-      } else {
-        print('[Whiteboard] No files in loaded Collab data');
-      }
-
       logDiagnosticEvent(
         'WhiteboardLoad',
         'data_load_done',
@@ -371,7 +332,6 @@ class WhiteboardDataService {
       jsonEncode({'type': 'update', 'data': fileData}),
     );
 
-    print('[Whiteboard] =====================================================');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'data_load_done',
@@ -404,12 +364,10 @@ class WhiteboardDataService {
           return jsonDecode(data.jsonData) as Map<String, dynamic>;
         },
         (error) {
-          print('[Whiteboard] Collab load error (normal if new): ${error.msg}');
           return null;
         },
       );
     } catch (e) {
-      print('[Whiteboard] Exception in _loadFromCollab: $e');
       return null;
     }
   }

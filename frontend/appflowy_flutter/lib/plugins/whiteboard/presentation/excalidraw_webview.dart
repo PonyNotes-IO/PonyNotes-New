@@ -141,16 +141,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> notifyContainerResized() async {
     await _safeEvalJs('''
       (function() {
-        clearTimeout(window._ponynotesResizeTimer);
-        if (window._ponynotesResizeObserver) {
-          window._ponynotesResizeObserver.disconnect();
-          window._ponynotesResizeObserver = null;
+        const _api = window.excalidrawAPI || window.excalidrawAppRef ||
+          window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+        if (_api && typeof _api.refresh === 'function') {
+          requestAnimationFrame(function() { _api.refresh(); });
         }
-        if (window._ponynotesResizeHandler) {
-          window.removeEventListener('resize', window._ponynotesResizeHandler);
-          window._ponynotesResizeHandler = null;
-        }
-        console.log('[PonyNotes] notifyContainerResized skipped: external refresh disabled');
       })();
     ''', tag: 'notifyContainerResized');
   }
@@ -183,7 +178,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
       final viewId = Uri.encodeQueryComponent(widget.viewId);
-      const cacheVersion = 'ponynotes-whiteboard-v5';
+      const cacheVersion = 'ponynotes-whiteboard-v4';
       final url = '$baseUrl/index.html?viewId=$viewId&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
@@ -607,12 +602,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
       await _improveContextMenuTextRendering();
-      // 2026-06-07 回归追溯：
-      // 画布漂移最早出现在 2026-05-18 引入 _installResizeGuard() 之后。
-      // 该逻辑通过 ResizeObserver + api.refresh()/window.resize 从外部干预
-      // Excalidraw 视口尺寸，历史修复记录显示它会触发 scrollX/scrollY
-      // 反馈链。这里恢复到问题出现前的行为：只清理历史安装的守护，
-      // 不再从外部触发 resize/refresh，让 Excalidraw 自己处理内部布局。
       await _installResizeGuard();
 
       // 设置主题
@@ -627,48 +616,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''', tag: 'setTheme');
-      // 注入工具栏坐标修正 + 诊断。
-      // 根因分析（Apple Silicon macOS 专属）：
-      //   WKWebView 的 JS 事件坐标系（clientX / getBoundingClientRect）与
-      //   CSS :hover（由 OS 层 NSTrackingArea 决定）所在的坐标系存在偏移，
-      //   导致鼠标视觉所在的工具与实际命中的工具偏左 1-2 个位置。
-      //   overscroll-behavior:none 已在 CSS 和 UserScript 中注入（阻止新回弹），
-      //   但无法修正已发生的坐标系偏移；因此加入 :hover 修正作为永久保障。
-      // 修正策略：
-      //   1. CSS :hover — 由 OS 层鼠标位置更新，代表视觉正确的工具；
-      //   2. e.target — JS 命中测试结果，可能因坐标系偏移而指向错误工具；
-      //   3. 若两者不一致，阻止原事件并对 :hover 指向的工具 dispatch click。
-      final isMacOS = defaultTargetPlatform == TargetPlatform.macOS;
+      // 注入弹性滚动防护 + 诊断
+      // 根因分析：macOS 26.x WKWebView 的 NSScrollView 发生弹性回弹（elastic bounce），
+      // 使内容视觉上偏右约 32px，但 JS 的 window.scrollX 始终报 0（弹性偏移在 native 层）。
+      // 所有 JS 坐标系（clientX、getBoundingClientRect、:hover）均在弹前坐标系中运算，
+      // 导致点击/hover 都偏左一位。
+      // 修复：CSS overscroll-behavior:none（映射 NSScrollView.elasticity=none）+
+      //       initialUserScript 在 document-start 早期生效，阻止弹性回弹产生。
       await _safeEvalJs('''
         (function() {
           setTimeout(function() {
-            function getToolbarTestId(label) {
-              var inp = label ? label.querySelector('[data-testid]') : null;
-              return inp ? (inp.getAttribute('data-testid') || '?') : '?';
-            }
-
-            function isVisibleToolbarLabel(label) {
-              if (!label) return false;
-              var cs = getComputedStyle(label);
-              var r = label.getBoundingClientRect();
-              return r.width > 0 && r.height > 0
-                && cs.display !== 'none'
-                && cs.visibility !== 'hidden'
-                && cs.opacity !== '0'
-                && cs.pointerEvents !== 'none';
-            }
-
-            function getVisibleToolbarLabels() {
-              var labels = document.querySelectorAll('.App-toolbar label.ToolIcon');
-              var visible = [];
-              for (var i = 0; i < labels.length; i++) {
-                if (isVisibleToolbarLabel(labels[i])) {
-                  visible.push(labels[i]);
-                }
-              }
-              return visible;
-            }
-
             // ===== 诊断：设备信息、弹性滚动状态和工具栏按钮位置 =====
             var overscrollVal = getComputedStyle(document.documentElement).overscrollBehavior || 'N/A';
             console.log('[PonyNotes] devicePixelRatio=' + window.devicePixelRatio
@@ -676,110 +633,54 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               + ' scrollX=' + window.scrollX + '/' + document.documentElement.scrollLeft
               + ' overscroll-behavior=' + overscrollVal);
             var labels = document.querySelectorAll('.App-toolbar label.ToolIcon');
-            var visibleCount = 0;
-            var seenVisible = Object.create(null);
-            console.log('[PonyNotes] 工具按钮DOM数量=' + labels.length);
+            console.log('[PonyNotes] 工具按钮数量=' + labels.length);
             for (var i = 0; i < labels.length; i++) {
               var r = labels[i].getBoundingClientRect();
-              var cs = getComputedStyle(labels[i]);
-              var tid = getToolbarTestId(labels[i]);
-              var visible = isVisibleToolbarLabel(labels[i]);
-              var duplicate = '';
-              if (visible) {
-                visibleCount++;
-                duplicate = seenVisible[tid] ? ' duplicate-visible' : '';
-                seenVisible[tid] = true;
-              }
-              console.log('[PonyNotes] label[' + i + '] ' + tid
-                + ' x=[' + Math.round(r.left) + ',' + Math.round(r.right) + ']'
-                + ' visible=' + visible
-                + ' display=' + cs.display
-                + ' visibility=' + cs.visibility
-                + ' opacity=' + cs.opacity
-                + ' pointer=' + cs.pointerEvents
-                + duplicate);
+              var inp = labels[i].querySelector('[data-testid]');
+              var tid = inp ? (inp.getAttribute('data-testid') || '?') : '?';
+              console.log('[PonyNotes] label[' + i + '] ' + tid + ' x=[' + Math.round(r.left) + ',' + Math.round(r.right) + ']');
             }
-            console.log('[PonyNotes] 可见工具按钮数量=' + visibleCount);
 
-            // ===== 诊断：点击拦截（60秒），三路对比 byTarget/byHover/byRect =====
+            // 强制重置任何残留弹性偏移（overscroll-behavior 阻止新弹性，此处清除旧的）
+            window.scrollTo(0, 0);
+
+            // ===== 诊断：点击拦截（60秒），含 scrollX/pageX 对比 =====
             function clickDiag(e) {
-              var allLbl = getVisibleToolbarLabels();
-              var tLabel = e.target && e.target.closest ? e.target.closest('label.ToolIcon') : null;
-              var byTarget = tLabel ? getToolbarTestId(tLabel) : 'none';
-              // byHover: CSS :hover — OS 层鼠标位置，最可靠
-              var byHover = 'none';
-              for (var h = 0; h < allLbl.length; h++) {
-                if (allLbl[h].matches(':hover')) {
-                  byHover = getToolbarTestId(allLbl[h]);
-                  break;
-                }
-              }
-              // byRect: getBoundingClientRect + clientX（与 byTarget 在同一坐标系）
+              var allLbl = document.querySelectorAll('.App-toolbar label.ToolIcon');
+              var tLabel = e.target ? e.target.closest('label.ToolIcon') : null;
+              var tInp = tLabel ? tLabel.querySelector('[data-testid]') : null;
+              var byTarget = tInp ? tInp.getAttribute('data-testid') : 'none';
               var byRect = 'none';
               for (var j = 0; j < allLbl.length; j++) {
                 var lr = allLbl[j].getBoundingClientRect();
                 if (e.clientX >= lr.left && e.clientX < lr.right && e.clientY >= lr.top && e.clientY < lr.bottom) {
-                  byRect = getToolbarTestId(allLbl[j]);
+                  var li = allLbl[j].querySelector('[data-testid]');
+                  byRect = li ? li.getAttribute('data-testid') : 'label-' + j;
                   break;
                 }
               }
-              var note = '';
-              if (byTarget !== byHover && byHover !== 'none') note += 'TARGET!=HOVER ';
-              if (byRect !== byHover && byHover !== 'none') note += 'RECT!=HOVER ';
-              if (byTarget !== byRect && byRect !== 'none') note += 'TARGET!=RECT';
+              // pageX - clientX = scrollX；若两者不等说明 JS 层有可见滚动
               console.log('[PonyNotes] CLICK clientX=' + Math.round(e.clientX)
                 + ' pageX=' + Math.round(e.pageX)
                 + ' scrollX=' + Math.round(window.scrollX)
-                + ' byTarget=' + byTarget + ' byHover=' + byHover + ' byRect=' + byRect
-                + (note ? ' *** ' + note : ''));
+                + ' byTarget=' + byTarget + ' byRect=' + byRect
+                + (byTarget !== byRect ? ' *** MISMATCH' : ''));
             }
             document.addEventListener('pointerdown', clickDiag, true);
             setTimeout(function() { document.removeEventListener('pointerdown', clickDiag, true); }, 60000);
 
-            // 监控 JS 层面可见的滚动
+            // 监控 JS 层面可见的滚动（NSScrollView 弹性偏移在此不可见，但作为保底）
             window.addEventListener('scroll', function() {
               if (window.scrollX !== 0 || window.scrollY !== 0) {
-                console.log('[PonyNotes] ⚠️ JS滚动: scrollX=' + window.scrollX + ' scrollY=' + window.scrollY);
+                console.log('[PonyNotes] ⚠️ JS滚动: scrollX=' + window.scrollX + ' scrollY=' + window.scrollY + '，已重置');
+                window.scrollTo(0, 0);
               }
             }, true);
 
-            ${isMacOS ? '''
-            // ===== macOS 专用：:hover 坐标修正（永久生效） =====
-            // 根因：Apple Silicon macOS WKWebView 中 JS 事件坐标系与视觉坐标系有偏移，
-            //       CSS :hover 由 OS 层 NSTrackingArea 决定，代表视觉正确的工具。
-            // 触发条件：toolbar 上存在 :hover（表示光标在工具栏上），
-            //           且 :hover 标签与 e.target 不一致（存在坐标偏移）。
-            // 安全性：若 :hover 与 e.target 一致，不干预（无副作用）；
-            //         若 toolbar 上无 :hover（光标不在工具栏），不干预。
-            function toolbarHoverCorrector(e) {
-              var toolbar = document.querySelector('.App-toolbar');
-              if (!toolbar) return;
-              // 通过 :hover 判断光标是否在工具栏上（不依赖 getBoundingClientRect）
-              if (!toolbar.matches(':hover')) return;
-              var lbs = toolbar.querySelectorAll('label.ToolIcon');
-              var hoveredLabel = null;
-              for (var k = 0; k < lbs.length; k++) {
-                if (lbs[k].matches(':hover')) { hoveredLabel = lbs[k]; break; }
-              }
-              if (!hoveredLabel) return;
-              var targetLabel = e.target && e.target.closest ? e.target.closest('label.ToolIcon') : null;
-              if (targetLabel === hoveredLabel) return; // 一致，无需修正
-              // 存在坐标偏移：阻止原事件，点击 :hover 所指工具
-              e.stopImmediatePropagation();
-              e.preventDefault();
-              hoveredLabel.click();
-              var hid = getToolbarTestId(hoveredLabel);
-              var tid2 = getToolbarTestId(targetLabel);
-              console.log('[PonyNotes] 坐标修正: ' + tid2 + ' -> ' + hid);
-            }
-            document.addEventListener('pointerdown', toolbarHoverCorrector, true);
-            console.log('[PonyNotes] macOS 工具栏 :hover 坐标修正已启用');
-            ''' : '// 非 macOS 平台，跳过 :hover 修正'}
-
-            console.log('[PonyNotes] 诊断已启用（60秒）');
+            console.log('[PonyNotes] 弹性滚动防护 + 诊断已启用（60秒）');
           }, 2500);
         })();
-      ''', tag: 'toolbarCorrector',);
+      ''', tag: 'overscrollFix',);
       // debug log removed
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
@@ -903,26 +804,48 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 不覆盖工具按钮的布局与事件路由。
+          /* 确保工具栏及可见按钮响应点击。
              重要：不对 .App-toolbar * 全量设置 pointer-events: auto，
              否则会误启用工具按钮内部隐藏的 <input type="radio">（.ToolIcon_type_radio）
-             的点击响应，导致鼠标点击工具时选中相邻工具（偏移一位）。
-             同样不能强制 ToolIcon 的 display/visibility/opacity/min-size，
-             Excalidraw 会通过这些属性隐藏响应式/实验性工具；在 macOS Apple Silicon
-             的 WKWebView 中，误激活的隐藏按钮会参与命中测试并造成视觉位置和实际
-             hover/点击工具偏移。 */
+             的点击响应，导致鼠标点击工具时选中相邻工具（偏移一位）。 */
           .App-toolbar {
-            background: rgba(255, 255, 255, 0.96) !important;
-            border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
-            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+            pointer-events: auto !important;
           }
-          .App-toolbar label.ToolIcon {
-            border-radius: 7px !important;
+          .App-toolbar label.ToolIcon,
+          .App-toolbar .ToolIcon__icon,
+          .App-toolbar button,
+          .App-toolbar .DropdownMenu-trigger {
+            pointer-events: auto !important;
           }
           /* 明确保持隐藏 radio/checkbox input 的 pointer-events: none */
           .App-toolbar .ToolIcon_type_radio,
           .App-toolbar .ToolIcon_type_checkbox {
             pointer-events: none !important;
+          }
+
+          .App-toolbar {
+            min-height: 49px !important;
+            padding: 7px 11px !important;
+            gap: 7px !important;
+            align-items: center !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+          }
+          
+          /* 确保工具栏按钮可以正常点击 */
+          .App-toolbar .ToolIcon,
+          .App-toolbar .Shape,
+          .App-toolbar label.ToolIcon {
+            pointer-events: auto !important;
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            min-width: 30px !important;
+            min-height: 30px !important;
+            border-radius: 7px !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
 
           .App-toolbar svg {
@@ -1202,23 +1125,56 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     );
   }
 
-  /// 外部尺寸守护已禁用。
-  /// 历史回归点：2026-05-18 引入的 ResizeObserver + refresh/resize 链路
-  /// 会反复刺激 Excalidraw 的 scrollX/scrollY 计算，导致画布漂移。
-  /// 保留方法用于兼容旧调用点，但只清理历史安装的 observer/timer。
+  /// 安装容器尺寸变化守护，确保 Excalidraw 在 Flutter 布局完成后正确知晓视口尺寸。
   Future<void> _installResizeGuard() async {
     await _safeEvalJs('''
       (function() {
-        clearTimeout(window._ponynotesResizeTimer);
+        const refreshAfterStableResize = () => {
+          const _api = window.excalidrawAPI ||
+            window.__EXCALIDRAW_API__ ||
+            window._excalidrawAPI;
+          if (_api && typeof _api.refresh === 'function') {
+            _api.refresh();
+          }
+        };
+
         if (window._ponynotesResizeObserver) {
           window._ponynotesResizeObserver.disconnect();
-          window._ponynotesResizeObserver = null;
         }
         if (window._ponynotesResizeHandler) {
           window.removeEventListener('resize', window._ponynotesResizeHandler);
-          window._ponynotesResizeHandler = null;
         }
-        console.log('[PonyNotes] external resize guard disabled');
+
+        let lastWidth = 0;
+        let lastHeight = 0;
+        const onContainerResize = () => {
+          const root = document.querySelector('.excalidraw') || document.body;
+          const rect = root.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) {
+            return;
+          }
+          if (Math.abs(rect.width - lastWidth) < 1 &&
+              Math.abs(rect.height - lastHeight) < 1) {
+            return;
+          }
+          lastWidth = rect.width;
+          lastHeight = rect.height;
+          clearTimeout(window._ponynotesResizeTimer);
+          window._ponynotesResizeTimer = setTimeout(refreshAfterStableResize, 120);
+        };
+
+        window._ponynotesResizeHandler = onContainerResize;
+        // 不再主动派发 window.resize。Excalidraw 自身已有 ResizeObserver，
+        // 这里仅在 Flutter 容器稳定后调用 refresh，避免合成 resize 反复改写 scroll。
+        window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
+        window._ponynotesResizeObserver.observe(document.body);
+        const root = document.querySelector('.excalidraw');
+        if (root) {
+          window._ponynotesResizeObserver.observe(root);
+        }
+
+        // 立即检查当前容器尺寸（初始化时 lastWidth=0 故必然触发一次）
+        onContainerResize();
       })();
     ''', tag: 'installResizeGuard');
   }
@@ -1240,13 +1196,13 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 不强制工具栏 display。Excalidraw 会按桌面/移动/实验工具状态切换
-             子工具按钮的可见性，覆盖 display 会把隐藏工具重新放回命中测试。
+          /* 确保工具栏始终显示。
              注意：只精确匹配 .App-toolbar，不使用 [class*="App-toolbar"]
              （会误匹配 App-toolbar-container 并破坏其 grid 布局），
              也不使用 [data-testid*="toolbar"]（会误匹配工具按钮内部
              隐藏的 <input type="radio"> 元素）。 */
           .App-toolbar {
+            display: flex !important;
             visibility: visible !important;
           }
         `;
@@ -1569,6 +1525,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window.pushWhiteboardData(${jsonEncode(pushPayload)});
         }
       ''', tag: 'pushWhiteboardData');
+      Log.info('[ExcalidrawWebView] ✅ JS pushWhiteboardData called: key=$key');
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] pushData failed for key $key: $e');
     }
@@ -1587,7 +1544,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
       await _improveContextMenuTextRendering();
-      await _installResizeGuard();
 
       // 设置主题
       final theme =
@@ -1662,7 +1618,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
 
     return Stack(
-      fit: StackFit.expand,
       children: [
         InAppWebView(
           // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key

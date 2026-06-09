@@ -2,25 +2,22 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:appflowy/core/notification/whiteboard_notification.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-notification/subject.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import '../../../core/notification/whiteboard_notification.dart';
 
-typedef OnWhiteboardRemoteUpdate = void Function(String key, dynamic value);
+typedef OnWhiteboardRemoteUpdate = void Function(String key, dynamic value, bool isRemote);
 
 class WhiteboardListener {
-  WhiteboardListener({
-    required this.id,
-  });
-
   final String id;
-
+  OnWhiteboardRemoteUpdate? _onRemoteUpdate;
   StreamSubscription<SubscribeObject>? _subscription;
   WhiteboardNotificationParser? _parser;
 
-  OnWhiteboardRemoteUpdate? _onRemoteUpdate;
+  WhiteboardListener({required this.id});
 
   void start({
     OnWhiteboardRemoteUpdate? onRemoteUpdate,
@@ -32,7 +29,9 @@ class WhiteboardListener {
       callback: _callback,
     );
     _subscription = RustStreamReceiver.listen(
-      (observable) => _parser?.parse(observable),
+      (observable) {
+        _parser?.parse(observable);
+      },
     );
   }
 
@@ -45,21 +44,27 @@ class WhiteboardListener {
     result.fold(
       (payloadBytes) {
         try {
-          // Rust 发送的是 JSON 字符串，不是 Protobuf 二进制。
-          // 直接解析 JSON，提取 key/value 推送给适配器。
-          final json = jsonDecode(String.fromCharCodes(payloadBytes));
-          if (json is! Map) return;
+          final json = jsonDecode(utf8.decode(payloadBytes));
+          if (json is! Map) {
+            return;
+          }
 
           final key = json['key'] as String?;
           final value = json['value'];
-          if (key == null || value == null) return;
+          final isRemote = json['is_remote'] == true;
 
-          _onRemoteUpdate?.call(key, value);
+          if (key == null || value == null) {
+            return;
+          }
+
+          _onRemoteUpdate?.call(key, value, isRemote);
         } catch (e) {
-          // 解析失败时静默忽略，避免污染日志
+          Log.error('[WhiteboardListener] Failed to parse notification: $e');
         }
       },
-      (_) {},
+      (error) {
+        Log.error('[WhiteboardListener] Notification error: ${error.msg}');
+      },
     );
   }
 

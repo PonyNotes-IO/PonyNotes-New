@@ -294,7 +294,7 @@ impl WhiteboardManager {
     // ✅ 开启数据变更订阅，监听来自云端的同步数据
     {
       let wb = arc_whiteboard.read().await;
-      wb.subscribe_changed();
+      wb.start_change_listener();
     }
 
     info!("[Whiteboard] ✅ Whiteboard {} finalized with sync_enable={}", view_id, sync_enable);

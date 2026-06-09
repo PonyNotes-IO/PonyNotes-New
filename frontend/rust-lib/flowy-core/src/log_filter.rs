@@ -68,6 +68,8 @@ pub fn create_log_filter(
   filters.push(format!("flowy_ai_pub={}", "warn"));
   filters.push(format!("flowy_storage={}", "warn"));
   filters.push(format!("flowy_sqlite_vec={}", "warn"));
+  filters.push(format!("flowy_whiteboard={}", level));
+  filters.push(format!("flowy_whiteboard_pub={}", level));
   // Enable the frontend logs. DO NOT DISABLE.
   // These logs are essential for debugging and verifying frontend behavior.
   filters.push(format!("dart_ffi={}", level));
