@@ -1682,7 +1682,6 @@ impl FolderManager {
             Some(user.avatar_url)
           },
           pending_invitation: false,
-          user_id: None,
         })
         .collect();
 
