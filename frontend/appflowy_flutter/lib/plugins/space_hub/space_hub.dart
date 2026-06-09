@@ -38,6 +38,7 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -556,7 +557,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       spaceBloc = null;
     }
     final isSidebarHidden = context.select<HomeSettingBloc, bool>(
-          (bloc) => bloc.isMenuHidden,
+      (bloc) => bloc.isMenuHidden,
     );
     final theme = AppFlowyTheme.of(context);
     // 右侧内容区域使用本地的 _selectedView 变量
@@ -635,7 +636,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                       children: [
                         if (isSidebarHidden && PlatformInfo.isMacOS) ...[
                           Padding(
-                            padding: const EdgeInsets.only(top:16,right:16),
+                            padding: const EdgeInsets.only(top: 16, right: 16),
                             child: SizedBox(
                               width: 24,
                               height: 24,
@@ -658,7 +659,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                       ],
                     ),
                   ),
-                  if (_isDocumentListVisible && !isFullWindow && !useFloatingDocumentList)
+                  if (_isDocumentListVisible &&
+                      !isFullWindow &&
+                      !useFloatingDocumentList)
                     _SpaceHubResizableDivider(
                       minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
                       maxLeftWidth: maxLeftPanelWidth,
@@ -687,7 +690,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               child: documentListPanel,
             ),
             Visibility(
-              visible: _isDocumentListVisible && !isFullWindow && useFloatingDocumentList,
+              visible: _isDocumentListVisible &&
+                  !isFullWindow &&
+                  useFloatingDocumentList,
               child: passiveFloatingDivider,
             ),
             rightPanel,
@@ -854,13 +859,11 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             child: UnifiedViewTopRightActions(
               view: view,
               viewInfoBloc: viewInfoBloc,
-              showCollaborators: FeatureFlag.syncDocument.isOn &&
-                  !isWhiteboard,
+              showCollaborators: FeatureFlag.syncDocument.isOn && !isWhiteboard,
               useFloatingSurface: true,
               // 白板视图：隐藏分享按钮，并强制图标为黑色（不影响文档/数据库视图）。
               showShareButton: !isWhiteboard,
-              iconColorOverride:
-                  isWhiteboard ? const Color(0xFF111111) : null,
+              iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
         ),
@@ -1015,13 +1018,13 @@ class _SpaceDocumentList extends StatelessWidget {
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
     final theme = AppFlowyTheme.of(context);
     final isSidebarHidden = context.select<HomeSettingBloc, bool>(
-          (bloc) => bloc.isMenuHidden,
+      (bloc) => bloc.isMenuHidden,
     );
     return Container(
       padding: EdgeInsets.only(
         left: 16,
         right: 16,
-        top:  10,
+        top: 10,
         bottom: 4,
       ),
       // decoration: BoxDecoration(
@@ -1256,14 +1259,85 @@ class _SpaceDocumentList extends StatelessWidget {
             thumbVisibility: false,
             controller: scrollController,
             child: ListView.builder(
+              controller: scrollController,
+              itemCount: childViews.length + 1,
+              itemBuilder: (context, index) {
+                if (index == childViews.length) {
+                  return AFGhostIconTextButton.primary(
+                    text: '新增笔记页', // 临时使用硬编码文本
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    size: AFButtonSize.l,
+                    onTap: () => _createNewNote(context),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    borderRadius: theme.borderRadius.s,
+                    iconBuilder: (context, isHover, disabled) => FlowySvg(
+                      FlowySvgs.view_item_add_s,
+                      size: const Size.square(16.0),
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
+                  );
+                }
+                final childView = childViews[index];
+                return ViewItem(
+                  key: ValueKey('space_hub_${childView.id}'),
+                  view: childView,
+                  spaceType:
+                      childView.spacePermission == SpacePermission.private
+                          ? FolderSpaceType.private
+                          : FolderSpaceType.public,
+                  level: 0,
+                  leftPadding: 10,
+                  onSelected: (itemContext, clickedView) {
+                    // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
+                    // 直接调用回调，不更新全局状态，避免整个页面刷新
+                    onViewSelectedWithRecent(clickedView);
+                  },
+                  isFeedback: false,
+                  shouldRenderChildren: true,
+                  shouldLoadChildViews: true,
+                  enableRightClickContext: true,
+                  isHoverEnabled: true,
+                  disableSelectedStatus: false,
+                  isTablet: PlatformInfo.isTablet,
+                  // 使用外部传入的选中状态，避免监听全局状态
+                  isExternallySelected: selectedView?.id == childView.id,
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildListFromBackend(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return FutureBuilder<List<ViewPB>>(
+      future: _loadChildViews(spaceView.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator.adaptive());
+        }
+
+        final childViews = snapshot.data ?? const <ViewPB>[];
+
+        return RawScrollbar(
+          thickness: 0.5,
+          radius: const Radius.circular(4),
+          thumbVisibility: false,
+          controller: scrollController,
+          child: ListView.builder(
             controller: scrollController,
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
                 return AFGhostIconTextButton.primary(
-                  text: '新增笔记页', // 临时使用硬编码文本
+                  text: '新增日记页', // 临时使用硬编码文本
                   mainAxisAlignment: MainAxisAlignment.start,
-                  size: AFButtonSize.l,
+                  size: AFButtonSize.xl,
                   onTap: () => _createNewNote(context),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1303,76 +1377,6 @@ class _SpaceDocumentList extends StatelessWidget {
               );
             },
           ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildListFromBackend(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return FutureBuilder<List<ViewPB>>(
-      future: _loadChildViews(spaceView.id),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator.adaptive());
-        }
-
-        final childViews = snapshot.data ?? const <ViewPB>[];
-
-        return RawScrollbar(
-          thickness: 0.5,
-          radius: const Radius.circular(4),
-          thumbVisibility: false,
-          controller: scrollController,
-          child: ListView.builder(
-          controller: scrollController,
-          itemCount: childViews.length + 1,
-          itemBuilder: (context, index) {
-            if (index == childViews.length) {
-              return AFGhostIconTextButton.primary(
-                text: '新增日记页', // 临时使用硬编码文本
-                mainAxisAlignment: MainAxisAlignment.start,
-                size: AFButtonSize.xl,
-                onTap: () => _createNewNote(context),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                borderRadius: theme.borderRadius.s,
-                iconBuilder: (context, isHover, disabled) => FlowySvg(
-                  FlowySvgs.view_item_add_s,
-                  size: const Size.square(16.0),
-                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                ),
-              );
-            }
-            final childView = childViews[index];
-            return ViewItem(
-              key: ValueKey('space_hub_${childView.id}'),
-              view: childView,
-              spaceType: childView.spacePermission == SpacePermission.private
-                  ? FolderSpaceType.private
-                  : FolderSpaceType.public,
-              level: 0,
-              leftPadding: 10,
-              onSelected: (itemContext, clickedView) {
-                // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
-                // 直接调用回调，不更新全局状态，避免整个页面刷新
-                onViewSelectedWithRecent(clickedView);
-              },
-              isFeedback: false,
-              shouldRenderChildren: true,
-              shouldLoadChildViews: true,
-              enableRightClickContext: true,
-              isHoverEnabled: true,
-              disableSelectedStatus: false,
-              isTablet: PlatformInfo.isTablet,
-              // 使用外部传入的选中状态，避免监听全局状态
-              isExternallySelected: selectedView?.id == childView.id,
-            );
-          },
-        ),
         );
       },
     );
@@ -1455,14 +1459,16 @@ class _SpaceHubResizableDivider extends StatefulWidget {
   final ValueChanged<double> onResize;
 
   @override
-  State<_SpaceHubResizableDivider> createState() => _SpaceHubResizableDividerState();
+  State<_SpaceHubResizableDivider> createState() =>
+      _SpaceHubResizableDividerState();
 }
 
 class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
   bool _isHover = false;
   bool _isDragging = false;
   Timer? _showHoverTimer;
-  final GlobalKey _dividerKey = GlobalKey();
+  double? _dragStartGlobalX;
+  double? _dragStartWidth;
 
   @override
   void dispose() {
@@ -1470,80 +1476,72 @@ class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
     super.dispose();
   }
 
-  void _handleDragUpdate(double deltaX) {
-    final newWidth = widget.currentLeftWidth + deltaX;
-    if (newWidth >= widget.minLeftWidth && newWidth <= widget.maxLeftWidth) {
-      widget.onResize(newWidth);
-    }
+  void _handleDragStart(DragStartDetails details) {
+    _showHoverTimer?.cancel();
+    setState(() => _isDragging = true);
+    _dragStartGlobalX = details.globalPosition.dx;
+    _dragStartWidth = widget.currentLeftWidth;
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    final dragStartGlobalX = _dragStartGlobalX ?? details.globalPosition.dx;
+    final dragStartWidth = _dragStartWidth ?? widget.currentLeftWidth;
+    final newWidth =
+        (dragStartWidth + (details.globalPosition.dx - dragStartGlobalX))
+            .clamp(widget.minLeftWidth, widget.maxLeftWidth)
+            .toDouble();
+    widget.onResize(newWidth);
   }
 
   void _endDrag() {
     setState(() => _isDragging = false);
+    _dragStartGlobalX = null;
+    _dragStartWidth = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      key: _dividerKey,
-      children: [
-        MouseRegion(
-          cursor: SystemMouseCursors.resizeLeftRight,
-          onEnter: (_) {
-            _showHoverTimer = Timer(const Duration(milliseconds: 100), () {
-              setState(() => _isHover = true);
-            });
-          },
-          onExit: (_) {
-            _showHoverTimer?.cancel();
-            setState(() => _isHover = false);
-          },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onHorizontalDragStart: (_) {
-              setState(() => _isDragging = true);
-            },
-            onHorizontalDragUpdate: (details) {
-              _handleDragUpdate(details.delta.dx);
-            },
-            onHorizontalDragEnd: (_) => _endDrag(),
-            onHorizontalDragCancel: () => _endDrag(),
-            child: Container(
-              width: HomeSizes.spaceHubDividerWidth,
-              color: Colors.transparent,
-              child: Center(
-                child: TweenAnimationBuilder(
-                  tween: ColorTween(
-                    end: _isHover || _isDragging
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).dividerColor.withValues(alpha: 0.9),
-                  ),
-                  duration: const Duration(milliseconds: 50),
-                  builder: (context, color, child) {
-                    return Container(
-                      color: color,
-                      width: 1.6,
-                    );
-                  },
-                ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      onEnter: (_) {
+        _showHoverTimer = Timer(const Duration(milliseconds: 100), () {
+          if (mounted) {
+            setState(() => _isHover = true);
+          }
+        });
+      },
+      onExit: (_) {
+        _showHoverTimer?.cancel();
+        setState(() => _isHover = false);
+      },
+      child: GestureDetector(
+        dragStartBehavior: DragStartBehavior.down,
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: _handleDragStart,
+        onHorizontalDragUpdate: _handleDragUpdate,
+        onHorizontalDragEnd: (_) => _endDrag(),
+        onHorizontalDragCancel: _endDrag,
+        child: Container(
+          width: HomeSizes.spaceHubDividerWidth,
+          color: Colors.transparent,
+          child: Center(
+            child: TweenAnimationBuilder(
+              tween: ColorTween(
+                end: _isHover || _isDragging
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).dividerColor.withValues(alpha: 0.9),
               ),
+              duration: const Duration(milliseconds: 50),
+              builder: (context, color, child) {
+                return Container(
+                  color: color,
+                  width: 1.6,
+                );
+              },
             ),
           ),
         ),
-        if (_isDragging)
-          Positioned.fill(
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerMove: (event) {
-                _handleDragUpdate(event.delta.dx);
-              },
-              onPointerUp: (_) => _endDrag(),
-              onPointerCancel: (_) => _endDrag(),
-              child: Container(
-                color: Colors.transparent,
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }
