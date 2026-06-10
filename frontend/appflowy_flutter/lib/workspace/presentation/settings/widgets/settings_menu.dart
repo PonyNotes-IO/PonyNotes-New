@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
@@ -225,24 +224,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
               changeSelectedPage: widget.changeSelectedPage,
             ),
 
-            // Keep backend/site capability intact, but hide the menu entry.
-            // 保留站点能力代码，仅隐藏设置菜单入口，避免牵动发布链路。
-            if (!isQuickEntryUser &&
-                FeatureFlag.planBilling.isOn &&
-                widget.isBillingEnabled) ...[
-              SettingsMenuElement(
-                page: SettingsPage.plan,
-                selectedPage: widget.currentPage,
-                label: LocaleKeys.settings_planPage_menuLabel.tr(),
-                changeSelectedPage: widget.changeSelectedPage,
-              ),
-              SettingsMenuElement(
-                page: SettingsPage.billing,
-                selectedPage: widget.currentPage,
-                label: LocaleKeys.settings_billingPage_menuLabel.tr(),
-                changeSelectedPage: widget.changeSelectedPage,
-              ),
-            ],
+            // PonyNotes（2026-06-09）：彻底移除"付费计划(Plan)/账单"两个设置菜单入口
+            // （产品决定不要）。仅删除这两个菜单项，不动 planBilling 开关、侧栏提示条、
+            // 移动端入口与后端/站点能力，确保不影响其它任何功能。
 
             // 关于小马按钮
             SettingsMenuElement(
