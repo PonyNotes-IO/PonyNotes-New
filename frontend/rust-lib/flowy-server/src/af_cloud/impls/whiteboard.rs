@@ -23,7 +23,7 @@ impl<T> WhiteboardCloudService for AFCloudWhiteboardCloudServiceImpl<T>
 where
   T: AFServer,
 {
-  #[instrument(level = "debug", skip_all, fields(whiteboard_id = %whiteboard_id))]
+  #[instrument(level = "debug", skip_all, fields(whiteboard_id = %whiteboard_id, collab_action = "get_doc_state"))]
   async fn get_whiteboard_doc_state(
     &self,
     whiteboard_id: &Uuid,
@@ -47,9 +47,10 @@ where
     check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
-      format!("get whiteboard doc state:{}", whiteboard_id),
+      format!("[WBCollab] get whiteboard doc state:{}", whiteboard_id),
     )?;
 
+    tracing::info!("[WBCollab] ✅ get_whiteboard_doc_state success, bytes={}", doc_state.len());
     Ok(doc_state)
   }
 
@@ -63,7 +64,7 @@ where
     Ok(vec![])
   }
 
-  #[instrument(level = "debug", skip_all)]
+  #[instrument(level = "debug", skip_all, fields(whiteboard_id = %whiteboard_id, collab_action = "get_data"))]
   async fn get_whiteboard_data(
     &self,
     whiteboard_id: &Uuid,
@@ -74,6 +75,7 @@ where
     Ok(None)
   }
 
+  #[instrument(level = "debug", skip_all, fields(whiteboard_id = %whiteboard_id, collab_action = "create_collab"))]
   async fn create_whiteboard_collab(
     &self,
     workspace_id: &Uuid,
@@ -90,6 +92,7 @@ where
       collab_type: CollabType::Document,
     };
     self.inner.try_get_client()?.create_collab(params).await?;
+    tracing::info!("[WBCollab] ✅ create_whiteboard_collab success for whiteboard_id={}", whiteboard_id);
     Ok(())
   }
 }

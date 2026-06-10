@@ -84,8 +84,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     // 生成全局唯一的InAppWebView实例ID
     _globalInAppWebViewInstanceCounter++;
     _inAppWebViewInstanceId = _globalInAppWebViewInstanceCounter;
-    Log.debug(
-        '🌐 [ExcalidrawWebView] Created with global instance ID: $_inAppWebViewInstanceId, viewId: ${widget.viewId}');
+        Log.debug('🌐 [WBCollab] Created with global instance ID: $_inAppWebViewInstanceId, viewId: ${widget.viewId}');
 
     _initializeSettings();
     _loadExcalidrawHTML();
@@ -253,7 +252,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         handlerName: "initData",
         callback: (args) async {
           Log.info(
-              '[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
+              '[WBCollab][ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
 
           try {
             final data = widget.initialDataLoaded || widget.deferInitialDataLoad
@@ -263,7 +262,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   );
 
             Log.info(
-                '[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
+                '[WBCollab][ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
 
             // ✅ 关键修复：标准化数据键名
             // 后端可能返回 localStorage 原始键名（excalidraw, excalidraw-state）
@@ -275,10 +274,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               final elements = normalizedData['elements'];
               if (elements is List) {
                 Log.info(
-                    '[ExcalidrawWebView] 📝 Elements count: ${elements.length}');
+                    '[WBCollab][ExcalidrawWebView] 📝 Elements count: ${elements.length}');
               } else if (elements is String) {
                 Log.info(
-                    '[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
+                    '[WBCollab][ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
               }
             }
             // 不在 initData 阶段同步下载图片，避免白板首屏被大量 base64 转换阻塞。
@@ -286,7 +285,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             if (normalizedData.containsKey('files') &&
                 normalizedData['files'] is Map) {
               final files = normalizedData['files'] as Map<String, dynamic>;
-              Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
+              Log.info('[WBCollab][ExcalidrawWebView] 📸 Files count: ${files.length}');
             }
 
             // 设置数据到 LocalStorage
@@ -322,8 +321,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               setCount++;
             }
 
-            Log.info(
-                '[ExcalidrawWebView] ✅ Set $setCount items to localStorage');
+        Log.info(
+            '[WBCollab][ExcalidrawWebView] ✅ Set $setCount items to localStorage');
 
             // ✅ 标记初始化完成
             if (!_initializationCompleter!.isCompleted) {
@@ -364,7 +363,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   final filesMap = jsonDecode(value);
                   if (filesMap is Map) {
                     Log.debug(
-                        '📸 [ExcalidrawWebView] Intercepted files update, count: ${filesMap.length}');
+                        '[WBCollab][ExcalidrawWebView] 📸 Intercepted files update, count: ${filesMap.length}');
                     widget.onDataChanged?.call('update', {'files': filesMap});
                     return;
                   }
@@ -441,7 +440,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           if (cloudFiles is! List) return [];
 
           Log.info(
-              '[ExcalidrawWebView] 📸 downloadCloudImages: ${cloudFiles.length} files to download');
+              '[WBCollab][ExcalidrawWebView] 📸 downloadCloudImages: ${cloudFiles.length} files to download');
 
           final results = <Map<String, dynamic>>[];
           for (final item in cloudFiles) {
@@ -454,7 +453,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
             try {
               Log.info(
-                  '[ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
+                  '[WBCollab][ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
 
               // 使用 HTTP 下载图片（带认证）
               final imageBytes = await _downloadCloudImage(url);
@@ -1525,9 +1524,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window.pushWhiteboardData(${jsonEncode(pushPayload)});
         }
       ''', tag: 'pushWhiteboardData');
-      Log.info('[ExcalidrawWebView] ✅ JS pushWhiteboardData called: key=$key');
+      Log.info('[WBCollab][ExcalidrawWebView] ✅ JS pushWhiteboardData called: key=$key');
     } catch (e) {
-      Log.error('❌ [ExcalidrawWebView] pushData failed for key $key: $e');
+      Log.error('[WBCollab][ExcalidrawWebView] ❌ pushData failed for key $key: $e');
     }
   }
 

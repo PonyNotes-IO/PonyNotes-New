@@ -22,7 +22,7 @@ class WhiteboardDataService {
     final userId = userProfileResult.fold(
       (profile) => profile.id.toString(),
       (error) {
-        Log.error('[Whiteboard] Failed to get user profile: ${error.msg}');
+        Log.error('[WBCollab][WhiteboardDataService] Failed to get user profile: ${error.msg}');
         return '';
       },
     );
@@ -34,7 +34,7 @@ class WhiteboardDataService {
     final directory = Directory(whiteboardPath);
     if (!directory.existsSync()) {
       await directory.create(recursive: true);
-      Log.info('[Whiteboard] Created directory: $whiteboardPath');
+      Log.info('[WBCollab][WhiteboardDataService] Created directory: $whiteboardPath');
     }
 
     return whiteboardPath;
@@ -58,7 +58,7 @@ class WhiteboardDataService {
 
       return await WhiteboardEventCreateWhiteboard(payload).send();
     } catch (e, stackTrace) {
-      Log.error('[Whiteboard] Exception in createWhiteboard: $e\n$stackTrace');
+      Log.error('[WBCollab][WhiteboardDataService] Exception in createWhiteboard: $e\n$stackTrace');
       return FlowyResult.failure(
         FlowyError(msg: 'Failed to create whiteboard: $e'),
       );
@@ -73,7 +73,7 @@ class WhiteboardDataService {
       final result = await WhiteboardEventOpenWhiteboard(payload).send();
       return result;
     } catch (e, stackTrace) {
-      Log.error('[Whiteboard] Exception in openWhiteboard: $e\n$stackTrace');
+      Log.error('[WBCollab][WhiteboardDataService] Exception in openWhiteboard: $e\n$stackTrace');
       return FlowyResult.failure(
         FlowyError(msg: 'Failed to open whiteboard: $e'),
       );
@@ -112,7 +112,7 @@ class WhiteboardDataService {
           );
           data['files'] = processedFiles;
         } catch (e) {
-          Log.warn('[Whiteboard] Image upload failed: $e');
+          Log.warn('[WBCollab][WhiteboardDataService] Image upload failed: $e');
         }
       }
     }
@@ -120,7 +120,7 @@ class WhiteboardDataService {
     final collabData = _stripDataURLsForCollab(data);
     final collabPayloadBytes = _estimatePayloadBytes(collabData);
 
-    Log.info('[Whiteboard] Saving whiteboard to collab: $viewId');
+    Log.info('[WBCollab][WhiteboardDataService] Saving whiteboard to collab: $viewId');
     final collabSuccess = await _saveToCollab(
       viewId,
       jsonEncode({'type': 'update', 'data': jsonEncode(collabData)}),
@@ -145,7 +145,7 @@ class WhiteboardDataService {
       return true;
     }
 
-    Log.warn('[Whiteboard] Collab save failed, falling back to file system');
+    Log.warn('[WBCollab][WhiteboardDataService] ⚠️ Collab save failed, falling back to file system');
     logDiagnosticEvent(
       'WhiteboardLoad',
       'collab_sync_fallback',
@@ -220,20 +220,20 @@ class WhiteboardDataService {
     Map<String, dynamic> data,
   ) async {
     Log.info(
-        '[Whiteboard] =====================================================');
-    Log.info('[Whiteboard] deleteWhiteboardData() called');
-    Log.info('[Whiteboard] ViewID: $viewId');
+        '[WBCollab][WhiteboardDataService] =====================================================');
+    Log.info('[WBCollab][WhiteboardDataService] deleteWhiteboardData() called');
+    Log.info('[WBCollab][WhiteboardDataService] ViewID: $viewId');
     Log.info(
-        '[Whiteboard] =====================================================');
+        '[WBCollab][WhiteboardDataService] =====================================================');
 
-    Log.info('[Whiteboard] Step 1: Trying to save to Collab backend...');
+    Log.info('[WBCollab][WhiteboardDataService] Step 1: Trying to save to Collab backend...');
     final collabSuccess = await _saveToCollab(
       viewId,
       jsonEncode({'type': 'delete', 'data': jsonEncode(data)}),
     );
     if (collabSuccess) {
       Log.info(
-          '[Whiteboard] Saved delete event to Collab successfully: $viewId');
+          '[WBCollab][WhiteboardDataService] Saved delete event to Collab successfully: $viewId');
       return true;
     }
 
@@ -251,12 +251,12 @@ class WhiteboardDataService {
       return result.fold(
         (_) => true,
         (error) {
-          Log.error('[Whiteboard] _saveToCollab failed: ${error.msg}');
+          Log.error('[WBCollab][WhiteboardDataService] _saveToCollab failed: ${error.msg}');
           return false;
         },
       );
     } catch (e, stackTrace) {
-      Log.error('[Whiteboard] _saveToCollab exception: $e\n$stackTrace');
+      Log.error('[WBCollab][WhiteboardDataService] _saveToCollab exception: $e\n$stackTrace');
       return false;
     }
   }
@@ -276,10 +276,10 @@ class WhiteboardDataService {
         flush: true,
       );
 
-      Log.info('[Whiteboard] Saved to file: $viewId');
+      Log.info('[WBCollab][WhiteboardDataService] Saved to file: $viewId');
       return true;
     } catch (e) {
-      Log.error('[Whiteboard] Failed to save to file: $e');
+      Log.error('[WBCollab][WhiteboardDataService] Failed to save to file: $e');
       return false;
     }
   }
@@ -324,7 +324,7 @@ class WhiteboardDataService {
       return collabData;
     }
 
-    print('[Whiteboard] Collab not found, trying file system');
+    print('[WBCollab][WhiteboardDataService] Collab not found, trying file system');
     final fileData = await _loadFromFile(viewId);
 
     await _saveToCollab(
@@ -378,17 +378,17 @@ class WhiteboardDataService {
       final file = File(filePath);
 
       if (!file.existsSync()) {
-        Log.info('[Whiteboard] File not found, returning empty: $viewId');
+        Log.info('[WBCollab][WhiteboardDataService] File not found, returning empty: $viewId');
         return _createEmptyWhiteboardData();
       }
 
       final content = await file.readAsString();
       final data = jsonDecode(content) as Map<String, dynamic>;
 
-      Log.info('[Whiteboard] Loaded from file: $viewId');
+      Log.info('[WBCollab][WhiteboardDataService] Loaded from file: $viewId');
       return data;
     } catch (e) {
-      Log.error('[Whiteboard] Failed to load from file: $e');
+      Log.error('[WBCollab][WhiteboardDataService] Failed to load from file: $e');
       return _createEmptyWhiteboardData();
     }
   }
@@ -400,7 +400,7 @@ class WhiteboardDataService {
       final payload = ViewIdPB()..value = viewId;
       return await WhiteboardEventCloseWhiteboard(payload).send();
     } catch (e, stackTrace) {
-      Log.error('[Whiteboard] Exception in closeWhiteboard: $e\n$stackTrace');
+      Log.error('[WBCollab][WhiteboardDataService] Exception in closeWhiteboard: $e\n$stackTrace');
       return FlowyResult.failure(
         FlowyError(msg: 'Failed to close whiteboard: $e'),
       );
@@ -415,7 +415,7 @@ class WhiteboardDataService {
       final success = result.fold(
         (_) => true,
         (error) {
-          Log.error('[Whiteboard] Failed to delete from Collab: ${error.msg}');
+          Log.error('[WBCollab][WhiteboardDataService] Failed to delete from Collab: ${error.msg}');
           return false;
         },
       );
@@ -425,12 +425,12 @@ class WhiteboardDataService {
 
       if (file.existsSync()) {
         await file.delete();
-        Log.info('[Whiteboard] File data deleted: $viewId');
+        Log.info('[WBCollab][WhiteboardDataService] File data deleted: $viewId');
       }
 
       return success;
     } catch (e) {
-      Log.error('[Whiteboard] Failed to delete whiteboard data: $e');
+      Log.error('[WBCollab][WhiteboardDataService] Failed to delete whiteboard data: $e');
       return false;
     }
   }

@@ -27,7 +27,7 @@ class WhiteboardCollabAdapter {
     _service = WhiteboardDataService();
     _listener = WhiteboardListener(id: viewId);
     _listener.start(onRemoteUpdate: _onRemoteUpdate);
-    Log.info('[WhiteboardCollabAdapter] Listener started for view: $viewId');
+    Log.info('[WBCollab][WhiteboardCollabAdapter] Listener started for view: $viewId');
   }
 
   final String viewId;
@@ -219,7 +219,7 @@ class WhiteboardCollabAdapter {
             existingData.containsKey('dataURL')) {
           newFileMap['dataURL'] = existingData['dataURL'];
           Log.info(
-              '[WhiteboardCollabAdapter] 📸 Preserving local dataURL for $fileId during merge');
+              '[WBCollab][WhiteboardCollabAdapter] 📸 Preserving local dataURL for $fileId during merge');
         }
 
         result[fileId] = newFileMap;
@@ -257,10 +257,10 @@ class WhiteboardCollabAdapter {
         }
 
         Log.info(
-            '[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
+            '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
         if (_fullData.containsKey('files')) {
           final files = _fullData['files'] as Map<String, dynamic>;
-          Log.info('[WhiteboardCollabAdapter] Files count: ${files.length}');
+          Log.info('[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
         }
 
         success = await _service.saveWhiteboardData(viewId, _fullData);
@@ -272,15 +272,15 @@ class WhiteboardCollabAdapter {
         _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
-        Log.warn('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+        Log.warn('[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
-        Log.info('[WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
+        Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
       }
     } catch (e) {
       _hasUnsavedChanges = true;
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
-      Log.error('[WhiteboardCollabAdapter] ❌ Sync error: $e');
+      Log.error('[WBCollab][WhiteboardCollabAdapter] ❌ Sync error: $e');
     } finally {
       _isSyncing = false;
       _syncData.clear();
@@ -323,14 +323,12 @@ class WhiteboardCollabAdapter {
     if (_disposed) return;
 
     try {
-      Log.info(
-        '[WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote',
-      );
+      Log.info('[WBCollab][WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote');
 
       // 本地写入回声不再推回 WebView，避免自触发循环
       if (!isRemote) {
         Log.debug(
-          '[WhiteboardCollabAdapter] Skip local echo notification for key=$key',
+          '[WBCollab][WhiteboardCollabAdapter] Skip local echo notification for key=$key',
         );
         return;
       }
@@ -351,7 +349,7 @@ class WhiteboardCollabAdapter {
       } else {
         if (_deepEquality.equals(_fullData[key], parsedValue)) {
           Log.debug(
-              '[WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
+              '[WBCollab][WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
           return;
         }
         _fullData[key] = parsedValue;
@@ -359,10 +357,10 @@ class WhiteboardCollabAdapter {
 
       // 通知 WebView 更新
       onDataChanged({key: parsedValue});
-      Log.info('[WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
+      Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
     } catch (e) {
       Log.error(
-          '[WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');
+          '[WBCollab][WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');
     }
   }
 

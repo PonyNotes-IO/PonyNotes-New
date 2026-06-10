@@ -2,7 +2,9 @@ use crate::entities::WhiteboardData;
 use crate::notification::{whiteboard_notification_send_json, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
+use collab::preclude::{Collab, CollabBuilder, DeepObservable, Map, MapRef};
+use collab::preclude::Subscription;
+use collab::preclude::Event;
 use collab::util::MapExt;
 use collab_entity::EncodedCollab;
 use collab_entity::define::DOCUMENT_ROOT;
@@ -10,7 +12,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
-use tracing::trace;
+use tracing::info;
 
 /// 通知类型：数据变更
 #[derive(Debug, Clone)]
@@ -29,6 +31,9 @@ pub struct Whiteboard {
   data: MapRef,
   /// 变更通知 channel
   notifier: broadcast::Sender<WhiteboardChanged>,
+  /// observe_deep subscription，用于取消订阅
+  #[allow(dead_code)]
+  _subscription: Option<Subscription>,
 }
 
 impl Whiteboard {
@@ -48,23 +53,70 @@ impl Whiteboard {
       collab,
       data,
       notifier,
+      _subscription: None,
     })
   }
 
   /// 从现有 Collab 对象打开白板
+  ///
+  /// 通过 yrs 原生的 observe_deep 监听所有 collab 变更，
+  /// 在变更发生时通过事务是否有 origin 来区分本地/远程。
   pub fn open(collab: Collab) -> Result<Self, Error> {
     let txn = collab.context.transact();
-    let data = collab
+    let data: MapRef = collab
       .data
       .get_with_txn(&txn, Self::DATA_KEY)
       .ok_or_else(|| anyhow!("Whiteboard data not found"))?;
     drop(txn);
 
     let (notifier, _) = broadcast::channel(100);
+
+    let data_clone = data.clone();
+    let notifier_clone = notifier.clone();
+
+    // observe_deep 回调签名：(txn, events)
+    // 有 origin 的事务是远程推送的变更
+    let subscription = data.observe_deep(move |txn, events| {
+      for event in events.iter() {
+        // 通过事务是否有 origin 来判断是否为远程变更
+        // 有 origin -> 远程变更（云端推送）
+        // 无 origin -> 本地变更
+        let origin = txn.origin();
+        let is_remote = origin.is_some();
+
+        // 匹配 Event::Map 事件并获取键变更
+        if let Event::Map(map_event) = event {
+          let key_changes = map_event.keys(txn);
+          for (key, change) in key_changes.iter() {
+            let key_str = key.to_string();
+
+            let event_json = serde_json::json!({
+              "key": key_str,
+              "is_remote": is_remote,
+              "change_type": format!("{:?}", change),
+            }).to_string();
+
+            info!(
+              "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}",
+              key_str, is_remote, change
+            );
+
+            let changed = WhiteboardChanged {
+              key: key_str,
+              value: event_json,
+              is_remote,
+            };
+            let _ = notifier_clone.send(changed);
+          }
+        }
+      }
+    });
+
     Ok(Self {
       collab,
       data,
       notifier,
+      _subscription: Some(subscription),
     })
   }
 
@@ -83,7 +135,7 @@ impl Whiteboard {
       self.data.insert(&mut txn, k.as_str(), v.as_str());
     }
 
-    trace!("[Whiteboard] Data updated successfully and transaction committed");
+    tracing::trace!("[WBCollab] Data updated successfully and transaction committed");
     Ok(())
   }
 
@@ -91,14 +143,12 @@ impl Whiteboard {
   /// 前端发送格式：{"type": "update", "data": "{\"elements\":..., \"files\":..., \"appState\":...}"}
   /// 这里的 data 字段是 JSON 字符串，需要二次解析
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
-    tracing::trace!("[Whiteboard] update_from_json called, len: {}", json_str.len());
+    tracing::trace!("[WBCollab] update_from_json called, len: {}", json_str.len());
 
-    // ✅ 解析外层 JSON
     #[derive(serde::Deserialize)]
     struct UpdateWrapper {
       #[serde(default)]
       r#type: String,
-      // data 字段可能是字符串（嵌套JSON）或直接是对象
       #[serde(default)]
       data: serde_json::Value,
     }
@@ -106,17 +156,12 @@ impl Whiteboard {
     let wrapper: UpdateWrapper = serde_json::from_str(json_str)
       .map_err(|e| anyhow!("Failed to parse wrapper JSON: {}", e))?;
 
-    // ✅ 提取实际数据：如果是字符串则二次解析，否则直接使用
     let data_map: HashMap<String, serde_json::Value> = match wrapper.data {
       serde_json::Value::String(data_str) => {
-        // data 是嵌套的 JSON 字符串，需要解析
         serde_json::from_str(&data_str)
           .map_err(|e| anyhow!("Failed to parse nested data JSON: {}", e))?
       },
-      serde_json::Value::Object(map) => map
-        .into_iter()
-        .map(|(k, v)| (k, v))
-        .collect(),
+      serde_json::Value::Object(map) => map.into_iter().collect(),
       _ => HashMap::new(),
     };
 
@@ -128,34 +173,17 @@ impl Whiteboard {
             .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
           self.data.insert(&mut txn, key.as_str(), json.as_str());
         }
-        tracing::trace!("[Whiteboard] Stored {} fields from update", data_map.len());
+        tracing::trace!("[WBCollab] Stored {} fields from update", data_map.len());
       },
       "delete" => {
         for (key, _) in data_map.iter() {
           self.data.remove(&mut txn, key.as_str());
         }
-        tracing::trace!("[Whiteboard] Deleted {} fields", data_map.len());
+        tracing::trace!("[WBCollab] Deleted {} fields", data_map.len());
       },
       _ => {
-        tracing::warn!("[Whiteboard] Unknown update type: {}", wrapper.r#type);
+        tracing::warn!("[WBCollab] Unknown update type: {}", wrapper.r#type);
       },
-    }
-
-    // ✅ 广播所有变更给订阅者（手动通知模式）
-    // 不依赖 observe_deep（它只监听远程 sync 事件），改为在事务提交后主动通知
-    for (key, value) in data_map.iter() {
-      let event_json = serde_json::json!({
-        "key": key.to_string(),
-        "value": value.to_string(),
-        "is_remote": false,
-      })
-      .to_string();
-
-      let _ = self.notifier.send(WhiteboardChanged {
-        key: key.clone(),
-        value: event_json,
-        is_remote: false,
-      });
     }
 
     Ok(())
@@ -210,6 +238,10 @@ impl Whiteboard {
 
     tokio::spawn(async move {
       while let Ok(changed) = rx.recv().await {
+        info!(
+          "[WBCollab] Broadcasting change: key={}, is_remote={}",
+          changed.key, changed.is_remote
+        );
         whiteboard_notification_send_json(
           view_id.clone(),
           WhiteboardNotification::DidReceiveUpdate,
@@ -235,13 +267,13 @@ impl std::borrow::Borrow<Collab> for Whiteboard {
 /// 从 WhiteboardData 创建 EncodedCollab
 pub fn whiteboard_data_to_encoded_collab(
   uid: i64,
-  object_id: &str, // 传进来的是 view_id
+  object_id: &str,
   device_id: &str,
   data: Option<WhiteboardData>,
 ) -> Result<EncodedCollab, Error> {
   tracing::info!(
-    "[Whiteboard] 🔵 whiteboard_data_to_encoded_collab called for object_id: {}, uid: {}, device_id: {}",
-    object_id, uid, device_id
+    "[WBCollab] whiteboard_data_to_encoded_collab: object_id={}, uid={}",
+    object_id, uid
   );
 
   if device_id.is_empty() {
@@ -252,38 +284,13 @@ pub fn whiteboard_data_to_encoded_collab(
     .with_device_id(device_id)
     .build()
     .map_err(|e| anyhow!("Failed to create collab: {}", e))?;
-  tracing::info!(
-    "[Whiteboard] ✅ Collab builder created for object_id: {}",
-    object_id
-  );
 
   let whiteboard = match data {
-    Some(data) => {
-      tracing::info!(
-        "[Whiteboard] 🔵 Creating whiteboard with data for object_id: {}",
-        object_id
-      );
-      Whiteboard::create_with_data(collab, data)?
-    },
-    None => {
-      tracing::info!(
-        "[Whiteboard] 🔵 Creating empty whiteboard for object_id: {}",
-        object_id
-      );
-      Whiteboard::create(collab)?
-    },
+    Some(data) => Whiteboard::create_with_data(collab, data)?,
+    None => Whiteboard::create(collab)?,
   };
-  tracing::info!(
-    "[Whiteboard] ✅ Whiteboard created for object_id: {}",
-    object_id
-  );
 
-  let encoded = whiteboard.encode_collab()?;
-  tracing::info!(
-    "[Whiteboard] ✅ Whiteboard encoded for object_id: {}",
-    object_id
-  );
-  Ok(encoded)
+  whiteboard.encode_collab()
 }
 
 #[cfg(test)]
@@ -311,10 +318,7 @@ mod tests {
       .unwrap();
 
     let data = whiteboard.get_data().unwrap();
-
     dbg!(data);
-    // assert!(data.elements.is_empty());
-    // assert!(data.files.is_empty());
   }
 
   #[test]
@@ -326,10 +330,8 @@ mod tests {
     let mut whiteboard = Whiteboard::create(collab).unwrap();
 
     let test_data = WhiteboardData::default();
-
     whiteboard.update_from_data(&test_data).unwrap();
     let retrieved_data = whiteboard.get_data().unwrap();
-
-    // assert_eq!(retrieved_data.elements.len(), test_data.elements.len());
+    assert_eq!(retrieved_data.0.len(), test_data.0.len());
   }
 }

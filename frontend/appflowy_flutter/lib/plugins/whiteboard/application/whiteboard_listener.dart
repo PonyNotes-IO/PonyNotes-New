@@ -69,11 +69,11 @@ class WhiteboardListener {
 
           _onRemoteUpdate?.call(key, value, isRemote);
         } catch (e) {
-          Log.debug('[WhiteboardListener] Failed to parse notification: $e');
+          Log.error('[WBCollab][WhiteboardListener] Failed to parse notification: $e');
         }
       },
       (error) {
-        Log.error('[WhiteboardListener] Notification error: ${error.msg}');
+        Log.error('[WBCollab][WhiteboardListener] Notification error: ${error.msg}');
       },
     );
   }
