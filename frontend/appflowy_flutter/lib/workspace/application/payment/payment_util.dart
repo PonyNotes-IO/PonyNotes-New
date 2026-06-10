@@ -11,14 +11,12 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 支付方式枚举
 enum PaymentMethod {
   applePay,
   wechatPay,
   alipay,
 }
 
-/// 支付结果
 class PaymentResult {
   final bool success;
   final String message;
@@ -39,14 +37,7 @@ class PaymentResult {
   }
 }
 
-/// 支持的平台与支付方式管理
 class PaymentPlatformSupport {
-  /// 根据当前平台返回可用支付方式
-  ///
-  /// 约定：
-  /// - macOS：只使用 Apple Pay
-  /// - Windows：使用 微信支付 + 支付宝支付
-  /// - 其他平台：暂不开放（返回空列表）
   static List<PaymentMethod> getAvailableMethods() {
     if (Platform.isMacOS) {
       return [PaymentMethod.applePay];
@@ -81,34 +72,19 @@ class PaymentPlatformSupport {
       getAvailableMethods().contains(PaymentMethod.alipay);
 }
 
-/// 支付工具类
-///
-/// Apple Pay 使用 in_app_purchase 包处理（App Store 内购）
-/// 其他支付方式通过 MethodChannel 在各平台原生侧实现：
-/// - 微信支付：startWeChatPay
-/// - 支付宝支付：startAlipayPay
 class PaymentUtil {
   static const MethodChannel _channel =
       MethodChannel('com.ponynotes.payment/channel');
-  
-  // In-App Purchase 实例 - 延迟初始化
+
   static InAppPurchase? _inAppPurchase;
-  
-  // 获取 InAppPurchase 实例（延迟初始化）
+
   static InAppPurchase get _inAppPurchaseInstance {
     _inAppPurchase ??= InAppPurchase.instance;
     return _inAppPurchase!;
   }
-  
-  // 购买结果监听器（用于处理异步购买结果）
+
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
-  /// 根据指定支付方式发起支付
-  ///
-  /// [amount] 支付金额（单位：分或你自定义的单位，由后端约定）
-  /// [currency] 货币，例如 CNY
-  /// [orderId] 订单号，由你服务端生成
-  /// [extra] 预留扩展字段，例如预下单返回的参数
   static Future<PaymentResult> pay({
     required PaymentMethod method,
     required int amount,
@@ -141,7 +117,6 @@ class PaymentUtil {
     }
   }
 
-  /// Apple Pay 支付（macOS/iOS）- 使用 in_app_purchase 处理 App Store 内购
   static Future<PaymentResult> _payWithApplePay({
     required int amount,
     required String currency,
@@ -153,14 +128,11 @@ class PaymentUtil {
     }
 
     try {
-      // 检查是否可用
       final bool available = await _inAppPurchaseInstance.isAvailable();
       if (!available) {
         return PaymentResult.failure(message: 'App Store 内购不可用');
       }
 
-      // 从 extra 中获取产品 ID（productId）
-      // 如果没有提供，尝试从 orderId 或其他字段中获取
       final String? productId = extra?['productId'] as String?;
       if (productId == null || productId.isEmpty) {
         Log.error('Apple Pay: 缺少 productId，无法发起内购');
@@ -169,7 +141,6 @@ class PaymentUtil {
 
       Log.info('Apple Pay: 开始购买产品，productId: $productId, orderId: $orderId');
 
-      // 设置购买结果监听器（如果还没有设置）
       if (_purchaseSubscription == null) {
         _purchaseSubscription = _inAppPurchaseInstance.purchaseStream.listen(
           (List<PurchaseDetails> purchaseDetailsList) {
@@ -186,7 +157,6 @@ class PaymentUtil {
         );
       }
 
-      // 获取产品详情
       final ProductDetailsResponse productDetailResponse =
           await _inAppPurchaseInstance.queryProductDetails({productId});
 
@@ -204,14 +174,10 @@ class PaymentUtil {
 
       final ProductDetails productDetails = productDetailResponse.productDetails.first;
 
-      // 创建购买参数
       final PurchaseParam purchaseParam = PurchaseParam(
         productDetails: productDetails,
       );
 
-      // 发起购买（根据产品类型选择合适的方法）
-      // 如果是订阅类产品，使用 buyNonConsumable 或 buyConsumable
-      // 如果是订阅，应该使用 buyNonConsumable（非消耗性产品）
       final bool purchaseInitiated = await _inAppPurchaseInstance.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
@@ -222,10 +188,7 @@ class PaymentUtil {
       }
 
       Log.info('Apple Pay: 购买请求已发起，等待用户确认');
-      
-      // 由于 in_app_purchase 的购买结果是异步的，需要通过 Stream 监听
-      // 这里先返回成功，表示购买流程已启动
-      // 实际的购买结果会在 _handlePurchaseUpdates 中处理
+
       return PaymentResult.success(
         message: '购买请求已发起，请完成支付',
         orderId: orderId,
@@ -236,25 +199,20 @@ class PaymentUtil {
     }
   }
 
-  /// 处理购买更新（购买结果回调）
   static void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
     for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
       Log.info('Apple Pay: 收到购买更新，productId: ${purchaseDetails.productID}, status: ${purchaseDetails.status}');
 
       if (purchaseDetails.status == PurchaseStatus.pending) {
         Log.info('Apple Pay: 购买进行中...');
-        // 可以在这里显示加载状态
       } else if (purchaseDetails.status == PurchaseStatus.purchased ||
           purchaseDetails.status == PurchaseStatus.restored) {
         Log.info('Apple Pay: 购买成功');
-        // 验证收据（应该在后端验证）
-        // 这里只是标记为已完成，实际验证应该在后端进行
         if (purchaseDetails.pendingCompletePurchase) {
           _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
       } else if (purchaseDetails.status == PurchaseStatus.error) {
         Log.error('Apple Pay: 购买失败: ${purchaseDetails.error}');
-        // 处理错误
         if (purchaseDetails.pendingCompletePurchase) {
           _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
@@ -267,7 +225,6 @@ class PaymentUtil {
     }
   }
 
-  /// 微信支付（Windows）
   static Future<PaymentResult> _payWithWeChat({
     required int amount,
     required String currency,
@@ -307,17 +264,13 @@ class PaymentUtil {
     }
   }
 
-  /// 支付宝支付（Windows）
   static Future<PaymentResult> _payWithAlipay({
     required int amount,
     required String currency,
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
-
     if (!Platform.isWindows) {
-
-
       return PaymentResult.failure(message: '当前平台不支持支付宝支付');
     }
 
@@ -350,67 +303,8 @@ class PaymentUtil {
     }
   }
 
-  /// 使用浏览器打开支付链接（支持 HTML form 和 URL）
-  /// 
-  /// [payUrl] 可以是 HTML form 格式或直接的 URL
-  /// 如果是 HTML form，会写入临时文件并通过浏览器打开
   static Future<void> webPay(String payUrl) async {
     try {
-//       final isHtmlForm = payUrl.contains('<form') || payUrl.contains('<FORM');
-//
-//       if (isHtmlForm) {
-//         // 解码 HTML 实体
-//         String html = payUrl
-//             .replaceAll('&amp;', '&')
-//             .replaceAll('&quot;', '"')
-//             .replaceAll('&lt;', '<')
-//             .replaceAll('&gt;', '>')
-//             .replaceAll('&#39;', "'")
-//             .replaceAll('&#x27;', "'")
-//             .replaceAll('&#x2F;', '/');
-//
-//         // 兼容 action=" `URL` "
-//         html = html.replaceAll('action=" `', 'action="').replaceAll('`"', '"');
-//
-//         // 包装成完整 HTML（保证 <script> 能执行）
-//         if (!html.contains('<!DOCTYPE') && !html.toLowerCase().contains('<html')) {
-//           html = '''<!DOCTYPE html>
-// <html>
-// <head>
-//   <meta charset="UTF-8">
-//   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-//   <title>支付页面</title>
-// </head>
-// <body>
-// $html
-// </body>
-// </html>''';
-//         }
-//
-//         // 写入临时文件
-//         final tmpDir = await getTemporaryDirectory();
-//         final fileName = 'alipay_pay_${DateTime.now().millisecondsSinceEpoch}.html';
-//         final filePath = '${tmpDir.path}/$fileName';
-//         await File(filePath).writeAsString(html, flush: true);
-
-        // 通过浏览器打开本地文件
-      //   final uri = Uri.file(filePath);
-      //   if (await canLaunchUrl(uri)) {
-      //     await launchUrl(uri, mode: LaunchMode.externalApplication);
-      //     Log.info('[PaymentUtil] Opened payment form in browser: $filePath');
-      //   } else {
-      //     Log.error('[PaymentUtil] Cannot launch file URL: $filePath');
-      //   }
-      // } else {
-      //   // 直接打开 URL
-      //   final uri = Uri.parse(payUrl);
-      //   if (await canLaunchUrl(uri)) {
-      //     await launchUrl(uri, mode: LaunchMode.externalApplication);
-      //     Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
-      //   } else {
-      //     Log.error('[PaymentUtil] Cannot launch URL: $payUrl');
-      //   }
-      // }
       final uri = Uri.parse(payUrl);
 
       await _showTabletPaymentWebView(uri.toString());
@@ -427,87 +321,41 @@ class PaymentUtil {
       return;
     }
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.all(20),
-          child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.9,
-            height: MediaQuery.of(context).size.height * 0.9,
-            child: Column(
-              children: [
-                // 顶部标题栏，包含关闭按钮
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                        width: 1,
-                      ),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        '支付',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(context).maybePop(),
-                      ),
-                    ],
-                  ),
-                ),
-                // WebView 内容区域
-                Expanded(
-                  child: InAppWebView(
-                    initialUrlRequest: URLRequest(url: WebUri(payUrl)),
-                    initialOptions: InAppWebViewGroupOptions(
-                      crossPlatform: InAppWebViewOptions(
-                        javaScriptEnabled: true,
-                        useShouldOverrideUrlLoading: true,
-                        mediaPlaybackRequiresUserGesture: false,
-                      ),
-                      ios: IOSInAppWebViewOptions(
-                        allowsInlineMediaPlayback: true,
-                        allowsBackForwardNavigationGestures: true,
-                      ),
-                    ),
-                    onLoadStart: (controller, url) {
-                      Log.info('[PaymentUtil] Payment webview loading: $url');
-                    },
-                    onLoadStop: (controller, url) {
-                      Log.info('[PaymentUtil] Payment webview loaded: $url');
-                    },
-                    onReceivedError: (controller, request, error) {
-                      Log.error('[PaymentUtil] Payment webview error: $error');
-                    },
-                    shouldOverrideUrlLoading: (controller, navigationAction) async {
-                      final url = navigationAction.request.url?.toString();
-                      if (url != null && url.startsWith('ponynotes://')) {
-                        Navigator.of(context).pop();
-                        return NavigationActionPolicy.CANCEL;
-                      }
-                      return NavigationActionPolicy.ALLOW;
-                    },
-                  ),
-                ),
-              ],
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (BuildContext context) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('支付'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
             ),
-          ),
-        );
-      },
+            body: InAppWebView(
+              initialUrlRequest: URLRequest(url: WebUri(payUrl)),
+              onLoadStart: (controller, url) {
+                Log.info('[PaymentUtil] Payment webview loading: $url');
+              },
+              onLoadStop: (controller, url) {
+                Log.info('[PaymentUtil] Payment webview loaded: $url');
+              },
+              onReceivedError: (controller, request, error) {
+                Log.error('[PaymentUtil] Payment webview error: $error');
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url = navigationAction.request.url?.toString();
+                if (url != null && url.startsWith('ponynotes://')) {
+                  Navigator.of(context).pop();
+                  return NavigationActionPolicy.CANCEL;
+                }
+                return NavigationActionPolicy.ALLOW;
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 }
-
-
-
