@@ -413,8 +413,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   /// 当前选中的视图
   ViewPB? _selectedView;
 
-  /// 左侧文档列表的宽度（使用 HomeSizes 统一管理）
-  double _leftPanelWidth = HomeSizes.defaultSpaceHubMiddlePaneWidth;
+  /// 左侧文档列表的宽度（使用 ValueNotifier 避免频繁 setState 导致的卡顿）
+  late final ValueNotifier<double> _leftPanelWidthNotifier;
 
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
@@ -451,6 +451,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.initState();
     SpaceHubMiddlePanelController.revealRequest
         .addListener(_handleRevealDocumentList);
+    _leftPanelWidthNotifier = ValueNotifier<double>(
+      HomeSizes.defaultSpaceHubMiddlePaneWidth,
+    );
     // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
     if (widget.initialSelectedView != null) {
       _selectedView = widget.initialSelectedView;
@@ -586,12 +589,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         final maxLeftPanelWidth = (availableContentWidth -
                 HomeSizes.minimumSpaceHubContentPeekWidth -
                 HomeSizes.spaceHubDividerWidth)
-            .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity)
-            .toDouble();
-        final effectiveLeftPanelWidth = _leftPanelWidth.clamp(
-          HomeSizes.minimumSpaceHubMiddlePaneWidth,
-          maxLeftPanelWidth,
-        );
+            .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity);
         final floatingDocumentListTopInset = 0.0;
         final passiveFloatingDivider = Padding(
           padding: EdgeInsets.only(
@@ -612,73 +610,84 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             ),
           ),
         );
-        final documentListPanel = Padding(
-          padding: useFloatingDocumentList
-              ? EdgeInsets.only(
-                  top: floatingDocumentListTopInset,
-                  bottom: 12,
-                )
-              : EdgeInsets.zero,
-          child: ClipRRect(
-            borderRadius: useFloatingDocumentList
-                ? const BorderRadius.horizontal(
-                    right: Radius.circular(14),
-                  )
-                : BorderRadius.zero,
-            child: Container(
-              color: homeContentBackgroundColor(context),
-              width: effectiveLeftPanelWidth,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (isSidebarHidden && PlatformInfo.isMacOS) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 16, right: 16),
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: _SpaceHubSidebarToggleButton(
-                                color: theme.iconColorScheme.secondary,
+
+        // 使用 ValueListenableBuilder 包裹需要响应宽度变化的区域
+        // 这样拖拽分隔线时只会重建这个区域，而不会触发整个 build() 重建
+        final documentListPanel = ValueListenableBuilder<double>(
+          valueListenable: _leftPanelWidthNotifier,
+          builder: (context, leftPanelWidth, child) {
+            final effectiveLeftPanelWidth = leftPanelWidth.clamp(
+              HomeSizes.minimumSpaceHubMiddlePaneWidth,
+              maxLeftPanelWidth,
+            );
+            return Padding(
+              padding: useFloatingDocumentList
+                  ? EdgeInsets.only(
+                      top: floatingDocumentListTopInset,
+                      bottom: 12,
+                    )
+                  : EdgeInsets.zero,
+              child: ClipRRect(
+                borderRadius: useFloatingDocumentList
+                    ? const BorderRadius.horizontal(
+                        right: Radius.circular(14),
+                      )
+                    : BorderRadius.zero,
+                child: Container(
+                  color: homeContentBackgroundColor(context),
+                  width: effectiveLeftPanelWidth,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (isSidebarHidden && PlatformInfo.isMacOS) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16, right: 16),
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: _SpaceHubSidebarToggleButton(
+                                    color: theme.iconColorScheme.secondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            Expanded(
+                              child: _SpaceDocumentList(
+                                spaceView: widget.spaceView,
+                                selectedView: _selectedView,
+                                showHeader: true,
+                                onViewSelectedWithRecent: _selectViewInMiddlePanel,
+                                onViewCreated: _selectViewInMiddlePanel,
+                                scrollController: _scrollController,
                               ),
                             ),
-                          ),
-                        ],
-                        Expanded(
-                          child: _SpaceDocumentList(
-                            spaceView: widget.spaceView,
-                            selectedView: _selectedView,
-                            showHeader: true,
-                            onViewSelectedWithRecent: _selectViewInMiddlePanel,
-                            onViewCreated: _selectViewInMiddlePanel,
-                            scrollController: _scrollController,
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      if (_isDocumentListVisible &&
+                          !isFullWindow &&
+                          !useFloatingDocumentList)
+                        _SpaceHubResizableDivider(
+                          minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                          maxLeftWidth: maxLeftPanelWidth,
+                          currentLeftWidth: effectiveLeftPanelWidth,
+                          onResize: (newWidth) {
+                            // 直接更新 ValueNotifier，避免 setState 导致的全局重建
+                            _leftPanelWidthNotifier.value = newWidth.clamp(
+                              HomeSizes.minimumSpaceHubMiddlePaneWidth,
+                              maxLeftPanelWidth,
+                            );
+                          },
+                        ),
+                    ],
                   ),
-                  if (_isDocumentListVisible &&
-                      !isFullWindow &&
-                      !useFloatingDocumentList)
-                    _SpaceHubResizableDivider(
-                      minLeftWidth: HomeSizes.minimumSpaceHubMiddlePaneWidth,
-                      maxLeftWidth: maxLeftPanelWidth,
-                      currentLeftWidth: effectiveLeftPanelWidth,
-                      onResize: (newWidth) {
-                        setState(() {
-                          _leftPanelWidth = newWidth.clamp(
-                            HomeSizes.minimumSpaceHubMiddlePaneWidth,
-                            maxLeftPanelWidth,
-                          );
-                        });
-                      },
-                    ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         );
 
         return Row(
@@ -959,6 +968,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
     _childViewInfoBlocs.clear();
     _scrollController.dispose();
+    _leftPanelWidthNotifier.dispose();
     super.dispose();
   }
 }
@@ -1439,11 +1449,7 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
 }
 
 /// SpaceHub 可拖动分隔线组件
-/// 仿照左侧侧边栏的分隔线实现，具有以下特点：
-/// - 默认透明分隔线
-/// - 鼠标悬停时显示主题色（带 500ms 延迟）
-/// - 拖动时显示主题色
-/// - 使用动画过渡效果
+/// 使用 Listener 直接监听 pointer 事件，避免频繁 setState 导致的卡顿
 class _SpaceHubResizableDivider extends StatefulWidget {
   const _SpaceHubResizableDivider({
     super.key,
@@ -1463,37 +1469,42 @@ class _SpaceHubResizableDivider extends StatefulWidget {
       _SpaceHubResizableDividerState();
 }
 
-class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
+class _SpaceHubResizableDividerState
+    extends State<_SpaceHubResizableDivider> {
   bool _isHover = false;
   bool _isDragging = false;
-  Timer? _showHoverTimer;
   double? _dragStartGlobalX;
   double? _dragStartWidth;
 
   @override
   void dispose() {
-    _showHoverTimer?.cancel();
     super.dispose();
   }
 
-  void _handleDragStart(DragStartDetails details) {
-    _showHoverTimer?.cancel();
+  void _handlePointerDown(PointerDownEvent event) {
     setState(() => _isDragging = true);
-    _dragStartGlobalX = details.globalPosition.dx;
+    _dragStartGlobalX = event.position.dx;
     _dragStartWidth = widget.currentLeftWidth;
   }
 
-  void _handleDragUpdate(DragUpdateDetails details) {
-    final dragStartGlobalX = _dragStartGlobalX ?? details.globalPosition.dx;
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_isDragging) return;
+
+    final dragStartGlobalX = _dragStartGlobalX ?? event.position.dx;
     final dragStartWidth = _dragStartWidth ?? widget.currentLeftWidth;
     final newWidth =
-        (dragStartWidth + (details.globalPosition.dx - dragStartGlobalX))
-            .clamp(widget.minLeftWidth, widget.maxLeftWidth)
-            .toDouble();
+        (dragStartWidth + (event.position.dx - dragStartGlobalX))
+            .clamp(widget.minLeftWidth, widget.maxLeftWidth);
     widget.onResize(newWidth);
   }
 
-  void _endDrag() {
+  void _handlePointerUp(PointerUpEvent event) {
+    setState(() => _isDragging = false);
+    _dragStartGlobalX = null;
+    _dragStartWidth = null;
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
     setState(() => _isDragging = false);
     _dragStartGlobalX = null;
     _dragStartWidth = null;
@@ -1501,43 +1512,29 @@ class _SpaceHubResizableDividerState extends State<_SpaceHubResizableDivider> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      onEnter: (_) {
-        _showHoverTimer = Timer(const Duration(milliseconds: 100), () {
-          if (mounted) {
-            setState(() => _isHover = true);
-          }
-        });
-      },
-      onExit: (_) {
-        _showHoverTimer?.cancel();
-        setState(() => _isHover = false);
-      },
-      child: GestureDetector(
-        dragStartBehavior: DragStartBehavior.down,
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: _handleDragStart,
-        onHorizontalDragUpdate: _handleDragUpdate,
-        onHorizontalDragEnd: (_) => _endDrag(),
-        onHorizontalDragCancel: _endDrag,
+    // 拖拽时使用更轻量的 UI 反馈
+    final showHighlight = _isHover || _isDragging;
+
+    return Listener(
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        onEnter: (_) => setState(() => _isHover = true),
+        onExit: (_) => setState(() => _isHover = false),
         child: Container(
           width: HomeSizes.spaceHubDividerWidth,
           color: Colors.transparent,
           child: Center(
-            child: TweenAnimationBuilder(
-              tween: ColorTween(
-                end: _isHover || _isDragging
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).dividerColor.withValues(alpha: 0.9),
-              ),
-              duration: const Duration(milliseconds: 50),
-              builder: (context, color, child) {
-                return Container(
-                  color: color,
-                  width: 1.6,
-                );
-              },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 16),
+              curve: Curves.easeOut,
+              width: showHighlight ? 2.0 : 1.0,
+              color: showHighlight
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).dividerColor.withValues(alpha: 0.9),
             ),
           ),
         ),
