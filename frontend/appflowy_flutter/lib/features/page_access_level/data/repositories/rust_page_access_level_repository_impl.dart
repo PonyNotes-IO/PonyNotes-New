@@ -218,7 +218,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
             },
           )
           .timeout(
-            const Duration(seconds: 10),
+            const Duration(seconds: 3),
             onTimeout: () {
               throw Exception('请求超时');
             },
@@ -235,10 +235,11 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
           }
         }
       }
-    } catch (e, stackTrace) {
-      Log.error(
+    } catch (e) {
+      // 使用 Log.warn 而非 Log.error，避免在网络不稳定时产生大量错误日志
+      // 超时等网络错误属于正常降级情况，不影响应用核心功能
+      Log.warn(
         '[PageAccessLevel] 检查接收文档只读状态失败: $e',
-        stackTrace,
       );
     }
     return (isReceived: false, isReadonly: false);

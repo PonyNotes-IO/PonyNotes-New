@@ -44,7 +44,17 @@ class WhiteboardListener {
     result.fold(
       (payloadBytes) {
         try {
-          final json = jsonDecode(utf8.decode(payloadBytes));
+          // 尝试解析为 UTF-8 编码的 JSON
+          String jsonString;
+          try {
+            jsonString = utf8.decode(payloadBytes);
+          } catch (e) {
+            // 如果 UTF-8 解码失败，可能是二进制数据（如图片等），直接忽略
+            Log.debug('[WhiteboardListener] Payload is not UTF-8 encoded, skipping');
+            return;
+          }
+
+          final json = jsonDecode(jsonString);
           if (json is! Map) {
             return;
           }
@@ -59,7 +69,7 @@ class WhiteboardListener {
 
           _onRemoteUpdate?.call(key, value, isRemote);
         } catch (e) {
-          Log.error('[WhiteboardListener] Failed to parse notification: $e');
+          Log.debug('[WhiteboardListener] Failed to parse notification: $e');
         }
       },
       (error) {

@@ -123,13 +123,24 @@ class LocalAssetServer {
       return cached;
     }
 
-    final bytes = await rootBundle.load(assetPath);
-    final data = bytes.buffer.asUint8List(
-      bytes.offsetInBytes,
-      bytes.lengthInBytes,
-    );
-    _assetCache[assetPath] = data;
-    return data;
+    try {
+      final bytes = await rootBundle.load(assetPath);
+      final data = bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      );
+      _assetCache[assetPath] = data;
+      return data;
+    } catch (e) {
+      Log.warn('Failed to load asset from rootBundle: $assetPath, trying file system');
+      final file = File(assetPath);
+      if (await file.exists()) {
+        final data = await file.readAsBytes();
+        _assetCache[assetPath] = data;
+        return data;
+      }
+      rethrow;
+    }
   }
 
   String _cacheControlForPath(String requestPath) {
