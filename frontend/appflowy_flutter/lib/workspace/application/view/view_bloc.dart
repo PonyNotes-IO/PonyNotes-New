@@ -16,8 +16,11 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart'
+    hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -142,6 +145,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           rename: (e) async {
+            // 检查用户是否有重命名权限（Guest 角色无法重命名）
+            final canRename = await _checkRenamePermission();
+            if (!canRename) {
+              showToastNotification(
+                message: '受限成员无法重命名文档',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             final result = await ViewBackendService.updateView(
               viewId: view.id,
               name: e.newName,
@@ -173,6 +186,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           delete: (e) async {
+            // 检查用户是否有删除权限（Guest 角色无法删除）
+            final canDelete = await _checkDeletePermission();
+            if (!canDelete) {
+              showToastNotification(
+                message: '受限成员无法删除文档',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             // AI chat views are not publishable, so skip unpublish for chat only.
             if (view.layout != ViewLayoutPB.Chat) {
               try {
@@ -203,6 +226,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           duplicate: (e) async {
+            // 检查用户是否有创建权限（复制文档需要创建权限）
+            final canCreate = await _checkCreatePermission();
+            if (!canCreate) {
+              showToastNotification(
+                message: '受限成员无法复制文档',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             final result = await ViewBackendService.duplicate(
               view: view,
               openAfterDuplicate: true,
@@ -325,6 +358,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           move: (value) async {
+            // 检查用户是否有移动权限（Guest 角色无法移动）
+            final canMove = await _checkMovePermission();
+            if (!canMove) {
+              showToastNotification(
+                message: '受限成员无法移动文档',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             final result = await ViewBackendService.moveViewV2(
               viewId: value.from.id,
               newParentId: value.newParentId,
@@ -346,6 +389,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           createView: (e) async {
+            // 检查用户是否有创建权限（Guest 角色无法创建）
+            final canCreate = await _checkCreatePermission();
+            if (!canCreate) {
+              showToastNotification(
+                message: '受限成员无法创建文档',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             final result = await ViewBackendService.createView(
               parentViewId: view.id,
               name: e.name,
@@ -564,6 +617,156 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
         view.parentViewId,
         view.layout,
       );
+
+  // ==================== 权限检查方法 ====================
+
+  /// 获取当前用户信息和工作区ID
+  Future<(UserProfilePB?, String?)> _getCurrentUserInfo() async {
+    try {
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final workspaceResult = await UserBackendService.getCurrentWorkspace();
+      final userProfile = userResult.fold((l) => l, (r) => null);
+      final workspace = workspaceResult.fold((l) => l, (r) => null);
+      return (userProfile, workspace?.id);
+    } catch (e, st) {
+      Log.error('Exception when getting current user info: $e\n$st');
+      return (null, null);
+    }
+  }
+
+  /// 检查当前用户是否有创建权限（用于创建文档、复制文档）
+  /// Guest（受限成员）无法创建文档
+  Future<bool> _checkCreatePermission() async {
+    try {
+      final (userProfile, workspaceId) = await _getCurrentUserInfo();
+      if (userProfile == null || workspaceId == null) {
+        // 无法获取用户信息时，默认允许（后端会执行最终检查）
+        return true;
+      }
+
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法创建
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check create permission: ${e.msg}');
+          // 获取失败时允许创建（后端会执行最终检查）
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking create permission: $e\n$st');
+      return true;
+    }
+  }
+
+  /// 检查当前用户是否有删除权限
+  /// Guest（受限成员）无法删除文档
+  Future<bool> _checkDeletePermission() async {
+    try {
+      final (userProfile, workspaceId) = await _getCurrentUserInfo();
+      if (userProfile == null || workspaceId == null) {
+        return true;
+      }
+
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法删除
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check delete permission: ${e.msg}');
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking delete permission: $e\n$st');
+      return true;
+    }
+  }
+
+  /// 检查当前用户是否有重命名/修改权限
+  /// Guest（受限成员）无法重命名文档
+  Future<bool> _checkRenamePermission() async {
+    try {
+      final (userProfile, workspaceId) = await _getCurrentUserInfo();
+      if (userProfile == null || workspaceId == null) {
+        return true;
+      }
+
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法重命名
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check rename permission: ${e.msg}');
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking rename permission: $e\n$st');
+      return true;
+    }
+  }
+
+  /// 检查当前用户是否有移动权限
+  /// Guest（受限成员）无法移动文档
+  Future<bool> _checkMovePermission() async {
+    try {
+      final (userProfile, workspaceId) = await _getCurrentUserInfo();
+      if (userProfile == null || workspaceId == null) {
+        return true;
+      }
+
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法移动
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check move permission: ${e.msg}');
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking move permission: $e\n$st');
+      return true;
+    }
+  }
 }
 
 @freezed

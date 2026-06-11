@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_bloc.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
+import 'package:appflowy/workspace/application/permission/workspace_permission_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
@@ -71,6 +72,48 @@ class ViewBackendService {
     return FolderEventCreateView(payload).send();
   }
 
+  /// 带权限检查的创建视图方法
+  /// Guest（受限成员）无法创建文档
+  static Future<FlowyResult<ViewPB, FlowyError>> createViewWithPermissionCheck({
+    required ViewLayoutPB layoutType,
+    required String parentViewId,
+    required String name,
+    required String workspaceId,
+    required int userId,
+    bool openAfterCreate = true,
+    List<int>? initialDataBytes,
+    Map<String, String> ext = const {},
+    int? index,
+    ViewSectionPB? section,
+    String? viewId,
+  }) async {
+    // 检查用户是否有创建权限
+    final canCreate = await WorkspacePermissionService.canCreate(
+      workspaceId: workspaceId,
+      userId: userId,
+    );
+
+    if (!canCreate) {
+      return FlowyResult.failure(
+        FlowyError.create()
+          ..code = ErrorCode.Internal
+          ..msg = '受限成员无法创建文档',
+      );
+    }
+
+    return createView(
+      layoutType: layoutType,
+      parentViewId: parentViewId,
+      name: name,
+      openAfterCreate: openAfterCreate,
+      initialDataBytes: initialDataBytes,
+      ext: ext,
+      index: index,
+      section: section,
+      viewId: viewId,
+    );
+  }
+
   /// The orphan view is meant to be a view that is not attached to any parent view. By default, this
   /// view will not be shown in the view list unless it is attached to a parent view that is shown in
   /// the view list.
@@ -132,6 +175,30 @@ class ViewBackendService {
   }) {
     final request = RepeatedViewIdPB.create()..items.add(viewId);
     return FolderEventDeleteView(request).send();
+  }
+
+  /// 带权限检查的删除视图方法
+  /// Guest（受限成员）无法删除文档
+  static Future<FlowyResult<void, FlowyError>> deleteViewWithPermissionCheck({
+    required String viewId,
+    required String workspaceId,
+    required int userId,
+  }) async {
+    // 检查用户是否有删除权限
+    final canDelete = await WorkspacePermissionService.canDelete(
+      workspaceId: workspaceId,
+      userId: userId,
+    );
+
+    if (!canDelete) {
+      return FlowyResult.failure(
+        FlowyError.create()
+          ..code = ErrorCode.NoPermissionRequired
+          ..msg = '受限成员无法删除文档',
+      );
+    }
+
+    return deleteView(viewId: viewId);
   }
 
   static Future<FlowyResult<void, FlowyError>> deleteViews({
