@@ -359,7 +359,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
     final isViewDeleted = context.read<DocumentBloc>().state.isDeleted;
     final isEditable =
-        context.read<PageAccessLevelBloc?>()?.state.isEditable ?? true;
+        context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? true;
 
     final editor = Directionality(
       textDirection: textDirection,

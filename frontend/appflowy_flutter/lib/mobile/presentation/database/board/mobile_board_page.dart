@@ -190,7 +190,7 @@ class _BoardContentState extends State<_BoardContent> {
 
   Widget _buildFooter(BuildContext context, AppFlowyGroupData columnData) {
     final isEditable =
-        context.read<PageAccessLevelBloc?>()?.state.isEditable ?? false;
+        context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
     final style = Theme.of(context);
 
     return SizedBox(

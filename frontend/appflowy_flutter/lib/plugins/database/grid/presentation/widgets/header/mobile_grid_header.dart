@@ -41,7 +41,7 @@ class _MobileGridHeaderState extends State<MobileGridHeader> {
     final fieldController =
         context.read<GridBloc>().databaseController.fieldController;
     final isEditable =
-        context.read<PageAccessLevelBloc?>()?.state.isEditable ?? false;
+        context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
     return BlocProvider(
       create: (context) {
         return GridHeaderBloc(

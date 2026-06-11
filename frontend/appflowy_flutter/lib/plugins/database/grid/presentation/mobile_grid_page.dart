@@ -184,7 +184,7 @@ class _GridPageContentState extends State<GridPageContent> {
   @override
   Widget build(BuildContext context) {
     final isEditable =
-        context.read<PageAccessLevelBloc?>()?.state.isEditable ?? false;
+        context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
     return BlocListener<GridBloc, GridState>(
       listenWhen: (previous, current) =>
           previous.createdRow != current.createdRow,
@@ -383,7 +383,7 @@ class _GridRows extends StatelessWidget {
     }
 
     final isEditable =
-        context.read<PageAccessLevelBloc?>()?.state.isEditable ?? false;
+        context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
     if (!isEditable) {
       child = IgnorePointer(
         child: child,

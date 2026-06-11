@@ -303,7 +303,7 @@ class _GridPageContentState extends State<GridPageContent> {
       children: [
         _GridHeader(
           headerScrollController: headerScrollController,
-          editable: context.read<PageAccessLevelBloc>().state.isEditable,
+          editable: context.watch<PageAccessLevelBloc>().state.isEditable,
           shrinkWrap: widget.shrinkWrap,
         ),
         _GridRows(
@@ -588,7 +588,7 @@ class _GridRowsState extends State<_GridRows> {
             children: footer,
           );
 
-          if (!context.read<PageAccessLevelBloc>().state.isEditable) {
+          if (!context.watch<PageAccessLevelBloc>().state.isEditable) {
             return IgnorePointer(
               key: const Key('grid_footer'),
               child: child,
