@@ -294,13 +294,24 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
 
       if (userProfile == null) {
         Log.error('User profile is null, cannot search users');
-        return FlowySuccess([]);
+        return FlowyFailure(
+          FlowyError(msg: 'User profile is null'),
+        );
       }
 
-      final authToken = userProfile.authToken;
+      // Use the normalized accessor that strips Bearer prefix, quotes,
+      // and extracts access_token from JSON envelopes.
+      // Using the raw authToken could send a malformed Authorization header
+      // (e.g. Bearer {"access_token":"xxx"}) which the server rejects.
+      final authToken = userProfile.authorizationAccessToken;
       if (authToken == null || authToken.isEmpty) {
-        Log.error('Auth token is empty, cannot search users');
-        return FlowySuccess([]);
+        Log.error(
+          'Auth token is empty, cannot search users. '
+          'token source=${userProfile.authorizationAccessTokenSource}',
+        );
+        return FlowyFailure(
+          FlowyError(msg: 'Auth token is empty'),
+        );
       }
 
       // Build request URL
