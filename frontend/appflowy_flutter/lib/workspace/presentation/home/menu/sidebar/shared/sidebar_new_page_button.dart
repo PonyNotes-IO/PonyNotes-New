@@ -36,46 +36,19 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
     super.dispose();
   }
 
-  /// 检查当前用户是否为受限成员（Guest）
-  bool get _isRestrictedMember {
-    try {
-      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
-      return role == AFRolePB.Guest;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// 当前用户是否为受限成员（Guest）
+  /// 由 build() 中 context.watch 驱动重建
+  late bool _isRestrictedMember;
 
   @override
   Widget build(BuildContext context) {
-    // 受限成员禁用新建按钮
-    if (_isRestrictedMember) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        height: HomeSizes.newPageSectionHeight,
-        child: Opacity(
-          opacity: 0.3,
-          child: FlowyButton(
-            onTap: () {
-              showToastNotification(message: '无权限');
-            },
-            mainAxisAlignment: MainAxisAlignment.start,
-            leftIcon: const FlowySvg(
-              FlowySvgs.new_app_m,
-              blendMode: null,
-            ),
-            leftIconSize: const Size.square(24.0),
-            margin: const EdgeInsets.only(left: 4.0),
-            iconPadding: 8.0,
-            text: FlowyText.regular(
-              LocaleKeys.newPageText.tr(),
-              lineHeight: 1.15,
-            ),
-          ),
-        ),
-      );
+    try {
+      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+    } catch (_) {
+      _isRestrictedMember = false;
     }
-    return Container(
+    // 受限成员按钮禁用（保留在 tree 中，context.watch 实时响应权限变化）
+    final button = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       height: HomeSizes.newPageSectionHeight,
       child: FlowyButton(
@@ -94,6 +67,13 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
         ),
       ),
     );
+
+    if (_isRestrictedMember) {
+      return IgnorePointer(
+        child: Opacity(opacity: 0.3, child: button),
+      );
+    }
+    return button;
   }
 
   Future<void> _createNewPage() async {

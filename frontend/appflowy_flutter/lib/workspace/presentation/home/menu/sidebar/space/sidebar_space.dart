@@ -47,7 +47,7 @@ class SidebarSpace extends StatelessWidget {
         context.watch<UserWorkspaceBloc>().state.currentWorkspace;
 
     // only show spaces if the user role is member or owner
-    final currentUserRole = currentWorkspace?.role;
+    final currentUserRole = context.watch<UserWorkspaceBloc>().state.currentUserRole;
     final shouldShowSpaces = [
       AFRolePB.Member,
       AFRolePB.Owner,

@@ -158,8 +158,7 @@ class ViewTitleBar extends StatelessWidget {
     }
 
     // remove the space from views if the current user role is a guest
-    final myRole =
-        context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+    final myRole = context.read<UserWorkspaceBloc>().state.currentUserRole;
     if (myRole == AFRolePB.Guest) {
       views = views.where((view) => !view.isSpace).toList();
     }

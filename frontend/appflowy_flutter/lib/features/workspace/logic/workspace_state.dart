@@ -1,6 +1,6 @@
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart' hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 
@@ -49,6 +49,7 @@ class UserWorkspaceState {
     this.currentSubscription,
     this.isCloudSyncEnabled = true, // 云同步开关状态，默认开启
     this.folderSyncState, // 文件夹同步状态
+    this.currentUserRole, // 当前用户在协作工作区中的角色
   });
 
   final UserWorkspacePB? currentWorkspace;
@@ -60,6 +61,7 @@ class UserWorkspaceState {
   final CurrentSubscription? currentSubscription;
   final bool isCloudSyncEnabled; // 云同步开关状态
   final FolderSyncStatePB? folderSyncState; // 文件夹同步状态
+  final AFRolePB? currentUserRole; // 当前用户在协作工作区中的角色（通过 member API 获取）
 
   UserWorkspaceState copyWith({
     UserWorkspacePB? currentWorkspace,
@@ -71,6 +73,7 @@ class UserWorkspaceState {
     CurrentSubscription? currentSubscription,
     bool? isCloudSyncEnabled,
     FolderSyncStatePB? folderSyncState,
+    AFRolePB? currentUserRole,
   }) {
     return UserWorkspaceState(
       currentWorkspace: currentWorkspace ?? this.currentWorkspace,
@@ -82,6 +85,7 @@ class UserWorkspaceState {
       currentSubscription: currentSubscription ?? this.currentSubscription,
       isCloudSyncEnabled: isCloudSyncEnabled ?? this.isCloudSyncEnabled,
       folderSyncState: folderSyncState ?? this.folderSyncState,
+      currentUserRole: currentUserRole ?? this.currentUserRole,
     );
   }
 
@@ -97,7 +101,8 @@ class UserWorkspaceState {
         other.workspaceSubscriptionInfo == workspaceSubscriptionInfo &&
         other.currentSubscription == currentSubscription &&
         other.isCloudSyncEnabled == isCloudSyncEnabled &&
-        other.folderSyncState == folderSyncState;
+        other.folderSyncState == folderSyncState &&
+        other.currentUserRole == currentUserRole;
   }
 
   @override
@@ -112,11 +117,12 @@ class UserWorkspaceState {
       currentSubscription,
       isCloudSyncEnabled,
       folderSyncState,
+      currentUserRole,
     );
   }
 
   @override
   String toString() {
-    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription, isCloudSyncEnabled: $isCloudSyncEnabled, folderSyncState: $folderSyncState)';
+    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription, isCloudSyncEnabled: $isCloudSyncEnabled, folderSyncState: $folderSyncState, currentUserRole: $currentUserRole)';
   }
 }

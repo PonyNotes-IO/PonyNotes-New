@@ -42,7 +42,7 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final targetSpace = widget.space ?? context.read<SpaceBloc>().state.currentSpace;
-      final userRole = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+      final userRole = context.read<UserWorkspaceBloc>().state.currentUserRole;
       // owner check: if current workspace role is Owner treat as owner for now
       setState(() {
         _isOwner = userRole == AFRolePB.Owner;

@@ -19,7 +19,7 @@ import 'package:appflowy/workspace/application/subscription/subscription_service
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart' hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -115,8 +115,12 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     return now.difference(_lastStorageCheckTime!) > _storageCheckInterval;
   }
 
+  // 角色轮询定时器：定期通过 member API 刷新当前用户角色
+  Timer? _rolePollingTimer;
+
   @override
   Future<void> close() {
+    _rolePollingTimer?.cancel();
     _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
     _listener.stop();
     _folderSyncStateListener?.stop();
@@ -395,9 +399,16 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         // 打开工作区失败
       });
 
+    // 通过 member API 获取当前用户在协作工作区中的角色
+    AFRolePB? currentUserRole = await _fetchCurrentUserRole(event.workspaceId);
+
+    // 启动角色轮询（每 5 秒刷新一次），确保权限变更实时生效
+    _startRolePolling(event.workspaceId);
+
     emit(
       state.copyWith(
         currentWorkspace: currentWorkspace,
+        currentUserRole: currentUserRole,
         actionResult: WorkspaceActionResult(
           actionType: WorkspaceActionType.open,
           isLoading: false,
@@ -999,5 +1010,43 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         Log.info('Storage check skipped, interval not reached');
       }
     }
+  }
+
+  /// 通过 member API 获取当前用户在工作区中的角色
+  Future<AFRolePB?> _fetchCurrentUserRole(String workspaceId) async {
+    try {
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          return myMember?.role;
+        },
+        (e) {
+          Log.error('Failed to fetch workspace members for role: ${e.msg}');
+          return null;
+        },
+      );
+    } catch (e) {
+      Log.error('Exception when fetching workspace member role: $e');
+      return null;
+    }
+  }
+
+  /// 启动角色轮询，定期刷新当前用户角色
+  void _startRolePolling(String workspaceId) {
+    _rolePollingTimer?.cancel();
+    _rolePollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) async {
+        if (isClosed) return;
+        final role = await _fetchCurrentUserRole(workspaceId);
+        if (!isClosed && role != state.currentUserRole) {
+          emit(state.copyWith(currentUserRole: role));
+        }
+      },
+    );
   }
 }

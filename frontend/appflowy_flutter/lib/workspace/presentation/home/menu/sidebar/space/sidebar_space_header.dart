@@ -46,15 +46,9 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
   final isHovered = ValueNotifier(false);
   final onEditing = ValueNotifier(false);
 
-  /// 检查当前用户是否为受限成员（Guest）
-  bool get _isRestrictedMember {
-    try {
-      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
-      return role == AFRolePB.Guest;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// 当前用户是否为受限成员（Guest）
+  /// 由 build() 中 context.watch 驱动重建
+  late bool _isRestrictedMember;
 
   @override
   void dispose() {
@@ -65,6 +59,11 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
 
   @override
   Widget build(BuildContext context) {
+    try {
+      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+    } catch (_) {
+      _isRestrictedMember = false;
+    }
     return ValueListenableBuilder(
       valueListenable: isHovered,
       builder: (context, onHover, child) {
@@ -145,6 +144,7 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
     final addPageButton = ViewAddButton(
       parentViewId: widget.space.id,
       onEditing: (_) {},
+      enabled: !restricted,
       onSelected: (
         pluginBuilder,
         name,
@@ -203,16 +203,12 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
               isHovered: isHovered,
             ),
             const HSpace(8.0),
+            // 受限成员按钮禁用（保留在 tree 中，context.watch 实时响应权限变化）
             FlowyTooltip(
-              message: restricted ? '无权限' : LocaleKeys.sideBar_addAPage.tr(),
-              child: restricted
-                  ? IgnorePointer(
-                      child: Opacity(
-                        opacity: 0.3,
-                        child: addPageButton,
-                      ),
-                    )
-                  : addPageButton,
+              message: restricted
+                  ? '无权限'
+                  : LocaleKeys.sideBar_addAPage.tr(),
+              child: addPageButton,
             ),
           ],
         ),

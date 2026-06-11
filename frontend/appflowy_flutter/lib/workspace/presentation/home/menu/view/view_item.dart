@@ -559,15 +559,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   bool isIconPickerOpened = false;
   bool isRenaming = false;
 
-  /// 检查当前用户是否为受限成员（Guest）
-  bool get _isRestrictedMember {
-    try {
-      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
-      return role == AFRolePB.Guest;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// 当前用户是否为受限成员（Guest）
+  /// 由 build() 中 context.watch 驱动重建，确保 role 变化时 UI 实时更新
+  late bool _isRestrictedMember;
 
   @override
   void dispose() {
@@ -578,6 +572,13 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   @override
   Widget build(BuildContext context) {
+    // context.watch 确保 role 变化时 widget 重建，实时更新权限状态
+    try {
+      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+    } catch (_) {
+      _isRestrictedMember = false;
+    }
+
     bool isSelected = widget.isSelected;
 
     if (widget.disableSelectedStatus == true) {
@@ -687,6 +688,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 if (_isRestrictedMember) {
                   showToastNotification(
                     message: '无权限',
+                    type: ToastificationType.warning,
                   );
                   return;
                 }
@@ -918,30 +920,17 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   // + button
   Widget _buildViewAddButton(BuildContext context) {
-    // 受限成员禁用新建按钮
-    if (_isRestrictedMember) {
-      return FlowyTooltip(
-        message: '无权限',
-        child: IgnorePointer(
-          child: Opacity(
-            opacity: 0.3,
-            child: ViewAddButton(
-              parentViewId: widget.view.id,
-              onEditing: (value) =>
-                  context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
-              onSelected: _onSelected,
-            ),
-          ),
-        ),
-      );
-    }
+    // 受限成员按钮禁用（保留在 tree 中，context.watch 实时响应权限变化）
     return FlowyTooltip(
-      message: LocaleKeys.menuAppHeader_addPageTooltip.tr(),
+      message: _isRestrictedMember
+          ? '无权限'
+          : LocaleKeys.menuAppHeader_addPageTooltip.tr(),
       child: ViewAddButton(
         parentViewId: widget.view.id,
         onEditing: (value) =>
             context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
         onSelected: _onSelected,
+        enabled: !_isRestrictedMember,
       ),
     );
   }

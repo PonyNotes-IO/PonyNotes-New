@@ -98,7 +98,7 @@ class SettingsDialog extends StatelessWidget {
     );
     final theme = AppFlowyTheme.of(context);
     final currentWorkspaceMemberRole =
-        context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+        context.read<UserWorkspaceBloc>().state.currentUserRole;
     return BlocProvider<SettingsDialogBloc>(
       create: (context) => SettingsDialogBloc(
         user,

@@ -15,6 +15,7 @@ class ViewAddButton extends StatelessWidget {
     required this.onSelected,
     this.isHovered = false,
     this.tooltipText,
+    this.enabled = true,
   });
 
   final String parentViewId;
@@ -28,6 +29,10 @@ class ViewAddButton extends StatelessWidget {
   ) onSelected;
   final bool isHovered;
   final String? tooltipText;
+
+  /// 是否可用。为 false 时按钮显示为禁用态（半透明 + 不可点击），
+  /// 但仍保留在 widget tree 中，以便 context.watch 实时响应权限变化。
+  final bool enabled;
 
   List<PopoverAction> get _actions {
     return [
@@ -48,6 +53,32 @@ class ViewAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 受限用户：按钮保留在 widget tree 中但禁用，
+    // 确保 context.watch 实时切换权限时能立即响应
+    if (!enabled) {
+      final disabledButton = Opacity(
+        opacity: 0.3,
+        child: FlowyIconButton(
+          width: 24,
+          icon: FlowySvg(
+            FlowySvgs.view_item_add_s,
+            color: isHovered ? Theme.of(context).colorScheme.onSurface : null,
+          ),
+          onPressed: () {},
+        ),
+      );
+
+      if (tooltipText != null && tooltipText!.isNotEmpty) {
+        return IgnorePointer(
+          child: FlowyTooltip(
+            message: tooltipText!,
+            child: disabledButton,
+          ),
+        );
+      }
+      return IgnorePointer(child: disabledButton);
+    }
+
     return PopoverActionList<PopoverAction>(
       direction: PopoverDirection.bottomWithLeftAligned,
       actions: _actions,
@@ -67,7 +98,7 @@ class ViewAddButton extends StatelessWidget {
             popover.show();
           },
         );
-        
+
         // 如果有tooltip文本，则包装在FlowyTooltip中
         if (tooltipText != null && tooltipText!.isNotEmpty) {
           return FlowyTooltip(
@@ -75,7 +106,7 @@ class ViewAddButton extends StatelessWidget {
             child: button,
           );
         }
-        
+
         return button;
       },
       onSelected: (action, popover) {

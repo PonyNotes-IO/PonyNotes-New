@@ -52,15 +52,9 @@ class FolderHeader extends StatefulWidget {
 class _FolderHeaderState extends State<FolderHeader> {
   final isHovered = ValueNotifier(false);
 
-  /// 检查当前用户是否为受限成员（Guest）
-  bool get _isRestrictedMember {
-    try {
-      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
-      return role == AFRolePB.Guest;
-    } catch (_) {
-      return false;
-    }
-  }
+  /// 当前用户是否为受限成员（Guest）
+  /// 由 build() 中 context.watch 驱动重建
+  late bool _isRestrictedMember;
 
   @override
   void dispose() {
@@ -70,6 +64,11 @@ class _FolderHeaderState extends State<FolderHeader> {
 
   @override
   Widget build(BuildContext context) {
+    try {
+      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+    } catch (_) {
+      _isRestrictedMember = false;
+    }
     final theme = AppFlowyTheme.of(context);
     final alwaysShowButtons = widget.isTablet || PlatformInfo.isTablet;
 
@@ -113,35 +112,23 @@ class _FolderHeaderState extends State<FolderHeader> {
   }
 
   Widget _buildAddButton() {
-    // 受限成员禁用文件夹头"+"按钮
-    if (_isRestrictedMember) {
-      return FlowyTooltip(
-        message: '无权限',
-        child: IgnorePointer(
-          child: Opacity(
-            opacity: 0.3,
-            child: FlowyIconButton(
-              width: 24,
-              iconPadding: const EdgeInsets.all(4.0),
-              tooltipText: widget.addButtonTooltip,
-              icon: const FlowySvg(FlowySvgs.view_item_add_s),
-              onPressed: () {
-                showToastNotification(message: '无权限');
-              },
-            ),
-          ),
-        ),
-      );
-    }
+    // 受限成员按钮禁用（保留在 tree 中，context.watch 实时响应权限变化）
 
     if (widget.showCreateSpaceButton && widget.onCreateSpace != null) {
-      return FlowyIconButton(
+      final btn = FlowyIconButton(
         width: 24,
         iconPadding: const EdgeInsets.all(4.0),
         tooltipText: widget.addButtonTooltip,
         icon: const FlowySvg(FlowySvgs.space_add_s),
         onPressed: widget.onCreateSpace,
       );
+      // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
+      if (_isRestrictedMember) {
+        return IgnorePointer(
+          child: Opacity(opacity: 0.3, child: btn),
+        );
+      }
+      return btn;
     }
 
     if (widget.parentViewId != null && widget.onViewSelected != null) {
@@ -153,16 +140,24 @@ class _FolderHeaderState extends State<FolderHeader> {
           onEditing: (value) {},
           onSelected: widget.onViewSelected!,
           tooltipText: widget.addButtonTooltip,
+          enabled: !_isRestrictedMember,
         ),
       );
     }
 
-    return FlowyIconButton(
+    final btn = FlowyIconButton(
       width: 24,
       iconPadding: const EdgeInsets.all(4.0),
       tooltipText: widget.addButtonTooltip,
       icon: const FlowySvg(FlowySvgs.view_item_add_s),
       onPressed: widget.onAdded,
     );
+    // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
+    if (_isRestrictedMember) {
+      return IgnorePointer(
+        child: Opacity(opacity: 0.3, child: btn),
+      );
+    }
+    return btn;
   }
 }

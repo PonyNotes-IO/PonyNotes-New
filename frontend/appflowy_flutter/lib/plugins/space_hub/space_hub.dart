@@ -32,8 +32,9 @@ import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
@@ -993,6 +994,14 @@ class _SpaceDocumentList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 受限成员权限检查（context.watch 实时响应权限变化）
+    bool isRestrictedMember = false;
+    try {
+      isRestrictedMember =
+          context.watch<UserWorkspaceBloc>().state.currentUserRole ==
+              AFRolePB.Guest;
+    } catch (_) {}
+
     // 尝试从 SpaceBloc 获取空间文档列表
     SpaceBloc? spaceBloc;
     try {
@@ -1011,21 +1020,21 @@ class _SpaceDocumentList extends StatelessWidget {
           if (showHeader) ...[
             // Header stays here only in fullscreen, where HomeStack has no tabs.
             // 仅在应用内全屏保留列表头部；普通模式下由顶部预留区承载。
-            _buildHeader(context, spaceBloc),
+            _buildHeader(context, spaceBloc, isRestrictedMember),
             VSpace(4),
           ],
           // 文档列表
           Expanded(
             child: spaceBloc != null
-                ? _buildListFromSpaceBloc(context, spaceBloc)
-                : _buildListFromBackend(context),
+                ? _buildListFromSpaceBloc(context, spaceBloc, isRestrictedMember)
+                : _buildListFromBackend(context, isRestrictedMember),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
+  Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc, bool isRestrictedMember) {
     final theme = AppFlowyTheme.of(context);
     final isSidebarHidden = context.select<HomeSettingBloc, bool>(
       (bloc) => bloc.isMenuHidden,
@@ -1058,6 +1067,7 @@ class _SpaceDocumentList extends StatelessWidget {
             child: ViewAddButton(
               parentViewId: spaceView.id,
               onEditing: (_) {},
+              enabled: !isRestrictedMember,
               onSelected: (pluginBuilder, name, initialDataBytes,
                   openAfterCreated, createNewView) async {
                 final layout = pluginBuilder.layoutType;
@@ -1168,7 +1178,7 @@ class _SpaceDocumentList extends StatelessWidget {
     );
   }
 
-  Widget _buildListFromSpaceBloc(BuildContext context, SpaceBloc spaceBloc) {
+  Widget _buildListFromSpaceBloc(BuildContext context, SpaceBloc spaceBloc, bool isRestrictedMember) {
     final theme = AppFlowyTheme.of(context);
     return BlocListener<SpaceBloc, SpaceState>(
       bloc: spaceBloc,
@@ -1273,7 +1283,7 @@ class _SpaceDocumentList extends StatelessWidget {
               itemCount: childViews.length + 1,
               itemBuilder: (context, index) {
                 if (index == childViews.length) {
-                  return AFGhostIconTextButton.primary(
+                  final addBtn = AFGhostIconTextButton.primary(
                     text: '新增笔记页', // 临时使用硬编码文本
                     mainAxisAlignment: MainAxisAlignment.start,
                     size: AFButtonSize.l,
@@ -1289,6 +1299,13 @@ class _SpaceDocumentList extends StatelessWidget {
                       color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
                   );
+                  // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
+                  if (isRestrictedMember) {
+                    return IgnorePointer(
+                      child: Opacity(opacity: 0.3, child: addBtn),
+                    );
+                  }
+                  return addBtn;
                 }
                 final childView = childViews[index];
                 return ViewItem(
@@ -1323,7 +1340,7 @@ class _SpaceDocumentList extends StatelessWidget {
     );
   }
 
-  Widget _buildListFromBackend(BuildContext context) {
+  Widget _buildListFromBackend(BuildContext context, bool isRestrictedMember) {
     final theme = AppFlowyTheme.of(context);
     return FutureBuilder<List<ViewPB>>(
       future: _loadChildViews(spaceView.id),
@@ -1344,7 +1361,7 @@ class _SpaceDocumentList extends StatelessWidget {
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
-                return AFGhostIconTextButton.primary(
+                final addBtn = AFGhostIconTextButton.primary(
                   text: '新增日记页', // 临时使用硬编码文本
                   mainAxisAlignment: MainAxisAlignment.start,
                   size: AFButtonSize.xl,
@@ -1360,6 +1377,13 @@ class _SpaceDocumentList extends StatelessWidget {
                     color: Theme.of(context).textTheme.bodyMedium?.color,
                   ),
                 );
+                // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
+                if (isRestrictedMember) {
+                  return IgnorePointer(
+                    child: Opacity(opacity: 0.3, child: addBtn),
+                  );
+                }
+                return addBtn;
               }
               final childView = childViews[index];
               return ViewItem(
