@@ -259,7 +259,7 @@ class _DocumentCoverWidgetState extends State<DocumentCoverWidget> {
 
   double _calculateIconLeft(BuildContext context, BoxConstraints constraints) {
     final editorState = context.read<EditorState>();
-    final appearanceCubit = context.read<DocumentAppearanceCubit>();
+    final appearanceCubit = context.watch<DocumentAppearanceCubit>();
 
     final renderBox = editorState.renderBox;
 

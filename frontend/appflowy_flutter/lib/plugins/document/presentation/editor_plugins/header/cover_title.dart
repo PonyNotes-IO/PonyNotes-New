@@ -87,13 +87,13 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
         .textTheme
         .bodyMedium!
         .copyWith(fontSize: 40.0, fontWeight: FontWeight.w700);
-    final width = context.read<DocumentAppearanceCubit>().state.width;
+    final width = context.watch<DocumentAppearanceCubit>().state.width;
     return BlocConsumer<ViewBloc, ViewState>(
       listenWhen: (previous, current) =>
           previous.view.name != current.view.name && !updatingViewName,
       listener: _onListen,
       builder: (context, state) {
-        final appearance = context.read<DocumentAppearanceCubit>().state;
+        final appearance = context.watch<DocumentAppearanceCubit>().state;
         return Container(
           constraints: BoxConstraints(maxWidth: width),
           child: Theme(

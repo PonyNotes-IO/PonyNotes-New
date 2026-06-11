@@ -24,7 +24,7 @@ class FontFamilyItem extends StatelessWidget {
     final theme = ToolbarColorExtension.of(context);
     final fontFamily = _getCurrentSelectedFontFamilyName();
     final systemFonFamily =
-        context.read<DocumentAppearanceCubit>().state.fontFamily;
+        context.watch<DocumentAppearanceCubit>().state.fontFamily;
     return MobileToolbarMenuItemWrapper(
       size: const Size(144, 52),
       onTap: () async {

@@ -79,7 +79,7 @@ class EditorStyleCustomizer {
     final theme = Theme.of(context);
     final afThemeExtension = AFThemeExtension.of(context);
     final appearanceFont = context.read<AppearanceSettingsCubit>().state.font;
-    final appearance = context.read<DocumentAppearanceCubit>().state;
+    final appearance = context.watch<DocumentAppearanceCubit>().state;
     final fontSize = appearance.fontSize;
     String fontFamily = appearance.fontFamily;
     if (fontFamily.isEmpty && appearanceFont.isNotEmpty) {
@@ -148,7 +148,7 @@ class EditorStyleCustomizer {
     final fontFamily = pageStyle.fontFamily ??
         context.read<AppearanceSettingsCubit>().state.font;
     final defaultTextDirection =
-        context.read<DocumentAppearanceCubit>().state.defaultTextDirection;
+        context.watch<DocumentAppearanceCubit>().state.defaultTextDirection;
     final textScaleFactor =
         context.read<AppearanceSettingsCubit>().state.textScaleFactor;
     final baseTextStyle = this.baseTextStyle(fontFamily);
@@ -203,11 +203,11 @@ class EditorStyleCustomizer {
       fontSizes = state.fontLayout.headingFontSizes;
     } else {
       fontFamily = context
-          .read<DocumentAppearanceCubit>()
+          .watch<DocumentAppearanceCubit>()
           .state
           .fontFamily
           .orDefault(context.read<AppearanceSettingsCubit>().state.font);
-      fontSize = context.read<DocumentAppearanceCubit>().state.fontSize;
+      fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
       fontSizes = [
         fontSize + 16,
         fontSize + 12,
@@ -223,9 +223,9 @@ class EditorStyleCustomizer {
   }
 
   CodeBlockStyle codeBlockStyleBuilder() {
-    final fontSize = context.read<DocumentAppearanceCubit>().state.fontSize;
+    final fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
     final fontFamily =
-        context.read<DocumentAppearanceCubit>().state.codeFontFamily;
+        context.watch<DocumentAppearanceCubit>().state.codeFontFamily;
 
     return CodeBlockStyle(
       textStyle: baseTextStyle(fontFamily).copyWith(
@@ -250,7 +250,7 @@ class EditorStyleCustomizer {
         color: afThemeExtension.onBackground,
       );
     } else {
-      final fontSize = context.read<DocumentAppearanceCubit>().state.fontSize;
+      final fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
       return baseTextStyle(null).copyWith(
         fontSize: fontSize,
         height: 1.5,
@@ -259,7 +259,7 @@ class EditorStyleCustomizer {
   }
 
   TextStyle outlineBlockPlaceholderStyleBuilder() {
-    final fontSize = context.read<DocumentAppearanceCubit>().state.fontSize;
+    final fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
     return TextStyle(
       fontFamily: defaultFontFamily,
       fontSize: fontSize,
@@ -278,7 +278,7 @@ class EditorStyleCustomizer {
         fontSize: fontSize,
       );
     } else {
-      final fontSize = context.read<DocumentAppearanceCubit>().state.fontSize;
+      final fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
       return baseTextStyle(null).copyWith(
         fontSize: fontSize,
         height: 1.5,
