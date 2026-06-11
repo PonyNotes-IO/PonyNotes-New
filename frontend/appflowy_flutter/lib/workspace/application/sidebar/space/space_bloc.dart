@@ -110,6 +110,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             createNewPageByDefault,
             openAfterCreate,
           ) async {
+            // 检查用户是否有创建权限（Guest 角色无法创建）
+            final canCreate = await _checkCreatePermission();
+            if (!canCreate) {
+              showToastNotification(
+                message: '受限成员无法创建空间',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             // Check workspace setting: if only owners can create team workspace, verify current user is owner.
             // Only apply this check for public/closed spaces, not for private spaces.
             bool shouldProceed = true;
@@ -201,11 +211,31 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               return;
             }
 
+            // 检查用户是否有删除权限（Guest 角色无法删除）
+            final canDelete = await _checkDeletePermission();
+            if (!canDelete) {
+              showToastNotification(
+                message: '受限成员无法删除空间',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             await ViewBackendService.deleteView(viewId: deletedSpace.id);
 
             Log.info('delete space: ${deletedSpace.name}(${deletedSpace.id})');
           },
           rename: (space, name) async {
+            // 检查用户是否有重命名权限（Guest 角色无法重命名）
+            final canRename = await _checkRenamePermission();
+            if (!canRename) {
+              showToastNotification(
+                message: '受限成员无法重命名空间',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             add(
               SpaceEvent.update(
                 space: space,
@@ -217,6 +247,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             );
           },
           changeIcon: (space, icon, iconColor) async {
+            // 检查用户是否有修改权限（Guest 角色无法修改）
+            final canUpdate = await _checkRenamePermission();
+            if (!canUpdate) {
+              showToastNotification(
+                message: '受限成员无法修改空间图标',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             add(
               SpaceEvent.update(
                 space: space,
@@ -229,6 +269,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             space ??= state.currentSpace;
             if (space == null) {
               Log.error('update space failed, space is null');
+              return;
+            }
+
+            // 检查用户是否有修改权限（Guest 角色无法修改）
+            final canUpdate = await _checkRenamePermission();
+            if (!canUpdate) {
+              showToastNotification(
+                message: '受限成员无法修改空间',
+                type: ToastificationType.error,
+              );
               return;
             }
 
@@ -453,6 +503,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
           createPage: (name, layout, index, openAfterCreate) async {
             final parentViewId = state.currentSpace?.id;
             if (parentViewId == null) {
+              return;
+            }
+
+            // 检查用户是否有创建权限（Guest 角色无法创建）
+            final canCreate = await _checkCreatePermission();
+            if (!canCreate) {
+              showToastNotification(
+                message: '受限成员无法创建文档',
+                type: ToastificationType.error,
+              );
               return;
             }
 
@@ -742,6 +802,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               return;
             }
 
+            // 检查用户是否有创建权限（Guest 角色无法创建）
+            final canCreate = await _checkCreatePermission();
+            if (!canCreate) {
+              showToastNotification(
+                message: '受限成员无法复制空间',
+                type: ToastificationType.error,
+              );
+              return;
+            }
+
             Log.info('duplicate space: ${space.name}(${space.id})');
 
             emit(state.copyWith(isDuplicatingSpace: true));
@@ -942,6 +1012,91 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     // 空间默认展开（如果缓存中没有记录）
     return ExpandedViewsCache.instance.isExpanded(space.id) || 
            !ExpandedViewsCache.instance.cache.containsKey(space.id);
+  }
+
+  /// 检查当前用户是否有创建权限
+  /// Guest（受限成员）无法创建文档和空间
+  Future<bool> _checkCreatePermission() async {
+    try {
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法创建
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check create permission: ${e.msg}');
+          // 获取失败时允许创建（后端会执行最终检查）
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking create permission: $e\n$st');
+      return true;
+    }
+  }
+
+  /// 检查当前用户是否有删除权限
+  /// Guest（受限成员）无法删除空间
+  Future<bool> _checkDeletePermission() async {
+    try {
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法删除
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check delete permission: ${e.msg}');
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking delete permission: $e\n$st');
+      return true;
+    }
+  }
+
+  /// 检查当前用户是否有重命名权限
+  /// Guest（受限成员）无法重命名空间
+  Future<bool> _checkRenamePermission() async {
+    try {
+      final membersRes = await UserBackendService(userId: userProfile.id)
+          .getWorkspaceMembers(workspaceId);
+      return await membersRes.fold(
+        (members) {
+          final myMember = members.items.firstWhereOrNull(
+            (m) => m.uid.toInt() == userProfile.id.toInt(),
+          );
+          // Guest 角色无法重命名
+          if (myMember?.role == AFRolePB.Guest) {
+            return false;
+          }
+          return true;
+        },
+        (e) async {
+          Log.error('Failed to check rename permission: ${e.msg}');
+          return true;
+        },
+      );
+    } catch (e, st) {
+      Log.error('Exception when checking rename permission: $e\n$st');
+      return true;
+    }
   }
 
   Future<bool> migrate({bool auto = true}) async {
