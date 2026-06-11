@@ -7,6 +7,7 @@ import 'package:appflowy/workspace/application/permission/workspace_permission_s
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -193,7 +194,7 @@ class ViewBackendService {
     if (!canDelete) {
       return FlowyResult.failure(
         FlowyError.create()
-          ..code = ErrorCode.NoPermissionRequired
+          ..code = ErrorCode.NotEnoughPermissions
           ..msg = '受限成员无法删除文档',
       );
     }

@@ -3,6 +3,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:collection/collection.dart';
+import 'package:fixnum/fixnum.dart';
 
 /// 工作区权限服务
 /// 提供集中式的权限检查，确保 Guest（受限成员）无法执行创建、删除等操作
@@ -65,7 +66,7 @@ class WorkspacePermissionService {
     required int userId,
   }) async {
     try {
-      final service = UserBackendService(userId: userId);
+      final service = UserBackendService(userId: Int64(userId));
       final result = await service.getWorkspaceMembers(workspaceId);
       return result.fold(
         (members) {
