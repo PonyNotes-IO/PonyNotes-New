@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
@@ -16,7 +17,8 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.d
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart' hide Icon;
@@ -43,6 +45,16 @@ class SidebarSpaceHeader extends StatefulWidget {
 class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
   final isHovered = ValueNotifier(false);
   final onEditing = ValueNotifier(false);
+
+  /// 检查当前用户是否为受限成员（Guest）
+  bool get _isRestrictedMember {
+    try {
+      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+      return role == AFRolePB.Guest;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void dispose() {
@@ -127,6 +139,57 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
   }
 
   Widget _buildRightIcon(bool isHovered) {
+    // 受限成员禁用空间头"+"按钮
+    final bool restricted = _isRestrictedMember;
+
+    final addPageButton = ViewAddButton(
+      parentViewId: widget.space.id,
+      onEditing: (_) {},
+      onSelected: (
+        pluginBuilder,
+        name,
+        initialDataBytes,
+        openAfterCreated,
+        createNewView,
+      ) async {
+        // ✅ 检测是否是手写笔记类型
+        if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+          // 手写笔记使用 Document layout，但需要通过 extra 字段标识
+          final ext = {'view_type': 'handwriting_saber'};
+
+          final result = await ViewBackendService.createView(
+            name: '',
+            layoutType: ViewLayoutPB.Document,
+            parentViewId: widget.space.id,
+            index: 0,
+            openAfterCreate: true,
+            ext: ext.map((k, v) => MapEntry(k, v.toString())),
+          );
+
+          result.fold(
+            (view) {
+              // 展开空间
+              context.read<SpaceBloc>().add(
+                SpaceEvent.expand(widget.space, true),
+              );
+            },
+            (error) {
+              Log.error('Failed to create handwriting saber page: $error');
+            },
+          );
+          return;
+        }
+
+        if (pluginBuilder.layoutType == ViewLayoutPB.Document) {
+          name = '';
+        }
+        if (createNewView) {
+          widget.onAdded(pluginBuilder.layoutType!);
+        }
+      },
+      isHovered: isHovered,
+    );
+
     return ValueListenableBuilder(
       valueListenable: onEditing,
       builder: (context, onEditing, child) => Opacity(
@@ -141,54 +204,15 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
             ),
             const HSpace(8.0),
             FlowyTooltip(
-              message: LocaleKeys.sideBar_addAPage.tr(),
-              child: ViewAddButton(
-                parentViewId: widget.space.id,
-                onEditing: (_) {},
-                onSelected: (
-                  pluginBuilder,
-                  name,
-                  initialDataBytes,
-                  openAfterCreated,
-                  createNewView,
-                ) async {
-                  // ✅ 检测是否是手写笔记类型
-                  if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
-                    // 手写笔记使用 Document layout，但需要通过 extra 字段标识
-                    final ext = {'view_type': 'handwriting_saber'};
-                    
-                    final result = await ViewBackendService.createView(
-                      name: '',
-                      layoutType: ViewLayoutPB.Document,
-                      parentViewId: widget.space.id,
-                      index: 0,
-                      openAfterCreate: true,
-                      ext: ext.map((k, v) => MapEntry(k, v.toString())),
-                    );
-                    
-                    result.fold(
-                      (view) {
-                        // 展开空间
-                        context.read<SpaceBloc>().add(
-                          SpaceEvent.expand(widget.space, true),
-                        );
-                      },
-                      (error) {
-                        Log.error('Failed to create handwriting saber page: $error');
-                      },
-                    );
-                    return;
-                  }
-                  
-                  if (pluginBuilder.layoutType == ViewLayoutPB.Document) {
-                    name = '';
-                  }
-                  if (createNewView) {
-                    widget.onAdded(pluginBuilder.layoutType!);
-                  }
-                },
-                isHovered: isHovered,
-              ),
+              message: restricted ? '无权限' : LocaleKeys.sideBar_addAPage.tr(),
+              child: restricted
+                  ? IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.3,
+                        child: addPageButton,
+                      ),
+                    )
+                  : addPageButton,
             ),
           ],
         ),

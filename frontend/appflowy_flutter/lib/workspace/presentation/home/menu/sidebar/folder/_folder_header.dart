@@ -1,11 +1,15 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class FolderHeader extends StatefulWidget {
   const FolderHeader({
@@ -47,6 +51,16 @@ class FolderHeader extends StatefulWidget {
 
 class _FolderHeaderState extends State<FolderHeader> {
   final isHovered = ValueNotifier(false);
+
+  /// 检查当前用户是否为受限成员（Guest）
+  bool get _isRestrictedMember {
+    try {
+      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+      return role == AFRolePB.Guest;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void dispose() {
@@ -99,6 +113,27 @@ class _FolderHeaderState extends State<FolderHeader> {
   }
 
   Widget _buildAddButton() {
+    // 受限成员禁用文件夹头"+"按钮
+    if (_isRestrictedMember) {
+      return FlowyTooltip(
+        message: '无权限',
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: 0.3,
+            child: FlowyIconButton(
+              width: 24,
+              iconPadding: const EdgeInsets.all(4.0),
+              tooltipText: widget.addButtonTooltip,
+              icon: const FlowySvg(FlowySvgs.view_item_add_s),
+              onPressed: () {
+                showToastNotification(message: '无权限');
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
     if (widget.showCreateSpaceButton && widget.onCreateSpace != null) {
       return FlowyIconButton(
         width: 24,

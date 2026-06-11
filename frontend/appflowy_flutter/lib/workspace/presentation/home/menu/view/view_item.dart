@@ -32,8 +32,9 @@ import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart' hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -558,6 +559,16 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   bool isIconPickerOpened = false;
   bool isRenaming = false;
 
+  /// 检查当前用户是否为受限成员（Guest）
+  bool get _isRestrictedMember {
+    try {
+      final role = context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
+      return role == AFRolePB.Guest;
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _renameController.dispose();
@@ -630,20 +641,23 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         children.addAll(widget.rightIconsBuilder!(context, widget.view));
       } else {
         // ··· more action button
-        children.add(
-          _buildViewMoreActionButton(
-            context,
-            viewMoreActionController,
-            (_) => FlowyTooltip(
-              message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
-              child: FlowyIconButton(
-                width: 24,
-                icon: const FlowySvg(FlowySvgs.workspace_three_dots_s),
-                onPressed: viewMoreActionController.show,
+        // 受限成员隐藏更多操作按钮
+        if (!_isRestrictedMember) {
+          children.add(
+            _buildViewMoreActionButton(
+              context,
+              viewMoreActionController,
+              (_) => FlowyTooltip(
+                message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+                child: FlowyIconButton(
+                  width: 24,
+                  icon: const FlowySvg(FlowySvgs.workspace_three_dots_s),
+                  onPressed: viewMoreActionController.show,
+                ),
               ),
             ),
-          ),
-        );
+          );
+        }
         // support add button for document, folder, and notebook layouts
         if (widget.view.layout == ViewLayoutPB.Document ||
             widget.view.layout == ViewLayoutPB.Folder ||
@@ -669,6 +683,13 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             onPointerDown: (event) {
               if (event.buttons == kSecondaryMouseButton &&
                   widget.enableRightClickContext) {
+                // 受限成员禁止右键操作文件菜单
+                if (_isRestrictedMember) {
+                  showToastNotification(
+                    message: '无权限',
+                  );
+                  return;
+                }
                 viewMoreActionController.showAt(
                   // We add some horizontal offset
                   event.position + const Offset(4, 0),
@@ -897,6 +918,23 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   // + button
   Widget _buildViewAddButton(BuildContext context) {
+    // 受限成员禁用新建按钮
+    if (_isRestrictedMember) {
+      return FlowyTooltip(
+        message: '无权限',
+        child: IgnorePointer(
+          child: Opacity(
+            opacity: 0.3,
+            child: ViewAddButton(
+              parentViewId: widget.view.id,
+              onEditing: (value) =>
+                  context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
+              onSelected: _onSelected,
+            ),
+          ),
+        ),
+      );
+    }
     return FlowyTooltip(
       message: LocaleKeys.menuAppHeader_addPageTooltip.tr(),
       child: ViewAddButton(
