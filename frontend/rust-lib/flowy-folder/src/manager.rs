@@ -2320,7 +2320,7 @@ impl FolderManager {
       view_id,
       meta: Default::default(),
       set_as_current: false,
-      index: None,
+      index: Some(0),
       section: None,
       extra: None,
       icon: None,
@@ -2328,10 +2328,10 @@ impl FolderManager {
 
     let view = create_view(self.user.user_id()?, params, import_data.view_layout);
 
-    // Insert the new view into the folder
+    // Insert the new view into the folder at the beginning (index 0)
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
-      folder.insert_view(view.clone(), None);
+      folder.insert_view(view.clone(), Some(0));
     }
 
     Ok((view, encoded_collab))
