@@ -131,7 +131,14 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
             FlowyResult<SharedUsers, FlowyError> res =
                 await repo.searchUsers(query: normalized);
             List<SharedUser> users = [];
-            res.fold((u) => users = u, (e) => users = []);
+            String? searchError;
+            res.fold(
+              (u) => users = u,
+              (e) {
+                searchError = e.msg;
+                users = [];
+              },
+            );
 
             // If no result and the query looks like a phone number, try variants
             if (users.isEmpty) {
@@ -186,8 +193,14 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
             });
 
             if (users.isEmpty) {
-              // no results; do not spam toast, just leave empty state visible
               Log.info('InviteSearch: no users found for query "$normalized"');
+              if (searchError != null) {
+                Log.error('InviteSearch: search error: $searchError');
+                showToastNotification(
+                  type: ToastificationType.error,
+                  message: '搜索失败，请检查网络后重试',
+                );
+              }
             }
           }
 
@@ -232,6 +245,24 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                               hintText: '搜索邮箱或手机号',
                             ),
                             autofocus: true,
+                            onSubmitted: (_) async {
+                              final q = _inputController.text.trim();
+                              if (q.isEmpty) {
+                                showToastNotification(
+                                  type: ToastificationType.error,
+                                  message: '请输入邮箱或手机号',
+                                );
+                                return;
+                              }
+                              if (!_isValidEmailOrPhone(q)) {
+                                showToastNotification(
+                                  type: ToastificationType.error,
+                                  message: '请输入有效的邮箱地址或手机号',
+                                );
+                                return;
+                              }
+                              await performSearch(q);
+                            },
                           ),
                         ),
                         const SizedBox(width: 8),
