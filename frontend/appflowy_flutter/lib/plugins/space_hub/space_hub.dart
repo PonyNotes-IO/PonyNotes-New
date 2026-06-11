@@ -1471,72 +1471,83 @@ class _SpaceHubResizableDivider extends StatefulWidget {
 
 class _SpaceHubResizableDividerState
     extends State<_SpaceHubResizableDivider> {
-  bool _isHover = false;
-  bool _isDragging = false;
+  final ValueNotifier<bool> _isHover = ValueNotifier(false);
+  final ValueNotifier<bool> _isDragging = ValueNotifier(false);
   double? _dragStartGlobalX;
   double? _dragStartWidth;
 
   @override
   void dispose() {
+    _isHover.dispose();
+    _isDragging.dispose();
     super.dispose();
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
-    setState(() => _isDragging = true);
-    _dragStartGlobalX = event.position.dx;
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _isDragging.value = true;
+    _dragStartGlobalX = details.globalPosition.dx;
     _dragStartWidth = widget.currentLeftWidth;
   }
 
-  void _handlePointerMove(PointerMoveEvent event) {
-    if (!_isDragging) return;
-
-    final dragStartGlobalX = _dragStartGlobalX ?? event.position.dx;
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    _isDragging.value = true;
+    final dragStartGlobalX = _dragStartGlobalX ?? details.globalPosition.dx;
     final dragStartWidth = _dragStartWidth ?? widget.currentLeftWidth;
     final newWidth =
-        (dragStartWidth + (event.position.dx - dragStartGlobalX))
+        (dragStartWidth + (details.globalPosition.dx - dragStartGlobalX))
             .clamp(widget.minLeftWidth, widget.maxLeftWidth);
     widget.onResize(newWidth);
   }
 
-  void _handlePointerUp(PointerUpEvent event) {
-    setState(() => _isDragging = false);
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    _isDragging.value = false;
     _dragStartGlobalX = null;
     _dragStartWidth = null;
   }
 
-  void _handlePointerCancel(PointerCancelEvent event) {
-    setState(() => _isDragging = false);
+  void _onHorizontalDragCancel() {
+    _isDragging.value = false;
     _dragStartGlobalX = null;
     _dragStartWidth = null;
   }
 
   @override
   Widget build(BuildContext context) {
-    // 拖拽时使用更轻量的 UI 反馈
-    final showHighlight = _isHover || _isDragging;
-
-    return Listener(
-      onPointerDown: _handlePointerDown,
-      onPointerMove: _handlePointerMove,
-      onPointerUp: _handlePointerUp,
-      onPointerCancel: _handlePointerCancel,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.resizeLeftRight,
-        onEnter: (_) => setState(() => _isHover = true),
-        onExit: (_) => setState(() => _isHover = false),
-        child: Container(
-          width: HomeSizes.spaceHubDividerWidth,
-          color: Colors.transparent,
-          child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 16),
-              curve: Curves.easeOut,
-              width: showHighlight ? 2.0 : 1.0,
-              color: showHighlight
-                  ? Theme.of(context).colorScheme.primary
-                  : Theme.of(context).dividerColor.withValues(alpha: 0.9),
-            ),
-          ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      onEnter: (_) => _isHover.value = true,
+      onExit: (_) => _isHover.value = false,
+      child: GestureDetector(
+        dragStartBehavior: DragStartBehavior.down,
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: _onHorizontalDragStart,
+        onHorizontalDragUpdate: _onHorizontalDragUpdate,
+        onHorizontalDragEnd: _onHorizontalDragEnd,
+        onHorizontalDragCancel: _onHorizontalDragCancel,
+        child: ValueListenableBuilder(
+          valueListenable: _isHover,
+          builder: (context, isHovered, _) {
+            return ValueListenableBuilder(
+              valueListenable: _isDragging,
+              builder: (context, isDragging, _) {
+                final showHighlight = isHovered || isDragging;
+                return Container(
+                  width: HomeSizes.spaceHubDividerWidth,
+                  color: Colors.transparent,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 16),
+                      curve: Curves.easeOut,
+                      width: showHighlight ? 2.0 : 1.0,
+                      color: showHighlight
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).dividerColor.withValues(alpha: 0.9),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
         ),
       ),
     );
