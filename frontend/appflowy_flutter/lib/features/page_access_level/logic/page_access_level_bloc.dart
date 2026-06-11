@@ -52,6 +52,10 @@ class PageAccessLevelBloc
   // in the row details page, we don't need to check the page access level
   final bool ignorePageAccessLevel;
 
+  // 定时轮询定时器：定期刷新权限状态，确保权限变更能及时生效
+  // 解决后端通知可能丢失的问题，提供兜底机制
+  Timer? _permissionPollingTimer;
+
   // DidUpdateSharedUsers 节流：避免短时间内重复刷新访问级别。
   // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
   // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
@@ -60,6 +64,7 @@ class PageAccessLevelBloc
 
   @override
   Future<void> close() async {
+    _permissionPollingTimer?.cancel();
     await listener.stop();
     await _sharedUsersListener?.stop();
     return super.close();
@@ -130,6 +135,14 @@ class PageAccessLevelBloc
         ),
         sectionType: sectionType,
       ),
+    );
+
+    // 启动定时轮询（每 3 秒刷新一次权限状态）
+    // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新
+    _permissionPollingTimer?.cancel();
+    _permissionPollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => add(const PageAccessLevelEvent.refreshAccessLevel()),
     );
   }
 
