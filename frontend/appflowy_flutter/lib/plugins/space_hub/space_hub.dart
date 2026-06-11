@@ -428,6 +428,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   /// 左侧文档列表的滚动控制器（用于 RawScrollbar）
   final ScrollController _scrollController = ScrollController();
 
+  /// ✅ 分隔线是否正在拖拽（用于协调白板手势）
+  bool _isDividerDragging = false;
+
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
     // 防抖：如果是同一个视图，跳过
@@ -526,6 +529,17 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return;
     }
     setState(() => _isDocumentListVisible = false);
+  }
+
+  /// ✅ 处理分隔线拖拽状态变化
+  /// 当拖拽开始时，可以通知白板禁用手势；拖拽结束时恢复手势
+  void _handleDividerDragStateChanged(bool isDragging) {
+    setState(() {
+      _isDividerDragging = isDragging;
+    });
+    Log.debug('[SpaceHub] Divider dragging: $isDragging');
+    // 如果需要，可以在这里添加通知白板的逻辑
+    // 例如：通过全局通知或回调机制通知白板组件
   }
 
   void _trySelectFirstDocument() {
@@ -682,6 +696,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                               maxLeftPanelWidth,
                             );
                           },
+                          // ✅ 新增：拖拽状态变化回调，用于协调白板手势
+                          onDragStateChanged: _handleDividerDragStateChanged,
                         ),
                     ],
                   ),
@@ -1474,6 +1490,7 @@ class _SpaceHubSidebarToggleButton extends StatelessWidget {
 
 /// SpaceHub 可拖动分隔线组件
 /// 使用 Listener 直接监听 pointer 事件，避免频繁 setState 导致的卡顿
+/// 拖拽时会通知父组件，以便协调白板的手势响应
 class _SpaceHubResizableDivider extends StatefulWidget {
   const _SpaceHubResizableDivider({
     super.key,
@@ -1481,12 +1498,16 @@ class _SpaceHubResizableDivider extends StatefulWidget {
     required this.maxLeftWidth,
     required this.currentLeftWidth,
     required this.onResize,
+    // ✅ 新增：拖拽状态变化回调，用于协调白板手势
+    this.onDragStateChanged,
   });
 
   final double minLeftWidth;
   final double maxLeftWidth;
   final double currentLeftWidth;
   final ValueChanged<double> onResize;
+  // ✅ 新增：当拖拽开始/结束时通知父组件
+  final ValueChanged<bool>? onDragStateChanged;
 
   @override
   State<_SpaceHubResizableDivider> createState() =>
@@ -1495,83 +1516,79 @@ class _SpaceHubResizableDivider extends StatefulWidget {
 
 class _SpaceHubResizableDividerState
     extends State<_SpaceHubResizableDivider> {
-  final ValueNotifier<bool> _isHover = ValueNotifier(false);
-  final ValueNotifier<bool> _isDragging = ValueNotifier(false);
+  bool _isHover = false;
+  bool _isDragging = false;
   double? _dragStartGlobalX;
   double? _dragStartWidth;
 
   @override
   void dispose() {
-    _isHover.dispose();
-    _isDragging.dispose();
     super.dispose();
   }
 
-  void _onHorizontalDragStart(DragStartDetails details) {
-    _isDragging.value = true;
-    _dragStartGlobalX = details.globalPosition.dx;
+  void _handlePointerDown(PointerDownEvent event) {
+    setState(() => _isDragging = true);
+    _dragStartGlobalX = event.position.dx;
     _dragStartWidth = widget.currentLeftWidth;
+    // ✅ 通知父组件拖拽开始
+    widget.onDragStateChanged?.call(true);
   }
 
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    _isDragging.value = true;
-    final dragStartGlobalX = _dragStartGlobalX ?? details.globalPosition.dx;
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (!_isDragging) return;
+
+    final dragStartGlobalX = _dragStartGlobalX ?? event.position.dx;
     final dragStartWidth = _dragStartWidth ?? widget.currentLeftWidth;
     final newWidth =
-        (dragStartWidth + (details.globalPosition.dx - dragStartGlobalX))
+        (dragStartWidth + (event.position.dx - dragStartGlobalX))
             .clamp(widget.minLeftWidth, widget.maxLeftWidth);
     widget.onResize(newWidth);
   }
 
-  void _onHorizontalDragEnd(DragEndDetails details) {
-    _isDragging.value = false;
+  void _handlePointerUp(PointerUpEvent event) {
+    setState(() => _isDragging = false);
     _dragStartGlobalX = null;
     _dragStartWidth = null;
+    // ✅ 通知父组件拖拽结束
+    widget.onDragStateChanged?.call(false);
   }
 
-  void _onHorizontalDragCancel() {
-    _isDragging.value = false;
+  void _handlePointerCancel(PointerCancelEvent event) {
+    setState(() => _isDragging = false);
     _dragStartGlobalX = null;
     _dragStartWidth = null;
+    // ✅ 通知父组件拖拽取消
+    widget.onDragStateChanged?.call(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      onEnter: (_) => _isHover.value = true,
-      onExit: (_) => _isHover.value = false,
-      child: GestureDetector(
-        dragStartBehavior: DragStartBehavior.down,
-        behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: _onHorizontalDragStart,
-        onHorizontalDragUpdate: _onHorizontalDragUpdate,
-        onHorizontalDragEnd: _onHorizontalDragEnd,
-        onHorizontalDragCancel: _onHorizontalDragCancel,
-        child: ValueListenableBuilder(
-          valueListenable: _isHover,
-          builder: (context, isHovered, _) {
-            return ValueListenableBuilder(
-              valueListenable: _isDragging,
-              builder: (context, isDragging, _) {
-                final showHighlight = isHovered || isDragging;
-                return Container(
-                  width: HomeSizes.spaceHubDividerWidth,
-                  color: Colors.transparent,
-                  child: Center(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 16),
-                      curve: Curves.easeOut,
-                      width: showHighlight ? 2.0 : 1.0,
-                      color: showHighlight
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).dividerColor.withValues(alpha: 0.9),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+    // 拖拽时使用更轻量的 UI 反馈
+    final showHighlight = _isHover || _isDragging;
+
+    return Listener(
+      behavior: HitTestBehavior.opaque, // ✅ 确保优先捕获指针事件
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeLeftRight,
+        onEnter: (_) => setState(() => _isHover = true),
+        onExit: (_) => setState(() => _isHover = false),
+        child: Container(
+          width: HomeSizes.spaceHubDividerWidth,
+          color: Colors.transparent,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 16),
+              curve: Curves.easeOut,
+              width: showHighlight ? 2.0 : 1.0,
+              color: showHighlight
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).dividerColor.withValues(alpha: 0.9),
+            ),
+          ),
         ),
       ),
     );
