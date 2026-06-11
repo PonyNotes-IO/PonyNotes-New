@@ -69,8 +69,13 @@ class WorkspaceMemberBloc
     });
   }
 
+  // 定时轮询定时器：定期刷新工作区成员列表，确保权限变更能及时生效
+  // 解决后端通知可能丢失的问题，提供兜底机制
+  Timer? _memberPollingTimer;
+
   @override
   Future<void> close() async {
+    _memberPollingTimer?.cancel();
     _workspaceId.dispose();
 
     await super.close();
@@ -184,6 +189,18 @@ class WorkspaceMemberBloc
           result: result,
         ),
       ),
+    );
+
+    // 启动定时轮询（每 3 秒刷新一次成员列表）
+    // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新
+    _memberPollingTimer?.cancel();
+    _memberPollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) {
+        if (!isClosed) {
+          add(const WorkspaceMemberEvent.getWorkspaceMembers());
+        }
+      },
     );
   }
 
