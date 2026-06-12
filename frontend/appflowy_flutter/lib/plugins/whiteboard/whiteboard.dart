@@ -909,7 +909,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   bool _shouldRenderTopActionsBar(bool isFullWindow) {
-    return isFullWindow || !widget.preferHostTopRightActions;
+    // 退出“应用内全屏”按钮已由宿主右上角操作栏(UnifiedViewTopRightActions)提供，
+    // 全屏时不再额外渲染内部浮层，避免出现上下两个“退出全屏”按钮。
+    // 仅当宿主不提供右上角操作时(preferHostTopRightActions=false)才渲染内部浮层。
+    return !widget.preferHostTopRightActions;
   }
 
   Widget _buildTopActionsBar(
