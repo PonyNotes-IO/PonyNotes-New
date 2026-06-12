@@ -1,4 +1,6 @@
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -42,7 +44,7 @@ class ImportPageScreen extends StatefulWidget {
 class _ImportPageScreenState extends State<ImportPageScreen> {
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final pageContent = Container(
       color: Theme.of(context).colorScheme.surface,
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(45.0, 68.0, 45.0, 32.0),
@@ -52,7 +54,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
             // Header
             _buildHeader(),
             const SizedBox(height: 20),
-            
+
             // Separator line
             Container(
               height: 1,
@@ -60,56 +62,61 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               color: Theme.of(context).dividerColor,
             ),
             const SizedBox(height: 17),
-            
+
             // Description
             _buildDescription(),
             const SizedBox(height: 30),
-            
+
             // File-based import section
             _buildFileImportSection(context),
             const SizedBox(height: 30),
-            
-            // Third-party import section  
+
+            // Third-party import section
             // _buildThirdPartyImportSection(),
           ],
         ),
       ),
     );
-  }
 
-  Widget _buildHeader() {
+    // 侧边栏收起时，在页面左上角显示展开按钮
     return BlocBuilder<HomeSettingBloc, HomeSettingState>(
       buildWhen: (p, c) => p.menuStatus != c.menuStatus,
       builder: (context, state) {
-        return Row(
+        final isSidebarHidden = state.menuStatus == MenuStatus.hidden;
+        if (!isSidebarHidden) return pageContent;
+        return Stack(
           children: [
-            // 侧边栏展开按钮（仅在侧边栏隐藏时显示）
-            if (state.menuStatus == MenuStatus.hidden) ...[
-              FlowyTooltip(
+            pageContent,
+            Positioned(
+              top: 10,
+              left: UniversalPlatform.isMacOS ? 50 : 4,
+              child: FlowyTooltip(
                 message: LocaleKeys.sideBar_openSidebar.tr(),
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => context.read<HomeSettingBloc>().add(
+                child: FlowyIconButton(
+                  width: 24,
+                  icon: FlowySvg(
+                    FlowySvgs.sidebar_collapse_custom_m,
+                    size: const Size.square(24),
+                  ),
+                  onPressed: () => context.read<HomeSettingBloc>().add(
                     const HomeSettingEvent.changeMenuStatus(
                       MenuStatus.expanded,
                     ),
                   ),
-                  child: FlowySvg(
-                    FlowySvgs.sidebar_collapse_custom_m,
-                    size: const Size(24, 24),
-                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-            ],
-            FlowyText.semibold(
-              "导入或者迁移",
-              fontSize: 20,
-              color: Theme.of(context).colorScheme.onSurface,
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildHeader() {
+    return FlowyText.semibold(
+      "导入或者迁移",
+      fontSize: 20,
+      color: Theme.of(context).colorScheme.onSurface,
     );
   }
 
