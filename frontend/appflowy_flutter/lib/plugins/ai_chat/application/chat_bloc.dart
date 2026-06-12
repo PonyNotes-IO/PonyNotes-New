@@ -14,6 +14,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/widgets.dart';
@@ -858,6 +859,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
       
+      // 【竞态防护】等待模型设置期间，远端历史消息可能已异步加载进来。
+      // 若此时已有历史消息，说明这是“重新打开的已有会话”（本地缓存冷导致首个空回调被误判为首次创建），
+      // 必须取消自动发送，否则会重复执行会话请求与回复。
+      if (chatController.messages.isNotEmpty) {
+        Log.info(
+            '🛑 ChatBloc: 发送前检测到已有 ${chatController.messages.length} 条历史消息，取消自动发送（重开已有会话）');
+        unawaited(_clearInitialMessageFromViewExtra());
+        return;
+      }
+
       if (!isClosed) {
         add(
           ChatEvent.sendMessage(
@@ -865,9 +876,42 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             metadata: metadata,
           ),
         );
+        // initial_message 是一次性触发标记，消费后立即从 view.extra 中清除，
+        // 防止以后任何一次重新打开该会话时再次自动发送（彻底根除复发）。
+        unawaited(_clearInitialMessageFromViewExtra());
       }
     } catch (e) {
       Log.error('❌ ChatBloc: 发送初始消息失败: $e');
+    }
+  }
+
+  /// 清除 view.extra 中的一次性字段 initial_message（及随附的初始图片），
+  /// 保留 preferred_model 等其它配置。失败不影响主流程。
+  Future<void> _clearInitialMessageFromViewExtra() async {
+    try {
+      final viewResult = await ViewBackendService.getView(chatId);
+      final view = viewResult.toNullable();
+      if (view == null || view.extra.isEmpty) {
+        return;
+      }
+      final decoded = jsonDecode(view.extra);
+      if (decoded is! Map) {
+        return;
+      }
+      final map = Map<String, dynamic>.from(decoded);
+      if (!map.containsKey('initial_message') &&
+          !map.containsKey('initial_images')) {
+        return;
+      }
+      map.remove('initial_message');
+      map.remove('initial_images');
+      await ViewBackendService.updateView(
+        viewId: chatId,
+        extra: jsonEncode(map),
+      );
+      Log.info('🧹 ChatBloc: 已清除 view.extra 中的一次性 initial_message');
+    } catch (e) {
+      Log.warn('⚠️ ChatBloc: 清除 view.extra 的 initial_message 失败: $e');
     }
   }
 
