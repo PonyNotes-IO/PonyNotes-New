@@ -4,6 +4,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/import/import_panel.dart';
 import 'package:appflowy/workspace/presentation/widgets/pop_up_action.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -13,6 +14,7 @@ class ViewAddButton extends StatelessWidget {
     required this.parentViewId,
     required this.onEditing,
     required this.onSelected,
+    this.onImportCompleted,
     this.isHovered = false,
     this.tooltipText,
     this.enabled = true,
@@ -27,6 +29,7 @@ class ViewAddButton extends StatelessWidget {
     bool openAfterCreated,
     bool createNewView,
   ) onSelected;
+  final void Function(List<ViewPB> importedViews)? onImportCompleted;
   final bool isHovered;
   final String? tooltipText;
 
@@ -138,8 +141,15 @@ class ViewAddButton extends StatelessWidget {
     showImportPanel(
       parentViewId,
       context,
-      (type, name, initialDataBytes) {
-        onSelected(action.pluginBuilder, null, null, true, false);
+      (type, name, initialDataBytes, importedViews) {
+        // 如果有导入完成回调，则调用它
+        if (onImportCompleted != null && importedViews != null && importedViews.isNotEmpty) {
+          onImportCompleted!(importedViews);
+        }
+        // 否则调用原来的 onSelected（保持向后兼容）
+        else {
+          onSelected(action.pluginBuilder, name, initialDataBytes, true, false);
+        }
       },
     );
   }

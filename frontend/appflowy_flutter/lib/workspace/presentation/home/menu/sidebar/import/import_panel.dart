@@ -21,6 +21,7 @@ typedef ImportCallback = void Function(
   ImportType type,
   String name,
   List<int>? document,
+  List<ViewPB>? importedViews,
 );
 
 Future<void> showImportPanel(
@@ -207,15 +208,20 @@ class _ImportPanelState extends State<ImportPanel> {
       }
     }
 
+    List<ViewPB> importedViews = [];
     if (importValues.isNotEmpty) {
-      await ImportBackendService.importPages(
+      final result = await ImportBackendService.importPages(
         parentViewId,
         importValues,
+      );
+      result.fold(
+        (views) => importedViews = views.items,
+        (_) {},
       );
     }
 
     showLoading.value = false;
-    widget.importCallback(importType, '', null);
+    widget.importCallback(importType, '', null, importedViews);
   }
 }
 

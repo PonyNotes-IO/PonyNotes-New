@@ -1084,6 +1084,24 @@ class _SpaceDocumentList extends StatelessWidget {
               parentViewId: spaceView.id,
               onEditing: (_) {},
               enabled: !isRestrictedMember,
+              onImportCompleted: (importedViews) async {
+                // 导入完成后，将导入的文件移动到列表第一位（参考新建文档使用 index: 0 的逻辑）
+                for (final view in importedViews) {
+                  await ViewBackendService.moveViewV2(
+                    viewId: view.id,
+                    newParentId: spaceView.id,
+                    prevViewId: null,  // null 表示移动到列表开头
+                  );
+                }
+                
+                // 刷新列表并选中第一个导入的文件
+                if (spaceBloc != null) {
+                  spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                }
+                if (importedViews.isNotEmpty) {
+                  onViewCreated(importedViews.first);
+                }
+              },
               onSelected: (pluginBuilder, name, initialDataBytes,
                   openAfterCreated, createNewView) async {
                 final layout = pluginBuilder.layoutType;
@@ -1434,7 +1452,11 @@ class _SpaceDocumentList extends StatelessWidget {
 
   Future<List<ViewPB>> _loadChildViews(String spaceId) async {
     final result = await ViewBackendService.getChildViews(viewId: spaceId);
-    return result.fold((views) => views, (_) => const <ViewPB>[]);
+    return result.fold((views) {
+      // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
+      views.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
+      return views;
+    }, (_) => const <ViewPB>[]);
   }
 
   /// 新建笔记页
