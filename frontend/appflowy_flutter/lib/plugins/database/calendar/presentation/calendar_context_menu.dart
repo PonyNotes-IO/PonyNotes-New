@@ -7,7 +7,6 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 
 import '../models/schedule_model.dart';
-import 'widgets/reminder_selection_dialog.dart';
 
 /// 点击日历格子呼出的上下文菜单，用于快速新建日程
 ///
@@ -77,6 +76,7 @@ class _CalendarContextMenuOverlayState
   bool _isSaving = false;
   bool _showStartTimePicker = false;
   bool _showEndTimePicker = false;
+  bool _showReminderPicker = false;
 
   static const double _menuWidth = 320;
   static const double _menuMaxHeight = 480;
@@ -559,20 +559,82 @@ class _CalendarContextMenuOverlayState
               : _reminderOption.label,
           isActive: _reminderOption != ReminderOption.none,
           onTap: () {
-            showDialog(
-              context: context,
-              builder: (_) => ReminderSelectionDialog(
-                currentOption: _reminderOption,
-                hasTime: !_isAllDay,
-                timeFormat: TimeFormatPB.TwentyFourHour,
-                onSave: (option) {
-                  if (mounted) setState(() => _reminderOption = option);
-                },
-              ),
-            );
+            setState(() => _showReminderPicker = !_showReminderPicker);
           },
         ),
+        if (_showReminderPicker) _buildInlineReminderPicker(af, theme),
       ],
+    );
+  }
+
+  /// 内联提醒选项选择器（替代弹窗，避免 OverlayEntry 层级冲突）
+  Widget _buildInlineReminderPicker(AFThemeExtension af, ThemeData theme) {
+    final options = ReminderOption.values.toList();
+    if (_reminderOption != ReminderOption.custom) {
+      options.remove(ReminderOption.custom);
+    }
+    final hasTime = !_isAllDay;
+    options.removeWhere(
+      (o) => !o.timeExempt && (!hasTime ? !o.withoutTime : o.requiresNoTime),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: af.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: af.borderColor, width: 0.5),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((option) {
+          String label = option.label;
+          if (option.withoutTime && !option.timeExempt) {
+            const time = "09:00";
+            final t = TimeFormatPB.TwentyFourHour == TimeFormatPB.TwelveHour
+                ? "$time AM"
+                : time;
+            label = "$label ($t)";
+          }
+          final isSelected = option == _reminderOption;
+          return InkWell(
+            onTap: () {
+              setState(() {
+                _reminderOption = option;
+                _showReminderPicker = false;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 16,
+                    color: isSelected
+                        ? theme.colorScheme.primary
+                        : af.lightIconColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isSelected ? af.onBackground : af.secondaryTextColor,
+                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
