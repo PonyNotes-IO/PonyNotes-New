@@ -279,8 +279,17 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         );
 
         importResult.fold(
-          (views) {
+          (views) async {
             if (mounted) {
+              // 将导入的文件移动到列表首位
+              for (final view in views.items) {
+                await ViewBackendService.moveViewV2(
+                  viewId: view.id,
+                  newParentId: externalImportView.id,
+                  prevViewId: null,  // null 表示移动到列表开头
+                );
+              }
+
               showToastNotification(
                 message: '成功将 ${result.fileName} 导入到外部导入项目',
                 type: ToastificationType.success,
@@ -532,8 +541,17 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         closeImportDialog();
 
         importResult.fold(
-          (views) {
+          (views) async {
             if (mounted) {
+              // 将导入的文件移动到列表首位
+              for (final view in views.items) {
+                await ViewBackendService.moveViewV2(
+                  viewId: view.id,
+                  newParentId: externalImportView.id,
+                  prevViewId: null,  // null 表示移动到列表开头
+                );
+              }
+
               final fileCount = importValues.length;
               showToastNotification(
                 message: '成功导入 $fileCount 个文件到外部导入项目',

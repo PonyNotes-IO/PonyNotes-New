@@ -1,6 +1,7 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -141,6 +142,16 @@ class _FolderHeaderState extends State<FolderHeader> {
           onSelected: widget.onViewSelected!,
           tooltipText: widget.addButtonTooltip,
           enabled: !_isRestrictedMember,
+          onImportCompleted: (importedViews) async {
+            // 导入完成后，将导入的文件移动到列表第一位
+            for (final view in importedViews) {
+              await ViewBackendService.moveViewV2(
+                viewId: view.id,
+                newParentId: widget.parentViewId!,
+                prevViewId: null,  // null 表示移动到列表开头
+              );
+            }
+          },
         ),
       );
     }

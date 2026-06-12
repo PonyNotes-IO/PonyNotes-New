@@ -170,8 +170,8 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
             (view) {
               // 展开空间
               context.read<SpaceBloc>().add(
-                SpaceEvent.expand(widget.space, true),
-              );
+                    SpaceEvent.expand(widget.space, true),
+                  );
             },
             (error) {
               Log.error('Failed to create handwriting saber page: $error');
@@ -186,6 +186,18 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
         if (createNewView) {
           widget.onAdded(pluginBuilder.layoutType!);
         }
+      },
+      onImportCompleted: (importedViews) async {
+        // 导入完成后，将导入的文件移动到列表第一位（参考 space_hub 的实现）
+        for (final view in importedViews) {
+          await ViewBackendService.moveViewV2(
+            viewId: view.id,
+            newParentId: widget.space.id,
+            prevViewId: null,  // null 表示移动到列表开头
+          );
+        }
+        // 刷新当前空间的子视图列表
+        context.read<SpaceBloc>().add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
       },
       isHovered: isHovered,
     );
