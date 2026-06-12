@@ -443,42 +443,56 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               '[WBCollab][ExcalidrawWebView] 📸 downloadCloudImages: ${cloudFiles.length} files to download');
 
           final results = <Map<String, dynamic>>[];
+
+          // 先过滤出有效项（fileId/url 齐全）
+          final validItems = <Map>[];
           for (final item in cloudFiles) {
             if (item is! Map) continue;
-            final fileId = item['fileId'] as String?;
-            final url = item['url'] as String?;
-            final mimeType = item['mimeType'] as String? ?? 'image/png';
-
-            if (fileId == null || url == null) continue;
-
-            try {
-              Log.info(
-                  '[WBCollab][ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
-
-              // 使用 HTTP 下载图片（带认证）
-              final imageBytes = await _downloadCloudImage(url);
-              if (imageBytes != null && imageBytes.isNotEmpty) {
-                // 转换为 base64 dataURL
-                final base64Data = base64Encode(imageBytes);
-                final dataURL = 'data:$mimeType;base64,$base64Data';
-
-                results.add({
-                  'fileId': fileId,
-                  'dataURL': dataURL,
-                  'mimeType': mimeType,
-                  'created': DateTime.now().millisecondsSinceEpoch,
-                });
-
-                Log.info(
-                    '[ExcalidrawWebView] ✅ Downloaded cloud image: $fileId (${imageBytes.length} bytes)');
-              } else {
-                Log.warn(
-                    '[ExcalidrawWebView] ⚠️ Downloaded empty image for: $fileId');
-              }
-            } catch (e) {
-              Log.error(
-                  '[ExcalidrawWebView] ❌ Failed to download cloud image $fileId: $e');
+            if (item['fileId'] is String && item['url'] is String) {
+              validItems.add(item);
             }
+          }
+
+          // 并发下载：每批最多 6 张，避免串行逐张等待导致多图白板加载特别慢。
+          const concurrency = 6;
+          for (var i = 0; i < validItems.length; i += concurrency) {
+            final batch = validItems.skip(i).take(concurrency);
+            final batchResults = await Future.wait(
+              batch.map((item) async {
+                final fileId = item['fileId'] as String;
+                final url = item['url'] as String;
+                final mimeType = item['mimeType'] as String? ?? 'image/png';
+                try {
+                  Log.info(
+                      '[WBCollab][ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
+
+                  // 使用 HTTP 下载图片（带认证）
+                  final imageBytes = await _downloadCloudImage(url);
+                  if (imageBytes != null && imageBytes.isNotEmpty) {
+                    // 转换为 base64 dataURL
+                    final base64Data = base64Encode(imageBytes);
+                    final dataURL = 'data:$mimeType;base64,$base64Data';
+
+                    Log.info(
+                        '[ExcalidrawWebView] ✅ Downloaded cloud image: $fileId (${imageBytes.length} bytes)');
+                    return <String, dynamic>{
+                      'fileId': fileId,
+                      'dataURL': dataURL,
+                      'mimeType': mimeType,
+                      'created': DateTime.now().millisecondsSinceEpoch,
+                    };
+                  } else {
+                    Log.warn(
+                        '[ExcalidrawWebView] ⚠️ Downloaded empty image for: $fileId');
+                  }
+                } catch (e) {
+                  Log.error(
+                      '[ExcalidrawWebView] ❌ Failed to download cloud image $fileId: $e');
+                }
+                return null;
+              }),
+            );
+            results.addAll(batchResults.whereType<Map<String, dynamic>>());
           }
 
           Log.info(

@@ -64,6 +64,11 @@ class WhiteboardPreloadTask extends LaunchTask {
         'assets/excalidraw/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2',
         'assets/excalidraw/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2',
         'assets/excalidraw/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2',
+        // Assistant 是 excalidraw UI 默认字体，已本地化（去除海外 CDN 依赖），预热避免首屏 document.fonts.load 等待。
+        'assets/excalidraw/assets/Assistant-Regular.woff2',
+        'assets/excalidraw/assets/Assistant-Medium.woff2',
+        'assets/excalidraw/assets/Assistant-SemiBold.woff2',
+        'assets/excalidraw/assets/Assistant-Bold.woff2',
       };
 
       if (indexHtml != null) {
