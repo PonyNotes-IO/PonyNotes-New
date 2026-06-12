@@ -15,6 +15,7 @@ import 'package:appflowy/plugins/shared/share/_shared.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_menu.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -741,7 +742,11 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
             onTap: () {
               CalendarUnsavedGuard.instance.maybeConfirmLeave(
                 context,
-                () => context.read<TabsBloc>().openPlugin(view),
+                () {
+                  // 标记从共享列表打开，文档页面需要显示侧边栏展开按钮
+                  getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+                  context.read<TabsBloc>().openPlugin(view);
+                },
               );
             },
             child: Padding(

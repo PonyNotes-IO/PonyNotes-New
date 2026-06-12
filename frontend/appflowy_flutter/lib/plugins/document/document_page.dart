@@ -1,6 +1,9 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
@@ -77,6 +80,7 @@ class _DocumentPageState extends State<DocumentPage>
   bool _handledDeletedInSpaceHub = false;
   bool _handledForceCloseNavigation = false;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
+  bool _showSidebarExpandButton = false; // 从最爱/共享列表打开时需要显示侧边栏展开按钮
   late final documentBloc = DocumentBloc(
       documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
@@ -85,6 +89,12 @@ class _DocumentPageState extends State<DocumentPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 读取标记并立即重置，保存到 State 中以保证 rebuild 后仍然有效
+    final menuSharedState = getIt<MenuSharedState>();
+    _showSidebarExpandButton = menuSharedState.openedFromFavoriteOrShared;
+    if (_showSidebarExpandButton) {
+      menuSharedState.openedFromFavoriteOrShared = false;
+    }
   }
 
   @override
@@ -308,7 +318,7 @@ class _DocumentPageState extends State<DocumentPage>
       }
     }
 
-    return Provider(
+    final editorContent = Provider(
       create: (_) {
         final context = SharedEditorContext();
         final children = editorState.document.root.children;
@@ -343,6 +353,48 @@ class _DocumentPageState extends State<DocumentPage>
         ),
       ),
     );
+
+    // 从最爱/共享列表打开的文档没有二级菜单，需要在左上角显示侧边栏展开按钮
+    if (_showSidebarExpandButton) {
+      return BlocBuilder<HomeSettingBloc, HomeSettingState>(
+        buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+        builder: (context, state) {
+          final isSidebarHidden = state.menuStatus == MenuStatus.hidden;
+          final theme = AppFlowyTheme.of(context);
+          // 始终用 Stack 包裹，避免侧边栏状态变化时 widget 树结构突变
+          // 导致 Provider (InheritedWidget) 被重新挂载触发 dependents 断言错误
+          return Stack(
+            children: [
+              editorContent,
+              if (isSidebarHidden)
+                Positioned(
+                  top: 10,
+                  left: UniversalPlatform.isMacOS ? 75 : 16,
+                  child: FlowyTooltip(
+                    message: LocaleKeys.sideBar_openSidebar.tr(),
+                    child: FlowyIconButton(
+                      width: 24,
+                      icon: FlowySvg(
+                        FlowySvgs.sidebar_collapse_custom_m,
+                        size: const Size.square(24),
+                        color: theme.iconColorScheme.primary,
+                      ),
+                      onPressed: () =>
+                          context.read<HomeSettingBloc>().add(
+                        const HomeSettingEvent.changeMenuStatus(
+                          MenuStatus.expanded,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    }
+
+    return editorContent;
   }
 
   Widget _buildTopBar(BuildContext context) {

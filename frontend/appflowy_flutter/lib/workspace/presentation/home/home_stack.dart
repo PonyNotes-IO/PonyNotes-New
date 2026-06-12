@@ -13,6 +13,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/util/theme_extension.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -1132,11 +1133,59 @@ class _HomeTopBarState extends State<HomeTopBar>
         ),
         child: Row(
           children: [
+            _buildSidebarToggleButton(context),
             HSpace(widget.layout.menuSpacing),
             const Expanded(child: SizedBox.shrink()),
           ],
         ),
       ),
+    );
+  }
+
+  /// 当侧边栏收起时，在顶部栏左侧显示展开按钮。
+  Widget _buildSidebarToggleButton(BuildContext context) {
+    return BlocBuilder<HomeSettingBloc, HomeSettingState>(
+      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+      builder: (context, state) {
+        if (state.menuStatus != MenuStatus.hidden) {
+          return const SizedBox.shrink();
+        }
+        final theme = AppFlowyTheme.of(context);
+        final shortcut = Platform.isMacOS ? '⌘+.' : 'Ctrl+\\';
+        final textSpan = TextSpan(
+          children: [
+            TextSpan(
+              text: '${LocaleKeys.sideBar_openSidebar.tr()}\n',
+              style: context.tooltipTextStyle(),
+            ),
+            TextSpan(
+              text: shortcut,
+              style: context
+                  .tooltipTextStyle()
+                  ?.copyWith(color: Theme.of(context).hintColor),
+            ),
+          ],
+        );
+        return FlowyTooltip(
+          richMessage: textSpan,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) {
+              context.read<HomeSettingBloc>().collapseMenu();
+            },
+            child: FlowyHover(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: FlowySvg(
+                  FlowySvgs.sidebar_collapse_custom_m,
+                  color: theme.iconColorScheme.secondary,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

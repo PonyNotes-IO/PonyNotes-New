@@ -1,10 +1,12 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -142,13 +144,20 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
         onSelected: (viewContext, selectedView) {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
-            () => context.read<TabsBloc>().openPlugin(selectedView),
+            () {
+              // 标记从最爱列表打开，文档页面需要显示侧边栏展开按钮
+              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              context.read<TabsBloc>().openPlugin(selectedView);
+            },
           );
         },
         onTertiarySelected: (viewContext, selectedView) {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
-            () => context.read<TabsBloc>().openPlugin(selectedView),
+            () {
+              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              context.read<TabsBloc>().openPlugin(selectedView);
+            },
           );
         },
       );
