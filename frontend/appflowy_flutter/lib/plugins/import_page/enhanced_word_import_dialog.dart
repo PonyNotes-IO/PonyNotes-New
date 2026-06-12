@@ -8,6 +8,7 @@ import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'processor/aliyun_doc_parse_processor.dart';
@@ -440,7 +441,16 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
         );
 
         importResult.fold(
-          (views) {
+          (views) async {
+            // 将导入的文件移动到列表首位
+            for (final view in views.items) {
+              await ViewBackendService.moveViewV2(
+                viewId: view.id,
+                newParentId: widget.parentViewId,
+                prevViewId: null,  // null 表示移动到列表开头
+              );
+            }
+            
             if (mounted) {
               Navigator.of(context).pop();
               if (widget.onImportSuccess != null) {

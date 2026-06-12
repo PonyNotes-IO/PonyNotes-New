@@ -11,6 +11,7 @@ import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfrx/pdfrx.dart' as pdfrx_widget;
 import 'package:markdown_widget/markdown_widget.dart';
@@ -637,16 +638,37 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             ..importType = ImportTypePB.Markdown,
         ];
         
-        await ImportBackendService.importPages(widget.parentViewId, importValues);
+        final importResult = await ImportBackendService.importPages(widget.parentViewId, importValues);
         
-        if (mounted) {
-          showToastNotification(
-            message: '成功导入PDF文档: $fileName',
-            type: ToastificationType.success,
-          );
-          Navigator.of(context).pop();
-          widget.onImportSuccess?.call();
-        }
+        importResult.fold(
+          (views) async {
+            // 将导入的文件移动到列表首位
+            for (final view in views.items) {
+              await ViewBackendService.moveViewV2(
+                viewId: view.id,
+                newParentId: widget.parentViewId,
+                prevViewId: null,  // null 表示移动到列表开头
+              );
+            }
+            
+            if (mounted) {
+              showToastNotification(
+                message: '成功导入PDF文档: $fileName',
+                type: ToastificationType.success,
+              );
+              Navigator.of(context).pop();
+              widget.onImportSuccess?.call();
+            }
+          },
+          (error) {
+            if (mounted) {
+              showToastNotification(
+                message: '导入失败: $error',
+                type: ToastificationType.error,
+              );
+            }
+          },
+        );
       }
     } catch (e) {
       Log.error('Failed to import PDF document: $e');
