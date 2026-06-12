@@ -1,7 +1,10 @@
-import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+﻿import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
@@ -99,7 +102,7 @@ class UnifiedViewTopRightActions extends StatelessWidget {
   }
 }
 
-class _UnifiedViewTopRightActionsContent extends StatelessWidget {
+class _UnifiedViewTopRightActionsContent extends StatefulWidget {
   const _UnifiedViewTopRightActionsContent({
     required this.view,
     required this.viewInfoBloc,
@@ -127,9 +130,57 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
   final List<Widget>? customActions;
 
   @override
+  State<_UnifiedViewTopRightActionsContent> createState() =>
+      _UnifiedViewTopRightActionsContentState();
+}
+
+class _UnifiedViewTopRightActionsContentState
+    extends State<_UnifiedViewTopRightActionsContent> {
+  // 缓存 Future，避免 BlocBuilder 重建时 FutureBuilder 重置导致闪烁
+  late Future<SpacePermission> _spacePermissionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _spacePermissionFuture = _getSpacePermission();
+  }
+
+  @override
+  void didUpdateWidget(_UnifiedViewTopRightActionsContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.view.id != widget.view.id) {
+      _spacePermissionFuture = _getSpacePermission();
+    }
+  }
+
+  /// 异步获取空间权限（与 ShareButton 逻辑一致）
+  Future<SpacePermission> _getSpacePermission() async {
+    try {
+      if (widget.view.isSpace) {
+        return widget.view.spacePermission;
+      }
+      final ancestorsResult =
+          await ViewBackendService.getViewAncestors(widget.view.id);
+      return ancestorsResult.fold(
+        (ancestors) {
+          for (final ancestor in ancestors.items) {
+            if (ancestor.isSpace) {
+              return ancestor.spacePermission;
+            }
+          }
+          return SpacePermission.publicToAll;
+        },
+        (_) => SpacePermission.publicToAll,
+      );
+    } catch (_) {
+      return SpacePermission.publicToAll;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final iconColor = iconColorOverride ??
-        (useFloatingSurface
+    final iconColor = widget.iconColorOverride ??
+        (widget.useFloatingSurface
             ? _floatingActionIconColor(context)
             : Theme.of(context).colorScheme.onSurface);
     final themedChild = Theme(
@@ -141,11 +192,17 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
       ),
       child: IconTheme(
         data: IconThemeData(color: iconColor),
-        child: _buildActions(context, iconColor),
+        child: FutureBuilder<SpacePermission>(
+          future: _spacePermissionFuture,
+          builder: (context, snapshot) {
+            final isPrivateSpace = snapshot.data == SpacePermission.private;
+            return _buildActions(context, iconColor, isPrivateSpace);
+          },
+        ),
       ),
     );
 
-    if (!useFloatingSurface) {
+    if (!widget.useFloatingSurface) {
       return themedChild;
     }
 
@@ -162,36 +219,40 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
     );
   }
 
-  Widget _buildActions(BuildContext context, Color iconColor) {
+  Widget _buildActions(
+    BuildContext context,
+    Color iconColor,
+    bool isPrivateSpace,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showCollaborators) ...[
+        if (widget.showCollaborators) ...[
           DocumentCollaborators(
-            key: ValueKey('collaborators_${view.id}'),
+            key: ValueKey('collaborators_${widget.view.id}'),
             width: 120,
             height: HomeSizes.topActionBarItemExtent,
-            view: view,
+            view: widget.view,
           ),
           const HSpace(8),
         ] else
           const HSpace(2),
-        if (showShareButton) ...[
+        if (widget.showShareButton && !isPrivateSpace) ...[
           ShareButton(
-            key: ValueKey('share_button_${view.id}'),
-            view: view,
+            key: ValueKey('share_button_${widget.view.id}'),
+            view: widget.view,
           ),
           const HSpace(4),
         ],
-        if (showFavoriteButton) ...[
+        if (widget.showFavoriteButton) ...[
           ViewFavoriteButton(
-            key: ValueKey('favorite_button_${view.id}'),
-            view: view,
+            key: ValueKey('favorite_button_${widget.view.id}'),
+            view: widget.view,
             inactiveColor: iconColor,
           ),
           const HSpace(4),
         ],
-        if (showFullWindowButton) ...[
+        if (widget.showFullWindowButton) ...[
           ValueListenableBuilder<bool>(
             valueListenable: FullWindowController.isFullWindow,
             builder: (context, isFullWindow, _) {
@@ -219,14 +280,14 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
           const HSpace(4),
         ],
         MoreViewActions(
-          view: view,
-          viewInfoBloc: viewInfoBloc ?? _maybeReadViewInfoBloc(context),
+          view: widget.view,
+          viewInfoBloc: widget.viewInfoBloc ?? _maybeReadViewInfoBloc(context),
           pageAccessLevelBloc:
-              pageAccessLevelBloc ?? _maybeReadPageAccessLevelBloc(context),
+              widget.pageAccessLevelBloc ?? _maybeReadPageAccessLevelBloc(context),
           iconColor: iconColor,
-          customActions: customActions ?? const [],
+          customActions: widget.customActions ?? const [],
         ),
-        HSpace(trailingSpacing),
+        HSpace(widget.trailingSpacing),
       ],
     );
   }
@@ -240,7 +301,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
   ViewInfoBloc? _maybeReadViewInfoBloc(BuildContext context) {
     try {
       final bloc = context.read<ViewInfoBloc>();
-      return bloc.view.id == view.id ? bloc : null;
+      return bloc.view.id == widget.view.id ? bloc : null;
     } catch (_) {
       return null;
     }
@@ -249,7 +310,7 @@ class _UnifiedViewTopRightActionsContent extends StatelessWidget {
   PageAccessLevelBloc? _maybeReadPageAccessLevelBloc(BuildContext context) {
     try {
       final bloc = context.read<PageAccessLevelBloc>();
-      return bloc.view.id == view.id ? bloc : null;
+      return bloc.view.id == widget.view.id ? bloc : null;
     } catch (_) {
       return null;
     }

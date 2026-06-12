@@ -1,4 +1,4 @@
-library;
+﻿library;
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -8,6 +8,8 @@ import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
@@ -166,11 +168,7 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
                   const HSpace(16),
                 ]
               : [const HSpace(8)],
-          ShareButton(
-            key: ValueKey('share_button_${view.id}'),
-            view: view,
-          ),
-          const HSpace(10),
+          _ConditionalShareButton(view: view),
           ViewFavoriteButton(
             key: ValueKey('favorite_button_${view.id}'),
             view: view,
@@ -207,4 +205,77 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
 }
 
+/// 私有空间内隐藏分享按钮的包装组件
+class _ConditionalShareButton extends StatefulWidget {
+  const _ConditionalShareButton({required this.view});
 
+  final ViewPB view;
+
+  @override
+  State<_ConditionalShareButton> createState() =>
+      _ConditionalShareButtonState();
+}
+
+class _ConditionalShareButtonState extends State<_ConditionalShareButton> {
+  late Future<SpacePermission> _spacePermissionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _spacePermissionFuture = _getSpacePermission();
+  }
+
+  @override
+  void didUpdateWidget(_ConditionalShareButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.view.id != widget.view.id) {
+      _spacePermissionFuture = _getSpacePermission();
+    }
+  }
+
+  Future<SpacePermission> _getSpacePermission() async {
+    try {
+      if (widget.view.isSpace) {
+        return widget.view.spacePermission;
+      }
+      final ancestorsResult =
+          await ViewBackendService.getViewAncestors(widget.view.id);
+      return ancestorsResult.fold(
+        (ancestors) {
+          for (final ancestor in ancestors.items) {
+            if (ancestor.isSpace) {
+              return ancestor.spacePermission;
+            }
+          }
+          return SpacePermission.publicToAll;
+        },
+        (_) => SpacePermission.publicToAll,
+      );
+    } catch (_) {
+      return SpacePermission.publicToAll;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<SpacePermission>(
+      future: _spacePermissionFuture,
+      builder: (context, snapshot) {
+        final isPrivate = snapshot.data == SpacePermission.private;
+        if (isPrivate) {
+          return const SizedBox.shrink();
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ShareButton(
+              key: ValueKey('share_button_${widget.view.id}'),
+              view: widget.view,
+            ),
+            const HSpace(10),
+          ],
+        );
+      },
+    );
+  }
+}
