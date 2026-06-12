@@ -788,23 +788,6 @@ class _EditEventPageState extends State<EditEventPage> {
                     constraints: BoxConstraints.tightFor(width: 36, height: 36),
                   ),
                   Spacer(),
-                  TextButton(
-                    onPressed: () => saveEvent(),
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      '保存',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
