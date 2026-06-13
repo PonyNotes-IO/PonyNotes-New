@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/insert_page_command.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/link_to_page_widget.dart';
@@ -8,6 +9,8 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 
 import 'slash_menu_item_builder.dart';
 
@@ -53,12 +56,15 @@ SelectionMenuItem gridSlashMenuItem(DocumentBloc documentBloc) {
     getName: () => LocaleKeys.document_slashMenu_name_grid.tr(),
     keywords: _gridKeywords,
     handler: (editorState, menuService, context) async {
-      // create the view inside current page
-      final parentViewId = documentBloc.documentId;
+      final parentViewId =
+          editorState.document.root.context != null
+              ? editorState.document.root.context!.read<DocumentBloc>().documentId
+              : documentBloc.documentId;
       final value = await ViewBackendService.createView(
         parentViewId: parentViewId,
         name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
         layoutType: ViewLayoutPB.Grid,
+        openAfterCreate: false,
       );
       value.map((r) => editorState.insertInlinePage(parentViewId, r));
     },
@@ -76,12 +82,15 @@ SelectionMenuItem kanbanSlashMenuItem(DocumentBloc documentBloc) {
     getName: () => LocaleKeys.document_slashMenu_name_kanban.tr(),
     keywords: _kanbanKeywords,
     handler: (editorState, menuService, context) async {
-      // create the view inside current page
-      final parentViewId = documentBloc.documentId;
+      final parentViewId =
+          editorState.document.root.context != null
+              ? editorState.document.root.context!.read<DocumentBloc>().documentId
+              : documentBloc.documentId;
       final value = await ViewBackendService.createView(
         parentViewId: parentViewId,
         name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
         layoutType: ViewLayoutPB.Board,
+        openAfterCreate: false,
       );
       value.map((r) => editorState.insertInlinePage(parentViewId, r));
     },
@@ -99,12 +108,15 @@ SelectionMenuItem calendarSlashMenuItem(DocumentBloc documentBloc) {
     getName: () => LocaleKeys.document_slashMenu_name_calendar.tr(),
     keywords: _calendarKeywords,
     handler: (editorState, menuService, context) async {
-      // create the view inside current page
-      final parentViewId = documentBloc.documentId;
+      final parentViewId =
+          editorState.document.root.context != null
+              ? editorState.document.root.context!.read<DocumentBloc>().documentId
+              : documentBloc.documentId;
       final value = await ViewBackendService.createView(
         parentViewId: parentViewId,
         name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
         layoutType: ViewLayoutPB.Calendar,
+        openAfterCreate: false,
       );
       value.map((r) => editorState.insertInlinePage(parentViewId, r));
     },

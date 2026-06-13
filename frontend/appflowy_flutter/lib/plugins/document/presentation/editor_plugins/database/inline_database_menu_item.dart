@@ -7,6 +7,8 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 
 SelectionMenuItem inlineGridMenuItem(DocumentBloc documentBloc) =>
     SelectionMenuItem(
@@ -18,12 +20,15 @@ SelectionMenuItem inlineGridMenuItem(DocumentBloc documentBloc) =>
       ),
       keywords: ['grid', 'database'],
       handler: (editorState, menuService, context) async {
-        // create the view inside current page
-        final parentViewId = documentBloc.documentId;
+        final parentViewId =
+            editorState.document.root.context != null
+                ? editorState.document.root.context!.read<DocumentBloc>().documentId
+                : documentBloc.documentId;
         final value = await ViewBackendService.createView(
           parentViewId: parentViewId,
           name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
           layoutType: ViewLayoutPB.Grid,
+          openAfterCreate: false,
         );
         value.map((r) => editorState.insertInlinePage(parentViewId, r));
       },
@@ -39,12 +44,15 @@ SelectionMenuItem inlineBoardMenuItem(DocumentBloc documentBloc) =>
       ),
       keywords: ['board', 'kanban', 'database'],
       handler: (editorState, menuService, context) async {
-        // create the view inside current page
-        final parentViewId = documentBloc.documentId;
+        final parentViewId =
+            editorState.document.root.context != null
+                ? editorState.document.root.context!.read<DocumentBloc>().documentId
+                : documentBloc.documentId;
         final value = await ViewBackendService.createView(
           parentViewId: parentViewId,
           name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
           layoutType: ViewLayoutPB.Board,
+          openAfterCreate: false,
         );
         value.map((r) => editorState.insertInlinePage(parentViewId, r));
       },
@@ -60,12 +68,15 @@ SelectionMenuItem inlineCalendarMenuItem(DocumentBloc documentBloc) =>
       ),
       keywords: ['calendar', 'database'],
       handler: (editorState, menuService, context) async {
-        // create the view inside current page
-        final parentViewId = documentBloc.documentId;
+        final parentViewId =
+            editorState.document.root.context != null
+                ? editorState.document.root.context!.read<DocumentBloc>().documentId
+                : documentBloc.documentId;
         final value = await ViewBackendService.createView(
           parentViewId: parentViewId,
           name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
           layoutType: ViewLayoutPB.Calendar,
+          openAfterCreate: false,
         );
         value.map((r) => editorState.insertInlinePage(parentViewId, r));
       },

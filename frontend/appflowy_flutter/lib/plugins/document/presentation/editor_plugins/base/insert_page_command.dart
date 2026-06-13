@@ -9,7 +9,12 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 extension InsertDatabase on EditorState {
-  Future<void> insertInlinePage(String parentViewId, ViewPB childView) async {
+  /// Inserts an inline database/calendar block at the current selection.
+  /// Does NOT update latestOpenView or trigger ancestor expansion.
+  Future<void> insertInlinePage(
+    String parentViewId,
+    ViewPB childView,
+  ) async {
     final selection = this.selection;
     if (selection == null || !selection.isCollapsed) {
       return;

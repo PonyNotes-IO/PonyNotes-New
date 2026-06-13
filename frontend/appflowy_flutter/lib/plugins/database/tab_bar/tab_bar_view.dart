@@ -78,6 +78,7 @@ class DatabaseTabBarView extends StatefulWidget {
     this.initialRowId,
     this.actionBuilder,
     this.node,
+    this.showTopRightActions = true,
   });
 
   final ViewPB view;
@@ -85,6 +86,7 @@ class DatabaseTabBarView extends StatefulWidget {
   final BlockComponentActionBuilder? actionBuilder;
   final bool showActions;
   final Node? node;
+  final bool showTopRightActions;
 
   /// Used to open a Row on plugin load
   ///
@@ -388,6 +390,7 @@ const kDatabasePluginWidgetBuilderHorizontalPadding = 'horizontal_padding';
 const kDatabasePluginWidgetBuilderShowActions = 'show_actions';
 const kDatabasePluginWidgetBuilderActionBuilder = 'action_builder';
 const kDatabasePluginWidgetBuilderNode = 'node';
+const kDatabasePluginWidgetBuilderShowTopRightActions = 'show_top_right_actions';
 
 class DatabasePluginWidgetBuilderSize {
   const DatabasePluginWidgetBuilderSize({
@@ -455,6 +458,8 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     final bool showActions =
         data?[kDatabasePluginWidgetBuilderShowActions] ?? false;
     final Node? node = data?[kDatabasePluginWidgetBuilderNode];
+    final bool showTopRightActions =
+        data?[kDatabasePluginWidgetBuilderShowTopRightActions] ?? true;
 
     return MultiBlocProvider(
       providers: [
@@ -473,6 +478,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
           view: notifier.view,
           viewInfoBloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
+          showTopRightActions: showTopRightActions,
           child: DatabaseTabBarView(
             key: ValueKey(notifier.view.id),
             view: notifier.view,
@@ -492,24 +498,26 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     required ViewInfoBloc viewInfoBloc,
     required PageAccessLevelBloc pageAccessLevelBloc,
     required Widget child,
+    bool showTopRightActions = true,
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
     return Stack(
       children: [
         child,
-        Positioned(
-          top: 0,
-          right: 0,
-          child: UnifiedViewTopRightActions(
-            view: view,
-            viewInfoBloc: viewInfoBloc,
-            pageAccessLevelBloc: pageAccessLevelBloc,
-            showCollaborators: false,
-            useFloatingSurface: true,
-            showShareButton: !isWhiteboard,
-            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+        if (showTopRightActions)
+          Positioned(
+            top: 0,
+            right: 0,
+            child: UnifiedViewTopRightActions(
+              view: view,
+              viewInfoBloc: viewInfoBloc,
+              pageAccessLevelBloc: pageAccessLevelBloc,
+              showCollaborators: false,
+              useFloatingSurface: true,
+              showShareButton: !isWhiteboard,
+              iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+            ),
           ),
-        ),
       ],
     );
   }

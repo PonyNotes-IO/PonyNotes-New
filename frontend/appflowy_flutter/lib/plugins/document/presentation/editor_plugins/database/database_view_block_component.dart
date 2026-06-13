@@ -112,6 +112,8 @@ class _DatabaseBlockComponentWidgetState
   Widget build(BuildContext context) {
     final editorState = Provider.of<EditorState>(context, listen: false);
     this.editorState = editorState;
+    // Always hide the top-right toolbar (share, favorite, fullscreen, more)
+    // for embedded database blocks — this widget is only used within documents.
     Widget child = BuiltInPageWidget(
       node: widget.node,
       editorState: editorState,
@@ -123,6 +125,7 @@ class _DatabaseBlockComponentWidgetState
           actionBuilder: widget.actionBuilder,
           showActions: widget.showActions,
           node: widget.node,
+          showTopRightActions: false,
         ),
       ),
     );

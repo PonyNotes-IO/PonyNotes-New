@@ -15,6 +15,7 @@ class DatabaseViewWidget extends StatefulWidget {
     required this.showActions,
     required this.node,
     this.actionBuilder,
+    this.showTopRightActions = true,
   });
 
   final ViewPB view;
@@ -22,6 +23,7 @@ class DatabaseViewWidget extends StatefulWidget {
   final BlockComponentActionBuilder? actionBuilder;
   final bool showActions;
   final Node node;
+  final bool showTopRightActions;
 
   @override
   State<DatabaseViewWidget> createState() => _DatabaseViewWidgetState();
@@ -78,6 +80,7 @@ class _DatabaseViewWidgetState extends State<DatabaseViewWidget> {
           kDatabasePluginWidgetBuilderActionBuilder: widget.actionBuilder,
           kDatabasePluginWidgetBuilderShowActions: widget.showActions,
           kDatabasePluginWidgetBuilderNode: widget.node,
+          kDatabasePluginWidgetBuilderShowTopRightActions: widget.showTopRightActions,
         },
       ),
     );

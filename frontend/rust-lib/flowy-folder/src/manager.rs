@@ -1671,6 +1671,7 @@ impl FolderManager {
       let shared_with = shared_details
         .into_iter()
         .map(|user| SharedUser {
+          user_id: Some(user.email.clone()),
           view_id: *page_id,
           email: user.email,
           name: user.name,
