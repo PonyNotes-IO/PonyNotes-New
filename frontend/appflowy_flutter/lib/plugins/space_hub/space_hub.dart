@@ -21,6 +21,7 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
@@ -484,6 +485,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           widget.selectedViewNotifier.value = null;
+          // ✅ 同步更新全局 notifier，通知侧边栏分割线
+          spaceHubSelectedViewLayoutNotifier.value = null;
         }
       });
       // 重新尝试选中新空间的第一个文档
@@ -512,10 +515,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       if (_selectedView?.id == view.id) {
         _selectedView = null;
         widget.selectedViewNotifier.value = null;
+        // ✅ 同步更新全局 notifier，通知侧边栏分割线
+        spaceHubSelectedViewLayoutNotifier.value = null;
       } else {
         // 否则选中新笔记
         _selectedView = view;
         widget.selectedViewNotifier.value = view;
+        // ✅ 同步更新全局 notifier，通知侧边栏分割线
+        spaceHubSelectedViewLayoutNotifier.value = view.layout;
       }
     });
 
@@ -556,6 +563,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             _selectedView = firstView;
           });
           widget.selectedViewNotifier.value = firstView;
+          // ✅ 同步更新全局 notifier，通知侧边栏分割线
+          spaceHubSelectedViewLayoutNotifier.value = firstView.layout;
           // 添加到最近访问
           _addToRecentViews(firstView.id);
         }
@@ -962,6 +971,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           _selectedView = null;
         });
         widget.selectedViewNotifier.value = null;
+        // ✅ 同步更新全局 notifier，通知侧边栏分割线
+        spaceHubSelectedViewLayoutNotifier.value = null;
       }
       return;
     }
@@ -974,6 +985,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         _selectedView = firstView;
       });
       widget.selectedViewNotifier.value = firstView;
+      // ✅ 同步更新全局 notifier，通知侧边栏分割线
+      spaceHubSelectedViewLayoutNotifier.value = firstView.layout;
       _addToRecentViews(firstView.id);
     }
   }
@@ -982,6 +995,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   void dispose() {
     SpaceHubMiddlePanelController.revealRequest
         .removeListener(_handleRevealDocumentList);
+    // ✅ 清理全局 notifier，通知侧边栏分割线恢复启用状态
+    spaceHubSelectedViewLayoutNotifier.value = null;
     // ✅ 清理所有缓存的 ViewInfoBloc，防止内存泄漏
     for (final bloc in _childViewInfoBlocs) {
       bloc.close();

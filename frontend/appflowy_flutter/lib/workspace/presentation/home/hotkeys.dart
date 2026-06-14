@@ -21,6 +21,11 @@ ValueNotifier<int> switchToTheNextSpace = ValueNotifier(0);
 ValueNotifier<int> createNewPageNotifier = ValueNotifier(0);
 ValueNotifier<ViewPB?> switchToSpaceNotifier = ValueNotifier(null);
 
+/// 用于同步 SpaceHub 选中视图的布局信息，让侧边栏分割线可以正确判断是否禁用
+/// 当 SpaceHub 中选中白板视图时，侧边栏分割线也需要禁用
+ValueNotifier<ViewLayoutPB?> spaceHubSelectedViewLayoutNotifier =
+    ValueNotifier(null);
+
 @visibleForTesting
 final zoomInKeyCodes = [KeyCode.equal, KeyCode.numpadAdd, KeyCode.add];
 @visibleForTesting

@@ -264,6 +264,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
 
     // ✅ 使用 BlocBuilder 监听 TabsState，检测当前视图是否是白板
     // 如果是白板视图，则禁用侧边栏分隔线，避免触发 setState 导致 WKWebView 布局偏移
+    // ✅ 同时使用 ValueListenableBuilder 监听 SpaceHub 选中视图的布局，保持与 SpaceHub 分割线同步
     return BlocBuilder<TabsBloc, TabsState>(
       buildWhen: (previous, current) =>
           previous.currentPageManager.plugin.pluginType !=
@@ -273,23 +274,33 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       builder: (context, tabsState) {
         final currentLayout = _getViewLayout(tabsState.currentPageManager);
         final isWhiteboard = currentLayout == ViewLayoutPB.Whiteboard;
-        final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
-            ? SidebarResizer(enabled: !isWhiteboard)
-            : const SizedBox.shrink();
-        final editPanel = _buildEditPanel(context, layout: layout);
+        // ✅ 使用 ValueListenableBuilder 监听 SpaceHub 选中视图的布局
+        // 当 SpaceHub 中选中白板视图时，侧边栏分割线也需要禁用
+        return ValueListenableBuilder<ViewLayoutPB?>(
+          valueListenable: spaceHubSelectedViewLayoutNotifier,
+          builder: (context, spaceHubLayout, _) {
+            // 任一为白板时，分割线都应该禁用
+            final isSpaceHubWhiteboard = spaceHubLayout == ViewLayoutPB.Whiteboard;
+            final shouldDisableResizer = isWhiteboard || isSpaceHubWhiteboard;
+            final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
+                ? SidebarResizer(enabled: !shouldDisableResizer)
+                : const SizedBox.shrink();
+            final editPanel = _buildEditPanel(context, layout: layout);
 
-        return ValueListenableBuilder<bool>(
-          valueListenable: FullWindowController.isFullWindow,
-          builder: (context, isFullWindow, _) {
-            return _layoutWidgets(
-              buildContext: context,
-              layout: layout,
-              homeStack: homeStack,
-              sidebar: sidebar,
-              editPanel: editPanel,
-              homeMenuResizer: homeMenuResizer,
-              notificationPanel: notificationPanel,
-              isFullWindow: isFullWindow,
+            return ValueListenableBuilder<bool>(
+              valueListenable: FullWindowController.isFullWindow,
+              builder: (context, isFullWindow, _) {
+                return _layoutWidgets(
+                  buildContext: context,
+                  layout: layout,
+                  homeStack: homeStack,
+                  sidebar: sidebar,
+                  editPanel: editPanel,
+                  homeMenuResizer: homeMenuResizer,
+                  notificationPanel: notificationPanel,
+                  isFullWindow: isFullWindow,
+                );
+              },
             );
           },
         );
