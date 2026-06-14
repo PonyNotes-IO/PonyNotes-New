@@ -59,5 +59,9 @@
 		<string>Bs++IOmOwYmNTjMMC2jMqLNldP+mndDp/LwujCg2/kw=</string>
 		<key>SUAllowsAutomaticUpdates</key>
 		<false />
+		<!-- ⚠️ 禁用 Impeller 渲染引擎（Flutter 3.35 macOS WebView 漂移修复） -->
+		<!-- 原因：Impeller 在 macOS 上与 WKWebView 的 PlatformView 存在兼容性问题 -->
+		<key>FLTEnableImpeller</key>
+		<false />
 	</dict>
 </plist>

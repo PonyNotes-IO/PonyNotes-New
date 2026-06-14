@@ -698,6 +698,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                           },
                           // ✅ 新增：拖拽状态变化回调，用于协调白板手势
                           onDragStateChanged: _handleDividerDragStateChanged,
+                          // ✅ 新增：当当前视图是白板时，禁用分隔线拖拽
+                          // 避免 MouseRegion 的 onEnter/onExit 触发 setState 导致 WKWebView 布局偏移
+                          enabled: _selectedView?.layout != ViewLayoutPB.Whiteboard,
                         ),
                     ],
                   ),
@@ -1522,6 +1525,8 @@ class _SpaceHubResizableDivider extends StatefulWidget {
     required this.onResize,
     // ✅ 新增：拖拽状态变化回调，用于协调白板手势
     this.onDragStateChanged,
+    // ✅ 新增：是否启用拖拽功能，用于白板视图时禁用
+    this.enabled = true,
   });
 
   final double minLeftWidth;
@@ -1530,6 +1535,9 @@ class _SpaceHubResizableDivider extends StatefulWidget {
   final ValueChanged<double> onResize;
   // ✅ 新增：当拖拽开始/结束时通知父组件
   final ValueChanged<bool>? onDragStateChanged;
+  /// 是否启用拖拽功能。当为 false 时，分隔线不可拖拽，也不会响应 hover 事件。
+  /// 用于在白板视图时禁用分隔线，避免触发 setState 导致 WKWebView 布局偏移。
+  final bool enabled;
 
   @override
   State<_SpaceHubResizableDivider> createState() =>
@@ -1549,6 +1557,7 @@ class _SpaceHubResizableDividerState
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (!widget.enabled) return;
     setState(() => _isDragging = true);
     _dragStartGlobalX = event.position.dx;
     _dragStartWidth = widget.currentLeftWidth;
@@ -1557,7 +1566,7 @@ class _SpaceHubResizableDividerState
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (!_isDragging) return;
+    if (!widget.enabled || !_isDragging) return;
 
     final dragStartGlobalX = _dragStartGlobalX ?? event.position.dx;
     final dragStartWidth = _dragStartWidth ?? widget.currentLeftWidth;
@@ -1568,6 +1577,7 @@ class _SpaceHubResizableDividerState
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (!widget.enabled) return;
     setState(() => _isDragging = false);
     _dragStartGlobalX = null;
     _dragStartWidth = null;
@@ -1576,6 +1586,7 @@ class _SpaceHubResizableDividerState
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (!widget.enabled) return;
     setState(() => _isDragging = false);
     _dragStartGlobalX = null;
     _dragStartWidth = null;
@@ -1585,6 +1596,22 @@ class _SpaceHubResizableDividerState
 
   @override
   Widget build(BuildContext context) {
+    // 当禁用时，使用简单的静态分隔线，不响应任何交互事件
+    // 这样可以避免 MouseRegion 的 onEnter/onExit 触发 setState
+    // 从而避免 WKWebView 布局偏移
+    if (!widget.enabled) {
+      return Container(
+        width: HomeSizes.spaceHubDividerWidth,
+        color: Colors.transparent,
+        child: Center(
+          child: Container(
+            width: 1.0,
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+          ),
+        ),
+      );
+    }
+
     // 拖拽时使用更轻量的 UI 反馈
     final showHighlight = _isHover || _isDragging;
 

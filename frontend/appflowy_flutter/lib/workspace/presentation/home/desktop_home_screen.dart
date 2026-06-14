@@ -5,6 +5,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/memory_leak_detector.dart';
@@ -260,16 +261,23 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       workspaceSetting: workspaceSetting,
     );
     final notificationPanel = NotificationPanel();
-    final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
-        ? const SidebarResizer()
-        : const SizedBox.shrink();
-    final editPanel = _buildEditPanel(context, layout: layout);
 
+    // ✅ 使用 BlocBuilder 监听 TabsState，检测当前视图是否是白板
+    // 如果是白板视图，则禁用侧边栏分隔线，避免触发 setState 导致 WKWebView 布局偏移
     return BlocBuilder<TabsBloc, TabsState>(
       buildWhen: (previous, current) =>
           previous.currentPageManager.plugin.pluginType !=
-          current.currentPageManager.plugin.pluginType,
-      builder: (context, _) {
+          current.currentPageManager.plugin.pluginType ||
+          _getViewLayout(previous.currentPageManager) !=
+          _getViewLayout(current.currentPageManager),
+      builder: (context, tabsState) {
+        final currentLayout = _getViewLayout(tabsState.currentPageManager);
+        final isWhiteboard = currentLayout == ViewLayoutPB.Whiteboard;
+        final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
+            ? SidebarResizer(enabled: !isWhiteboard)
+            : const SizedBox.shrink();
+        final editPanel = _buildEditPanel(context, layout: layout);
+
         return ValueListenableBuilder<bool>(
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
@@ -287,6 +295,15 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         );
       },
     );
+  }
+
+  /// 从 PageManager 获取当前视图的布局类型
+  ViewLayoutPB? _getViewLayout(PageManager pageManager) {
+    final notifier = pageManager.plugin.notifier;
+    if (notifier is ViewPluginNotifier) {
+      return notifier.view.layout;
+    }
+    return null;
   }
 
   Widget _buildHomeSidebar(

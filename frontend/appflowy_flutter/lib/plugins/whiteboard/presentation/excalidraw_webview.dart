@@ -694,6 +694,30 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }, 2500);
         })();
       ''', tag: 'overscrollFix',);
+
+      // ✅ 关键修复：在初始化完成后立即强制重置滚动偏移
+      // 避免 macOS WKWebView 的 NSScrollView 弹性滚动导致的偏移
+      await _safeEvalJs('''
+        (function() {
+          // 立即重置滚动偏移
+          window.scrollTo(0, 0);
+          document.documentElement.scrollLeft = 0;
+          document.documentElement.scrollTop = 0;
+          document.body.scrollLeft = 0;
+          document.body.scrollTop = 0;
+
+          // 强制应用 overscroll-behavior: none
+          document.documentElement.style.overscrollBehavior = 'none';
+          document.body.style.overscrollBehavior = 'none';
+
+          // 禁止任何滚动
+          document.documentElement.style.overflow = 'hidden';
+          document.body.style.overflow = 'hidden';
+
+          console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移');
+        })();
+      ''', tag: 'forceResetScroll');
+
       // debug log removed
     } catch (e) {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
