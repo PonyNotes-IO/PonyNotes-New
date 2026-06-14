@@ -700,21 +700,52 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       await _safeEvalJs('''
         (function() {
           // 立即重置滚动偏移
-          window.scrollTo(0, 0);
-          document.documentElement.scrollLeft = 0;
-          document.documentElement.scrollTop = 0;
-          document.body.scrollLeft = 0;
-          document.body.scrollTop = 0;
+          const resetScroll = function() {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollLeft = 0;
+            document.documentElement.scrollTop = 0;
+            document.body.scrollLeft = 0;
+            document.body.scrollTop = 0;
+            
+            // 强制应用 overscroll-behavior: none
+            document.documentElement.style.overscrollBehavior = 'none';
+            document.body.style.overscrollBehavior = 'none';
+            
+            // 禁止任何滚动
+            document.documentElement.style.overflow = 'hidden';
+            document.body.style.overflow = 'hidden';
+          };
+          
+          // 立即执行一次
+          resetScroll();
+          
+          // ✅ 周期性检测：每 200ms 检查一次，持续 5 秒
+          // 防止滚动偏移在后续操作中再次出现（特别是作为子控件时）
+          let checkCount = 0;
+          const maxChecks = 25; // 25 * 200ms = 5秒
+          const scrollWatchdog = setInterval(function() {
+            if (checkCount >= maxChecks) {
+              clearInterval(scrollWatchdog);
+              console.log('[PonyNotes] ✅ 滚动监控结束');
+              return;
+            }
+            
+            // 检查是否有意外滚动
+            if (window.scrollX !== 0 || window.scrollY !== 0 ||
+                document.documentElement.scrollLeft !== 0 ||
+                document.documentElement.scrollTop !== 0) {
+              resetScroll();
+              console.log('[PonyNotes] ⚠️ 检测到意外滚动，已重置');
+            }
+            
+            checkCount++;
+          }, 200);
 
-          // 强制应用 overscroll-behavior: none
-          document.documentElement.style.overscrollBehavior = 'none';
-          document.body.style.overscrollBehavior = 'none';
+          // 保存到全局，便于调试
+          window._ponynotesScrollWatchdog = scrollWatchdog;
+          window._ponynotesResetScroll = resetScroll;
 
-          // 禁止任何滚动
-          document.documentElement.style.overflow = 'hidden';
-          document.body.style.overflow = 'hidden';
-
-          console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移');
+          console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移，启动滚动监控');
         })();
       ''', tag: 'forceResetScroll');
 
@@ -1197,7 +1228,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           lastWidth = rect.width;
           lastHeight = rect.height;
           clearTimeout(window._ponynotesResizeTimer);
-          window._ponynotesResizeTimer = setTimeout(refreshAfterStableResize, 120);
+          // ✅ 增加防抖延迟到 200ms，确保 Flutter 布局完全稳定后再刷新
+          // 作为子控件时，父容器尺寸变化可能更频繁，需要更长的稳定时间
+          window._ponynotesResizeTimer = setTimeout(refreshAfterStableResize, 200);
         };
 
         window._ponynotesResizeHandler = onContainerResize;
@@ -1656,7 +1689,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
     return Stack(
       children: [
-        InAppWebView(
+        // ✅ 关键修复：添加显式尺寸约束容器
+        // 作为子控件时，确保 InAppWebView 获得明确的尺寸约束
+        // 避免 PlatformView 与 Flutter 布局不同步导致的漂移
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return Container(
+              width: constraints.maxWidth,
+              height: constraints.maxHeight,
+              child: InAppWebView(
           // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key
           // 原因：InAppWebView底层使用PlatformView与原生代码通信
           // 问题：如果没有唯一key，Flutter可能会错误地复用或重复创建PlatformView
@@ -1750,6 +1791,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               }
 
               await _initializeExcalidraw();
+
+              // ✅ 关键修复：使用 postFrameCallback 确保 Flutter 布局完成后
+              // 再通知 WebView 刷新，避免作为子控件时尺寸获取不准确
+              WidgetsBinding.instance.addPostFrameCallback((_) async {
+                if (mounted) {
+                  await Future.delayed(const Duration(milliseconds: 100));
+                  await notifyContainerResized();
+                }
+              });
             }
             Log.debug('✅ [ExcalidrawWebView] Loading finished: $url');
           },
@@ -1796,7 +1846,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               Log.debug('[WebView Console] $message');
             }
           },
-        ),
+              ), // InAppWebView
+            ); // Container
+          }, // LayoutBuilder.builder
+        ), // LayoutBuilder
 
         // 加载覆盖层 - 使用完全不透明背景遮挡 Excalidraw 的加载界面
         if (_isLoading || _isInitializing)

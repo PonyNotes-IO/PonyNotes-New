@@ -1170,20 +1170,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
     );
 
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: ExcalidrawWebView(
-        key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
-        viewId: widget.view.id,
-        sessionTraceId: _sessionTraceId,
-        loadTraceId: _loadTraceId,
-        initialData: _initialData,
-        initialDataLoaded: !_isLoadingData,
-        deferInitialDataLoad: true,
-        onDataChanged: _onWhiteboardDataChanged,
-        onExport: _onWhiteboardExport,
-        onError: _onWhiteboardError,
-      ),
+    return ExcalidrawWebView(
+      key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
+      viewId: widget.view.id,
+      sessionTraceId: _sessionTraceId,
+      loadTraceId: _loadTraceId,
+      initialData: _initialData,
+      initialDataLoaded: !_isLoadingData,
+      deferInitialDataLoad: true,
+      onDataChanged: _onWhiteboardDataChanged,
+      onExport: _onWhiteboardExport,
+      onError: _onWhiteboardError,
     );
   }
 
