@@ -16,6 +16,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'tabs_bloc.freezed.dart';
@@ -70,6 +71,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   void _dispatch() {
     on<TabsEvent>(
       (event, emit) async {
+        // event.when 内部启动的异步回调(goBackToPreviousView)不会被 on handler
+        // 顶层 await,bloc 会立即认为 handler 完成 → emit.isDone = true →
+        // 异步回调里的 await 之后所有逻辑被 abort。所以在这里显式 await。
+        Future<void>? pendingAsync;
         event.when(
           selectTab: (int index) {
             if (index != state.currentIndex &&
@@ -101,16 +106,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           openTab: (Plugin plugin, ViewPB view) {
             // 协作空间（isSpace=true）只做侧边栏导航，不生成选项卡
             if (view.isSpace) return;
-            state.currentPageManager
-              ..hideSecondaryPlugin()
-              ..setSecondaryPlugin(BlankPagePlugin());
+            // 完全不触碰 SecondaryView,避免在文档内创建/打开子页面后
+            // 右侧辅助面板（AI 对话等）被清掉或被隐藏。
             emit(state.openView(plugin));
             _setLatestOpenView(view);
           },
           openPlugin: (Plugin plugin, ViewPB? view, bool setLatest) {
-            state.currentPageManager
-              ..hideSecondaryPlugin()
-              ..setSecondaryPlugin(BlankPagePlugin());
+            // 完全不触碰 SecondaryView,避免在文档内创建/打开子页面后
+            // 右侧辅助面板（AI 对话等）被清掉或被隐藏。
             emit(state.openPlugin(plugin: plugin, setLatest: setLatest));
             if (setLatest) {
               _setLatestOpenView(view);
@@ -219,6 +222,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               ..expandSecondaryPlugin();
             _setLatestOpenView();
           },
+          goBackToPreviousView: () async {
+            pendingAsync = _goBackToPreviousView(emit);
+          },
           switchWorkspace: (workspaceId) {
             // Workspace context changed: reset tabs to a clean blank page,
             // then HomeBloc can open the latest view for the new workspace.
@@ -235,6 +241,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             }
           },
         );
+        // 等待 event.when 启动的所有异步分支(目前只有 goBackToPreviousView)
+        // 真正完成,避免 bloc 立即认为 handler 完成。
+        if (pendingAsync != null) {
+          await pendingAsync;
+        }
       },
     );
   }
@@ -243,6 +254,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     ViewPB? targetView = view;
 
     if (targetView != null) {
+      // 在覆盖 latestOpenView 之前，把当前 view 快照到 previousOpenView。
+      // 这样在 doc A 中通过 sub_page 块自动跳转到 doc B 时，B 的页面可以
+      // 拿到 A 作为"上一文档"，提供返回按钮。
+      // 当 source 和 target 相同时（同 tab 切换、不算导航）不清空。
+      final currentLatest = menuSharedState.latestOpenView;
+      if (currentLatest != null && currentLatest.id != targetView.id) {
+        menuSharedState.setPreviousOpenView(currentLatest);
+      }
       menuSharedState.latestOpenView = targetView;
     } else {
       final pageManager = state.currentPageManager;
@@ -250,6 +269,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       if (notifier is ViewPluginNotifier &&
           menuSharedState.latestOpenView?.id != notifier.view.id) {
         targetView = notifier.view;
+        // 同样的快照逻辑（覆盖前先记录）
+        final currentLatest = menuSharedState.latestOpenView;
+        if (currentLatest != null && currentLatest.id != targetView.id) {
+          menuSharedState.setPreviousOpenView(currentLatest);
+        }
         menuSharedState.latestOpenView = targetView;
       }
     }
@@ -378,6 +402,131 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
   }
 
+  /// 异步加载一个 view，加载失败或 view id 为空时返回 null。
+  Future<ViewPB?> _loadView(String viewId) async {
+    if (viewId.isEmpty) return null;
+    final result = await ViewBackendService.getView(viewId);
+    return result.fold(
+      (v) => v,
+      (err) {
+        Log.error('[TabsBloc] _loadView: failed to load $viewId: $err');
+        return null;
+      },
+    );
+  }
+
+  /// 处理"返回上一文档"逻辑。提取为独立方法(而不是嵌在 event.when 回调内),
+  /// 是因为 on<TabsEvent> handler 顶层没有 await 异步分支时,bloc 会认为
+  /// handler 同步完成,emit.isDone 立即变 true,await 之后的逻辑被 abort。
+  /// 在 on handler 顶层 await 此方法返回的 Future,可确保 bloc 一直保持
+  /// handler 活跃直到真正结束。
+  Future<void> _goBackToPreviousView(Emitter<TabsState> emit) async {
+    Log.info('[goBack] START - clicking back button');
+    // 1. 拿到当前 view
+    final currentNotifier =
+        state.currentPageManager.plugin.notifier;
+    final currentView =
+        currentNotifier is ViewPluginNotifier ? currentNotifier.view : null;
+    if (currentView == null || currentView.id.isEmpty) {
+      Log.info('[TabsBloc] goBackToPreviousView: no current view');
+      return;
+    }
+    Log.info(
+      '[goBack] currentView=${currentView.name}(${currentView.id}), parent=${currentView.parentViewId}',
+    );
+
+    // 2. 父级 id 为空：没有父级可回退，保留旧行为（用 previousOpenView）
+    if (currentView.parentViewId.isEmpty) {
+      final previousView = menuSharedState.previousOpenView;
+      if (previousView == null || previousView.id.isEmpty) {
+        Log.info(
+          '[TabsBloc] goBackToPreviousView: no parent and no previous view',
+        );
+        return;
+      }
+      menuSharedState.clearPreviousOpenView();
+      final plugin = previousView.plugin();
+      state.currentPageManager.setSecondaryPlugin(BlankPagePlugin());
+      emit(state.openPlugin(plugin: plugin));
+      menuSharedState.latestOpenView = previousView;
+      return;
+    }
+
+    // 3. 沿父级链向上追溯，找到第一个 isSpace 的祖先作为返回目标。
+    //    在协作空间内多层子页面里点返回，会回到"包含该子页面的协作空间"，
+    //    而不是直接父级。这样进入子页面新建子页面后返回，UI 仍处于
+    //    "父协作空间 + 中间一栏子页面列表" 的状态。
+    ViewPB? targetView;
+    ViewPB? childForSelected;
+    String nextId = currentView.parentViewId;
+    int safetyCounter = 0;
+    while (nextId.isNotEmpty && safetyCounter < 16) {
+      if (emit.isDone) return;
+      safetyCounter++;
+      Log.info(
+        '[goBack] loop iter=$safetyCounter, loading nextId=$nextId',
+      );
+      final loaded = await _loadView(nextId);
+      if (emit.isDone) {
+        Log.warn('[goBack] emit.isDone after await _loadView, abort');
+        return;
+      }
+      if (loaded == null) {
+        Log.warn('[goBack] _loadView returned null for $nextId, break');
+        break;
+      }
+      Log.info(
+        '[goBack] loaded view=${loaded.name}(${loaded.id}), isSpace=${loaded.isSpace}',
+      );
+      if (loaded.isSpace) {
+        targetView = loaded;
+        // 如果直接父级就是 space，childForSelected 应取 currentView 自己，
+        // 这样 SpaceHub 会选中 currentView，主区域显示其内容。
+        if (childForSelected == null) {
+          childForSelected = currentView;
+        }
+        break;
+      }
+      childForSelected ??= loaded;
+      nextId = loaded.parentViewId;
+    }
+    // 兜底：找不到协作空间祖先，则退到最近的非空间父 view
+    targetView ??= childForSelected;
+    if (targetView == null) {
+      Log.warn(
+        '[TabsBloc] goBackToPreviousView: cannot resolve any parent view',
+      );
+      return;
+    }
+    Log.info(
+      '[goBack] resolved targetView=${targetView.name}(${targetView.id}), isSpace=${targetView.isSpace}, childForSelected=${childForSelected?.name}(${childForSelected?.id})',
+    );
+
+    // 4. 先清空 previousOpenView，避免 _setLatestOpenView 把当前 view 当成 previous 记录
+    menuSharedState.clearPreviousOpenView();
+
+    // 5. 打开目标 view；如果是 SpaceHub，把 childForSelected 作为初始选中，
+    //    这样回退后能保持"父级展开 + 显示直接子页面"的状态。
+    if (emit.isDone) return;
+    final plugin = targetView.plugin(
+      initialSelectedView: targetView.isSpace ? childForSelected : null,
+    );
+    Log.info(
+      '[goBack] plugin created: ${plugin.id}, initialSelectedView=${targetView.isSpace ? childForSelected?.name : "N/A"}',
+    );
+    // 不走 state.openPlugin —— 那个会通过 _selectPluginIfOpen 复用已存在
+    // 的 SpaceHub tab 但不会重建 plugin，导致新的 initialSelectedView
+    // 不生效。这里强制在当前 tab 替换 plugin，确保 SpaceHub 带着新的
+    // initialSelectedView 重新构建，SpaceHub 主页能正确显示 childForSelected。
+    state.currentPageManager
+      ..setSecondaryPlugin(BlankPagePlugin())
+      ..setPlugin(plugin, true);
+    Log.info(
+      '[goBack] setPlugin done: target=${targetView.name}(${targetView.id}), childForSelected=${childForSelected?.name}(${childForSelected?.id})',
+    );
+    menuSharedState.latestOpenView = targetView;
+  }
+
   /// Adds a [TabsEvent.openPlugin] event for the provided [ViewPB]
   void openPlugin(
     ViewPB view, {
@@ -434,6 +583,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       }
     }
   }
+
+  /// 返回到上一文档（由 MenuSharedState.previousOpenView 记录）。
+  /// 用于：在 doc A 内通过 sub_page 块自动跳转到新 doc B 后，
+  /// B 的页面左上角返回按钮触发此事件，跳回 A。
+  void goBackToPreviousView() {
+    add(const TabsEvent.goBackToPreviousView());
+  }
 }
 
 @freezed
@@ -469,6 +625,11 @@ class TabsEvent with _$TabsEvent {
   const factory TabsEvent.closeSecondaryPlugin() = _CloseSecondaryPlugin;
 
   const factory TabsEvent.expandSecondaryPlugin() = _ExpandSecondaryPlugin;
+
+  /// 从当前文档返回到上一文档（由 MenuSharedState.previousOpenView 记录）。
+  /// 适用于：在 doc A 内通过 sub_page 块自动跳转到新 doc B 后，
+  /// B 的页面左上角返回按钮触发此事件，跳回 A。
+  const factory TabsEvent.goBackToPreviousView() = _GoBackToPreviousView;
 
   const factory TabsEvent.switchWorkspace(String workspaceId) =
       _SwitchWorkspace;

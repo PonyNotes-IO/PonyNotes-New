@@ -26,6 +26,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
@@ -79,6 +80,14 @@ class _DocumentPageState extends State<DocumentPage>
   bool _handledDeletedInSpaceHub = false;
   bool _handledForceCloseNavigation = false;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
+  // 父级 view 是不是协作空间。null 表示尚未查询完成。
+  // 用于决定"返回上一级文档"按钮是否显示：
+  //   - parentIsSpace == true 时，按钮不应该显示（父级是协作空间，
+  //     主视图是 SpaceHub，不是"上一级文档"，没有"上一级文档"可返回）；
+  //   - parentIsSpace == false 时，按钮显示（父级是普通文档，点击返回
+  //     可回到父级文档页面）；
+  //   - 无父级（parentViewId 为空）时，按钮不显示。
+  bool? _parentIsSpace;
   late final documentBloc = DocumentBloc(
       documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
@@ -87,6 +96,30 @@ class _DocumentPageState extends State<DocumentPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadParentIsSpace();
+  }
+
+  @override
+  void didUpdateWidget(covariant DocumentPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.view.parentViewId != widget.view.parentViewId) {
+      _parentIsSpace = null;
+      _loadParentIsSpace();
+    }
+  }
+
+  Future<void> _loadParentIsSpace() async {
+    final parentId = widget.view.parentViewId;
+    if (parentId.isEmpty) {
+      if (mounted) setState(() => _parentIsSpace = false);
+      return;
+    }
+    final result = await ViewBackendService.getView(parentId);
+    if (!mounted) return;
+    final parentView = result.toNullable();
+    setState(() {
+      _parentIsSpace = parentView?.isSpace ?? false;
+    });
   }
 
   @override
@@ -346,38 +379,81 @@ class _DocumentPageState extends State<DocumentPage>
       ),
     );
 
-    // 侧边栏收起时，在文档左上角显示展开按钮
+    // 侧边栏收起时，在文档左上角显示展开按钮；
+    // 此外如果存在"上一文档"（例如 sub_page 自动跳转过来），显示返回按钮。
     return BlocBuilder<HomeSettingBloc, HomeSettingState>(
       buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-      builder: (context, state) {
-        final isSidebarHidden = state.menuStatus == MenuStatus.hidden;
+      builder: (context, menuState) {
+        final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
         final theme = AppFlowyTheme.of(context);
-        return Stack(
-          children: [
-            editorContent,
-            if (isSidebarHidden)
-              Positioned(
-                top: 10,
-                left: UniversalPlatform.isMacOS ? 75 : 16,
-                child: FlowyTooltip(
-                  message: LocaleKeys.sideBar_openSidebar.tr(),
-                  child: FlowyIconButton(
-                    width: 24,
-                    icon: FlowySvg(
-                      FlowySvgs.sidebar_collapse_custom_m,
-                      size: const Size.square(24),
-                      color: theme.iconColorScheme.primary,
-                    ),
-                    onPressed: () =>
-                        context.read<HomeSettingBloc>().add(
-                      const HomeSettingEvent.changeMenuStatus(
-                        MenuStatus.expanded,
+        // 监听 latestOpenView 和 previousOpenView 两个 ValueNotifier，
+        // 合并两个的变更，确保 snapshot 写入后页面会重建。
+        return ValueListenableBuilder<ViewPB?>(
+          valueListenable: getIt<MenuSharedState>().previousOpenViewNotifier,
+          builder: (context, previousView, _) {
+            // previousView 仅用于触发该 ValueListenableBuilder 重建，自身不参与判断。
+            // 真正决定是否显示返回按钮的是：当前 view 是否有"上一级文档"可返回。
+            // 只有当父级是普通文档（不是协作空间）时，按钮才有意义——因为协作空间
+            // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
+            // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
+            // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
+            final showBackButton = _parentIsSpace == false;
+            // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
+            const double buttonSize = 24.0;
+            const double buttonGap = 4.0;
+            // 是否有任何左侧按钮，决定整体 left 偏移起点
+            final leftBase =
+                UniversalPlatform.isMacOS ? 75.0 : 16.0;
+            // 始终保留返回按钮占位（如果存在），便于位置稳定
+            final backButtonLeft = leftBase;
+            final sidebarButtonLeft = leftBase +
+                (showBackButton ? (buttonSize + buttonGap) : 0.0);
+            return Stack(
+              children: [
+                editorContent,
+                if (showBackButton)
+                  Positioned(
+                    top: 10,
+                    left: backButtonLeft,
+                    child: FlowyTooltip(
+                      message: '返回上一文档',
+                      child: FlowyIconButton(
+                        width: buttonSize,
+                        icon: FlowySvg(
+                          FlowySvgs.arrow_left_s,
+                          size: const Size.square(buttonSize),
+                          color: theme.iconColorScheme.primary,
+                        ),
+                        onPressed: () =>
+                            getIt<TabsBloc>().goBackToPreviousView(),
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
+                if (isSidebarHidden)
+                  Positioned(
+                    top: 10,
+                    left: sidebarButtonLeft,
+                    child: FlowyTooltip(
+                      message: LocaleKeys.sideBar_openSidebar.tr(),
+                      child: FlowyIconButton(
+                        width: buttonSize,
+                        icon: FlowySvg(
+                          FlowySvgs.sidebar_collapse_custom_m,
+                          size: const Size.square(buttonSize),
+                          color: theme.iconColorScheme.primary,
+                        ),
+                        onPressed: () =>
+                            context.read<HomeSettingBloc>().add(
+                          const HomeSettingEvent.changeMenuStatus(
+                            MenuStatus.expanded,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
         );
       },
     );
