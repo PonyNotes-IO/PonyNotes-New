@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -435,6 +436,26 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       '[goBack] currentView=${currentView.name}(${currentView.id}), parent=${currentView.parentViewId}',
     );
 
+    // 1.5 特殊情况：当前是 SpaceHubPlugin 且中间栏选中了子视图(嵌入了文档)。
+    //    此时 currentView 是 space 本身，但用户期望的"返回"应该是
+    //    回到 SpaceHub 主页(子页面列表)而不是跳到 parent Workspace。
+    //    直接清空 SpaceHub 的选中状态即可。
+    final currentPlugin = state.currentPageManager.plugin;
+    if (currentPlugin is SpaceHubPlugin) {
+      if (currentPlugin.hasSelectedView) {
+        Log.info(
+          '[goBack] SpaceHubPlugin has selectedView, clear it to return to document list',
+        );
+        currentPlugin.clearSelection();
+        return;
+      }
+      // SpaceHub 顶层(未选中子视图)无可回退目标
+      Log.info(
+        '[goBack] SpaceHubPlugin at top level (no selectedView), nothing to go back to',
+      );
+      return;
+    }
+
     // 2. 父级 id 为空：没有父级可回退，保留旧行为（用 previousOpenView）
     if (currentView.parentViewId.isEmpty) {
       final previousView = menuSharedState.previousOpenView;
@@ -512,7 +533,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       initialSelectedView: targetView.isSpace ? childForSelected : null,
     );
     Log.info(
-      '[goBack] plugin created: ${plugin.id}, initialSelectedView=${targetView.isSpace ? childForSelected?.name : "N/A"}',
+      '[goBack] plugin created: ${plugin.id}, type=${plugin.runtimeType}, initialSelectedView=${targetView.isSpace ? childForSelected?.name : "N/A"}',
     );
     // 不走 state.openPlugin —— 那个会通过 _selectPluginIfOpen 复用已存在
     // 的 SpaceHub tab 但不会重建 plugin，导致新的 initialSelectedView
@@ -523,6 +544,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       ..setPlugin(plugin, true);
     Log.info(
       '[goBack] setPlugin done: target=${targetView.name}(${targetView.id}), childForSelected=${childForSelected?.name}(${childForSelected?.id})',
+    );
+    Log.info(
+      '[goBack] after setPlugin: currentPageManager.plugin.id=${state.currentPageManager.plugin.id}, type=${state.currentPageManager.plugin.runtimeType}',
+    );
+    Log.info(
+      '[goBack] currentPageManager.plugin is SpaceHubPlugin: ${state.currentPageManager.plugin is SpaceHubPlugin}',
     );
     menuSharedState.latestOpenView = targetView;
   }

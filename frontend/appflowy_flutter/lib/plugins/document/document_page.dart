@@ -7,6 +7,7 @@ import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/banner.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/document/presentation/editor_drop_handler.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/ai/widgets/ai_writer_scroll_wrapper.dart';
@@ -396,8 +397,13 @@ class _DocumentPageState extends State<DocumentPage>
             // 只有当父级是普通文档（不是协作空间）时，按钮才有意义——因为协作空间
             // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
             // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
+            // 例外：isInSpaceHub == true 时(从 SpaceHub 中间栏点击进入的文档),
+            // 父级是 space，但当前 back 逻辑会把 currentView 误判为 space 跳到
+            // parent Workspace 显示加载态。为避免这个混乱行为,SpaceHub 中嵌
+            // 入的文档直接不显示 back 按钮,用户用 SpaceHub 中间栏的笔记条目切换。
             // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
-            final showBackButton = _parentIsSpace == false;
+            final showBackButton =
+                _parentIsSpace == false && !widget.isInSpaceHub;
             // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
             const double buttonSize = 24.0;
             const double buttonGap = 4.0;
