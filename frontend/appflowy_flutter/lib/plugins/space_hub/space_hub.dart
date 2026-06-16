@@ -150,6 +150,21 @@ class SpaceHubPlugin extends Plugin {
 
   /// 当前中间栏是否选中了某个子视图(用于 back 时判断是否在 SpaceHub 内嵌文档中)。
   bool get hasSelectedView => _selectedViewNotifier.value != null;
+
+  /// 由 TabsBloc 在 SpaceHub 内嵌子文档中的链接点击时调用:
+  /// 不替换 SpaceHub,而是在 SpaceHub 内选中目标子视图(在 rightPanel 中显示)。
+  /// 这样:
+  ///   - SpaceHub 整体布局保留(侧边栏 + 中间栏 + rightPanel)
+  ///   - 中间栏高亮更新为目标 view
+  ///   - rightPanel 切换为新的 DocumentPage
+  /// 如果 view 是 space 本身或 isSpace=true,则不做任何操作(让外层 fallthrough)。
+  void selectViewInSpaceHub(ViewPB view) {
+    if (view.id.isEmpty) return;
+    if (view.isSpace) return; // space 视图不应该在 SpaceHub 内嵌套显示
+    Log.info('[SpaceHub][selectViewInSpaceHub] ${view.name}(${view.id}), layout=${view.layout}');
+    _selectedViewNotifier.value = view;
+    spaceHubSelectedViewLayoutNotifier.value = view.layout;
+  }
 }
 
 /// SpaceHubPluginWidgetBuilder 实现空间统一页面的布局
@@ -471,6 +486,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.initState();
     SpaceHubMiddlePanelController.revealRequest
         .addListener(_handleRevealDocumentList);
+    // 监听外部 notifier 变化(由 SpaceHubPlugin.selectViewInSpaceHub 或
+    // TabsBloc 在 SpaceHub 内嵌文档链接点击时设置),同步到本地 _selectedView,
+    // 触发 rightPanel 重建,显示新的子文档而不替换整个 SpaceHub。
+    widget.selectedViewNotifier.addListener(_onSelectedViewNotifierChanged);
     _leftPanelWidthNotifier = ValueNotifier<double>(
       HomeSizes.defaultSpaceHubMiddlePaneWidth,
     );
@@ -481,6 +500,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       _addToRecentViews(widget.initialSelectedView!.id);
     } else {
       _trySelectFirstDocument();
+    }
+  }
+
+  /// 响应 selectedViewNotifier 变化(由 SpaceHubPlugin.selectViewInSpaceHub
+  /// 或 TabsBloc 在 SpaceHub 内嵌子文档中点击链接时设置)。
+  /// 同步更新本地 _selectedView,触发 build 重建。
+  /// 注意:这里只在外部 value 与本地不一致时 setState,避免自身在
+  /// _selectViewInMiddlePanel 中改 notifier.value 引起的循环 rebuild。
+  void _onSelectedViewNotifierChanged() {
+    if (!mounted) return;
+    final external = widget.selectedViewNotifier.value;
+    if (external?.id != _selectedView?.id) {
+      setState(() {
+        _selectedView = external;
+      });
     }
   }
 
@@ -1028,6 +1062,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     _childViewInfoBlocs.clear();
     _scrollController.dispose();
     _leftPanelWidthNotifier.dispose();
+    widget.selectedViewNotifier.removeListener(_onSelectedViewNotifierChanged);
     super.dispose();
   }
 }
