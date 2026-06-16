@@ -1683,6 +1683,8 @@ impl FolderManager {
             Some(user.avatar_url)
           },
           pending_invitation: false,
+          // 本地数据库表 WorkspaceSharedUserTable 未存储 user_id，从本地缓存重建时填 None
+          user_id: None,
         })
         .collect();
 

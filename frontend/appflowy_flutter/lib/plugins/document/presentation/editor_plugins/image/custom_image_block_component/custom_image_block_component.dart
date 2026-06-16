@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/presentation/widgets/image_viewer/interactive
 import 'package:appflowy_editor/appflowy_editor.dart' hide ResizableImage;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
@@ -160,6 +161,27 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
 
   bool alwaysShowMenu = false;
 
+  /// 安全更新图片状态通知器。
+  /// ResizableImage 会在 CachedNetworkImage 的 progressIndicatorBuilder/errorWidgetBuilder
+  /// 等 build 阶段同步回调 onStateChange，若此时直接写 notifier，会让消费它的
+  /// ValueListenableBuilder 在 build 期间被标脏，抛出 “setState() called during build”。
+  /// 因此处于 build/layout/paint 阶段时，延迟到当前帧结束后再更新。
+  void _updateImageState(ResizableImageState state) {
+    if (!mounted || imageStateNotifier.value == state) {
+      return;
+    }
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          imageStateNotifier.value = state;
+        }
+      });
+    } else {
+      imageStateNotifier.value = state;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final node = widget.node;
@@ -194,7 +216,7 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
         editable: editorState.editable,
         alignment: alignment,
         type: imageType,
-        onStateChange: (state) => imageStateNotifier.value = state,
+        onStateChange: _updateImageState,
         onDoubleTap: () => showDialog(
           context: context,
           builder: (_) => InteractiveImageViewer(
