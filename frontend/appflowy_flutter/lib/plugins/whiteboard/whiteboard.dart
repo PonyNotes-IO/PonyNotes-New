@@ -886,52 +886,74 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
           body: ValueListenableBuilder<bool>(
             valueListenable: FullWindowController.isFullWindow,
             builder: (context, isFullWindow, _) {
-              return Stack(
-                children: [
-                  const Positioned.fill(
-                    child: ColoredBox(color: _whiteboardCanvasFallbackColor),
-                  ),
-                  _buildExcalidrawView(),
-                  if (_shouldRenderTopActionsBar(isFullWindow))
-                    Positioned.fill(
-                      child: _WhiteboardFloatingActionsOverlay(
-                        key: ValueKey(
-                          'whiteboard_top_actions_${widget.view.id}',
-                        ),
-                        edgeInsets: EdgeInsets.fromLTRB(
-                          12,
-                          isFullWindow ? 12 : 14,
-                          isFullWindow ? 12 : 18,
-                          12,
-                        ),
-                        child: _buildTopActionsBar(
-                          context,
-                          isFullWindow: isFullWindow,
-                        ),
-                      ),
+              try {
+                if (!mounted) {
+                  return const SizedBox.shrink();
+                }
+
+                return Stack(
+                  children: [
+                    const Positioned.fill(
+                      child: ColoredBox(color: _whiteboardCanvasFallbackColor),
                     ),
-                  // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
-                  if (isSidebarHidden && !isFullWindow && !widget.isInSpaceHub)
-                    Positioned(
-                      top: 10,
-                      left: UniversalPlatform.isMacOS ? 88 : 16,
-                      child: FlowyTooltip(
-                        message: LocaleKeys.sideBar_openSidebar.tr(),
-                        child: FlowyIconButton(
-                          width: 24,
-                          icon: FlowySvg(
-                            FlowySvgs.sidebar_collapse_custom_m,
-                            size: const Size.square(24),
-                            color: _whiteboardActionIconColor(context),
+                    _buildExcalidrawView(),
+                    if (_shouldRenderTopActionsBar(isFullWindow))
+                      Positioned.fill(
+                        child: _WhiteboardFloatingActionsOverlay(
+                          key: ValueKey(
+                            'whiteboard_top_actions_${widget.view.id}',
                           ),
-                          onPressed: () => context.read<HomeSettingBloc>().add(
-                            const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                          edgeInsets: EdgeInsets.fromLTRB(
+                            12,
+                            isFullWindow ? 12 : 14,
+                            isFullWindow ? 12 : 18,
+                            12,
+                          ),
+                          child: _buildTopActionsBar(
+                            context,
+                            isFullWindow: isFullWindow,
                           ),
                         ),
                       ),
-                    ),
-                ],
-              );
+                    // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
+                    if (isSidebarHidden && !widget.isInSpaceHub)
+                      Positioned(
+                        top: 10,
+                        left: UniversalPlatform.isMacOS ? 88 : 16,
+                        child: FlowyTooltip(
+                          message: LocaleKeys.sideBar_openSidebar.tr(),
+                          child: FlowyIconButton(
+                            width: 24,
+                            icon: FlowySvg(
+                              FlowySvgs.sidebar_collapse_custom_m,
+                              size: const Size.square(24),
+                              color: _whiteboardActionIconColor(context),
+                            ),
+                            onPressed: () {
+                              if (!mounted) return;
+                              try {
+                                context.read<HomeSettingBloc>().add(
+                                      const HomeSettingEvent.changeMenuStatus(
+                                          MenuStatus.expanded),
+                                    );
+                              } catch (e) {
+                                Log.warn(
+                                    '[Whiteboard] Error expanding sidebar: $e');
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              } catch (error, stackTrace) {
+                Log.error(
+                  '[Whiteboard] Error building whiteboard in full window mode: $error',
+                  error,
+                  stackTrace,
+                );
+                return _buildExcalidrawView();
+              }
             },
           ),
         );

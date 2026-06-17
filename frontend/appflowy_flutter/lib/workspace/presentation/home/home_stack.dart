@@ -12,6 +12,7 @@ import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/windows.dart';
+import 'package:appflowy/util/log_utils.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -278,26 +279,36 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   ) {
     Widget? fullWindowMoreItem;
     var handlesFullWindowOverlayActionsInternally = false;
-    if (state.currentIndex >= 0 &&
-        state.currentIndex < state.pageManagers.length) {
-      final pm = state.pageManagers[state.currentIndex];
-      handlesFullWindowOverlayActionsInternally =
-          pm.plugin.widgetBuilder.handlesFullWindowOverlayActionsInternally;
-      final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
-      if (currentMoreItem != null) {
-        fullWindowMoreItem = ChangeNotifierProvider.value(
-          value: pm.notifier,
-          child: Consumer<PageNotifier>(
-            builder: (_, notifier, __) =>
-                notifier.plugin.widgetBuilder.fullWindowMoreItem ??
-                const SizedBox.shrink(),
-          ),
-        );
+    
+    try {
+      if (state.currentIndex >= 0 &&
+          state.currentIndex < state.pageManagers.length) {
+        final pm = state.pageManagers[state.currentIndex];
+        handlesFullWindowOverlayActionsInternally =
+            pm.plugin.widgetBuilder.handlesFullWindowOverlayActionsInternally;
+        final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
+        if (currentMoreItem != null) {
+          fullWindowMoreItem = ChangeNotifierProvider.value(
+            value: pm.notifier,
+            child: Consumer<PageNotifier>(
+              builder: (_, notifier, __) {
+                if (!mounted) {
+                  return const SizedBox.shrink();
+                }
+                return notifier.plugin.widgetBuilder.fullWindowMoreItem ??
+                    const SizedBox.shrink();
+              },
+            ),
+          );
+        }
       }
+    } catch (error, stackTrace) {
+      LogUtils.error(
+        '[HomeStack] Error building full window overlay actions: $error'
+      );
+      handlesFullWindowOverlayActionsInternally = false;
     }
 
-    // Whiteboard and other canvas-like plugins can render the full-window
-    // actions inside their own floating capsule.
     if (handlesFullWindowOverlayActionsInternally) {
       return const SizedBox.shrink();
     }
@@ -333,7 +344,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                       Icons.fullscreen_exit_rounded,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
-                    onPressed: FullWindowController.exit,
+                    onPressed: () {
+                      if (mounted) {
+                        FullWindowController.exit();
+                      }
+                    },
                   ),
                 ),
               ),
@@ -421,6 +436,12 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   void onWindowFocus() {
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
+    
+    // 添加 mounted 检查，避免 dispose 后调用 setState 导致崩溃
+    if (!mounted) {
+      return;
+    }
+    
     setState(() {});
 
     // macOS 窗口最小化后长时间再打开时，需要确保窗口正确显示
