@@ -92,7 +92,7 @@ class AIWelcomePage extends StatelessWidget {
                 ),
                 Positioned(
                   top: 10,
-                  left: UniversalPlatform.isMacOS ? 75 : 16,
+                  left: UniversalPlatform.isMacOS ? 88 : 16,
                   child:
                   // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
                   BlocBuilder<HomeSettingBloc, HomeSettingState>(

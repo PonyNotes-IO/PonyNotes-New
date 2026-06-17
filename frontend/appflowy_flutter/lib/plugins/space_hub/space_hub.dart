@@ -715,7 +715,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (isSidebarHidden && PlatformInfo.isMacOS) ...[
+                            if (isSidebarHidden) ...[
                               Padding(
                                 padding: const EdgeInsets.only(top: 16, right: 16),
                                 child: SizedBox(
@@ -1274,16 +1274,6 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          if (isSidebarHidden && !PlatformInfo.isMacOS) ...[
-            const HSpace(4),
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: _SpaceHubSidebarToggleButton(
-                color: theme.iconColorScheme.secondary,
-              ),
-            ),
-          ],
         ],
       ),
     );

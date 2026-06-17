@@ -25,8 +25,13 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import '../../workspace/application/view/view_bloc.dart';
+import '../../workspace/application/home/home_setting_bloc.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 
 // This widget is largely copied from `plugins/document/document_page.dart` intentionally instead of opting for an abstraction. We can make an abstraction after the view refactor is done and there's more clarity in that department.
 
@@ -38,6 +43,7 @@ class DatabaseDocumentPage extends StatefulWidget {
     required this.rowId,
     required this.documentId,
     this.initialSelection,
+    this.isInSpaceHub = false,
   });
 
   final ViewPB view;
@@ -45,6 +51,7 @@ class DatabaseDocumentPage extends StatefulWidget {
   final String rowId;
   final String documentId;
   final Selection? initialSelection;
+  final bool isInSpaceHub;
 
   @override
   State<DatabaseDocumentPage> createState() => _DatabaseDocumentPageState();
@@ -97,10 +104,40 @@ class _DatabaseDocumentPageState extends State<DatabaseDocumentPage> {
           return BlocListener<ActionNavigationBloc, ActionNavigationState>(
             listener: _onNotificationAction,
             listenWhen: (_, curr) => curr.action != null,
-            child: AiWriterScrollWrapper(
-              viewId: widget.view.id,
-              editorState: editorState,
-              child: _buildEditorPage(context, state),
+            child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+              buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+              builder: (context, menuState) {
+                final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+                return Stack(
+                  children: [
+                    AiWriterScrollWrapper(
+                      viewId: widget.view.id,
+                      editorState: editorState,
+                      child: _buildEditorPage(context, state),
+                    ),
+                    // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
+                    if (isSidebarHidden && !widget.isInSpaceHub)
+                      Positioned(
+                        top: 10,
+                        left: UniversalPlatform.isMacOS ? 88 : 16,
+                        child: FlowyTooltip(
+                          message: LocaleKeys.sideBar_openSidebar.tr(),
+                          child: FlowyIconButton(
+                            width: 24,
+                            icon: FlowySvg(
+                              FlowySvgs.sidebar_collapse_custom_m,
+                              size: const Size.square(24),
+                              color: Theme.of(context).iconTheme.color,
+                            ),
+                            onPressed: () => context.read<HomeSettingBloc>().add(
+                              const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           );
         },

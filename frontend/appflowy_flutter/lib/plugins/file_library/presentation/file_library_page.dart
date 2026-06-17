@@ -25,6 +25,8 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/cust
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
@@ -86,85 +88,110 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                 !isFullWindow && menuStatus != MenuStatus.expanded;
             final contentTopPadding =
                 shouldApplyTopPadding ? HomeSizes.topBarHeight : 0.0;
+            final isSidebarHidden = menuStatus == MenuStatus.hidden;
 
-            return Container(
-              width: double.infinity,
-              height: double.infinity,
-              child: Row(
-                children: [
-                  // 左侧文件分类侧边栏
-                  Container(
-                    width: 250,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    ),
-                    clipBehavior: Clip.hardEdge,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // 顶部标题
-                        Container(
-                          height: 50,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Theme.of(context).dividerColor,
-                                width: 0.5,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Text(
-                                '文件库',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+            return Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  child: Row(
+                    children: [
+                      // 左侧文件分类侧边栏
+                      Container(
+                        width: 250,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                        ),
+                        clipBehavior: Clip.hardEdge,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // 顶部标题
+                            Container(
+                              height: 50,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Theme.of(context).dividerColor,
+                                    width: 0.5,
+                                  ),
                                 ),
                               ),
-                              const Spacer(),
-                              BlocBuilder<FileLibraryBloc, FileLibraryState>(
-                                builder: (context, state) {
-                                  return FlowyIconButton(
-                                    icon: const FlowySvg(
-                                      FlowySvgs.fl_upload_m,
-                                      size: Size.square(18),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    '文件库',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    onPressed: state.isImporting
-                                        ? null
-                                        : () {
-                                            _bloc.add(const FileLibraryEvent.importPdfFile());
-                                          },
-                                    tooltipText: '上传文件',
-                                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                                  );
-                                },
+                                  ),
+                                  const Spacer(),
+                                  BlocBuilder<FileLibraryBloc, FileLibraryState>(
+                                    builder: (context, state) {
+                                      return FlowyIconButton(
+                                        icon: const FlowySvg(
+                                          FlowySvgs.fl_upload_m,
+                                          size: Size.square(18),
+                                        ),
+                                        onPressed: state.isImporting
+                                            ? null
+                                            : () {
+                                                _bloc.add(const FileLibraryEvent.importPdfFile());
+                                              },
+                                        tooltipText: '上传文件',
+                                        hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                      );
+                                    },
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
+                            // 分类列表
+                            Expanded(
+                              child: _buildCategoryList(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // 右侧文件列表区域
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(top: contentTopPadding),
+                          child: Container(
+                            width: double.infinity,
+                            height: double.infinity,
+                            color: Theme.of(context).colorScheme.surface,
+                            child: _buildMainContent(),
                           ),
                         ),
-                        // 分类列表
-                        Expanded(
-                          child: _buildCategoryList(),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  // 右侧文件列表区域
-                  Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: contentTopPadding),
-                      child: Container(
-                        width: double.infinity,
-                        height: double.infinity,
-                        color: Theme.of(context).colorScheme.surface,
-                        child: _buildMainContent(),
+                ),
+                // 侧边栏收起时，在左上角显示展开按钮
+                if (isSidebarHidden)
+                  Positioned(
+                    top: 10,
+                    left: UniversalPlatform.isMacOS ? 88 : 16,
+                    child: FlowyTooltip(
+                      message: '打开侧边栏',
+                      child: FlowyIconButton(
+                        width: 24,
+                        icon: FlowySvg(
+                          FlowySvgs.sidebar_collapse_custom_m,
+                          size: const Size.square(24),
+                          color: Theme.of(context).iconTheme.color,
+                        ),
+                        onPressed: () => context.read<HomeSettingBloc>().add(
+                          const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                        ),
                       ),
                     ),
                   ),
-                ],
-              ),
+              ],
             );
           },
         ),

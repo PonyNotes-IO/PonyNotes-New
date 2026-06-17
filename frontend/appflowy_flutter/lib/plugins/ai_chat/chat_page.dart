@@ -2,13 +2,21 @@ import 'dart:convert';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'application/chat_bloc.dart';
 import 'application/chat_member_bloc.dart';
@@ -24,11 +32,13 @@ class AIChatPage extends StatelessWidget {
     required this.view,
     required this.onDeleted,
     required this.userProfile,
+    this.isInSpaceHub = false,
   });
 
   final ViewPB view;
   final VoidCallback onDeleted;
   final UserProfilePB userProfile;
+  final bool isInSpaceHub;
 
   @override
   Widget build(BuildContext context) {
@@ -159,9 +169,39 @@ class AIChatPage extends StatelessWidget {
                     },
                   ),
                 },
-                child: ChatContentPage(
-                  view: view,
-                  userProfile: userProfile,
+                child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                  buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                  builder: (context, menuState) {
+                    final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+                    return Stack(
+                      children: [
+                        ChatContentPage(
+                          view: view,
+                          userProfile: userProfile,
+                        ),
+                        // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
+                        if (isSidebarHidden && !isInSpaceHub)
+                          Positioned(
+                            top: 10,
+                            left: UniversalPlatform.isMacOS ? 88 : 16,
+                            child: FlowyTooltip(
+                              message: LocaleKeys.sideBar_openSidebar.tr(),
+                              child: FlowyIconButton(
+                                width: 24,
+                                icon: FlowySvg(
+                                  FlowySvgs.sidebar_collapse_custom_m,
+                                  size: const Size.square(24),
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
+                                onPressed: () => context.read<HomeSettingBloc>().add(
+                                  const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
