@@ -18,6 +18,8 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   final String title;
   final windowSizeManager = WindowSizeManager();
   static const Size _windowsSafeStartupSize = Size(1280, 720);
+  
+  bool _isDisposed = false;
 
   @override
   Future<void> initialize(LaunchContext context) async {
@@ -104,6 +106,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowMaximize() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowMaximize();
     await windowSizeManager.setWindowMaximized(true);
     await windowSizeManager.setPosition(Offset.zero);
@@ -111,6 +116,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowUnmaximize() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowUnmaximize();
     await windowSizeManager.setWindowMaximized(false);
 
@@ -119,7 +127,10 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   }
 
   @override
-  void onWindowEnterFullScreen() async {
+  Future<void> onWindowEnterFullScreen() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowEnterFullScreen();
     await windowSizeManager.setWindowMaximized(true);
     await windowSizeManager.setPosition(Offset.zero);
@@ -127,6 +138,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowLeaveFullScreen() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowLeaveFullScreen();
     await windowSizeManager.setWindowMaximized(false);
 
@@ -136,6 +150,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowResize() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowResize();
 
     if (await windowManager.isMaximized()) {
@@ -147,7 +164,10 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   }
 
   @override
-  void onWindowMoved() async {
+  Future<void> onWindowMoved() async {
+    if (_isDisposed) {
+      return;
+    }
     super.onWindowMoved();
 
     final position = await windowManager.getPosition();
@@ -156,6 +176,7 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> dispose() async {
+    _isDisposed = true;
     await super.dispose();
 
     windowManager.removeListener(this);
@@ -225,20 +246,50 @@ Future<void> refreshWindowsSurfaceAfterNavigation({
 
 /// macOS 窗口恢复处理
 /// 当窗口最小化后长时间再打开时，确保窗口正确显示
+/// 
+/// 该方法解决以下问题：
+/// 1. 窗口最小化后长时间再打开时，窗口可能无法正确显示在桌面
+/// 2. 切换笔记后程序崩溃的问题
+/// 3. 窗口状态不一致导致的各种异常
 Future<void> refreshMacOSWindowAfterMinimize() async {
   if (!Platform.isMacOS) {
     return;
   }
 
   try {
+    // 确保窗口管理器已初始化
+    final isInitialized = await windowManager.ensureInitialized().then((_) => true).catchError((_) => false);
+    if (!isInitialized) {
+      Log.warn('[macOS] windowManager not initialized, skipping refresh');
+      return;
+    }
+
     // 检查窗口是否被最小化
-    if (await windowManager.isMinimized()) {
-      await windowManager.restore();
+    final isMinimized = await windowManager.isMinimized().catchError((_) => false);
+    if (isMinimized) {
+      await windowManager.restore().catchError((error) {
+        Log.warn('[macOS] failed to restore window: $error');
+      });
     }
 
     // 确保窗口可见并获得焦点
-    await windowManager.show();
-    await windowManager.focus();
+    await windowManager.show().catchError((error) {
+      Log.warn('[macOS] failed to show window: $error');
+    });
+    
+    await windowManager.focus().catchError((error) {
+      Log.warn('[macOS] failed to focus window: $error');
+    });
+
+    // 额外的安全检查：确保窗口确实在前台
+    await Future.delayed(const Duration(milliseconds: 50));
+    final isVisible = await windowManager.isVisible().catchError((_) => false);
+    if (!isVisible) {
+      // 再次尝试显示窗口
+      await windowManager.show().catchError((error) {
+        Log.warn('[macOS] second attempt to show window failed: $error');
+      });
+    }
 
     Log.info('[macOS] refreshed window after minimize');
   } catch (error, stackTrace) {

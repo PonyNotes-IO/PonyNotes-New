@@ -363,10 +363,22 @@ class _DocumentPageState extends State<DocumentPage>
             ValueListenableBuilder<bool>(
               valueListenable: FullWindowController.isFullWindow,
               builder: (context, isFullWindow, _) {
-                if (isFullWindow) {
+                try {
+                  if (!mounted) {
+                    return const SizedBox.shrink();
+                  }
+                  if (isFullWindow) {
+                    return const SizedBox.shrink();
+                  }
+                  return _buildTopBar(context);
+                } catch (error, stackTrace) {
+                  Log.error(
+                    '[DocumentPage] Error building top bar in full window mode: $error',
+                    error,
+                    stackTrace,
+                  );
                   return const SizedBox.shrink();
                 }
-                return _buildTopBar(context);
               },
             ),
             // the banner only shows on desktop
