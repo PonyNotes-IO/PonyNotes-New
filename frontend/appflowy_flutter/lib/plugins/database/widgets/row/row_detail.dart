@@ -11,13 +11,16 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import '../cell/editable_cell_builder.dart';
 import 'row_banner.dart';
@@ -30,12 +33,14 @@ class RowDetailPage extends StatefulWidget with FlowyOverlayDelegate {
     required this.databaseController,
     this.allowOpenAsFullPage = true,
     this.userProfile,
+    this.isInSpaceHub = false,
   });
 
   final RowController rowController;
   final DatabaseController databaseController;
   final bool allowOpenAsFullPage;
   final UserProfilePB? userProfile;
+  final bool isInSpaceHub;
 
   @override
   State<RowDetailPage> createState() => _RowDetailPageState();
@@ -84,62 +89,90 @@ class _RowDetailPageState extends State<RowDetailPage> {
             BlocProvider.value(value: getIt<ReminderBloc>()),
           ],
           child: BlocBuilder<RowDetailBloc, RowDetailState>(
-            builder: (context, state) => Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned.fill(
-                  child: NestedScrollView(
-                    controller: scrollController,
-                    headerSliverBuilder:
-                        (BuildContext context, bool innerBoxIsScrolled) {
-                      return <Widget>[
-                        SliverToBoxAdapter(
-                          child: Column(
-                            children: [
-                              RowBanner(
-                                databaseController: widget.databaseController,
-                                rowController: widget.rowController,
-                                cellBuilder: cellBuilder,
-                                allowOpenAsFullPage: widget.allowOpenAsFullPage,
-                                userProfile: widget.userProfile,
-                              ),
-                              const VSpace(16),
-                              Padding(
-                                padding:
-                                    const EdgeInsets.only(left: 40, right: 60),
-                                child: RowPropertyList(
-                                  cellBuilder: cellBuilder,
-                                  viewId: widget.databaseController.viewId,
-                                  fieldController:
-                                      widget.databaseController.fieldController,
+            builder: (context, state) {
+              return BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                builder: (sidebarContext, menuState) {
+                  final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned.fill(
+                        child: NestedScrollView(
+                          controller: scrollController,
+                          headerSliverBuilder:
+                              (BuildContext context, bool innerBoxIsScrolled) {
+                            return <Widget>[
+                              SliverToBoxAdapter(
+                                child: Column(
+                                  children: [
+                                    RowBanner(
+                                      databaseController: widget.databaseController,
+                                      rowController: widget.rowController,
+                                      cellBuilder: cellBuilder,
+                                      allowOpenAsFullPage: widget.allowOpenAsFullPage,
+                                      userProfile: widget.userProfile,
+                                    ),
+                                    const VSpace(16),
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(left: 40, right: 60),
+                                      child: RowPropertyList(
+                                        cellBuilder: cellBuilder,
+                                        viewId: widget.databaseController.viewId,
+                                        fieldController:
+                                            widget.databaseController.fieldController,
+                                      ),
+                                    ),
+                                    const VSpace(20),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 60),
+                                      child: Divider(height: 1.0),
+                                    ),
+                                    const VSpace(20),
+                                  ],
                                 ),
                               ),
-                              const VSpace(20),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 60),
-                                child: Divider(height: 1.0),
-                              ),
-                              const VSpace(20),
-                            ],
+                            ];
+                          },
+                          body: RowDocument(
+                            viewId: widget.rowController.viewId,
+                            rowId: widget.rowController.rowId,
                           ),
                         ),
-                      ];
-                    },
-                    body: RowDocument(
-                      viewId: widget.rowController.viewId,
-                      rowId: widget.rowController.rowId,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: calculateActionsOffset(
-                    state.rowMeta.cover.data.isNotEmpty,
-                  ),
-                  right: 12,
-                  child: Row(children: actions(context)),
-                ),
-              ],
-            ),
+                      ),
+                      Positioned(
+                        top: calculateActionsOffset(
+                          state.rowMeta.cover.data.isNotEmpty,
+                        ),
+                        right: 12,
+                        child: Row(children: actions(context)),
+                      ),
+                      // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
+                      if (isSidebarHidden && !widget.isInSpaceHub)
+                        Positioned(
+                          top: 10,
+                          left: UniversalPlatform.isMacOS ? 88 : 16,
+                          child: FlowyTooltip(
+                            message: LocaleKeys.sideBar_openSidebar.tr(),
+                            child: FlowyIconButton(
+                              width: 24,
+                              icon: FlowySvg(
+                                FlowySvgs.sidebar_collapse_custom_m,
+                                size: const Size.square(24),
+                                color: Theme.of(context).iconTheme.color,
+                              ),
+                              onPressed: () => sidebarContext.read<HomeSettingBloc>().add(
+                                const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
           ),
         ),
       ),

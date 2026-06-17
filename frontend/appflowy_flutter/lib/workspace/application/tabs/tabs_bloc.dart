@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -104,6 +105,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView();
           },
           openTab: (Plugin plugin, ViewPB view) {
+            // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,通知 SpaceHub
+            // 选中子视图,不替换 SpaceHub。
+            if (state.currentPageManager.plugin is SpaceHubPlugin) {
+              try {
+                final spaceHubPlugin =
+                    state.currentPageManager.plugin as SpaceHubPlugin;
+                spaceHubPlugin.selectViewInSpaceHub(view);
+                return;
+              } catch (_) {
+                // 失败时回退到原有逻辑
+              }
+            }
             // 协作空间（isSpace=true）只做侧边栏导航，不生成选项卡
             if (view.isSpace) return;
             // 完全不触碰 SecondaryView,避免在文档内创建/打开子页面后
@@ -112,6 +125,20 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView(view);
           },
           openPlugin: (Plugin plugin, ViewPB? view, bool setLatest) {
+            // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub
+            // 整个替换掉。文档内的 mention/sub_page 链接会直接 add 这个 event,
+            // 绕过 openPlugin() 入口的判断,这里再判断一次。
+            if (view != null &&
+                state.currentPageManager.plugin is SpaceHubPlugin) {
+              try {
+                final spaceHubPlugin =
+                    state.currentPageManager.plugin as SpaceHubPlugin;
+                spaceHubPlugin.selectViewInSpaceHub(view);
+                return;
+              } catch (_) {
+                // 失败时回退到原有逻辑
+              }
+            }
             // 完全不触碰 SecondaryView,避免在文档内创建/打开子页面后
             // 右侧辅助面板（AI 对话等）被清掉或被隐藏。
             emit(state.openPlugin(plugin: plugin, setLatest: setLatest));
@@ -365,6 +392,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
   void openTab(ViewPB view) {
+    // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub 整个
+    // 替换掉,而是通知 SpaceHubPlugin 选中该子视图。
+    if (state.currentPageManager.plugin is SpaceHubPlugin) {
+      try {
+        final plugin =
+            state.currentPageManager.plugin as SpaceHubPlugin;
+        plugin.selectViewInSpaceHub(view);
+        return;
+      } catch (_) {
+        // 失败时回退到原有 openTab 流程
+      }
+    }
     // 协作空间不生成选项卡
     if (view.isSpace) return;
     try {
@@ -421,27 +460,32 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   /// 在 on handler 顶层 await 此方法返回的 Future,可确保 bloc 一直保持
   /// handler 活跃直到真正结束。
   Future<void> _goBackToPreviousView(Emitter<TabsState> emit) async {
-    Log.info('[goBack] START - clicking back button');
     // 1. 拿到当前 view
     final currentNotifier =
         state.currentPageManager.plugin.notifier;
     final currentView =
         currentNotifier is ViewPluginNotifier ? currentNotifier.view : null;
     if (currentView == null || currentView.id.isEmpty) {
-      Log.info('[TabsBloc] goBackToPreviousView: no current view');
       return;
     }
-    Log.info(
-      '[goBack] currentView=${currentView.name}(${currentView.id}), parent=${currentView.parentViewId}',
-    );
+
+    // 1.5 特殊情况：当前是 SpaceHubPlugin 且中间栏选中了子视图(嵌入了文档)。
+    //    此时 currentView 是 space 本身，但用户期望的"返回"应该是
+    //    回到 SpaceHub 主页(子页面列表)而不是跳到 parent Workspace。
+    //    直接清空 SpaceHub 的选中状态即可。
+    final currentPlugin = state.currentPageManager.plugin;
+    if (currentPlugin is SpaceHubPlugin) {
+      if (currentPlugin.hasSelectedView) {
+        currentPlugin.clearSelection();
+        return;
+      }
+      return;
+    }
 
     // 2. 父级 id 为空：没有父级可回退，保留旧行为（用 previousOpenView）
     if (currentView.parentViewId.isEmpty) {
       final previousView = menuSharedState.previousOpenView;
       if (previousView == null || previousView.id.isEmpty) {
-        Log.info(
-          '[TabsBloc] goBackToPreviousView: no parent and no previous view',
-        );
         return;
       }
       menuSharedState.clearPreviousOpenView();
@@ -463,25 +507,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     while (nextId.isNotEmpty && safetyCounter < 16) {
       if (emit.isDone) return;
       safetyCounter++;
-      Log.info(
-        '[goBack] loop iter=$safetyCounter, loading nextId=$nextId',
-      );
       final loaded = await _loadView(nextId);
-      if (emit.isDone) {
-        Log.warn('[goBack] emit.isDone after await _loadView, abort');
-        return;
-      }
-      if (loaded == null) {
-        Log.warn('[goBack] _loadView returned null for $nextId, break');
-        break;
-      }
-      Log.info(
-        '[goBack] loaded view=${loaded.name}(${loaded.id}), isSpace=${loaded.isSpace}',
-      );
+      if (emit.isDone) return;
+      if (loaded == null) break;
       if (loaded.isSpace) {
         targetView = loaded;
-        // 如果直接父级就是 space，childForSelected 应取 currentView 自己，
-        // 这样 SpaceHub 会选中 currentView，主区域显示其内容。
         if (childForSelected == null) {
           childForSelected = currentView;
         }
@@ -490,17 +520,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       childForSelected ??= loaded;
       nextId = loaded.parentViewId;
     }
-    // 兜底：找不到协作空间祖先，则退到最近的非空间父 view
     targetView ??= childForSelected;
-    if (targetView == null) {
-      Log.warn(
-        '[TabsBloc] goBackToPreviousView: cannot resolve any parent view',
-      );
-      return;
-    }
-    Log.info(
-      '[goBack] resolved targetView=${targetView.name}(${targetView.id}), isSpace=${targetView.isSpace}, childForSelected=${childForSelected?.name}(${childForSelected?.id})',
-    );
+    if (targetView == null) return;
 
     // 4. 先清空 previousOpenView，避免 _setLatestOpenView 把当前 view 当成 previous 记录
     menuSharedState.clearPreviousOpenView();
@@ -511,19 +532,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final plugin = targetView.plugin(
       initialSelectedView: targetView.isSpace ? childForSelected : null,
     );
-    Log.info(
-      '[goBack] plugin created: ${plugin.id}, initialSelectedView=${targetView.isSpace ? childForSelected?.name : "N/A"}',
-    );
-    // 不走 state.openPlugin —— 那个会通过 _selectPluginIfOpen 复用已存在
-    // 的 SpaceHub tab 但不会重建 plugin，导致新的 initialSelectedView
-    // 不生效。这里强制在当前 tab 替换 plugin，确保 SpaceHub 带着新的
-    // initialSelectedView 重新构建，SpaceHub 主页能正确显示 childForSelected。
     state.currentPageManager
       ..setSecondaryPlugin(BlankPagePlugin())
       ..setPlugin(plugin, true);
-    Log.info(
-      '[goBack] setPlugin done: target=${targetView.name}(${targetView.id}), childForSelected=${childForSelected?.name}(${childForSelected?.id})',
-    );
     menuSharedState.latestOpenView = targetView;
   }
 
@@ -532,6 +543,26 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     ViewPB view, {
     Map<String, dynamic> arguments = const {},
   }) {
+    // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub 整个
+    // 替换掉。SpaceHub 中间栏嵌入的子文档内,如果点击了 mention/sub_page
+    // 等链接,这些链接的点击也会走到 openPlugin。
+    // 正确做法:把点击的 view 通知给 SpaceHubPlugin,让它选中该子视图
+    // (在 rightPanel 内显示),保持 SpaceHub 整体布局不变。
+    if (state.currentPageManager.plugin is SpaceHubPlugin) {
+      Log.info('[TabsBloc][openPlugin] SpaceHubPlugin detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
+      try {
+        final plugin =
+            state.currentPageManager.plugin as SpaceHubPlugin;
+        plugin.selectViewInSpaceHub(view);
+        return;
+      } catch (e) {
+      Log.error('[TabsBloc][openPlugin] selectViewInSpaceHub failed, falling back: $e');
+        // 失败时回退到原有 openPlugin 流程
+      }
+    } else {
+      Log.info('[TabsBloc][openPlugin] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
+    }
+
     try {
       if (view.id.isEmpty) {
         Log.error('openPlugin called with empty view.id, aborting openPlugin');

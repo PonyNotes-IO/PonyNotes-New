@@ -139,6 +139,32 @@ class SpaceHubPlugin extends Plugin {
     _currentViewInfoBlocNotifier.dispose();
     notifier.dispose();
   }
+
+  /// 清空中间栏的选中视图(用于返回操作:从 SpaceHub 内嵌的子文档
+  /// 点 back 时,清空选中回到 SpaceHub 主页的子页面列表)。
+  void clearSelection() {
+    if (_selectedViewNotifier.value != null) {
+      _selectedViewNotifier.value = null;
+    }
+  }
+
+  /// 当前中间栏是否选中了某个子视图(用于 back 时判断是否在 SpaceHub 内嵌文档中)。
+  bool get hasSelectedView => _selectedViewNotifier.value != null;
+
+  /// 由 TabsBloc 在 SpaceHub 内嵌子文档中的链接点击时调用:
+  /// 不替换 SpaceHub,而是在 SpaceHub 内选中目标子视图(在 rightPanel 中显示)。
+  /// 这样:
+  ///   - SpaceHub 整体布局保留(侧边栏 + 中间栏 + rightPanel)
+  ///   - 中间栏高亮更新为目标 view
+  ///   - rightPanel 切换为新的 DocumentPage
+  /// 如果 view 是 space 本身或 isSpace=true,则不做任何操作(让外层 fallthrough)。
+  void selectViewInSpaceHub(ViewPB view) {
+    if (view.id.isEmpty) return;
+    if (view.isSpace) return; // space 视图不应该在 SpaceHub 内嵌套显示
+    Log.info('[SpaceHub][selectViewInSpaceHub] ${view.name}(${view.id}), layout=${view.layout}');
+    _selectedViewNotifier.value = view;
+    spaceHubSelectedViewLayoutNotifier.value = view.layout;
+  }
 }
 
 /// SpaceHubPluginWidgetBuilder 实现空间统一页面的布局
@@ -354,6 +380,10 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         _lastWorkspaceId != workspaceId ||
         _lastSpaceViewId != spaceViewId;
 
+    Log.info(
+      '[SpaceHub] _SpaceHubBlocProviderState.build: spaceView=${widget.spaceView.name}($spaceViewId), needNewBloc=$needNewBloc, lastSpaceViewId=$_lastSpaceViewId',
+    );
+
     if (needNewBloc && workspaceId.isNotEmpty && userProfile != null) {
       _spaceBloc?.close();
       _spaceBloc = SpaceBloc(
@@ -456,6 +486,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.initState();
     SpaceHubMiddlePanelController.revealRequest
         .addListener(_handleRevealDocumentList);
+    // 监听外部 notifier 变化(由 SpaceHubPlugin.selectViewInSpaceHub 或
+    // TabsBloc 在 SpaceHub 内嵌文档链接点击时设置),同步到本地 _selectedView,
+    // 触发 rightPanel 重建,显示新的子文档而不替换整个 SpaceHub。
+    widget.selectedViewNotifier.addListener(_onSelectedViewNotifierChanged);
     _leftPanelWidthNotifier = ValueNotifier<double>(
       HomeSizes.defaultSpaceHubMiddlePaneWidth,
     );
@@ -466,6 +500,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       _addToRecentViews(widget.initialSelectedView!.id);
     } else {
       _trySelectFirstDocument();
+    }
+  }
+
+  /// 响应 selectedViewNotifier 变化(由 SpaceHubPlugin.selectViewInSpaceHub
+  /// 或 TabsBloc 在 SpaceHub 内嵌子文档中点击链接时设置)。
+  /// 同步更新本地 _selectedView,触发 build 重建。
+  /// 注意:这里只在外部 value 与本地不一致时 setState,避免自身在
+  /// _selectViewInMiddlePanel 中改 notifier.value 引起的循环 rebuild。
+  void _onSelectedViewNotifierChanged() {
+    if (!mounted) return;
+    final external = widget.selectedViewNotifier.value;
+    if (external?.id != _selectedView?.id) {
+      setState(() {
+        _selectedView = external;
+      });
     }
   }
 
@@ -666,7 +715,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            if (isSidebarHidden && PlatformInfo.isMacOS) ...[
+                            if (isSidebarHidden) ...[
                               Padding(
                                 padding: const EdgeInsets.only(top: 16, right: 16),
                                 child: SizedBox(
@@ -830,6 +879,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 PickerTabType.custom,
               ],
               viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
+              isInSpaceHub: true, // 标记为 SpaceHub 内嵌的文档,影响 back 按钮行为
             ),
           );
         }
@@ -995,8 +1045,16 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   void dispose() {
     SpaceHubMiddlePanelController.revealRequest
         .removeListener(_handleRevealDocumentList);
-    // ✅ 清理全局 notifier，通知侧边栏分割线恢复启用状态
-    spaceHubSelectedViewLayoutNotifier.value = null;
+    // ✅ 清理全局 notifier，通知侧边栏分割线恢复启用状态。
+    // 注意：dispose 期间 widget tree 处于 locked 状态，直接修改全局
+    // ValueNotifier 会触发监听者 ValueListenableBuilder 在 build 阶段
+    // markNeedsBuild,从而报 "setState() or markNeedsBuild() called when
+    // widget tree was locked" 异常。延迟到 frame 之后再修改，让监听者
+    // 在下一帧正常 build。
+    final notifier = spaceHubSelectedViewLayoutNotifier;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      notifier.value = null;
+    });
     // ✅ 清理所有缓存的 ViewInfoBloc，防止内存泄漏
     for (final bloc in _childViewInfoBlocs) {
       bloc.close();
@@ -1004,6 +1062,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     _childViewInfoBlocs.clear();
     _scrollController.dispose();
     _leftPanelWidthNotifier.dispose();
+    widget.selectedViewNotifier.removeListener(_onSelectedViewNotifierChanged);
     super.dispose();
   }
 }
@@ -1215,16 +1274,6 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
-          if (isSidebarHidden && !PlatformInfo.isMacOS) ...[
-            const HSpace(4),
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: _SpaceHubSidebarToggleButton(
-                color: theme.iconColorScheme.secondary,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1245,12 +1294,18 @@ class _SpaceDocumentList extends StatelessWidget {
         return initialized || spaceChanged || childViewsChanged;
       },
       listener: (context, state) {
+        Log.info(
+          '[SpaceHub] BlocListener fired: isInitialized=${state.isInitialized}, currentSpace=${state.currentSpace?.name ?? "null"}(${state.currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
+        );
         // 当 SpaceBloc 初始化完成后，如果当前空间不是目标空间，则打开目标空间
         if (state.isInitialized) {
           final currentSpace = state.currentSpace;
           if (currentSpace?.id != spaceView.id) {
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
             Future.microtask(() {
+              Log.info(
+                '[SpaceHub] dispatching SpaceEvent.open for spaceView=${spaceView.name}(${spaceView.id})',
+              );
               if (!spaceBloc.isClosed) {
                 final currentState = spaceBloc.state;
                 // 再次检查，避免重复打开
@@ -1306,6 +1361,9 @@ class _SpaceDocumentList extends StatelessWidget {
         builder: (context, state) {
           // 确保当前空间已加载，如果没有则触发加载
           final currentSpace = state.currentSpace;
+          Log.info(
+            '[SpaceHub] BlocBuilder builder: isInitialized=${state.isInitialized}, currentSpace=${currentSpace?.name ?? "null"}(${currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
+          );
 
           // 如果 SpaceBloc 还未初始化，显示加载中
           if (!state.isInitialized) {

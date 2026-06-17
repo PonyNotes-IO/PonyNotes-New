@@ -221,6 +221,9 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
       builder: (context, snapshot) {
         final ancestors = snapshot.data ?? [];
         final hasParent = ancestors.length > 2; // workspace + parent + current
+        Log.info(
+          '[Back] view=${view.name}(${view.id}), isSpace=${view.isSpace}, ancestors=${ancestors.map((a) => "${a.name}(${a.id}, isSpace=${a.isSpace})").join(" -> ")}, hasParent=$hasParent',
+        );
 
         return Row(
           mainAxisSize: MainAxisSize.min,

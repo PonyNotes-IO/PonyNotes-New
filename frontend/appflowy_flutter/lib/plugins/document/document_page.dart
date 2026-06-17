@@ -7,6 +7,7 @@ import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/banner.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/document/presentation/editor_drop_handler.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/ai/widgets/ai_writer_scroll_wrapper.dart';
@@ -381,33 +382,40 @@ class _DocumentPageState extends State<DocumentPage>
 
     // 侧边栏收起时，在文档左上角显示展开按钮；
     // 此外如果存在"上一文档"（例如 sub_page 自动跳转过来），显示返回按钮。
-    return BlocBuilder<HomeSettingBloc, HomeSettingState>(
-      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-      builder: (context, menuState) {
-        final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
-        final theme = AppFlowyTheme.of(context);
-        // 监听 latestOpenView 和 previousOpenView 两个 ValueNotifier，
-        // 合并两个的变更，确保 snapshot 写入后页面会重建。
-        return ValueListenableBuilder<ViewPB?>(
-          valueListenable: getIt<MenuSharedState>().previousOpenViewNotifier,
-          builder: (context, previousView, _) {
-            // previousView 仅用于触发该 ValueListenableBuilder 重建，自身不参与判断。
-            // 真正决定是否显示返回按钮的是：当前 view 是否有"上一级文档"可返回。
-            // 只有当父级是普通文档（不是协作空间）时，按钮才有意义——因为协作空间
-            // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
-            // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
-            // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
-            final showBackButton = _parentIsSpace == false;
-            // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
-            const double buttonSize = 24.0;
-            const double buttonGap = 4.0;
-            // 是否有任何左侧按钮，决定整体 left 偏移起点
-            final leftBase =
-                UniversalPlatform.isMacOS ? 75.0 : 16.0;
-            // 始终保留返回按钮占位（如果存在），便于位置稳定
-            final backButtonLeft = leftBase;
-            final sidebarButtonLeft = leftBase +
-                (showBackButton ? (buttonSize + buttonGap) : 0.0);
+    // 监听 latestOpenView 和 previousOpenView 两个 ValueNotifier，
+    // 合并两个的变更，确保 snapshot 写入后页面会重建。
+    return ValueListenableBuilder<ViewPB?>(
+      valueListenable: getIt<MenuSharedState>().previousOpenViewNotifier,
+      builder: (context, previousView, _) {
+        // previousView 仅用于触发该 ValueListenableBuilder 重建，自身不参与判断。
+        // 真正决定是否显示返回按钮的是：当前 view 是否有"上一级文档"可返回。
+        // 只有当父级是普通文档（不是协作空间）时，按钮才有意义——因为协作空间
+        // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
+        // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
+        // 例外：isInSpaceHub == true 时(从 SpaceHub 中间栏点击进入的文档),
+        // 父级是 space，但当前 back 逻辑会把 currentView 误判为 space 跳到
+        // parent Workspace 显示加载态。为避免这个混乱行为,SpaceHub 中嵌
+        // 入的文档直接不显示 back 按钮,用户用 SpaceHub 中间栏的笔记条目切换。
+        // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
+        final showBackButton =
+            _parentIsSpace == false && !widget.isInSpaceHub;
+        // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
+        const double buttonSize = 24.0;
+        const double buttonGap = 4.0;
+        // macOS 上系统窗口按钮（关闭、最小化、最大化）占据约 88 像素宽度，
+        // 需要留出足够空间避免按钮被遮挡
+        // 其他平台使用较小的偏移量
+        final leftBase =
+            UniversalPlatform.isMacOS ? 88.0 : 16.0;
+        // 始终保留返回按钮占位（如果存在），便于位置稳定
+        final backButtonLeft = leftBase;
+        final sidebarButtonLeft = leftBase +
+            (showBackButton ? (buttonSize + buttonGap) : 0.0);
+        return BlocBuilder<HomeSettingBloc, HomeSettingState>(
+          buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+          builder: (context, menuState) {
+            final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+            final theme = AppFlowyTheme.of(context);
             return Stack(
               children: [
                 editorContent,
@@ -429,7 +437,7 @@ class _DocumentPageState extends State<DocumentPage>
                       ),
                     ),
                   ),
-                if (isSidebarHidden)
+                if (isSidebarHidden && !widget.isInSpaceHub)
                   Positioned(
                     top: 10,
                     left: sidebarButtonLeft,

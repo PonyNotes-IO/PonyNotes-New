@@ -6,6 +6,8 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/database_controller.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
@@ -15,6 +17,7 @@ import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
@@ -28,6 +31,8 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -79,6 +84,7 @@ class DatabaseTabBarView extends StatefulWidget {
     this.actionBuilder,
     this.node,
     this.showTopRightActions = true,
+    this.isInSpaceHub = false,
   });
 
   final ViewPB view;
@@ -87,6 +93,7 @@ class DatabaseTabBarView extends StatefulWidget {
   final bool showActions;
   final Node? node;
   final bool showTopRightActions;
+  final bool isInSpaceHub;
 
   /// Used to open a Row on plugin load
   ///
@@ -160,89 +167,121 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                 ),
             ),
           ],
-          child: BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
-            builder: (innerContext, state) {
-              final layout = state.tabBars[state.selectedIndex].layout;
-              final isCalendar = layout == ViewLayoutPB.Calendar;
-              final databseBuilderSize =
-                  context.read<DatabasePluginWidgetBuilderSize>();
-              final horizontalPadding = databseBuilderSize.horizontalPadding;
-              final showActionWrapper = widget.showActions &&
-                  widget.actionBuilder != null &&
-                  widget.node != null;
-              final Widget child = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  VSpace(12) ,
-                  ValueListenableBuilder<bool>(
-                    valueListenable: state
-                        .tabBarControllerByViewId[state.parentView.id]!
-                        .controller
-                        .isLoading,
-                    builder: (_, value, ___) {
-                      if (value) {
-                        return const SizedBox.shrink();
-                      }
+          child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+            buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+            builder: (sidebarContext, menuState) {
+              final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+              return BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
+                builder: (innerContext, state) {
+                  final layout = state.tabBars[state.selectedIndex].layout;
+                  final isCalendar = layout == ViewLayoutPB.Calendar;
+                  final databseBuilderSize =
+                      context.read<DatabasePluginWidgetBuilderSize>();
+                  final horizontalPadding = databseBuilderSize.horizontalPadding;
+                  final showActionWrapper = widget.showActions &&
+                      widget.actionBuilder != null &&
+                      widget.node != null;
+                  final Widget child = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      VSpace(12) ,
+                      ValueListenableBuilder<bool>(
+                        valueListenable: state
+                            .tabBarControllerByViewId[state.parentView.id]!
+                            .controller
+                            .isLoading,
+                        builder: (_, value, ___) {
+                          if (value) {
+                            return const SizedBox.shrink();
+                          }
 
-                      Widget child = PlatformInfo.isDesktopOrTablet
-                          ? const TabBarHeader()
-                          : const MobileTabBarHeader();
+                          Widget child = PlatformInfo.isDesktopOrTablet
+                              ? const TabBarHeader()
+                              : const MobileTabBarHeader();
 
-                      if (innerContext.watch<ViewBloc>().state.view.isLocked) {
-                        child = IgnorePointer(
-                          child: child,
-                        );
-                      }
+                          if (innerContext.watch<ViewBloc>().state.view.isLocked) {
+                            child = IgnorePointer(
+                              child: child,
+                            );
+                          }
 
-                      if (showActionWrapper) {
-                        child = BlockComponentActionWrapper(
-                          node: widget.node!,
-                          actionBuilder: widget.actionBuilder!,
-                          child: Padding(
-                            padding: EdgeInsets.only(right: horizontalPadding),
-                            child: child,
-                          ),
-                        );
-                      }
+                          if (showActionWrapper) {
+                            child = BlockComponentActionWrapper(
+                              node: widget.node!,
+                              actionBuilder: widget.actionBuilder!,
+                              child: Padding(
+                                padding: EdgeInsets.only(right: horizontalPadding),
+                                child: child,
+                              ),
+                            );
+                          }
 
-                      if (PlatformInfo.isDesktopOrTablet) {
-                        child = Container(
-                          padding: EdgeInsets.fromLTRB(
-                            horizontalPadding + paddingLeft,
-                            25,
-                            horizontalPadding,
-                            0,
-                          ),
-                          child: child,
-                        );
-                      }
+                          if (PlatformInfo.isDesktopOrTablet) {
+                            child = Container(
+                              padding: EdgeInsets.fromLTRB(
+                                horizontalPadding + paddingLeft,
+                                25,
+                                horizontalPadding,
+                                0,
+                              ),
+                              child: child,
+                            );
+                          }
 
-                      return child;
-                    },
-                  ),
-                  pageSettingBarExtensionFromState(context, state),
-                  wrapContent(
-                    layout: layout,
-                    child: Padding(
-                      padding:
-                          (isCalendar && widget.shrinkWrap || showActionWrapper)
-                              ? EdgeInsets.only(left: 42 - horizontalPadding)
-                              : EdgeInsets.zero,
-                      child: Provider(
-                        create: (_) => DatabasePluginWidgetBuilderSize(
-                          horizontalPadding: horizontalPadding,
-                          paddingLeftWithMaxDocumentWidth: paddingLeft,
-                          verticalPadding: databseBuilderSize.verticalPadding,
-                        ),
-                        child: pageContentFromState(context, state),
+                          return child;
+                        },
                       ),
-                    ),
-                  ),
-                ],
-              );
+                      pageSettingBarExtensionFromState(context, state),
+                      wrapContent(
+                        layout: layout,
+                        child: Padding(
+                          padding:
+                              (isCalendar && widget.shrinkWrap || showActionWrapper)
+                                  ? EdgeInsets.only(left: 42 - horizontalPadding)
+                                  : EdgeInsets.zero,
+                          child: Provider(
+                            create: (_) => DatabasePluginWidgetBuilderSize(
+                              horizontalPadding: horizontalPadding,
+                              paddingLeftWithMaxDocumentWidth: paddingLeft,
+                              verticalPadding: databseBuilderSize.verticalPadding,
+                            ),
+                            child: pageContentFromState(context, state),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
 
-              return child;
+                  // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
+                  if (isSidebarHidden && !widget.isInSpaceHub) {
+                    return Stack(
+                      children: [
+                        child,
+                        Positioned(
+                          top: 10,
+                          left: UniversalPlatform.isMacOS ? 88 : 16,
+                          child: FlowyTooltip(
+                            message: LocaleKeys.sideBar_openSidebar.tr(),
+                            child: FlowyIconButton(
+                              width: 24,
+                              icon: FlowySvg(
+                                FlowySvgs.sidebar_collapse_custom_m,
+                                size: const Size.square(24),
+                                color: Theme.of(context).iconTheme.color,
+                              ),
+                              onPressed: () => sidebarContext.read<HomeSettingBloc>().add(
+                                const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return child;
+                },
+              );
             },
           ),
         );
