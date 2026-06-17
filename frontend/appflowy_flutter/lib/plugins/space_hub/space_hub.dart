@@ -938,6 +938,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return child;
     }
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+    final isHandwriting = isHandwritingNote(view);
     return Stack(
       children: [
         child,
@@ -951,8 +952,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               viewInfoBloc: viewInfoBloc,
               showCollaborators: FeatureFlag.syncDocument.isOn && !isWhiteboard,
               useFloatingSurface: true,
-              // 白板视图：隐藏分享按钮，并强制图标为黑色（不影响文档/数据库视图）。
-              showShareButton: !isWhiteboard,
+              // 白板和手写笔记：隐藏分享按钮
+              showShareButton: !isWhiteboard && !isHandwriting,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
@@ -1716,5 +1717,16 @@ class _SpaceHubResizableDividerState
         ),
       ),
     );
+  }
+}
+
+/// 检查视图是否为手写笔记类型
+bool isHandwritingNote(ViewPB view) {
+  try {
+    if (view.extra.isEmpty) return false;
+    final extra = jsonDecode(view.extra) as Map<String, dynamic>;
+    return extra['view_type'] == 'handwriting_saber';
+  } catch (e) {
+    return false;
   }
 }
