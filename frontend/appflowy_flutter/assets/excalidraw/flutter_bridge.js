@@ -55,6 +55,42 @@
     // 在 _injectFilesFromStorage 中使用此变量而非 localStorage
     let _initPayload = null;
 
+    // ✅ 关键修复（数据丢失根因）：稳定 appState 助手必须在此处提前定义。
+    // 原因：下方 waitForExcalidrawAndRestore() 会在 IIFE 同步执行阶段（远早于
+    // 这些 const 原先所在的位置）就被调用；若白板 API 已预热（切回已打开过的
+    // 白板），会同步进入 _restoreWhiteboardData → pickStableAppState，此时该
+    // const 仍处于 TDZ（暂时性死区），抛出
+    // "Cannot access 'pickStableAppState' before initialization"，导致整个恢复
+    // 流程中断、elements 与 files(图片) 全部未注入 → 白板内容丢失。
+    // 将定义提前到调用点之前可彻底消除该竞态。
+    //
+    // scrollX/scrollY 故意不包含在此集合中。
+    // 原因同 whiteboard_collab_adapter.dart：每次 resize 反馈循环都会调整
+    // scrollX/scrollY，若将其纳入 stableAppStateKeys，远端 appState 推送
+    // 会把旧的坐标覆写到当前画布，造成漂移。
+    const stableAppStateKeys = new Set([
+        'gridModeEnabled',
+        'gridSize',
+        'theme',
+        'viewBackgroundColor',
+        'zoom',
+        'zenModeEnabled',
+    ]);
+
+    const pickStableAppState = (appState) => {
+        if (!appState || typeof appState !== 'object') {
+            return {};
+        }
+
+        const stableState = {};
+        for (const key of stableAppStateKeys) {
+            if (Object.prototype.hasOwnProperty.call(appState, key)) {
+                stableState[key] = appState[key];
+            }
+        }
+        return stableState;
+    };
+
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
@@ -1017,33 +1053,6 @@
     setTimeout(installContextMenuFontPatch, 1500);
     setTimeout(installContextMenuPastePositionPatch, 1500);
     setTimeout(installHighQualityClipboardPatch, 1500);
-
-    // scrollX/scrollY 故意不包含在此集合中。
-    // 原因同 whiteboard_collab_adapter.dart：每次 resize 反馈循环都会调整
-    // scrollX/scrollY，若将其纳入 stableAppStateKeys，远端 appState 推送
-    // 会把旧的坐标覆写到当前画布，造成漂移。
-    const stableAppStateKeys = new Set([
-        'gridModeEnabled',
-        'gridSize',
-        'theme',
-        'viewBackgroundColor',
-        'zoom',
-        'zenModeEnabled',
-    ]);
-
-    const pickStableAppState = (appState) => {
-        if (!appState || typeof appState !== 'object') {
-            return {};
-        }
-
-        const stableState = {};
-        for (const key of stableAppStateKeys) {
-            if (Object.prototype.hasOwnProperty.call(appState, key)) {
-                stableState[key] = appState[key];
-            }
-        }
-        return stableState;
-    };
 
     // Flutter 调用：导出
     window.exportExcalidraw = async function (format = 'png') {
