@@ -525,7 +525,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 预加载所有页面的PDF背景图
       _preloadPdfBackgrounds();
 
-      // ✅ 从云端下载图片资源（跨设备同步后只有云 URL，需要下载字节才能显示）
+      // ✅ 先用本地完整备份按 id 回填图片字节，命中则无需联网（修复本地图片加载慢/先红色"!"）
+      await _hydrateImagesFromLocalBackup();
+
+      // ✅ 从云端下载图片资源（仅本地确实缺失时，如跨设备首次打开）
       // 异步执行，不阻塞页面加载，下载完成后触发局部刷新
       unawaited(_downloadAssetsFromCloud());
 
@@ -663,6 +666,64 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
       }
+    }
+  }
+
+  /// 打开笔记时，用本地完整备份（含 base64）按图片 id 回填缺失的字节，
+  /// 避免对本地已有的图片重复联网下载（图片加载慢 / 先红色"!"的核心修复）。
+  ///
+  /// Collab 数据是精简版（仅云 URL、无字节），直接渲染会触发错误占位并等待
+  /// 云端下载。本方法在下载前先从本地备份文件命中字节，命中则完全无需联网。
+  /// 图片上传后内容不可变，按 id 命中的字节与云端一致，回填永远正确。
+  Future<void> _hydrateImagesFromLocalBackup() async {
+    // 1. 收集需要回填的图片（无字节但有云 URL）
+    final List<PngEditorImage> missing = [];
+    for (final page in _coreInfo.pages) {
+      for (final img in page.images) {
+        if (img is PngEditorImage &&
+            img.imageBytes.isEmpty &&
+            img.imageUrl != null) {
+          missing.add(img);
+        }
+      }
+    }
+    if (missing.isEmpty) return;
+
+    try {
+      // 2. 读取并解析本地完整备份（仅本地，不走 Collab）
+      final List<int> localBytes =
+          await _dataService.loadLocalBackupData(widget.view.id);
+      if (localBytes.isEmpty) return;
+
+      final EditorCoreInfo localInfo =
+          EditorCoreInfo.fromJsonString(utf8.decode(localBytes));
+
+      // 3. 建立 id → 字节 映射
+      final Map<String, Uint8List> bytesById = {};
+      for (final page in localInfo.pages) {
+        for (final img in page.images) {
+          if (img is PngEditorImage && img.imageBytes.isNotEmpty) {
+            bytesById[img.id] = img.imageBytes;
+          }
+        }
+      }
+      if (bytesById.isEmpty) return;
+
+      // 4. 按 id 回填
+      int hydrated = 0;
+      for (final target in missing) {
+        final bytes = bytesById[target.id];
+        if (bytes != null && bytes.isNotEmpty) {
+          target.imageBytes = bytes;
+          hydrated++;
+        }
+      }
+      if (hydrated > 0) {
+        debugPrint(
+            '🦋[HandwritingSaber] ✅ 本地回填图片字节 $hydrated/${missing.length} 张，无需联网');
+      }
+    } catch (e) {
+      debugPrint('⚠️[HandwritingSaber] 本地图片回填失败（将回退云端下载）：$e');
     }
   }
 

@@ -210,6 +210,12 @@ class HandwritingSaberDataService {
     }
   }
 
+  /// 仅读取本地完整备份文件（含 base64 图片字节）。
+  ///
+  /// 与 [loadHandwritingSaberData] 不同：本方法**只读本地备份**、不走 Collab，
+  /// 用于打开笔记时从本地按 id 回填图片字节，避免对本地图片重复联网下载。
+  Future<List<int>> loadLocalBackupData(String viewId) => _loadFromFile(viewId);
+
   /// 从文件系统加载（回退方案）
   Future<List<int>> _loadFromFile(String viewId) async {
     try {

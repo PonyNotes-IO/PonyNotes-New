@@ -239,6 +239,29 @@ class _CanvasImageState extends State<CanvasImage> {
   Widget _buildImageWidget() {
     final image = widget.image;
     if (image is PngEditorImage) {
+      // 字节为空但有云 URL：正在下载 / 待下载，显示淡色加载占位而非红色"!"，
+      // 避免给用户"图片丢了"的错觉（红色"!"仅保留给真正的解码失败）。
+      if (image.imageBytes.isEmpty) {
+        if (image.imageUrl != null) {
+          return Container(
+            color: Colors.grey.withValues(alpha: 0.12),
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        // 既无字节也无 URL：确属异常，显示错误占位
+        return Container(
+          color: Colors.grey.withValues(alpha: 0.3),
+          child: const Center(
+            child: Icon(Icons.error, color: Colors.red, size: 32),
+          ),
+        );
+      }
       return Image.memory(
         image.imageBytes,
         fit: BoxFit.contain,

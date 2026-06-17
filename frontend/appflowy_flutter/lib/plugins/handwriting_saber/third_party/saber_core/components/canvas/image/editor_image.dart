@@ -214,7 +214,11 @@ class PngEditorImage extends EditorImage {
       'height': dstRect.height,
     };
 
-    if (imageUrl != null && imageUrl!.startsWith('http')) {
+    final bool hasUrl = imageUrl != null && imageUrl!.startsWith('http');
+
+    // Collab 同步：有云 URL 时只存 URL（轻量），避免 base64 撑大 Yrs CRDT
+    // 更新包导致 WebSocket 同步失败；跨设备 B 端按 URL 从云端下载字节。
+    if (forCollab && hasUrl) {
       return {
         'type': imageType,
         'id': id,
@@ -227,10 +231,12 @@ class PngEditorImage extends EditorImage {
       };
     }
 
-    // 没有云 URL 但有图片数据 → 必须包含 base64（无论是否 forCollab）
-    // 关键修复：forCollab 模式下如果没有 imageUrl，仍然包含 base64 数据，
-    // 否则图片在跨设备 Collab 同步时会完全丢失（B设备既没有 URL 也没有字节数据）。
-    // 虽然 base64 会增大 Collab 同步数据，但丢失数据比同步慢更严重。
+    // 本地完整备份(forCollab=false) 或 无云 URL：必须包含 base64 字节。
+    // 关键修复（图片加载慢/先红色"!"根因）：此前只要有 imageUrl 就丢弃
+    // base64，导致本地备份文件也只剩 URL，每次打开都要 HTTP 重新下载。
+    // 现在本地备份自包含字节，重开笔记可直接解码显示、无需联网。
+    // 同时保留 imageUrl 作为后备（跨设备/本地缺失时云端兜底）。
+    // forCollab=true 但无 URL 时，仍回退包含 base64，否则跨设备会彻底丢图。
     if (imageBytes.isNotEmpty) {
       if (forCollab) {
         Log.warn(
@@ -238,10 +244,28 @@ class PngEditorImage extends EditorImage {
         );
       }
       final base64Str = base64Encode(imageBytes);
-      return {
+      final map = <String, dynamic>{
         'type': imageType,
         'id': id,
         'imageBase64': base64Str,
+        'extension': extension,
+        'pageIndex': pageIndex,
+        'rotation': rotation,
+        'pageSize': pageSizeMap,
+        'dstRect': dstRectMap,
+      };
+      if (hasUrl) {
+        map['imageUrl'] = imageUrl;
+      }
+      return map;
+    }
+
+    // 无本地字节但有云 URL（如尚未下载完成的远程图）：退回仅存 URL，避免丢引用。
+    if (hasUrl) {
+      return {
+        'type': imageType,
+        'id': id,
+        'imageUrl': imageUrl,
         'extension': extension,
         'pageIndex': pageIndex,
         'rotation': rotation,
