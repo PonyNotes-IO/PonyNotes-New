@@ -539,7 +539,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         final result = await service.closeWhiteboard(viewId: viewId);
         result.fold(
           (_) => Log.info('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
-          (error) => Log.error('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+          (error) => Log.error(
+              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
         );
       } catch (e) {
         Log.error('[WhiteboardPage] Exception closing whiteboard: $e');
@@ -877,87 +878,39 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     }
 
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
-    return BlocBuilder<HomeSettingBloc, HomeSettingState>(
-      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-      builder: (context, menuState) {
-        final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
-        return Scaffold(
-          backgroundColor: _whiteboardCanvasFallbackColor,
-          body: ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              try {
-                if (!mounted) {
-                  return const SizedBox.shrink();
-                }
-
-                return Stack(
-                  children: [
-                    const Positioned.fill(
-                      child: ColoredBox(color: _whiteboardCanvasFallbackColor),
+    return Scaffold(
+      backgroundColor: _whiteboardCanvasFallbackColor,
+      body: ValueListenableBuilder<bool>(
+        valueListenable: FullWindowController.isFullWindow,
+        builder: (context, isFullWindow, _) {
+          return Stack(
+            children: [
+              const Positioned.fill(
+                child: ColoredBox(color: _whiteboardCanvasFallbackColor),
+              ),
+              _buildExcalidrawView(),
+              if (_shouldRenderTopActionsBar(isFullWindow))
+                Positioned.fill(
+                  child: _WhiteboardFloatingActionsOverlay(
+                    key: ValueKey(
+                      'whiteboard_top_actions_${widget.view.id}',
                     ),
-                    _buildExcalidrawView(),
-                    if (_shouldRenderTopActionsBar(isFullWindow))
-                      Positioned.fill(
-                        child: _WhiteboardFloatingActionsOverlay(
-                          key: ValueKey(
-                            'whiteboard_top_actions_${widget.view.id}',
-                          ),
-                          edgeInsets: EdgeInsets.fromLTRB(
-                            12,
-                            isFullWindow ? 12 : 14,
-                            isFullWindow ? 12 : 18,
-                            12,
-                          ),
-                          child: _buildTopActionsBar(
-                            context,
-                            isFullWindow: isFullWindow,
-                          ),
-                        ),
-                      ),
-                    // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
-                    if (isSidebarHidden && !widget.isInSpaceHub)
-                      Positioned(
-                        top: 10,
-                        left: UniversalPlatform.isMacOS ? 88 : 16,
-                        child: FlowyTooltip(
-                          message: LocaleKeys.sideBar_openSidebar.tr(),
-                          child: FlowyIconButton(
-                            width: 24,
-                            icon: FlowySvg(
-                              FlowySvgs.sidebar_collapse_custom_m,
-                              size: const Size.square(24),
-                              color: _whiteboardActionIconColor(context),
-                            ),
-                            onPressed: () {
-                              if (!mounted) return;
-                              try {
-                                context.read<HomeSettingBloc>().add(
-                                      const HomeSettingEvent.changeMenuStatus(
-                                          MenuStatus.expanded),
-                                    );
-                              } catch (e) {
-                                Log.warn(
-                                    '[Whiteboard] Error expanding sidebar: $e');
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              } catch (error, stackTrace) {
-                Log.error(
-                  '[Whiteboard] Error building whiteboard in full window mode: $error',
-                  error,
-                  stackTrace,
-                );
-                return _buildExcalidrawView();
-              }
-            },
-          ),
-        );
-      },
+                    edgeInsets: EdgeInsets.fromLTRB(
+                      12,
+                      isFullWindow ? 12 : 14,
+                      isFullWindow ? 12 : 18,
+                      12,
+                    ),
+                    child: _buildTopActionsBar(
+                      context,
+                      isFullWindow: isFullWindow,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 
