@@ -774,7 +774,7 @@ class _PonyNotesHeader extends StatefulWidget {
 class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   static const double _syncActionCollapseWidth =
       HomeSizes.maximumSidebarWidth - 32.0;
-  static const Duration _headerActionsCloseDelay = Duration(milliseconds: 650);
+  static const Duration _headerActionsCloseDelay = Duration(milliseconds: 250);
   static const Color _headerActionsPopupDarkBackgroundColor = Color(0xFF111111);
   static const Color _headerActionsPopupDarkForegroundColor = Color(0xFFF5F5F5);
   static const Color _headerActionsPopupLightForegroundColor =
@@ -1174,7 +1174,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         onExit: (_) {
           _isMouseInHeaderActionsArea = false;
           // 延迟检查，给弹出菜单的 onEnter 一个机会来取消关闭
-          Future.delayed(const Duration(milliseconds: 80), () {
+          Future.delayed(const Duration(milliseconds: 30), () {
             if (!_isMouseInHeaderActionsArea &&
                 _isHeaderActionsPopoverVisible &&
                 mounted) {

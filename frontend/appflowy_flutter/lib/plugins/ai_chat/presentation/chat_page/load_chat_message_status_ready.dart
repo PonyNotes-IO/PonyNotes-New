@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_footer.dart
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_message_widget.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/text_message_widget.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/scroll_to_bottom.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flutter/material.dart';
@@ -51,59 +52,66 @@ class LoadChatMessageStatusReady extends StatelessWidget {
       child: Align(
         alignment: Alignment.topCenter,
         child: _wrapConstraints(
-          SelectionArea(
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                scrollbars: false,
-              ),
-              child: Chat(
-                chatController: chatController,
-                user: User(id: userProfile.id.toString()),
-                darkTheme: ChatTheme.fromThemeData(Theme.of(context)),
-                theme: ChatTheme.fromThemeData(Theme.of(context)),
-                builders: Builders(
-                  // we have a custom input builder, so we don't need the default one
-                  inputBuilder: (_) => const SizedBox.shrink(),
-                  textMessageBuilder: (
-                    context,
-                    message,
-                  ) =>
-                      TextMessageWidget(
-                    message: message,
-                    userProfile: userProfile,
-                    view: view,
-                    enableAnimation: enableAnimation,
-                  ),
-                  chatMessageBuilder: (
-                    context,
-                    message,
-                    animation,
-                    child,
-                  ) =>
-                      ChatMessage(
-                    message: message,
-                    padding: const EdgeInsets.symmetric(vertical: 18.0),
-                    child: child,
-                  ),
-                  scrollToBottomBuilder: (
-                    context,
-                    animation,
-                    onPressed,
-                  ) =>
-                      CustomScrollToBottom(
-                    animation: animation,
-                    onPressed: onPressed,
-                  ),
-                  chatAnimatedListBuilder: (
-                    context,
-                    scrollController,
-                    itemBuilder,
-                  ) =>
-                      ChatAnimationListWidget(
-                    userProfile: userProfile,
-                    scrollController: scrollController,
-                    itemBuilder: itemBuilder,
-                    enableReversedList: !enableAnimation,
+          // 顶部 padding：避开 tab 栏下方的右侧工具栏行（HomeSizes.tabBarHeight），
+          // 防止首条消息被右上角按钮遮挡。仅作用于聊天页，不影响其他页面。
+          Padding(
+            padding: const EdgeInsets.only(
+              top: HomeSizes.tabBarHeight + 12.0,
+            ),
+            child: SelectionArea(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(
+                  scrollbars: false,
+                ),
+                child: Chat(
+                  chatController: chatController,
+                  user: User(id: userProfile.id.toString()),
+                  darkTheme: ChatTheme.fromThemeData(Theme.of(context)),
+                  theme: ChatTheme.fromThemeData(Theme.of(context)),
+                  builders: Builders(
+                    // we have a custom input builder, so we don't need the default one
+                    inputBuilder: (_) => const SizedBox.shrink(),
+                    textMessageBuilder: (
+                      context,
+                      message,
+                    ) =>
+                        TextMessageWidget(
+                      message: message,
+                      userProfile: userProfile,
+                      view: view,
+                      enableAnimation: enableAnimation,
+                    ),
+                    chatMessageBuilder: (
+                      context,
+                      message,
+                      animation,
+                      child,
+                    ) =>
+                        ChatMessage(
+                      message: message,
+                      padding: const EdgeInsets.symmetric(vertical: 18.0),
+                      child: child,
+                    ),
+                    scrollToBottomBuilder: (
+                      context,
+                      animation,
+                      onPressed,
+                    ) =>
+                        CustomScrollToBottom(
+                      animation: animation,
+                      onPressed: onPressed,
+                    ),
+                    chatAnimatedListBuilder: (
+                      context,
+                      scrollController,
+                      itemBuilder,
+                    ) =>
+                        ChatAnimationListWidget(
+                      userProfile: userProfile,
+                      scrollController: scrollController,
+                      itemBuilder: itemBuilder,
+                      enableReversedList: !enableAnimation,
+                    ),
                   ),
                 ),
               ),

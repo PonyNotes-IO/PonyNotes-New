@@ -369,107 +369,129 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     required Widget notificationPanel,
     bool isFullWindow = false,
   }) {
-    final isSliderbarShowing = layout.showMenu && !isFullWindow;
-    final isDrawerMenu = isSliderbarShowing && layout.menuIsDrawer;
-    final homeStackLeft = isFullWindow ? 0.0 : layout.homePageLOffset;
-    final homeStackRight = isFullWindow ? 0.0 : layout.homePageROffset;
+    try {
+      if (!mounted) {
+        return const SizedBox.shrink();
+      }
 
-    return Stack(
-      children: [
-        homeStack
-            .constrained(
-              minWidth: _minContentWidth,
-              minHeight: _minContentHeight,
-            )
-            .positioned(
-              left: homeStackLeft,
-              right: homeStackRight,
-              bottom: 0,
-              top: 0,
-              animate: true,
-            )
-            .animate(layout.animDuration, Curves.easeOutQuad),
-        if (!isFullWindow)
-          editPanel
-              .animatedPanelX(
-                duration: layout.animDuration.inMilliseconds * 0.001,
-                closeX: layout.editPanelWidth,
-                isClosed: !layout.showEditPanel,
-                curve: Curves.easeOutQuad,
+      final isSliderbarShowing = layout.showMenu && !isFullWindow;
+      final isDrawerMenu = isSliderbarShowing && layout.menuIsDrawer;
+      final homeStackLeft = isFullWindow ? 0.0 : layout.homePageLOffset;
+      final homeStackRight = isFullWindow ? 0.0 : layout.homePageROffset;
+
+      return Stack(
+        children: [
+          homeStack
+              .constrained(
+                minWidth: _minContentWidth,
+                minHeight: _minContentHeight,
               )
               .positioned(
+                left: homeStackLeft,
+                right: homeStackRight,
+                bottom: 0,
                 top: 0,
-                right: 0,
-                bottom: 0,
-                width: layout.editPanelWidth,
+                animate: true,
+              )
+              .animate(layout.animDuration, Curves.easeOutQuad),
+          if (!isFullWindow)
+            editPanel
+                .animatedPanelX(
+                  duration: layout.animDuration.inMilliseconds * 0.001,
+                  closeX: layout.editPanelWidth,
+                  isClosed: !layout.showEditPanel,
+                  curve: Curves.easeOutQuad,
+                )
+                .positioned(
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: layout.editPanelWidth,
+                ),
+          if (!isFullWindow)
+            notificationPanel
+                .animatedPanelX(
+                  closeX: -layout.notificationPanelWidth,
+                  isClosed: !layout.showNotificationPanel,
+                  curve: Curves.easeOutQuad,
+                  duration: layout.animDuration.inMilliseconds * 0.001,
+                )
+                .positioned(
+                  left:
+                      isSliderbarShowing && !isDrawerMenu ? layout.menuWidth : 0,
+                  top: isSliderbarShowing && !isDrawerMenu ? 0 : 52,
+                  width: layout.notificationPanelWidth,
+                  bottom: 0,
+                ),
+          if (isDrawerMenu)
+            Positioned.fill(
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (_) {
+                  if (!mounted) return;
+                  try {
+                    buildContext.read<HomeSettingBloc>().add(
+                          const HomeSettingEvent.changeMenuStatus(
+                              MenuStatus.hidden),
+                        );
+                  } catch (e) {
+                    Log.warn(
+                        '[DesktopHomeScreen] Error closing drawer menu: $e');
+                  }
+                },
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.08),
+                ),
               ),
-        if (!isFullWindow)
-          notificationPanel
-              .animatedPanelX(
-                closeX: -layout.notificationPanelWidth,
-                isClosed: !layout.showNotificationPanel,
+            ),
+          Positioned(
+            left: 0,
+            top: isDrawerMenu ? 12 : 0,
+            bottom: isDrawerMenu ? 12 : 0,
+            width: layout.menuWidth,
+            child: Visibility(
+              visible: isSliderbarShowing,
+              maintainState: true,
+              child: (isDrawerMenu
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(14),
+                          ),
+                          child: sidebar,
+                        )
+                      : sidebar)
+                  .animatedPanelX(
+                closeX: -layout.menuWidth,
+                isClosed: !isSliderbarShowing,
                 curve: Curves.easeOutQuad,
                 duration: layout.animDuration.inMilliseconds * 0.001,
-              )
-              .positioned(
-                left:
-                    isSliderbarShowing && !isDrawerMenu ? layout.menuWidth : 0,
-                top: isSliderbarShowing && !isDrawerMenu ? 0 : 52,
-                width: layout.notificationPanelWidth,
-                bottom: 0,
-              ),
-        if (isDrawerMenu)
-          Positioned.fill(
-            child: Listener(
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
-                    const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
-                  ),
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.08),
               ),
             ),
           ),
-        Positioned(
-          left: 0,
-          top: isDrawerMenu ? 12 : 0,
-          bottom: isDrawerMenu ? 12 : 0,
-          width: layout.menuWidth,
-          child: Visibility(
-            visible: isSliderbarShowing,
-            maintainState: true,
-            child: (isDrawerMenu
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.horizontal(
-                          right: Radius.circular(14),
-                        ),
-                        child: sidebar,
-                      )
-                    : sidebar)
-                .animatedPanelX(
-              closeX: -layout.menuWidth,
-              isClosed: !isSliderbarShowing,
-              curve: Curves.easeOutQuad,
-              duration: layout.animDuration.inMilliseconds * 0.001,
+          Positioned(
+            left: isFullWindow ? 0 : layout.menuWidth,
+            top: 0,
+            bottom: 0,
+            width: isFullWindow ? 0 : null,
+            child: Visibility(
+              visible: !isFullWindow && !isDrawerMenu,
+              maintainState: true,
+              child: homeMenuResizer.animate(
+                layout.animDuration,
+                Curves.easeOutQuad,
+              ),
             ),
           ),
-        ),
-        Positioned(
-          left: isFullWindow ? 0 : layout.menuWidth,
-          top: 0,
-          bottom: 0,
-          width: isFullWindow ? 0 : null,
-          child: Visibility(
-            visible: !isFullWindow && !isDrawerMenu,
-            maintainState: true,
-            child: homeMenuResizer.animate(
-              layout.animDuration,
-              Curves.easeOutQuad,
-            ),
-          ),
-        ),
-      ],
-    );
+        ],
+      );
+    } catch (error, stackTrace) {
+      Log.error(
+        '[DesktopHomeScreen] Error building layout widgets: $error',
+        error,
+        stackTrace,
+      );
+      return homeStack;
+    }
   }
 
   Future<void> _switchToSpace(ViewPB view) async {

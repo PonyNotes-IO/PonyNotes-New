@@ -175,7 +175,6 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
             initialBlockId: blockId,
             fixedTitle: fixedTitle,
             tabs: tabs,
-            isInSpaceHub: false, // 默认为 false，单独打开时使用
             viewInfoBloc: bloc, // 传入 ViewInfoBloc
           ),
         ),
