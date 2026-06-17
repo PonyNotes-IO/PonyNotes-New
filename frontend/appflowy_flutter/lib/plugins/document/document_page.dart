@@ -55,9 +55,8 @@ class DocumentPage extends StatefulWidget {
     this.initialSelection,
     this.initialBlockId,
     this.fixedTitle,
-    this.showShareAndFavorite = false, // 是否显示分享和收藏工具栏，默认不显示（工作区打开时不显示）
-    this.isInSpaceHub = false, // 是否在 Space Hub 中打开
-    this.viewInfoBloc, // 可选：外部传入的 ViewInfoBloc（如 SpaceHub 中需要为每个文档创建单独的 bloc）
+    this.showShareAndFavorite = false,
+    this.viewInfoBloc,
   });
 
   final ViewPB view;
@@ -67,7 +66,6 @@ class DocumentPage extends StatefulWidget {
   final String? fixedTitle;
   final List<PickerTabType> tabs;
   final bool showShareAndFavorite; // 是否显示分享和收藏工具栏
-  final bool isInSpaceHub; // 是否在 Space Hub 中打开
   final ViewInfoBloc? viewInfoBloc; // 可选：外部传入的 ViewInfoBloc
 
   @override
@@ -392,13 +390,8 @@ class _DocumentPageState extends State<DocumentPage>
         // 只有当父级是普通文档（不是协作空间）时，按钮才有意义——因为协作空间
         // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
         // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
-        // 例外：isInSpaceHub == true 时(从 SpaceHub 中间栏点击进入的文档),
-        // 父级是 space，但当前 back 逻辑会把 currentView 误判为 space 跳到
-        // parent Workspace 显示加载态。为避免这个混乱行为,SpaceHub 中嵌
-        // 入的文档直接不显示 back 按钮,用户用 SpaceHub 中间栏的笔记条目切换。
         // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
-        final showBackButton =
-            _parentIsSpace == false && !widget.isInSpaceHub;
+        final showBackButton = _parentIsSpace == false;
         // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
         const double buttonSize = 24.0;
         const double buttonGap = 4.0;
@@ -437,7 +430,7 @@ class _DocumentPageState extends State<DocumentPage>
                       ),
                     ),
                   ),
-                if (isSidebarHidden && !widget.isInSpaceHub)
+                if (isSidebarHidden)
                   Positioned(
                     top: 10,
                     left: sidebarButtonLeft,

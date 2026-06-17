@@ -151,6 +151,9 @@ class SpaceHubPlugin extends Plugin {
   /// 当前中间栏是否选中了某个子视图(用于 back 时判断是否在 SpaceHub 内嵌文档中)。
   bool get hasSelectedView => _selectedViewNotifier.value != null;
 
+  /// 获取当前选中的子视图（用于返回导航时切回父文档）。
+  ViewPB? get currentSelectedView => _selectedViewNotifier.value;
+
   /// 由 TabsBloc 在 SpaceHub 内嵌子文档中的链接点击时调用:
   /// 不替换 SpaceHub,而是在 SpaceHub 内选中目标子视图(在 rightPanel 中显示)。
   /// 这样:
@@ -161,7 +164,7 @@ class SpaceHubPlugin extends Plugin {
   void selectViewInSpaceHub(ViewPB view) {
     if (view.id.isEmpty) return;
     if (view.isSpace) return; // space 视图不应该在 SpaceHub 内嵌套显示
-    Log.info('[SpaceHub][selectViewInSpaceHub] ${view.name}(${view.id}), layout=${view.layout}');
+    Log.info('[SpaceHubLink] selectViewInSpaceHub: ${view.name}(${view.id}), layout=${view.layout}');
     _selectedViewNotifier.value = view;
     spaceHubSelectedViewLayoutNotifier.value = view.layout;
   }
@@ -878,8 +881,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 PickerTabType.icon,
                 PickerTabType.custom,
               ],
-              viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
-              isInSpaceHub: true, // 标记为 SpaceHub 内嵌的文档,影响 back 按钮行为
+              viewInfoBloc: viewInfoBloc,
             ),
           );
         }

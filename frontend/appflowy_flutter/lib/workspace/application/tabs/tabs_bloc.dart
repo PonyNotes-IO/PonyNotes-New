@@ -470,12 +470,23 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
 
     // 1.5 特殊情况：当前是 SpaceHubPlugin 且中间栏选中了子视图(嵌入了文档)。
-    //    此时 currentView 是 space 本身，但用户期望的"返回"应该是
-    //    回到 SpaceHub 主页(子页面列表)而不是跳到 parent Workspace。
-    //    直接清空 SpaceHub 的选中状态即可。
+    //    用户期望的"返回"应该是切到父文档（如果存在），而不是清空选中。
+    //    - 如果当前选中文档有父级且父级在同一个 SpaceHub 下 → selectViewInSpaceHub(父文档)
+    //    - 否则 → 清空选中，回到 SpaceHub 主视图（空状态页）
     final currentPlugin = state.currentPageManager.plugin;
     if (currentPlugin is SpaceHubPlugin) {
       if (currentPlugin.hasSelectedView) {
+        final currentSelected = currentPlugin.currentSelectedView;
+        if (currentSelected != null && currentSelected.parentViewId.isNotEmpty) {
+          // 加载父文档，看是否属于同一个 SpaceHub
+          final parentResult = await _loadView(currentSelected.parentViewId);
+          if (parentResult != null && !parentResult.isSpace) {
+            // 父级是普通文档，属于同一个 SpaceHub → 切到父文档
+            currentPlugin.selectViewInSpaceHub(parentResult);
+            return;
+          }
+        }
+        // 父级是 space 或没有父级 → 清空选中，回到 SpaceHub 空状态
         currentPlugin.clearSelection();
         return;
       }
@@ -549,18 +560,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // 正确做法:把点击的 view 通知给 SpaceHubPlugin,让它选中该子视图
     // (在 rightPanel 内显示),保持 SpaceHub 整体布局不变。
     if (state.currentPageManager.plugin is SpaceHubPlugin) {
-      Log.info('[TabsBloc][openPlugin] SpaceHubPlugin detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
+      Log.info('[SpaceHubLink] detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
       try {
         final plugin =
             state.currentPageManager.plugin as SpaceHubPlugin;
         plugin.selectViewInSpaceHub(view);
         return;
       } catch (e) {
-      Log.error('[TabsBloc][openPlugin] selectViewInSpaceHub failed, falling back: $e');
+      Log.error('[SpaceHubLink] selectViewInSpaceHub failed, falling back: $e');
         // 失败时回退到原有 openPlugin 流程
       }
     } else {
-      Log.info('[TabsBloc][openPlugin] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
+      Log.info('[SpaceHubLink] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
     }
 
     try {
