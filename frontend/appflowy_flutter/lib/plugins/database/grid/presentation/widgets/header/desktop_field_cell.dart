@@ -74,6 +74,7 @@ class _GridFieldCellState extends State<GridFieldCell> {
     return BlocProvider.value(
       value: _bloc,
       child: BlocBuilder<FieldCellBloc, FieldCellState>(
+        buildWhen: (previous, current) => previous.width != current.width,
         builder: (context, state) {
           final button = AppFlowyPopover(
             triggerActions: PopoverTriggerFlags.none,
