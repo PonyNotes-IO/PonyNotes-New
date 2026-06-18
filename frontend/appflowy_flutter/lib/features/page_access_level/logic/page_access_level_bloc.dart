@@ -7,6 +7,7 @@ import 'package:appflowy/features/page_access_level/data/repositories/rust_page_
 import 'package:appflowy/features/page_access_level/logic/page_access_level_event.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_state.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
+import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -56,6 +57,9 @@ class PageAccessLevelBloc
   // 解决后端通知可能丢失的问题，提供兜底机制
   Timer? _permissionPollingTimer;
 
+  // 监听 ShareSectionRefreshNotifier 信号，权限变更后立即刷新
+  StreamSubscription<void>? _shareSectionRefreshSub;
+
   // DidUpdateSharedUsers 节流：避免短时间内重复刷新访问级别。
   // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
   // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
@@ -65,6 +69,7 @@ class PageAccessLevelBloc
   @override
   Future<void> close() async {
     _permissionPollingTimer?.cancel();
+    await _shareSectionRefreshSub?.cancel();
     await listener.stop();
     await _sharedUsersListener?.stop();
     return super.close();
@@ -144,6 +149,15 @@ class PageAccessLevelBloc
       const Duration(seconds: 3),
       (_) => add(const PageAccessLevelEvent.refreshAccessLevel()),
     );
+
+    // 监听 ShareSectionRefreshNotifier 信号
+    // 当 ShareTabBloc 修改权限或移除协作者后会调用 notify()，
+    // 收到信号后立即刷新权限，确保编辑器实时反映权限变更。
+    await _shareSectionRefreshSub?.cancel();
+    _shareSectionRefreshSub =
+        ShareSectionRefreshNotifier.stream.listen((_) {
+      add(const PageAccessLevelEvent.refreshAccessLevel());
+    });
   }
 
   Future<void> _onLock(
@@ -216,13 +230,18 @@ class PageAccessLevelBloc
     }
 
     final accessLevel = await repository.getAccessLevel(view.id);
-    emit(
-      state.copyWith(
-        accessLevel: accessLevel.fold(
-          (accessLevel) => accessLevel,
-          (_) => ShareAccessLevel.readOnly,
-        ),
-      ),
+    final newAccessLevel = accessLevel.fold(
+      (accessLevel) => accessLevel,
+      (_) => ShareAccessLevel.readOnly,
     );
+
+    // 只在权限真正变化时才 emit，避免不必要的 UI 重建
+    if (newAccessLevel != state.accessLevel) {
+      emit(
+        state.copyWith(
+          accessLevel: newAccessLevel,
+        ),
+      );
+    }
   }
 }
