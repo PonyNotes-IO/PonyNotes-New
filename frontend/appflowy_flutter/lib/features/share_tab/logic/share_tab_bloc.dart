@@ -206,12 +206,11 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       );
       // 只有当新权限与当前权限不同时才更新
       if (existingUser.accessLevel != event.accessLevel) {
-        final permissionId = _accessLevelToPermissionId(event.accessLevel);
         final (success, errorMsg) = await _updateMemberPermission(
           workspaceId: workspaceId,
           objectId: pageId,
           memberUserId: existingUser.userId ?? '',
-          permissionId: permissionId,
+          permissionId: event.accessLevel.permissionId,
         );
         if (!success) {
           Log.warn('[ShareTabBloc] 更新已有成员权限失败: $email, $errorMsg');
@@ -583,7 +582,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             final permissionId = memberMap['permission_id'] as int? ?? 1;
 
             // 将 permission_id 转换为 ShareAccessLevel
-            // 后端定义：10=readOnly, 20=readAndComment, 30=readAndWrite, 50=fullAccess
+            // 后端定义：1=readOnly, 2=readAndComment, 3=readAndWrite, 4=fullAccess
             ShareAccessLevel accessLevel;
             switch (permissionId) {
               case 1:
@@ -670,21 +669,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     );
   }
 
-  /// 将 ShareAccessLevel 转换为 permission_id
-  /// 根据后端定义：10=readOnly, 20=readAndComment, 30=readAndWrite, 50=fullAccess
-  int _accessLevelToPermissionId(ShareAccessLevel accessLevel) {
-    switch (accessLevel) {
-      case ShareAccessLevel.readOnly:
-        return 1;
-      case ShareAccessLevel.readAndComment:
-        return 2;
-      case ShareAccessLevel.readAndWrite:
-        return 3;
-      case ShareAccessLevel.fullAccess:
-        return 4;
-    }
-  }
-
   /// 解析成员的 member_user_id（uuid）。
   ///
   /// FFI 通知下发的 SharedUserPB 不包含 user_id 字段，导致 event.user.userId 为空，
@@ -744,7 +728,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
-      permissionId: _accessLevelToPermissionId(event.accessLevel),
+      permissionId: event.accessLevel.permissionId,
     );
 
     if (success) {
@@ -856,7 +840,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
-      permissionId: _accessLevelToPermissionId(event.accessLevel),
+      permissionId: event.accessLevel.permissionId,
     );
 
     if (success) {
@@ -866,7 +850,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           workspaceId: workspaceId,
           objectId: pageId,
           memberUserId: memberUserId,
-          permissionId: _accessLevelToPermissionId(event.accessLevel),
+          permissionId: event.accessLevel.permissionId,
         );
 
         if (!updateSuccess) {

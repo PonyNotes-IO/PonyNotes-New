@@ -71,6 +71,20 @@ extension ShareAccessLevelExtension on ShareAccessLevel {
         return AFAccessLevelPB.FullAccess;
     }
   }
+
+  /// 后端 HTTP API 使用的 permission_id（1-4）
+  int get permissionId {
+    switch (this) {
+      case ShareAccessLevel.readOnly:
+        return 1;
+      case ShareAccessLevel.readAndComment:
+        return 2;
+      case ShareAccessLevel.readAndWrite:
+        return 3;
+      case ShareAccessLevel.fullAccess:
+        return 4;
+    }
+  }
 }
 
 extension AFRolePBExtension on AFRolePB {

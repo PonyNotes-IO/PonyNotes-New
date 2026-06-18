@@ -106,9 +106,11 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
     final request = SharePageWithUserPayloadPB(
       viewId: pageId,
       emails: emails,
-      accessLevel: accessLevel.accessLevel,
       autoConfirm: true,
     );
+    // 使用后端 HTTP API 的 permission_id（1-4），而非 protobuf 枚举值（0-3）
+    // 通过 setField 绕过 protobuf 枚举类型检查
+    request.setField(3, accessLevel.permissionId);
     final result = await FolderEventSharePageWithUser(request).send();
 
     return result.fold(
