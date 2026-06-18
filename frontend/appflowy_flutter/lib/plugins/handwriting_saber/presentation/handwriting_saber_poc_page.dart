@@ -81,6 +81,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 简化版 Saber 核心数据
   EditorCoreInfo _coreInfo = EditorCoreInfo.empty();
 
+  /// ✅ 数据是否已成功从存储加载完成。
+  /// 防止在异步加载(_loadFromStorage)完成前 _coreInfo 仍为空时，
+  /// 因 deactivate/didUpdateWidget(全屏切换、视图树重建等)触发保存，
+  /// 用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
+  bool _isDataLoaded = false;
+
   /// 当前正在绘制的一笔（使用 ValueNotifier 减少父级 setState 频繁重建）
   final ValueNotifier<Stroke?> _currentStrokeNotifier =
       ValueNotifier<Stroke?>(null);
@@ -291,6 +297,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _saveDebounceTimer?.cancel();
     _saveDebounceTimer = null;
 
+    // ✅ 关键防丢失：数据尚未加载完成时（_coreInfo 仍为空），
+    // 全屏切换/视图重建触发的 deactivate 会调用本方法。此时若保存，
+    // 会用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
+    if (!_isDataLoaded) {
+      debugPrint(
+          '🦋[HandwritingSaber] _flushSaveForView: data NOT loaded yet, skip to avoid overwriting cloud content ($viewId)');
+      return;
+    }
+
     try {
       final String json = _coreInfo.toJsonString();
       final List<int> bytes = utf8.encode(json);
@@ -456,6 +471,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     debugPrint(
         '📖📖📖 [HandwritingSaber] 当前_coreInfo.pages.length: ${_coreInfo.pages.length}');
 
+    // ✅ 加载未完成前禁止保存，避免空数据覆盖云端真实内容
+    _isDataLoaded = false;
+
     try {
       final List<int> bytes =
           await _dataService.loadHandwritingSaberData(widget.view.id);
@@ -513,6 +531,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       }
+
+      // ✅ 数据已成功加载(新建空笔记或已有内容)，此后允许保存
+      _isDataLoaded = true;
 
       debugPrint(
           '📖📖📖 [HandwritingSaber] Final _coreInfo.pages.length: ${_coreInfo.pages.length}');
