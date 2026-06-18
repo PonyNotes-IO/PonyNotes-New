@@ -14,6 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 class PdfHTMLEncoderWrapper {
   final pw.Font? font;
   final List<pw.Font> fontFallback;
+  int _checkboxCounter = 0;
 
   PdfHTMLEncoderWrapper({
     this.font,
@@ -151,13 +152,11 @@ class PdfHTMLEncoderWrapper {
       if (type == 'checkbox') {
         final isChecked = element.attributes.containsKey('checked');
         nodes.add(
-          pw.Text(
-            isChecked ? '[x] ' : '[ ] ',
-            style: pw.TextStyle(
-              font: font,
-              fontFallback: fontFallback,
-              fontSize: 12,
-            ),
+          pw.Checkbox(
+            name: 'cb_${_checkboxCounter++}',
+            value: isChecked,
+            width: 13,
+            height: 13,
           ),
         );
       }
@@ -404,29 +403,30 @@ class PdfHTMLEncoderWrapper {
           childNodes = await _parseElement(child);
         }
 
-        // 决定前缀：任务列表用 checkbox，普通列表用 bullet/编号
-        final String prefix;
-        if (isTaskItem) {
-          prefix = isChecked ? '[x] ' : '[ ] ';
-        } else if (ordered) {
-          prefix = '$index. ';
-        } else {
-          prefix = '• ';
-        }
-
         items.add(
           pw.Padding(
             padding: const pw.EdgeInsets.only(left: 16, bottom: 4),
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.SizedBox(
-                  width: 28,
-                  child: pw.Text(
-                    prefix,
-                    style: pw.TextStyle(font: font, fontFallback: fontFallback),
+                if (isTaskItem)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(right: 4),
+                    child: pw.Checkbox(
+                      name: 'cb_${_checkboxCounter++}',
+                      value: isChecked,
+                      width: 13,
+                      height: 13,
+                    ),
+                  )
+                else
+                  pw.SizedBox(
+                    width: 24,
+                    child: pw.Text(
+                      ordered ? '$index. ' : '• ',
+                      style: pw.TextStyle(font: font, fontFallback: fontFallback),
+                    ),
                   ),
-                ),
                 pw.Expanded(
                   child: pw.Wrap(children: childNodes),
                 ),
