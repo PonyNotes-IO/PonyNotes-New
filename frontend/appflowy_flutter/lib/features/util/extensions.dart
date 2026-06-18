@@ -36,6 +36,7 @@ extension SharedUserPBExtension on SharedUserPB {
       accessLevel: accessLevel.shareAccessLevel,
       role: role.shareRole,
       avatarUrl: avatarUrl,
+      userId: userId,
     );
   }
 }

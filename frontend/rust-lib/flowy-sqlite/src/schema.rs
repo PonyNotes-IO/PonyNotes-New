@@ -177,6 +177,7 @@ diesel::table! {
         role -> Integer,
         access_level -> Integer,
         order -> Integer,
+        user_id -> Text,
     }
 }
 

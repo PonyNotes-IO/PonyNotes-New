@@ -16,6 +16,7 @@ pub struct WorkspaceSharedUserTable {
   pub role: i32,
   pub access_level: i32,
   pub order: i32,
+  pub user_id: String,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -29,6 +30,7 @@ impl WorkspaceSharedUserTable {
     role: i32,
     access_level: i32,
     order: i32,
+    user_id: String,
   ) -> Self {
     Self {
       workspace_id,
@@ -39,6 +41,7 @@ impl WorkspaceSharedUserTable {
       role,
       access_level,
       order,
+      user_id,
     }
   }
 }

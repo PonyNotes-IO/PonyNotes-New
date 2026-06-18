@@ -777,7 +777,31 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
                 },
               );
         // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
-        // 这里使用最小权限(member + readOnly)作为安全默认值，防止误放权。
+        // 智能判断权限：如果第一条拥有 fullAccess（约定第一条为拥有者），
+        // 则当前用户大概率是拥有者，赋予 fullAccess；否则使用 readOnly。
+        ShareAccessLevel fallbackAccessLevel = ShareAccessLevel.readOnly;
+        if (currentSharedUser == null && currentUser != null) {
+          if (allUsers.isNotEmpty &&
+              allUsers.first.accessLevel == ShareAccessLevel.fullAccess) {
+            // 接口约定第一条为拥有者；匹配失败说明 userId/email 格式不一致，
+            // 但当前用户大概率就是拥有者，赋予 fullAccess 避免权限按钮变灰。
+            fallbackAccessLevel = ShareAccessLevel.fullAccess;
+            LogUtils.debug(
+              '[ShareTab] Current user not matched in collab list, '
+              'but first member has fullAccess — assuming owner, '
+              'fallback to fullAccess. currentUid=$currentUid, '
+              'currentEmail=$currentEmail, '
+              'firstMemberEmail=${allUsers.first.email}',
+            );
+          } else {
+            LogUtils.warning(
+              '[ShareTab] Current user not matched in collab list and '
+              'first member is NOT owner. Falling back to readOnly. '
+              'currentUid=$currentUid, currentEmail=$currentEmail, '
+              'usersCount=${allUsers.length}',
+            );
+          }
+        }
         final effectiveCurrentSharedUser = currentSharedUser ??
             SharedUser(
               email: currentUser?.email ?? '',
@@ -785,7 +809,7 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
                   ? currentUser!.name
                   : (currentUser?.email ?? 'current_user'),
               role: ShareRole.member,
-              accessLevel: ShareAccessLevel.readOnly,
+              accessLevel: fallbackAccessLevel,
               userId: currentUid,
             );
 

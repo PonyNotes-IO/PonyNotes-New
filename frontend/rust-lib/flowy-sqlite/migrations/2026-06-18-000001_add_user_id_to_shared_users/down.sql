@@ -1,0 +1,2 @@
+-- SQLite does not support DROP COLUMN directly; to rollback you would need to
+-- recreate the table without the user_id column.

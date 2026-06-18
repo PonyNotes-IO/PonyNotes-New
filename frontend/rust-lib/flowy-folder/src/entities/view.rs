@@ -926,6 +926,9 @@ pub struct SharedUserPB {
 
   #[pb(index = 5, one_of)]
   pub avatar_url: Option<String>,
+
+  #[pb(index = 6, one_of)]
+  pub user_id: Option<String>,
 }
 
 impl From<SharedUser> for SharedUserPB {
@@ -936,6 +939,7 @@ impl From<SharedUser> for SharedUserPB {
       role: user.role.into(),
       access_level: user.access_level.into(),
       avatar_url: user.avatar_url,
+      user_id: user.user_id.map(|id| id.to_string()),
     }
   }
 }
@@ -951,6 +955,11 @@ impl From<WorkspaceSharedUserTable> for SharedUserPB {
         None
       } else {
         Some(table.avatar_url)
+      },
+      user_id: if table.user_id.is_empty() {
+        None
+      } else {
+        Some(table.user_id)
       },
     }
   }

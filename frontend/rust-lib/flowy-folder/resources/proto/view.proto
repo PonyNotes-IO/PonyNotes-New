@@ -1,0 +1,187 @@
+syntax = "proto3";
+import "icon.proto";
+message ChildViewUpdatePB {
+    string parent_view_id = 1;
+    repeated ViewPB create_child_views = 2;
+    repeated string delete_child_views = 3;
+    repeated ViewPB update_child_views = 4;
+}
+message ViewPB {
+    string id = 1;
+    string parent_view_id = 2;
+    string name = 3;
+    int64 create_time = 4;
+    repeated ViewPB child_views = 5;
+    ViewLayoutPB layout = 6;
+    oneof one_of_icon { ViewIconPB icon = 7; };
+    bool is_favorite = 8;
+    oneof one_of_extra { string extra = 9; };
+    oneof one_of_created_by { int64 created_by = 10; };
+    int64 last_edited = 11;
+    oneof one_of_last_edited_by { int64 last_edited_by = 12; };
+    oneof one_of_is_locked { bool is_locked = 13; };
+    oneof one_of_workspace_id { string workspace_id = 14; };
+}
+message SectionViewsPB {
+    ViewSectionPB section = 1;
+    repeated ViewPB views = 2;
+}
+message RepeatedViewPB {
+    repeated ViewPB items = 1;
+}
+message RepeatedFavoriteViewPB {
+    repeated SectionViewPB items = 1;
+}
+message ReadRecentViewsPB {
+    uint64 start = 1;
+    uint64 limit = 2;
+}
+message RepeatedRecentViewPB {
+    repeated SectionViewPB items = 1;
+}
+message SectionViewPB {
+    ViewPB item = 1;
+    int64 timestamp = 2;
+}
+message RepeatedViewIdPB {
+    repeated string items = 1;
+}
+message CreateViewPayloadPB {
+    string parent_view_id = 1;
+    string name = 2;
+    oneof one_of_thumbnail { string thumbnail = 3; };
+    ViewLayoutPB layout = 4;
+    bytes initial_data = 5;
+    map<string, string> meta = 6;
+    bool set_as_current = 7;
+    oneof one_of_index { uint32 index = 8; };
+    oneof one_of_section { ViewSectionPB section = 9; };
+    oneof one_of_view_id { string view_id = 10; };
+    oneof one_of_extra { string extra = 11; };
+}
+message CreateOrphanViewPayloadPB {
+    string view_id = 1;
+    string name = 2;
+    ViewLayoutPB layout = 3;
+    bytes initial_data = 4;
+}
+message ViewIdPB {
+    string value = 1;
+}
+message SetPublishNamePB {
+    string view_id = 1;
+    string new_name = 2;
+}
+message DeletedViewPB {
+    string view_id = 1;
+    oneof one_of_index { int32 index = 2; };
+}
+message UpdateViewPayloadPB {
+    string view_id = 1;
+    oneof one_of_name { string name = 2; };
+    oneof one_of_desc { string desc = 3; };
+    oneof one_of_thumbnail { string thumbnail = 4; };
+    oneof one_of_layout { ViewLayoutPB layout = 5; };
+    oneof one_of_is_favorite { bool is_favorite = 6; };
+    oneof one_of_extra { string extra = 7; };
+}
+message MoveViewPayloadPB {
+    string view_id = 1;
+    int32 from = 2;
+    int32 to = 3;
+}
+message MoveNestedViewPayloadPB {
+    string view_id = 1;
+    string new_parent_id = 2;
+    oneof one_of_prev_view_id { string prev_view_id = 3; };
+    oneof one_of_from_section { ViewSectionPB from_section = 4; };
+    oneof one_of_to_section { ViewSectionPB to_section = 5; };
+}
+message UpdateRecentViewPayloadPB {
+    repeated string view_ids = 1;
+    bool add_in_recent = 2;
+}
+message UpdateViewVisibilityStatusPayloadPB {
+    repeated string view_ids = 1;
+    bool is_public = 2;
+}
+message DuplicateViewPayloadPB {
+    string view_id = 1;
+    bool open_after_duplicate = 2;
+    bool include_children = 3;
+    oneof one_of_parent_view_id { string parent_view_id = 4; };
+    oneof one_of_suffix { string suffix = 5; };
+    bool sync_after_create = 6;
+}
+message SharePageWithUserPayloadPB {
+    string view_id = 1;
+    repeated string emails = 2;
+    AFAccessLevelPB access_level = 3;
+    bool auto_confirm = 4;
+}
+message RemoveUserFromSharedPagePayloadPB {
+    string view_id = 1;
+    repeated string emails = 2;
+}
+message SharedUserPB {
+    string email = 1;
+    string name = 2;
+    AFRolePB role = 3;
+    AFAccessLevelPB access_level = 4;
+    oneof one_of_avatar_url { string avatar_url = 5; };
+    oneof one_of_user_id { string user_id = 6; };
+}
+message RepeatedSharedUserPB {
+    repeated SharedUserPB items = 1;
+}
+message GetSharedUsersPayloadPB {
+    string view_id = 1;
+}
+message SharedViewPB {
+    ViewPB view = 1;
+    AFAccessLevelPB access_level = 2;
+    oneof one_of_workspace_id { string workspace_id = 3; };
+}
+message RepeatedSharedViewResponsePB {
+    repeated SharedViewPB shared_views = 1;
+}
+message GetSharedViewSectionResponsePB {
+    SharedViewSectionPB section = 1;
+}
+message SaveSharedViewMetaPB {
+    string view_id = 1;
+    string workspace_id = 2;
+    string view_name = 3;
+    int32 view_layout = 4;
+    int32 permission_id = 5;
+}
+enum ViewLayoutPB {
+    Document = 0;
+    Grid = 1;
+    Board = 2;
+    Calendar = 3;
+    Chat = 4;
+    Folder = 5;
+    Notebook = 6;
+    Whiteboard = 7;
+}
+enum ViewSectionPB {
+    Private = 0;
+    Public = 1;
+}
+enum AFAccessLevelPB {
+    ReadOnly = 0;
+    ReadAndComment = 1;
+    ReadAndWrite = 2;
+    FullAccess = 3;
+}
+enum AFRolePB {
+    Owner = 0;
+    Member = 1;
+    Guest = 2;
+}
+enum SharedViewSectionPB {
+    PrivateSection = 0;
+    PublicSection = 1;
+    SharedSection = 2;
+}

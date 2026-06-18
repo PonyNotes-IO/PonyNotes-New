@@ -1570,6 +1570,7 @@ impl FolderManager {
                     user.role.clone() as i32,
                     user.access_level as i32,
                     order as i32,
+                    user.user_id.map(|id| id.to_string()).unwrap_or_default(),
                   )
                 })
                 .collect::<Vec<_>>();
@@ -1682,8 +1683,7 @@ impl FolderManager {
             Some(user.avatar_url)
           },
           pending_invitation: false,
-          // 本地数据库表 WorkspaceSharedUserTable 未存储 user_id，从本地缓存重建时填 None
-          user_id: None,
+          user_id: if user.user_id.is_empty() { None } else { Some(user.user_id) },
         })
         .collect();
 
@@ -1719,6 +1719,7 @@ impl FolderManager {
                   user.role.clone() as i32,
                   user.access_level as i32,
                   order as i32,
+                  user.user_id.map(|id| id.to_string()).unwrap_or_default(),
                 )
               })
               .collect::<Vec<_>>();
