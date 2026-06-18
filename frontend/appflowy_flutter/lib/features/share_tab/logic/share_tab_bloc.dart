@@ -631,6 +631,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
               accessLevel: accessLevel,
               avatarUrl: avatarUrl?.isNotEmpty == true ? avatarUrl : null,
               userId: uuid,
+              uid: uid,
               phone: phone?.isNotEmpty == true ? phone : null,
             );
           }).toList();

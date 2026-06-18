@@ -12,6 +12,7 @@ class SharedUser {
     required this.accessLevel,
     this.avatarUrl,
     this.userId,
+    this.uid,
     this.phone,
   });
 
@@ -31,8 +32,11 @@ class SharedUser {
   /// if the avatar is not set, it will be the first letter of the name.
   final String? avatarUrl;
 
-  /// The user ID (member_user_id) for collaboration API.
+  /// The user ID (member_user_id / uuid) for collaboration API.
   final String? userId;
+
+  /// The numeric user ID from the API (uid field).
+  final String? uid;
 
   /// The phone number of the user.
   final String? phone;
@@ -44,6 +48,7 @@ class SharedUser {
     ShareAccessLevel? accessLevel,
     String? avatarUrl,
     String? userId,
+    String? uid,
     String? phone,
   }) {
     return SharedUser(
@@ -53,6 +58,7 @@ class SharedUser {
       accessLevel: accessLevel ?? this.accessLevel,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       userId: userId ?? this.userId,
+      uid: uid ?? this.uid,
       phone: phone ?? this.phone,
     );
   }
