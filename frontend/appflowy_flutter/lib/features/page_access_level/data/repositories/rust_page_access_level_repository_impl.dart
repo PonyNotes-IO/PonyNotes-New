@@ -13,6 +13,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 import 'package:appflowy/startup/startup.dart';
 import 'dart:convert';
@@ -108,27 +109,29 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     }
 
     final email = user.email;
-    final userId = user.id.toInt();
 
-    // 关键修复：显式权限检查必须在 creator 检查之前。
-    // 即使当前用户是文档创建者，如果后端已将其权限修改为 readOnly，
-    // 必须以 API 返回的显式权限为准，不能直接返回 fullAccess。
-    // API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
-    final sharedUsersAccessLevel = await _getAccessLevelFromCollabMembers(
-      pageId,
-      email: email,
-      userId: userId,
-      authToken: authToken,
+    // 通过 Rust FFI 查询本地 SQLite 缓存中的共享用户列表
+    // 后台会自动同步云端数据并发送通知触发刷新
+    final request = GetSharedUsersPayloadPB(viewId: pageId);
+    final result = await FolderEventGetSharedUsers(request).send();
+    final sharedUsersAccessLevel = result.fold(
+      (success) {
+        return success.items
+            .firstWhereOrNull((item) => item.email == email)
+            ?.accessLevel
+            .shareAccessLevel;
+      },
+      (failure) {
+        Log.error('failed to get user access level: $failure, in page: $pageId');
+        return null;
+      },
     );
 
-    // If the user has an explicit permission in the collab members list, use it
     if (sharedUsersAccessLevel != null) {
-      Log.debug('[PageAccessLevel] collab API returned: $sharedUsersAccessLevel for page: $pageId');
+      Log.debug('[PageAccessLevel] shared list returned: $sharedUsersAccessLevel for page: $pageId');
       return FlowyResult.success(sharedUsersAccessLevel);
     }
 
-    // API 返回 null（调用失败或用户不在列表中），回退到 creator 检查
-    Log.warn('[PageAccessLevel] collab API returned null for page: $pageId, email: $email — falling back to creator/default check');
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
@@ -158,13 +161,14 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    // 修复：不再对公共区域工作区成员默认返回 fullAccess。
-    // 之前的逻辑会导致被修改权限的用户（不在 collab members 列表中）
-    // 仍然获得 fullAccess，权限修改无法生效。
-    // 现在统一回退到 readOnly，确保只有显式授权的用户才能编辑。
-    Log.warn('[PageAccessLevel] no explicit permission found for user uid=$userId '
-        'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
-        'defaulting to readOnly');
+    // Fall back to default permissions for workspace members in public section
+    // Non-Guest workspace members get fullAccess for public section documents.
+    if (workspace.role != AFRolePB.Guest &&
+        sectionType == SharedSectionType.public) {
+      return FlowyResult.success(ShareAccessLevel.fullAccess);
+    }
+
+    // Default to readOnly if no permission is found
     return FlowyResult.success(ShareAccessLevel.readOnly);
   }
 

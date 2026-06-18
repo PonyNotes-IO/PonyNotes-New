@@ -576,7 +576,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             final memberMap = member as Map<String, dynamic>;
             final uuid = (memberMap['uuid'] as String?) ??
                 (memberMap['user_id'] as String?) ??
-                (memberMap['uid'] as String?);
+                (memberMap['uid']?.toString());
             final email = memberMap['email'] as String? ?? '';
             final name = memberMap['name'] as String? ?? email;
             final phone = memberMap['phone'] as String?;
@@ -720,6 +720,10 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventUpdateMemberPermission event,
     Emitter<ShareTabState> emit,
   ) async {
+    Log.info('[ShareTabBloc] _onUpdateMemberPermission called: '
+        'user=${event.user.email}, userId=${event.user.userId}, '
+        'newLevel=${event.accessLevel}');
+
     emit(
       state.copyWith(
         errorMessage: '',
@@ -730,6 +734,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     // 确保用户有 userId（FFI 通知下发的 SharedUserPB 不含 user_id，
     // 这里按 email 通过 HTTP 成员接口回退解析，避免本地直接中断导致后端收不到请求）
     String? memberUserId = await _resolveMemberUserId(event.user);
+    Log.info('[ShareTabBloc] resolved memberUserId=$memberUserId');
     if (memberUserId == null || memberUserId.isEmpty) {
       emit(
         state.copyWith(
