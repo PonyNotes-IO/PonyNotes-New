@@ -158,17 +158,13 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    // Fall back to default permissions for workspace members in public section
-    // Non-Guest workspace members get fullAccess for public section documents.
-    // Private docs explicitly return PrivateSection when the folder IS loaded.
-    // SharedSection docs (cross-workspace explicit shares) should go through
-    // the explicit shared-users permission check above.
-    if (workspace.role != AFRolePB.Guest &&
-        sectionType == SharedSectionType.public) {
-      return FlowyResult.success(ShareAccessLevel.fullAccess);
-    }
-
-    // Default to readOnly if no permission is found
+    // 修复：不再对公共区域工作区成员默认返回 fullAccess。
+    // 之前的逻辑会导致被修改权限的用户（不在 collab members 列表中）
+    // 仍然获得 fullAccess，权限修改无法生效。
+    // 现在统一回退到 readOnly，确保只有显式授权的用户才能编辑。
+    Log.warn('[PageAccessLevel] no explicit permission found for user uid=$userId '
+        'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
+        'defaulting to readOnly');
     return FlowyResult.success(ShareAccessLevel.readOnly);
   }
 
