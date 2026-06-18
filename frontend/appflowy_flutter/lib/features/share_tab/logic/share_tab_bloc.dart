@@ -574,12 +574,31 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           // 将 API 返回的成员列表转换为 SharedUsers
           final users = data.map((member) {
             final memberMap = member as Map<String, dynamic>;
-            final uuid = memberMap['uuid'] as String?;
+            final uuid = (memberMap['uuid'] as String?) ??
+                (memberMap['user_id'] as String?) ??
+                (memberMap['uid'] as String?);
             final email = memberMap['email'] as String? ?? '';
             final name = memberMap['name'] as String? ?? email;
             final phone = memberMap['phone'] as String?;
             final avatarUrl = memberMap['avatar_url'] as String?;
-            final permissionId = memberMap['permission_id'] as int? ?? 1;
+
+            // 调试：打印原始数据，确认后端返回的权限字段名和值
+            Log.info('[ShareTabBloc] member raw data: $memberMap');
+
+            // 兼容多种可能的字段名：permission_id / permission / access_level / role
+            // 同时兼容 int 和 String 类型（后端可能返回 "1" 而非 1）
+            int? _parseInt(dynamic v) {
+              if (v is int) return v;
+              if (v is String) return int.tryParse(v);
+              return null;
+            }
+
+            final permissionId = _parseInt(memberMap['permission_id']) ??
+                _parseInt(memberMap['permission']) ??
+                _parseInt(memberMap['access_level']) ??
+                _parseInt(memberMap['role']) ??
+                1;
+            Log.info('[ShareTabBloc] parsed permissionId=$permissionId for email=$email');
 
             // 将 permission_id 转换为 ShareAccessLevel
             // 后端定义：1=readOnly, 2=readAndComment, 3=readAndWrite, 4=fullAccess
