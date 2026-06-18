@@ -12,6 +12,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:http/http.dart' as http;
 
 import '../application/whiteboard_data_service.dart';
+import '../application/whiteboard_image_cache_service.dart';
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy_backend/log.dart';
 
@@ -331,10 +332,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               _initializationCompleter!.complete();
             }
 
+            // ⚡ 本地缓存优先：为返回给 JS 的 payload 补全本地缓存命中的 dataURL。
+            // 这样 flutter_bridge.js 的 _injectFiles 可直接 addFiles（toAdd 分支），
+            // 无需再发起 downloadCloudImages 网络往返 —— 切换视图/重开客户端秒开。
+            // 注意：仅 enrich 返回值（_initPayload），不写入 localStorage
+            // （base64 体积大，避免撑爆 localStorage 配额，与 Excalidraw 原生策略一致）。
+            final enrichedData = await _enrichFilesWithCache(normalizedData);
+
             // ✅ 关键修复：将加载的数据作为返回值传给 JavaScript
             // flutter_bridge.js 会将此数据保存到 _initPayload 变量中
             // 用于在 Excalidraw API 就绪后恢复数据（不依赖 localStorage，避免竞态条件）
-            return normalizedData;
+            return enrichedData;
           } catch (e, stack) {
             Log.error('[ExcalidrawWebView] ❌ initData failed: $e\n$stack');
             if (_initializationCompleter != null &&
@@ -465,12 +473,32 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 final url = item['url'] as String;
                 final mimeType = item['mimeType'] as String? ?? 'image/png';
                 try {
+                  // ⚡ 优先读取本地磁盘缓存，命中则直接使用，无需回源云端。
+                  final cachedBytes =
+                      await WhiteboardImageCacheService().read(fileId);
+                  if (cachedBytes != null && cachedBytes.isNotEmpty) {
+                    final dataURL =
+                        'data:$mimeType;base64,${base64Encode(cachedBytes)}';
+                    Log.info(
+                        '[ExcalidrawWebView] ⚡ Cache hit for image: $fileId (${cachedBytes.length} bytes)');
+                    return <String, dynamic>{
+                      'fileId': fileId,
+                      'dataURL': dataURL,
+                      'mimeType': mimeType,
+                      'created': DateTime.now().millisecondsSinceEpoch,
+                    };
+                  }
+
                   Log.info(
-                      '[WBCollab][ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
+                      '[WBCollab][ExcalidrawWebView] 📸 Cache miss, downloading cloud image: $fileId from $url');
 
                   // 使用 HTTP 下载图片（带认证）
                   final imageBytes = await _downloadCloudImage(url);
                   if (imageBytes != null && imageBytes.isNotEmpty) {
+                    // ⚡ 下载成功后写入本地缓存，下次加载直接命中。
+                    await WhiteboardImageCacheService()
+                        .write(fileId, imageBytes);
+
                     // 转换为 base64 dataURL
                     final base64Data = base64Encode(imageBytes);
                     final dataURL = 'data:$mimeType;base64,$base64Data';
@@ -1389,6 +1417,62 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// ✅ 关键修复：标准化数据键名
   /// 将 localStorage 原始键名转换为标准键名，避免重复存储
   /// excalidraw -> elements, excalidraw-state -> appState, excalidraw-files -> files
+  /// ⚡ 用本地磁盘缓存补全 files 的 dataURL（仅用于返回给 JS 的 payload）。
+  /// 对"只有云 url、无 dataURL"的图片，查本地缓存命中则注入 dataURL，
+  /// 使 flutter_bridge.js 走 addFiles 直显，省去 downloadCloudImages 网络往返。
+  /// 读盘 + base64 编码远快于网络下载；未命中的图片保持原样，仍由 JS 兜底下载。
+  Future<Map<String, dynamic>> _enrichFilesWithCache(
+    Map<String, dynamic> normalizedData,
+  ) async {
+    try {
+      final files = normalizedData['files'];
+      if (files is! Map || files.isEmpty) {
+        return normalizedData;
+      }
+
+      final enrichedFiles = <String, dynamic>{};
+      var hitCount = 0;
+      await Future.wait(
+        files.entries.map((entry) async {
+          final fileId = entry.key.toString();
+          final fileData = entry.value;
+          if (fileData is! Map) {
+            enrichedFiles[fileId] = fileData;
+            return;
+          }
+          final map = Map<String, dynamic>.from(fileData);
+          final dataURL = map['dataURL'];
+          final hasDataUrl =
+              dataURL is String && dataURL.startsWith('data:');
+          final url = map['url'];
+          final hasCloudUrl = url is String && url.startsWith('http');
+
+          if (!hasDataUrl && hasCloudUrl) {
+            final cached = await WhiteboardImageCacheService().read(fileId);
+            if (cached != null && cached.isNotEmpty) {
+              final mimeType = map['mimeType'] as String? ?? 'image/png';
+              map['dataURL'] = 'data:$mimeType;base64,${base64Encode(cached)}';
+              hitCount++;
+            }
+          }
+          enrichedFiles[fileId] = map;
+        }),
+      );
+
+      if (hitCount > 0) {
+        Log.info(
+            '[WBCollab][ExcalidrawWebView] ⚡ initData cache-injected $hitCount/${files.length} images (no network)');
+      }
+
+      final result = Map<String, dynamic>.from(normalizedData);
+      result['files'] = enrichedFiles;
+      return result;
+    } catch (e) {
+      Log.warn('[ExcalidrawWebView] _enrichFilesWithCache failed: $e');
+      return normalizedData;
+    }
+  }
+
   Map<String, dynamic> _normalizeDataKeys(Map<String, dynamic> data) {
     final normalized = <String, dynamic>{};
 
