@@ -9,6 +9,7 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_stat
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -231,11 +232,23 @@ class PageAccessLevelBloc
     final accessLevel = await repository.getAccessLevel(view.id);
     final newAccessLevel = accessLevel.fold(
       (accessLevel) => accessLevel,
-      (_) => ShareAccessLevel.readOnly,
+      (error) {
+        Log.warn('[PageAccessLevel] getAccessLevel failed: $error');
+        return ShareAccessLevel.readOnly;
+      },
+    );
+
+    Log.debug(
+      '[PageAccessLevel] polling refresh: '
+      'viewId=${view.id}, '
+      'current=${state.accessLevel}, '
+      'new=$newAccessLevel, '
+      'changed=${newAccessLevel != state.accessLevel}',
     );
 
     // 只在权限真正变化时才 emit，避免不必要的 UI 重建
     if (newAccessLevel != state.accessLevel) {
+      Log.debug('[PageAccessLevel] access level changed: ${state.accessLevel} -> $newAccessLevel');
       emit(
         state.copyWith(
           accessLevel: newAccessLevel,

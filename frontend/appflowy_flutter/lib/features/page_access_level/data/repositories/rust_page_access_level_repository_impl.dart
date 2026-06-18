@@ -108,6 +108,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     }
 
     final email = user.email;
+    final userId = user.id.toInt();
 
     // 关键修复：显式权限检查必须在 creator 检查之前。
     // 即使当前用户是文档创建者，如果后端已将其权限修改为 readOnly，
@@ -116,16 +117,18 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final sharedUsersAccessLevel = await _getAccessLevelFromCollabMembers(
       pageId,
       email: email,
+      userId: userId,
       authToken: authToken,
     );
 
     // If the user has an explicit permission in the collab members list, use it
     if (sharedUsersAccessLevel != null) {
-      Log.debug('current user access level from collab members API: $sharedUsersAccessLevel, in page: $pageId');
+      Log.debug('[PageAccessLevel] collab API returned: $sharedUsersAccessLevel for page: $pageId');
       return FlowyResult.success(sharedUsersAccessLevel);
     }
 
-    // 只有当 API 中没有找到当前用户的显式权限时，才回退到 creator 检查
+    // API 返回 null（调用失败或用户不在列表中），回退到 creator 检查
+    Log.warn('[PageAccessLevel] collab API returned null for page: $pageId, email: $email — falling back to creator/default check');
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
@@ -314,6 +317,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   Future<ShareAccessLevel?> _getAccessLevelFromCollabMembers(
     String pageId, {
     required String email,
+    required int userId,
     String? authToken,
   }) async {
     try {
@@ -348,6 +352,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         path: '/api/workspace/$workspaceId/collab/$pageId/members',
       );
 
+      Log.debug('[PageAccessLevel] fetching collab members: $uri, email: $email');
+
       final response = await http
           .get(
             uri,
@@ -363,35 +369,55 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
             },
           );
 
+      Log.debug('[PageAccessLevel] collab members response: HTTP ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final code = body['code'] as int?;
         if (code != null && code != 0) {
-          Log.warn('[PageAccessLevel] collab members API 返回错误码: $code');
+          Log.warn('[PageAccessLevel] collab members API returned error code: $code, body: ${response.body}');
           return null;
         }
 
         final data = body['data'] as List<dynamic>?;
         if (data == null) {
-          Log.warn('[PageAccessLevel] collab members API 返回 data 为 null');
+          Log.warn('[PageAccessLevel] collab members API returned data=null, body: ${response.body}');
           return null;
         }
 
-        // 在成员列表中查找当前用户（通过 email 匹配）
+        Log.debug('[PageAccessLevel] collab members count: ${data.length}, searching for uid=$userId, email=$email');
+
+        // 在成员列表中查找当前用户
+        // 优先通过 uid 匹配（最可靠），回退到 email 匹配
         for (final member in data) {
           final memberMap = member as Map<String, dynamic>;
+          final memberUid = memberMap['uid'] as int?;
           final memberEmail = (memberMap['email'] as String? ?? '').trim().toLowerCase();
+          final permissionId = memberMap['permission_id'] as int? ?? 1;
 
-          if (memberEmail == email.trim().toLowerCase()) {
-            final permissionId = memberMap['permission_id'] as int? ?? 1;
-            return _mapPermissionIdToAccessLevel(permissionId);
+          Log.debug('[PageAccessLevel] member: uid=$memberUid, email=$memberEmail, permission_id=$permissionId');
+
+          // 优先 uid 匹配
+          final uidMatch = memberUid != null && memberUid == userId;
+          // 回退 email 匹配（仅当 email 非空时）
+          final emailMatch = email.isNotEmpty &&
+              memberEmail.isNotEmpty &&
+              memberEmail == email.trim().toLowerCase();
+
+          if (uidMatch || emailMatch) {
+            final accessLevel = _mapPermissionIdToAccessLevel(permissionId);
+            Log.debug('[PageAccessLevel] MATCH FOUND: uid=$memberUid, email=$memberEmail, '
+                'permission_id=$permissionId -> $accessLevel (by ${uidMatch ? "uid" : "email"})');
+            return accessLevel;
           }
         }
 
-        Log.debug('[PageAccessLevel] 当前用户不在 collab members 列表中: $pageId');
+        Log.warn('[PageAccessLevel] user NOT found in collab members list. '
+            'Looking for uid=$userId, email=$email, '
+            'members=${data.map((m) => 'uid=${(m as Map)['uid']}, email=${m['email']}, perm=${m['permission_id']}').toList()}');
         return null;
       } else {
-        Log.warn('[PageAccessLevel] collab members API 请求失败: HTTP ${response.statusCode}');
+        Log.warn('[PageAccessLevel] collab members API failed: HTTP ${response.statusCode}, body: ${response.body}');
         return null;
       }
     } catch (e) {
