@@ -715,32 +715,13 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            if (isSidebarHidden) ...[
-                              Padding(
-                                padding: const EdgeInsets.only(top: 16, right: 16),
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: _SpaceHubSidebarToggleButton(
-                                    color: theme.iconColorScheme.secondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                            Expanded(
-                              child: _SpaceDocumentList(
-                                spaceView: widget.spaceView,
-                                selectedView: _selectedView,
-                                showHeader: true,
-                                onViewSelectedWithRecent: _selectViewInMiddlePanel,
-                                onViewCreated: _selectViewInMiddlePanel,
-                                scrollController: _scrollController,
-                              ),
-                            ),
-                          ],
+                        child: _SpaceDocumentList(
+                          spaceView: widget.spaceView,
+                          selectedView: _selectedView,
+                          showHeader: true,
+                          onViewSelectedWithRecent: _selectViewInMiddlePanel,
+                          onViewCreated: _selectViewInMiddlePanel,
+                          scrollController: _scrollController,
                         ),
                       ),
                       if (_isDocumentListVisible &&
@@ -1173,7 +1154,7 @@ class _SpaceDocumentList extends StatelessWidget {
                     prevViewId: null,  // null 表示移动到列表开头
                   );
                 }
-                
+
                 // 刷新列表并选中第一个导入的文件
                 if (spaceBloc != null) {
                   spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
@@ -1277,6 +1258,17 @@ class _SpaceDocumentList extends StatelessWidget {
               tooltipText: '新增文档',
             ),
           ),
+          // 当侧边栏隐藏时，在加号按钮右边显示展开按钮
+          if (isSidebarHidden) ...[
+            const HSpace(8),
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: _SpaceHubSidebarToggleButton(
+                color: theme.iconColorScheme.secondary,
+              ),
+            ),
+          ],
         ],
       ),
     );
