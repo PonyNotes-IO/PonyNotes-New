@@ -59,6 +59,10 @@ Future<String> customDocumentToMarkdown(
   String path = '',
   AsyncValueSetter<Archive>? onArchive,
   String lineBreak = '',
+  /// When true, image nodes emit raw URLs (local paths) instead of
+  /// archive-relative paths.  Used by PDF export where the encoder
+  /// reads images directly from disk, not from an archive.
+  bool useSimpleImageParser = false,
 }) async {
   final List<Future<ArchiveFile>> fileFutures = [];
 
@@ -78,8 +82,14 @@ Future<String> customDocumentToMarkdown(
         const MathEquationNodeParser(),
         const CalloutNodeParser(),
         const ToggleListNodeParser(),
-        CustomImageNodeFileParser(fileFutures, dirName),
-        CustomMultiImageNodeFileParser(fileFutures, dirName),
+        if (useSimpleImageParser)
+          const CustomImageNodeParser()
+        else
+          CustomImageNodeFileParser(fileFutures, dirName),
+        if (useSimpleImageParser)
+          const SimpleMultiImageNodeParser()
+        else
+          CustomMultiImageNodeFileParser(fileFutures, dirName),
         GridNodeParser(fileFutures, dirName),
         BoardNodeParser(fileFutures, dirName),
         CalendarNodeParser(fileFutures, dirName),

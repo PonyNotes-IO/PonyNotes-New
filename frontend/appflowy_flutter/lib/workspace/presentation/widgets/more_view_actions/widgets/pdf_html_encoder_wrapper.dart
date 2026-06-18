@@ -8,117 +8,109 @@ import 'package:http/http.dart' as http;
 import 'package:markdown/markdown.dart' as md;
 import 'package:pdf/pdf.dart' as pdf;
 import 'package:pdf/widgets.dart' as pw;
-import 'package:appflowy_editor/src/plugins/pdf/html_to_pdf_encoder.dart' as original;
 
-/// 包装类，确保代码块（pre标签）被正确处理
+/// 包装类，将 Markdown 转换为 HTML 再解析为 PDF。
+/// 始终手动解析 HTML DOM，确保图片、代码块、列表等元素被正确处理。
 class PdfHTMLEncoderWrapper {
   final pw.Font? font;
   final List<pw.Font> fontFallback;
-  final original.PdfHTMLEncoder _originalEncoder;
 
   PdfHTMLEncoderWrapper({
     this.font,
     required this.fontFallback,
-  }) : _originalEncoder = original.PdfHTMLEncoder(
-          font: font,
-          fontFallback: fontFallback,
-        );
+  });
 
   Future<pw.Document> convert(String input) async {
     Log.info('🔍 PdfHTMLEncoderWrapper.convert: 开始转换，输入长度: ${input.length}');
-    
-    // 先转换为HTML，检查是否有pre标签
+
+    // 始终使用手动HTML解析，确保图片和代码块都能正确处理。
+    // 原始 encoder 的 _parseImageElement 存在图片无法嵌入的问题。
     final htmlx = md.markdownToHtml(
       input,
       extensionSet: md.ExtensionSet.gitHubFlavored,
     );
-    
+
     Log.info('🔍 PdfHTMLEncoderWrapper.convert: HTML转换完成，长度: ${htmlx.length}');
-    
-    // 检查是否有pre标签
-    final hasPreTags = htmlx.contains('<pre') || htmlx.contains('</pre>');
-    if (hasPreTags) {
-      Log.info('✅ PdfHTMLEncoderWrapper.convert: HTML中包含pre标签');
-      
-      // 解析HTML，手动处理pre标签
-      final document = parse(htmlx);
-      final body = document.body;
-      if (body == null) {
-        final blank = pw.Document();
-        blank.addPage(
-          pw.Page(
-            build: (pw.Context context) {
-              return pw.Column(children: [pw.SizedBox.shrink()]);
-            },
-          ),
-        );
-        return blank;
-      }
-      
-      // 手动构建PDF，确保pre标签被正确处理
-      final nodes = await _parseBody(body);
-      final newPdf = pw.Document();
-      newPdf.addPage(
-        pw.MultiPage(build: (pw.Context context) => nodes.toList()),
+
+    final document = parse(htmlx);
+    final body = document.body;
+    if (body == null) {
+      final blank = pw.Document();
+      blank.addPage(
+        pw.Page(
+          build: (pw.Context context) {
+            return pw.Column(children: [pw.SizedBox.shrink()]);
+          },
+        ),
       );
-      return newPdf;
-    } else {
-      // 没有pre标签，直接使用原始encoder
-      Log.info('ℹ️ PdfHTMLEncoderWrapper.convert: HTML中无pre标签，使用原始encoder');
-      return await _originalEncoder.convert(input);
+      return blank;
     }
+
+    // 手动解析HTML DOM，确保pre标签和图片都被正确处理
+    final nodes = await _parseBody(body);
+    final newPdf = pw.Document();
+    newPdf.addPage(
+      pw.MultiPage(build: (pw.Context context) => nodes.toList()),
+    );
+    return newPdf;
   }
 
-  /// 解析body节点，手动处理pre标签
+  /// 解析body节点
   Future<List<pw.Widget>> _parseBody(dom.Element body) async {
     final nodes = <pw.Widget>[];
-    
+
     for (final node in body.nodes) {
       if (node is dom.Element) {
         if (node.localName == 'pre') {
-          // 手动处理pre标签
           final preWidget = await _parsePreElement(node);
           nodes.add(preWidget);
         } else if (node.localName == 'h1' || node.localName == 'h2' || node.localName == 'h3' ||
                    node.localName == 'h4' || node.localName == 'h5' || node.localName == 'h6') {
-          // 处理标题
-          final levelStr = node.localName;
-          final level = levelStr != null && levelStr.length > 1 
-              ? int.tryParse(levelStr.substring(1)) ?? 1 
+          final levelStr = node.localName ?? 'h1';
+          final level = levelStr.length > 1
+              ? int.tryParse(levelStr.substring(1)) ?? 1
               : 1;
           nodes.add(
-            pw.Text(
-              node.text,
-              style: pw.TextStyle(
-                font: font,
-                fontFallback: fontFallback,
-                fontSize: 24 - (level - 1) * 2,
-                fontWeight: pw.FontWeight.bold,
+            pw.Header(
+              level: level,
+              child: pw.Text(
+                node.text,
+                style: pw.TextStyle(
+                  font: font,
+                  fontFallback: fontFallback,
+                  fontSize: 24 - (level - 1) * 2,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
           );
         } else if (node.localName == 'p') {
-          // 处理段落（可能包含图片）
           final paragraphNodes = await _parseElement(node);
           if (paragraphNodes.isNotEmpty) {
             nodes.add(
               pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 8),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: paragraphNodes,
-                ),
+                child: pw.Wrap(children: paragraphNodes),
               ),
             );
           }
         } else if (node.localName == 'img') {
-          // 处理图片
           final imageWidget = await _parseImageElement(node);
           if (imageWidget != null) {
             nodes.add(imageWidget);
           }
+        } else if (node.localName == 'ul' || node.localName == 'ol') {
+          final listNodes = await _parseListElement(node, ordered: node.localName == 'ol');
+          nodes.addAll(listNodes);
+        } else if (node.localName == 'blockquote') {
+          final quoteNodes = await _parseBlockquoteElement(node);
+          nodes.addAll(quoteNodes);
+        } else if (node.localName == 'table') {
+          final tableWidget = _parseTableElement(node);
+          nodes.add(tableWidget);
+        } else if (node.localName == 'hr') {
+          nodes.add(pw.Divider());
         } else {
-          // 其他元素，递归处理
           final childNodes = await _parseElement(node);
           nodes.addAll(childNodes);
         }
@@ -144,18 +136,32 @@ class PdfHTMLEncoderWrapper {
   /// 解析元素节点
   Future<List<pw.Widget>> _parseElement(dom.Element element) async {
     final nodes = <pw.Widget>[];
-    
+
     if (element.localName == 'pre') {
       final preWidget = await _parsePreElement(element);
       nodes.add(preWidget);
     } else if (element.localName == 'img') {
-      // 处理图片
       final imageWidget = await _parseImageElement(element);
       if (imageWidget != null) {
         nodes.add(imageWidget);
       }
+    } else if (element.localName == 'input') {
+      // 处理 checkbox（markdown 任务列表生成的 <input type="checkbox">）
+      final type = element.attributes['type'];
+      if (type == 'checkbox') {
+        final isChecked = element.attributes.containsKey('checked');
+        nodes.add(
+          pw.Text(
+            isChecked ? '[x] ' : '[ ] ',
+            style: pw.TextStyle(
+              font: font,
+              fontFallback: fontFallback,
+              fontSize: 12,
+            ),
+          ),
+        );
+      }
     } else {
-      // 处理其他元素
       for (final child in element.nodes) {
         if (child is dom.Element) {
           final childNodes = await _parseElement(child);
@@ -186,29 +192,33 @@ class PdfHTMLEncoderWrapper {
     if (src == null || src.isEmpty) {
       return null;
     }
-    
+
     try {
+      // markdown 库的 normalizeLinkDestination() 会通过 Uri.encodeFull() 将
+      // Windows 反斜杠 \ 编码为 %5C，需要先解码还原真实路径。
+      final decodedSrc = Uri.decodeComponent(src);
       Uint8List imageBytes;
-      
-      if (src.startsWith('http://') || src.startsWith('https://')) {
+
+      if (decodedSrc.startsWith('http://') || decodedSrc.startsWith('https://')) {
         // 网络图片
-        Log.info('🔍 PdfHTMLEncoderWrapper: 加载网络图片: $src');
-        final response = await http.get(Uri.parse(src));
+        Log.info('🔍 PdfHTMLEncoderWrapper: 加载网络图片: $decodedSrc');
+        final response = await http.get(Uri.parse(decodedSrc));
         if (response.statusCode == 200) {
           imageBytes = response.bodyBytes;
         } else {
           Log.warn('⚠️ PdfHTMLEncoderWrapper: 图片加载失败，状态码: ${response.statusCode}');
-          return pw.Text('[图片加载失败: $src]');
+          return pw.Text('[图片加载失败: $decodedSrc]');
         }
       } else {
         // 本地图片
-        Log.info('🔍 PdfHTMLEncoderWrapper: 加载本地图片: $src');
-        final file = File(src);
+        Log.info('🔍 PdfHTMLEncoderWrapper: 加载本地图片: $decodedSrc');
+        final file = File(decodedSrc);
         if (await file.exists()) {
           imageBytes = await file.readAsBytes();
+          Log.info('✅ PdfHTMLEncoderWrapper: 本地图片读取成功，大小: ${imageBytes.length} 字节');
         } else {
-          Log.warn('⚠️ PdfHTMLEncoderWrapper: 图片文件不存在: $src');
-          return pw.Text('[图片文件不存在: $src]');
+          Log.warn('⚠️ PdfHTMLEncoderWrapper: 图片文件不存在: $decodedSrc');
+          return pw.Text('[图片文件不存在: $decodedSrc]');
         }
       }
       
@@ -363,6 +373,122 @@ class PdfHTMLEncoderWrapper {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: codeWidgets,
+    );
+  }
+
+  /// 解析列表元素（ul/ol），支持任务列表 checkbox
+  Future<List<pw.Widget>> _parseListElement(
+    dom.Element element, {
+    bool ordered = false,
+  }) async {
+    final items = <pw.Widget>[];
+    int index = 1;
+    for (final child in element.children) {
+      if (child.localName == 'li') {
+        // 检测是否为任务列表项（包含 <input type="checkbox">）
+        final checkbox = child.querySelector('input[type="checkbox"]');
+        final isTaskItem = checkbox != null;
+        final isChecked = isTaskItem && checkbox.attributes.containsKey('checked');
+
+        // 对于任务列表项，先移除 checkbox 元素再提取文本，
+        // 避免 _parseElement 重复渲染 checkbox。
+        List<pw.Widget> childNodes;
+        if (isTaskItem) {
+          final cloned = dom.Element.html('<div>${child.innerHtml}</div>');
+          final inputs = cloned.querySelectorAll('input[type="checkbox"]');
+          for (final inp in inputs) {
+            inp.remove();
+          }
+          childNodes = await _parseElement(cloned);
+        } else {
+          childNodes = await _parseElement(child);
+        }
+
+        // 决定前缀：任务列表用 checkbox，普通列表用 bullet/编号
+        final String prefix;
+        if (isTaskItem) {
+          prefix = isChecked ? '[x] ' : '[ ] ';
+        } else if (ordered) {
+          prefix = '$index. ';
+        } else {
+          prefix = '• ';
+        }
+
+        items.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 16, bottom: 4),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.SizedBox(
+                  width: 28,
+                  child: pw.Text(
+                    prefix,
+                    style: pw.TextStyle(font: font, fontFallback: fontFallback),
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Wrap(children: childNodes),
+                ),
+              ],
+            ),
+          ),
+        );
+        if (ordered) index++;
+      }
+    }
+    return items;
+  }
+
+  /// 解析引用块元素
+  Future<List<pw.Widget>> _parseBlockquoteElement(dom.Element element) async {
+    final childNodes = await _parseElement(element);
+    return [
+      pw.Container(
+        margin: const pw.EdgeInsets.only(bottom: 8),
+        padding: const pw.EdgeInsets.only(left: 12),
+        decoration: const pw.BoxDecoration(
+          border: pw.Border(
+            left: pw.BorderSide(color: pdf.PdfColors.grey400, width: 3),
+          ),
+        ),
+        child: pw.Wrap(children: childNodes),
+      ),
+    ];
+  }
+
+  /// 解析表格元素
+  pw.Widget _parseTableElement(dom.Element element) {
+    final rows = element.querySelectorAll('tr');
+    final tableRows = <pw.TableRow>[];
+
+    for (final row in rows) {
+      final cells = <pw.Widget>[];
+      for (final cell in row.children) {
+        if (cell.localName == 'td' || cell.localName == 'th') {
+          cells.add(
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(4),
+              child: pw.Text(
+                cell.text,
+                style: pw.TextStyle(
+                  font: font,
+                  fontFallback: fontFallback,
+                  fontWeight: cell.localName == 'th'
+                      ? pw.FontWeight.bold
+                      : pw.FontWeight.normal,
+                ),
+              ),
+            ),
+          );
+        }
+      }
+      tableRows.add(pw.TableRow(children: cells));
+    }
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: pdf.PdfColors.grey300),
+      children: tableRows,
     );
   }
 }

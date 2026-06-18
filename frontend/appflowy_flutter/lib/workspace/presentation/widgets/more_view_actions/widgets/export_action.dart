@@ -6,6 +6,9 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/multi_image_block_component/multi_image_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/parsers/simple_table_node_parser.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/simple_table/simple_table_block_component.dart';
 import 'package:appflowy/shared/markdown_to_document.dart';
@@ -23,6 +26,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
+import 'package:path/path.dart' as p;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
@@ -253,10 +257,29 @@ class _ExportActionState extends State<ExportAction> {
             return;
           }
 
+          // 预处理文档中的图片，下载网络图片到本地
+          Log.info('开始预处理文档中的图片...');
+          final processedDocument = await _preprocessDocumentImages(document);
+          Log.info('图片预处理完成');
+
           // 将文档转换为 Markdown
+          // useSimpleImageParser: true 使图片节点输出本地绝对路径而非归档相对路径，
+          // 因为 PDF 编码器需要从磁盘直接读取图片文件。
           Log.info('开始将文档转换为 Markdown...');
-          final markdown = await customDocumentToMarkdown(document);
+          final markdown = await customDocumentToMarkdown(
+            processedDocument,
+            useSimpleImageParser: true,
+          );
           Log.info('Markdown 转换完成，长度: ${markdown.length} 字符');
+
+          // 打印 Markdown 内容，检查图片是否被正确包含
+          Log.info('Markdown 内容预览:');
+          final lines = markdown.split('\n');
+          for (int i = 0; i < lines.length && i < 50; i++) {
+            if (lines[i].contains('![') || lines[i].contains('http')) {
+              Log.info('  第 $i 行: ${lines[i]}');
+            }
+          }
           
           if (markdown.isEmpty) {
             Log.error('导出 PDF 失败：Markdown 内容为空');
@@ -724,6 +747,148 @@ class _ExportActionState extends State<ExportAction> {
       }
     } catch (e) {
       Log.error('加载图片失败: $imageUrl, 错误: $e');
+      return null;
+    }
+  }
+
+  /// 预处理文档中的图片，下载网络图片到本地临时目录
+  /// 返回处理后的文档副本，其中网络图片URL已替换为本地路径
+  Future<Document> _preprocessDocumentImages(Document document) async {
+    try {
+      Log.info('=== 开始预处理文档图片 ===');
+      Log.info('文档根节点子节点数量: ${document.root.children.length}');
+
+      // 创建临时目录用于保存下载的图片
+      final tempDir = Directory.systemTemp.createTempSync('ponynotes_pdf_export_');
+      Log.info('创建临时目录: ${tempDir.path}');
+
+      // 递归遍历文档节点，下载网络图片
+      await _downloadNetworkImagesInNode(document.root, tempDir);
+
+      Log.info('=== 预处理文档图片完成 ===');
+      return document;
+    } catch (e) {
+      Log.error('预处理文档图片失败: $e');
+      return document; // 返回原始文档，不阻塞导出流程
+    }
+  }
+
+  /// 递归遍历节点，下载网络图片
+  Future<void> _downloadNetworkImagesInNode(Node node, Directory tempDir) async {
+    Log.info('遍历节点: type=${node.type}, id=${node.id}');
+
+    // 处理单图片节点
+    if (node.type == CustomImageBlockKeys.type) {
+      Log.info('找到单图片节点: ${node.type}');
+      await _downloadImageForNode(node, CustomImageBlockKeys.url, tempDir);
+    }
+    // 处理多图片节点
+    else if (node.type == MultiImageBlockKeys.type) {
+      Log.info('找到多图片节点: ${node.type}');
+      final currentAttributes = node.attributes;
+      final images = currentAttributes[MultiImageBlockKeys.images] as List?;
+      if (images != null) {
+        Log.info('多图片节点包含 ${images.length} 张图片');
+        bool updated = false;
+        final List<dynamic> newImages = List.from(images);
+
+        for (int i = 0; i < newImages.length; i++) {
+          final image = newImages[i] as Map<String, dynamic>?;
+          if (image != null) {
+            final url = image['url'] as String?;
+            final type = image['type'] as int?;
+            Log.info('检查图片 $i: url=$url, type=$type');
+            if (url != null && type != null) {
+              final imageType = CustomImageType.fromIntValue(type);
+              if (imageType == CustomImageType.internal || imageType == CustomImageType.external) {
+                Log.info('下载网络图片: $url');
+                final localPath = await _downloadImage(url, tempDir, 'multi_image_$i');
+                if (localPath != null) {
+                  // 更新图片URL为本地路径
+                  newImages[i] = {...image, 'url': localPath, 'type': CustomImageType.local.toIntValue()};
+                  updated = true;
+                  Log.info('图片已下载: $url -> $localPath');
+                }
+              }
+            }
+          }
+        }
+
+        // 使用 updateAttributes 更新节点属性
+        if (updated) {
+          node.updateAttributes({
+            MultiImageBlockKeys.images: newImages,
+          });
+          Log.info('多图片节点属性已更新');
+        }
+      }
+    }
+
+    // 递归处理子节点
+    for (final child in node.children) {
+      await _downloadNetworkImagesInNode(child, tempDir);
+    }
+  }
+
+  /// 下载单个图片节点的网络图片
+  Future<void> _downloadImageForNode(Node node, String urlKey, Directory tempDir) async {
+    final currentAttributes = node.attributes;
+    final url = currentAttributes[urlKey] as String?;
+    final type = currentAttributes['image_type'] as int?;
+
+    Log.info('检查图片节点: url=$url, type=$type, urlKey=$urlKey');
+    Log.info('节点属性: $currentAttributes');
+
+    if (url == null || type == null) {
+      Log.info('跳过图片节点: url或type为空');
+      return;
+    }
+
+    final imageType = CustomImageType.fromIntValue(type);
+    Log.info('图片类型: $imageType');
+
+    // 只处理网络图片（internal 或 external）
+    if (imageType == CustomImageType.internal || imageType == CustomImageType.external) {
+      Log.info('开始下载网络图片: $url');
+      final localPath = await _downloadImage(url, tempDir, 'image');
+      if (localPath != null) {
+        // 使用 updateAttributes 更新节点属性
+        node.updateAttributes({
+          urlKey: localPath,
+          'image_type': CustomImageType.local.toIntValue(),
+        });
+        Log.info('已将网络图片下载到本地: $url -> $localPath');
+        Log.info('更新后的节点属性: ${node.attributes}');
+      }
+    } else {
+      Log.info('跳过非网络图片: $imageType');
+    }
+  }
+
+  /// 下载图片并保存到临时目录
+  Future<String?> _downloadImage(String url, Directory tempDir, String prefix) async {
+    try {
+      Log.info('开始下载网络图片: $url');
+
+      // 根据URL生成文件名
+      final uri = Uri.parse(url);
+      final extension = p.extension(uri.path).isNotEmpty ? p.extension(uri.path) : '.jpg';
+      final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}$extension';
+      final localPath = p.join(tempDir.path, fileName);
+
+      // 下载图片
+      final response = await http.get(uri);
+      if (response.statusCode == 200) {
+        final file = File(localPath);
+        await file.writeAsBytes(response.bodyBytes);
+        Log.info('图片下载成功: $localPath (${response.bodyBytes.length} 字节)');
+        return localPath;
+      } else {
+        Log.warn('图片下载失败，状态码: ${response.statusCode}, URL: $url');
+        return null;
+      }
+    } catch (e) {
+      Log.error('下载图片时出错: $url, 错误: $e');
       return null;
     }
   }
