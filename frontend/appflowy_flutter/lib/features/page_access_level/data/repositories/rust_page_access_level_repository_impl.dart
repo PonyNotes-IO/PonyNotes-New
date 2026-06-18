@@ -67,10 +67,10 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   /// 权限检查优先级（从高到低）：
   /// 1. local users → fullAccess
   /// 2. local workspace → fullAccess
-  /// 3. **接收的发布文档 → readOnly**（必须在 creator 检查之前，因为复制后 createdBy 是接收者自己）
-  /// 4. page creator → fullAccess
-  /// 5. public page owner/member → fullAccess
-  /// 6. shared users list
+  /// 3. 接收的发布文档 → readOnly（必须在 creator 检查之前，因为复制后 createdBy 是接收者自己）
+  /// 4. **显式共享权限**（HTTP API + FFI 缓存双层查询）→ 使用 API 返回值
+  /// 5. page creator → fullAccess（仅当 API 无记录时）
+  /// 6. 默认 → readOnly（不再对公共区域成员兜底 fullAccess）
   @override
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
     String pageId,
@@ -191,14 +191,13 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    // Fall back to default permissions for workspace members in public section
-    // Non-Guest workspace members get fullAccess for public section documents.
-    if (workspace.role != AFRolePB.Guest &&
-        sectionType == SharedSectionType.public) {
-      return FlowyResult.success(ShareAccessLevel.fullAccess);
-    }
-
-    // Default to readOnly if no permission is found
+    // 修复：不再对公共区域工作区成员默认返回 fullAccess。
+    // 之前的逻辑会导致被修改权限的用户（不在 collab members 列表中）
+    // 仍然获得 fullAccess，权限修改无法生效。
+    // 现在统一回退到 readOnly，确保只有显式授权的用户才能编辑。
+    Log.debug('[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
+        'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
+        'defaulting to readOnly');
     return FlowyResult.success(ShareAccessLevel.readOnly);
   }
 
