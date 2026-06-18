@@ -385,6 +385,9 @@ class _ShareTabState extends State<ShareTab> {
     );
   }
 
+  /// 是否启用链接权限下拉选择（默认隐藏，后续可开放）
+  static const bool _enablePermissionDropdown = false;
+
   /// 构建权限选择器
   Widget _buildPermissionSelector(BuildContext context, ShareTabState state) {
     final theme = AppFlowyTheme.of(context);
@@ -403,6 +406,19 @@ class _ShareTabState extends State<ShareTab> {
         permissionItems.any((entry) => entry.key == state.selectedPermissionId)
             ? state.selectedPermissionId
             : (permissionItems.isNotEmpty ? permissionItems.first.key : null);
+
+    // 固定使用"编辑"权限（readAndWrite = 3），同步状态
+    const editPermissionId = 3;
+    if (state.selectedPermissionId != editPermissionId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          context.read<ShareTabBloc>().add(
+                ShareTabEvent.updateShareLinkPermission(
+                    permissionId: editPermissionId),
+              );
+        }
+      });
+    }
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -423,45 +439,61 @@ class _ShareTabState extends State<ShareTab> {
             color: theme.textColorScheme.primary,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: DropdownButton<int>(
-              value: selectedPermissionId,
-              isExpanded: true,
-              underline: const SizedBox(),
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.primary,
-              ),
-              dropdownColor: theme.surfaceContainerColorScheme.layer01,
-              borderRadius: BorderRadius.circular(8),
-              items: permissionItems.map((entry) {
-                final level = entry.value;
-                return DropdownMenuItem<int>(
-                  value: entry.key,
-                  child: Row(
-                    children: [
-                      FlowySvg(
-                    level.icon,
-                        size: const Size(18, 18),
-                        color: theme.textColorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      FlowyText(
-                        level.title,
-                        color: theme.textColorScheme.primary,
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  context.read<ShareTabBloc>().add(
-                    ShareTabEvent.updateShareLinkPermission(permissionId: value),
+          if (_enablePermissionDropdown)
+            // 下拉选择器（暂时隐藏，后续开放）
+            Expanded(
+              child: DropdownButton<int>(
+                value: selectedPermissionId,
+                isExpanded: true,
+                underline: const SizedBox(),
+                style: theme.textStyle.body.standard(
+                  color: theme.textColorScheme.primary,
+                ),
+                dropdownColor: theme.surfaceContainerColorScheme.layer01,
+                borderRadius: BorderRadius.circular(8),
+                items: permissionItems.map((entry) {
+                  final level = entry.value;
+                  return DropdownMenuItem<int>(
+                    value: entry.key,
+                    child: Row(
+                      children: [
+                        FlowySvg(
+                          level.icon,
+                          size: const Size(18, 18),
+                          color: theme.textColorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        FlowyText(
+                          level.title,
+                          color: theme.textColorScheme.primary,
+                        ),
+                      ],
+                    ),
                   );
-                }
-              },
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    context.read<ShareTabBloc>().add(
+                          ShareTabEvent.updateShareLinkPermission(
+                              permissionId: value),
+                        );
+                  }
+                },
+              ),
+            )
+          else ...[
+            // 固定显示"编辑"权限（当前默认）
+            FlowySvg(
+              ShareAccessLevel.readAndWrite.icon,
+              size: const Size(18, 18),
+              color: theme.textColorScheme.primary,
             ),
-          ),
+            const SizedBox(width: 8),
+            FlowyText(
+              ShareAccessLevel.readAndWrite.title,
+              color: theme.textColorScheme.primary,
+            ),
+          ],
         ],
       ),
     );
