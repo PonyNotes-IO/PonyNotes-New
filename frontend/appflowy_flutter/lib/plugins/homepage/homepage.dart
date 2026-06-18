@@ -383,6 +383,7 @@ class _HomePageState extends State<HomePage> {
             child:
                 // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
                 BlocBuilder<HomeSettingBloc, HomeSettingState>(
+              buildWhen: (p, c) => p.menuStatus != c.menuStatus,
               builder: (context, state) {
                 if (state.menuStatus != MenuStatus.hidden) {
                   return const SizedBox.shrink();
@@ -463,6 +464,9 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildRecentSection() {
     return BlocBuilder<RecentViewsBloc, RecentViewsState>(
+      buildWhen: (previous, current) =>
+          previous.isLoading != current.isLoading ||
+          previous.views != current.views,
       builder: (context, state) {
         if (state.isLoading) {
           return const SizedBox(

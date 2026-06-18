@@ -234,6 +234,9 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
         ),
       ),
       child: BlocBuilder<TodoBloc, TodoState>(
+        buildWhen: (previous, current) =>
+            previous.isLoading != current.isLoading ||
+            previous.errorMessage != current.errorMessage,
         builder: (context, state) {
           if (state.isLoading) {
             return const Center(

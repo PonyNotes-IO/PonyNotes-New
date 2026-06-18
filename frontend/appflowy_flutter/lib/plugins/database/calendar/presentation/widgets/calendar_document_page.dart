@@ -91,6 +91,10 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
         BlocProvider.value(value: _viewBloc),
       ],
       child: BlocBuilder<DocumentBloc, DocumentState>(
+        buildWhen: (previous, current) =>
+            previous.isLoading != current.isLoading ||
+            previous.editorState != current.editorState ||
+            previous.error != current.error,
         builder: (context, state) {
           if (state.isLoading) {
             return const Center(

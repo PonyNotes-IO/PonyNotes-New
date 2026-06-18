@@ -31,6 +31,9 @@ class DocumentCollaborators extends StatelessWidget {
       create: (context) => DocumentCollaboratorsBloc(view: view)
         ..add(const DocumentCollaboratorsEvent.initial()),
       child: BlocBuilder<DocumentCollaboratorsBloc, DocumentCollaboratorsState>(
+        buildWhen: (previous, current) =>
+            previous.collaborators != current.collaborators ||
+            previous.shouldShowIndicator != current.shouldShowIndicator,
         builder: (context, state) {
           final collaborators = state.collaborators;
           if (!state.shouldShowIndicator || collaborators.isEmpty) {

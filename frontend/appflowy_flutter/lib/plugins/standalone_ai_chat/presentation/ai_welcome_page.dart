@@ -60,34 +60,28 @@ class AIWelcomePage extends StatelessWidget {
                   padding: EdgeInsets.only(
                     bottom: MediaQuery.of(context).viewInsets.bottom,
                   ),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        children: [
-                          // 顶部头像和欢迎文字区域 / Header section.
-                          AIWelcomeHeader(
-                            onChatHistoryTap: onChatHistoryTap,
-                          ),
-                          // 输入交互区域和使用提示 / Input area and usage hint.
-                          AIInputArea(
-                            onMessageSent: onMessageSent,
-                            onChatHistoryTap: onChatHistoryTap,
-                          ),
-                          const Spacer(),
-                          // 底部提示文字 / Footer disclaimer.
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 64),
-                            child: Text(
-                              '内容由 AI 生成，请仔细甄别',
-                              style: AIWelcomeTheme.tooltipStyle(context),
-                            ),
-                          ),
-                        ],
+                  child: Column(
+                    children: [
+                      // 顶部头像和欢迎文字区域 / Header section.
+                      AIWelcomeHeader(
+                        onChatHistoryTap: onChatHistoryTap,
                       ),
-                    ),
+                      // 输入交互区域和使用提示 / Input area and usage hint.
+                      Expanded(
+                        child: AIInputArea(
+                          onMessageSent: onMessageSent,
+                          onChatHistoryTap: onChatHistoryTap,
+                        ),
+                      ),
+                      // 底部提示文字 / Footer disclaimer.
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 64),
+                        child: Text(
+                          '内容由 AI 生成，请仔细甄别',
+                          style: AIWelcomeTheme.tooltipStyle(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Positioned(
@@ -96,6 +90,7 @@ class AIWelcomePage extends StatelessWidget {
                   child:
                   // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
                   BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                    buildWhen: (p, c) => p.menuStatus != c.menuStatus,
                     builder: (context, state) {
                       if (state.menuStatus != MenuStatus.hidden) {
                         return const SizedBox.shrink();
