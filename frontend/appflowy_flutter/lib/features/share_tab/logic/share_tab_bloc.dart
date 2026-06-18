@@ -10,7 +10,6 @@ import 'package:appflowy/features/share_tab/logic/share_tab_state.dart';
 import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -96,16 +95,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventInitialize event,
     Emitter<ShareTabState> emit,
   ) async {
-    if (!FeatureFlag.sharedSection.isOn) {
-      emit(
-        state.copyWith(
-          errorMessage: 'Sharing is currently disabled.',
-          users: [],
-          isLoading: false,
-        ),
-      );
-      return;
-    }
 
     _initFolderNotificationListener();
 
@@ -162,10 +151,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventLoadSharedUsers event,
     Emitter<ShareTabState> emit,
   ) async {
-    if (!FeatureFlag.sharedSection.isOn) {
-      return;
-    }
-
     emit(
       state.copyWith(
         errorMessage: '',

@@ -1,5 +1,4 @@
 import 'package:appflowy/features/share_tab/data/models/models.dart';
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 
 class PageAccessLevelState {
@@ -35,10 +34,6 @@ class PageAccessLevelState {
   bool get shouldHideSpace => myRole == ShareRole.guest;
 
   bool get isEditable {
-    if (!FeatureFlag.sharedSection.isOn) {
-      return !isLocked;
-    }
-
     return accessLevel != ShareAccessLevel.readOnly && !isLocked;
   }
 

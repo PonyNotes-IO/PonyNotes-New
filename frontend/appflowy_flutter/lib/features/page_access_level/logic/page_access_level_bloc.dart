@@ -8,7 +8,6 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_even
 import 'package:appflowy/features/page_access_level/logic/page_access_level_state.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
@@ -110,7 +109,7 @@ class PageAccessLevelBloc
       (_) => SharedSectionType.public,
     );
 
-    if (!FeatureFlag.sharedSection.isOn || ignorePageAccessLevel) {
+    if (ignorePageAccessLevel) {
       emit(
         state.copyWith(
           view: view,
@@ -225,7 +224,7 @@ class PageAccessLevelBloc
     PageAccessLevelRefreshAccessLevelEvent event,
     Emitter<PageAccessLevelState> emit,
   ) async {
-    if (!FeatureFlag.sharedSection.isOn || ignorePageAccessLevel) {
+    if (ignorePageAccessLevel) {
       return;
     }
 
