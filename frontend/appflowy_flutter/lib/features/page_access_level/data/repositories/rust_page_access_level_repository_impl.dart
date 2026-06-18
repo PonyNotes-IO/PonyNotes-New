@@ -1,5 +1,6 @@
 import 'package:appflowy/features/page_access_level/data/repositories/page_access_level_repository.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
+import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -136,7 +137,6 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     );
 
     final email = user.email;
-    final authToken = _extractAuthToken(user);
 
     // 直接通过 HTTP 查询后端 collab members API 获取实时权限，
     // 绕过本地 SQLite 缓存，确保权限变更立即生效。
