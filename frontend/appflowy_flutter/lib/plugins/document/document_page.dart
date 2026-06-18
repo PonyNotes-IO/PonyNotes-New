@@ -22,7 +22,6 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
-import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
@@ -406,8 +405,8 @@ class _DocumentPageState extends State<DocumentPage>
       ),
     );
 
-    // 侧边栏收起时，在文档左上角显示展开按钮；
-    // 此外如果存在"上一文档"（例如 sub_page 自动跳转过来），显示返回按钮。
+    // 如果存在"上一文档"（例如 sub_page 自动跳转过来），显示返回按钮。
+    // 侧边栏展开按钮已移至顶部栏（FlowyNavigation / HomeTopBar），不再在此处显示。
     // 监听 latestOpenView 和 previousOpenView 两个 ValueNotifier，
     // 合并两个的变更，确保 snapshot 写入后页面会重建。
     return ValueListenableBuilder<ViewPB?>(
@@ -420,69 +419,36 @@ class _DocumentPageState extends State<DocumentPage>
         // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
         // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
         final showBackButton = _parentIsSpace == false;
-        // 左侧按钮组宽度，用于让 sidebar 展开按钮和返回按钮互不重叠
         const double buttonSize = 24.0;
-        const double buttonGap = 4.0;
         // macOS 上系统窗口按钮（关闭、最小化、最大化）占据约 88 像素宽度，
         // 需要留出足够空间避免按钮被遮挡
         // 其他平台使用较小的偏移量
         final leftBase =
             UniversalPlatform.isMacOS ? 88.0 : 16.0;
-        // 始终保留返回按钮占位（如果存在），便于位置稳定
         final backButtonLeft = leftBase;
-        final sidebarButtonLeft = leftBase +
-            (showBackButton ? (buttonSize + buttonGap) : 0.0);
-        return BlocBuilder<HomeSettingBloc, HomeSettingState>(
-          buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-          builder: (context, menuState) {
-            final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
-            final theme = AppFlowyTheme.of(context);
-            return Stack(
-              children: [
-                editorContent,
-                if (showBackButton)
-                  Positioned(
-                    top: 10,
-                    left: backButtonLeft,
-                    child: FlowyTooltip(
-                      message: '返回上一文档',
-                      child: FlowyIconButton(
-                        width: buttonSize,
-                        icon: FlowySvg(
-                          FlowySvgs.arrow_left_s,
-                          size: const Size.square(buttonSize),
-                          color: theme.iconColorScheme.primary,
-                        ),
-                        onPressed: () =>
-                            getIt<TabsBloc>().goBackToPreviousView(),
-                      ),
+        final theme = AppFlowyTheme.of(context);
+        return Stack(
+          children: [
+            editorContent,
+            if (showBackButton)
+              Positioned(
+                top: 10,
+                left: backButtonLeft,
+                child: FlowyTooltip(
+                  message: '返回上一文档',
+                  child: FlowyIconButton(
+                    width: buttonSize,
+                    icon: FlowySvg(
+                      FlowySvgs.arrow_left_s,
+                      size: const Size.square(buttonSize),
+                      color: theme.iconColorScheme.primary,
                     ),
+                    onPressed: () =>
+                        getIt<TabsBloc>().goBackToPreviousView(),
                   ),
-                if (isSidebarHidden)
-                  Positioned(
-                    top: 10,
-                    left: sidebarButtonLeft,
-                    child: FlowyTooltip(
-                      message: LocaleKeys.sideBar_openSidebar.tr(),
-                      child: FlowyIconButton(
-                        width: buttonSize,
-                        icon: FlowySvg(
-                          FlowySvgs.sidebar_collapse_custom_m,
-                          size: const Size.square(buttonSize),
-                          color: theme.iconColorScheme.primary,
-                        ),
-                        onPressed: () =>
-                            context.read<HomeSettingBloc>().add(
-                          const HomeSettingEvent.changeMenuStatus(
-                            MenuStatus.expanded,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+                ),
+              ),
+          ],
         );
       },
     );
