@@ -79,11 +79,26 @@ class LocalAssetServer {
         }
       };
 
-      _server = await shelf_io.serve(
-        handler,
-        InternetAddress.loopbackIPv4,
-        0,
-      );
+      // ⚡ 固定端口优先：稳定 WebView 的 origin(http://localhost:<port>)。
+      // 端口随机(0)会导致每次重启 origin 漂移，WebView 侧 HTTP 缓存/IndexedDB/
+      // localStorage 全部孤儿化、无法跨重启复用。固定端口可保持 origin 稳定；
+      // 若该端口被占用，则优雅回退到系统随机端口（不影响功能）。
+      const preferredPort = 51789;
+      try {
+        _server = await shelf_io.serve(
+          handler,
+          InternetAddress.loopbackIPv4,
+          preferredPort,
+        );
+      } catch (error) {
+        Log.warn(
+            '[LocalAssetServer] preferred port $preferredPort unavailable ($error), falling back to random port');
+        _server = await shelf_io.serve(
+          handler,
+          InternetAddress.loopbackIPv4,
+          0,
+        );
+      }
       _port = _server!.port;
 
       Log.info('LocalAssetServer started: $baseUrl');

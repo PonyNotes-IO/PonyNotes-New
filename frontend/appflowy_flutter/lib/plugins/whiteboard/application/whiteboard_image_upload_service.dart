@@ -4,6 +4,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 import '../../import_page/file_upload_service.dart';
+import 'whiteboard_image_cache_service.dart';
 
 /// Whiteboard image upload service
 /// Handles uploading images to cloud storage and managing image URLs
@@ -185,6 +186,10 @@ class WhiteboardImageUploadService {
     try {
       final originalFileName = parsed.originalFileName ?? 'image_$fileId.png';
       final metadata = await uploadImageWithMetadata(parsed.bytes, originalFileName);
+
+      // ⚡ 写入本地磁盘缓存：导入图片上传成功后立即落盘，
+      // 这样首次切换视图回来即可命中本地缓存，无需回源云端下载。
+      await WhiteboardImageCacheService().write(fileId, parsed.bytes);
 
       // ✅ 关键修复：保留 Excalidraw 原始格式，同时添加云 URL 信息
       // Excalidraw 需要 'dataURL' 字段来显示图片

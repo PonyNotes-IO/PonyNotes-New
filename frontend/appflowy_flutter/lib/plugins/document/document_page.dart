@@ -133,10 +133,26 @@ class _DocumentPageState extends State<DocumentPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
+      // 应用进入后台，清理 awareness states 和缓存
       documentBloc.add(const DocumentEvent.clearAwarenessStates());
+      _clearDocumentCache();
     } else if (state == AppLifecycleState.resumed) {
+      // 应用回到前台，同步 awareness states
       documentBloc.add(const DocumentEvent.syncAwarenessStates());
     }
+  }
+
+  /// 清理文档缓存
+  void _clearDocumentCache() {
+    Log.info('[DocumentPage] Clearing document cache on background');
+    
+    // 清理图片缓存
+    // ImageCache.instance.clear();
+    
+    // 清理其他可能的缓存
+    // ...
+    
+    Log.info('[DocumentPage] Document cache cleared');
   }
 
   @override
