@@ -1,6 +1,5 @@
 import 'package:appflowy/features/page_access_level/data/repositories/page_access_level_repository.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
-import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -13,7 +12,6 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
-import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 import 'package:appflowy/startup/startup.dart';
 import 'dart:convert';
@@ -138,34 +136,20 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     );
 
     final email = user.email;
+    final authToken = _extractAuthToken(user);
 
-    // First, check the shared users list for explicit permission settings
-    // This ensures that explicit share permissions take precedence over
-    // default workspace member permissions
-    final request = GetSharedUsersPayloadPB(
-      viewId: pageId,
-    );
-    final result = await FolderEventGetSharedUsers(request).send();
-    final sharedUsersAccessLevel = result.fold(
-      (success) {
-        return success.items
-                .firstWhereOrNull(
-                  (item) => item.email == email,
-                )
-                ?.accessLevel
-                .shareAccessLevel;
-      },
-      (failure) {
-        Log.error(
-          'failed to get user access level: $failure, in page: $pageId',
-        );
-        return null;
-      },
+    // 直接通过 HTTP 查询后端 collab members API 获取实时权限，
+    // 绕过本地 SQLite 缓存，确保权限变更立即生效。
+    // API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
+    final sharedUsersAccessLevel = await _getAccessLevelFromCollabMembers(
+      pageId,
+      email: email,
+      authToken: authToken,
     );
 
     // If the user has an explicit permission in the shared users list, use it
     if (sharedUsersAccessLevel != null) {
-      Log.debug('current user access level from shared list: $sharedUsersAccessLevel, in page: $pageId');
+      Log.debug('current user access level from collab members API: $sharedUsersAccessLevel, in page: $pageId');
       return FlowyResult.success(sharedUsersAccessLevel);
     }
 
@@ -320,5 +304,114 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       currentWorkspaceId,
     );
     return workspaceResult;
+  }
+
+  /// 直接通过 HTTP 查询后端 collab members API 获取当前用户的权限。
+  /// 绕过本地 SQLite 缓存，确保权限变更立即生效。
+  /// API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
+  Future<ShareAccessLevel?> _getAccessLevelFromCollabMembers(
+    String pageId, {
+    required String email,
+    String? authToken,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.warn('[PageAccessLevel] Base URL 为空，无法查询 collab members');
+        return null;
+      }
+
+      // 获取当前 workspace ID
+      final workspaceResult = await UserBackendService.getCurrentWorkspace();
+      final workspaceId = workspaceResult.fold(
+        (s) => s.id,
+        (_) => null,
+      );
+
+      if (workspaceId == null) {
+        Log.warn('[PageAccessLevel] 无法获取当前 workspace ID');
+        return null;
+      }
+
+      final token = authToken ?? await _getAuthToken();
+      if (token == null || token.isEmpty) {
+        Log.warn('[PageAccessLevel] Auth token 为空，无法查询 collab members');
+        return null;
+      }
+
+      // GET /api/workspace/{workspace_id}/collab/{object_id}/members
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/collab/$pageId/members',
+      );
+
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw Exception('请求超时');
+            },
+          );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final code = body['code'] as int?;
+        if (code != null && code != 0) {
+          Log.warn('[PageAccessLevel] collab members API 返回错误码: $code');
+          return null;
+        }
+
+        final data = body['data'] as List<dynamic>?;
+        if (data == null) {
+          Log.warn('[PageAccessLevel] collab members API 返回 data 为 null');
+          return null;
+        }
+
+        // 在成员列表中查找当前用户（通过 email 匹配）
+        for (final member in data) {
+          final memberMap = member as Map<String, dynamic>;
+          final memberEmail = (memberMap['email'] as String? ?? '').trim().toLowerCase();
+
+          if (memberEmail == email.trim().toLowerCase()) {
+            final permissionId = memberMap['permission_id'] as int? ?? 1;
+            return _mapPermissionIdToAccessLevel(permissionId);
+          }
+        }
+
+        Log.debug('[PageAccessLevel] 当前用户不在 collab members 列表中: $pageId');
+        return null;
+      } else {
+        Log.warn('[PageAccessLevel] collab members API 请求失败: HTTP ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      Log.warn('[PageAccessLevel] 查询 collab members 失败: $e');
+      return null;
+    }
+  }
+
+  /// 将后端 permission_id 映射为 ShareAccessLevel
+  /// 后端定义：1=ReadOnly, 2=ReadAndComment, 3=ReadAndWrite, 4=FullAccess
+  ShareAccessLevel _mapPermissionIdToAccessLevel(int permissionId) {
+    switch (permissionId) {
+      case 1:
+        return ShareAccessLevel.readOnly;
+      case 2:
+        return ShareAccessLevel.readAndComment;
+      case 3:
+        return ShareAccessLevel.readAndWrite;
+      case 4:
+        return ShareAccessLevel.fullAccess;
+      default:
+        return ShareAccessLevel.readOnly;
+    }
   }
 }
