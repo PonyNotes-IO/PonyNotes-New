@@ -8,10 +8,9 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:uuid/uuid.dart';
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_cache_service.dart';
 import '../../../../../../../util/log_utils.dart';
 
 /// PDF加载状态枚举
@@ -442,6 +441,8 @@ class PdfEditorImage {
 
       final url = await FileUploadService.uploadFile(bytes, fileName);
       pdfUrl = url;
+      // ⚡ 导入上传后立即写入工作区持久缓存，首次切换视图回来即命中、无需联网
+      await HandwritingPdfCacheService().put(url, bytes);
       Log.info('[PdfEditorImage] ✅ PDF uploaded: $url');
       return url;
     } catch (e) {
@@ -457,6 +458,15 @@ class PdfEditorImage {
     // 检查本地缓存是否有效
     if (pdfFilePath.isNotEmpty && File(pdfFilePath).existsSync()) return;
 
+    // ⚡ 优先命中工作区持久缓存（按 pdfUrl 稳定 key），命中则用本地文件、无需联网
+    final cachedPath =
+        await HandwritingPdfCacheService().cachedPathIfExists(pdfUrl!);
+    if (cachedPath != null) {
+      pdfFilePath = cachedPath;
+      Log.info('[PdfEditorImage] ⚡ PDF cache hit (workspace): $cachedPath');
+      return;
+    }
+
     try {
       Log.info('[PdfEditorImage] Downloading PDF from cloud: $pdfUrl');
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -471,15 +481,13 @@ class PdfEditorImage {
       if (response.statusCode == 200) {
         pdfBytes = response.bodyBytes;
 
-        // 将 PDF 写入本地临时缓存文件
-        final cacheDir = await getTemporaryDirectory();
-        final urlHash = pdfUrl!.hashCode.abs().toString();
-        final localPath = p.join(cacheDir.path, 'pdf_cache_$urlHash.pdf');
-        final cacheFile = File(localPath);
-        await cacheFile.writeAsBytes(pdfBytes!);
-        pdfFilePath = localPath;
-
-        Log.info('[PdfEditorImage] ✅ PDF cached at: $localPath (${pdfBytes!.length} bytes)');
+        // ⚡ 写入工作区持久缓存（跨重启、切换视图复用，避免重复下载）
+        final localPath =
+            await HandwritingPdfCacheService().put(pdfUrl!, pdfBytes!);
+        if (localPath != null) {
+          pdfFilePath = localPath;
+          Log.info('[PdfEditorImage] ✅ PDF cached at: $localPath (${pdfBytes!.length} bytes)');
+        }
       } else {
         Log.error('[PdfEditorImage] ❌ PDF download failed: ${response.statusCode}');
       }
