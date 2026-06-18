@@ -107,6 +107,25 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.success(ShareAccessLevel.readOnly);
     }
 
+    final email = user.email;
+
+    // 关键修复：显式权限检查必须在 creator 检查之前。
+    // 即使当前用户是文档创建者，如果后端已将其权限修改为 readOnly，
+    // 必须以 API 返回的显式权限为准，不能直接返回 fullAccess。
+    // API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
+    final sharedUsersAccessLevel = await _getAccessLevelFromCollabMembers(
+      pageId,
+      email: email,
+      authToken: authToken,
+    );
+
+    // If the user has an explicit permission in the collab members list, use it
+    if (sharedUsersAccessLevel != null) {
+      Log.debug('current user access level from collab members API: $sharedUsersAccessLevel, in page: $pageId');
+      return FlowyResult.success(sharedUsersAccessLevel);
+    }
+
+    // 只有当 API 中没有找到当前用户的显式权限时，才回退到 creator 检查
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
@@ -135,23 +154,6 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (s) => s,
       (_) => null,
     );
-
-    final email = user.email;
-
-    // 直接通过 HTTP 查询后端 collab members API 获取实时权限，
-    // 绕过本地 SQLite 缓存，确保权限变更立即生效。
-    // API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
-    final sharedUsersAccessLevel = await _getAccessLevelFromCollabMembers(
-      pageId,
-      email: email,
-      authToken: authToken,
-    );
-
-    // If the user has an explicit permission in the shared users list, use it
-    if (sharedUsersAccessLevel != null) {
-      Log.debug('current user access level from collab members API: $sharedUsersAccessLevel, in page: $pageId');
-      return FlowyResult.success(sharedUsersAccessLevel);
-    }
 
     // Fall back to default permissions for workspace members in public section
     // Non-Guest workspace members get fullAccess for public section documents.
