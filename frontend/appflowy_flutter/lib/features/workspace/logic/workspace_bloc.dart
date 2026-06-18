@@ -185,23 +185,28 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       initialWorkspaceId: event.initialWorkspaceId,
     );
 
-    final currentWorkspace = result.currentWorkspace;
     final workspaces = result.workspaces;
 
+    // 只刷新工作区列表，不自动切换工作区
+    // 这样可以避免程序从后台恢复时自动切换到其他工作区
     emit(
       state.copyWith(
         workspaces: workspaces,
       ),
     );
 
-    if (currentWorkspace != null &&
-        currentWorkspace.workspaceId != state.currentWorkspace?.workspaceId) {
-      add(
-        UserWorkspaceEvent.openWorkspace(
-          workspaceId: currentWorkspace.workspaceId,
-          workspaceType: currentWorkspace.workspaceType,
-        ),
-      );
+    // 只有在初始化时（initialWorkspaceId 不为空）或者当前工作区被删除时，才自动切换工作区
+    if (event.initialWorkspaceId != null) {
+      final currentWorkspace = result.currentWorkspace;
+      if (currentWorkspace != null &&
+          currentWorkspace.workspaceId != state.currentWorkspace?.workspaceId) {
+        add(
+          UserWorkspaceEvent.openWorkspace(
+            workspaceId: currentWorkspace.workspaceId,
+            workspaceType: currentWorkspace.workspaceType,
+          ),
+        );
+      }
     }
   }
 
