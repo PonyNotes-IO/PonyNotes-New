@@ -250,12 +250,13 @@ class WhiteboardPage extends StatefulWidget {
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
 
-class _WhiteboardPageState extends State<WhiteboardPage> {
+class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObserver {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
   bool get _showLegacyBlockingLoader => false;
   bool _isDisposing = false; // 标记是否正在销毁
   int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
+  bool _isAppInBackground = false; // 标记应用是否在后台
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -274,6 +275,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   @override
   void initState() {
     super.initState();
+    // 注册应用生命周期监听
+    WidgetsBinding.instance.addObserver(this);
+    
     _sessionTraceId =
         ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
     _loadTraceId = ponyNotesDiagTraceId('whiteboard', widget.view.id);
@@ -474,7 +478,35 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    Log.info('[WhiteboardPage] 🔄 App lifecycle changed: $state');
+    
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // 应用进入后台，标记状态
+      _isAppInBackground = true;
+      Log.info('[WhiteboardPage] ⏸️ App entering background');
+      
+    } else if (state == AppLifecycleState.resumed) {
+      // 应用回到前台，恢复操作
+      _isAppInBackground = false;
+      Log.info('[WhiteboardPage] ▶️ App resumed');
+      
+      // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
+      if (mounted) {
+        setState(() {
+          _importReloadCounter++; // 强制重建 WebView
+        });
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    // 注销应用生命周期监听
+    WidgetsBinding.instance.removeObserver(this);
+    
     _isDisposing = true;
     logDiagnosticEvent(
       'WhiteboardLoad',

@@ -74,27 +74,35 @@ class _DesktopSimpleTableWidgetState extends State<DesktopSimpleTableWidget> {
   Widget _buildFeedbackTable() {
     return Provider.value(
       value: simpleTableContext,
-      child: IntrinsicWidth(
-        child: IntrinsicHeight(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: _buildRows(),
-          ),
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ConstrainedBox(
+            constraints: constraints,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _buildRows(),
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildDesktopTable() {
     // table content
-    // IntrinsicHeight is used to make the table size fit the content.
-    Widget child = IntrinsicHeight(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: _buildRows(),
-      ),
+    // 使用 LayoutBuilder 替代 IntrinsicHeight 以提高性能
+    Widget child = LayoutBuilder(
+      builder: (context, constraints) {
+        return ConstrainedBox(
+          constraints: constraints,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _buildRows(),
+          ),
+        );
+      },
     );
 
     if (widget.alwaysDistributeColumnWidths) {
@@ -110,8 +118,11 @@ class _DesktopSimpleTableWidgetState extends State<DesktopSimpleTableWidget> {
           scrollDirection: Axis.horizontal,
           child: Padding(
             padding: SimpleTableConstants.tablePadding,
-            // IntrinsicWidth is used to make the table size fit the content.
-            child: IntrinsicWidth(child: child),
+            // 使用 ConstrainedBox 替代 IntrinsicWidth 以提高性能
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: double.infinity),
+              child: child,
+            ),
           ),
         ),
       );

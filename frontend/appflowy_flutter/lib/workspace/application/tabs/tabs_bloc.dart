@@ -130,13 +130,16 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             // 绕过 openPlugin() 入口的判断,这里再判断一次。
             if (view != null &&
                 state.currentPageManager.plugin is SpaceHubPlugin) {
-              try {
-                final spaceHubPlugin =
-                    state.currentPageManager.plugin as SpaceHubPlugin;
-                spaceHubPlugin.selectViewInSpaceHub(view);
-                return;
-              } catch (_) {
-                // 失败时回退到原有逻辑
+              // 如果点击的是空间视图，应该打开新的 SpaceHub 实例，而不是在当前 SpaceHub 内显示
+              if (!view.isSpace) {
+                try {
+                  final spaceHubPlugin =
+                      state.currentPageManager.plugin as SpaceHubPlugin;
+                  spaceHubPlugin.selectViewInSpaceHub(view);
+                  return;
+                } catch (_) {
+                  // 失败时回退到原有逻辑
+                }
               }
             }
             // 完全不触碰 SecondaryView,避免在文档内创建/打开子页面后
@@ -560,15 +563,20 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // 正确做法:把点击的 view 通知给 SpaceHubPlugin,让它选中该子视图
     // (在 rightPanel 内显示),保持 SpaceHub 整体布局不变。
     if (state.currentPageManager.plugin is SpaceHubPlugin) {
-      Log.info('[SpaceHubLink] detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
-      try {
-        final plugin =
-            state.currentPageManager.plugin as SpaceHubPlugin;
-        plugin.selectViewInSpaceHub(view);
-        return;
-      } catch (e) {
-      Log.error('[SpaceHubLink] selectViewInSpaceHub failed, falling back: $e');
-        // 失败时回退到原有 openPlugin 流程
+      // 如果点击的是空间视图，应该打开新的 SpaceHub 实例，而不是在当前 SpaceHub 内显示
+      if (view.isSpace) {
+        Log.info('[SpaceHubLink] Space view clicked in SpaceHub, opening new SpaceHub');
+      } else {
+        Log.info('[SpaceHubLink] detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
+        try {
+          final plugin =
+              state.currentPageManager.plugin as SpaceHubPlugin;
+          plugin.selectViewInSpaceHub(view);
+          return;
+        } catch (e) {
+        Log.error('[SpaceHubLink] selectViewInSpaceHub failed, falling back: $e');
+          // 失败时回退到原有 openPlugin 流程
+        }
       }
     } else {
       Log.info('[SpaceHubLink] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
