@@ -848,6 +848,14 @@ class _HomePageState extends State<HomePage> {
       width: 132,
       height: 132,
       margin: const EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: theme.borderColorScheme.primary,
+          width: 1,
+        ),
+      ),
       child: GestureDetector(
         onTap: _handleAddNotebook,
         child: DecoratedBox(
