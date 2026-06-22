@@ -1570,7 +1570,7 @@ impl FolderManager {
                     user.role.clone() as i32,
                     user.access_level as i32,
                     order as i32,
-                    user.user_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
+                    user.user_id.map(|id| id.to_string()).unwrap_or_default(),
                   )
                 })
                 .collect::<Vec<_>>();
@@ -1719,7 +1719,7 @@ impl FolderManager {
                   user.role.clone() as i32,
                   user.access_level as i32,
                   order as i32,
-                  user.user_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
+                  user.user_id.map(|id| id.to_string()).unwrap_or_default(),
                 )
               })
               .collect::<Vec<_>>();
