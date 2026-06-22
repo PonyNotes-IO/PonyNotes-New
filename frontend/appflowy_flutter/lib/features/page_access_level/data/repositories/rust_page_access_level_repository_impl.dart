@@ -154,9 +154,10 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       },
     );
 
-    if (ffiAccessLevel != null) {
-      Log.debug('[PageAccessLevel] FFI cache returned: $ffiAccessLevel for page: $pageId');
-      return FlowyResult.success(ffiAccessLevel);
+    final resolvedFfiLevel = ffiAccessLevel;
+    if (resolvedFfiLevel != null) {
+      Log.debug('[PageAccessLevel] FFI cache returned: $resolvedFfiLevel for page: $pageId');
+      return FlowyResult.success(resolvedFfiLevel);
     }
 
     // 关键保护：如果用户在 FFI 缓存的共享列表中存在但匹配失败
@@ -270,6 +271,38 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       );
     }
     return (isReceived: false, isReadonly: false);
+  }
+
+  /// 从 JWT token 中提取用户 UUID（sub 字段）
+  /// 用于 FFI 缓存的 uid 匹配（后端 uid 是 UUID 字符串）
+  String? _extractUserUuid(UserProfilePB user) {
+    final rawToken = user.authToken;
+    if (rawToken == null || rawToken.isEmpty) return null;
+
+    String? accessToken = rawToken;
+    if (rawToken.trimLeft().startsWith('{')) {
+      try {
+        final tokenMap = jsonDecode(rawToken) as Map<String, dynamic>;
+        accessToken = tokenMap['access_token'] as String?;
+      } catch (_) {
+        return null;
+      }
+    }
+    if (accessToken == null || accessToken.isEmpty) return null;
+
+    final parts = accessToken.split('.');
+    if (parts.length < 2) return null;
+    try {
+      final payload = parts[1];
+      final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      final padding = (4 - normalized.length % 4) % 4;
+      final padded = normalized + ('=' * padding);
+      final decoded = utf8.decode(base64Decode(padded));
+      final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
+      final sub = payloadMap['sub']?.toString();
+      if (sub != null && sub.isNotEmpty) return sub;
+    } catch (_) {}
+    return null;
   }
 
   /// 从 UserProfilePB 中提取 Bearer token（不触发网络请求）
