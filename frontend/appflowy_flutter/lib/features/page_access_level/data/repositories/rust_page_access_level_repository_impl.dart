@@ -111,6 +111,18 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final email = user.email;
     final userId = user.id.toInt();
     final userUuid = _extractUserUuid(user);
+    final cloudAccessLevel = await _getAccessLevelFromCollabMembers(
+      pageId,
+      email: email,
+      userId: userId,
+      authToken: authToken,
+    );
+    if (cloudAccessLevel != null) {
+      Log.debug(
+        '[PageAccessLevel] HTTP collab members returned: $cloudAccessLevel for page: $pageId',
+      );
+      return FlowyResult.success(cloudAccessLevel);
+    }
 
     // 通过 Rust FFI 查询本地 SQLite 缓存中的共享用户列表
     // 后台会自动同步云端数据并发送通知触发刷新
@@ -173,18 +185,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
 
     // FFI 缓存未命中：直接查后端 collab members API，绕过本地缓存延迟。
     // 当云端权限已变更但本地 SQLite 尚未同步时，这是唯一的可靠数据源。
-    Log.debug('[PageAccessLevel] FFI cache ${ffiCacheHadData ? "miss" : "empty"}, '
-        'falling back to HTTP collab members API. page: $pageId');
-    final httpLevel = await _getAccessLevelFromCollabMembers(
-      pageId,
-      email: email,
-      userId: userId,
-      authToken: authToken,
-    );
-    if (httpLevel != null) {
-      Log.debug('[PageAccessLevel] HTTP collab members returned: $httpLevel for page: $pageId');
-      return FlowyResult.success(httpLevel);
-    }
+    Log.debug('[PageAccessLevel] cloud HTTP miss and FFI cache '
+        '${ffiCacheHadData ? "miss" : "empty"}. page: $pageId');
     // HTTP 也未命中：如果 FFI 缓存有数据（用户确实不在共享列表），
     // 允许 creator 兜底；如果 FFI 缓存为空（可能未同步），安全兜底到 readOnly。
     if (!ffiCacheHadData) {
