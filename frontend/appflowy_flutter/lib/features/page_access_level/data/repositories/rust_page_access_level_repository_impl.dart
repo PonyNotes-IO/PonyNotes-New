@@ -122,9 +122,11 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final result = await FolderEventGetSharedUsers(request).send();
     ShareAccessLevel? ffiAccessLevel;
     bool userFoundInFfiCache = false;
+    bool ffiCacheHadData = false;
 
     result.fold(
       (success) {
+        ffiCacheHadData = success.items.isNotEmpty;
         for (final item in success.items) {
           final itemEmail = item.email.trim().toLowerCase();
           final emailMatches = email.isNotEmpty &&
@@ -169,15 +171,37 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.success(ShareAccessLevel.readOnly);
     }
 
-    // 用户不在共享列表中，回退到 creator 检查
+    // FFI 缓存未命中：直接查后端 collab members API，绕过本地缓存延迟。
+    // 当云端权限已变更但本地 SQLite 尚未同步时，这是唯一的可靠数据源。
+    Log.debug('[PageAccessLevel] FFI cache ${ffiCacheHadData ? "miss" : "empty"}, '
+        'falling back to HTTP collab members API. page: $pageId');
+    final httpLevel = await _getAccessLevelFromCollabMembers(
+      pageId,
+      email: email,
+      userId: userId,
+      authToken: authToken,
+    );
+    if (httpLevel != null) {
+      Log.debug('[PageAccessLevel] HTTP collab members returned: $httpLevel for page: $pageId');
+      return FlowyResult.success(httpLevel);
+    }
+    // HTTP 也未命中：如果 FFI 缓存有数据（用户确实不在共享列表），
+    // 允许 creator 兜底；如果 FFI 缓存为空（可能未同步），安全兜底到 readOnly。
+    if (!ffiCacheHadData) {
+      Log.warn('[PageAccessLevel] both FFI cache empty and HTTP miss, '
+          'defaulting to readOnly for safety. page: $pageId');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
+    }
+
+    // 用户确认不在共享列表中（FFI 有数据 + HTTP 也确认），回退到 creator 检查
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
       (_) => null,
     );
     if (view?.createdBy == user.id) {
-      Log.debug('[PageAccessLevel] user is page creator and NOT in shared list, '
-          'granting fullAccess. page: $pageId, userId: $userId');
+      Log.debug('[PageAccessLevel] user is page creator and NOT in shared list '
+          '(confirmed by FFI + HTTP), granting fullAccess. page: $pageId, userId: $userId');
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
