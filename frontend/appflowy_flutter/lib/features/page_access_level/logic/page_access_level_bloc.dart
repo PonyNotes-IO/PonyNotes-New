@@ -82,6 +82,7 @@ class PageAccessLevelBloc
     // lock status
     listener.start(
       onViewUpdated: (view) async {
+        if (isClosed) return;
         add(PageAccessLevelEvent.updateLockStatus(view.isLocked));
       },
     );
@@ -97,6 +98,7 @@ class PageAccessLevelBloc
               now.difference(_lastRefreshAccessLevelTime!) >
                   _refreshAccessLevelThrottle) {
             _lastRefreshAccessLevelTime = now;
+            if (isClosed) return;
             add(const PageAccessLevelEvent.refreshAccessLevel());
           }
         }
@@ -147,7 +149,10 @@ class PageAccessLevelBloc
     _permissionPollingTimer?.cancel();
     _permissionPollingTimer = Timer.periodic(
       const Duration(seconds: 3),
-      (_) => add(const PageAccessLevelEvent.refreshAccessLevel()),
+      (_) {
+        if (isClosed) return;
+        add(const PageAccessLevelEvent.refreshAccessLevel());
+      },
     );
 
     // 监听 ShareSectionRefreshNotifier 信号
@@ -156,6 +161,7 @@ class PageAccessLevelBloc
     await _shareSectionRefreshSub?.cancel();
     _shareSectionRefreshSub =
         ShareSectionRefreshNotifier.stream.listen((_) {
+      if (isClosed) return;
       add(const PageAccessLevelEvent.refreshAccessLevel());
     });
   }

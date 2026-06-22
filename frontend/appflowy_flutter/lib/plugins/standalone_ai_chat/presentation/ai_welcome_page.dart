@@ -53,36 +53,36 @@ class AIWelcomePage extends StatelessWidget {
         color: AIWelcomeTheme.backgroundColor(context),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
             return Stack(
               children: [
-                SingleChildScrollView(
-                  reverse: true,
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: Column(
-                    children: [
-                      // 顶部头像和欢迎文字区域 / Header section.
-                      AIWelcomeHeader(
-                        onChatHistoryTap: onChatHistoryTap,
+                CustomScrollView(
+                  slivers: [
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Column(
+                        children: [
+                          // 顶部头像和欢迎文字区域 / Header section.
+                          AIWelcomeHeader(
+                            onChatHistoryTap: onChatHistoryTap,
+                          ),
+                          // 输入交互区域和使用提示 / Input area and usage hint.
+                          AIInputArea(
+                            onMessageSent: onMessageSent,
+                            onChatHistoryTap: onChatHistoryTap,
+                          ),
+                          // 底部提示文字 / Footer disclaimer.
+                          Container(
+                            margin: EdgeInsets.only(bottom: 64 + viewInsetsBottom),
+                            child: Text(
+                              '内容由 AI 生成，请仔细甄别',
+                              style: AIWelcomeTheme.tooltipStyle(context),
+                            ),
+                          ),
+                        ],
                       ),
-                      // 输入交互区域和使用提示 / Input area and usage hint.
-                      Expanded(
-                        child: AIInputArea(
-                          onMessageSent: onMessageSent,
-                          onChatHistoryTap: onChatHistoryTap,
-                        ),
-                      ),
-                      // 底部提示文字 / Footer disclaimer.
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 64),
-                        child: Text(
-                          '内容由 AI 生成，请仔细甄别',
-                          style: AIWelcomeTheme.tooltipStyle(context),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 Positioned(
                   top: 10,
