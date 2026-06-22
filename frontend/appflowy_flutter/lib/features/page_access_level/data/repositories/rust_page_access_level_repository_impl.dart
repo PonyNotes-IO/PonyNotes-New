@@ -68,8 +68,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   /// 1. local users → fullAccess
   /// 2. local workspace → fullAccess
   /// 3. 接收的发布文档 → readOnly（必须在 creator 检查之前，因为复制后 createdBy 是接收者自己）
-  /// 4. **显式共享权限**（HTTP API + FFI 缓存双层查询）→ 使用 API 返回值
-  /// 5. page creator → fullAccess（仅当 API 无记录时）
+  /// 4. **显式共享权限**（FFI 缓存查询，uuid/uid/email 三重匹配）→ 使用缓存值
+  /// 5. page creator → fullAccess（仅当用户确认不在共享列表中时）
   /// 6. 默认 → readOnly（不再对公共区域成员兜底 fullAccess）
   @override
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
@@ -109,35 +109,74 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     }
 
     final email = user.email;
+    final userId = user.id.toInt();
+    final userUuid = _extractUserUuid(user);
 
     // 通过 Rust FFI 查询本地 SQLite 缓存中的共享用户列表
     // 后台会自动同步云端数据并发送通知触发刷新
+    //
+    // 匹配优先级与 HTTP API 一致：uuid > uid > email
+    // 之前只用 email 匹配，当 email 不一致时会漏掉用户，
+    // 导致回退到 creator 检查给 readOnly 用户返回 fullAccess。
     final request = GetSharedUsersPayloadPB(viewId: pageId);
     final result = await FolderEventGetSharedUsers(request).send();
-    final sharedUsersAccessLevel = result.fold(
+    ShareAccessLevel? ffiAccessLevel;
+    bool userFoundInFfiCache = false;
+
+    result.fold(
       (success) {
-        return success.items
-            .firstWhereOrNull((item) => item.email == email)
-            ?.accessLevel
-            .shareAccessLevel;
+        for (final item in success.items) {
+          final itemEmail = item.email.trim().toLowerCase();
+          final emailMatches = email.isNotEmpty &&
+              itemEmail.isNotEmpty &&
+              itemEmail == email.trim().toLowerCase();
+          final itemId = item.userId;
+          final uuidMatches = userUuid != null &&
+              userUuid.isNotEmpty &&
+              itemId.isNotEmpty &&
+              itemId == userUuid;
+          final uidMatches = itemId.isNotEmpty &&
+              itemId == userId.toString();
+
+          if (emailMatches || uuidMatches || uidMatches) {
+            userFoundInFfiCache = true;
+            ffiAccessLevel = item.accessLevel.shareAccessLevel;
+            Log.debug('[PageAccessLevel] FFI cache match: '
+                'email=$email, uuid=$userUuid, uid=$userId, '
+                'itemId=$itemId, accessLevel=$ffiAccessLevel '
+                '(by ${uuidMatches ? "uuid" : (uidMatches ? "uid" : "email")})');
+            break;
+          }
+        }
       },
       (failure) {
-        Log.error('failed to get user access level: $failure, in page: $pageId');
-        return null;
+        Log.error('failed to get user access level from FFI: $failure, in page: $pageId');
       },
     );
 
-    if (sharedUsersAccessLevel != null) {
-      Log.debug('[PageAccessLevel] shared list returned: $sharedUsersAccessLevel for page: $pageId');
-      return FlowyResult.success(sharedUsersAccessLevel);
+    if (ffiAccessLevel != null) {
+      Log.debug('[PageAccessLevel] FFI cache returned: $ffiAccessLevel for page: $pageId');
+      return FlowyResult.success(ffiAccessLevel);
     }
 
+    // 关键保护：如果用户在 FFI 缓存的共享列表中存在但匹配失败
+    // （例如 email/uuid 格式不一致），不能回退到 creator 检查，
+    // 否则被设为 readOnly 的创建者会因匹配失败而获得 fullAccess。
+    if (userFoundInFfiCache) {
+      Log.warn('[PageAccessLevel] user found in FFI cache but accessLevel was null, '
+          'defaulting to readOnly for safety. page: $pageId, email: $email');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
+    }
+
+    // 用户不在共享列表中，回退到 creator 检查
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
       (_) => null,
     );
     if (view?.createdBy == user.id) {
+      Log.debug('[PageAccessLevel] user is page creator and NOT in shared list, '
+          'granting fullAccess. page: $pageId, userId: $userId');
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
