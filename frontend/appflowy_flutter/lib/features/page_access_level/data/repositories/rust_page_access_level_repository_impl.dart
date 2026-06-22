@@ -109,7 +109,6 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     }
 
     final email = user.email;
-    final userId = user.id.toInt();
 
     // 通过 Rust FFI 查询本地 SQLite 缓存中的共享用户列表
     // 后台会自动同步云端数据并发送通知触发刷新
@@ -118,9 +117,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final sharedUsersAccessLevel = result.fold(
       (success) {
         return success.items
-            .firstWhereOrNull((item) =>
-                item.userId != null &&
-                item.userId == userId.toString())
+            .firstWhereOrNull((item) => item.email == email)
             ?.accessLevel
             .shareAccessLevel;
       },
