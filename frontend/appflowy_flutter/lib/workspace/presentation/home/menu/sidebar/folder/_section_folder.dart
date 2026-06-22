@@ -240,6 +240,7 @@ class _SectionFolderState extends State<SectionFolder> {
         leftIconBuilder: isSpace
             ? (context, view) => SizedBox(width: HomeSpaceViewSizes.leftPadding)
             : null,
+        isTablet: PlatformInfo.isTablet,
         onSelected: (viewContext, selectedView) {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             viewContext,
@@ -315,6 +316,7 @@ class _SectionFolderState extends State<SectionFolder> {
       shouldLoadChildViews: false,
       onSelected: (_, __) {},
       isHoverEnabled: false,
+      isTablet: PlatformInfo.isTablet,
     );
   }
 

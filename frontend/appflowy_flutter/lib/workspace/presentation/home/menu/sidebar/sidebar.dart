@@ -971,7 +971,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                                   if (shouldCollapseSyncActions) ...[
                                     _buildHeaderActionsMoreButton(context),
                                     // Windows 窄侧边栏时收起按钮在"..."按钮右侧
-                                    if (Platform.isWindows) ...[
+                                    if (!Platform.isMacOS) ...[
                                       const HSpace(4),
                                       _buildInlineCollapseButton(context),
                                     ],
