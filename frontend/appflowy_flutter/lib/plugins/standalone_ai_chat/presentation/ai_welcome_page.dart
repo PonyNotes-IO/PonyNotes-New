@@ -9,6 +9,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +49,7 @@ class AIWelcomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AIWelcomeTheme.backgroundColor(context),
-      resizeToAvoidBottomInset: UniversalPlatform.isMobile,
+      resizeToAvoidBottomInset: UniversalPlatform.isMobile && !PlatformInfo.isTablet,
       body: ColoredBox(
         color: AIWelcomeTheme.backgroundColor(context),
         child: LayoutBuilder(

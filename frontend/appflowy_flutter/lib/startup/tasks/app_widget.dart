@@ -317,6 +317,13 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                           //  affected by the system setting.
                           data: MediaQuery.of(context).copyWith(
                             textScaler: TextScaler.linear(textScaleFactor),
+                            // 🚀 Pad端键盘动画全局优化：固定viewInsets为零
+                            // 原因：iPad/Android平板走桌面端布局，但有软键盘
+                            // 影响：键盘弹出时MediaQuery.viewInsets变化导致全树重建和布局抖动
+                            // 解决方案：在平板上固定viewInsets为零，让各个页面自行处理键盘
+                            viewInsets: PlatformInfo.isTablet
+                                ? EdgeInsets.zero
+                                : MediaQuery.of(context).viewInsets,
                           ),
                           child: overlayManagerBuilder(
                             context,

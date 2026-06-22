@@ -136,6 +136,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               ),
             ],
             child: Scaffold(
+              resizeToAvoidBottomInset: !PlatformInfo.isTablet,  // 防止全树重建
               floatingActionButton:
                   BlocBuilder<HomeSettingBloc, HomeSettingState>(
                 buildWhen: (previous, current) =>

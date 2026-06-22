@@ -39,6 +39,7 @@ import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
 const _preferHostTopRightActionsKey = 'preferHostTopRightActions';
@@ -896,6 +897,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     if (_isLoadingData && _showLegacyBlockingLoader) {
       Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
+        resizeToAvoidBottomInset: !PlatformInfo.isTablet,
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -911,6 +913,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
 
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
+      resizeToAvoidBottomInset: !PlatformInfo.isTablet,
       backgroundColor: _whiteboardCanvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
@@ -1208,7 +1211,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
     );
 
-    return ExcalidrawWebView(
+    final webView = ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
       sessionTraceId: _sessionTraceId,
@@ -1220,6 +1223,22 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
     );
+
+    // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建
+    // 原因：iPad/Android平板走桌面端布局，但有软键盘，导致MediaQuery.viewInsets变化
+    // 影响：WebView（PlatformView）布局抖动，键盘动画卡顿
+    // 解决方案：在平板上固定viewInsets为零，让WebView内部处理键盘
+    if (PlatformInfo.isTablet) {
+      return MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          viewInsets: EdgeInsets.zero,
+          padding: MediaQuery.of(context).padding,
+        ),
+        child: webView,
+      );
+    }
+
+    return webView;
   }
 
   /// 导出为源文件

@@ -440,7 +440,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       );
     }
     final appTheme = AppFlowyTheme.of(context);
-    return Center(
+    Widget desktopEditor = Center(
       child: BlocProvider.value(
         value: context.read<DocumentBloc>(),
         child: FloatingToolbar(
@@ -481,6 +481,22 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
         ),
       ),
     );
+
+    // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建
+    // 原因：iPad/Android平板走桌面端布局，但有软键盘，导致MediaQuery.viewInsets变化
+    // 影响：编辑器布局抖动，键盘动画卡顿
+    // 解决方案：在平板上固定viewInsets为零
+    if (PlatformInfo.isTablet) {
+      return MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          viewInsets: EdgeInsets.zero,
+          padding: MediaQuery.of(context).padding,
+        ),
+        child: desktopEditor,
+      );
+    }
+
+    return desktopEditor;
   }
 
   List<SelectionMenuItem> _customSlashMenuItems({
