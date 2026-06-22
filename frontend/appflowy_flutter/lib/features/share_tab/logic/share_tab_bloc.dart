@@ -18,6 +18,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
+import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 
 export 'share_tab_event.dart';
@@ -667,9 +668,30 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventUpdateSharedUsers event,
     Emitter<ShareTabState> emit,
   ) {
+    // FFI 通知下发的 SharedUserPB 不含 user_id 字段，
+    // 直接覆盖会导致后续权限变更因缺少 userId 而失败。
+    // 这里将 FFI 数据与现有数据合并：保留已有 userId。
+    final existingUsers = state.users;
+    final mergedUsers = event.users.map((ffiUser) {
+      if (ffiUser.userId != null && ffiUser.userId!.isNotEmpty) {
+        return ffiUser; // FFI 数据已有 userId，直接使用
+      }
+      // 按 email 从现有列表中查找并保留 userId
+      final existing = existingUsers.firstWhereOrNull(
+        (u) => u.email.trim().toLowerCase() ==
+            ffiUser.email.trim().toLowerCase(),
+      );
+      if (existing != null &&
+          existing.userId != null &&
+          existing.userId!.isNotEmpty) {
+        return ffiUser.copyWith(userId: existing.userId);
+      }
+      return ffiUser;
+    }).toList();
+
     emit(
       state.copyWith(
-        users: event.users,
+        users: mergedUsers,
       ),
     );
   }
