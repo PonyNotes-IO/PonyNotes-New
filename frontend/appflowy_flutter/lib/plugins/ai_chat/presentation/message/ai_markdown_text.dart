@@ -165,59 +165,64 @@ class _AppFlowyEditorMarkdownState extends State<_AppFlowyEditorMarkdown>
       alwaysDistributeSimpleTableColumnWidths: PlatformInfo.isDesktopOrTablet,
       customPadding: (node) => EdgeInsets.zero,
     );
-    return IntrinsicHeight(
-      child: AppFlowyEditor(
-        shrinkWrap: true,
-        // the editor is not editable in the chat
-        editable: false,
-        disableKeyboardService: PlatformInfo.isMobile,
-        disableSelectionService: PlatformInfo.isMobile,
-        editorStyle: editorStyle,
-        editorScrollController: scrollController,
-        blockComponentBuilders: blockBuilders,
-        commandShortcutEvents: [customCopyCommand],
-        disableAutoScroll: true,
-        editorState: editorState,
-        blockWrapper: (
-          context, {
-          required Node node,
-          required Widget child,
-        }) {
-          if (!widget.withAnimation) {
-            return child;
-          }
+    // 不要用 IntrinsicHeight 包裹编辑器：
+    // 编辑器内容（markdown 块）里存在 LayoutBuilder，而 LayoutBuilder 不支持
+    // intrinsic 尺寸测量。IntrinsicHeight 在布局阶段会对子树做 intrinsic 测量，
+    // 经过编辑器 Overlay(_RenderTheatre) 委托一路下探到 LayoutBuilder 时抛
+    // "LayoutBuilder does not support returning intrinsic dimensions"，
+    // 导致整条 AI 聊天气泡 hasSize 级联崩溃（Flutter 3.35）。
+    // 配合 PonyNotes fork 的 _RenderTheatre 补丁（无限高度约束下按内容收缩），
+    // 编辑器在不限高的聊天列表中可直接自适应高度，无需 IntrinsicHeight。
+    return AppFlowyEditor(
+      shrinkWrap: true,
+      // the editor is not editable in the chat
+      editable: false,
+      disableKeyboardService: PlatformInfo.isMobile,
+      disableSelectionService: PlatformInfo.isMobile,
+      editorStyle: editorStyle,
+      editorScrollController: scrollController,
+      blockComponentBuilders: blockBuilders,
+      commandShortcutEvents: [customCopyCommand],
+      disableAutoScroll: true,
+      editorState: editorState,
+      blockWrapper: (
+        context, {
+        required Node node,
+        required Widget child,
+      }) {
+        if (!widget.withAnimation) {
+          return child;
+        }
 
-          if (!_animations.containsKey(node.id)) {
-            final duration = PlatformInfo.isMobile
-                ? const Duration(milliseconds: 800)
-                : const Duration(milliseconds: 1600);
-            final controller = AnimationController(
-              vsync: this,
-              duration: duration,
-            );
-            final fade = Tween<double>(
-              begin: 0,
-              end: 1,
-            ).animate(controller);
-            _animations[node.id] = (controller, fade);
-            controller.forward();
-          }
-          final (controller, fade) = _animations[node.id]!;
-          return _AnimatedWrapper(
-            fade: fade,
-            child: child,
+        if (!_animations.containsKey(node.id)) {
+          final duration = PlatformInfo.isMobile
+              ? const Duration(milliseconds: 800)
+              : const Duration(milliseconds: 1600);
+          final controller = AnimationController(
+            vsync: this,
+            duration: duration,
           );
-        },
-        contextMenuItems: [
-          [
-            ContextMenuItem(
-              getName: LocaleKeys.document_plugins_contextMenu_copy.tr,
-              onPressed: (editorState) =>
-                  customCopyCommand.execute(editorState),
-            ),
-          ]
-        ],
-      ),
+          final fade = Tween<double>(
+            begin: 0,
+            end: 1,
+          ).animate(controller);
+          _animations[node.id] = (controller, fade);
+          controller.forward();
+        }
+        final (controller, fade) = _animations[node.id]!;
+        return _AnimatedWrapper(
+          fade: fade,
+          child: child,
+        );
+      },
+      contextMenuItems: [
+        [
+          ContextMenuItem(
+            getName: LocaleKeys.document_plugins_contextMenu_copy.tr,
+            onPressed: (editorState) => customCopyCommand.execute(editorState),
+          ),
+        ]
+      ],
     );
   }
 

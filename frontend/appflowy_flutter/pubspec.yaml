@@ -224,10 +224,12 @@ dependency_overrides:
       url: https://github.com/LucasXu0/flutter_url_protocol.git
       commit: 737681d
 
+  # 指向 PonyNotes fork：在 d830301 基础上 patch 了 _RenderTheatre，
+  # 使其支持无限高度约束，修复 AI 聊天气泡在 Flutter 3.35 下的 hasSize 级联崩溃。
   appflowy_editor:
     git:
-      url: https://github.com/AppFlowy-IO/appflowy-editor.git
-      ref: "d830301"
+      url: https://github.com/PonyNotes-IO/appflowy-editor.git
+      ref: "a4c9c0ba8d46a5ba191b3909400f2961c65cece6"
 
   appflowy_editor_plugins:
     git:
