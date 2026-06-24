@@ -34,7 +34,9 @@ class PageAccessLevelState {
   bool get shouldHideSpace => myRole == ShareRole.guest;
 
   bool get isEditable {
-    return accessLevel != ShareAccessLevel.readOnly && !isLocked;
+    return (accessLevel == ShareAccessLevel.fullAccess ||
+            accessLevel == ShareAccessLevel.readAndWrite) &&
+        !isLocked;
   }
 
   bool get isReadOnly => accessLevel == ShareAccessLevel.readOnly;

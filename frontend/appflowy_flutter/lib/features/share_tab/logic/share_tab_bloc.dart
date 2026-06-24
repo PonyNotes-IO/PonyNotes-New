@@ -96,7 +96,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventInitialize event,
     Emitter<ShareTabState> emit,
   ) async {
-
     _initFolderNotificationListener();
 
     final result = await repository.getCurrentUserProfile();
@@ -247,6 +246,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         users: users,
       ),
     );
+    // 通知侧边栏和 PageAccessLevelBloc 刷新（已有成员权限可能已变更）
+    ShareSectionRefreshNotifier.notify();
   }
 
   Future<void> _onRemove(
@@ -273,6 +274,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             users: users,
           ),
         );
+        // 通知侧边栏和 PageAccessLevelBloc 刷新
+        ShareSectionRefreshNotifier.notify();
       },
       (error) async {
         emit(
@@ -599,7 +602,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
                 _parseInt(memberMap['access_level']) ??
                 _parseInt(memberMap['role']) ??
                 1;
-            Log.info('[ShareTabBloc] parsed permissionId=$permissionId for email=$email');
+            Log.info(
+                '[ShareTabBloc] parsed permissionId=$permissionId for email=$email');
 
             // 将 permission_id 转换为 ShareAccessLevel
             // 后端定义：1=readOnly, 2=readAndComment, 3=readAndWrite, 4=fullAccess
@@ -678,8 +682,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       }
       // 按 email 从现有列表中查找并保留 userId
       final existing = existingUsers.firstWhereOrNull(
-        (u) => u.email.trim().toLowerCase() ==
-            ffiUser.email.trim().toLowerCase(),
+        (u) =>
+            u.email.trim().toLowerCase() == ffiUser.email.trim().toLowerCase(),
       );
       if (existing != null &&
           existing.userId != null &&
@@ -1141,6 +1145,9 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         if (notification == FolderNotification.DidUpdateSharedUsers) {
           final response = result.fold(
             (payload) {
+              if (payload.isEmpty) {
+                return null;
+              }
               final repeatedSharedUsers =
                   RepeatedSharedUserPB.fromBuffer(payload);
               return repeatedSharedUsers;

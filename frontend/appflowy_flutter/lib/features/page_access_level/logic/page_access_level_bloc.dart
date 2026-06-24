@@ -64,7 +64,8 @@ class PageAccessLevelBloc
   // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
   // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
   DateTime? _lastRefreshAccessLevelTime;
-  static const Duration _refreshAccessLevelThrottle = Duration(milliseconds: 500);
+  static const Duration _refreshAccessLevelThrottle =
+      Duration(milliseconds: 500);
 
   @override
   Future<void> close() async {
@@ -144,11 +145,11 @@ class PageAccessLevelBloc
       ),
     );
 
-    // 启动定时轮询（每 3 秒刷新一次权限状态）
+    // 启动兜底轮询（每 30 秒刷新一次权限状态）
     // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新
     _permissionPollingTimer?.cancel();
     _permissionPollingTimer = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(seconds: 30),
       (_) {
         if (isClosed) return;
         add(const PageAccessLevelEvent.refreshAccessLevel());
@@ -159,8 +160,7 @@ class PageAccessLevelBloc
     // 当 ShareTabBloc 修改权限或移除协作者后会调用 notify()，
     // 收到信号后立即刷新权限，确保编辑器实时反映权限变更。
     await _shareSectionRefreshSub?.cancel();
-    _shareSectionRefreshSub =
-        ShareSectionRefreshNotifier.stream.listen((_) {
+    _shareSectionRefreshSub = ShareSectionRefreshNotifier.stream.listen((_) {
       if (isClosed) return;
       add(const PageAccessLevelEvent.refreshAccessLevel());
     });
@@ -254,7 +254,8 @@ class PageAccessLevelBloc
 
     // 只在权限真正变化时才 emit，避免不必要的 UI 重建
     if (newAccessLevel != state.accessLevel) {
-      Log.debug('[PageAccessLevel] access level changed: ${state.accessLevel} -> $newAccessLevel');
+      Log.debug(
+          '[PageAccessLevel] access level changed: ${state.accessLevel} -> $newAccessLevel');
       emit(
         state.copyWith(
           accessLevel: newAccessLevel,

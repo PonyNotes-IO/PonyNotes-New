@@ -43,6 +43,9 @@ use crate::{errors::FlowyError, notification::*};
 use flowy_user_pub::session::Session;
 use flowy_user_pub::sql::*;
 
+const FOLDER_OBSERVABLE_SOURCE: &str = "Workspace";
+const DID_UPDATE_SHARED_USERS: i32 = 41;
+
 pub struct UserManager {
   pub(crate) cloud_service: Weak<dyn UserCloudServiceProvider>,
   pub(crate) store_preferences: Arc<KVStorePreferences>,
@@ -877,6 +880,30 @@ impl UserManager {
 
             // 通过弱引用获取 UserManager 并创建 Reminder
             if let Some(manager) = weak_manager.upgrade() {
+              if matches!(
+                notification.notification_type.as_str(),
+                "collab_permission_changed"
+                  | "collab_shared"
+                  | "collab_share_link_self_received"
+              ) {
+                if let Some(view_id) = serde_json::from_str::<Value>(&notification.payload_json)
+                  .ok()
+                  .and_then(|value| {
+                    value
+                      .get("view_id")
+                      .and_then(|view_id| view_id.as_str())
+                      .map(ToString::to_string)
+                  })
+                {
+                  flowy_notification::NotificationBuilder::new(
+                    &view_id,
+                    DID_UPDATE_SHARED_USERS,
+                    FOLDER_OBSERVABLE_SOURCE,
+                  )
+                  .send();
+                }
+              }
+
               // 创建 Reminder
               // 将 cloud 通知类型映射到 Flutter tab 分类：mention → mention，其他 → system
               let tab_type = match notification.notification_type.as_str() {

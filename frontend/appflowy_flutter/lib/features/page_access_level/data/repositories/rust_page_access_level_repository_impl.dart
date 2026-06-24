@@ -102,26 +102,40 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 因为 receive_published_collab 复制文档时 created_by 设为了接收者的 uid，
     // 如果先检查 creator，接收者会被误判为"创建者"而获得 fullAccess
     final authToken = _extractAuthToken(user);
-    final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId, authToken: authToken);
-    if (receivedReadonlyResult.isReceived && receivedReadonlyResult.isReadonly) {
-      Log.debug('page $pageId is a received published collab, setting to fullAccess');
+    final receivedReadonlyResult =
+        await _getReceivedPublishedCollabReadonly(pageId, authToken: authToken);
+    if (receivedReadonlyResult.isReceived &&
+        receivedReadonlyResult.isReadonly) {
+      Log.debug(
+          'page $pageId is a received published collab, setting to fullAccess');
       return FlowyResult.success(ShareAccessLevel.fullAccess);
+    }
+
+    final cloudAccessLevel = await _getCurrentUserAccessLevelFromCloud(
+      pageId,
+      authToken: authToken,
+    );
+    if (cloudAccessLevel != null) {
+      Log.debug(
+        '[PageAccessLevel] HTTP current permission returned: $cloudAccessLevel for page: $pageId',
+      );
+      return FlowyResult.success(cloudAccessLevel);
     }
 
     final email = user.email;
     final userId = user.id.toInt();
     final userUuid = _extractUserUuid(user);
-    final cloudAccessLevel = await _getAccessLevelFromCollabMembers(
+    final membersAccessLevel = await _getAccessLevelFromCollabMembers(
       pageId,
       email: email,
       userId: userId,
       authToken: authToken,
     );
-    if (cloudAccessLevel != null) {
+    if (membersAccessLevel != null) {
       Log.debug(
-        '[PageAccessLevel] HTTP collab members returned: $cloudAccessLevel for page: $pageId',
+        '[PageAccessLevel] HTTP collab members returned: $membersAccessLevel for page: $pageId',
       );
-      return FlowyResult.success(cloudAccessLevel);
+      return FlowyResult.success(membersAccessLevel);
     }
 
     // 通过 Rust FFI 查询本地 SQLite 缓存中的共享用户列表
@@ -149,8 +163,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
               userUuid.isNotEmpty &&
               itemId.isNotEmpty &&
               itemId == userUuid;
-          final uidMatches = itemId.isNotEmpty &&
-              itemId == userId.toString();
+          final uidMatches = itemId.isNotEmpty && itemId == userId.toString();
 
           if (emailMatches || uuidMatches || uidMatches) {
             userFoundInFfiCache = true;
@@ -164,13 +177,15 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         }
       },
       (failure) {
-        Log.error('failed to get user access level from FFI: $failure, in page: $pageId');
+        Log.error(
+            'failed to get user access level from FFI: $failure, in page: $pageId');
       },
     );
 
     final resolvedFfiLevel = ffiAccessLevel;
     if (resolvedFfiLevel != null) {
-      Log.debug('[PageAccessLevel] FFI cache returned: $resolvedFfiLevel for page: $pageId');
+      Log.debug(
+          '[PageAccessLevel] FFI cache returned: $resolvedFfiLevel for page: $pageId');
       return FlowyResult.success(resolvedFfiLevel);
     }
 
@@ -178,7 +193,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // （例如 email/uuid 格式不一致），不能回退到 creator 检查，
     // 否则被设为 readOnly 的创建者会因匹配失败而获得 fullAccess。
     if (userFoundInFfiCache) {
-      Log.warn('[PageAccessLevel] user found in FFI cache but accessLevel was null, '
+      Log.warn(
+          '[PageAccessLevel] user found in FFI cache but accessLevel was null, '
           'defaulting to fullAccess for safety. page: $pageId, email: $email');
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
@@ -227,7 +243,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    Log.debug('[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
+    Log.debug(
+        '[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
         'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
         'defaulting to fullAccess');
     return FlowyResult.success(ShareAccessLevel.fullAccess);
@@ -235,7 +252,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
 
   /// 查询接收的发布文档只读状态
   /// [authToken] 已解析好的 Bearer token，避免重复调用 GET_PROFILE
-  Future<({bool isReceived, bool isReadonly})> _getReceivedPublishedCollabReadonly(
+  Future<({bool isReceived, bool isReadonly})>
+      _getReceivedPublishedCollabReadonly(
     String pageId, {
     String? authToken,
   }) async {
@@ -259,20 +277,18 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         return (isReceived: false, isReadonly: false);
       }
 
-      final response = await http
-          .get(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 3),
-            onTimeout: () {
-              throw Exception('请求超时');
-            },
-          );
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
@@ -407,6 +423,99 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   /// 直接通过 HTTP 查询后端 collab members API 获取当前用户的权限。
   /// 绕过本地 SQLite 缓存，确保权限变更立即生效。
   /// API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
+  Future<ShareAccessLevel?> _getCurrentUserAccessLevelFromCloud(
+    String pageId, {
+    String? authToken,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.warn(
+            '[PageAccessLevel] Base URL is empty, cannot query current permission');
+        return null;
+      }
+
+      final workspaceResult = await UserBackendService.getCurrentWorkspace();
+      final workspaceId = workspaceResult.fold(
+        (s) => s.id,
+        (_) => null,
+      );
+
+      if (workspaceId == null) {
+        Log.warn('[PageAccessLevel] Cannot get current workspace ID');
+        return null;
+      }
+
+      final token = authToken ?? await _getAuthToken();
+      if (token == null || token.isEmpty) {
+        Log.warn(
+            '[PageAccessLevel] Auth token is empty, cannot query current permission');
+        return null;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/collab/$pageId/permission',
+      );
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('request timeout'),
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final code = body['code'] as int?;
+        if (code != null && code != 0) {
+          Log.warn(
+              '[PageAccessLevel] current permission API returned code: $code, body: ${response.body}');
+          return null;
+        }
+
+        final data = body['data'] as Map<String, dynamic>?;
+        if (data == null) {
+          Log.warn(
+              '[PageAccessLevel] current permission API returned data=null, body: ${response.body}');
+          return null;
+        }
+
+        final permissionId = data['permission_id'] as int?;
+        if (permissionId != null) {
+          return _mapPermissionIdToAccessLevel(permissionId);
+        }
+
+        final accessLevel = data['access_level'] as int?;
+        if (accessLevel != null) {
+          return _mapAccessLevelValueToAccessLevel(accessLevel);
+        }
+
+        Log.warn(
+            '[PageAccessLevel] current permission API returned unknown data: ${response.body}');
+        return null;
+      }
+
+      if (response.statusCode == 403) {
+        return ShareAccessLevel.readOnly;
+      }
+
+      if (response.statusCode != 404) {
+        Log.warn(
+            '[PageAccessLevel] current permission API failed: HTTP ${response.statusCode}, body: ${response.body}');
+      }
+      return null;
+    } catch (e) {
+      Log.warn('[PageAccessLevel] query current permission failed: $e');
+      return null;
+    }
+  }
+
   Future<ShareAccessLevel?> _getAccessLevelFromCollabMembers(
     String pageId, {
     required String email,
@@ -445,50 +554,55 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         path: '/api/workspace/$workspaceId/collab/$pageId/members',
       );
 
-      Log.debug('[PageAccessLevel] fetching collab members: $uri, email: $email');
+      Log.debug(
+          '[PageAccessLevel] fetching collab members: $uri, email: $email');
 
-      final response = await http
-          .get(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              throw Exception('请求超时');
-            },
-          );
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
 
-      Log.debug('[PageAccessLevel] collab members response: HTTP ${response.statusCode}');
+      Log.debug(
+          '[PageAccessLevel] collab members response: HTTP ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
         final code = body['code'] as int?;
         if (code != null && code != 0) {
-          Log.warn('[PageAccessLevel] collab members API returned error code: $code, body: ${response.body}');
+          Log.warn(
+              '[PageAccessLevel] collab members API returned error code: $code, body: ${response.body}');
           return null;
         }
 
         final data = body['data'] as List<dynamic>?;
         if (data == null) {
-          Log.warn('[PageAccessLevel] collab members API returned data=null, body: ${response.body}');
+          Log.warn(
+              '[PageAccessLevel] collab members API returned data=null, body: ${response.body}');
           return null;
         }
 
-        Log.debug('[PageAccessLevel] collab members count: ${data.length}, searching for uid=$userId, email=$email');
+        Log.debug(
+            '[PageAccessLevel] collab members count: ${data.length}, searching for uid=$userId, email=$email');
 
         // 在成员列表中查找当前用户
         // 优先通过 uid 匹配（最可靠），回退到 email 匹配
         for (final member in data) {
           final memberMap = member as Map<String, dynamic>;
           final memberUid = memberMap['uid'] as int?;
-          final memberEmail = (memberMap['email'] as String? ?? '').trim().toLowerCase();
+          final memberEmail =
+              (memberMap['email'] as String? ?? '').trim().toLowerCase();
           final permissionId = memberMap['permission_id'] as int? ?? 1;
 
-          Log.debug('[PageAccessLevel] member: uid=$memberUid, email=$memberEmail, permission_id=$permissionId');
+          Log.debug(
+              '[PageAccessLevel] member: uid=$memberUid, email=$memberEmail, permission_id=$permissionId');
 
           // 优先 uid 匹配
           final uidMatch = memberUid != null && memberUid == userId;
@@ -499,7 +613,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
 
           if (uidMatch || emailMatch) {
             final accessLevel = _mapPermissionIdToAccessLevel(permissionId);
-            Log.debug('[PageAccessLevel] MATCH FOUND: uid=$memberUid, email=$memberEmail, '
+            Log.debug(
+                '[PageAccessLevel] MATCH FOUND: uid=$memberUid, email=$memberEmail, '
                 'permission_id=$permissionId -> $accessLevel (by ${uidMatch ? "uid" : "email"})');
             return accessLevel;
           }
@@ -510,7 +625,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
             'members=${data.map((m) => 'uid=${(m as Map)['uid']}, email=${m['email']}, perm=${m['permission_id']}').toList()}');
         return null;
       } else {
-        Log.warn('[PageAccessLevel] collab members API failed: HTTP ${response.statusCode}, body: ${response.body}');
+        Log.warn(
+            '[PageAccessLevel] collab members API failed: HTTP ${response.statusCode}, body: ${response.body}');
         return null;
       }
     } catch (e) {
@@ -530,6 +646,21 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       case 3:
         return ShareAccessLevel.readAndWrite;
       case 4:
+        return ShareAccessLevel.fullAccess;
+      default:
+        return ShareAccessLevel.readOnly;
+    }
+  }
+
+  ShareAccessLevel _mapAccessLevelValueToAccessLevel(int accessLevel) {
+    switch (accessLevel) {
+      case 10:
+        return ShareAccessLevel.readOnly;
+      case 20:
+        return ShareAccessLevel.readAndComment;
+      case 30:
+        return ShareAccessLevel.readAndWrite;
+      case 50:
         return ShareAccessLevel.fullAccess;
       default:
         return ShareAccessLevel.readOnly;
