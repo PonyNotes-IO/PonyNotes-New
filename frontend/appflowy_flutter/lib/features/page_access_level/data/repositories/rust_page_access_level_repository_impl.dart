@@ -67,10 +67,10 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   /// 权限检查优先级（从高到低）：
   /// 1. local users → fullAccess
   /// 2. local workspace → fullAccess
-  /// 3. 接收的发布文档 → readOnly（必须在 creator 检查之前，因为复制后 createdBy 是接收者自己）
+  /// 3. 接收的发布文档 → fullAccess
   /// 4. **显式共享权限**（FFI 缓存查询，uuid/uid/email 三重匹配）→ 使用缓存值
   /// 5. page creator → fullAccess（仅当用户确认不在共享列表中时）
-  /// 6. 默认 → readOnly（不再对公共区域成员兜底 fullAccess）
+  /// 6. 默认 → fullAccess
   @override
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
     String pageId,
@@ -104,8 +104,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final authToken = _extractAuthToken(user);
     final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId, authToken: authToken);
     if (receivedReadonlyResult.isReceived && receivedReadonlyResult.isReadonly) {
-      Log.debug('page $pageId is a received published collab, setting to readonly');
-      return FlowyResult.success(ShareAccessLevel.readOnly);
+      Log.debug('page $pageId is a received published collab, setting to fullAccess');
+      return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
     final email = user.email;
@@ -179,8 +179,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 否则被设为 readOnly 的创建者会因匹配失败而获得 fullAccess。
     if (userFoundInFfiCache) {
       Log.warn('[PageAccessLevel] user found in FFI cache but accessLevel was null, '
-          'defaulting to readOnly for safety. page: $pageId, email: $email');
-      return FlowyResult.success(ShareAccessLevel.readOnly);
+          'defaulting to fullAccess for safety. page: $pageId, email: $email');
+      return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
     // FFI 缓存未命中：直接查后端 collab members API，绕过本地缓存延迟。
@@ -191,8 +191,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 允许 creator 兜底；如果 FFI 缓存为空（可能未同步），安全兜底到 readOnly。
     if (!ffiCacheHadData) {
       Log.warn('[PageAccessLevel] both FFI cache empty and HTTP miss, '
-          'defaulting to readOnly for safety. page: $pageId');
-      return FlowyResult.success(ShareAccessLevel.readOnly);
+          'defaulting to fullAccess for safety. page: $pageId');
+      return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
     // 用户确认不在共享列表中（FFI 有数据 + HTTP 也确认），回退到 creator 检查
@@ -227,14 +227,10 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
-    // 修复：不再对公共区域工作区成员默认返回 fullAccess。
-    // 之前的逻辑会导致被修改权限的用户（不在 collab members 列表中）
-    // 仍然获得 fullAccess，权限修改无法生效。
-    // 现在统一回退到 readOnly，确保只有显式授权的用户才能编辑。
     Log.debug('[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
         'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
-        'defaulting to readOnly');
-    return FlowyResult.success(ShareAccessLevel.readOnly);
+        'defaulting to fullAccess');
+    return FlowyResult.success(ShareAccessLevel.fullAccess);
   }
 
   /// 查询接收的发布文档只读状态

@@ -7,7 +7,7 @@ class PageAccessLevelState {
         isLocked: false,
         lockCounter: 0,
         sectionType: SharedSectionType.public,
-        accessLevel: ShareAccessLevel.readOnly,
+        accessLevel: ShareAccessLevel.fullAccess,
       );
 
   const PageAccessLevelState({
