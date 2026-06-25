@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/field/type_option/relation_type_option_cubit.dart';
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
@@ -320,8 +321,11 @@ class _SearchField extends StatelessWidget {
                 FlowyOverlay.show(
                   context: context,
                   builder: (BuildContext overlayContext) {
-                    return BlocProvider.value(
-                      value: context.read<UserWorkspaceBloc>(),
+                    return MultiBlocProvider(
+                      providers: [
+                        BlocProvider.value(value: context.read<HomeSettingBloc>()),
+                        BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+                      ],
                       child: RelatedRowDetailPage(
                         databaseId: context
                             .read<RelationCellBloc>()
@@ -399,12 +403,16 @@ class _RowListItem extends StatelessWidget {
       child: GestureDetector(
         onTap: () {
           final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+          final homeSettingBloc = context.read<HomeSettingBloc>();
           if (isSelected) {
             FlowyOverlay.show(
               context: context,
               builder: (BuildContext overlayContext) {
-                return BlocProvider.value(
-                  value: userWorkspaceBloc,
+                return MultiBlocProvider(
+                  providers: [
+                    BlocProvider.value(value: homeSettingBloc),
+                    BlocProvider.value(value: userWorkspaceBloc),
+                  ],
                   child: RelatedRowDetailPage(
                     databaseId: databaseId,
                     rowId: row.rowId,

@@ -3,6 +3,7 @@ import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/database/board/mobile_board_page.dart';
@@ -909,8 +910,11 @@ void _openCard({
 
   FlowyOverlay.show(
     context: context,
-    builder: (_) => BlocProvider.value(
-      value: context.read<UserWorkspaceBloc>(),
+    builder: (_) => MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: context.read<HomeSettingBloc>()),
+        BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+      ],
       child: RowDetailPage(
         databaseController: databaseController,
         rowController: rowController,

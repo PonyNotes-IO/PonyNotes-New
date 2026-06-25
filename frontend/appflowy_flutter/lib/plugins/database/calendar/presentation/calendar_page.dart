@@ -12,6 +12,7 @@ import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
 import 'package:appflowy/plugins/database/tab_bar/desktop/setting_menu.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:calendar_view/calendar_view.dart';
@@ -421,8 +422,11 @@ void showEventDetails({
   FlowyOverlay.show(
     context: context,
     builder: (BuildContext overlayContext) {
-      return BlocProvider.value(
-        value: context.read<UserWorkspaceBloc>(),
+      return MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: context.read<HomeSettingBloc>()),
+          BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+        ],
         child: RowDetailPage(
           rowController: rowController,
           databaseController: databaseController,

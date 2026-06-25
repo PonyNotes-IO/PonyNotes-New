@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/mobile/presentation/database/card/card_detail/mobile_card_detail_screen.dart';
 import 'package:appflowy/plugins/database/application/database_controller.dart';
 import 'package:appflowy/plugins/database/application/row/row_cache.dart';
@@ -178,8 +179,11 @@ class _EventCardState extends State<EventCard> {
 
               FlowyOverlay.show(
                 context: context,
-                builder: (_) => BlocProvider.value(
-                  value: context.read<UserWorkspaceBloc>(),
+                builder: (_) => MultiBlocProvider(
+                  providers: [
+                    BlocProvider.value(value: context.read<HomeSettingBloc>()),
+                    BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+                  ],
                   child: RowDetailPage(
                     databaseController: widget.databaseController,
                     rowController: rowController,
