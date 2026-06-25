@@ -15,6 +15,9 @@ class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
     EditorState editorState,
     List<CharacterShortcutEvent> characterShortcutEvents,
   ) async {
+    if (!editorState.editable) {
+      return true;
+    }
     // Only check on the mobile platform: check if the inserted text is a link, if so, try to paste it as a link preview
     final text = insertion.textInserted;
     if (PlatformInfo.isMobile && hrefRegex.hasMatch(text)) {
@@ -30,6 +33,9 @@ class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
     EditorState editorState,
     List<CharacterShortcutEvent> characterShortcutEvents,
   ) async {
+    if (!editorState.editable) {
+      return true;
+    }
     // Only check on the mobile platform: check if the replaced text is a link, if so, try to paste it as a link preview
     final text = replacement.replacementText;
     if (PlatformInfo.isMobile && hrefRegex.hasMatch(text)) {
@@ -56,6 +62,9 @@ class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
     TextEditingDeltaDeletion deletion,
     EditorState editorState,
   ) async {
+    if (!editorState.editable) {
+      return true;
+    }
     // check if the current selection is in a code block
     final (isInTableCell, selection, tableCellNode, node) =
         editorState.isCurrentSelectionInTableCell();

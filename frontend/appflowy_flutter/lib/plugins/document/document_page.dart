@@ -302,7 +302,11 @@ class _DocumentPageState extends State<DocumentPage>
     final wasEditable = _lastEditable;
     _lastEditable = isEditable;
     if (wasEditable == true && !isEditable) {
+      // 权限降级：清除选择、关闭键盘、分离文本输入，
+      // 确保 IME 不再积累"幽灵编辑"
+      editorState?.selection = null;
       editorState?.service.keyboardService?.closeKeyboard();
+      editorState?.service.selectionService.clearSelection();
       unawaited(documentBloc.discardLocalDocumentState());
     }
   }
