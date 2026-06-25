@@ -338,7 +338,8 @@ extension ViewExtension on ViewPB {
   }
 
   PageStyleCover? get cover {
-    if (layout != ViewLayoutPB.Document) {
+    // Folder 和 Notebook 本质上是文档，支持封面
+    if (layout.isDatabaseView || layout == ViewLayoutPB.Chat || layout == ViewLayoutPB.Whiteboard) {
       return null;
     }
 
@@ -418,7 +419,10 @@ extension ViewLayoutExtension on ViewLayoutPB {
       };
 
   bool get isDocumentView => switch (this) {
-        ViewLayoutPB.Document => true,
+        ViewLayoutPB.Document ||
+        ViewLayoutPB.Folder ||
+        ViewLayoutPB.Notebook =>
+          true,
         ViewLayoutPB.Chat ||
         ViewLayoutPB.Grid ||
         ViewLayoutPB.Board ||
