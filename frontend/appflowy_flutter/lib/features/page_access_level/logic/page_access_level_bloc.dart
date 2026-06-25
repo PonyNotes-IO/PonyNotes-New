@@ -9,6 +9,7 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_stat
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
@@ -145,16 +146,36 @@ class PageAccessLevelBloc
       ),
     );
 
+    // #4 非共享文档(无协作者)无需兜底轮询：权限不会变化，轮询纯浪费。
+    // 若之后被分享，DidUpdateSharedUsers 通知与 ShareSectionRefreshNotifier
+    // 仍会触发刷新，因此跳过轮询是安全的。查询失败时保守起见仍启用轮询。
+    var hasSharedUsers = true;
+    try {
+      final sharedResult = await FolderEventGetSharedUsers(
+        GetSharedUsersPayloadPB(viewId: view.id),
+      ).send();
+      hasSharedUsers = sharedResult.fold(
+        (success) => success.items.isNotEmpty,
+        (_) => true,
+      );
+    } catch (_) {
+      hasSharedUsers = true;
+    }
+
     // 启动兜底轮询（每 30 秒刷新一次权限状态）
     // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新
     _permissionPollingTimer?.cancel();
-    _permissionPollingTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) {
-        if (isClosed) return;
-        add(const PageAccessLevelEvent.refreshAccessLevel());
-      },
-    );
+    if (hasSharedUsers) {
+      _permissionPollingTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) {
+          if (isClosed) return;
+          add(const PageAccessLevelEvent.refreshAccessLevel());
+        },
+      );
+    } else {
+      Log.debug('[PageAccessLevel] 非共享文档，跳过权限轮询. page: ${view.id}');
+    }
 
     // 监听 ShareSectionRefreshNotifier 信号
     // 当 ShareTabBloc 修改权限或移除协作者后会调用 notify()，
