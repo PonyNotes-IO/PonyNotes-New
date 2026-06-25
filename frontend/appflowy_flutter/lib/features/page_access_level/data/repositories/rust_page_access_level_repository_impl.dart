@@ -195,8 +195,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     if (userFoundInFfiCache) {
       Log.warn(
           '[PageAccessLevel] user found in FFI cache but accessLevel was null, '
-          'defaulting to fullAccess for safety. page: $pageId, email: $email');
-      return FlowyResult.success(ShareAccessLevel.fullAccess);
+          'defaulting to readOnly for safety. page: $pageId, email: $email');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
     }
 
     // FFI 缓存未命中：直接查后端 collab members API，绕过本地缓存延迟。
@@ -207,8 +207,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 允许 creator 兜底；如果 FFI 缓存为空（可能未同步），安全兜底到 readOnly。
     if (!ffiCacheHadData) {
       Log.warn('[PageAccessLevel] both FFI cache empty and HTTP miss, '
-          'defaulting to fullAccess for safety. page: $pageId');
-      return FlowyResult.success(ShareAccessLevel.fullAccess);
+          'defaulting to readOnly for safety. page: $pageId');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
     }
 
     // 用户确认不在共享列表中（FFI 有数据 + HTTP 也确认），回退到 creator 检查
@@ -246,8 +246,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     Log.debug(
         '[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
         'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
-        'defaulting to fullAccess');
-    return FlowyResult.success(ShareAccessLevel.fullAccess);
+        'defaulting to readOnly (失败路径安全降级，非创建者不放开编辑权)');
+    return FlowyResult.success(ShareAccessLevel.readOnly);
   }
 
   /// 查询接收的发布文档只读状态
