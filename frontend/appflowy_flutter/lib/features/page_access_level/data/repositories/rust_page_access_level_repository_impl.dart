@@ -459,16 +459,36 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         path: '/api/workspace/$workspaceId/collab/$pageId/permission',
       );
 
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => throw Exception('request timeout'),
-      );
+      // 带重试的请求：DNS/网络瞬时失败（例如 App 启动时网络尚未就绪）不应
+      // 直接掉到上层的 fullAccess 兜底，否则被设为只读的用户会因一次网络抖动
+      // 恢复编辑权。仅对网络/超时错误重试；200/403/404 等明确响应不重试。
+      http.Response? response;
+      const maxAttempts = 3;
+      for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          response = await http.get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          ).timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('request timeout'),
+          );
+          break;
+        } catch (e) {
+          Log.warn(
+              '[PageAccessLevel] permission request attempt $attempt/$maxAttempts failed: $e');
+          if (attempt >= maxAttempts) {
+            return null;
+          }
+          await Future.delayed(Duration(milliseconds: 400 * attempt));
+        }
+      }
+      if (response == null) {
+        return null;
+      }
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
