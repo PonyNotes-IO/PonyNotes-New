@@ -461,7 +461,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                 tool: const SelectTool(selectMode: SelectMode.click),
               ),
               ToolOption(
-                icon: FontAwesomeIcons.vectorSquare,
+                icon: FontAwesomeIcons.crop,
                 label: '框选',
                 tool: const SelectTool(selectMode: SelectMode.rectangle),
               ),

@@ -436,7 +436,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
               const int openAttempts = 12;
               for (var attempt = 1; attempt <= openAttempts; attempt++) {
                 final retryResult =
-                    await _documentService.openDocument(documentId: documentId);
+                    await _documentService.openDocument(documentId: documentId, workspaceId: workspaceId);
                 if (retryResult.isSuccess) {
                   final retryData = retryResult.toNullable();
                   final retryDocument = retryData?.toDocument();
@@ -467,7 +467,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
             const int longOpenAttempts = 20; // ~10s with 500ms backoff
             for (var attempt = 1; attempt <= longOpenAttempts; attempt++) {
               final retryResult =
-                  await _documentService.openDocument(documentId: documentId);
+                  await _documentService.openDocument(documentId: documentId, workspaceId: workspaceId);
               if (retryResult.isSuccess) {
                 final retryData = retryResult.toNullable();
                 final retryDocument = retryData?.toDocument();
