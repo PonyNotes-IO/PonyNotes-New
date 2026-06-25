@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/row/row_service.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
@@ -208,8 +209,11 @@ class _GridPageState extends State<GridPage> {
 
       FlowyOverlay.show(
         context: context,
-        builder: (_) => BlocProvider.value(
-          value: context.read<UserWorkspaceBloc>(),
+        builder: (_) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: context.read<HomeSettingBloc>()),
+            BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+          ],
           child: RowDetailPage(
             databaseController: context.read<GridBloc>().databaseController,
             rowController: rowController,
@@ -245,8 +249,11 @@ class _GridPageState extends State<GridPage> {
           unawaited(
             FlowyOverlay.show(
               context: context,
-              builder: (_) => BlocProvider.value(
-                value: context.read<UserWorkspaceBloc>(),
+              builder: (_) => MultiBlocProvider(
+                providers: [
+                  BlocProvider.value(value: context.read<HomeSettingBloc>()),
+                  BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+                ],
                 child: RowDetailPage(
                   databaseController:
                       context.read<GridBloc>().databaseController,
@@ -645,8 +652,11 @@ class _GridRowsState extends State<_GridRows> {
             return const SizedBox.shrink();
           }
 
-          return BlocProvider.value(
-            value: context.read<UserWorkspaceBloc>(),
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider.value(value: context.read<HomeSettingBloc>()),
+              BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+            ],
             child: RowDetailPage(
               rowController: RowController(
                 viewId: viewId,

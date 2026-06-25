@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
@@ -441,8 +442,11 @@ class HiddenGroupPopupItemList extends StatelessWidget {
                     onPressed: () {
                       FlowyOverlay.show(
                         context: context,
-                        builder: (_) => BlocProvider.value(
-                          value: context.read<UserWorkspaceBloc>(),
+                        builder: (_) => MultiBlocProvider(
+                          providers: [
+                            BlocProvider.value(value: context.read<HomeSettingBloc>()),
+                            BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+                          ],
                           child: RowDetailPage(
                             databaseController: databaseController,
                             rowController: rowController,

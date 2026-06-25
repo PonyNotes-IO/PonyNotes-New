@@ -79,7 +79,7 @@ class _CalendarContextMenuOverlayState
   bool _showReminderPicker = false;
 
   static const double _menuWidth = 320;
-  static const double _menuMaxHeight = 480;
+  static const double _menuMaxHeight = 560;
 
   @override
   void initState() {
@@ -538,31 +538,40 @@ class _CalendarContextMenuOverlayState
   // ---------- 选项行（重要性 / 提醒） ----------
 
   Widget _buildOptionsRow(AFThemeExtension af, ThemeData theme) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildChip(
-          af,
-          theme,
-          icon: _isImportant ? Icons.star : Icons.star_border,
-          label: _isImportant ? '重要' : '标记重要',
-          isActive: _isImportant,
-          onTap: () => setState(() => _isImportant = !_isImportant),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            _buildChip(
+              af,
+              theme,
+              icon: _isImportant ? Icons.star : Icons.star_border,
+              label: _isImportant ? '重要' : '标记重要',
+              isActive: _isImportant,
+              onTap: () => setState(() => _isImportant = !_isImportant),
+            ),
+            _buildChip(
+              af,
+              theme,
+              icon: Icons.notifications_none,
+              label: _reminderOption == ReminderOption.none
+                  ? '提醒'
+                  : _reminderOption.label,
+              isActive: _reminderOption != ReminderOption.none,
+              onTap: () {
+                setState(() => _showReminderPicker = !_showReminderPicker);
+              },
+            ),
+          ],
         ),
-        _buildChip(
-          af,
-          theme,
-          icon: Icons.notifications_none,
-          label: _reminderOption == ReminderOption.none
-              ? '提醒'
-              : _reminderOption.label,
-          isActive: _reminderOption != ReminderOption.none,
-          onTap: () {
-            setState(() => _showReminderPicker = !_showReminderPicker);
-          },
-        ),
-        if (_showReminderPicker) _buildInlineReminderPicker(af, theme),
+        // 提醒选项列表放在 Wrap 外面，避免被 Wrap 的水平布局裁剪
+        if (_showReminderPicker) ...[
+          const SizedBox(height: 8),
+          _buildInlineReminderPicker(af, theme),
+        ],
       ],
     );
   }
