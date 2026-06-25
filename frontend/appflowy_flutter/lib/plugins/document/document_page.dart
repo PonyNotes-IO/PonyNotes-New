@@ -221,6 +221,14 @@ class _DocumentPageState extends State<DocumentPage>
 
               final editorState = state.editorState;
               this.editorState = editorState;
+              // 始终把当前权限同步到 editorState.editable。
+              // 监听器(BlocConsumer/BlocListener)只在权限"发生变化"时触发；
+              // 当文档打开时就已经是只读（无 fullAccess→readOnly 的变化），
+              // 监听器不会 fire，导致 editorState.editable 没被设为 false、
+              // 编辑器仍可输入。这里在每次 build 都同步，确保只读真正生效。
+              if (editorState != null) {
+                editorState.editable = pageAccessLevelState.isEditable;
+              }
               // editorState 就绪后注册到 ViewInfoBloc（仅首次），触发字数统计服务启动
               if (editorState != null && !_editorStateRegistered) {
                 _editorStateRegistered = true;
