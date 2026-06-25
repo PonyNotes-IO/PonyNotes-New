@@ -18,6 +18,10 @@ pub fn init(document_manager: Weak<DocumentManager>) -> AFPlugin {
     .event(DocumentEvent::CloseDocument, close_document_handler)
     .event(DocumentEvent::ApplyAction, apply_action_handler)
     .event(DocumentEvent::GetDocumentData, get_document_data_handler)
+    .event(
+      DocumentEvent::GetCloudDocumentData,
+      get_cloud_document_data_handler,
+    )
     .event(DocumentEvent::GetDocumentText, get_document_text_handler)
     .event(
       DocumentEvent::GetDocEncodedCollab,
@@ -137,4 +141,7 @@ pub enum DocumentEvent {
 
   #[event(input = "OpenDocumentPayloadPB", output = "DocumentTextPB")]
   GetDocumentText = 20,
+
+  #[event(input = "OpenDocumentPayloadPB", output = "DocumentDataPB")]
+  GetCloudDocumentData = 21,
 }

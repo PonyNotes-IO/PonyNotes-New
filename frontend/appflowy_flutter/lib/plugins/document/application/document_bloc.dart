@@ -550,6 +550,13 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
           return;
         }
 
+        if (!editorState.editable) {
+          Log.warn(
+            '[DocumentBloc] skip local transaction because document is read-only: $documentId',
+          );
+          return;
+        }
+
         if (enableDocumentInternalLog) {
           Log.trace(
             '[TransactionAdapter] 1. transaction before apply: ${transaction.hashCode}',
@@ -692,6 +699,13 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   Future<void> forceReloadDocumentState() {
     if (_documentCollabAdapter != null) {
       return _documentCollabAdapter!.syncV3();
+    }
+    return Future.value();
+  }
+
+  Future<void> discardLocalDocumentState() {
+    if (_documentCollabAdapter != null) {
+      return _documentCollabAdapter!.forceReload();
     }
     return Future.value();
   }

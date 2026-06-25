@@ -46,6 +46,18 @@ class DocumentService {
     return result;
   }
 
+  Future<FlowyResult<DocumentDataPB, FlowyError>> getCloudDocument({
+    required String documentId,
+    String? workspaceId,
+  }) async {
+    final payload = OpenDocumentPayloadPB()..documentId = documentId;
+    if (workspaceId != null) {
+      payload.workspaceId = workspaceId;
+    }
+    final result = await DocumentEventGetCloudDocumentData(payload).send();
+    return result;
+  }
+
   Future<FlowyResult<(DocumentDataPB, BlockPB, Node), FlowyError>>
       getDocumentNode({
     required String documentId,

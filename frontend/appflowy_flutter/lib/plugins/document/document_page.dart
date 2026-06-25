@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_backend/log.dart';
@@ -77,6 +79,7 @@ class _DocumentPageState extends State<DocumentPage>
   Selection? initialSelection;
   bool _handledDeletedInSpaceHub = false;
   bool _handledForceCloseNavigation = false;
+  bool? _lastEditable;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
   // 父级 view 是不是协作空间。null 表示尚未查询完成。
   // 用于决定"返回上一级文档"按钮是否显示：
@@ -144,13 +147,13 @@ class _DocumentPageState extends State<DocumentPage>
   /// 清理文档缓存
   void _clearDocumentCache() {
     Log.info('[DocumentPage] Clearing document cache on background');
-    
+
     // 清理图片缓存
     // ImageCache.instance.clear();
-    
+
     // 清理其他可能的缓存
     // ...
-    
+
     Log.info('[DocumentPage] Document cache cleared');
   }
 
@@ -181,7 +184,7 @@ class _DocumentPageState extends State<DocumentPage>
             return;
           }
 
-          editorState?.editable = pageAccessLevelState.isEditable;
+          _syncEditorEditable(pageAccessLevelState.isEditable);
         },
         builder: (context, pageAccessLevelState) {
           return BlocBuilder<DocumentBloc, DocumentState>(
@@ -227,7 +230,7 @@ class _DocumentPageState extends State<DocumentPage>
               // 监听器不会 fire，导致 editorState.editable 没被设为 false、
               // 编辑器仍可输入。这里在每次 build 都同步，确保只读真正生效。
               if (editorState != null) {
-                editorState.editable = pageAccessLevelState.isEditable;
+                _syncEditorEditable(pageAccessLevelState.isEditable);
               }
               // editorState 就绪后注册到 ViewInfoBloc（仅首次），触发字数统计服务启动
               if (editorState != null && !_editorStateRegistered) {
@@ -272,7 +275,7 @@ class _DocumentPageState extends State<DocumentPage>
                 listeners: [
                   BlocListener<PageAccessLevelBloc, PageAccessLevelState>(
                     listener: (context, state) {
-                      editorState.editable = state.isEditable;
+                      _syncEditorEditable(state.isEditable);
                     },
                   ),
                   BlocListener<ActionNavigationBloc, ActionNavigationState>(
@@ -291,6 +294,17 @@ class _DocumentPageState extends State<DocumentPage>
         },
       ),
     );
+  }
+
+  void _syncEditorEditable(bool isEditable) {
+    editorState?.editable = isEditable;
+
+    final wasEditable = _lastEditable;
+    _lastEditable = isEditable;
+    if (wasEditable == true && !isEditable) {
+      editorState?.service.keyboardService?.closeKeyboard();
+      unawaited(documentBloc.discardLocalDocumentState());
+    }
   }
 
   Widget buildEditorPage(
@@ -431,8 +445,7 @@ class _DocumentPageState extends State<DocumentPage>
         // macOS 上系统窗口按钮（关闭、最小化、最大化）占据约 88 像素宽度，
         // 需要留出足够空间避免按钮被遮挡
         // 其他平台使用较小的偏移量
-        final leftBase =
-            UniversalPlatform.isMacOS ? 88.0 : 16.0;
+        final leftBase = UniversalPlatform.isMacOS ? 88.0 : 16.0;
         final backButtonLeft = leftBase;
         final theme = AppFlowyTheme.of(context);
         return Stack(
@@ -451,8 +464,7 @@ class _DocumentPageState extends State<DocumentPage>
                       size: const Size.square(buttonSize),
                       color: theme.iconColorScheme.primary,
                     ),
-                    onPressed: () =>
-                        getIt<TabsBloc>().goBackToPreviousView(),
+                    onPressed: () => getIt<TabsBloc>().goBackToPreviousView(),
                   ),
                 ),
               ),

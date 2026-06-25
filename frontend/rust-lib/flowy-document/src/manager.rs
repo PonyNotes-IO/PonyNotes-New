@@ -23,7 +23,7 @@ use collab_integrate::collab_builder::{
 use collab_plugins::CollabKVDB;
 use dashmap::DashMap;
 use flowy_document_pub::cloud::DocumentCloudService;
-use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
+use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use flowy_storage_pub::storage::{CreatedUpload, StorageService};
 use lib_infra::util::timestamp;
 use tracing::{event, instrument};
@@ -177,7 +177,7 @@ impl DocumentManager {
             .encode_collab()
             .map_err(internal_error)?;
           return Ok(encoded);
-        }
+        },
         Err(err) => {
           // If data is invalid (incomplete collab), try to regenerate using provided data (or default)
           if err.is_invalid_data() {
@@ -206,7 +206,7 @@ impl DocumentManager {
               format!("document {} already exists", doc_id),
             ));
           }
-        }
+        },
       }
     } else {
       let encoded_collab = doc_state_from_document_data(doc_id, data).await?;
@@ -343,6 +343,25 @@ impl DocumentManager {
     let document = document.read().await;
     document.get_document_data().map_err(internal_error)
   }
+
+  pub async fn get_cloud_document_data(
+    &self,
+    doc_id: &Uuid,
+    workspace_id: Option<Uuid>,
+  ) -> FlowyResult<DocumentData> {
+    let workspace_id = workspace_id.unwrap_or(self.user_service.workspace_id()?);
+    self
+      .cloud_service
+      .get_document_data(doc_id, &workspace_id)
+      .await?
+      .ok_or_else(|| {
+        FlowyError::new(
+          ErrorCode::RecordNotFound,
+          format!("document {} not found in cloud", doc_id),
+        )
+      })
+  }
+
   pub async fn get_document_text(&self, doc_id: &Uuid) -> FlowyResult<String> {
     let document = self.get_document(doc_id).await?;
     let document = document.read().await;
@@ -375,7 +394,9 @@ impl DocumentManager {
       return Ok(());
     }
 
-    let _ = self.create_document_instance(doc_id, true, workspace_id).await?;
+    let _ = self
+      .create_document_instance(doc_id, true, workspace_id)
+      .await?;
     Ok(())
   }
 

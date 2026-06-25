@@ -111,9 +111,12 @@ class DocumentCollabAdapter {
   }
 
   Future<void> forceReload() async {
-    final result = await _service.getDocument(documentId: docId);
+    final result = await _service.getCloudDocument(documentId: docId);
     final document = result.fold((s) => s.toDocument(), (f) => null);
     if (document == null) {
+      Log.warn(
+        '[DocumentCollabAdapter] failed to load cloud document for $docId, skip force reload',
+      );
       return;
     }
 

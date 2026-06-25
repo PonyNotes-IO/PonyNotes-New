@@ -20,7 +20,7 @@ use crate::parser::parser_entities::{
 };
 use crate::{manager::DocumentManager, parser::json::parser::JsonToDocumentParser};
 use flowy_error::{FlowyError, FlowyResult};
-use lib_dispatch::prelude::{AFPluginData, AFPluginState, DataResult, data_result_ok};
+use lib_dispatch::prelude::{data_result_ok, AFPluginData, AFPluginState, DataResult};
 use lib_infra::sync_trace;
 use tracing::instrument;
 use uuid::Uuid;
@@ -107,6 +107,25 @@ pub(crate) async fn get_document_data_handler(
   let params: OpenDocumentParams = data.into_inner().try_into()?;
   let doc_id = params.document_id;
   let document_data = manager.get_document_data(&doc_id).await?;
+  data_result_ok(DocumentDataPB::from(document_data))
+}
+
+pub(crate) async fn get_cloud_document_data_handler(
+  data: AFPluginData<OpenDocumentPayloadPB>,
+  manager: AFPluginState<Weak<DocumentManager>>,
+) -> DataResult<DocumentDataPB, FlowyError> {
+  let manager = upgrade_document(manager)?;
+  let payload = data.into_inner();
+  let workspace_id = if payload.workspace_id.is_empty() {
+    None
+  } else {
+    uuid::Uuid::parse_str(&payload.workspace_id).ok()
+  };
+  let params: OpenDocumentParams = payload.try_into()?;
+  let doc_id = params.document_id;
+  let document_data = manager
+    .get_cloud_document_data(&doc_id, workspace_id)
+    .await?;
   data_result_ok(DocumentDataPB::from(document_data))
 }
 
