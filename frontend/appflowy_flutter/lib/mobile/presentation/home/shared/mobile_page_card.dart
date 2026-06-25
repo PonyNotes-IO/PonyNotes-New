@@ -323,6 +323,10 @@ class _ViewCover extends StatelessWidget {
           FlowySvgs.m_chat_thumbnail_m,
           isLightMode ? const Color(0x66FFE6FD) : const Color(0x33987195)
         ),
+      ViewLayoutPB.Folder || ViewLayoutPB.Notebook => (
+          FlowySvgs.m_document_thumbnail_m,
+          isLightMode ? const Color(0xCCEDFBFF) : const Color(0x33658B90)
+        ),
       _ => (
           FlowySvgs.m_document_thumbnail_m,
           isLightMode ? Colors.black : Colors.white

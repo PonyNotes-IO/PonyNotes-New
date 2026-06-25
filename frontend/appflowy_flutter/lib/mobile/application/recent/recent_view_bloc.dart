@@ -58,8 +58,8 @@ class RecentViewBloc extends Bloc<RecentViewEvent, RecentViewState> {
               },
             );
 
-            // only document supports the cover
-            if (view.layout != ViewLayoutPB.Document) {
+            // Document、Folder、Notebook 都支持封面
+            if (view.layout.isDatabaseView || view.layout == ViewLayoutPB.Chat || view.layout == ViewLayoutPB.Whiteboard) {
               emit(
                 state.copyWith(
                   name: view.name,

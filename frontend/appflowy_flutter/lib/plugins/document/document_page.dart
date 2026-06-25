@@ -445,7 +445,7 @@ class _DocumentPageState extends State<DocumentPage>
         // macOS 上系统窗口按钮（关闭、最小化、最大化）占据约 88 像素宽度，
         // 需要留出足够空间避免按钮被遮挡
         // 其他平台使用较小的偏移量
-        final leftBase = UniversalPlatform.isMacOS ? 88.0 : 16.0;
+        final leftBase = UniversalPlatform.isMacOS ? 48.0 : 16.0;
         final backButtonLeft = leftBase;
         final theme = AppFlowyTheme.of(context);
         return Stack(

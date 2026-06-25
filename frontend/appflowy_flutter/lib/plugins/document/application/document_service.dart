@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -30,8 +32,19 @@ class DocumentService {
     if (workspaceId != null) {
       payload.workspaceId = workspaceId;
     }
-    final result = await DocumentEventOpenDocument(payload).send();
-    return result;
+    try {
+      final result = await DocumentEventOpenDocument(payload)
+          .send()
+          .timeout(const Duration(seconds: 30));
+      return result;
+    } on TimeoutException {
+      Log.error(
+        '[DocumentService] openDocument timed out for documentId: $documentId',
+      );
+      return FlowyResult.failure(
+        FlowyError(msg: 'openDocument timed out after 30s'),
+      );
+    }
   }
 
   Future<FlowyResult<DocumentDataPB, FlowyError>> getDocument({
