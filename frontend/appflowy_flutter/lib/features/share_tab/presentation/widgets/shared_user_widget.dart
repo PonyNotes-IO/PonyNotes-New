@@ -92,7 +92,7 @@ class SharedUserWidget extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     final subtitle = user.email.trim().isNotEmpty
         ? user.email
-        : user.uid ?? user.userId ?? '';
+        : user.uid ?? '';
 
     if (subtitle.isEmpty) {
       return const SizedBox.shrink();
