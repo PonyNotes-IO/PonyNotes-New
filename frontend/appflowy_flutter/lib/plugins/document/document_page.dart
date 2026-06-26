@@ -299,12 +299,16 @@ class _DocumentPageState extends State<DocumentPage>
                     listenWhen: (previous, current) =>
                         previous.currentUserRole != current.currentUserRole,
                     listener: (context, workspaceState) {
-                      _syncEditorEditable(
-                        _canEditDocument(
-                          context.read<PageAccessLevelBloc>().state,
-                          _effectiveWorkspaceRole(workspaceState),
-                        ),
+                      final pageState =
+                          context.read<PageAccessLevelBloc>().state;
+                      final role = _effectiveWorkspaceRole(workspaceState);
+                      final canEdit = _canEditDocument(pageState, role);
+                      Log.debug(
+                        '[PageAccessLevel] currentUserRole changed -> '
+                        'page=${widget.view.id}, role=$role, '
+                        'pageIsEditable=${pageState.isEditable}, canEdit=$canEdit',
                       );
+                      _syncEditorEditable(canEdit);
                     },
                   ),
                   BlocListener<ActionNavigationBloc, ActionNavigationState>(
@@ -337,7 +341,13 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   void _syncEditorEditable(bool isEditable) {
+    final previousEditorEditable = editorState?.editable;
     editorState?.editable = isEditable;
+    Log.debug(
+      '[PageAccessLevel] _syncEditorEditable page=${widget.view.id} '
+      'requested=$isEditable, editorState.editable before=$previousEditorEditable '
+      'after=${editorState?.editable}, hasEditorState=${editorState != null}',
+    );
 
     final wasEditable = _lastEditable;
     _lastEditable = isEditable;
