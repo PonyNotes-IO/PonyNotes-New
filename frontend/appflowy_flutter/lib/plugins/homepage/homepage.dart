@@ -606,8 +606,15 @@ class _HomePageState extends State<HomePage> {
 
       result.fold(
         (view) {
-          // 成功创建，打开新创建的视图
-          _openView(view);
+          // 成功创建，导航到最近访问空间并选中新笔记
+          final spaceHubPlugin = recentAccessSpace.plugin(initialSelectedView: view);
+          context.read<TabsBloc>().add(
+                TabsEvent.openPlugin(
+                  plugin: spaceHubPlugin,
+                  view: recentAccessSpace,
+                  setLatest: true,
+                ),
+              );
 
           // 显示成功消息
           if (mounted) {
