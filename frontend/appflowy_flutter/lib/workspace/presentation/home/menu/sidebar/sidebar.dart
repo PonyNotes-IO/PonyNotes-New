@@ -524,9 +524,7 @@ class _SidebarState extends State<_Sidebar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  // 鏂囦欢搴?
                   SidebarTrashItem(),
-                  VSpace(6),
                   SidebarSettingsButton(),
                 ],
               ),
@@ -733,7 +731,7 @@ class _SidebarSearchButton extends StatelessWidget {
               color: searchBorderColor,
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Row(
             children: [
               const FlowySvg(
@@ -937,7 +935,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                                             .colorScheme
                                             .tertiary,
                                         overflow: TextOverflow.ellipsis,
-                                        fontSize: 15.0,
+                                        fontSize: 14.0,
                                       ),
                                     ),
                                     const HSpace(7),

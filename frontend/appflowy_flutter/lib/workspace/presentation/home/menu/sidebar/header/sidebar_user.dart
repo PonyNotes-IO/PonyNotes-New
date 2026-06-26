@@ -63,7 +63,7 @@ class SidebarUser extends StatelessWidget {
       name,
       overflow: TextOverflow.ellipsis,
       color: Theme.of(context).colorScheme.tertiary,
-      fontSize: 15.0,
+      fontSize: 14.0,
     );
   }
 

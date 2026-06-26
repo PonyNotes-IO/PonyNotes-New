@@ -20,7 +20,6 @@ class SidebarCalendarButton extends StatelessWidget {
           child: AFGhostIconTextButton.primary(
             text: '日历',
             mainAxisAlignment: MainAxisAlignment.start,
-            size: AFButtonSize.l,
             onTap: () => _openCalendar(context, state),
             padding: sidebarEntryPadding,
             borderRadius: theme.borderRadius.s,

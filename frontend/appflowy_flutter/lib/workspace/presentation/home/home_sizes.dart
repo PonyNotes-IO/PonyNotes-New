@@ -11,9 +11,9 @@ class HomeSizes {
   static const double dialogMaxWidth = 420;
   static const double dialogMaxHeight = 272;
   static const double okCancelDialogMaxWidth = 520;
-  static double get workspaceSectionHeight => 42 * Sizes.hitScale;
-  static double get searchSectionHeight => 40 * Sizes.hitScale;
-  static double get newPageSectionHeight => 40 * Sizes.hitScale;
+  static double get workspaceSectionHeight => 38 * Sizes.hitScale;
+  static double get searchSectionHeight => 36 * Sizes.hitScale;
+  static double get newPageSectionHeight => 36 * Sizes.hitScale;
   static double get topActionBarHeight => 40 * Sizes.hitScale;
   static double get topActionBarItemExtent => 36 * Sizes.hitScale;
   static const double minimumSidebarWidth = 224;
@@ -58,7 +58,7 @@ class HomeRadii {
 
 class HomeSpaceViewSizes {
   static const double leftPadding = 16.0;
-  static double get viewHeight => 40 * Sizes.hitScale;
+  static double get viewHeight => 32 * Sizes.hitScale;
 
   // mobile, m represents mobile
   static const double mViewHeight = 48.0;

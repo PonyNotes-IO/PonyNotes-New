@@ -783,7 +783,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   Widget _buildNameText() {
     final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 14.0,
+          fontSize: 12.0,
           height: 1.35,
           leadingDistribution: TextLeadingDistribution.even,
         );
@@ -826,8 +826,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           controller: _renameController,
           focusNode: _renameFocusNode,
           style: const TextStyle(
-            fontSize: 14.0,
+            fontSize: 12.0,
             height: 1.35,
+            fontWeight: FontWeight.w800,
             leadingDistribution: TextLeadingDistribution.even,
           ),
           decoration: InputDecoration(

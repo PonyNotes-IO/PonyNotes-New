@@ -25,7 +25,6 @@ class SidebarHomeButton extends StatelessWidget {
           child: AFGhostIconTextButton.primary(
             text: '主页',
             mainAxisAlignment: MainAxisAlignment.start,
-            size: AFButtonSize.l,
             onTap: () => _openHomePage(context, state),
             padding: sidebarHomeEntryPadding,
             borderRadius: theme.borderRadius.s,

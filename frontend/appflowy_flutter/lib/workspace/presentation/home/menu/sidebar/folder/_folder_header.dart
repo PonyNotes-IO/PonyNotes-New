@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../shared/sidebar_entry_style.dart';
+
 class FolderHeader extends StatefulWidget {
   const FolderHeader({
     super.key,
@@ -83,9 +85,8 @@ class _FolderHeaderState extends State<FolderHeader> {
             AFGhostIconTextButton.primary(
               text: widget.title,
               mainAxisAlignment: MainAxisAlignment.start,
-              size: AFButtonSize.l,
               onTap: widget.onPressed,
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: sidebarEntryPaddingNoIcon,
               borderRadius: theme.borderRadius.s,
               iconBuilder: (context, isHover, disabled) => SizedBox.shrink(),
               showExpandArrow: true,

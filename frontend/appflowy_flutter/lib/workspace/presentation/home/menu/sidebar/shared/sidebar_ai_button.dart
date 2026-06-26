@@ -25,7 +25,6 @@ class SidebarAiButton extends StatelessWidget {
           child: AFGhostIconTextButton.primary(
             text: '问AI',
             mainAxisAlignment: MainAxisAlignment.start,
-            size: AFButtonSize.l,
             onTap: () => _openAiWelcomePage(context),
             padding: sidebarEntryPadding,
             borderRadius: theme.borderRadius.s,

@@ -18,6 +18,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -652,7 +653,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                             _isDragHovering || candidateData.isNotEmpty;
                         return AnimatedContainer(
                           duration: const Duration(milliseconds: 120),
-                          height: 44,
                           decoration: BoxDecoration(
                             color: isActive
                                 ? Theme.of(context)
@@ -667,14 +667,13 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                           child: AFGhostIconTextButton.primary(
                             text: '共享',
                             mainAxisAlignment: MainAxisAlignment.start,
-                            size: AFButtonSize.l,
                             onTap: () {
                               setState(() => _isExpanded = !_isExpanded);
                               if (_isExpanded) {
                                 _loadUserSharedNotes(showLoading: false);
                               }
                             },
-                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            padding: sidebarEntryPaddingNoIcon,
                             borderRadius: theme.borderRadius.s,
                             iconBuilder: (context, isHover, disabled) =>
                                 const SizedBox.shrink(),

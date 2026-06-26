@@ -61,7 +61,7 @@ class SettingsMenuElement extends StatelessWidget {
     final hasTrailingText = trailingText != null && trailingText!.isNotEmpty;
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
+      constraints: const BoxConstraints(minHeight: 36),
       child: AFBaseButton(
         onTap: () {
           if (!isEnabled) return;

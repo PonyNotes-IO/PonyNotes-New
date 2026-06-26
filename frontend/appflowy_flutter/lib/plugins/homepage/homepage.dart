@@ -254,16 +254,16 @@ class _HomePageState extends State<HomePage> {
           Container(
             color: theme.colorScheme.surface,
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
+              padding: const EdgeInsets.fromLTRB(90, 60.0, 90, 32.0),
               child: Column(
                 children: [
                   // 问候语区域 - 右对齐，与头像一起
                   _buildGreetingSection(greeting, userName),
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 36),
                   // 问AI区域标题
                   Container(
                     alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(bottom: 16.0),
+                    padding: const EdgeInsets.only(bottom: 12.0),
                     child: Row(
                       children: [
                         FlowySvg(
@@ -275,7 +275,7 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           "问AI",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: appTheme.textColorScheme.primary,
                           ),
@@ -311,12 +311,12 @@ class _HomePageState extends State<HomePage> {
                       );
                     },
                   ),
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 36),
 
                   // 最近访问标题
                   Container(
                     alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(bottom: 16.0),
+                    padding: const EdgeInsets.only(bottom: 12.0),
                     child: Row(
                       children: [
                         Icon(
@@ -328,7 +328,7 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           "最近访问",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: appTheme.textColorScheme.primary,
                           ),
@@ -339,12 +339,12 @@ class _HomePageState extends State<HomePage> {
 
                   // 最近访问
                   _buildRecentSection(),
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 36),
 
                   // 待办计划标题
                   Container(
                     alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(bottom: 16.0),
+                    padding: const EdgeInsets.only(bottom: 12.0),
                     child: Row(
                       children: [
                         FlowySvg(
@@ -356,7 +356,7 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           "待办计划",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: appTheme.textColorScheme.primary,
                           ),

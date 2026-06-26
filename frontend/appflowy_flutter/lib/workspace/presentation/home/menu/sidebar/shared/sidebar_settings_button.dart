@@ -5,6 +5,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/af_focus_manager.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/settings/settings_dialog.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
@@ -58,16 +59,12 @@ class _SidebarSettingsButtonState extends State<SidebarSettingsButton> {
           child: AFGhostIconTextButton.primary(
             text: '设置',
             mainAxisAlignment: MainAxisAlignment.start,
-            size: AFButtonSize.l,
             onTap: () => showSettingsDialog(
               context,
               userWorkspaceBloc: _userWorkspaceBloc,
               passwordBloc: _passwordBloc,
             ),
-            padding: EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 11,
-            ),
+            padding: sidebarEntryPadding,
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
               FlowySvgs.icon_settings_s,
