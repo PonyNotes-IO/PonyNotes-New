@@ -182,50 +182,6 @@ class WhiteboardDataService {
     return fileSuccess;
   }
 
-  /// Save dirty elements using merge_elements type (element-level incremental merge)
-  /// Only sends changed elements, server merges by element id + version
-  Future<bool> saveWhiteboardElements(
-    String viewId,
-    Map<String, dynamic> data, {
-    String? traceId,
-    String? sessionId,
-  }) async {
-    final stopwatch = Stopwatch()..start();
-
-    // Process files if present
-    if (data.containsKey('files') && data['files'] is Map) {
-      final files = data['files'] as Map<String, dynamic>;
-      if (files.isNotEmpty) {
-        try {
-          final processedFiles =
-              await WhiteboardImageUploadService.processFilesForUpload(files);
-          data['files'] = processedFiles;
-        } catch (e) {
-          Log.warn('[WBCollab][WhiteboardDataService] Image upload failed: $e');
-        }
-      }
-    }
-
-    final collabData = _stripDataURLsForCollab(data);
-    Log.info(
-        '[WBCollab][WhiteboardDataService] Saving whiteboard elements (merge): $viewId, '
-        'elements count: ${(collabData['elements'] as List?)?.length ?? 0}');
-
-    final collabSuccess = await _saveToCollab(
-      viewId,
-      jsonEncode({'type': 'merge_elements', 'data': jsonEncode(collabData)}),
-    );
-
-    if (collabSuccess) {
-      Log.info(
-          '[WBCollab][WhiteboardDataService] Merge elements saved in ${stopwatch.elapsedMilliseconds}ms');
-      return true;
-    }
-
-    Log.warn('[WBCollab][WhiteboardDataService] Merge elements save failed');
-    return false;
-  }
-
   Map<String, dynamic> _stripDataURLsForCollab(Map<String, dynamic> data) {
     final result = Map<String, dynamic>.from(data);
 

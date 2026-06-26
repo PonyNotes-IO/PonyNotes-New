@@ -1044,33 +1044,6 @@
         }
     };
 
-    // ✅ Ctrl+S 拦截（早期注册，双重保险）
-    // 在 flutter_bridge.js 中尽早注册，确保在 Excalidraw 初始化之前就拦截
-    // 与 initialUserScripts 中的拦截形成双重保险
-    (function installCtrlSInterceptor() {
-        if (window.__ponynotesCtrlSInterceptorInstalled) return;
-        window.__ponynotesCtrlSInterceptorInstalled = true;
-
-        document.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                console.log('[PonyNotes] Ctrl+S intercepted by flutter_bridge.js');
-                try {
-                    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                        window.flutter_inappwebview.callHandler('onSave');
-                    }
-                } catch (err) {
-                    console.error('[PonyNotes] onSave callHandler failed:', err);
-                }
-                return false;
-            }
-        }, true); // capture: true，确保在捕获阶段就拦截
-
-        console.log('[PonyNotes] ✅ Ctrl+S interceptor installed (flutter_bridge.js)');
-    })();
-
     installContextMenuFontPatch();
     installContextMenuPastePositionPatch();
     installHighQualityClipboardPatch();
