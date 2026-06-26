@@ -35,7 +35,6 @@ class ExcalidrawWebView extends StatefulWidget {
     this.onDataChanged,
     this.onExport,
     this.onError,
-    this.onSave,
   });
 
   final String viewId;
@@ -47,7 +46,6 @@ class ExcalidrawWebView extends StatefulWidget {
   final Function(String type, Map<String, dynamic> data)? onDataChanged;
   final Function(String format, dynamic data)? onExport;
   final Function(String error)? onError;
-  final VoidCallback? onSave;
 
   @override
   State<ExcalidrawWebView> createState() => ExcalidrawWebViewState();
@@ -570,18 +568,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         } catch (e) {
           Log.error('[ExcalidrawWebView] onExportError handler error: $e');
           widget.onError?.call('导出失败: $e');
-        }
-      },
-    );
-
-    // Ctrl+S 快捷键拦截：JS 层捕获后通知 Flutter
-    controller.addJavaScriptHandler(
-      handlerName: 'onSave',
-      callback: (args) async {
-        Log.info('[ExcalidrawWebView] Ctrl+S save triggered from WebView');
-        // 调用白板的保存逻辑（通过回调传递给 WhiteboardPage）
-        if (widget.onSave != null) {
-          widget.onSave!();
         }
       },
     );
@@ -1884,17 +1870,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                         document.body.style.overscrollBehaviorX = 'none';
                         document.body.style.overscrollBehaviorY = 'none';
                         window.scrollTo(0, 0);
-
-                        // Ctrl+S 拦截：阻止浏览器默认"另存为"，通知 Flutter 保存白板
-                        document.addEventListener('keydown', function(e) {
-                          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (window.flutter_inappwebview) {
-                              window.flutter_inappwebview.callHandler('onSave');
-                            }
-                          }
-                        }, true);
                       ''',
                     injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                   ),
