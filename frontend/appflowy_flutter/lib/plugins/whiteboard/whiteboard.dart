@@ -23,6 +23,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
@@ -258,6 +259,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   bool _isDisposing = false; // 标记是否正在销毁
   int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
   bool _isAppInBackground = false; // 标记应用是否在后台
+  DateTime? _lastAutoSaveToastTime; // 自动保存 toast 节流
+  static const _autoSaveToastInterval = Duration(seconds: 30); // 自动保存提示间隔
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -620,6 +623,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       viewId: widget.view.id,
       traceId: _loadTraceId,
       sessionId: _sessionTraceId,
+      onAutoSaveSuccess: () {
+        if (mounted && !_isDisposing) {
+          final now = DateTime.now();
+          if (_lastAutoSaveToastTime == null ||
+              now.difference(_lastAutoSaveToastTime!) >= _autoSaveToastInterval) {
+            _lastAutoSaveToastTime = now;
+            showToastNotification(
+              message: '白板已自动保存',
+              type: ToastificationType.success,
+              bottomPadding: 60,
+            );
+          }
+        }
+      },
       onDataChanged: (data) {
         // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
         if (!_isDisposing && mounted) {
@@ -1211,6 +1228,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
     );
 
+    // Ctrl+S 由 WebView JS 层拦截（见 excalidraw_webview.dart 的 initialUserScripts），
+    // 通过 onSave 回调通知 Flutter，不使用 CallbackShortcuts（PlatformView 不支持）
     final webView = ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
@@ -1222,6 +1241,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       onDataChanged: _onWhiteboardDataChanged,
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
+      onSave: _saveWhiteboard,
     );
 
     // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建

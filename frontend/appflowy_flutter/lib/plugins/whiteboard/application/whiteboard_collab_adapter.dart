@@ -21,6 +21,7 @@ class WhiteboardCollabAdapter {
   WhiteboardCollabAdapter({
     required this.viewId,
     required this.onDataChanged,
+    this.onAutoSaveSuccess,
     this.traceId,
     this.sessionId,
   }) {
@@ -32,6 +33,7 @@ class WhiteboardCollabAdapter {
 
   final String viewId;
   final Function(Map<String, dynamic>) onDataChanged;
+  final VoidCallback? onAutoSaveSuccess;
   final String? traceId;
   final String? sessionId;
 
@@ -55,6 +57,10 @@ class WhiteboardCollabAdapter {
   bool _disposed = false;
   bool _isSyncing = false;
   bool _hasUnsavedChanges = false;
+
+  // Dirty element tracking for incremental merge
+  final Set<String> _dirtyElementIds = {};
+  final List<dynamic> _dirtyElements = [];
 
   // 待同步的数据（增量）
   final Map<String, dynamic> _pendingData = {};
@@ -182,6 +188,19 @@ class WhiteboardCollabAdapter {
     });
 
     _hasUnsavedChanges = true;
+
+    // Track dirty element ids for incremental merge
+    if (data.containsKey('elements') && data['elements'] is List) {
+      final elements = data['elements'] as List;
+      for (final el in elements) {
+        if (el is Map && el.containsKey('id')) {
+          final id = el['id'] as String;
+          _dirtyElementIds.add(id);
+          _dirtyElements.add(el);
+        }
+      }
+    }
+
     _pendingData.addAll(
       data.map(
         (key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value)),
@@ -256,14 +275,26 @@ class WhiteboardCollabAdapter {
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
 
-        Log.info(
-            '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
-        if (_fullData.containsKey('files')) {
-          final files = _fullData['files'] as Map<String, dynamic>;
-          Log.info('[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
+        // Use incremental merge when we have dirty elements
+        if (_dirtyElementIds.isNotEmpty) {
+          Log.info(
+              '[WBCollab][WhiteboardCollabAdapter] Saving dirty elements via merge_elements');
+          final mergeData = {
+            'elements': List<dynamic>.from(_dirtyElements),
+          };
+          if (_syncFiles.isNotEmpty) {
+            mergeData['files'] = _fullData['files'] ?? {};
+          }
+          success = await _service.saveWhiteboardElements(viewId, mergeData);
+          if (success) {
+            _dirtyElementIds.clear();
+            _dirtyElements.clear();
+          }
+        } else {
+          Log.info(
+              '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data (full)');
+          success = await _service.saveWhiteboardData(viewId, _fullData);
         }
-
-        success = await _service.saveWhiteboardData(viewId, _fullData);
       } else {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
@@ -275,6 +306,7 @@ class WhiteboardCollabAdapter {
         Log.warn('[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
         Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
+        onAutoSaveSuccess?.call();
       }
     } catch (e) {
       _hasUnsavedChanges = true;
@@ -375,5 +407,7 @@ class WhiteboardCollabAdapter {
     _fullData.clear();
     _pendingFiles.clear();
     _syncFiles.clear();
+    _dirtyElementIds.clear();
+    _dirtyElements.clear();
   }
 }

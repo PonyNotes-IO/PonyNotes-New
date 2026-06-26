@@ -175,6 +175,86 @@ impl Whiteboard {
         }
         tracing::trace!("[WBCollab] Stored {} fields from update", data_map.len());
       },
+      "merge_elements" => {
+        // Element-level merge: only merge changed elements by id + version
+        // Incoming data format: {"elements": [{id, version, ...}, ...]}
+        if let Some(elements_value) = data_map.get("elements") {
+          let incoming_elements: Vec<serde_json::Value> = match elements_value {
+            serde_json::Value::Array(arr) => arr.clone(),
+            serde_json::Value::String(s) => serde_json::from_str(s)
+              .unwrap_or_default(),
+            _ => vec![],
+          };
+
+          if !incoming_elements.is_empty() {
+            // Read existing elements from Yjs
+            let existing_json = self.data.get(&txn, "elements")
+              .map(|v| v.to_string(&txn))
+              .unwrap_or_else(|| "[]".to_string());
+
+            let mut existing_elements: Vec<serde_json::Value> =
+              serde_json::from_str(&existing_json).unwrap_or_default();
+
+            // Build a map of existing elements by id
+            let mut element_map: std::collections::HashMap<String, serde_json::Value> =
+              std::collections::HashMap::new();
+            for el in existing_elements.drain(..) {
+              if let Some(id) = el.get("id").and_then(|v| v.as_str()) {
+                element_map.insert(id.to_string(), el);
+              }
+            }
+
+            // Merge incoming elements
+            for incoming_el in incoming_elements.iter() {
+              let incoming_id = incoming_el.get("id").and_then(|v| v.as_str());
+              if let Some(id) = incoming_id {
+                let should_replace = match element_map.get(id) {
+                  Some(existing_el) => {
+                    let existing_version = existing_el.get("version")
+                      .and_then(|v| v.as_i64()).unwrap_or(0);
+                    let incoming_version = incoming_el.get("version")
+                      .and_then(|v| v.as_i64()).unwrap_or(0);
+                    if incoming_version > existing_version {
+                      true
+                    } else if incoming_version == existing_version {
+                      let existing_nonce = existing_el.get("versionNonce")
+                        .and_then(|v| v.as_i64()).unwrap_or(0);
+                      let incoming_nonce = incoming_el.get("versionNonce")
+                        .and_then(|v| v.as_i64()).unwrap_or(0);
+                      incoming_nonce > existing_nonce
+                    } else {
+                      false
+                    }
+                  },
+                  None => true, // New element
+                };
+                if should_replace {
+                  element_map.insert(id.to_string(), incoming_el.clone());
+                }
+              }
+            }
+
+            // Write merged elements back
+            let incoming_count = incoming_elements.len();
+            let merged: Vec<serde_json::Value> = element_map.into_values().collect();
+            let merged_len = merged.len();
+            let merged_json = serde_json::to_string(&merged)
+              .map_err(|e| anyhow!("Failed to serialize merged elements: {}", e))?;
+            self.data.insert(&mut txn, "elements", merged_json.as_str());
+            tracing::info!("[WBCollab] Merged {} incoming elements, total now: {}",
+              incoming_count, merged_len);
+          }
+        }
+
+        // Also handle non-elements keys (appState, files) as regular update
+        for (key, value) in data_map.iter() {
+          if key != "elements" {
+            let json = serde_json::to_string(value)
+              .map_err(|e| anyhow!("Failed to serialize field {}: {}", key, e))?;
+            self.data.insert(&mut txn, key.as_str(), json.as_str());
+          }
+        }
+      },
       "delete" => {
         for (key, _) in data_map.iter() {
           self.data.remove(&mut txn, key.as_str());
