@@ -383,9 +383,9 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         _lastWorkspaceId != workspaceId ||
         _lastSpaceViewId != spaceViewId;
 
-    Log.info(
-      '[SpaceHub] _SpaceHubBlocProviderState.build: spaceView=${widget.spaceView.name}($spaceViewId), needNewBloc=$needNewBloc, lastSpaceViewId=$_lastSpaceViewId',
-    );
+    // Log.info(
+    //   '[SpaceHub] _SpaceHubBlocProviderState.build: spaceView=${widget.spaceView.name}($spaceViewId), needNewBloc=$needNewBloc, lastSpaceViewId=$_lastSpaceViewId',
+    // );
 
     if (needNewBloc && workspaceId.isNotEmpty && userProfile != null) {
       _spaceBloc?.close();
@@ -596,7 +596,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     setState(() {
       _isDividerDragging = isDragging;
     });
-    Log.debug('[SpaceHub] Divider dragging: $isDragging');
+    // Log.debug('[SpaceHub] Divider dragging: $isDragging');
     // 如果需要，可以在这里添加通知白板的逻辑
     // 例如：通过全局通知或回调机制通知白板组件
   }
@@ -849,20 +849,38 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         if (plugin.pluginType == PluginType.document ||
             plugin.pluginType == PluginType.folder ||
             plugin.pluginType == PluginType.notebook) {
-          // 将 viewInfoBloc 作为参数传给 DocumentPage
-          return _buildContentWithToolbar(
-            view: view,
-            viewInfoBloc: viewInfoBloc,
-            child: DocumentPage(
-              key: ValueKey(view.id),
+          // 将 viewInfoBloc 作为参数传给 DocumentPage。
+          //
+          // ⚠️ 关键修复：必须为“当前选中的子文档”单独提供一个绑定到它自己的
+          // PageAccessLevelBloc，遮蔽掉祖先（_SpaceHubBlocProvider）提供的
+          // “SpaceHub 主视图”的那个 bloc。
+          //
+          // 否则 DocumentPage / editor_page 会通过 context 读到 SpaceHub 主视图
+          // 的权限（通常是 space，creator=自己 → fullAccess），导致无论子文档
+          // 实际权限是不是只读，editorState.editable 都是 true：只读用户仍能输入，
+          // 这些本地编辑被服务端拒绝（他人看不见），却残留在本地 CRDT，重新授权
+          // 为可编辑时一次性回放到其他协作者页面。
+          //
+          // 用 create 形式让 BlocProvider 自动管理生命周期：ValueKey(view.id)
+          // 保证切换子文档时旧 bloc 被 close、为新文档重建，零泄漏。
+          return BlocProvider<PageAccessLevelBloc>(
+            key: ValueKey('page_access_${view.id}'),
+            create: (_) => PageAccessLevelBloc(view: view)
+              ..add(const PageAccessLevelEvent.initial()),
+            child: _buildContentWithToolbar(
               view: view,
-              onDeleted: () => _onChildViewDeleted(view, null),
-              tabs: const [
-                PickerTabType.emoji,
-                PickerTabType.icon,
-                PickerTabType.custom,
-              ],
               viewInfoBloc: viewInfoBloc,
+              child: DocumentPage(
+                key: ValueKey(view.id),
+                view: view,
+                onDeleted: () => _onChildViewDeleted(view, null),
+                tabs: const [
+                  PickerTabType.emoji,
+                  PickerTabType.icon,
+                  PickerTabType.custom,
+                ],
+                viewInfoBloc: viewInfoBloc,
+              ),
             ),
           );
         }
@@ -1289,18 +1307,18 @@ class _SpaceDocumentList extends StatelessWidget {
         return initialized || spaceChanged || childViewsChanged;
       },
       listener: (context, state) {
-        Log.info(
-          '[SpaceHub] BlocListener fired: isInitialized=${state.isInitialized}, currentSpace=${state.currentSpace?.name ?? "null"}(${state.currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
-        );
+        // Log.info(
+        //   '[SpaceHub] BlocListener fired: isInitialized=${state.isInitialized}, currentSpace=${state.currentSpace?.name ?? "null"}(${state.currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
+        // );
         // 当 SpaceBloc 初始化完成后，如果当前空间不是目标空间，则打开目标空间
         if (state.isInitialized) {
           final currentSpace = state.currentSpace;
           if (currentSpace?.id != spaceView.id) {
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
             Future.microtask(() {
-              Log.info(
-                '[SpaceHub] dispatching SpaceEvent.open for spaceView=${spaceView.name}(${spaceView.id})',
-              );
+              // Log.info(
+              //   '[SpaceHub] dispatching SpaceEvent.open for spaceView=${spaceView.name}(${spaceView.id})',
+              // );
               if (!spaceBloc.isClosed) {
                 final currentState = spaceBloc.state;
                 // 再次检查，避免重复打开
@@ -1356,9 +1374,9 @@ class _SpaceDocumentList extends StatelessWidget {
         builder: (context, state) {
           // 确保当前空间已加载，如果没有则触发加载
           final currentSpace = state.currentSpace;
-          Log.info(
-            '[SpaceHub] BlocBuilder builder: isInitialized=${state.isInitialized}, currentSpace=${currentSpace?.name ?? "null"}(${currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
-          );
+          // Log.info(
+          //   '[SpaceHub] BlocBuilder builder: isInitialized=${state.isInitialized}, currentSpace=${currentSpace?.name ?? "null"}(${currentSpace?.id ?? "null"}), spaceView=${spaceView.name}(${spaceView.id})',
+          // );
 
           // 如果 SpaceBloc 还未初始化，显示加载中
           if (!state.isInitialized) {
