@@ -2,13 +2,26 @@ import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:collection/collection.dart';
 
-import '../data/models/share_access_level.dart';
-
 /// 判断 sharedUser 是否是当前登录用户
 /// 优先用 email 匹配，其次用 phone 匹配
 bool _isCurrentUser(SharedUser user, UserProfilePB currentUser) {
   // 优先用 email 匹配
-  if (user.email == currentUser.email) {
+  final currentNumericId = currentUser.id.toString();
+  final userId = user.userId;
+  if (userId != null && userId.isNotEmpty && userId == currentNumericId) {
+    return true;
+  }
+
+  final uid = user.uid;
+  if (uid != null && uid.isNotEmpty && uid == currentNumericId) {
+    return true;
+  }
+
+  final userEmail = user.email.trim().toLowerCase();
+  final currentEmail = currentUser.email.trim().toLowerCase();
+  if (userEmail.isNotEmpty &&
+      currentEmail.isNotEmpty &&
+      userEmail == currentEmail) {
     return true;
   }
 

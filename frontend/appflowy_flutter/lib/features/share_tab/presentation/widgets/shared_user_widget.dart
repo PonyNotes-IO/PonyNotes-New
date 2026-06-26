@@ -90,8 +90,16 @@ class SharedUserWidget extends StatelessWidget {
     BuildContext context,
   ) {
     final theme = AppFlowyTheme.of(context);
+    final subtitle = user.email.trim().isNotEmpty
+        ? user.email
+        : user.uid ?? user.userId ?? '';
+
+    if (subtitle.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Text(
-      user.email,
+      subtitle,
       style: theme.textStyle.caption.standard(
         color: theme.textColorScheme.secondary,
       ),

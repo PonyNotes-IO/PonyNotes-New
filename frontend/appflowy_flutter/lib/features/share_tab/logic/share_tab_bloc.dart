@@ -503,7 +503,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (baseUrl.isEmpty) {
         Log.error('Base URL is empty');
-        return state.users;
+        return _getSharedUsersFromFfiFallback('base URL is empty');
       }
 
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -517,20 +517,20 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (userProfile == null) {
         Log.error('User profile is null');
-        return state.users;
+        return _getSharedUsersFromFfiFallback('user profile is null');
       }
 
       final rawToken = userProfile.token;
       if (rawToken.isEmpty) {
         Log.error('Auth token is empty');
-        return state.users;
+        return _getSharedUsersFromFfiFallback('auth token is empty');
       }
 
       // 提取 access_token（可能是 JSON 格式）
       final accessToken = _extractAccessToken(rawToken);
       if (accessToken == null || accessToken.isEmpty) {
         Log.error('Failed to extract access_token from token');
-        return state.users;
+        return _getSharedUsersFromFfiFallback('access token is empty');
       }
 
       // 构建 API URL: GET /api/workspace/{workspace_id}/collab/{object_id}/members
@@ -565,14 +565,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           final code = responseBody['code'] as int?;
           if (code != null && code != 0) {
             Log.error('API returned error code: $code');
-            return state.users;
+            return _getSharedUsersFromFfiFallback('HTTP API code=$code');
           }
 
           // 解析 data 数组
           final data = responseBody['data'] as List<dynamic>?;
           if (data == null) {
             Log.error('Response data is null');
-            return state.users;
+            return _getSharedUsersFromFfiFallback('HTTP data is null');
           }
 
           // 将 API 返回的成员列表转换为 SharedUsers
@@ -643,19 +643,49 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
           Log.info('Successfully fetched ${users.length} collab members');
 
+          if (users.isEmpty) {
+            return _getSharedUsersFromFfiFallback(
+              'HTTP returned empty collab members',
+            );
+          }
+
           return users;
         } catch (e, stackTrace) {
           Log.error('Failed to parse response: $e', e, stackTrace);
-          return state.users;
+          return _getSharedUsersFromFfiFallback('parse HTTP response failed');
         }
       } else {
         Log.error('Failed to get collab members: HTTP ${response.statusCode}');
-        return state.users;
+        return _getSharedUsersFromFfiFallback(
+          'HTTP status ${response.statusCode}',
+        );
       }
     } catch (e, stackTrace) {
       Log.error('Exception in _getSharedUsers: $e', e, stackTrace);
-      return state.users;
+      return _getSharedUsersFromFfiFallback('HTTP request exception');
     }
+  }
+
+  Future<SharedUsers> _getSharedUsersFromFfiFallback(String reason) async {
+    Log.warn(
+      '[ShareTabBloc] Falling back to FFI shared users. reason=$reason, '
+      'pageId=$pageId',
+    );
+
+    final result = await repository.getSharedUsersInPage(pageId: pageId);
+    return result.fold(
+      (users) {
+        Log.info(
+          '[ShareTabBloc] FFI shared users fallback returned '
+          '${users.length} users',
+        );
+        return users.isNotEmpty ? users : state.users;
+      },
+      (error) {
+        Log.error('[ShareTabBloc] FFI shared users fallback failed: $error');
+        return state.users;
+      },
+    );
   }
 
   void _onClearState(

@@ -25,9 +25,7 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc
 
 import '../../../util/log_utils.dart';
 import '../../../workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
-import '../data/repositories/rust_share_with_user_repository_impl.dart';
 import 'build_users_list_with_owner.dart';
-import '../data/models/share_access_level.dart';
 
 String? _extractCurrentUserUuid(UserProfilePB? user) {
   if (user == null) return null;
@@ -450,19 +448,16 @@ class _ShareTabState extends State<ShareTab> {
   }
 
   void _showCollaboratorsDialog(BuildContext context) {
+    _bloc.add(ShareTabEvent.loadSharedUsers());
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return BlocProvider(
-          create: (context) => ShareTabBloc(
-            repository: RustShareWithUserRepositoryImpl(),
-            pageId: widget.pageId,
-            workspaceId: widget.workspaceId,
-          )..add(ShareTabEvent.initialize()),
+        return BlocProvider.value(
+          value: _bloc,
           child: CollaboratorsDialog(
-            workspaceId: widget.workspaceId,
-            pageId: widget.pageId,
+            workspaceId: _bloc.workspaceId,
+            pageId: _bloc.pageId,
           ),
         );
       },
@@ -802,12 +797,14 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
         final users = state.users;
 
         // 构建完整的用户列表：
-        // 接口返回的是显式协作者；文档拥有者可能不在 af_collab_member 中，
-        // 因此需要补入当前拥有者，避免工作区受限导致分享权限管理被误判为只读。
-        final allUsers = buildUsersListWithOwner(
-          users: users,
-          currentUser: currentUser,
-        );
+        // 接口/FFI 返回的是显式协作者；文档拥有者可能不在 af_collab_member 中。
+        // 只有存在真实成员数据时才补 owner，避免取数失败时误展示成“只有自己”。
+        final allUsers = users.isEmpty
+            ? users
+            : buildUsersListWithOwner(
+                users: users,
+                currentUser: currentUser,
+              );
 
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
         final currentUid =
