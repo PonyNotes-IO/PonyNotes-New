@@ -44,13 +44,13 @@ class SidebarFolder extends StatelessWidget {
             // home button
             const SidebarHomeButton(),
             // AI button
-            const VSpace(sidebarPrimaryEntryGap),
+            // const VSpace(sidebarPrimaryEntryGap),
             const SidebarAiButton(),
             // calendar button
-            const VSpace(sidebarPrimaryEntryGap),
+            // const VSpace(sidebarPrimaryEntryGap),
             const SidebarCalendarButton(),
             // favorite
-            const VSpace(sidebarPrimaryEntryGap),
+            // const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
             // BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
             //   builder: (context, state) {

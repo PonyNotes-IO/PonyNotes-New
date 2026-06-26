@@ -393,7 +393,7 @@ class _SideBarSwitchWorkspaceButtonChild extends StatelessWidget {
                       isHover ? Theme.of(context).colorScheme.onSurface : null,
                   overflow: TextOverflow.ellipsis,
                   withTooltip: true,
-                  fontSize: 15.0,
+                  fontSize: 14.0,
                 ),
               ),
               if (isHover) ...[

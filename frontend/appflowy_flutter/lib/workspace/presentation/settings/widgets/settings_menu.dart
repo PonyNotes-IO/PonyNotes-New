@@ -151,7 +151,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         ),
         physics: const ClampingScrollPhysics(),
         child: Column(
-          spacing: theme.spacing.xs,
+          // spacing: theme.spacing.xs,
           children: [
             // 账号标题 + 用户信息卡片
             Container(

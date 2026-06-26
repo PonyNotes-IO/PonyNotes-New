@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,12 +20,8 @@ class SidebarTrashItem extends StatelessWidget {
       child: AFGhostIconTextButton.primary(
         text: LocaleKeys.trash_text.tr(),
         mainAxisAlignment: MainAxisAlignment.start,
-        size: AFButtonSize.l,
         onTap: () => _openTrash(context),
-        padding: EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 11,
-        ),
+        padding: sidebarEntryPadding,
         borderRadius: theme.borderRadius.s,
         iconBuilder: (context, isHover, disabled) => FlowySvg(
           FlowySvgs.icon_trash_s,

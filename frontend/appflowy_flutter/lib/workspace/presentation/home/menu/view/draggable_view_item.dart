@@ -21,7 +21,7 @@ enum DraggableHoverPosition {
   bottom,
 }
 
-const kDraggableViewItemDividerHeight = 2.0;
+const kDraggableViewItemDividerHeight = 0.0;
 
 class DraggableViewItem extends StatefulWidget {
   const DraggableViewItem({

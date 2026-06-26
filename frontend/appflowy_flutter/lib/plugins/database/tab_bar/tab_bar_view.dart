@@ -491,7 +491,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
 
     final horizontalPadding =
         data?[kDatabasePluginWidgetBuilderHorizontalPadding] as double? ??
-            GridSize.horizontalHeaderPadding + 40;
+            GridSize.horizontalHeaderPadding + 20;
     final BlockComponentActionBuilder? actionBuilder =
         data?[kDatabasePluginWidgetBuilderActionBuilder];
     final bool showActions =

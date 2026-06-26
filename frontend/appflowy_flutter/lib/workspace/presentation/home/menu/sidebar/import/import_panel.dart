@@ -108,7 +108,7 @@ class _ImportPanelState extends State<ImportPanel> {
                         leftIconSize: const Size.square(20),
                         text: FlowyText.medium(
                           e.toString(),
-                          fontSize: 15,
+                          fontSize: 14,
                           overflow: TextOverflow.ellipsis,
                           color: Theme.of(context).colorScheme.tertiary,
                         ),

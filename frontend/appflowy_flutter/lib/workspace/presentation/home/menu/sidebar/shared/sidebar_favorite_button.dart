@@ -8,6 +8,7 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -110,11 +111,10 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             child: AFGhostIconTextButton.primary(
               text: '最爱',
               mainAxisAlignment: MainAxisAlignment.start,
-              size: AFButtonSize.l,
               onTap: () {
                 setState(() => _isExpanded = !_isExpanded);
               },
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: sidebarEntryPaddingNoIcon,
               borderRadius: theme.borderRadius.s,
               iconBuilder: (context, isHover, disabled) =>
                   const SizedBox.shrink(),
