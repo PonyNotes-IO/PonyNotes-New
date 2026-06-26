@@ -319,7 +319,7 @@ class _DocumentPageState extends State<DocumentPage>
                 child: AiWriterScrollWrapper(
                   viewId: widget.view.id,
                   editorState: editorState,
-                  child: buildEditorPage(context, state),
+                  child: buildEditorPage(context, state, canEditDocument),
                 ),
               );
             },
@@ -391,6 +391,7 @@ class _DocumentPageState extends State<DocumentPage>
   Widget buildEditorPage(
     BuildContext context,
     DocumentState state,
+    bool canEditDocument,
   ) {
     final editorState = state.editorState;
     if (editorState == null) {
@@ -407,6 +408,7 @@ class _DocumentPageState extends State<DocumentPage>
       child = BlocBuilder<DocumentPageStyleBloc, DocumentPageStyleState>(
         builder: (context, styleState) => AppFlowyEditorPage(
           editorState: editorState,
+          editable: canEditDocument,
           // if the view's name is empty, focus on the title
           autoFocus: widget.view.name.isEmpty ? false : null,
           styleCustomizer: EditorStyleCustomizer(
@@ -426,6 +428,7 @@ class _DocumentPageState extends State<DocumentPage>
         isLocalMode: context.read<DocumentBloc>().isLocalMode,
         child: AppFlowyEditorPage(
           editorState: editorState,
+          editable: canEditDocument,
           // if the view's name is empty, focus on the title
           autoFocus: widget.view.name.isEmpty ? false : null,
           styleCustomizer: EditorStyleCustomizer(

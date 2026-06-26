@@ -61,6 +61,7 @@ class AppFlowyEditorPage extends StatefulWidget {
     this.placeholderText,
     this.initialSelection,
     this.useViewInfoBloc = true,
+    this.editable,
   });
 
   final Widget? header;
@@ -76,6 +77,13 @@ class AppFlowyEditorPage extends StatefulWidget {
   final Selection? initialSelection;
 
   final bool useViewInfoBloc;
+
+  /// Final editor write permission from the page container.
+  ///
+  /// When null, falls back to the document/page access level for existing
+  /// call sites. Workspace-restricted documents must pass a non-null value so
+  /// cursor/focus paths cannot re-enable editing from page access alone.
+  final bool? editable;
 
   @override
   State<AppFlowyEditorPage> createState() => _AppFlowyEditorPageState();
@@ -358,8 +366,9 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     );
 
     final isViewDeleted = context.read<DocumentBloc>().state.isDeleted;
-    final isEditable =
+    final pageAccessEditable =
         context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
+    final isEditable = widget.editable ?? pageAccessEditable;
 
     final editor = Directionality(
       textDirection: textDirection,
@@ -651,6 +660,10 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
   Future<void> _focusOnLastEmptyParagraph() async {
     final editorState = widget.editorState;
+    if (!editorState.editable || widget.editable == false) {
+      editorState.service.keyboardService?.closeKeyboard();
+      return;
+    }
     final root = editorState.document.root;
     final lastNode = root.children.lastOrNull;
     final transaction = editorState.transaction;
