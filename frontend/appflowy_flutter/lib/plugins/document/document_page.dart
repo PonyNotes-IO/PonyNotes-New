@@ -28,12 +28,15 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -184,9 +187,18 @@ class _DocumentPageState extends State<DocumentPage>
             return;
           }
 
-          _syncEditorEditable(pageAccessLevelState.isEditable);
+          final workspaceRole =
+              _effectiveWorkspaceRole(context.read<UserWorkspaceBloc>().state);
+          _syncEditorEditable(
+            _canEditDocument(pageAccessLevelState, workspaceRole),
+          );
         },
         builder: (context, pageAccessLevelState) {
+          final workspaceRole = context.select(
+            (UserWorkspaceBloc bloc) => _effectiveWorkspaceRole(bloc.state),
+          );
+          final canEditDocument =
+              _canEditDocument(pageAccessLevelState, workspaceRole);
           return BlocBuilder<DocumentBloc, DocumentState>(
             buildWhen: shouldRebuildDocument,
             builder: (context, state) {
@@ -230,7 +242,7 @@ class _DocumentPageState extends State<DocumentPage>
               // 监听器不会 fire，导致 editorState.editable 没被设为 false、
               // 编辑器仍可输入。这里在每次 build 都同步，确保只读真正生效。
               if (editorState != null) {
-                _syncEditorEditable(pageAccessLevelState.isEditable);
+                _syncEditorEditable(canEditDocument);
               }
               // editorState 就绪后注册到 ViewInfoBloc（仅首次），触发字数统计服务启动
               if (editorState != null && !_editorStateRegistered) {
@@ -275,7 +287,24 @@ class _DocumentPageState extends State<DocumentPage>
                 listeners: [
                   BlocListener<PageAccessLevelBloc, PageAccessLevelState>(
                     listener: (context, state) {
-                      _syncEditorEditable(state.isEditable);
+                      final workspaceRole = _effectiveWorkspaceRole(
+                        context.read<UserWorkspaceBloc>().state,
+                      );
+                      _syncEditorEditable(
+                        _canEditDocument(state, workspaceRole),
+                      );
+                    },
+                  ),
+                  BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                    listenWhen: (previous, current) =>
+                        previous.currentUserRole != current.currentUserRole,
+                    listener: (context, workspaceState) {
+                      _syncEditorEditable(
+                        _canEditDocument(
+                          context.read<PageAccessLevelBloc>().state,
+                          _effectiveWorkspaceRole(workspaceState),
+                        ),
+                      );
                     },
                   ),
                   BlocListener<ActionNavigationBloc, ActionNavigationState>(
@@ -294,6 +323,17 @@ class _DocumentPageState extends State<DocumentPage>
         },
       ),
     );
+  }
+
+  AFRolePB? _effectiveWorkspaceRole(UserWorkspaceState state) {
+    return state.currentUserRole ?? state.currentWorkspace?.role;
+  }
+
+  bool _canEditDocument(
+    PageAccessLevelState pageAccessLevelState,
+    AFRolePB? workspaceRole,
+  ) {
+    return pageAccessLevelState.isEditable && workspaceRole != AFRolePB.Guest;
   }
 
   void _syncEditorEditable(bool isEditable) {

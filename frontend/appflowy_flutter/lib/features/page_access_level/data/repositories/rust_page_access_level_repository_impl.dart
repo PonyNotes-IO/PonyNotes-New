@@ -203,23 +203,21 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 当云端权限已变更但本地 SQLite 尚未同步时，这是唯一的可靠数据源。
     Log.debug('[PageAccessLevel] cloud HTTP miss and FFI cache '
         '${ffiCacheHadData ? "miss" : "empty"}. page: $pageId');
-    // HTTP 也未命中：如果 FFI 缓存有数据（用户确实不在共享列表），
-    // 允许 creator 兜底；如果 FFI 缓存为空（可能未同步），安全兜底到 readOnly。
-    if (!ffiCacheHadData) {
-      Log.warn('[PageAccessLevel] both FFI cache empty and HTTP miss, '
-          'defaulting to readOnly for safety. page: $pageId');
-      return FlowyResult.success(ShareAccessLevel.readOnly);
-    }
+    // 走到这里：HTTP permission、collab members、FFI 缓存三处都没有该文档的
+    // 显式共享/权限记录。这说明该文档**没有被共享**（而不是被共享后设为只读），
+    // 是工作区内的普通文档。此类文档的权限应由“当前用户的工作区角色”决定，
+    // 而不是一律 readOnly —— 否则工作区成员（Owner/Member）无法编辑工作区内
+    // 别人创建的文档（这正是“工作区权限为全部却不能编辑他人文档”的原因）。
 
-    // 用户确认不在共享列表中（FFI 有数据 + HTTP 也确认），回退到 creator 检查
+    // 1. 自己创建的文档 → fullAccess（绝对安全，与共享与否无关）
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
       (_) => null,
     );
     if (view?.createdBy == user.id) {
-      Log.debug('[PageAccessLevel] user is page creator and NOT in shared list '
-          '(confirmed by FFI + HTTP), granting fullAccess. page: $pageId, userId: $userId');
+      Log.debug('[PageAccessLevel] user is page creator, granting fullAccess. '
+          'page: $pageId, userId: $userId');
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
@@ -243,11 +241,25 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (_) => null,
     );
 
+    // 2. 安全护栏：若文档确实属于“共享”分区（被显式共享过），仍保守 readOnly，
+    //    因为共享文档的权限应由共享记录决定，而不是工作区角色。
+    if (sectionType == SharedSectionType.shared) {
+      Log.warn('[PageAccessLevel] shared-section doc with no resolved member '
+          'permission, defaulting to readOnly for safety. page: $pageId');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
+    }
+
+    // 3. 非共享的工作区文档：按工作区角色判定。
+    //    Owner / Member 拥有工作区写权限 → readAndWrite；Guest 等 → readOnly。
+    final role = workspace.role;
+    final canWrite = role == AFRolePB.Owner || role == AFRolePB.Member;
     Log.debug(
-        '[PageAccessLevel] no explicit permission found for user uid=${user.id.toInt()} '
-        'on page $pageId, sectionType=$sectionType, workspaceRole=${workspace.role} — '
-        'defaulting to readOnly (失败路径安全降级，非创建者不放开编辑权)');
-    return FlowyResult.success(ShareAccessLevel.readOnly);
+        '[PageAccessLevel] unshared workspace doc for uid=${user.id.toInt()} '
+        'on page $pageId, sectionType=$sectionType, workspaceRole=$role, '
+        'canWrite=$canWrite');
+    return FlowyResult.success(
+      canWrite ? ShareAccessLevel.readAndWrite : ShareAccessLevel.readOnly,
+    );
   }
 
   /// 查询接收的发布文档只读状态
