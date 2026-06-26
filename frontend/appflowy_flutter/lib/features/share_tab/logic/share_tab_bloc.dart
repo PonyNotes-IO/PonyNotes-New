@@ -579,8 +579,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           final users = data.map((member) {
             final memberMap = member as Map<String, dynamic>;
             final uuid = (memberMap['uuid'] as String?) ??
-                (memberMap['user_id'] as String?) ??
-                (memberMap['uid']?.toString());
+                (memberMap['user_id'] as String?);
+            final numericUid = memberMap['uid']?.toString();
             final email = memberMap['email'] as String? ?? '';
             final name = memberMap['name'] as String? ?? email;
             final phone = memberMap['phone'] as String?;
@@ -636,6 +636,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
               accessLevel: accessLevel,
               avatarUrl: avatarUrl?.isNotEmpty == true ? avatarUrl : null,
               userId: uuid,
+              uid: numericUid,
               phone: phone?.isNotEmpty == true ? phone : null,
             );
           }).toList();
