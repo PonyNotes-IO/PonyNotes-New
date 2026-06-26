@@ -388,14 +388,21 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               _loadContentForDate(initialDate);
               // 如果需要打开新建日程页面
               if (widget.pluginData?.openNewEvent == true) {
-                Future.delayed(const Duration(milliseconds: 300), () {
+                // 弹出浮窗式新建日程菜单（与手动点击日历格子效果一致）
+                Future.delayed(const Duration(milliseconds: 500), () {
                   if (mounted) {
-                    _newEventScheduleModel?.dispose();
-                    _newEventScheduleModel = ScheduleModel();
-                    setState(() {
-                      _showNewEventPage = true;
-                      _newEventHasUnsavedConfig = false;
-                    });
+                    final date = initialDate;
+                    final gridView = _gridViewKey.currentState;
+                    if (gridView != null) {
+                      gridView.showCreateMenuForDate(date);
+                    } else {
+                      // GridView 尚未构建，再延迟重试一次
+                      Future.delayed(const Duration(milliseconds: 300), () {
+                        if (mounted) {
+                          _gridViewKey.currentState?.showCreateMenuForDate(date);
+                        }
+                      });
+                    }
                   }
                 });
               }
