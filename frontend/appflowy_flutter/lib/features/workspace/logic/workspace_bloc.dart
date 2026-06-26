@@ -91,6 +91,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     on<WorkspaceEventUpdateCurrentSubscription>(_onUpdateCurrentSubscription);
     on<WorkspaceEventUpdateCloudSyncEnabled>(_onUpdateCloudSyncEnabled);
     on<WorkspaceEventUpdateFolderSyncState>(_onUpdateFolderSyncState);
+    on<WorkspaceEventEmitCurrentUserRole>(_onEmitCurrentUserRole);
   }
 
   final String? initialWorkspaceId;
@@ -1041,6 +1042,12 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   }
 
   /// 启动角色轮询，定期刷新当前用户角色
+  ///
+  /// 注意：这里必须通过 add() 把结果重新投递进事件队列，而不能直接捕获
+  /// _onOpenWorkspace 的 emit 在 Timer 回调里调用——那个 emit 在
+  /// _onOpenWorkspace 这个 async handler 返回后就已失效（bloc 会拒绝/吞掉
+  /// 之后的 emit 调用），导致轮询请求成功却永远无法把新角色写入 state，
+  /// 用户被降级为 Guest 后客户端本地权限判断仍停留在旧角色上。
   void _startRolePolling(String workspaceId) {
     _rolePollingTimer?.cancel();
     _rolePollingTimer = Timer.periodic(
@@ -1048,10 +1055,24 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       (_) async {
         if (isClosed) return;
         final role = await _fetchCurrentUserRole(workspaceId);
-        if (!isClosed && role != state.currentUserRole) {
-          emit(state.copyWith(currentUserRole: role));
+        Log.debug(
+          '[WorkspaceBloc] role poll for workspace=$workspaceId: '
+          'fetched=$role, current=${state.currentUserRole}',
+        );
+        if (!isClosed && role != null && role != state.currentUserRole) {
+          _safeAdd(UserWorkspaceEvent.emitCurrentUserRole(role: role));
         }
       },
     );
+  }
+
+  Future<void> _onEmitCurrentUserRole(
+    WorkspaceEventEmitCurrentUserRole event,
+    Emitter<UserWorkspaceState> emit,
+  ) async {
+    if (event.role == state.currentUserRole) {
+      return;
+    }
+    emit(state.copyWith(currentUserRole: event.role));
   }
 }

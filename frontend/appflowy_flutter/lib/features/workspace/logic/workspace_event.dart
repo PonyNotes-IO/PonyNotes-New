@@ -1,5 +1,6 @@
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart'
+    hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 
 sealed class UserWorkspaceEvent {
@@ -101,6 +102,11 @@ sealed class UserWorkspaceEvent {
     required FolderSyncStatePB syncState,
   }) =>
       WorkspaceEventUpdateFolderSyncState(syncState: syncState);
+
+  factory UserWorkspaceEvent.emitCurrentUserRole({
+    required AFRolePB? role,
+  }) =>
+      WorkspaceEventEmitCurrentUserRole(role: role);
 }
 
 /// Initializes the workspace bloc.
@@ -253,4 +259,13 @@ class WorkspaceEventUpdateFolderSyncState extends UserWorkspaceEvent {
   });
 
   final FolderSyncStatePB syncState;
+}
+
+/// Emits a freshly-polled current-user role for the active workspace.
+class WorkspaceEventEmitCurrentUserRole extends UserWorkspaceEvent {
+  WorkspaceEventEmitCurrentUserRole({
+    required this.role,
+  });
+
+  final AFRolePB? role;
 }
