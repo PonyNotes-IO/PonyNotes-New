@@ -29,6 +29,40 @@ import '../data/repositories/rust_share_with_user_repository_impl.dart';
 import 'build_users_list_with_owner.dart';
 import '../data/models/share_access_level.dart';
 
+String? _extractCurrentUserUuid(UserProfilePB? user) {
+  if (user == null) return null;
+  final rawToken = user.token;
+  if (rawToken.isEmpty) return null;
+
+  String? accessToken = rawToken;
+  if (rawToken.trimLeft().startsWith('{')) {
+    try {
+      final tokenMap = jsonDecode(rawToken) as Map<String, dynamic>;
+      accessToken = tokenMap['access_token'] as String?;
+    } catch (_) {
+      accessToken = null;
+    }
+  }
+  if (accessToken == null || accessToken.isEmpty) return null;
+
+  final parts = accessToken.split('.');
+  if (parts.length < 2) return null;
+  try {
+    final payload = parts[1];
+    final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+    final padding = (4 - normalized.length % 4) % 4;
+    final padded = normalized + ('=' * padding);
+    final decoded = utf8.decode(base64Decode(padded));
+    final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
+    final sub = payloadMap['sub']?.toString();
+    if (sub != null && sub.isNotEmpty) {
+      return sub;
+    }
+  } catch (_) {}
+
+  return null;
+}
+
 class ShareTab extends StatefulWidget {
   const ShareTab({
     super.key,
@@ -89,7 +123,6 @@ class _ShareTabState extends State<ShareTab> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final isReadOnly = _isReadOnlyFromContext(context);
 
     return BlocConsumer<ShareTabBloc, ShareTabState>(
       listener: (context, state) {
@@ -99,6 +132,7 @@ class _ShareTabState extends State<ShareTab> {
         if (state.isLoading) {
           return const SizedBox.shrink();
         }
+        final isReadOnly = _isShareManagementReadOnly(context, state);
 
         // final currentUser = state.currentUser;
         // final accessLevel = state.users
@@ -127,24 +161,24 @@ class _ShareTabState extends State<ShareTab> {
                 ),
               ),
             ] else ...[
-            // share page with user by email
-            // only user with full access can invite others
-            VSpace(theme.spacing.l),
-            Row(
-              children: [
-                FlowyText("当前文档为私密，仅自己和协作者可访问"),
-              ],
-            ),
-            VSpace(theme.spacing.m),
-            
-            // 添加权限选择器
-            _buildPermissionSelector(context, state),
-            
-            VSpace(theme.spacing.m),
-            _buildLinkAndCopyButton(
-              state.shareLink,
-              state.users.isNotEmpty,
-            ),
+              // share page with user by email
+              // only user with full access can invite others
+              VSpace(theme.spacing.l),
+              Row(
+                children: [
+                  FlowyText("当前文档为私密，仅自己和协作者可访问"),
+                ],
+              ),
+              VSpace(theme.spacing.m),
+
+              // 添加权限选择器
+              _buildPermissionSelector(context, state),
+
+              VSpace(theme.spacing.m),
+              _buildLinkAndCopyButton(
+                state.shareLink,
+                state.users.isNotEmpty,
+              ),
             ],
 
             // ShareWithUserWidget(
@@ -188,7 +222,15 @@ class _ShareTabState extends State<ShareTab> {
     );
   }
 
-  bool _isReadOnlyFromContext(BuildContext context) {
+  bool _isShareManagementReadOnly(
+    BuildContext context,
+    ShareTabState state,
+  ) {
+    final currentShareAccessLevel = _currentShareAccessLevel(state);
+    if (currentShareAccessLevel != null) {
+      return currentShareAccessLevel == ShareAccessLevel.readOnly;
+    }
+
     try {
       final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
       return !pageAccessLevelBloc.state.isLoadingLockStatus &&
@@ -196,6 +238,47 @@ class _ShareTabState extends State<ShareTab> {
     } catch (_) {
       return false;
     }
+  }
+
+  ShareAccessLevel? _currentShareAccessLevel(ShareTabState state) {
+    final currentUser = state.currentUser;
+    if (currentUser == null) {
+      return null;
+    }
+
+    final currentUid = _extractCurrentUserUuid(currentUser);
+    final currentEmail = currentUser.email.trim().toLowerCase();
+    final currentNumericId = currentUser.id.toString();
+
+    final usersWithOwner = buildUsersListWithOwner(
+      users: state.users,
+      currentUser: currentUser,
+    );
+    final currentSharedUser = usersWithOwner.firstWhereOrNull((user) {
+      final idMatch = currentUid != null &&
+          currentUid.isNotEmpty &&
+          user.userId == currentUid;
+      final uidMatch =
+          currentNumericId.isNotEmpty && user.uid == currentNumericId;
+      final emailMatch = currentEmail.isNotEmpty &&
+          user.email.trim().toLowerCase() == currentEmail;
+      return idMatch || uidMatch || emailMatch;
+    });
+    if (currentSharedUser != null) {
+      return currentSharedUser.accessLevel;
+    }
+
+    if (usersWithOwner.isNotEmpty &&
+        usersWithOwner.first.accessLevel == ShareAccessLevel.fullAccess) {
+      LogUtils.debug(
+        '[ShareTab] Current user not matched in share list; '
+        'using owner fallback for share management. currentUid=$currentUid, '
+        'currentEmail=$currentEmail',
+      );
+      return ShareAccessLevel.fullAccess;
+    }
+
+    return null;
   }
 
   PeopleWithAccessSectionCallbacks _buildPeopleWithAccessSectionCallbacks(
@@ -216,34 +299,35 @@ class _ShareTabState extends State<ShareTab> {
             );
       },
       onRemoveAccess: (user) {
-                final theme = AppFlowyTheme.of(context);
-                final shareTabBloc = context.read<ShareTabBloc>();
-                final currentUser = shareTabBloc.state.currentUser;
-                final currentUid = currentUser?.id.toString();
-                final removingSelf =
-                    (currentUid != null && currentUid.isNotEmpty && user.userId == currentUid);
-                if (removingSelf) {
-                  showConfirmDialog(
-                    context: context,
-                    title: LocaleKeys.shareAction_removeOwnAccess.tr(),
-                    titleStyle: theme.textStyle.body.standard(
-                      color: theme.textColorScheme.primary,
-                    ),
-                    description: '',
-                    style: ConfirmPopupStyle.cancelAndOk,
-                    confirmLabel: LocaleKeys.button_delete.tr(),
-                    onConfirm: (_) {
-                      shareTabBloc.add(
-                        ShareTabEvent.removeCollabMember(user: user),
-                      );
-                    },
-                  );
-                } else {
-                  shareTabBloc.add(
-                    ShareTabEvent.removeCollabMember(user: user),
-                  );
-                }
-              },
+        final theme = AppFlowyTheme.of(context);
+        final shareTabBloc = context.read<ShareTabBloc>();
+        final currentUser = shareTabBloc.state.currentUser;
+        final currentUid = currentUser?.id.toString();
+        final removingSelf = currentUid != null &&
+            currentUid.isNotEmpty &&
+            user.userId == currentUid;
+        if (removingSelf) {
+          showConfirmDialog(
+            context: context,
+            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
+            titleStyle: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
+            ),
+            description: '',
+            style: ConfirmPopupStyle.cancelAndOk,
+            confirmLabel: LocaleKeys.button_delete.tr(),
+            onConfirm: (_) {
+              shareTabBloc.add(
+                ShareTabEvent.removeCollabMember(user: user),
+              );
+            },
+          );
+        } else {
+          shareTabBloc.add(
+            ShareTabEvent.removeCollabMember(user: user),
+          );
+        }
+      },
     );
   }
 
@@ -398,9 +482,11 @@ class _ShareTabState extends State<ShareTab> {
         .map((level) => MapEntry(_permissionIdFromAccessLevel(level), level))
         .fold<Map<int, ShareAccessLevel>>(<int, ShareAccessLevel>{},
             (acc, entry) {
-      acc.putIfAbsent(entry.key, () => entry.value);
-      return acc;
-    }).entries.toList();
+          acc.putIfAbsent(entry.key, () => entry.value);
+          return acc;
+        })
+        .entries
+        .toList();
 
     final selectedPermissionId =
         permissionItems.any((entry) => entry.key == state.selectedPermissionId)
@@ -641,42 +727,6 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
     super.dispose();
   }
 
-  String? _extractCurrentUserUuid(UserProfilePB? user) {
-    if (user == null) return null;
-    final rawToken = user.token;
-    if (rawToken.isEmpty) return null;
-
-    String? accessToken = rawToken;
-    // token 可能是 JSON（包含 access_token）或直接 JWT
-    if (rawToken.trimLeft().startsWith('{')) {
-      try {
-        final tokenMap = jsonDecode(rawToken) as Map<String, dynamic>;
-        accessToken = tokenMap['access_token'] as String?;
-      } catch (_) {
-        accessToken = null;
-      }
-    }
-    if (accessToken == null || accessToken.isEmpty) return null;
-
-    // JWT 格式：header.payload.signature，uuid 常在 sub
-    final parts = accessToken.split('.');
-    if (parts.length < 2) return null;
-    try {
-      final payload = parts[1];
-      final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
-      final padding = (4 - normalized.length % 4) % 4;
-      final padded = normalized + ('=' * padding);
-      final decoded = utf8.decode(base64Decode(padded));
-      final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
-      final sub = payloadMap['sub']?.toString();
-      if (sub != null && sub.isNotEmpty) {
-        return sub;
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
   void _inviteUser(SharedUser user) {
     _bloc.add(
       ShareTabEvent.inviteUsers(
@@ -752,8 +802,12 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
         final users = state.users;
 
         // 构建完整的用户列表：
-        // 接口返回的顺序即为展示顺序，约定第一条为拥有者，其余为被邀请者
-        final List<SharedUser> allUsers = users;
+        // 接口返回的是显式协作者；文档拥有者可能不在 af_collab_member 中，
+        // 因此需要补入当前拥有者，避免工作区受限导致分享权限管理被误判为只读。
+        final allUsers = buildUsersListWithOwner(
+          users: users,
+          currentUser: currentUser,
+        );
 
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
         final currentUid =
@@ -871,79 +925,76 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
                             ),
                           )
                         : ListView.separated(
-                                shrinkWrap: true,
-                                itemCount: allUsers.length,
-                                separatorBuilder: (_, __) => Divider(
-                                  height: 1,
-                                  color: theme.borderColorScheme.primary
-                                      .withValues(alpha: 0.15),
-                                ),
-                                itemBuilder: (context, index) {
-                                  final user = allUsers[index];
-                                  return SharedUserWidget(
-                                    user: user,
-                                    currentUser: effectiveCurrentSharedUser,
-                                    /// 因为当前协作区都是公开，所有分享都是公开的文档，导致分享后不能编辑权限。
-                                    // isInPublicPage: state.sectionType ==
-                                    //     SharedSectionType.public,
-                                    callbacks: AccessLevelListCallbacks(
-                                      onSelectAccessLevel: (accessLevel) {
-                                        _bloc.add(
-                                          ShareTabEvent.updateMemberPermission(
-                                            user: user,
-                                            accessLevel: accessLevel,
-                                          ),
-                                        );
-                                      },
-                                      onTurnIntoMember: () {
-                                        _bloc.add(
-                                          ShareTabEvent.convertToMember(
-                                            email: user.email,
-                                          ),
-                                        );
-                                      },
-                                      onRemoveAccess: () {
-                                        final removingSelf =
-                                            (currentUid != null &&
-                                                currentUid.isNotEmpty &&
-                                                user.userId == currentUid);
-                                        if (removingSelf) {
-                                          showConfirmDialog(
-                                            context: context,
-                                            title: LocaleKeys
-                                                .shareAction_removeOwnAccess
-                                                .tr(),
-                                            titleStyle:
-                                                theme.textStyle.body.standard(
-                                              color:
-                                                  theme.textColorScheme.primary,
-                                            ),
-                                            description: '',
-                                            style:
-                                                ConfirmPopupStyle.cancelAndOk,
-                                            confirmLabel:
-                                                LocaleKeys.button_delete.tr(),
-                                            onConfirm: (_) {
-                                              _bloc.add(
-                                                ShareTabEvent
-                                                    .removeCollabMember(
-                                                  user: user,
-                                                ),
-                                              );
-                                            },
-                                          );
-                                        } else {
+                            shrinkWrap: true,
+                            itemCount: allUsers.length,
+                            separatorBuilder: (_, __) => Divider(
+                              height: 1,
+                              color: theme.borderColorScheme.primary
+                                  .withValues(alpha: 0.15),
+                            ),
+                            itemBuilder: (context, index) {
+                              final user = allUsers[index];
+                              return SharedUserWidget(
+                                user: user,
+                                currentUser: effectiveCurrentSharedUser,
+
+                                /// 因为当前协作区都是公开，所有分享都是公开的文档，导致分享后不能编辑权限。
+                                // isInPublicPage: state.sectionType ==
+                                //     SharedSectionType.public,
+                                callbacks: AccessLevelListCallbacks(
+                                  onSelectAccessLevel: (accessLevel) {
+                                    _bloc.add(
+                                      ShareTabEvent.updateMemberPermission(
+                                        user: user,
+                                        accessLevel: accessLevel,
+                                      ),
+                                    );
+                                  },
+                                  onTurnIntoMember: () {
+                                    _bloc.add(
+                                      ShareTabEvent.convertToMember(
+                                        email: user.email,
+                                      ),
+                                    );
+                                  },
+                                  onRemoveAccess: () {
+                                    final removingSelf = currentUid != null &&
+                                        currentUid.isNotEmpty &&
+                                        user.userId == currentUid;
+                                    if (removingSelf) {
+                                      showConfirmDialog(
+                                        context: context,
+                                        title: LocaleKeys
+                                            .shareAction_removeOwnAccess
+                                            .tr(),
+                                        titleStyle:
+                                            theme.textStyle.body.standard(
+                                          color: theme.textColorScheme.primary,
+                                        ),
+                                        description: '',
+                                        style: ConfirmPopupStyle.cancelAndOk,
+                                        confirmLabel:
+                                            LocaleKeys.button_delete.tr(),
+                                        onConfirm: (_) {
                                           _bloc.add(
                                             ShareTabEvent.removeCollabMember(
                                               user: user,
                                             ),
                                           );
-                                        }
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
+                                        },
+                                      );
+                                    } else {
+                                      _bloc.add(
+                                        ShareTabEvent.removeCollabMember(
+                                          user: user,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
                   ),
                 ],
               ),
@@ -1555,13 +1606,12 @@ class _AccessLevelSelectorState extends State<_AccessLevelSelector> {
               dropdownColor: theme.surfaceContainerColorScheme.layer01,
               borderRadius: BorderRadius.circular(8),
               items: ShareAccessLevel.values
-                  .where((level) =>
-                      level != ShareAccessLevel.readAndComment)
+                  .where((level) => level != ShareAccessLevel.readAndComment)
                   .map((level) {
-                  return DropdownMenuItem(
-                    value: level,
-                    child: Text(_getAccessLevelLabel(level)),
-                  );
+                return DropdownMenuItem(
+                  value: level,
+                  child: Text(_getAccessLevelLabel(level)),
+                );
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
