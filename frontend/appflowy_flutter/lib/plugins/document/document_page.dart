@@ -304,6 +304,16 @@ class _DocumentPageState extends State<DocumentPage>
     if (wasEditable == true && !isEditable) {
       editorState?.service.keyboardService?.closeKeyboard();
       unawaited(documentBloc.discardLocalDocumentState());
+    } else if (wasEditable == false && isEditable) {
+      // 从只读恢复为可编辑的瞬间，先关闭输入法连接、丢弃查看期间残留在 IME
+      // composing 缓冲里的预输入文本（未上屏的拼音/候选）。
+      //
+      // 桌面端只读时光标仍可聚焦，输入法照样 attach，A 打的字会进入 composing
+      // 缓冲——这些字没经过 editorState.apply()，所以不显示在文档上；但若不清理，
+      // 权限改回可编辑时这些缓冲会被一次性提交（“冒出来”）并同步给其他协作者。
+      // closeKeyboard() 会清空 composingTextRange 并关闭平台输入连接，A 下次点击
+      // 会重新 attach 一个干净的连接。
+      editorState?.service.keyboardService?.closeKeyboard();
     }
   }
 
