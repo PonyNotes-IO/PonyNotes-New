@@ -332,11 +332,23 @@ class _DocumentPageState extends State<DocumentPage>
   AFRolePB? _effectiveWorkspaceRole(UserWorkspaceState state) {
     // UserWorkspaceBloc 里的 currentUserRole/currentWorkspace 只反映"当前
     // 激活"的那一个工作区。多标签页场景下，用户可能同时打开了属于不同
-    // 工作区的文档 tab；如果这个文档（widget.view）并不属于当前激活的
-    // 工作区，就不能把激活工作区的角色套用到它身上——否则切换工作区会
-    // 把角色"污染"到所有已打开的、不相关的文档 tab 上（无论是误锁定，
-    // 还是反过来误放行）。
-    if (state.currentWorkspace?.workspaceId != widget.view.workspaceId) {
+    // 工作区的文档 tab；如果这个文档（widget.view）明确属于另一个工作区，
+    // 就不能把激活工作区的角色套用到它身上——否则切换工作区会把角色
+    // "污染"到所有已打开的、不相关的文档 tab 上（无论是误锁定，还是
+    // 反过来误放行）。
+    //
+    // 注意：widget.view.workspaceId 在很多导航路径下是空字符串（ViewPB
+    // 没有填充这个字段），这种情况下无法判断文档归属，不能直接当作"不同
+    // 工作区"处理——否则会导致单工作区场景下角色闸门被错误跳过（曾经
+    // 复现过：role 始终为 null，canEdit 恒为 true）。只有在双方的
+    // workspaceId 都非空且确实不同时，才认为是跨工作区场景。
+    final docWorkspaceId = widget.view.workspaceId;
+    final activeWorkspaceId = state.currentWorkspace?.workspaceId;
+    final isKnownDifferentWorkspace = docWorkspaceId.isNotEmpty &&
+        activeWorkspaceId != null &&
+        activeWorkspaceId.isNotEmpty &&
+        docWorkspaceId != activeWorkspaceId;
+    if (isKnownDifferentWorkspace) {
       return null;
     }
     return state.currentUserRole ?? state.currentWorkspace?.role;
