@@ -62,11 +62,13 @@ class PageAccessLevelBloc
   StreamSubscription<void>? _shareSectionRefreshSub;
 
   // DidUpdateSharedUsers 节流：避免短时间内重复刷新访问级别。
-  // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），因此只做轻量节流，
-  // 既能防止通知风暴导致的重复请求，又能保证权限改动近乎实时反映到编辑器上。
+  // 协作场景下权限变更需要尽快生效（如从可编辑改为只读），降级窗口越小，
+  // 只读用户能误编辑、进而在重新授权时回放到他人页面的内容就越少，因此把节流
+  // 收紧到 150ms：既能防止通知风暴导致的重复请求，又能让权限改动近乎实时
+  // 反映到编辑器（editable=false），尽快关闭“可写窗口”。
   DateTime? _lastRefreshAccessLevelTime;
   static const Duration _refreshAccessLevelThrottle =
-      Duration(milliseconds: 500);
+      Duration(milliseconds: 150);
 
   @override
   Future<void> close() async {
@@ -162,12 +164,15 @@ class PageAccessLevelBloc
       hasSharedUsers = true;
     }
 
-    // 启动兜底轮询（每 30 秒刷新一次权限状态）
-    // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新
+    // 启动兜底轮询（每 10 秒刷新一次权限状态）
+    // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新。
+    // 这是 DidUpdateSharedUsers 通知丢失时的唯一兜底：间隔越短，被降级为只读的
+    // 用户能继续误编辑的窗口越小，从而减少重新授权时回放到他人页面的内容。
+    // 10s 是“及时性”与“每个打开的协作文档的权限查询请求量”的折中。
     _permissionPollingTimer?.cancel();
     if (hasSharedUsers) {
       _permissionPollingTimer = Timer.periodic(
-        const Duration(seconds: 30),
+        const Duration(seconds: 10),
         (_) {
           if (isClosed) return;
           add(const PageAccessLevelEvent.refreshAccessLevel());
