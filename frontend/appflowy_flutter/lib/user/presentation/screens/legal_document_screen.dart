@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 
 import '../../../generated/flowy_svgs.g.dart';
 
@@ -39,6 +40,7 @@ class LegalDocumentScreen extends StatelessWidget {
           javaScriptEnabled: true,
           supportZoom: true,
         ),
+        webViewEnvironment: sharedWebViewEnvironment,
       ) : LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(

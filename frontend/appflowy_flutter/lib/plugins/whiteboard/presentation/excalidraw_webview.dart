@@ -9,6 +9,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:http/http.dart' as http;
 
 import '../application/whiteboard_data_service.dart';
@@ -1873,6 +1874,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                     injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                   ),
                 ]),
+                webViewEnvironment: sharedWebViewEnvironment,
 
                 onWebViewCreated: (controller) {
                   _controller = controller;

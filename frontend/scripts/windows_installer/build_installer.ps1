@@ -1,19 +1,193 @@
 # PonyNotes Windows Installer Builder
 # Compatible with PowerShell execution environment
 
-$ErrorActionPreference = "Continue"
+# Stop on any unhandled error so silent failures don't slip through.
+$ErrorActionPreference = "Stop"
+
+# ----------------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------------
+
+# Run an external command, capture stdout AND stderr (so we can show real
+# errors on failure instead of swallowing them with 2>$null), and return its
+# exit code. Stdout/stderr are also mirrored to the live console.
+function Invoke-Step {
+    param(
+        [Parameter(Mandatory)][string]$File,
+        [Parameter(Mandatory)][string[]]$Args
+    )
+
+    $stdoutLog = [System.IO.Path]::GetTempFileName()
+    $stderrLog = [System.IO.Path]::GetTempFileName()
+    try {
+        $proc = Start-Process -FilePath $File -ArgumentList $Args `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutLog `
+            -RedirectStandardError  $stderrLog
+
+        $stdoutText = if (Test-Path $stdoutLog) { Get-Content $stdoutLog -Raw -Encoding UTF8 } else { "" }
+        $stderrText = if (Test-Path $stderrLog) { Get-Content $stderrLog -Raw -Encoding UTF8 } else { "" }
+
+        if ($stdoutText) { Write-Host $stdoutText.TrimEnd() }
+        if ($stderrText) {
+            foreach ($line in ($stderrText -split "`r?`n")) {
+                if ($line.Trim().Length -gt 0) { Write-Host $line -ForegroundColor DarkYellow }
+            }
+        }
+        return $proc.ExitCode
+    } finally {
+        Remove-Item $stdoutLog, $stderrLog -ErrorAction SilentlyContinue
+    }
+}
+
+# Copy a single file. Fails (throws) if the source is missing.
+function Copy-RequiredFile {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$DestinationDir
+    )
+    if (-not (Test-Path -LiteralPath $Source)) {
+        throw "Required file not found: $Source"
+    }
+    $destFile = Join-Path $DestinationDir (Split-Path -Leaf $Source)
+    Copy-Item -LiteralPath $Source -Destination $destFile -Force
+}
+
+# Copy a single file. Warns (does not throw) if the source is missing.
+function Copy-OptionalFile {
+    param(
+        [Parameter(Mandatory)][string]$Source,
+        [Parameter(Mandatory)][string]$DestinationDir,
+        [string]$Label = (Split-Path -Leaf $Source)
+    )
+    if (-not (Test-Path -LiteralPath $Source)) {
+        Write-Host "  [WARN] Skipping $Label (source not found: $Source)" -ForegroundColor Yellow
+        return $false
+    }
+    $destFile = Join-Path $DestinationDir (Split-Path -Leaf $Source)
+    Copy-Item -LiteralPath $Source -Destination $destFile -Force
+    return $true
+}
+
+# Copy all DLLs in a directory (non-recursive). Warns if dir is missing.
+function Copy-OptionalDlls {
+    param(
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$DestinationDir,
+        [string]$Label = $SourceDir
+    )
+    if (-not (Test-Path -LiteralPath $SourceDir)) {
+        Write-Host "  [WARN] Skipping $Label (directory not found)" -ForegroundColor Yellow
+        return 0
+    }
+    $files = Get-ChildItem -LiteralPath $SourceDir -Filter "*.dll" -File -ErrorAction Stop
+    if (-not $files) {
+        Write-Host "  [WARN] No DLLs found in $SourceDir" -ForegroundColor Yellow
+        return 0
+    }
+    foreach ($f in $files) {
+        Copy-Item -LiteralPath $f.FullName -Destination $DestinationDir -Force
+    }
+    return $files.Count
+}
+
+# Copy a directory tree using robocopy (most reliable on Windows for bulk
+# directory copies; PowerShell's Copy-Item has known quirks with wildcard
+# source paths on already-existing destinations). Warns if source is missing.
+#
+# IMPORTANT: we run robocopy via Start-Process -Wait -PassThru so we get a
+# proper ExitCode property. When invoked as `$rc = robocopy ...` directly,
+# PowerShell assigns the (empty) stdout to $rc and discards the actual
+# return code in $LASTEXITCODE, which silently disables any error checking.
+#
+# IMPORTANT: this function CLEARS the destination before copying (it removes
+# the existing tree then asks robocopy to mirror the source). This is the
+# right semantic for sub-directories like data/ or webview2_fixed/ where
+# stale leftovers would be wrong, but it is WRONG when the destination is
+# $InstallDir itself - the caller would silently lose every other file just
+# copied. Pass -ClearDestination:$false when copying into the installer
+# root so robocopy overlays without removing siblings.
+function Copy-OptionalDir {
+    param(
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$DestinationDir,
+        [string]$Label = $SourceDir,
+        [bool]$ClearDestination = $true
+    )
+    if (-not (Test-Path -LiteralPath $SourceDir)) {
+        Write-Host "  [WARN] Skipping $Label (directory not found)" -ForegroundColor Yellow
+        return $false
+    }
+    if ($ClearDestination -and (Test-Path -LiteralPath $DestinationDir)) {
+        Remove-Item -LiteralPath $DestinationDir -Recurse -Force
+    } elseif (-not (Test-Path -LiteralPath $DestinationDir)) {
+        New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
+    }
+    # robocopy exit codes: 0=no change, 1=files copied, 2=extra files deleted,
+    # 3=both. Anything >=8 is an error we care about.
+    $args = @("`"$SourceDir`"", "`"$DestinationDir`"", "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP", "/R:0", "/W:0")
+    $proc = Start-Process -FilePath "robocopy.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru
+    if ($proc.ExitCode -ge 8) {
+        throw "robocopy failed (exit code $($proc.ExitCode)) copying '$SourceDir' -> '$DestinationDir'"
+    }
+    return $true
+}
+
+# Copy the *contents* of $SourceDir into an already-existing $DestinationDir,
+# preserving subdirectories. Used for the Flutter Release root -> InstallerDir
+# bulk copy. Throws (rather than warns) on missing source because Release is
+# the build artifact this installer is built around.
+function Copy-DirContents {
+    param(
+        [Parameter(Mandatory)][string]$SourceDir,
+        [Parameter(Mandatory)][string]$DestinationDir,
+        [string]$Label = $SourceDir
+    )
+    if (-not (Test-Path -LiteralPath $SourceDir)) {
+        throw "Required source directory not found: $SourceDir ($Label)"
+    }
+    if (-not (Test-Path -LiteralPath $DestinationDir)) {
+        New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
+    }
+    # robocopy with a bare source path copies the contents of SourceDir into
+    # DestinationDir (this is the conventional, reliable Windows bulk copy;
+    # PowerShell's Copy-Item has known quirks with wildcard source paths on
+    # already-existing destinations, which is why we don't use it here).
+    $args = @("`"$SourceDir`"", "`"$DestinationDir`"", "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP", "/R:0", "/W:0")
+    $proc = Start-Process -FilePath "robocopy.exe" -ArgumentList $args -NoNewWindow -Wait -PassThru
+    if ($proc.ExitCode -ge 8) {
+        throw "robocopy failed (exit code $($proc.ExitCode)) copying contents of '$SourceDir' -> '$DestinationDir'"
+    }
+}
+
+# Verify a list of required paths (file or directory). Throws on first miss.
+function Assert-AllExist {
+    param(
+        [Parameter(Mandatory)][string[]]$Paths,
+        [string]$Context = "Verification"
+    )
+    foreach ($p in $Paths) {
+        if (-not (Test-Path -LiteralPath $p)) {
+            throw "$Context failed: missing '$p'"
+        }
+    }
+}
+
+# ----------------------------------------------------------------------------
+# Resolve paths
+# ----------------------------------------------------------------------------
 
 Write-Host "============================================="
 Write-Host "  PonyNotes Windows Installer Builder"
 Write-Host "============================================="
 Write-Host ""
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $FrontendDir = Join-Path $ScriptDir "..\.."
-$RustLibDir = Join-Path $FrontendDir "rust-lib"
-$FlutterDir = Join-Path $FrontendDir "appflowy_flutter"
-$InstallDir = Join-Path $ScriptDir "AppFlowy"
-$OutputDir = Join-Path $ScriptDir "Output"
+$RustLibDir  = Join-Path $FrontendDir "rust-lib"
+$FlutterDir  = Join-Path $FrontendDir "appflowy_flutter"
+$InstallDir  = Join-Path $ScriptDir "AppFlowy"
+$OutputDir   = Join-Path $ScriptDir "Output"
 
 $Version = "0.9.9"
 
@@ -21,9 +195,7 @@ $Version = "0.9.9"
 $IsccPath = "D:\Inno Setup 6\ISCC.exe"
 if (-not (Test-Path $IsccPath)) {
     $iscc = Get-Command iscc -ErrorAction SilentlyContinue
-    if ($iscc) {
-        $IsccPath = $iscc.Source
-    }
+    if ($iscc) { $IsccPath = $iscc.Source }
 }
 if (-not (Test-Path $IsccPath)) {
     Write-Host "[ERROR] Inno Setup compiler (iscc.exe) not found" -ForegroundColor Red
@@ -40,35 +212,40 @@ Write-Host "[1/3] Building Flutter Release..."
 
 Push-Location $FlutterDir
 
-Write-Host "Getting dependencies..."
-# Suppress stderr deprecation warnings that confuse PowerShell
-flutter pub get 2>$null
-$pubCode = $LASTEXITCODE
-Write-Host "Done getting dependencies (exit code: $pubCode)"
-if ($pubCode -ne 0) {
-    Write-Host "[ERROR] flutter pub get failed with code $pubCode" -ForegroundColor Red
+try {
+    Write-Host "Getting dependencies..."
+    $pubCode = Invoke-Step -File "flutter" -Args @("pub", "get")
+    Write-Host "Done getting dependencies (exit code: $pubCode)"
+    if ($pubCode -ne 0) {
+        throw "flutter pub get failed with exit code $pubCode"
+    }
+
+    Write-Host "Building Flutter Windows Release..."
+    Write-Host "Starting build at $(Get-Date -Format 'HH:mm:ss')"
+    $buildCode = Invoke-Step -File "flutter" -Args @("build", "windows", "--release")
+    Write-Host "Build command finished with code: $buildCode"
+    if ($buildCode -ne 0) {
+        throw "flutter build windows --release failed with exit code $buildCode"
+    }
+} finally {
     Pop-Location
-    exit $pubCode
 }
 
-Write-Host "Building Flutter Windows Release..."
-Write-Host "Starting build at $(Get-Date -Format 'HH:mm:ss')"
-flutter build windows --release 2>$null
-$buildCode = $LASTEXITCODE
-Write-Host "Build command finished with code: $buildCode"
-Pop-Location
+$releaseDir = Join-Path $FlutterDir "build\windows\x64\runner\Release"
+$exePath    = Join-Path $releaseDir  "PonyNotes.exe"
+$dataDir    = Join-Path $releaseDir  "data"
 
-if ($buildCode -ne 0) {
-    Write-Host "[ERROR] Flutter Release build failed with code $buildCode" -ForegroundColor Red
-    exit $buildCode
-}
-
-$exePath = Join-Path $FlutterDir "build\windows\x64\runner\Release\PonyNotes.exe"
-if (-not (Test-Path $exePath)) {
-    Write-Host "[ERROR] Flutter build failed - PonyNotes.exe not found at $exePath" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] Flutter Release build completed: $exePath"
+# Strong pre-flight check: Flutter build is only "successful" if the runtime
+# files that the engine needs to start are actually present. This is the
+# root-cause check that prevents shipping a broken installer.
+Assert-AllExist -Context "Flutter build output" -Paths @(
+    $exePath,
+    (Join-Path $releaseDir "flutter_windows.dll"),
+    (Join-Path $dataDir "app.so"),
+    (Join-Path $dataDir "icudtl.dat"),
+    (Join-Path $dataDir "flutter_assets")
+)
+Write-Host "[OK] Flutter Release build verified (exe + engine + AOT snapshot + assets)"
 
 # ============================================================================
 # Step 2: Prepare installation directory
@@ -81,126 +258,167 @@ if (Test-Path $InstallDir) {
 }
 New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 
-$releaseDir = Join-Path $FlutterDir "build\windows\x64\runner\Release"
-
+# Copy Flutter build root (exe + flutter_windows.dll + icudtl.dat etc.).
+# Use robocopy here instead of PowerShell Copy-Item: Copy-Item with a wildcard
+# source path on an existing destination silently drops files on some Windows
+# configurations, which was the root cause of the original silent-failure bug.
 Write-Host "Copying Flutter build files..."
-Copy-Item "$releaseDir\*" $InstallDir -Force -ErrorAction SilentlyContinue
+Copy-DirContents -SourceDir $releaseDir -DestinationDir $InstallDir -Label "Flutter Release dir"
 
+# Ensure the data/ subtree is present and contains the runtime files.
 Write-Host "Copying data directory..."
-$dataDir = Join-Path $releaseDir "data"
-if (Test-Path $dataDir) {
-    Copy-Item "$dataDir\*" "$InstallDir\data" -Recurse -Force
-}
+Copy-OptionalDir -SourceDir $dataDir -DestinationDir (Join-Path $InstallDir "data") -Label "Flutter data dir"
 
-# Verify critical files
-if (-not (Test-Path "$InstallDir\data")) {
-    Write-Host "[ERROR] data directory is missing!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] data directory verified"
+# Critical: data\app.so / icudtl.dat / flutter_assets MUST exist after copy.
+Assert-AllExist -Context "Installation data dir" -Paths @(
+    (Join-Path $InstallDir "data\app.so"),
+    (Join-Path $InstallDir "data\icudtl.dat"),
+    (Join-Path $InstallDir "data\flutter_assets")
+)
+Write-Host "[OK] Critical AOT/ICU/assets files verified"
 
-if (-not (Test-Path "$InstallDir\data\app.so")) {
-    Write-Host "[ERROR] app.so is missing!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] app.so verified"
-
-$icudtlSrc = Join-Path $dataDir "icudtl.dat"
-$icudtlDst = Join-Path $InstallDir "data\icudtl.dat"
-if (-not (Test-Path $icudtlDst)) {
-    if (Test-Path $icudtlSrc) {
-        Copy-Item $icudtlSrc $icudtlDst -Force
+# Strip legacy AppFlowy artifacts that may have been copied verbatim.
+foreach ($legacy in @("AppFlowy.exe", "AppFlowy.exp", "AppFlowy.lib")) {
+    $p = Join-Path $InstallDir $legacy
+    if (Test-Path $p) {
+        Remove-Item $p -Force
+        Write-Host "  [CLEAN] Removed legacy $legacy"
     }
 }
-if (-not (Test-Path $icudtlDst)) {
-    Write-Host "[ERROR] icudtl.dat is missing!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] icudtl.dat verified"
 
-if (-not (Test-Path "$InstallDir\data\flutter_assets")) {
-    Write-Host "[ERROR] flutter_assets is missing!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "[OK] flutter_assets verified"
-
-# Clean old AppFlowy compatibility files
-Remove-Item "$InstallDir\AppFlowy.exe" -Force -ErrorAction SilentlyContinue
-Remove-Item "$InstallDir\AppFlowy.exp" -Force -ErrorAction SilentlyContinue
-Remove-Item "$InstallDir\AppFlowy.lib" -Force -ErrorAction SilentlyContinue
-
-# Copy Flutter plugin DLLs
+# Flutter plugin DLLs. Fail if there are zero - that almost always means the
+# build was incomplete or plugins were never generated.
 Write-Host "Copying Flutter plugin DLLs..."
-$pluginDlls = Get-ChildItem "$FlutterDir\build\windows\x64\plugins\*\*\Release\*.dll" -ErrorAction SilentlyContinue
-foreach ($dll in $pluginDlls) {
-    Copy-Item $dll.FullName $InstallDir -Force -ErrorAction SilentlyContinue
+$pluginsRoot = Join-Path $FlutterDir "build\windows\x64\plugins"
+if (-not (Test-Path $pluginsRoot)) {
+    throw "Flutter plugins directory not found: $pluginsRoot"
 }
+$pluginDlls = @(Get-ChildItem -Path (Join-Path $pluginsRoot "*\Release\*.dll") -File -ErrorAction SilentlyContinue)
+if ($pluginDlls.Count -eq 0) {
+    throw "No Flutter plugin DLLs found under $pluginsRoot\*\Release"
+}
+foreach ($dll in $pluginDlls) {
+    Copy-Item -LiteralPath $dll.FullName -Destination $InstallDir -Force
+}
+Write-Host "  [OK] Copied $($pluginDlls.Count) plugin DLL(s)"
 
-# Copy ANGLE DLLs
+# ANGLE DLLs (optional - some Flutter versions ship them, others don't).
 Write-Host "Copying ANGLE DLLs..."
 $angleDir = Join-Path $FlutterDir "build\windows\x64\ANGLE"
-if (Test-Path $angleDir) {
-    Copy-Item "$angleDir\*.dll" $InstallDir -Force -ErrorAction SilentlyContinue
-}
+$angleCount = Copy-OptionalDlls -SourceDir $angleDir -DestinationDir $InstallDir -Label "ANGLE"
+if ($angleCount -gt 0) { Write-Host "  [OK] Copied $angleCount ANGLE DLL(s)" }
 
-# Copy libmpv DLL
+# libmpv (optional - only present when media_kit is enabled). The libmpv
+# directory contains loose files that should be merged into the installer
+# root WITHOUT clearing the rest of the installer (otherwise we'd nuke the
+# PonyNotes.exe etc. we already copied above).
 Write-Host "Copying libmpv DLL..."
 $mpvDir = Join-Path $FlutterDir "build\windows\x64\libmpv"
-if (Test-Path $mpvDir) {
-    Copy-Item "$mpvDir\*.dll" $InstallDir -Force -ErrorAction SilentlyContinue
+if (Copy-OptionalDir -SourceDir $mpvDir -DestinationDir $InstallDir -Label "libmpv" -ClearDestination:$false) {
+    Write-Host "  [OK] libmpv bundled"
 }
 
-# Copy pdfium DLL
+# pdfium (optional - only present when pdf rendering is enabled).
 Write-Host "Copying pdfium DLL..."
 $pdfiumBase = Join-Path $FlutterDir "build\windows\x64\.lib\chromium"
 if (Test-Path $pdfiumBase) {
-    $pdfiumDlls = Get-ChildItem "$pdfiumBase\*\x64\pdfium.dll" -ErrorAction SilentlyContinue
+    $pdfiumDlls = @(Get-ChildItem -Path (Join-Path $pdfiumBase "*\x64\pdfium.dll") -File -ErrorAction SilentlyContinue)
     foreach ($dll in $pdfiumDlls) {
-        Copy-Item $dll.FullName $InstallDir -Force -ErrorAction SilentlyContinue
+        Copy-Item -LiteralPath $dll.FullName -Destination $InstallDir -Force
     }
+    if ($pdfiumDlls.Count -gt 0) { Write-Host "  [OK] Copied $($pdfiumDlls.Count) pdfium DLL(s)" }
+} else {
+    Write-Host "  [WARN] pdfium base directory not found, skipping" -ForegroundColor Yellow
 }
 
-# Copy dart_ffi.dll from Flutter build output
+# dart_ffi.dll - optional but strongly expected.
 Write-Host "Copying dart_ffi.dll..."
 $dartFfiFromBuild = Join-Path $releaseDir "dart_ffi.dll"
-$dartFfiFromSrc = Join-Path $FlutterDir "windows\flutter\dart_ffi\dart_ffi.dll"
+$dartFfiFromSrc   = Join-Path $FlutterDir "windows\flutter\dart_ffi\dart_ffi.dll"
 if (Test-Path $dartFfiFromBuild) {
-    Copy-Item $dartFfiFromBuild "$InstallDir\dart_ffi.dll" -Force
-    Write-Host "[OK] dart_ffi.dll copied from Flutter build output"
+    Copy-Item -LiteralPath $dartFfiFromBuild -Destination (Join-Path $InstallDir "dart_ffi.dll") -Force
+    Write-Host "  [OK] dart_ffi.dll copied from Flutter build output"
 } elseif (Test-Path $dartFfiFromSrc) {
-    Copy-Item $dartFfiFromSrc "$InstallDir\dart_ffi.dll" -Force
-    Write-Host "[OK] dart_ffi.dll copied from source"
+    Copy-Item -LiteralPath $dartFfiFromSrc -Destination (Join-Path $InstallDir "dart_ffi.dll") -Force
+    Write-Host "  [OK] dart_ffi.dll copied from source"
 } else {
-    Write-Host "[WARNING] dart_ffi.dll not found in build output or source" -ForegroundColor Yellow
+    Write-Host "  [WARN] dart_ffi.dll not found (will rely on Flutter SDK runtime)" -ForegroundColor Yellow
 }
 
-# Copy Rust DLL dependencies
+# Rust DLLs.
 Write-Host "Copying Rust DLL dependencies..."
 $rustDeps = Join-Path $RustLibDir "target\release\deps"
-if (Test-Path $rustDeps) {
-    Copy-Item "$rustDeps\*.dll" $InstallDir -Force -ErrorAction SilentlyContinue
-}
 $rustDlls = Join-Path $RustLibDir "target\release"
-if (Test-Path $rustDlls) {
-    Copy-Item "$rustDlls\*.dll" $InstallDir -Force -ErrorAction SilentlyContinue
-}
+$rustCount = 0
+$rustCount += Copy-OptionalDlls -SourceDir $rustDeps -DestinationDir $InstallDir -Label "Rust deps"
+$rustCount += Copy-OptionalDlls -SourceDir $rustDlls -DestinationDir $InstallDir -Label "Rust release"
+Write-Host "  [OK] Copied $rustCount Rust DLL(s)"
 
-# Copy VC++ Redistributable
+# VC++ Redistributable (optional - bundled if present in scripts dir).
 Write-Host "Copying VC++ Redistributable..."
 $vcRedist = Join-Path $ScriptDir "vc_redist_x64.exe"
 if (Test-Path $vcRedist) {
-    Copy-Item $vcRedist $InstallDir -Force
+    Copy-Item -LiteralPath $vcRedist -Destination $InstallDir -Force
+    Write-Host "  [OK] vc_redist_x64.exe bundled"
+} else {
+    Write-Host "  [WARN] vc_redist_x64.exe not found in scripts dir; target machines need VC++ runtime pre-installed" -ForegroundColor Yellow
 }
 
-Write-Host "[OK] Installation directory ready"
+# Bundle WebView2 runtime (optional - required for WebView2 features).
+Write-Host "Bundling WebView2 runtime..."
+$webview2SourceRoot = "C:/Program Files (x86)/Microsoft/EdgeWebView/Application"
+$webview2Dest = Join-Path $InstallDir "webview2_fixed"
 
-# Final check
-if (-not (Test-Path "$InstallDir\data\app.so") -or
-    -not (Test-Path "$InstallDir\data\icudtl.dat") -or
-    -not (Test-Path "$InstallDir\data\flutter_assets")) {
-    Write-Host "[ERROR] Installation directory is incomplete" -ForegroundColor Red
-    exit 1
+$webview2BestVersion = ""
+$webview2BestPath    = ""
+
+if (Test-Path $webview2SourceRoot) {
+    $webview2Candidates = Get-ChildItem -LiteralPath $webview2SourceRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" }
+    foreach ($candidate in $webview2Candidates) {
+        $exeCandidate = Join-Path $candidate.FullName "msedgewebview2.exe"
+        if (Test-Path $exeCandidate) {
+            if (-not $webview2BestVersion -or ($candidate.Name -gt $webview2BestVersion)) {
+                $webview2BestVersion = $candidate.Name
+                $webview2BestPath    = $candidate.FullName
+            }
+        }
+    }
 }
+
+if ($webview2BestVersion) {
+    Write-Host "  Found WebView2 runtime v$webview2BestVersion"
+    if (Copy-OptionalDir -SourceDir $webview2BestPath -DestinationDir $webview2Dest -Label "WebView2 runtime") {
+        Write-Host "  [OK] WebView2 runtime bundled to: $webview2Dest"
+    }
+} else {
+    Write-Host "  [WARN] WebView2 runtime not found at: $webview2SourceRoot" -ForegroundColor Yellow
+    Write-Host "  The app will require WebView2 to be pre-installed on target machines." -ForegroundColor Yellow
+}
+
+# Download standalone WebView2 Runtime installer (best-effort).
+Write-Host "Downloading standalone WebView2 Runtime installer..."
+$webview2SetupUrl  = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+$webview2SetupPath = Join-Path $InstallDir "MicrosoftEdgeWebview2Setup.exe"
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri $webview2SetupUrl -OutFile $webview2SetupPath -UseBasicParsing -TimeoutSec 120
+    $setupSize = [math]::Round((Get-Item $webview2SetupPath).Length / 1MB, 2)
+    Write-Host "  [OK] WebView2 installer downloaded: $setupSize MB"
+} catch {
+    Write-Host "  [WARN] Failed to download WebView2 installer: $_" -ForegroundColor Yellow
+    Write-Host "  Target machines will need WebView2 pre-installed." -ForegroundColor Yellow
+}
+
+# Final hard check on the installation payload before we hand it to Inno Setup.
+Assert-AllExist -Context "Installation payload" -Paths @(
+    (Join-Path $InstallDir "PonyNotes.exe"),
+    (Join-Path $InstallDir "flutter_windows.dll"),
+    (Join-Path $InstallDir "data\app.so"),
+    (Join-Path $InstallDir "data\icudtl.dat"),
+    (Join-Path $InstallDir "data\flutter_assets")
+)
 Write-Host "[OK] All critical files verified"
 
 # ============================================================================
@@ -216,20 +434,15 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $issFile = Join-Path $ScriptDir "inno_setup_config.iss"
 if (-not (Test-Path $issFile)) {
-    Write-Host "[ERROR] Inno Setup config not found: $issFile" -ForegroundColor Red
-    exit 1
+    throw "Inno Setup config not found: $issFile"
 }
 
 Write-Host "Running: $IsccPath $issFile"
-& $IsccPath $issFile
-$issCode = $LASTEXITCODE
-
-if ($issCode -eq 0) {
-    Write-Host "[OK] Installer compiled successfully!" -ForegroundColor Green
-} else {
-    Write-Host "[ERROR] Installer compilation failed with code $issCode" -ForegroundColor Red
-    exit $issCode
+$issCode = Invoke-Step -File $IsccPath -Args @($issFile)
+if ($issCode -ne 0) {
+    throw "Inno Setup compilation failed with exit code $issCode"
 }
+Write-Host "[OK] Installer compiled successfully!" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "============================================="

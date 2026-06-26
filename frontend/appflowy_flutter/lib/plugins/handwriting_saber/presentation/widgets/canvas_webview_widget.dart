@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 
 import '../../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
 
@@ -446,6 +447,7 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
             disableVerticalScroll: !widget.webView.isInteractive,
             disableHorizontalScroll: !widget.webView.isInteractive,
           ),
+          webViewEnvironment: sharedWebViewEnvironment,
           onWebViewCreated: _onWebViewCreated,
           onLoadStart: (controller, url) {
             if (mounted) {

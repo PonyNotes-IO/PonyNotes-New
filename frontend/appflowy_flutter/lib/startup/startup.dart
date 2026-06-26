@@ -150,6 +150,8 @@ class FlowyRunner {
         InitAppWindowTask(),
         // Init Rust SDK - must be initialized first to ensure platform channels work
         InitRustSDKTask(),
+        // Init WebView2 environment with bundled runtime (must be before any WebView is created)
+        const WebView2InitTask(),
         // init media_kit for video/audio playback
         const InitMediaKitTask(),
         // localization - moved after Rust SDK to ensure platform channels are ready

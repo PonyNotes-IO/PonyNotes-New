@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/button.dart';
 import 'package:flutter/material.dart';
@@ -111,6 +112,7 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                 userAgent:
                                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                               ),
+                              webViewEnvironment: sharedWebViewEnvironment,
                               onWebViewCreated: (c) => _controller = c,
                               onLoadStop: (_, __) {
                                 if (mounted) {
