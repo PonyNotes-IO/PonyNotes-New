@@ -19,8 +19,7 @@ OutputDir=Output
 
 [Files]
 Source: "AppFlowy\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
-; Note: vc_redist_x64.exe is optional - uncomment if you have it
-; Source: "AppFlowy\vc_redist_x64.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "AppFlowy\vc_redist_x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
 Source: "AppFlowy\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
@@ -28,8 +27,8 @@ Name: "{userdesktop}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
 Name: "{group}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
 
 [Run]
-; Note: vc_redist_x64.exe is optional - uncomment if you have it
-; Filename: "{app}\vc_redist_x64.exe"; Parameters: "/install /quiet /norestart"; Description: "Installing Visual C++ Redistributable..."; Flags: shellexec waituntilterminated
+Filename: "{tmp}\vc_redist_x64.exe"; Parameters: "/install /quiet /norestart"; Description: "Installing Visual C++ Redistributable..."; Flags: shellexec waituntilterminated
+Filename: "{app}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; Description: "Installing WebView2 Runtime..."; Flags: shellexec waituntilterminated; StatusMsg: "Installing WebView2 Runtime..."
 
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\ponynotes"; ValueType: "string"; ValueData: "URL:PonyNotes"; Flags: uninsdeletekey

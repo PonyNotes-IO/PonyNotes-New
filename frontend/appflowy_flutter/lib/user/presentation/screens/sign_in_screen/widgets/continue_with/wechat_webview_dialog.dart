@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -88,6 +89,7 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                           javaScriptEnabled: true,
                           supportZoom: false,
                         ),
+                        webViewEnvironment: sharedWebViewEnvironment,
                         onWebViewCreated: (c) => _controller = c,
                         onLoadStop: (_, __) {
                           setState(() => _isLoading = false);

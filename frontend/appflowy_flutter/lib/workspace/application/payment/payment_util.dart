@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
@@ -335,6 +336,7 @@ class PaymentUtil {
             ),
             body: InAppWebView(
               initialUrlRequest: URLRequest(url: WebUri(payUrl)),
+              webViewEnvironment: sharedWebViewEnvironment,
               onLoadStart: (controller, url) {
                 Log.info('[PaymentUtil] Payment webview loading: $url');
               },
