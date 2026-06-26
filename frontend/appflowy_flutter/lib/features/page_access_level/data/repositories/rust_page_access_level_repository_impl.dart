@@ -221,7 +221,15 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
-    final workspaceResult = await getCurrentWorkspace();
+    // 注意：必须查“这篇文档自己所属”的工作区（view.workspaceId），不能用
+    // getCurrentWorkspace()（全局当前激活的工作区）。多标签页场景下用户可能
+    // 同时打开了属于不同工作区的文档，若用当前激活工作区的角色去判断一篇
+    // 属于另一个工作区的文档，切换工作区会把角色"污染"到所有已打开的、
+    // 不相关的文档上。
+    final docWorkspaceId = view?.workspaceId;
+    final workspaceResult = docWorkspaceId != null && docWorkspaceId.isNotEmpty
+        ? await UserBackendService.getWorkspaceById(docWorkspaceId)
+        : await getCurrentWorkspace();
     final workspace = workspaceResult.fold(
       (s) => s,
       (_) => null,
@@ -230,7 +238,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.failure(
         FlowyError(
           code: ErrorCode.Internal,
-          msg: 'Current workspace not found',
+          msg: 'Workspace not found for page',
         ),
       );
     }

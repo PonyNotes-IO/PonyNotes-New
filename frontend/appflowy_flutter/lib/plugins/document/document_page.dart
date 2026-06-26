@@ -330,6 +330,15 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   AFRolePB? _effectiveWorkspaceRole(UserWorkspaceState state) {
+    // UserWorkspaceBloc 里的 currentUserRole/currentWorkspace 只反映"当前
+    // 激活"的那一个工作区。多标签页场景下，用户可能同时打开了属于不同
+    // 工作区的文档 tab；如果这个文档（widget.view）并不属于当前激活的
+    // 工作区，就不能把激活工作区的角色套用到它身上——否则切换工作区会
+    // 把角色"污染"到所有已打开的、不相关的文档 tab 上（无论是误锁定，
+    // 还是反过来误放行）。
+    if (state.currentWorkspace?.workspaceId != widget.view.workspaceId) {
+      return null;
+    }
     return state.currentUserRole ?? state.currentWorkspace?.role;
   }
 
