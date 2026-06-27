@@ -91,6 +91,25 @@
         return stableState;
     };
 
+    function _getSceneElementsForSync(fallbackValue) {
+        const api = window._excalidrawAPI;
+        if (api) {
+            try {
+                const elements = (
+                    typeof api.getSceneElementsIncludingDeleted === 'function'
+                        ? api.getSceneElementsIncludingDeleted()
+                        : api.getSceneElements?.()
+                );
+                if (Array.isArray(elements)) {
+                    return JSON.stringify(elements);
+                }
+            } catch (e) {
+                console.warn('[PonyNotes] Failed to read elements including deleted, using storage value:', e);
+            }
+        }
+        return fallbackValue;
+    }
+
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
@@ -99,9 +118,12 @@
         },
 
         setItem: function (key, value) {
+            const valueForSync = key.endsWith('excalidraw')
+                ? _getSceneElementsForSync(value)
+                : value;
             originalLocalStorage.setItem(scopedStorageKey(key), value);
             if (init) {
-                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: key, value });
+                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: key, value: valueForSync });
 
                 // 📸 关键修复：当 elements 更新时，自动捕获 files 并同步
                 // Excalidraw 不会将 files 写入 localStorage，我们需要手动提取
