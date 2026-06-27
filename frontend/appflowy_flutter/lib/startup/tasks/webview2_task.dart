@@ -6,18 +6,21 @@ import 'package:universal_platform/universal_platform.dart';
 
 import '../startup.dart';
 
-/// Pre-created WebView2 environment using the bundled runtime.
-/// Used by all InAppWebView widgets on Windows to avoid relying on system WebView2.
+/// Pre-created WebView2 environment.
+/// Uses the system-installed WebView2 Evergreen runtime found via the registry.
+/// The installer's [Run] section guarantees WebView2 is present on every
+/// target machine before the app starts, so no bundled fixed-version is needed.
 WebViewEnvironment? _sharedWebViewEnvironment;
 
 /// Returns the shared WebView2 environment, if initialized.
 WebViewEnvironment? get sharedWebViewEnvironment => _sharedWebViewEnvironment;
 
-/// Initializes the WebView2 environment using the bundled runtime on Windows.
+/// Initializes the WebView2 environment.
 ///
-/// This task must run before any WebView is created. It configures flutter_inappwebview
-/// to use the WebView2 runtime bundled in the `webview2_fixed/` directory next to the
-/// executable, so the app works even on machines that never had WebView2 installed.
+/// This task must run before any WebView is created. It creates a shared
+/// WebViewEnvironment that all InAppWebView widgets on Windows will use.
+/// The runtime is the system-installed Evergreen version installed by the
+/// installer (MicrosoftEdgeWebview2Setup.exe runs silently during setup).
 class WebView2InitTask extends LaunchTask {
   const WebView2InitTask();
 
@@ -28,18 +31,10 @@ class WebView2InitTask extends LaunchTask {
     }
 
     try {
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      final bundledRuntimePath = '$exeDir\\webview2_fixed';
-
-      Log.info('[WebView2] Bundled runtime path: $bundledRuntimePath');
-
       _sharedWebViewEnvironment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(
-          browserExecutableFolder: bundledRuntimePath,
-        ),
+        settings: WebViewEnvironmentSettings(),
       );
-
-      Log.info('[WebView2] Environment initialized successfully');
+      Log.info('[WebView2] Environment initialized (system Evergreen runtime)');
     } catch (e, stackTrace) {
       Log.error('[WebView2] Failed to initialize WebView2 environment', e, stackTrace);
     }

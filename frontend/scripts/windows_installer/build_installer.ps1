@@ -364,51 +364,28 @@ if (Test-Path $vcRedist) {
     Write-Host "  [WARN] vc_redist_x64.exe not found in scripts dir; target machines need VC++ runtime pre-installed" -ForegroundColor Yellow
 }
 
-# Bundle WebView2 runtime (optional - required for WebView2 features).
-Write-Host "Bundling WebView2 runtime..."
-$webview2SourceRoot = "C:/Program Files (x86)/Microsoft/EdgeWebView/Application"
-$webview2Dest = Join-Path $InstallDir "webview2_fixed"
-
-$webview2BestVersion = ""
-$webview2BestPath    = ""
-
-if (Test-Path $webview2SourceRoot) {
-    $webview2Candidates = Get-ChildItem -LiteralPath $webview2SourceRoot -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match "^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$" }
-    foreach ($candidate in $webview2Candidates) {
-        $exeCandidate = Join-Path $candidate.FullName "msedgewebview2.exe"
-        if (Test-Path $exeCandidate) {
-            if (-not $webview2BestVersion -or ($candidate.Name -gt $webview2BestVersion)) {
-                $webview2BestVersion = $candidate.Name
-                $webview2BestPath    = $candidate.FullName
-            }
-        }
-    }
-}
-
-if ($webview2BestVersion) {
-    Write-Host "  Found WebView2 runtime v$webview2BestVersion"
-    if (Copy-OptionalDir -SourceDir $webview2BestPath -DestinationDir $webview2Dest -Label "WebView2 runtime") {
-        Write-Host "  [OK] WebView2 runtime bundled to: $webview2Dest"
-    }
-} else {
-    Write-Host "  [WARN] WebView2 runtime not found at: $webview2SourceRoot" -ForegroundColor Yellow
-    Write-Host "  The app will require WebView2 to be pre-installed on target machines." -ForegroundColor Yellow
-}
-
-# Download standalone WebView2 Runtime installer (best-effort).
-Write-Host "Downloading standalone WebView2 Runtime installer..."
+# WebView2: rely on the Evergreen standalone installer that ships in the
+# install directory.  At install time, Inno Setup's [Run] section silently
+# installs it to the system (C:\Program Files (x86)\Microsoft\EdgeWebView\)
+# so every target machine ends up with a consistent, auto-updating WebView2
+# without us having to ship a frozen-in-time fixed-version directory that
+# may or may not match the target OS.
+Write-Host "Downloading WebView2 Evergreen installer..."
 $webview2SetupUrl  = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 $webview2SetupPath = Join-Path $InstallDir "MicrosoftEdgeWebview2Setup.exe"
-try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri $webview2SetupUrl -OutFile $webview2SetupPath -UseBasicParsing -TimeoutSec 120
-    $setupSize = [math]::Round((Get-Item $webview2SetupPath).Length / 1MB, 2)
-    Write-Host "  [OK] WebView2 installer downloaded: $setupSize MB"
-} catch {
-    Write-Host "  [WARN] Failed to download WebView2 installer: $_" -ForegroundColor Yellow
-    Write-Host "  Target machines will need WebView2 pre-installed." -ForegroundColor Yellow
+if (-not (Test-Path $webview2SetupPath)) {
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $webview2SetupUrl -OutFile $webview2SetupPath -UseBasicParsing -TimeoutSec 120
+        $setupSize = [math]::Round((Get-Item $webview2SetupPath).Length / 1MB, 2)
+        Write-Host "  [OK] WebView2 installer downloaded: $setupSize MB"
+    } catch {
+        Write-Host "  [WARN] Failed to download WebView2 installer: $_" -ForegroundColor Yellow
+        Write-Host "  Target machines will need WebView2 pre-installed." -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "  [OK] WebView2 installer already present, skipping download"
 }
 
 # Final hard check on the installation payload before we hand it to Inno Setup.
