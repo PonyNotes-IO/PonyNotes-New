@@ -1,4 +1,5 @@
-﻿import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -264,11 +265,11 @@ class _UnifiedViewTopRightActionsContentState
                   dimension: HomeSizes.topActionBarItemExtent,
                   child: FlowyButton(
                     margin: EdgeInsets.zero,
-                    text: Icon(
+                    text: FlowySvg(
                       isFullWindow
-                          ? Icons.fullscreen_exit_rounded
-                          : Icons.fullscreen_rounded,
-                      size: 20,
+                          ? FlowySvgs.app_exit_full_window_m
+                          : FlowySvgs.app_full_window_m,
+                      size: const Size.square(20),
                       color: iconColor,
                     ),
                     onTap: FullWindowController.toggle,
@@ -282,8 +283,8 @@ class _UnifiedViewTopRightActionsContentState
         MoreViewActions(
           view: widget.view,
           viewInfoBloc: widget.viewInfoBloc ?? _maybeReadViewInfoBloc(context),
-          pageAccessLevelBloc:
-              widget.pageAccessLevelBloc ?? _maybeReadPageAccessLevelBloc(context),
+          pageAccessLevelBloc: widget.pageAccessLevelBloc ??
+              _maybeReadPageAccessLevelBloc(context),
           iconColor: iconColor,
           customActions: widget.customActions ?? const [],
         ),
