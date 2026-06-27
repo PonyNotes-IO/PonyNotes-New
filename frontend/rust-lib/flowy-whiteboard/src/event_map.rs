@@ -16,6 +16,8 @@ pub fn init(whiteboard_manager: Weak<WhiteboardManager>) -> AFPlugin {
     .event(WhiteboardEvent::GetWhiteboardData, get_whiteboard_data_handler)
     .event(WhiteboardEvent::CloseWhiteboard, close_whiteboard_handler)
     .event(WhiteboardEvent::DeleteWhiteboard, delete_whiteboard_handler)
+    .event(WhiteboardEvent::ForceSaveWhiteboard, force_save_whiteboard_handler)
+    .event(WhiteboardEvent::GetWhiteboardJsonData, get_whiteboard_json_data_handler)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Display, ProtoBuf_Enum, Flowy_Event)]
@@ -38,4 +40,10 @@ pub enum WhiteboardEvent {
   
   #[event(input = "ViewIdPB")]
   DeleteWhiteboard = 5,
+
+  #[event(input = "ViewIdPB")]
+  ForceSaveWhiteboard = 6,
+
+  #[event(input = "ViewIdPB", output = "WhiteboardDataPB")]
+  GetWhiteboardJsonData = 7,
 }

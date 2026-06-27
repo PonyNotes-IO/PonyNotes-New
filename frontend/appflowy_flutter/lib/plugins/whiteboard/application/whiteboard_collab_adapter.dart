@@ -6,17 +6,8 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 
-/// WhiteboardCollabAdapter
-///
-/// 完全模仿 TransactionAdapter 的实现
-/// 立即同步白板数据变更到 Collab 后端（不使用定时器）
-///
-/// 核心思路：
-/// 1. 监听白板数据变更（模仿 DocumentBloc 的 transactionStream）
-/// 2. **立即调用** WhiteboardDataService.saveWhiteboardData()（模仿 TransactionAdapter.apply()）
-/// 3. 使用防抖机制避免过于频繁的调用
-/// 4. 提供强制同步方法（用于手动保存）
-/// 5. ✅ 关键修复：在 Widget 销毁前强制同步，确保数据不丢失
+enum WhiteboardSyncStatus { idle, syncing, success, error }
+
 class WhiteboardCollabAdapter {
   WhiteboardCollabAdapter({
     required this.viewId,
@@ -40,9 +31,6 @@ class WhiteboardCollabAdapter {
 
   static const _debounceDuration = Duration(milliseconds: 50);
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
-  // scrollX/scrollY 已从稳定键中移除：
-  // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
-  // 导致每次会话中画布不断向左漂移且漂移量被持久化到后端
   static const Set<String> _stableAppStateKeys = {
     'gridModeEnabled',
     'gridSize',
@@ -52,34 +40,34 @@ class WhiteboardCollabAdapter {
     'zenModeEnabled',
   };
 
+  static const int _filesSizeWarningBytes = 5 * 1024 * 1024;
+
   bool _disposed = false;
   bool _isSyncing = false;
   bool _hasUnsavedChanges = false;
+  bool _isPulling = false;
+  bool _hasQueuedSync = false;
 
-  // 待同步的数据（增量）
+  WhiteboardSyncStatus _syncStatus = WhiteboardSyncStatus.idle;
+  final StreamController<WhiteboardSyncStatus> _syncStatusController =
+      StreamController<WhiteboardSyncStatus>.broadcast();
+
+  Stream<WhiteboardSyncStatus> get syncStatusStream => _syncStatusController.stream;
+  WhiteboardSyncStatus get syncStatus => _syncStatus;
+
   final Map<String, dynamic> _pendingData = {};
-  String _pendingType = "";
-
-  // 正在同步的数据（增量）
+  String _pendingType = '';
   final Map<String, dynamic> _syncData = {};
-  String _syncType = "";
-
+  String _syncType = '';
   Timer? _debounceTimer;
-  // 缓存完整白板数据（全量状态）
   final Map<String, dynamic> _fullData = {};
-
-  // ✅ 修复：添加待处理的 files 数据
   final Map<String, dynamic> _pendingFiles = {};
   final Map<String, dynamic> _syncFiles = {};
 
-  /// 设置初始数据
-  /// ✅ 关键修复：标准化键名，避免 localStorage 原始键名和标准键名共存导致数据混乱
   void setInitialData(Map<String, dynamic>? data) {
     if (data != null) {
-      // 标准化键名后再设置
       final normalized = _normalizeKeys(data);
       _fullData.addAll(normalized);
-      // 同时初始化 files 数据
       if (normalized.containsKey('files') && normalized['files'] is Map) {
         _fullData['files'] =
             Map<String, dynamic>.from(normalized['files'] as Map);
@@ -87,47 +75,32 @@ class WhiteboardCollabAdapter {
     }
   }
 
-  /// ✅ 标准化键名：将 localStorage 原始键名转换为标准键名
-  /// excalidraw -> elements, excalidraw-state -> appState, excalidraw-files -> files
   Map<String, dynamic> _normalizeKeys(Map<String, dynamic> data) {
     final normalized = <String, dynamic>{};
-
     for (final entry in data.entries) {
       final key = entry.key;
       final value = entry.value;
-
       if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
         if (!normalized.containsKey('elements')) {
-          normalized['elements'] =
-              value is String ? _tryParseJson(value) : value;
+          normalized['elements'] = value is String ? _tryParseJson(value) : value;
         }
-      } else if (key == 'excalidraw-state' ||
-          key.endsWith('_excalidraw-state')) {
+      } else if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
         if (!normalized.containsKey('appState')) {
-          normalized['appState'] = _sanitizeAppState(
-            value is String ? _tryParseJson(value) : value,
-          );
+          normalized['appState'] = _sanitizeAppState(value is String ? _tryParseJson(value) : value);
         }
-      } else if (key == 'excalidraw-files' ||
-          key.endsWith('_excalidraw-files')) {
+      } else if (key == 'excalidraw-files' || key.endsWith('_excalidraw-files')) {
         if (!normalized.containsKey('files')) {
           normalized['files'] = value is String ? _tryParseJson(value) : value;
         }
       } else if (key == 'elements' || key == 'appState' || key == 'files') {
-        // 标准键名优先（不覆盖已有的标准键名数据）
-        normalized[key] = _sanitizeWhiteboardValue(
-          key,
-          value is String ? _tryParseJson(value) : value,
-        );
+        normalized[key] = _sanitizeWhiteboardValue(key, value is String ? _tryParseJson(value) : value);
       } else {
         normalized[key] = value;
       }
     }
-
     return normalized;
   }
 
-  /// 尝试解析 JSON 字符串，失败则返回原始值
   dynamic _tryParseJson(String value) {
     try {
       return jsonDecode(value);
@@ -136,134 +109,116 @@ class WhiteboardCollabAdapter {
     }
   }
 
-  /// 白板数据变更回调（模仿 DocumentBloc 的 transactionStream）
-  ///
-  /// 关键：立即同步到后端（模仿 TransactionAdapter.apply()）
   dynamic _sanitizeWhiteboardValue(String key, dynamic value) {
-    if (key == 'appState') {
-      return _sanitizeAppState(value);
-    }
-    if (key == 'files' && value is Map) {
-      return Map<String, dynamic>.from(value);
-    }
+    if (key == 'appState') return _sanitizeAppState(value);
+    if (key == 'files' && value is Map) return Map<String, dynamic>.from(value);
     return value;
   }
 
   Map<String, dynamic> _sanitizeAppState(dynamic value) {
-    if (value is! Map) {
-      return <String, dynamic>{};
-    }
-
+    if (value is! Map) return <String, dynamic>{};
     final source = Map<String, dynamic>.from(value);
     final sanitized = <String, dynamic>{};
     for (final key in _stableAppStateKeys) {
-      if (source.containsKey(key)) {
-        sanitized[key] = source[key];
-      }
+      if (source.containsKey(key)) sanitized[key] = source[key];
     }
     return sanitized;
   }
 
   void onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
-    if (_disposed) {
-      return;
-    }
-
-    // 更新全量数据缓存
+    if (_disposed) return;
     data.forEach((key, value) {
       final sanitizedValue = _sanitizeWhiteboardValue(key, value);
       if (key == 'files' && value is Map) {
-        _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?,
-            value as Map<String, dynamic>);
+        _fullData[key] = _mergeFiles(
+            _fullData[key] as Map<String, dynamic>?, value as Map<String, dynamic>);
         _pendingFiles.addAll(value);
       } else {
         _fullData[key] = sanitizedValue;
       }
     });
-
     _hasUnsavedChanges = true;
     _pendingData.addAll(
-      data.map(
-        (key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value)),
-      ),
+      data.map((key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value))),
     );
     _pendingType = type;
-
-    // 通知上层数据已变更（用于 UI 更新）
-
-    // 取消之前的防抖定时器，重新开始计时
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_debounceDuration, () {
       _syncImmediately();
     });
   }
 
-  /// 合并 files 数据（智能合并，保护 dataURL）
   Map<String, dynamic> _mergeFiles(
       Map<String, dynamic>? existing, Map<String, dynamic> newFiles) {
     final result = <String, dynamic>{};
-    if (existing != null) {
-      result.addAll(existing);
-    }
-
-    // 遍历新文件，如果本地已有该文件且包含 dataURL，而新数据没有，则保留本地的 dataURL
+    if (existing != null) result.addAll(existing);
     newFiles.forEach((fileId, newData) {
-      if (newData is Map &&
-          result.containsKey(fileId) &&
-          result[fileId] is Map) {
+      if (newData is Map && result.containsKey(fileId) && result[fileId] is Map) {
         final existingData = Map<String, dynamic>.from(result[fileId] as Map);
         final newFileMap = Map<String, dynamic>.from(newData as Map);
-
-        // 如果新数据没有 dataURL 但本地有，则保留本地的
-        if (!newFileMap.containsKey('dataURL') &&
-            existingData.containsKey('dataURL')) {
+        if (!newFileMap.containsKey('dataURL') && existingData.containsKey('dataURL')) {
           newFileMap['dataURL'] = existingData['dataURL'];
-          Log.info(
-              '[WBCollab][WhiteboardCollabAdapter] 📸 Preserving local dataURL for $fileId during merge');
+          Log.info('[WBCollab][WhiteboardCollabAdapter] Preserving local dataURL for $fileId during merge');
         }
-
         result[fileId] = newFileMap;
       } else {
         result[fileId] = newData;
       }
     });
-
     return result;
   }
 
-  /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
   Future<void> _syncImmediately() async {
-    if (!_hasUnsavedChanges || _isSyncing || _disposed) {
+    if (!_hasUnsavedChanges || _disposed) return;
+    if (_isSyncing) {
+      _hasQueuedSync = true;
       return;
     }
-
     _isSyncing = true;
     _hasUnsavedChanges = false;
     _syncData.addAll(_pendingData);
     _syncType = _pendingType;
-    _pendingType = "";
+    _pendingType = '';
     _pendingData.clear();
-
     _syncFiles.addAll(_pendingFiles);
     _pendingFiles.clear();
 
+    _syncStatus = WhiteboardSyncStatus.syncing;
+    _syncStatusController.add(_syncStatus);
+
     try {
       var success = false;
-
       if (_syncType == 'update') {
         if (_syncFiles.isNotEmpty) {
           _fullData['files'] = _mergeFiles(
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
 
-        Log.info(
-            '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
-        if (_fullData.containsKey('files')) {
+        if (_fullData.containsKey('files') && _fullData['files'] is Map) {
           final files = _fullData['files'] as Map<String, dynamic>;
           Log.info('[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
+          try {
+            final filesBytes = utf8.encode(jsonEncode(files)).length;
+            if (filesBytes > _filesSizeWarningBytes) {
+              Log.warn('[WBCollab][WhiteboardCollabAdapter] Files payload exceeds 5 MB ($filesBytes bytes)');
+            }
+          } catch (_) {}
         }
 
-        success = await _service.saveWhiteboardData(viewId, _fullData);
+        Map<String, dynamic>? dataToSend;
+        final elements = _fullData['elements'];
+        if (elements is List && elements.length > 0) {
+          dataToSend = Map<String, dynamic>.from(_fullData);
+        }
+
+        if (dataToSend != null) {
+          Log.info('[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
+          success = await _service.saveWhiteboardData(viewId, dataToSend);
+        }
+
+        if (success && _fullData['elements'] is List) {
+          // Full sync completed successfully
+        }
       } else {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
@@ -272,23 +227,32 @@ class WhiteboardCollabAdapter {
         _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
-        Log.warn('[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+        _syncStatus = WhiteboardSyncStatus.error;
+        _syncStatusController.add(_syncStatus);
+        Log.warn('[WBCollab][WhiteboardCollabAdapter] Sync failed, will retry');
       } else {
-        Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
+        _syncStatus = WhiteboardSyncStatus.success;
+        _syncStatusController.add(_syncStatus);
+        Log.info('[WBCollab][WhiteboardCollabAdapter] Sync completed: saved to server');
       }
     } catch (e) {
       _hasUnsavedChanges = true;
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
-      Log.error('[WBCollab][WhiteboardCollabAdapter] ❌ Sync error: $e');
+      _syncStatus = WhiteboardSyncStatus.error;
+      _syncStatusController.add(_syncStatus);
+      Log.error('[WBCollab][WhiteboardCollabAdapter] Sync error: $e');
     } finally {
       _isSyncing = false;
       _syncData.clear();
       _syncFiles.clear();
     }
 
-    // 同步期间如果有新变更积累，安排下一次同步
-    if (_hasUnsavedChanges && !_disposed) {
+    if (_hasQueuedSync && !_disposed) {
+      _hasQueuedSync = false;
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(_debounceDuration, () => _syncImmediately());
+    } else if (_hasUnsavedChanges && !_disposed) {
       _debounceTimer?.cancel();
       _debounceTimer = Timer(_debounceDuration, () {
         _syncImmediately();
@@ -296,51 +260,47 @@ class WhiteboardCollabAdapter {
     }
   }
 
-  /// 强制立即同步（用于手动保存和 Widget 销毁前）
-  /// 会等待正在进行的同步完成，然后如果有未保存的变更则再次同步
-  Future<void> forceSync() async {
-    if (_disposed) {
-      return;
-    }
-
-    _debounceTimer?.cancel();
-
-    // 等待正在进行的同步完成（最多等待 5 秒）
-    int attempts = 0;
-    while (_isSyncing && !_disposed && attempts < 100) {
-      await Future.delayed(const Duration(milliseconds: 50));
-      attempts++;
-    }
-
-    if (_hasUnsavedChanges && !_disposed) {
-      await _syncImmediately();
+  /// 从 Collab 后端拉取完整白板数据（公开方法，供页面恢复时调用）
+  Future<void> pullFromCollab() async {
+    if (_disposed || _isPulling) return;
+    _isPulling = true;
+    try {
+      final data = await _service.loadWhiteboardData(viewId);
+      if (data.isNotEmpty && !_disposed) {
+        _fullData.clear();
+        _fullData.addAll(_normalizeKeys(data));
+        onDataChanged(_fullData);
+        Log.info('[WBCollab] Pulled full data from collab: ${_fullData.keys.toList()}');
+      }
+    } catch (e) {
+      Log.error('[WBCollab] Pull from collab failed: $e');
+    } finally {
+      _isPulling = false;
     }
   }
 
-  /// 处理来自实时通知的更新
-  /// 由 WhiteboardListener 回调，payload 已在 Listener 中从 JSON 解析完毕
-  void _onRemoteUpdate(String key, dynamic value, bool isRemote) {
+  void _onRemoteUpdate(Map<String, dynamic> payload) {
     if (_disposed) return;
-
     try {
-      Log.info('[WBCollab][WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote');
-
-      // 本地写入回声不再推回 WebView，避免自触发循环
+      final key = payload['key'] as String?;
+      if (key == null) return;
+      final isRemote = payload['is_remote'] == true;
+      final isLargeData = payload['large_data'] == true;
+      Log.info('[WBCollab][WhiteboardCollabAdapter] Notification update: key=$key, isRemote=$isRemote, largeData=$isLargeData');
       if (!isRemote) {
-        Log.debug(
-          '[WBCollab][WhiteboardCollabAdapter] Skip local echo notification for key=$key',
-        );
+        Log.debug('[WBCollab][WhiteboardCollabAdapter] Skip local echo notification for key=$key');
         return;
       }
-
-      // 解析值（如果是字符串 JSON 则解析）
-      dynamic parsedValue = value;
-      if (value is String) {
-        parsedValue = _tryParseJson(value);
+      if (isLargeData) {
+        Log.info('[WBCollab][WhiteboardCollabAdapter] Large data notification for key=$key - pulling full state from collab');
+        pullFromCollab();
+        return;
+      }
+      var parsedValue = payload['value'];
+      if (parsedValue is String) {
+        parsedValue = _tryParseJson(parsedValue);
       }
       parsedValue = _sanitizeWhiteboardValue(key, parsedValue);
-
-      // 更新全量数据
       if (key == 'files' && parsedValue is Map) {
         _fullData[key] = _mergeFiles(
           _fullData[key] as Map<String, dynamic>?,
@@ -348,23 +308,31 @@ class WhiteboardCollabAdapter {
         );
       } else {
         if (_deepEquality.equals(_fullData[key], parsedValue)) {
-          Log.debug(
-              '[WBCollab][WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
+          Log.debug('[WBCollab][WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
           return;
         }
         _fullData[key] = parsedValue;
       }
-
-      // 通知 WebView 更新
       onDataChanged({key: parsedValue});
-      Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
+      Log.info('[WBCollab][WhiteboardCollabAdapter] Pushed to WebView: key=$key');
     } catch (e) {
-      Log.error(
-          '[WBCollab][WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');
+      Log.error('[WBCollab][WhiteboardCollabAdapter] Failed to process remote update: $e');
     }
   }
 
-  /// 销毁适配器
+  Future<void> forceSync() async {
+    if (_disposed) return;
+    _debounceTimer?.cancel();
+    int attempts = 0;
+    while (_isSyncing && !_disposed && attempts < 100) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      attempts++;
+    }
+    if (_hasUnsavedChanges && !_disposed) {
+      await _syncImmediately();
+    }
+  }
+
   void dispose() {
     _disposed = true;
     _listener.stop();
@@ -375,5 +343,6 @@ class WhiteboardCollabAdapter {
     _fullData.clear();
     _pendingFiles.clear();
     _syncFiles.clear();
+    _syncStatusController.close();
   }
 }

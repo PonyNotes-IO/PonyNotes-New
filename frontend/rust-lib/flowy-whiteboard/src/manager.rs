@@ -15,6 +15,7 @@ use dashmap::DashMap;
 use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
 use std::sync::{Arc, Weak};
+use tokio::sync::Semaphore;
 use tracing::{error, info, trace};
 use uuid::Uuid;
 
@@ -34,6 +35,8 @@ pub struct WhiteboardManager {
   cloud_service: Arc<dyn WhiteboardCloudService>,
   /// 已打开的白板缓存
   whiteboards: Arc<DashMap<Uuid, Arc<RwLock<Whiteboard>>>>,
+  /// 限制并发云端操作数量，防止云端请求风暴
+  cloud_semaphore: Arc<Semaphore>,
 }
 
 impl Drop for WhiteboardManager {
@@ -53,6 +56,7 @@ impl WhiteboardManager {
       collab_builder,
       cloud_service,
       whiteboards: Arc::new(Default::default()),
+      cloud_semaphore: Arc::new(Semaphore::new(5)),
     }
   }
 
@@ -173,7 +177,7 @@ impl WhiteboardManager {
   /// 否则从磁盘加载，如果本地不存在则尝试从云端获取
   pub async fn open_whiteboard(&self, view_id: &Uuid) -> FlowyResult<Arc<RwLock<Whiteboard>>> {
     info!("[Whiteboard] 🔵 open_whiteboard called for view: {}", view_id);
-    
+
     // 检查缓存
     if let Some(whiteboard) = self.whiteboards.get(view_id) {
       trace!("[Whiteboard] Whiteboard {} found in cache", view_id);
@@ -182,7 +186,7 @@ impl WhiteboardManager {
 
     // 创建白板实例（会自动配置持久化）
     let whiteboard = self.create_whiteboard_instance(view_id, true).await?;
-    
+
     // 缓存
     self.whiteboards.insert(*view_id, whiteboard.clone());
 
@@ -302,6 +306,9 @@ impl WhiteboardManager {
   }
 
   /// 更新白板数据
+  ///
+  /// 快速路径：如果白板已在缓存中，直接获取写锁并更新
+  /// 慢速路径：如果不在缓存中，先打开（可能触发云端获取），再更新
   pub async fn update_whiteboard(
     &self,
     view_id: &Uuid,
@@ -310,20 +317,25 @@ impl WhiteboardManager {
     info!("[Whiteboard] Manager.update_whiteboard called");
     info!("[Whiteboard] ViewID: {}", view_id);
     info!("[Whiteboard] JSON data length: {} bytes", json_data.len());
-    
-    info!("[Whiteboard] Opening whiteboard...");
+
+    // 快速路径：直接从缓存获取
+    if let Some(whiteboard) = self.whiteboards.get(view_id) {
+      info!("[Whiteboard] Cache hit, acquiring write lock...");
+      let mut wb = whiteboard.write().await;
+      wb.update_from_json(json_data)
+        .map_err(|e| internal_error(format!("Failed to update whiteboard: {}", e)))?;
+      info!("[Whiteboard] ✅ Updated whiteboard (fast path): {}", view_id);
+      return Ok(());
+    }
+
+    // 慢速路径：打开（可能从云端获取），然后更新
+    info!("[Whiteboard] Cache miss, opening whiteboard (slow path)...");
     let whiteboard = self.open_whiteboard(view_id).await?;
-    info!("[Whiteboard] ✅ Whiteboard opened");
-    
-    info!("[Whiteboard] Acquiring write lock...");
     let mut wb = whiteboard.write().await;
-    info!("[Whiteboard] ✅ Write lock acquired");
-    
-    info!("[Whiteboard] Calling wb.update_from_json...");
     wb.update_from_json(json_data)
       .map_err(|e| internal_error(format!("Failed to update whiteboard: {}", e)))?;
 
-    info!("[Whiteboard] ✅✅✅ Updated whiteboard successfully: {}", view_id);
+    info!("[Whiteboard] ✅ Updated whiteboard (slow path): {}", view_id);
     Ok(())
   }
 
@@ -342,6 +354,45 @@ impl WhiteboardManager {
     self.whiteboards.remove(view_id);
     info!("[Whiteboard] Closed whiteboard: {}", view_id);
     Ok(())
+  }
+
+  /// 强制保存：将当前白板状态持久化到磁盘
+  /// 由 Dart 端在手动保存（Ctrl+S）时调用
+  /// Note: cloud sync is handled by the Collab sync plugin (WebSocket).
+  /// This method only ensures disk persistence for recovery.
+  pub async fn force_save(&self, view_id: &Uuid) -> FlowyResult<()> {
+    let whiteboard = self.whiteboards.get(view_id)
+      .ok_or_else(|| FlowyError::new(ErrorCode::RecordNotFound, "Whiteboard not open"))?;
+
+    let wb = whiteboard.read().await;
+    let encoded = wb.encode_collab()
+      .map_err(|e| internal_error(format!("Failed to encode: {}", e)))?;
+
+    // 保存到本地磁盘
+    let persistence = self.persistence()?;
+    persistence.save_collab_to_disk(&view_id.to_string(), encoded)
+      .map_err(internal_error)?;
+
+    info!("[Whiteboard] Force saved whiteboard to disk: {}", view_id);
+    Ok(())
+  }
+
+  /// 获取白板数据为 JSON 字符串（用于 Dart 拉取）
+  ///
+  /// 优先从缓存获取，缓存未命中则尝试打开（从磁盘或云端加载）
+  pub async fn get_whiteboard_json_data(&self, view_id: &Uuid) -> FlowyResult<String> {
+    // 优先从缓存获取
+    if let Some(whiteboard) = self.whiteboards.get(view_id) {
+      let wb = whiteboard.read().await;
+      return wb.to_json()
+        .map_err(|e| internal_error(format!("Failed to serialize: {}", e)));
+    }
+
+    // 缓存未命中，尝试打开（从磁盘或云端加载）
+    let whiteboard = self.open_whiteboard(view_id).await?;
+    let wb = whiteboard.read().await;
+    wb.to_json()
+      .map_err(|e| internal_error(format!("Failed to serialize: {}", e)))
   }
 
   /// 删除白板

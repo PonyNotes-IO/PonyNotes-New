@@ -23,12 +23,14 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
+import 'package:appflowy/plugins/shared/callback_shortcuts.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -257,7 +259,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   bool get _showLegacyBlockingLoader => false;
   bool _isDisposing = false; // 标记是否正在销毁
   int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
-  bool _isAppInBackground = false; // 标记应用是否在后台
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -481,28 +482,41 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     Log.info('[WhiteboardPage] 🔄 App lifecycle changed: $state');
-    
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      // 应用进入后台，标记状态
-      _isAppInBackground = true;
-      Log.info('[WhiteboardPage] ⏸️ App entering background');
-      
-    } else if (state == AppLifecycleState.resumed) {
-      // 应用回到前台，恢复操作
-      _isAppInBackground = false;
-      Log.info('[WhiteboardPage] ▶️ App resumed');
-      
-      // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
-      if (mounted) {
-        setState(() {
-          _importReloadCounter++; // 强制重建 WebView
-        });
-      }
+
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+        // 应用进入后台，强制保存
+        Log.info('[WhiteboardPage] ⏸️ App entering background, forcing sync');
+        _collabAdapter?.forceSync();
+        break;
+      case AppLifecycleState.resumed:
+        // 应用回到前台，拉取最新数据
+        Log.info('[WhiteboardPage] ▶️ App resumed, pulling latest data');
+        _collabAdapter?.pullFromCollab();
+        // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
+        if (mounted) {
+          setState(() {
+            _importReloadCounter++; // 强制重建 WebView
+          });
+        }
+        break;
+      default:
+        break;
     }
   }
 
+  @override
+  void deactivate() {
+    // Force sync when the widget is removed from the tree (e.g. document switching).
+    // Only sync here if not already disposing — dispose() handles the final sync.
+    if (!_isDisposing) {
+      _collabAdapter?.forceSync();
+    }
+    super.deactivate();
+  }
   @override
   void dispose() {
     // 注销应用生命周期监听
@@ -915,7 +929,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     return Scaffold(
       resizeToAvoidBottomInset: !PlatformInfo.isTablet,
       backgroundColor: _whiteboardCanvasFallbackColor,
-      body: ValueListenableBuilder<bool>(
+      body: Builder(
+        builder: (context) {
+          return AFCallbackShortcuts(
+            bindings: {
+              SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
+                _saveWhiteboard();
+                return true;
+              },
+              SingleActivator(LogicalKeyboardKey.keyS, meta: true): () {
+                _saveWhiteboard();
+                return true;
+              },
+            },
+            child: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
         builder: (context, isFullWindow, _) {
           return Stack(
@@ -945,7 +972,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
             ],
           );
         },
-      ),
+      ),   // ValueListenableBuilder
+      );  // AFCallbackShortcuts child
+    },   // Builder builder
+  ),   // Builder
     );
   }
 
@@ -971,6 +1001,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
             _buildHeaderAction(_buildFullWindowAction(context)),
           ]
         : [
+            _buildHeaderAction(_buildSaveAction(context)),
+            const SizedBox(width: 6),
             _buildHeaderAction(_buildFavoriteAction(context)),
             const SizedBox(width: 6),
             _buildHeaderAction(_buildFullWindowAction(context)),
@@ -1036,6 +1068,46 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
                 color: _whiteboardActionIconColor(context),
               ),
               onTap: FullWindowController.toggle,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSaveAction(BuildContext context) {
+    return StreamBuilder<WhiteboardSyncStatus>(
+      stream: _collabAdapter?.syncStatusStream,
+      initialData: _collabAdapter?.syncStatus ?? WhiteboardSyncStatus.idle,
+      builder: (context, snapshot) {
+        final status = snapshot.data ?? WhiteboardSyncStatus.idle;
+        final isSyncing = status == WhiteboardSyncStatus.syncing;
+        final hasError = status == WhiteboardSyncStatus.error;
+
+        return FlowyTooltip(
+          message: '保存白板 (Ctrl+S)',
+          child: SizedBox.square(
+            dimension: 36,
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: isSyncing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.grey,
+                      ),
+                    )
+                  : Icon(
+                      hasError ? Icons.cloud_off_rounded : Icons.save_rounded,
+                      size: 20,
+                      color: hasError
+                          ? Colors.redAccent
+                          : _whiteboardActionIconColor(context),
+                    ),
+              onTap: isSyncing ? null : _saveWhiteboard,
             ),
           ),
         );
