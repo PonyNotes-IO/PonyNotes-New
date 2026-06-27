@@ -535,6 +535,29 @@ mod tests {
   }
 
   #[test]
+  fn test_deleted_tombstone_overwrites_visible_element() {
+    let collab = test_collab("wb-delete");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[{"id":"a","type":"rectangle","version":1}]}}"#,
+      )
+      .unwrap();
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[{"id":"a","type":"rectangle","version":2,"isDeleted":true}]}}"#,
+      )
+      .unwrap();
+
+    let data = whiteboard.get_data().unwrap();
+    let elements = data.0["elements"].as_array().unwrap();
+    let element = elements.iter().find(|element| element["id"] == "a").unwrap();
+    assert_eq!(element["version"], 2);
+    assert_eq!(element["isDeleted"], true);
+  }
+
+  #[test]
   fn test_observe_emits_element_value() {
     let collab = test_collab("wb-notify");
     let mut whiteboard = Whiteboard::open(collab).unwrap();
