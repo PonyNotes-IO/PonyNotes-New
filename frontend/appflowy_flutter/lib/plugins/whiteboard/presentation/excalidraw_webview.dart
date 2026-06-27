@@ -14,8 +14,12 @@ import 'package:http/http.dart' as http;
 
 import '../application/whiteboard_data_service.dart';
 import '../application/whiteboard_image_cache_service.dart';
+import '../application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy_backend/log.dart';
+
+// 白板逐元素同步开关：出问题时置 false 回退到旧整段 elements 推送路径。
+const bool kWhiteboardPerElementSync = true;
 
 // 全局InAppWebView实例计数器，确保每个InAppWebView的PlatformView ID全局唯一
 int _globalInAppWebViewInstanceCounter = 0;
@@ -79,6 +83,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   bool _pageLoaded = false;
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
   Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
+  final bool _perElementSyncEnabled = kWhiteboardPerElementSync;
 
   @override
   void initState() {
@@ -1443,8 +1448,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }
           final map = Map<String, dynamic>.from(fileData);
           final dataURL = map['dataURL'];
-          final hasDataUrl =
-              dataURL is String && dataURL.startsWith('data:');
+          final hasDataUrl = dataURL is String && dataURL.startsWith('data:');
           final url = map['url'];
           final hasCloudUrl = url is String && url.startsWith('http');
 
@@ -1716,6 +1720,18 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     if (!mounted || _controller == null) return;
 
     try {
+      if (key == WhiteboardCollabAdapter.whiteboardElementsDeltaKey) {
+        if (value is Map) {
+          await pushWhiteboardElements(
+            List<dynamic>.from(value['changed'] as List? ?? const []),
+            fallbackElements: value['elements'],
+          );
+        } else if (value is List) {
+          await pushWhiteboardElements(value);
+        }
+        return;
+      }
+
       // ✅ 关键：包装为 {key, value} 结构，与 JS 接口匹配
       if (key == 'appState') {
         value = _sanitizeAppState(value);
@@ -1739,6 +1755,39 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     } catch (e) {
       Log.error(
           '[WBCollab][ExcalidrawWebView] ❌ pushData failed for key $key: $e');
+    }
+  }
+
+  Future<void> pushWhiteboardElements(
+    List<dynamic> changed, {
+    dynamic fallbackElements,
+  }) async {
+    if (!mounted || _controller == null || changed.isEmpty) return;
+
+    try {
+      if (!_perElementSyncEnabled) {
+        if (fallbackElements is List) {
+          await pushData('elements', fallbackElements);
+        } else {
+          Log.warn(
+            '[WBCollab][ExcalidrawWebView] Per-element sync disabled without fallback elements.',
+          );
+        }
+        return;
+      }
+
+      await _safeEvalJs('''
+        if (window.pushWhiteboardElements) {
+          window.pushWhiteboardElements(${jsonEncode(changed)});
+        }
+      ''', tag: 'pushWhiteboardElements');
+      Log.info(
+        '[WBCollab][ExcalidrawWebView] ✅ JS pushWhiteboardElements called: count=${changed.length}',
+      );
+    } catch (e) {
+      Log.error(
+        '[WBCollab][ExcalidrawWebView] ❌ pushWhiteboardElements failed: $e',
+      );
     }
   }
 

@@ -2,7 +2,7 @@ use crate::entities::WhiteboardData;
 use crate::notification::{whiteboard_notification_send_json, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Collab, CollabBuilder, DeepObservable, Map, MapRef};
+use collab::preclude::{Any, Collab, CollabBuilder, DeepObservable, Map, MapRef, Out};
 use collab::preclude::Subscription;
 use collab::preclude::Event;
 use collab::util::MapExt;
@@ -39,6 +39,7 @@ pub struct Whiteboard {
 impl Whiteboard {
   /// 数据键
   const DATA_KEY: &'static str = "data";
+  const ELEMENTS_KEY: &'static str = "elements";
 
   /// 创建新白板（空白板）
   pub fn create(mut collab: Collab) -> Result<Self, Error> {
@@ -46,6 +47,7 @@ impl Whiteboard {
 
     let _document_root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
     let data = collab.data.get_or_init_map(&mut txn, Self::DATA_KEY);
+    Self::ensure_elements_map(&data, &mut txn);
     drop(txn);
 
     let (notifier, _) = broadcast::channel(100);
@@ -61,17 +63,15 @@ impl Whiteboard {
   ///
   /// 通过 yrs 原生的 observe_deep 监听所有 collab 变更，
   /// 在变更发生时通过事务是否有 origin 来区分本地/远程。
-  pub fn open(collab: Collab) -> Result<Self, Error> {
-    let txn = collab.context.transact();
-    let data: MapRef = collab
-      .data
-      .get_with_txn(&txn, Self::DATA_KEY)
-      .ok_or_else(|| anyhow!("Whiteboard data not found"))?;
+  pub fn open(mut collab: Collab) -> Result<Self, Error> {
+    let mut txn = collab.context.transact_mut();
+    let _document_root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
+    let data = collab.data.get_or_init_map(&mut txn, Self::DATA_KEY);
+    Self::ensure_elements_map(&data, &mut txn);
     drop(txn);
 
     let (notifier, _) = broadcast::channel(100);
 
-    let data_clone = data.clone();
     let notifier_clone = notifier.clone();
 
     // observe_deep 回调签名：(txn, events)
@@ -84,29 +84,66 @@ impl Whiteboard {
         let origin = txn.origin();
         let is_remote = origin.is_some();
 
-        // 匹配 Event::Map 事件并获取键变更
         if let Event::Map(map_event) = event {
+          let target = map_event.target();
           let key_changes = map_event.keys(txn);
-          for (key, change) in key_changes.iter() {
-            let key_str = key.to_string();
+          let is_elements_map = !map_event.path().is_empty();
+
+          if is_elements_map {
+            let mut changed_elements = Vec::new();
+            for (key, change) in key_changes.iter() {
+              let id = key.to_string();
+              let element = Self::map_string_value_to_json(target.get(txn, id.as_str()));
+              changed_elements.push(serde_json::json!({
+                "id": id,
+                "element": element,
+              }));
+
+              info!(
+                "[WBCollab] observe_deep: elements.{}, is_remote={}, change={:?}",
+                key, is_remote, change
+              );
+            }
+
+            if changed_elements.is_empty() {
+              continue;
+            }
 
             let event_json = serde_json::json!({
-              "key": key_str,
+              "key": Self::ELEMENTS_KEY,
               "is_remote": is_remote,
-              "change_type": format!("{:?}", change),
+              "value": { "changed": changed_elements },
             }).to_string();
-
-            info!(
-              "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}",
-              key_str, is_remote, change
-            );
-
             let changed = WhiteboardChanged {
-              key: key_str,
+              key: Self::ELEMENTS_KEY.to_string(),
               value: event_json,
               is_remote,
             };
             let _ = notifier_clone.send(changed);
+          } else {
+            for (key, change) in key_changes.iter() {
+              let key_str = key.to_string();
+              let value = Self::map_string_value_to_json(target.get(txn, key_str.as_str()));
+
+              let event_json = serde_json::json!({
+                "key": key_str,
+                "is_remote": is_remote,
+                "value": value,
+                "change_type": format!("{:?}", change),
+              }).to_string();
+
+              info!(
+                "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}",
+                key_str, is_remote, change
+              );
+
+              let changed = WhiteboardChanged {
+                key: key_str,
+                value: event_json,
+                is_remote,
+              };
+              let _ = notifier_clone.send(changed);
+            }
           }
         }
       }
@@ -132,7 +169,13 @@ impl Whiteboard {
     let mut txn = self.collab.context.transact_mut();
 
     for (k, v) in &whiteboard_data.0 {
-      self.data.insert(&mut txn, k.as_str(), v.as_str());
+      if k == Self::ELEMENTS_KEY {
+        Self::update_elements_map(&self.data, &mut txn, v)?;
+      } else {
+        let json = serde_json::to_string(v)
+          .map_err(|e| anyhow!("Failed to serialize field '{}': {}", k, e))?;
+        self.data.insert(&mut txn, k.as_str(), json.as_str());
+      }
     }
 
     tracing::trace!("[WBCollab] Data updated successfully and transaction committed");
@@ -169,15 +212,21 @@ impl Whiteboard {
     match wrapper.r#type.as_str() {
       "update" | "" => {
         for (key, value) in data_map.iter() {
-          let json = serde_json::to_string(value)
-            .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
-          self.data.insert(&mut txn, key.as_str(), json.as_str());
+          if key == Self::ELEMENTS_KEY {
+            Self::update_elements_map(&self.data, &mut txn, value)?;
+          } else {
+            let json = serde_json::to_string(value)
+              .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
+            self.data.insert(&mut txn, key.as_str(), json.as_str());
+          }
         }
         tracing::trace!("[WBCollab] Stored {} fields from update", data_map.len());
       },
       "delete" => {
         for (key, _) in data_map.iter() {
-          self.data.remove(&mut txn, key.as_str());
+          if key != Self::ELEMENTS_KEY {
+            self.data.remove(&mut txn, key.as_str());
+          }
         }
         tracing::trace!("[WBCollab] Deleted {} fields", data_map.len());
       },
@@ -195,9 +244,112 @@ impl Whiteboard {
 
     let mut data_map = HashMap::new();
     for (k, v) in self.data.iter(&txn) {
-      data_map.insert(k.to_string(), serde_json::from_str(&v.to_string(&txn))?);
+      let key = k.to_string();
+      if key == Self::ELEMENTS_KEY {
+        continue;
+      }
+      let value = Self::map_string_value_to_json(Some(v));
+      if !value.is_null() {
+        data_map.insert(key, value);
+      }
     }
+
+    let mut elements = Vec::new();
+    if let Some(Out::YMap(elements_map)) = self.data.get(&txn, Self::ELEMENTS_KEY) {
+      for (_id, value) in elements_map.iter(&txn) {
+        let element = Self::map_string_value_to_json(Some(value));
+        if !element.is_null() {
+          elements.push(element);
+        }
+      }
+    }
+    data_map.insert(
+      Self::ELEMENTS_KEY.to_string(),
+      serde_json::Value::Array(elements),
+    );
     Ok(WhiteboardData(data_map))
+  }
+
+  fn ensure_elements_map(
+    data: &MapRef,
+    txn: &mut collab::preclude::TransactionMut,
+  ) -> MapRef {
+    match data.get(txn, Self::ELEMENTS_KEY) {
+      Some(Out::YMap(map)) => map,
+      Some(Out::Any(Any::String(elements_json))) => {
+        data.remove(txn, Self::ELEMENTS_KEY);
+        let map = data.get_or_init_map(txn, Self::ELEMENTS_KEY);
+        if let Ok(elements) = serde_json::from_str::<Vec<serde_json::Value>>(&elements_json) {
+          for element in elements {
+            if let Some(id) = element.get("id").and_then(|value| value.as_str()) {
+              if let Ok(json) = serde_json::to_string(&element) {
+                map.insert(txn, id, json.as_str());
+              }
+            }
+          }
+        }
+        map
+      },
+      _ => data.get_or_init_map(txn, Self::ELEMENTS_KEY),
+    }
+  }
+
+  fn update_elements_map(
+    data: &MapRef,
+    txn: &mut collab::preclude::TransactionMut,
+    value: &serde_json::Value,
+  ) -> Result<(), Error> {
+    let Some(incoming) = value.as_array() else {
+      return Ok(());
+    };
+
+    let elements_map = Self::ensure_elements_map(data, txn);
+    for element in incoming {
+      let Some(id) = element.get("id").and_then(|value| value.as_str()) else {
+        continue;
+      };
+
+      let incoming_version = Self::element_version(element);
+      let existing_json = Self::map_string_value(elements_map.get(txn, id));
+      let existing_version = existing_json
+        .as_deref()
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        .as_ref()
+        .map(Self::element_version)
+        .unwrap_or(-1);
+
+      if incoming_version < existing_version {
+        continue;
+      }
+
+      let json = serde_json::to_string(element)
+        .map_err(|e| anyhow!("Failed to serialize element '{}': {}", id, e))?;
+      if existing_json.as_deref() != Some(json.as_str()) {
+        elements_map.insert(txn, id, json.as_str());
+      }
+    }
+
+    Ok(())
+  }
+
+  fn element_version(element: &serde_json::Value) -> i64 {
+    element
+      .get("version")
+      .and_then(|value| value.as_i64())
+      .unwrap_or(0)
+  }
+
+  fn map_string_value(value: Option<Out>) -> Option<String> {
+    match value {
+      Some(Out::Any(Any::String(value))) => Some(value.to_string()),
+      _ => None,
+    }
+  }
+
+  fn map_string_value_to_json(value: Option<Out>) -> serde_json::Value {
+    Self::map_string_value(value)
+      .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
+      .unwrap_or(serde_json::Value::Null)
   }
 
   /// 导出为 Excalidraw JSON 格式
@@ -297,41 +449,108 @@ pub fn whiteboard_data_to_encoded_collab(
 mod tests {
   use super::*;
 
+  fn test_collab(object_id: &str) -> Collab {
+    CollabBuilder::new(1, object_id, DataSource::Disk(None))
+      .with_device_id("whiteboard-test-device")
+      .build()
+      .unwrap()
+  }
+
   #[test]
   fn test_create_empty_whiteboard() {
-    let collab = CollabBuilder::new(
-      1,
-      "2f6baa3b-f8e7-4551-b553-1b7f3802d299",
-      DataSource::Disk(None),
-    )
-    .build()
-    .unwrap();
+    let collab = test_collab("2f6baa3b-f8e7-4551-b553-1b7f3802d299");
 
     let mut whiteboard = Whiteboard::create(collab).unwrap();
     let data = whiteboard.get_data().unwrap();
+    assert_eq!(data.0["elements"].as_array().unwrap().len(), 0);
 
     whiteboard
-      .update_from_json(r#"""{ "key1": "value1"}"""#)
+      .update_from_json(r#"{"type":"update","data":{"appState":{"theme":"light"}}}"#)
       .unwrap();
     whiteboard
-      .update_from_json(r#"""{ "key1": "value2"}"""#)
+      .update_from_json(r#"{"type":"update","data":{"appState":{"theme":"dark"}}}"#)
       .unwrap();
 
     let data = whiteboard.get_data().unwrap();
-    dbg!(data);
+    assert_eq!(data.0["appState"]["theme"], "dark");
   }
 
   #[test]
   fn test_update_and_get_data() {
-    let collab = CollabBuilder::new(1, "test-whiteboard", DataSource::Disk(None))
-      .build()
-      .unwrap();
+    let collab = test_collab("test-whiteboard");
 
     let mut whiteboard = Whiteboard::create(collab).unwrap();
 
     let test_data = WhiteboardData::default();
     whiteboard.update_from_data(&test_data).unwrap();
     let retrieved_data = whiteboard.get_data().unwrap();
-    assert_eq!(retrieved_data.0.len(), test_data.0.len());
+    assert_eq!(retrieved_data.0["elements"].as_array().unwrap().len(), 0);
+  }
+
+  #[test]
+  fn test_elements_stored_as_nested_map_roundtrip() {
+    let collab = test_collab("wb-nested");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[
+          {"id":"a","type":"rectangle","version":1},
+          {"id":"b","type":"ellipse","version":1}
+        ]}}"#,
+      )
+      .unwrap();
+
+    let data = whiteboard.get_data().unwrap();
+    let elements = data.0["elements"].as_array().unwrap();
+    let ids: Vec<&str> = elements
+      .iter()
+      .filter_map(|element| element["id"].as_str())
+      .collect();
+    assert_eq!(elements.len(), 2);
+    assert!(ids.contains(&"a"));
+    assert!(ids.contains(&"b"));
+  }
+
+  #[test]
+  fn test_lower_version_does_not_overwrite() {
+    let collab = test_collab("wb-version");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[{"id":"a","type":"rectangle","version":5}]}}"#,
+      )
+      .unwrap();
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[{"id":"a","type":"rectangle","version":3}]}}"#,
+      )
+      .unwrap();
+
+    let data = whiteboard.get_data().unwrap();
+    let elements = data.0["elements"].as_array().unwrap();
+    let element = elements.iter().find(|element| element["id"] == "a").unwrap();
+    assert_eq!(element["version"], 5);
+  }
+
+  #[test]
+  fn test_observe_emits_element_value() {
+    let collab = test_collab("wb-notify");
+    let mut whiteboard = Whiteboard::open(collab).unwrap();
+    let mut rx = whiteboard.subscribe_changed();
+
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"elements":[{"id":"a","type":"rectangle","version":1}]}}"#,
+      )
+      .unwrap();
+
+    let changed = rx.try_recv().expect("should receive element change");
+    let payload: serde_json::Value = serde_json::from_str(&changed.value).unwrap();
+    assert_eq!(payload["key"], "elements");
+    let first = &payload["value"]["changed"][0];
+    assert_eq!(first["id"], "a");
+    assert_eq!(first["element"]["version"], 1);
   }
 }

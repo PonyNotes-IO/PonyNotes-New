@@ -27,7 +27,8 @@ class WhiteboardCollabAdapter {
     _service = WhiteboardDataService();
     _listener = WhiteboardListener(id: viewId);
     _listener.start(onRemoteUpdate: _onRemoteUpdate);
-    Log.info('[WBCollab][WhiteboardCollabAdapter] Listener started for view: $viewId');
+    Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Listener started for view: $viewId');
   }
 
   final String viewId;
@@ -39,6 +40,7 @@ class WhiteboardCollabAdapter {
   late final WhiteboardListener _listener;
 
   static const _debounceDuration = Duration(milliseconds: 50);
+  static const whiteboardElementsDeltaKey = '__whiteboard_elements_delta';
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
   // scrollX/scrollY 已从稳定键中移除：
   // 原因：resize 反馈循环会持续调整 scrollX 并触发保存，
@@ -260,7 +262,8 @@ class WhiteboardCollabAdapter {
             '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
         if (_fullData.containsKey('files')) {
           final files = _fullData['files'] as Map<String, dynamic>;
-          Log.info('[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
+          Log.info(
+              '[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
         }
 
         success = await _service.saveWhiteboardData(viewId, _fullData);
@@ -272,9 +275,11 @@ class WhiteboardCollabAdapter {
         _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
-        Log.warn('[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+        Log.warn(
+            '[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
-        Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
+        Log.info(
+            '[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
       }
     } catch (e) {
       _hasUnsavedChanges = true;
@@ -323,7 +328,8 @@ class WhiteboardCollabAdapter {
     if (_disposed) return;
 
     try {
-      Log.info('[WBCollab][WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote');
+      Log.info(
+          '[WBCollab][WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote');
 
       // 本地写入回声不再推回 WebView，避免自触发循环
       if (!isRemote) {
@@ -339,6 +345,28 @@ class WhiteboardCollabAdapter {
         parsedValue = _tryParseJson(value);
       }
       parsedValue = _sanitizeWhiteboardValue(key, parsedValue);
+
+      if (key == 'elements' &&
+          parsedValue is Map &&
+          parsedValue['changed'] is List) {
+        final changed = List<dynamic>.from(parsedValue['changed'] as List);
+        if (changed.isEmpty) {
+          return;
+        }
+
+        final mergedElements = _mergeElementsDelta(_fullData[key], changed);
+        _fullData[key] = mergedElements;
+        onDataChanged({
+          whiteboardElementsDeltaKey: {
+            'changed': changed,
+            'elements': mergedElements,
+          },
+        });
+        Log.info(
+          '[WBCollab][WhiteboardCollabAdapter] ✅ Pushed elements delta to WebView: count=${changed.length}',
+        );
+        return;
+      }
 
       // 更新全量数据
       if (key == 'files' && parsedValue is Map) {
@@ -357,11 +385,68 @@ class WhiteboardCollabAdapter {
 
       // 通知 WebView 更新
       onDataChanged({key: parsedValue});
-      Log.info('[WBCollab][WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
+      Log.info(
+          '[WBCollab][WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
     } catch (e) {
       Log.error(
           '[WBCollab][WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');
     }
+  }
+
+  List<dynamic> _mergeElementsDelta(dynamic existing, List<dynamic> changed) {
+    final byId = <String, dynamic>{};
+    if (existing is List) {
+      for (final element in existing) {
+        if (element is Map && element['id'] is String) {
+          byId[element['id'] as String] = element;
+        }
+      }
+    }
+
+    for (final change in changed) {
+      if (change is! Map || change['id'] is! String) {
+        continue;
+      }
+
+      final id = change['id'] as String;
+      final remoteElement = change['element'];
+      final localElement = byId[id];
+      if (remoteElement is! Map) {
+        if (localElement is Map) {
+          byId[id] = {
+            ...localElement,
+            'isDeleted': true,
+          };
+        }
+        continue;
+      }
+
+      if (localElement is! Map) {
+        byId[id] = remoteElement;
+        continue;
+      }
+
+      final localVersion = _elementVersion(localElement);
+      final remoteVersion = _elementVersion(remoteElement);
+      if (remoteVersion > localVersion ||
+          (remoteVersion == localVersion &&
+              _elementVersionNonce(remoteElement) >
+                  _elementVersionNonce(localElement))) {
+        byId[id] = remoteElement;
+      }
+    }
+
+    return byId.values.toList(growable: false);
+  }
+
+  int _elementVersion(Map element) {
+    final version = element['version'];
+    return version is int ? version : 0;
+  }
+
+  int _elementVersionNonce(Map element) {
+    final nonce = element['versionNonce'];
+    return nonce is int ? nonce : 0;
   }
 
   /// 销毁适配器

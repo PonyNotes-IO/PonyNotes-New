@@ -1408,6 +1408,12 @@
             // 2. 注入文件
             await _injectFilesFromStorage(api);
 
+            if (_initPayload && Array.isArray(_initPayload._pendingElements) && _initPayload._pendingElements.length) {
+                const pending = _initPayload._pendingElements;
+                _initPayload._pendingElements = [];
+                await window.pushWhiteboardElements(pending);
+            }
+
             console.log('[PonyNotes] ✅ Restoration finished');
         } catch (e) {
             console.error('[PonyNotes] ❌ Failed to restore whiteboard data:', e);
@@ -1545,6 +1551,70 @@
             }
         } catch (e) {
             console.error('[PonyNotes] ❌ Push update failed:', e);
+        }
+    };
+
+    function _reconcileElements(localElements, remoteChanged) {
+        const byId = new Map();
+        for (const element of localElements || []) {
+            if (element && element.id) {
+                byId.set(element.id, element);
+            }
+        }
+
+        for (const change of remoteChanged || []) {
+            if (!change || !change.id) continue;
+
+            const remoteElement = change.element;
+            const localElement = byId.get(change.id);
+
+            if (!remoteElement) {
+                if (localElement) {
+                    byId.set(change.id, { ...localElement, isDeleted: true });
+                }
+                continue;
+            }
+
+            if (!localElement) {
+                byId.set(change.id, remoteElement);
+                continue;
+            }
+
+            const localVersion = localElement.version || 0;
+            const remoteVersion = remoteElement.version || 0;
+            if (remoteVersion > localVersion) {
+                byId.set(change.id, remoteElement);
+            } else if (
+                remoteVersion === localVersion &&
+                (remoteElement.versionNonce || 0) > (localElement.versionNonce || 0)
+            ) {
+                byId.set(change.id, remoteElement);
+            }
+        }
+
+        return Array.from(byId.values());
+    }
+
+    window.pushWhiteboardElements = async function (remoteChanged) {
+        const api = window._excalidrawAPI;
+        if (!api) {
+            console.warn('[PonyNotes] 🔔 Element push received but API not ready, saving to payload');
+            if (!_initPayload) _initPayload = {};
+            _initPayload._pendingElements = (_initPayload._pendingElements || []).concat(remoteChanged || []);
+            return;
+        }
+
+        try {
+            const current = (
+                typeof api.getSceneElementsIncludingDeleted === 'function'
+                    ? api.getSceneElementsIncludingDeleted()
+                    : api.getSceneElements()
+            ) || [];
+            const merged = _reconcileElements(current.slice(), remoteChanged || []);
+            api.updateScene({ elements: merged, commitToHistory: false });
+            console.log('[PonyNotes] 🔁 Reconciled elements:', (remoteChanged || []).length, '-> total', merged.length);
+        } catch (e) {
+            console.error('[PonyNotes] ❌ pushWhiteboardElements failed:', e);
         }
     };
 })();

@@ -38,4 +38,10 @@ pub enum WhiteboardEvent {
   
   #[event(input = "ViewIdPB")]
   DeleteWhiteboard = 5,
+
+  #[event(input = "ViewIdPB")]
+  ForceSaveWhiteboard = 6,
+
+  #[event(input = "ViewIdPB", output = "WhiteboardDataPB")]
+  GetWhiteboardJsonData = 7,
 }
