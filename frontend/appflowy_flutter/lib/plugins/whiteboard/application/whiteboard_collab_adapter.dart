@@ -64,6 +64,11 @@ class WhiteboardCollabAdapter {
   final Map<String, dynamic> _pendingFiles = {};
   final Map<String, dynamic> _syncFiles = {};
 
+  /// 最近一次被接受的 elements 版本签名（id:version:versionNonce）。
+  /// 用于识别并丢弃"自己改动经服务器回显"的回声，打断同步死循环。
+  /// 仅在真实编辑（version/versionNonce 改变）时更新，绝不会误伤正常绘画。
+  String? _lastElementsSig;
+
   void setInitialData(Map<String, dynamic>? data) {
     if (data != null) {
       final normalized = _normalizeKeys(data);
@@ -71,6 +76,11 @@ class WhiteboardCollabAdapter {
       if (normalized.containsKey('files') && normalized['files'] is Map) {
         _fullData['files'] =
             Map<String, dynamic>.from(normalized['files'] as Map);
+      }
+      // 记录初始 elements 签名：WebView 恢复初始数据时会经 capture 回流相同的
+      // elements，借此去重避免一次多余的初始回写保存。
+      if (normalized['elements'] is List) {
+        _lastElementsSig = _elementsSignature(normalized['elements']);
       }
     }
   }
@@ -125,8 +135,39 @@ class WhiteboardCollabAdapter {
     return sanitized;
   }
 
+  /// 计算 elements 的版本签名：id:version:versionNonce 排序拼接。
+  /// 仅依赖版本字段，对序列化字段顺序/裁剪不敏感。
+  String _elementsSignature(dynamic elements) {
+    if (elements is! List) return '';
+    final parts = <String>[];
+    for (final e in elements) {
+      if (e is Map) {
+        parts.add('${e['id']}:${e['version'] ?? 0}:${e['versionNonce'] ?? 0}');
+      }
+    }
+    parts.sort();
+    return parts.join('|');
+  }
+
   void onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_disposed) return;
+
+    // ✅ 协同关键修复：丢弃 elements 回声，打断"保存→服务器回显→reconcile 回写→
+    // 落盘→capture"的自维持死循环。当 capture 上来的 elements 与"最近一次接受"的
+    // 版本签名完全一致时，说明这是一次回声（远端回推后 Excalidraw 重新落盘 / 重复保存），
+    // 仅把 elements 这个 key 从本次变更中剔除即可；files/appState 仍正常处理。
+    // 真实绘画会改变 version/versionNonce → 签名必然不同 → 一定会被正常同步。
+    if (type == 'update' && data.containsKey('elements')) {
+      final sig = _elementsSignature(data['elements']);
+      if (sig.isNotEmpty && sig == _lastElementsSig) {
+        final reduced = Map<String, dynamic>.from(data)..remove('elements');
+        if (reduced.isEmpty) return;
+        data = reduced;
+      } else if (sig.isNotEmpty) {
+        _lastElementsSig = sig;
+      }
+    }
+
     data.forEach((key, value) {
       final sanitizedValue = _sanitizeWhiteboardValue(key, value);
       if (key == 'files' && value is Map) {
@@ -267,10 +308,25 @@ class WhiteboardCollabAdapter {
     try {
       final data = await _service.loadWhiteboardData(viewId);
       if (data.isNotEmpty && !_disposed) {
-        _fullData.clear();
-        _fullData.addAll(_normalizeKeys(data));
-        onDataChanged(_fullData);
-        Log.info('[WBCollab] Pulled full data from collab: ${_fullData.keys.toList()}');
+        final normalized = _normalizeKeys(data);
+        // 把服务器全量状态推给 WebView，由 JS 端 reconcile 合并进本地场景；
+        // 合并结果会经 capture 路径回流并更新 _fullData['elements']。
+        // ⚠️ 这里【不直接覆盖】_fullData['elements']：若本地存在尚未同步的改动，
+        // 用落后的服务器快照覆盖缓存会在随后的全量保存里把本地改动删掉。
+        // reconcile 已保证场景不丢，capture 负责把合并后的权威状态回填缓存。
+        onDataChanged(normalized);
+        for (final entry in normalized.entries) {
+          if (entry.key == 'elements') continue;
+          if (entry.key == 'files' && entry.value is Map) {
+            _fullData['files'] = _mergeFiles(
+              _fullData['files'] as Map<String, dynamic>?,
+              Map<String, dynamic>.from(entry.value as Map),
+            );
+          } else {
+            _fullData[entry.key] = entry.value;
+          }
+        }
+        Log.info('[WBCollab] Pulled full data from collab (reconcile): ${normalized.keys.toList()}');
       }
     } catch (e) {
       Log.error('[WBCollab] Pull from collab failed: $e');
@@ -306,6 +362,15 @@ class WhiteboardCollabAdapter {
           _fullData[key] as Map<String, dynamic>?,
           Map<String, dynamic>.from(parsedValue),
         );
+      } else if (key == 'elements') {
+        // elements 不直接写缓存：纯回声（与缓存相等）直接跳过；
+        // 非回声则推给 WebView 做 reconcile，合并结果经 capture 回流后，
+        // 由 onWhiteboardDataChanged 作为唯一写入方更新 _fullData['elements']，
+        // 避免用远端快照覆盖本地未同步改动。
+        if (_deepEquality.equals(_fullData[key], parsedValue)) {
+          Log.debug('[WBCollab][WhiteboardCollabAdapter] Skip echoed remote elements');
+          return;
+        }
       } else {
         if (_deepEquality.equals(_fullData[key], parsedValue)) {
           Log.debug('[WBCollab][WhiteboardCollabAdapter] Skip echoed remote update for key=$key');

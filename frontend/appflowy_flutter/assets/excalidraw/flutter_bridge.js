@@ -1519,6 +1519,46 @@
     }
 
     /**
+     * ✅ 协同：基于版本号挑选获胜元素（规则与 Excalidraw 官方 reconcile 一致）
+     *  - version 高者胜；
+     *  - version 相同时，versionNonce 较小者胜（保证所有端确定性收敛到同一结果）。
+     */
+    function pickWinner(local, remote) {
+        const lv = local.version || 0;
+        const rv = remote.version || 0;
+        if (lv > rv) return local;
+        if (lv < rv) return remote;
+        const ln = local.versionNonce || 0;
+        const rn = remote.versionNonce || 0;
+        return ln <= rn ? local : remote;
+    }
+
+    /**
+     * ✅ 协同核心：把远端元素合并进本地场景，而不是整体替换。
+     * 本地独有 / 远端独有的元素都保留，相同 id 的按版本择优，
+     * 从而实现"多人同时编辑互不抹除"，同时让"自己改动被服务器回显"变成无副作用的幂等合并。
+     */
+    function reconcileElements(localElements, remoteElements) {
+        const resultById = new Map();
+        (localElements || []).forEach((el) => {
+            if (el && el.id) resultById.set(el.id, el);
+        });
+        (remoteElements || []).forEach((rEl) => {
+            if (!rEl || !rEl.id) return;
+            const lEl = resultById.get(rEl.id);
+            resultById.set(rEl.id, lEl ? pickWinner(lEl, rEl) : rEl);
+        });
+        let merged = Array.from(resultById.values());
+        // Excalidraw 0.17+ 用分数索引(index, 字符串)表达 z 轴顺序，按其排序保证层级稳定
+        if (merged.length > 0 && merged.every((e) => typeof e.index === 'string')) {
+            merged = merged.slice().sort((a, b) =>
+                a.index < b.index ? -1 : a.index > b.index ? 1 : 0,
+            );
+        }
+        return merged;
+    }
+
+    /**
      * ✅ 关键接口：Dart 端主动推送到 WebView
      */
     window.pushWhiteboardData = async function (data) {
@@ -1534,7 +1574,16 @@
         console.log('[PonyNotes] 🔔 Applying push update for:', data.key);
         try {
             if (data.key === 'elements') {
-                api.updateScene({ elements: data.value, commitToHistory: false });
+                // ✅ 协同核心：reconcile 合并而非整体替换，避免抹掉本地正在画的内容。
+                const remote = Array.isArray(data.value) ? data.value : [];
+                const localEls =
+                    (typeof api.getSceneElementsIncludingDeleted === 'function'
+                        ? api.getSceneElementsIncludingDeleted()
+                        : api.getSceneElements?.()) || [];
+                const merged = reconcileElements(localEls, remote);
+                // 合并结果回写场景；落盘后会经由 capture 路径回流到 Dart，
+                // 由 Dart 端基于版本签名去重，避免把回声再次发回后端（打断同步循环）。
+                api.updateScene({ elements: merged, commitToHistory: false });
             } else if (data.key === 'appState') {
                 const stableAppState = pickStableAppState(data.value);
                 if (Object.keys(stableAppState).length > 0) {
