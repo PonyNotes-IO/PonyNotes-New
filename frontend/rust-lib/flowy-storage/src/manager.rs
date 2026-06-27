@@ -1,12 +1,12 @@
 use crate::entities::FileStatePB;
 use crate::file_cache::FileTempStorage;
-use crate::notification::{StorageNotification, make_notification};
+use crate::notification::{make_notification, StorageNotification};
 use crate::sqlite_sql::{
-  UploadFilePartTable, UploadFileTable, batch_select_upload_file,
-  batch_select_upload_file_by_parent_dir, delete_all_upload_parts, delete_upload_file,
-  delete_upload_file_by_file_id, insert_upload_file, insert_upload_part, is_upload_completed,
-  is_upload_exist, select_upload_file, select_upload_parts, update_upload_file_completed,
-  update_upload_file_upload_id,
+  batch_select_upload_file, batch_select_upload_file_by_parent_dir, delete_all_upload_parts,
+  delete_upload_file, delete_upload_file_by_file_id, insert_upload_file, insert_upload_part,
+  is_upload_completed, is_upload_exist, is_upload_file_exist, select_upload_file,
+  select_upload_parts, update_upload_file_completed, update_upload_file_upload_id,
+  UploadFilePartTable, UploadFileTable,
 };
 use crate::uploader::{FileUploader, FileUploaderRunner, Signal, UploadTask, UploadTaskQueue};
 use allo_isolate::Isolate;
@@ -15,7 +15,7 @@ use collab_importer::util::FileId;
 use dashmap::DashMap;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::DBConnection;
-use flowy_storage_pub::chunked_byte::{ChunkedBytes, MIN_CHUNK_SIZE, calculate_offsets};
+use flowy_storage_pub::chunked_byte::{calculate_offsets, ChunkedBytes, MIN_CHUNK_SIZE};
 use flowy_storage_pub::cloud::StorageCloudService;
 use flowy_storage_pub::storage::{
   CompletedPartRequest, CreatedUpload, FileProgress, FileProgressReceiver, FileUploadState,
@@ -26,8 +26,8 @@ use lib_infra::isolate_stream::{IsolateSink, SinkExt};
 use lib_infra::util::timestamp;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, error, info, instrument, trace};
@@ -171,10 +171,7 @@ impl StorageManager {
       error!("[File] send global notifier failed: {}", err);
     }
 
-    Some(FileStatePB {
-      file_id,
-      is_finish,
-    })
+    Some(FileStatePB { file_id, is_finish })
   }
 
   pub async fn initialize(&self, workspace_id: &str) {
@@ -649,7 +646,9 @@ async fn start_upload(
   // 1. create upload
   trace!(
     "[File] create upload for workspace: {}, parent_dir: {}, file_id: {}",
-    upload_file.workspace_id, upload_file.parent_dir, upload_file.file_id
+    upload_file.workspace_id,
+    upload_file.parent_dir,
+    upload_file.file_id
   );
 
   let workspace_id = Uuid::from_str(&upload_file.workspace_id)?;
@@ -679,6 +678,17 @@ async fn start_upload(
   }
   let create_upload_resp = create_upload_resp_result?;
 
+  if !is_upload_record_alive(user_service, &upload_file)? {
+    cleanup_cancelled_upload(
+      storage_service,
+      &upload_file,
+      &file_url,
+      "after create_upload",
+    )
+    .await;
+    return Ok(());
+  }
+
   // 2. update upload_id
   let conn = user_service.sqlite_connection(user_service.user_id()?)?;
   update_upload_file_upload_id(
@@ -691,9 +701,21 @@ async fn start_upload(
 
   trace!(
     "[File] {} update upload_id: {}",
-    upload_file.file_id, create_upload_resp.upload_id
+    upload_file.file_id,
+    create_upload_resp.upload_id
   );
   upload_file.upload_id = create_upload_resp.upload_id;
+
+  if !is_upload_record_alive(user_service, &upload_file)? {
+    cleanup_cancelled_upload(
+      storage_service,
+      &upload_file,
+      &file_url,
+      "after upload_id update",
+    )
+    .await;
+    return Ok(());
+  }
 
   // 3. start uploading parts
   info!(
@@ -704,7 +726,22 @@ async fn start_upload(
   );
 
   let mut part_number = upload_offset + 1;
-  while let Some(chunk_result) = chunked_bytes.next_chunk().await {
+  loop {
+    if !is_upload_record_alive(user_service, &upload_file)? {
+      cleanup_cancelled_upload(
+        storage_service,
+        &upload_file,
+        &file_url,
+        "before upload_part",
+      )
+      .await;
+      return Ok(());
+    }
+
+    let Some(chunk_result) = chunked_bytes.next_chunk().await else {
+      break;
+    };
+
     match chunk_result {
       Ok(chunk_bytes) => {
         info!(
@@ -713,6 +750,17 @@ async fn start_upload(
           part_number,
           chunk_bytes.len() / 1000,
         );
+
+        if !is_upload_record_alive(user_service, &upload_file)? {
+          cleanup_cancelled_upload(
+            storage_service,
+            &upload_file,
+            &file_url,
+            "before sending part",
+          )
+          .await;
+          return Ok(());
+        }
 
         // start uploading parts
         match upload_part(
@@ -728,9 +776,21 @@ async fn start_upload(
         .await
         {
           Ok(resp) => {
+            if !is_upload_record_alive(user_service, &upload_file)? {
+              cleanup_cancelled_upload(
+                storage_service,
+                &upload_file,
+                &file_url,
+                "after upload_part",
+              )
+              .await;
+              return Ok(());
+            }
+
             trace!(
               "[File] {} part {} uploaded",
-              upload_file.file_id, part_number
+              upload_file.file_id,
+              part_number
             );
             let mut progress_value = (part_number as f64 / total_parts as f64).clamp(0.0, 1.0);
             // The 0.1 is reserved for the complete_upload progress
@@ -782,6 +842,17 @@ async fn start_upload(
     }
   }
 
+  if !is_upload_record_alive(user_service, &upload_file)? {
+    cleanup_cancelled_upload(
+      storage_service,
+      &upload_file,
+      &file_url,
+      "before complete_upload",
+    )
+    .await;
+    return Ok(());
+  }
+
   // mark it as completed
   let complete_upload_result = complete_upload(
     cloud_service,
@@ -798,6 +869,50 @@ async fn start_upload(
   }
 
   Ok(())
+}
+
+fn is_upload_record_alive(
+  user_service: &Arc<dyn StorageUserService>,
+  upload_file: &UploadFileTable,
+) -> FlowyResult<bool> {
+  let mut conn = user_service.sqlite_connection(user_service.user_id()?)?;
+  is_upload_file_exist(
+    &mut conn,
+    &upload_file.workspace_id,
+    &upload_file.parent_dir,
+    &upload_file.file_id,
+  )
+}
+
+async fn cleanup_cancelled_upload(
+  storage_service: &StorageServiceImpl,
+  upload_file: &UploadFileTable,
+  file_url: &str,
+  stage: &str,
+) {
+  info!(
+    "[File] upload cancelled {}, workspace: {}, parent_dir: {}, file_id: {}",
+    stage, upload_file.workspace_id, upload_file.parent_dir, upload_file.file_id
+  );
+
+  if let Err(err) = storage_service.cloud_service.delete_object(file_url).await {
+    error!(
+      "[File] cleanup cancelled upload cloud object failed: {}, file_id: {}",
+      err, upload_file.file_id
+    );
+  }
+
+  if let Err(err) = storage_service
+    .temp_storage
+    .delete_temp_file(&upload_file.local_file_path)
+    .await
+  {
+    trace!(
+      "[File] cleanup cancelled upload temp file failed: {}, file_id: {}",
+      err,
+      upload_file.file_id
+    );
+  }
 }
 
 async fn handle_upload_error(

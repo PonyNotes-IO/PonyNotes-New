@@ -3,6 +3,10 @@ import 'package:flowy_infra/size.dart';
 class HomeSizes {
   static const double menuAddButtonHeight = 60;
   static const double topBarHeight = 48;
+  // macOS 窗口左上角红绿灯（关闭/最小化/最大化）按钮所占的垂直高度。
+  // 收起左侧边栏后，中间栏顶端需下移此值，避免与这些窗口按钮重叠。
+  // 仅 macOS 使用；Windows/Linux 的窗口控制按钮不在左上角，无需此偏移。
+  static const double macOSTrafficLightsTopInset = 28;
   static const double editPanelTopBarHeight = 60;
   static const double editPanelWidth = 420;
   static const double notificationPanelWidth = 320;

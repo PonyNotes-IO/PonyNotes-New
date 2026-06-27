@@ -94,6 +94,13 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
+                    // macOS：收起左侧边栏时，让中间栏整体顶端向下偏移，避免最顶端
+                    // 与窗口左上角红绿灯（关闭/最小化/最大化）按钮重叠。
+                    // 该偏移无论是否显示顶部 Tab 栏都生效（仅靠 Tab 栏的水平 menuSpacing
+                    // 在“单文档无 Tab 栏”时不起作用，故此处补充垂直避让）。
+                    // Windows/Linux：menuTopSpacing 恒为 0，此处无任何影响。详见 HomeLayout。
+                    if (widget.layout.menuTopSpacing > 0)
+                      SizedBox(height: widget.layout.menuTopSpacing),
                     if (!isFullWindow && _shouldShowTabBar(state))
                       Padding(
                         padding:
