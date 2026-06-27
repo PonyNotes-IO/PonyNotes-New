@@ -177,7 +177,8 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                   final isCalendar = layout == ViewLayoutPB.Calendar;
                   final databseBuilderSize =
                       context.read<DatabasePluginWidgetBuilderSize>();
-                  final horizontalPadding = databseBuilderSize.horizontalPadding;
+                  final horizontalPadding =
+                      databseBuilderSize.horizontalPadding;
                   final showActionWrapper = widget.showActions &&
                       widget.actionBuilder != null &&
                       widget.node != null;
@@ -185,7 +186,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      VSpace(12) ,
+                      VSpace(12),
                       ValueListenableBuilder<bool>(
                         valueListenable: state
                             .tabBarControllerByViewId[state.parentView.id]!
@@ -200,7 +201,11 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                               ? const TabBarHeader()
                               : const MobileTabBarHeader();
 
-                          if (innerContext.watch<ViewBloc>().state.view.isLocked) {
+                          if (innerContext
+                              .watch<ViewBloc>()
+                              .state
+                              .view
+                              .isLocked) {
                             child = IgnorePointer(
                               child: child,
                             );
@@ -211,7 +216,8 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                               node: widget.node!,
                               actionBuilder: widget.actionBuilder!,
                               child: Padding(
-                                padding: EdgeInsets.only(right: horizontalPadding),
+                                padding:
+                                    EdgeInsets.only(right: horizontalPadding),
                                 child: child,
                               ),
                             );
@@ -236,15 +242,16 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                       wrapContent(
                         layout: layout,
                         child: Padding(
-                          padding:
-                              (isCalendar && widget.shrinkWrap || showActionWrapper)
-                                  ? EdgeInsets.only(left: 42 - horizontalPadding)
-                                  : EdgeInsets.zero,
+                          padding: (isCalendar && widget.shrinkWrap ||
+                                  showActionWrapper)
+                              ? EdgeInsets.only(left: 42 - horizontalPadding)
+                              : EdgeInsets.zero,
                           child: Provider(
                             create: (_) => DatabasePluginWidgetBuilderSize(
                               horizontalPadding: horizontalPadding,
                               paddingLeftWithMaxDocumentWidth: paddingLeft,
-                              verticalPadding: databseBuilderSize.verticalPadding,
+                              verticalPadding:
+                                  databseBuilderSize.verticalPadding,
                             ),
                             child: pageContentFromState(context, state),
                           ),
@@ -253,11 +260,10 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                     ],
                   );
 
-                  // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）
-                  if (isSidebarHidden && !widget.isInSpaceHub) {
-                    return Stack(
-                      children: [
-                        child,
+                  return Stack(
+                    children: [
+                      child,
+                      if (isSidebarHidden && !widget.isInSpaceHub)
                         Positioned(
                           top: 10,
                           left: UniversalPlatform.isMacOS ? 88 : 16,
@@ -270,16 +276,17 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                                 size: const Size.square(24),
                                 color: Theme.of(context).iconTheme.color,
                               ),
-                              onPressed: () => sidebarContext.read<HomeSettingBloc>().add(
-                                const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                              ),
+                              onPressed: () =>
+                                  sidebarContext.read<HomeSettingBloc>().add(
+                                        const HomeSettingEvent.changeMenuStatus(
+                                          MenuStatus.expanded,
+                                        ),
+                                      ),
                             ),
                           ),
                         ),
-                      ],
-                    );
-                  }
-                  return child;
+                    ],
+                  );
                 },
               );
             },
@@ -429,7 +436,8 @@ const kDatabasePluginWidgetBuilderHorizontalPadding = 'horizontal_padding';
 const kDatabasePluginWidgetBuilderShowActions = 'show_actions';
 const kDatabasePluginWidgetBuilderActionBuilder = 'action_builder';
 const kDatabasePluginWidgetBuilderNode = 'node';
-const kDatabasePluginWidgetBuilderShowTopRightActions = 'show_top_right_actions';
+const kDatabasePluginWidgetBuilderShowTopRightActions =
+    'show_top_right_actions';
 
 class DatabasePluginWidgetBuilderSize {
   const DatabasePluginWidgetBuilderSize({
@@ -551,7 +559,6 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
               view: view,
               viewInfoBloc: viewInfoBloc,
               pageAccessLevelBloc: pageAccessLevelBloc,
-              showCollaborators: false,
               useFloatingSurface: true,
               showShareButton: !isWhiteboard,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
