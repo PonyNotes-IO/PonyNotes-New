@@ -46,7 +46,6 @@ class FlowyNavigation extends StatelessWidget {
       child: Expanded(
         child: Row(
           children: [
-            _renderCollapse(context),
             Selector<NavigationNotifier, List<NavigationItem>>(
               selector: (context, notifier) => notifier.navigationItems,
               builder: (ctx, items, child) => Expanded(
