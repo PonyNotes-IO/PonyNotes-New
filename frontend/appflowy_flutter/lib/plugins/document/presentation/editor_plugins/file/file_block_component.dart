@@ -7,6 +7,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_option_tile.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_drop_manager.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/actions/mobile_block_action_buttons.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
@@ -179,9 +180,8 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   RenderBox? get _renderBox => context.findRenderObject() as RenderBox?;
 
-  late EditorDropManagerState? dropManagerState = PlatformInfo.isMobile
-      ? null
-      : context.read<EditorDropManagerState?>();
+  late EditorDropManagerState? dropManagerState =
+      PlatformInfo.isMobile ? null : context.read<EditorDropManagerState?>();
 
   final fileKey = GlobalKey();
   final showActionsNotifier = ValueNotifier<bool>(false);
@@ -282,7 +282,8 @@ class FileBlockComponentState extends State<FileBlockComponent>
     }
 
     _disposeUploadProgressNotifier();
-    final notifier = getIt<FileStorageService>().onFileProgress(fileUrl: fileUrl);
+    final notifier =
+        getIt<FileStorageService>().onFileProgress(fileUrl: fileUrl);
     notifier.addListener(_onUploadProgressChanged);
     _uploadProgressNotifier = notifier;
     _progressFileUrl = fileUrl;
@@ -676,9 +677,9 @@ class FileBlockComponentState extends State<FileBlockComponent>
                 primaryAction: (
                   '升级',
                   (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                    ctx,
-                    userProfile: userProfileForDialog,
-                  ),
+                        ctx,
+                        userProfile: userProfileForDialog,
+                      ),
                 ),
                 secondaryAction: ('取消', null),
               );
@@ -687,13 +688,25 @@ class FileBlockComponentState extends State<FileBlockComponent>
           }
         }
 
-        final result = await saveFileToCloudStorage(path, documentBloc.documentId);
+        final result =
+            await saveFileToCloudStorage(path, documentBloc.documentId);
         url = result.$1;
         errorMsg = result.$2;
       }
 
       if (errorMsg != null && mounted) {
-        showToastNotification(message: errorMsg, type: ToastificationType.error);
+        showToastNotification(
+          message: errorMsg,
+          type: ToastificationType.error,
+        );
+        return;
+      }
+
+      final currentNode = editorState.getNodeAtPath(widget.node.path);
+      if (currentNode == null || currentNode.id != widget.node.id) {
+        if (!isLocalMode && url?.isNotEmpty == true) {
+          await DocumentService().deleteFile(url: url!);
+        }
         return;
       }
 
@@ -702,7 +715,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
       final transaction = editorState.transaction;
       final currentUserId = documentBloc.state.userProfilePB?.id.toString();
-      transaction.updateNode(widget.node, {
+      transaction.updateNode(currentNode, {
         FileBlockKeys.url: url,
         FileBlockKeys.urlType: urlType.toIntValue(),
         FileBlockKeys.name: file.name,

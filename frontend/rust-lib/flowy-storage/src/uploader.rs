@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::{RwLock, watch};
+use tokio::sync::{watch, RwLock};
 use tracing::{error, info, instrument, trace, warn};
 
 #[derive(Clone)]
@@ -79,7 +79,7 @@ impl FileUploader {
     Self {
       storage_service,
       queue,
-      max_uploads: 3,
+      max_uploads: 1,
       current_uploads: Default::default(),
       pause_sync: Default::default(),
       disable_upload: is_exceed_limit,

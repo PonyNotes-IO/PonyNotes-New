@@ -1,12 +1,13 @@
 use collab_importer::util::FileId;
 use flowy_sqlite::Database;
 use flowy_storage::sqlite_sql::{
-  UploadFilePartTable, UploadFileTable, batch_select_upload_file, delete_upload_file,
-  insert_upload_file, insert_upload_part, select_latest_upload_part, select_upload_parts,
+  batch_select_upload_file, delete_upload_file, insert_upload_file, insert_upload_part,
+  is_upload_file_exist, select_latest_upload_part, select_upload_parts, UploadFilePartTable,
+  UploadFileTable,
 };
 use flowy_storage_pub::chunked_byte::{ChunkedBytes, MIN_CHUNK_SIZE};
 use rand::distributions::Alphanumeric;
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 use std::env::temp_dir;
 use std::fs::File;
 use std::io::Write;
@@ -115,6 +116,41 @@ async fn test_upload_part_test() {
   let mut conn = db.get_connection().unwrap();
   let parts = select_upload_parts(&mut conn, &upload_id).unwrap();
   assert!(parts.is_empty())
+}
+
+#[tokio::test]
+async fn test_deleted_upload_record_is_not_alive() {
+  let (db, _) = test_database();
+
+  let workspace_id = uuid::Uuid::new_v4().to_string();
+  let upload_id = uuid::Uuid::new_v4().to_string();
+  let local_file_path = create_temp_file_with_random_content(8 * 1024 * 1024).unwrap();
+  let upload_file =
+    create_upload_file_record(workspace_id.clone(), upload_id.clone(), local_file_path).await;
+
+  let conn = db.get_connection().unwrap();
+  insert_upload_file(conn, &upload_file).unwrap();
+
+  let mut conn = db.get_connection().unwrap();
+  assert!(is_upload_file_exist(
+    &mut conn,
+    &upload_file.workspace_id,
+    &upload_file.parent_dir,
+    &upload_file.file_id,
+  )
+  .unwrap());
+
+  let conn = db.get_connection().unwrap();
+  delete_upload_file(conn, &upload_id).unwrap();
+
+  let mut conn = db.get_connection().unwrap();
+  assert!(!is_upload_file_exist(
+    &mut conn,
+    &upload_file.workspace_id,
+    &upload_file.parent_dir,
+    &upload_file.file_id,
+  )
+  .unwrap());
 }
 
 pub fn generate_random_string(len: usize) -> String {
