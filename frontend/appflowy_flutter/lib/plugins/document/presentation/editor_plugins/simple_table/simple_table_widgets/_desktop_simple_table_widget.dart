@@ -74,35 +74,30 @@ class _DesktopSimpleTableWidgetState extends State<DesktopSimpleTableWidget> {
   Widget _buildFeedbackTable() {
     return Provider.value(
       value: simpleTableContext,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return ConstrainedBox(
-            constraints: constraints,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _buildRows(),
-            ),
-          );
-        },
+      // 必须用 IntrinsicWidth/IntrinsicHeight 计算表格的有限自然尺寸，
+      // 不可替换为 LayoutBuilder（横向滚动场景下会拿到无限宽，导致渲染崩溃）。
+      child: IntrinsicWidth(
+        child: IntrinsicHeight(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _buildRows(),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildDesktopTable() {
     // table content
-    // 使用 LayoutBuilder 替代 IntrinsicHeight 以提高性能
-    Widget child = LayoutBuilder(
-      builder: (context, constraints) {
-        return ConstrainedBox(
-          constraints: constraints,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _buildRows(),
-          ),
-        );
-      },
+    // 必须用 IntrinsicHeight 让表格高度自适应内容（计算有限高度）。
+    // 不可替换为 LayoutBuilder：它会把外层约束原样下传，横向滚动下即无限宽，导致崩溃。
+    Widget child = IntrinsicHeight(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _buildRows(),
+      ),
     );
 
     if (widget.alwaysDistributeColumnWidths) {
@@ -118,11 +113,10 @@ class _DesktopSimpleTableWidgetState extends State<DesktopSimpleTableWidget> {
           scrollDirection: Axis.horizontal,
           child: Padding(
             padding: SimpleTableConstants.tablePadding,
-            // 使用 ConstrainedBox 替代 IntrinsicWidth 以提高性能
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: double.infinity),
-              child: child,
-            ),
+            // 必须用 IntrinsicWidth 计算表格的有限自然宽度（列宽之和）。
+            // 不可替换为 ConstrainedBox(minWidth: infinity)：横向滚动给的是无限宽约束，
+            // minWidth=infinity 会把宽度强制成 Infinity，导致 hasSize 断言失败崩溃。
+            child: IntrinsicWidth(child: child),
           ),
         ),
       );

@@ -1024,7 +1024,11 @@ extension TableMapOperation on Node {
 }) {
   MapEntry? duplicatedEntry;
   final newSource = source.map((key, value) {
-    final iKey = int.parse(key);
+    // 非数字 key（脏/旧数据，如被污染成 "=2"）原样保留，避免 int.parse 抛 FormatException
+    final iKey = int.tryParse(key);
+    if (iKey == null) {
+      return MapEntry(key, value);
+    }
     if (iKey == index) {
       duplicatedEntry = MapEntry(key, value);
     }
@@ -1051,7 +1055,11 @@ Map<String, dynamic> _remapSource(
     newSource.remove(filterIndex.toString());
   }
   newSource = newSource.map((key, value) {
-    final iKey = int.parse(key);
+    // 非数字 key（脏/旧数据，如被污染成 "=2"）原样保留，避免 int.parse 抛 FormatException
+    final iKey = int.tryParse(key);
+    if (iKey == null) {
+      return MapEntry(key, value);
+    }
     if (comparator(iKey, index)) {
       return MapEntry((iKey + (increment ? 1 : -1)).toString(), value);
     }
