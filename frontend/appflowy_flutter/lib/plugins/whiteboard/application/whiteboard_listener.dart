@@ -9,19 +9,13 @@ import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import '../../../core/notification/whiteboard_notification.dart';
 
-/// Callback signature: receives the full parsed JSON payload from Rust notifications.
-/// The payload contains: {key, value, is_remote, and optionally large_data}.
-typedef OnWhiteboardRemoteUpdate = void Function(Map<String, dynamic> payload);
+typedef OnWhiteboardRemoteUpdate = void Function(String key, dynamic value, bool isRemote);
 
 class WhiteboardListener {
   final String id;
   OnWhiteboardRemoteUpdate? _onRemoteUpdate;
   StreamSubscription<SubscribeObject>? _subscription;
   WhiteboardNotificationParser? _parser;
-  bool _stopped = false;
-  int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 5;
-  static const Duration _initialReconnectDelay = Duration(milliseconds: 500);
 
   WhiteboardListener({required this.id});
 
@@ -29,58 +23,16 @@ class WhiteboardListener {
     OnWhiteboardRemoteUpdate? onRemoteUpdate,
   }) {
     _onRemoteUpdate = onRemoteUpdate;
-    _stopped = false;
-    _reconnectAttempts = 0;
-    _subscribe();
-  }
-
-  void _subscribe() {
-    if (_stopped) return;
 
     _parser = WhiteboardNotificationParser(
       id: id,
       callback: _callback,
     );
-    _subscription = RustStreamReceiver.shared.observable.stream.listen(
+    _subscription = RustStreamReceiver.listen(
       (observable) {
         _parser?.parse(observable);
       },
-      onError: (Object error) {
-        Log.error('[WBCollab][WhiteboardListener] Stream error: $error, will reconnect');
-        _scheduleReconnect();
-      },
-      onDone: () {
-        if (!_stopped) {
-          Log.warn('[WBCollab][WhiteboardListener] Stream closed unexpectedly, will reconnect');
-          _scheduleReconnect();
-        }
-      },
     );
-  }
-
-  void _scheduleReconnect() {
-    if (_stopped) return;
-    _subscription?.cancel();
-    _subscription = null;
-
-    if (_reconnectAttempts >= _maxReconnectAttempts) {
-      Log.error(
-        '[WBCollab][WhiteboardListener] Max reconnect attempts ($_maxReconnectAttempts) reached, giving up',
-      );
-      return;
-    }
-
-    final delay = _initialReconnectDelay * (1 << _reconnectAttempts);
-    _reconnectAttempts++;
-    Log.info(
-      '[WBCollab][WhiteboardListener] Scheduling reconnect attempt $_reconnectAttempts in ${delay.inMilliseconds}ms',
-    );
-
-    Timer(delay, () {
-      if (!_stopped) {
-        _subscribe();
-      }
-    });
   }
 
   void _callback(
@@ -89,16 +41,15 @@ class WhiteboardListener {
   ) {
     if (ty != WhiteboardNotification.DidReceiveUpdate) return;
 
-    // Reset reconnect counter on successful message delivery
-    _reconnectAttempts = 0;
-
     result.fold(
       (payloadBytes) {
         try {
+          // 尝试解析为 UTF-8 编码的 JSON
           String jsonString;
           try {
             jsonString = utf8.decode(payloadBytes);
           } catch (e) {
+            // 如果 UTF-8 解码失败，可能是二进制数据（如图片等），直接忽略
             Log.debug('[WhiteboardListener] Payload is not UTF-8 encoded, skipping');
             return;
           }
@@ -109,11 +60,14 @@ class WhiteboardListener {
           }
 
           final key = json['key'] as String?;
-          if (key == null) return;
+          final value = json['value'];
+          final isRemote = json['is_remote'] == true;
 
-          // Note: value may be null for large_data notifications — that is valid.
-          // Pass the full payload so the adapter can access all fields.
-          _onRemoteUpdate?.call(Map<String, dynamic>.from(json as Map));
+          if (key == null || value == null) {
+            return;
+          }
+
+          _onRemoteUpdate?.call(key, value, isRemote);
         } catch (e) {
           Log.error('[WBCollab][WhiteboardListener] Failed to parse notification: $e');
         }
@@ -125,7 +79,6 @@ class WhiteboardListener {
   }
 
   Future<void> stop() async {
-    _stopped = true;
     _onRemoteUpdate = null;
     await _subscription?.cancel();
     _subscription = null;

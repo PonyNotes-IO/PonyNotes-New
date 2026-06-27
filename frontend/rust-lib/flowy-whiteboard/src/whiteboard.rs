@@ -12,14 +12,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
-use tokio::time::{Duration, Instant};
 use tracing::info;
-
-/// Large data threshold: 50KB
-const LARGE_DATA_THRESHOLD: usize = 50 * 1024;
-
-/// Debounce duration for local changes: 100ms
-const DEBOUNCE_DURATION: Duration = Duration::from_millis(100);
 
 /// 通知类型：数据变更
 #[derive(Debug, Clone)]
@@ -42,6 +35,7 @@ pub struct Whiteboard {
   #[allow(dead_code)]
   _subscription: Option<Subscription>,
 }
+
 impl Whiteboard {
   /// 数据键
   const DATA_KEY: &'static str = "data";
@@ -96,46 +90,20 @@ impl Whiteboard {
           for (key, change) in key_changes.iter() {
             let key_str = key.to_string();
 
-            // Read the actual value from the data map.
-            // If the key was deleted, get() returns None.
-            let actual_value = data_clone.get(txn, key_str.as_str());
-            let (value_json, is_large) = match actual_value {
-              Some(v) => {
-                let s = v.to_string(txn);
-                let size = s.len();
-                // For large payloads on "elements", signal Dart to fetch via RPC.
-                if size > LARGE_DATA_THRESHOLD && key_str == "elements" {
-                  (serde_json::Value::Null, true)
-                } else {
-                  let parsed = serde_json::from_str::<serde_json::Value>(&s)
-                    .unwrap_or(serde_json::Value::String(s));
-                  (parsed, false)
-                }
-              }
-              // Key was removed or has no value
-              None => (serde_json::Value::Null, false),
-            };
-
-            let mut event_json = serde_json::json!({
+            let event_json = serde_json::json!({
               "key": key_str,
-              "value": value_json,
               "is_remote": is_remote,
-            });
-
-            if is_large {
-              event_json["large_data"] = serde_json::Value::Bool(true);
-            }
-
-            let event_json_str = event_json.to_string();
+              "change_type": format!("{:?}", change),
+            }).to_string();
 
             info!(
-              "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}, large_data={}",
-              key_str, is_remote, change, is_large
+              "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}",
+              key_str, is_remote, change
             );
 
             let changed = WhiteboardChanged {
               key: key_str,
-              value: event_json_str,
+              value: event_json,
               is_remote,
             };
             let _ = notifier_clone.send(changed);
@@ -151,6 +119,7 @@ impl Whiteboard {
       _subscription: Some(subscription),
     })
   }
+
   /// 从 WhiteboardData 创建白板
   pub fn create_with_data(collab: Collab, whiteboard_data: WhiteboardData) -> Result<Self, Error> {
     let mut whiteboard = Self::create(collab)?;
@@ -171,6 +140,8 @@ impl Whiteboard {
   }
 
   /// 从完整的 Excalidraw JSON 更新
+  /// 前端发送格式：{"type": "update", "data": "{\"elements\":..., \"files\":..., \"appState\":...}"}
+  /// 这里的 data 字段是 JSON 字符串，需要二次解析
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
     tracing::trace!("[WBCollab] update_from_json called, len: {}", json_str.len());
 
@@ -259,109 +230,28 @@ impl Whiteboard {
   pub fn subscribe_changed(&self) -> broadcast::Receiver<WhiteboardChanged> {
     self.notifier.subscribe()
   }
+
   /// 启动监听任务：在 tokio spawn 中监听 channel，收到变更后发给 Dart
-  ///
-  /// Debounce strategy:
-  /// - Remote changes (is_remote=true) and appState changes are forwarded immediately.
-  /// - Local changes are debounced per-key: after 100ms of no new changes for a given key,
-  ///   the latest value is flushed as a single notification.
   pub fn start_change_listener(&self) {
     let view_id = self.object_id();
     let mut rx = self.subscribe_changed();
 
     tokio::spawn(async move {
-      // Per-key buffer: key -> latest pending change
-      let mut buffer: HashMap<String, WhiteboardChanged> = HashMap::new();
-      // Per-key deadline: key -> when to flush
-      let mut deadlines: HashMap<String, Instant> = HashMap::new();
-
-      loop {
-        // Compute the soonest deadline from all buffered keys
-        let next_deadline = deadlines.values().min().copied();
-
-        tokio::select! {
-          biased;
-
-          result = rx.recv() => {
-            match result {
-              Ok(changed) => {
-                if changed.is_remote || changed.key == "appState" {
-                  // Remote or appState changes: forward immediately.
-                  // Flush any buffered local change for the same key first.
-                  if let Some(buf) = buffer.remove(&changed.key) {
-                    deadlines.remove(&changed.key);
-                    info!(
-                      "[WBCollab] Flushing buffered change before remote: key={}",
-                      buf.key
-                    );
-                    Self::send_notification(&view_id, &buf);
-                  }
-                  Self::send_notification(&view_id, &changed);
-                } else {
-                  // Local non-appState change: debounce per-key.
-                  // Each new change resets the deadline for that key.
-                  let key = changed.key.clone();
-                  buffer.insert(key.clone(), changed);
-                  deadlines.insert(key, Instant::now() + DEBOUNCE_DURATION);
-                }
-              }
-              Err(broadcast::error::RecvError::Lagged(n)) => {
-                tracing::warn!("[WBCollab] Listener lagged by {} messages", n);
-              }
-              Err(broadcast::error::RecvError::Closed) => {
-                // Channel closed; flush remaining buffered changes
-                for (_, changed) in buffer.drain() {
-                  Self::send_notification(&view_id, &changed);
-                }
-                break;
-              }
-            }
-          }
-
-          _ = async {
-            match next_deadline {
-              Some(dl) => tokio::time::sleep_until(dl).await,
-              // No pending changes: park until a new message arrives
-              None => std::future::pending::<()>().await,
-            }
-          } => {
-            // Flush all keys whose debounce deadline has passed
-            let now = Instant::now();
-            let expired_keys: Vec<String> = deadlines
-              .iter()
-              .filter(|(_, &dl)| now >= dl)
-              .map(|(k, _)| k.clone())
-              .collect();
-
-            for key in expired_keys {
-              deadlines.remove(&key);
-              if let Some(changed) = buffer.remove(&key) {
-                info!(
-                  "[WBCollab] Debounced flush: key={}, is_remote={}",
-                  changed.key, changed.is_remote
-                );
-                Self::send_notification(&view_id, &changed);
-              }
-            }
-          }
-        }
+      while let Ok(changed) = rx.recv().await {
+        info!(
+          "[WBCollab] Broadcasting change: key={}, is_remote={}",
+          changed.key, changed.is_remote
+        );
+        whiteboard_notification_send_json(
+          view_id.clone(),
+          WhiteboardNotification::DidReceiveUpdate,
+          changed.value,
+        );
       }
     });
   }
-
-  /// Send a single change notification to Dart.
-  fn send_notification(view_id: &str, changed: &WhiteboardChanged) {
-    info!(
-      "[WBCollab] Broadcasting change: key={}, is_remote={}",
-      changed.key, changed.is_remote
-    );
-    whiteboard_notification_send_json(
-      view_id.to_string(),
-      WhiteboardNotification::DidReceiveUpdate,
-      changed.value.clone(),
-    );
-  }
 }
+
 impl BorrowMut<Collab> for Whiteboard {
   fn borrow_mut(&mut self) -> &mut Collab {
     &mut self.collab
@@ -421,10 +311,10 @@ mod tests {
     let data = whiteboard.get_data().unwrap();
 
     whiteboard
-      .update_from_json(r#"{"type": "update", "data": {"key1": "value1"}}"#)
+      .update_from_json(r#"""{ "key1": "value1"}"""#)
       .unwrap();
     whiteboard
-      .update_from_json(r#"{"type": "update", "data": {"key1": "value2"}}"#)
+      .update_from_json(r#"""{ "key1": "value2"}"""#)
       .unwrap();
 
     let data = whiteboard.get_data().unwrap();

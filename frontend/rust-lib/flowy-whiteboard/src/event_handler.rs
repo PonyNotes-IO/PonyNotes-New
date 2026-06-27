@@ -154,46 +154,6 @@ pub(crate) async fn get_whiteboard_data_handler(
   })
 }
 
-/// 强制保存白板处理器
-#[instrument(level = "info", skip_all, err)]
-pub(crate) async fn force_save_whiteboard_handler(
-  data: AFPluginData<ViewIdPB>,
-  manager: AFPluginState<Weak<WhiteboardManager>>,
-) -> FlowyResult<()> {
-  let manager = upgrade_manager(manager)?;
-  let payload = data.into_inner();
-
-  let view_id = Uuid::parse_str(&payload.value)
-    .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
-
-  manager.force_save(&view_id).await?;
-  info!("[Whiteboard] Force saved whiteboard: {}", view_id);
-  Ok(())
-}
-
-/// 获取白板 JSON 数据处理器
-#[instrument(level = "info", skip_all, err)]
-pub(crate) async fn get_whiteboard_json_data_handler(
-  data: AFPluginData<ViewIdPB>,
-  manager: AFPluginState<Weak<WhiteboardManager>>,
-) -> DataResult<WhiteboardDataPB, FlowyError> {
-  let manager = upgrade_manager(manager)?;
-  let payload = data.into_inner();
-
-  info!("[Whiteboard] get_whiteboard_json_data_handler called for view: {}", payload.value);
-
-  let view_id = Uuid::parse_str(&payload.value)
-    .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
-
-  let json_data = manager.get_whiteboard_json_data(&view_id).await?;
-  info!("[Whiteboard] Got whiteboard JSON data, length: {} bytes", json_data.len());
-
-  data_result_ok(WhiteboardDataPB {
-    view_id: payload.value,
-    json_data,
-  })
-}
-
 /// 获取编码的 Collab 数据处理器
 #[instrument(level = "debug", skip_all, err)]
 pub(crate) async fn get_encoded_collab_handler(
