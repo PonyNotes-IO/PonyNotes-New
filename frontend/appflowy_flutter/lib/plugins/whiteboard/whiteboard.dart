@@ -251,7 +251,8 @@ class WhiteboardPage extends StatefulWidget {
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
 
-class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObserver {
+class _WhiteboardPageState extends State<WhiteboardPage>
+    with WidgetsBindingObserver {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
   bool get _showLegacyBlockingLoader => false;
@@ -278,7 +279,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     super.initState();
     // 注册应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
-    
+
     _sessionTraceId =
         ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
     _loadTraceId = ponyNotesDiagTraceId('whiteboard', widget.view.id);
@@ -481,19 +482,19 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     Log.info('[WhiteboardPage] 🔄 App lifecycle changed: $state');
-    
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       // 应用进入后台，标记状态
       _isAppInBackground = true;
       Log.info('[WhiteboardPage] ⏸️ App entering background');
-      
     } else if (state == AppLifecycleState.resumed) {
       // 应用回到前台，恢复操作
       _isAppInBackground = false;
       Log.info('[WhiteboardPage] ▶️ App resumed');
-      
+
       // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
       if (mounted) {
         setState(() {
@@ -507,7 +508,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   void dispose() {
     // 注销应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
-    
+
     _isDisposing = true;
     logDiagnosticEvent(
       'WhiteboardLoad',
@@ -917,13 +918,14 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       backgroundColor: _whiteboardCanvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
-        builder: (context, isFullWindow, _) {
+        child: _buildExcalidrawView(),
+        builder: (context, isFullWindow, excalidrawView) {
           return Stack(
             children: [
               const Positioned.fill(
                 child: ColoredBox(color: _whiteboardCanvasFallbackColor),
               ),
-              _buildExcalidrawView(),
+              excalidrawView!,
               if (_shouldRenderTopActionsBar(isFullWindow))
                 Positioned.fill(
                   child: _WhiteboardFloatingActionsOverlay(

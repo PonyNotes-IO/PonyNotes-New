@@ -1888,10 +1888,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
         return Stack(
           children: [
-            // ✅ 关键修复：使用明确尺寸的容器包裹 InAppWebView
-            // 确保 PlatformView 获得精确的尺寸约束
-            Container(
-              key: ValueKey('whiteboard_container_${width}x$height'),
+            // 使用明确尺寸约束包裹 InAppWebView，但不能把 key 绑定到尺寸。
+            // 侧边栏伸缩/全屏会改变 width/height，尺寸 key 会销毁并重建原生 WebView。
+            SizedBox(
               width: width,
               height: height,
               // ✅ 裁剪超出边界的内容，防止弹性回弹导致的视觉溢出
