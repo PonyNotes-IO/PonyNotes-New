@@ -94,12 +94,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
-                    // macOS：收起左侧边栏时，让中间栏整体顶端向下偏移，避免最顶端
-                    // 与窗口左上角红绿灯（关闭/最小化/最大化）按钮重叠。
-                    // 该偏移无论是否显示顶部 Tab 栏都生效（仅靠 Tab 栏的水平 menuSpacing
-                    // 在“单文档无 Tab 栏”时不起作用，故此处补充垂直避让）。
-                    // Windows/Linux：menuTopSpacing 恒为 0，此处无任何影响。详见 HomeLayout。
-                    SizedBox(height: widget.layout.menuTopSpacing),
+                    // 注意：避开 macOS 红绿灯按钮的顶部下移【不在这里做】。
+                    // 若在此处用 SizedBox 下移整个 Column，会把右侧白板/内容区一起下推，
+                    // 深色主题下白板顶部出现黑边。正确做法是只下移“中间栏(文档列表)”——
+                    // 见 SpaceHub 的 floatingDocumentListTopInset（space_hub.dart），
+                    // 它只作用于文档列表，不影响 rightPanel(白板)。
                     HomeStackStableVisibility(
                       visible: !isFullWindow && _shouldShowTabBar(state),
                       child: _shouldShowTabBar(state)
