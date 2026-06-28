@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
 import 'package:appflowy/plugins/space_hub/space_hub.dart';
@@ -40,14 +42,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       final lastOpenView = menuSharedState.latestOpenView;
       if (lastOpenView != null && lastOpenView.id.isNotEmpty) {
         Log.info('[TabsBloc] Restoring last open view: ${lastOpenView.id}');
-        
+
         // 如果上次打开的是日历视图，直接打开日历插件
         if (lastOpenView.layout == ViewLayoutPB.Calendar) {
           final calendarPlugin = CalendarMainPlugin();
           add(TabsEvent.openPlugin(plugin: calendarPlugin, view: lastOpenView));
           return;
         }
-        
+
         // 尝试打开普通视图
         final plugin = lastOpenView.plugin();
         add(TabsEvent.openPlugin(plugin: plugin, view: lastOpenView));
@@ -67,6 +69,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   Future<void> close() {
     state.dispose();
     return super.close();
+  }
+
+  void _disposePageManagersRemovedFrom(
+    TabsState previousState,
+    TabsState nextState,
+  ) {
+    for (final manager in previousState.pageManagers) {
+      if (!nextState.pageManagers.contains(manager)) {
+        unawaited(Future<void>.sync(manager.dispose));
+      }
+    }
   }
 
   void _dispatch() {
@@ -93,7 +106,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               return;
             }
 
-            emit(state.closeView(pluginId));
+            final previousState = state;
+            final nextState = state.closeView(pluginId);
+            emit(nextState);
+            _disposePageManagersRemovedFrom(previousState, nextState);
             _setLatestOpenView();
           },
           closeCurrentTab: () {
@@ -101,7 +117,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               return;
             }
 
-            emit(state.closeView(state.currentPageManager.plugin.id));
+            final previousState = state;
+            final nextState =
+                state.closeView(state.currentPageManager.plugin.id);
+            emit(nextState);
+            _disposePageManagersRemovedFrom(previousState, nextState);
             _setLatestOpenView();
           },
           openTab: (Plugin plugin, ViewPB view) {
@@ -166,12 +186,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
               newIndex = pm != null ? pageManagers.indexOf(pm) : 0;
             }
 
-            emit(
-              state.copyWith(
-                currentIndex: newIndex,
-                pageManagers: pageManagers,
-              ),
+            final previousState = state;
+            final nextState = state.copyWith(
+              currentIndex: newIndex,
+              pageManagers: pageManagers,
             );
+            emit(nextState);
+            _disposePageManagersRemovedFrom(previousState, nextState);
 
             _setLatestOpenView();
           },
@@ -399,8 +420,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // 替换掉,而是通知 SpaceHubPlugin 选中该子视图。
     if (state.currentPageManager.plugin is SpaceHubPlugin) {
       try {
-        final plugin =
-            state.currentPageManager.plugin as SpaceHubPlugin;
+        final plugin = state.currentPageManager.plugin as SpaceHubPlugin;
         plugin.selectViewInSpaceHub(view);
         return;
       } catch (_) {
@@ -464,8 +484,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   /// handler 活跃直到真正结束。
   Future<void> _goBackToPreviousView(Emitter<TabsState> emit) async {
     // 1. 拿到当前 view
-    final currentNotifier =
-        state.currentPageManager.plugin.notifier;
+    final currentNotifier = state.currentPageManager.plugin.notifier;
     final currentView =
         currentNotifier is ViewPluginNotifier ? currentNotifier.view : null;
     if (currentView == null || currentView.id.isEmpty) {
@@ -480,7 +499,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     if (currentPlugin is SpaceHubPlugin) {
       if (currentPlugin.hasSelectedView) {
         final currentSelected = currentPlugin.currentSelectedView;
-        if (currentSelected != null && currentSelected.parentViewId.isNotEmpty) {
+        if (currentSelected != null &&
+            currentSelected.parentViewId.isNotEmpty) {
           // 加载父文档，看是否属于同一个 SpaceHub
           final parentResult = await _loadView(currentSelected.parentViewId);
           if (parentResult != null && !parentResult.isSpace) {
@@ -565,21 +585,24 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     if (state.currentPageManager.plugin is SpaceHubPlugin) {
       // 如果点击的是空间视图，应该打开新的 SpaceHub 实例，而不是在当前 SpaceHub 内显示
       if (view.isSpace) {
-        Log.info('[SpaceHubLink] Space view clicked in SpaceHub, opening new SpaceHub');
+        Log.info(
+            '[SpaceHubLink] Space view clicked in SpaceHub, opening new SpaceHub');
       } else {
-        Log.info('[SpaceHubLink] detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
+        Log.info(
+            '[SpaceHubLink] detected, calling selectViewInSpaceHub: ${view.name}(${view.id})');
         try {
-          final plugin =
-              state.currentPageManager.plugin as SpaceHubPlugin;
+          final plugin = state.currentPageManager.plugin as SpaceHubPlugin;
           plugin.selectViewInSpaceHub(view);
           return;
         } catch (e) {
-        Log.error('[SpaceHubLink] selectViewInSpaceHub failed, falling back: $e');
+          Log.error(
+              '[SpaceHubLink] selectViewInSpaceHub failed, falling back: $e');
           // 失败时回退到原有 openPlugin 流程
         }
       }
     } else {
-      Log.info('[SpaceHubLink] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
+      Log.info(
+          '[SpaceHubLink] NOT SpaceHubPlugin (${state.currentPageManager.plugin.runtimeType}), proceeding normal openPlugin');
     }
 
     try {

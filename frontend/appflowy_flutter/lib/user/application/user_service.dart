@@ -36,9 +36,9 @@ class PhoneBindSendResult {
     this.existingUid,
     this.message,
   });
-  final bool codeSent;      // 验证码是否已发送
-  final bool phoneExists;   // 手机号是否已被其他账号注册
-  final bool isOwnPhone;    // 手机号是否是当前用户自己的
+  final bool codeSent; // 验证码是否已发送
+  final bool phoneExists; // 手机号是否已被其他账号注册
+  final bool isOwnPhone; // 手机号是否是当前用户自己的
   final String? existingUid; // 已存在账号的 UID（用于展示）
   final String? message;
 }
@@ -54,11 +54,11 @@ class PhoneBindConfirmResult {
     this.expiresIn,
     this.tokenType,
   });
-  final bool bindToExisting;  // 是否绑定到了已注册账号
-  final String? userId;       // 绑定后实际使用的账号 ID
-  final String? message;       // 消息
-  final String? accessToken;   // bindToExisting=true 时返回的新 access_token
-  final String? refreshToken;  // bindToExisting=true 时返回的新 refresh_token
+  final bool bindToExisting; // 是否绑定到了已注册账号
+  final String? userId; // 绑定后实际使用的账号 ID
+  final String? message; // 消息
+  final String? accessToken; // bindToExisting=true 时返回的新 access_token
+  final String? refreshToken; // bindToExisting=true 时返回的新 refresh_token
   final int? expiresIn;
   final String? tokenType;
 }
@@ -80,9 +80,13 @@ class CollabMember {
   final int permissionId;
 }
 
-
 const _baseBetaUrl = 'https://beta.appflowy.com';
 const _baseProdUrl = 'https://appflowy.com';
+const _currentUserProfileCacheTtl = Duration(milliseconds: 500);
+
+Future<FlowyResult<UserProfilePB, FlowyError>>? _currentUserProfileInFlight;
+FlowyResult<UserProfilePB, FlowyError>? _cachedCurrentUserProfile;
+DateTime? _cachedCurrentUserProfileAt;
 
 /// Derives the Gotrue base URL from the Cloud server URL.
 /// If the server URL is a xiaomabiji.com domain, returns the standalone Gotrue URL;
@@ -124,8 +128,31 @@ class UserBackendService implements IUserBackendService {
 
   static Future<FlowyResult<UserProfilePB, FlowyError>>
       getCurrentUserProfile() async {
-    final result = await UserEventGetUserProfile().send();
-    return result;
+    final cachedAt = _cachedCurrentUserProfileAt;
+    final cached = _cachedCurrentUserProfile;
+    if (cachedAt != null &&
+        cached != null &&
+        DateTime.now().difference(cachedAt) < _currentUserProfileCacheTtl) {
+      return cached;
+    }
+
+    final inFlight = _currentUserProfileInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final request = UserEventGetUserProfile().send();
+    _currentUserProfileInFlight = request;
+    try {
+      final result = await request;
+      _cachedCurrentUserProfile = result;
+      _cachedCurrentUserProfileAt = DateTime.now();
+      return result;
+    } finally {
+      if (identical(_currentUserProfileInFlight, request)) {
+        _currentUserProfileInFlight = null;
+      }
+    }
   }
 
   Future<FlowyResult<void, FlowyError>> updateUserProfile({
@@ -199,7 +226,7 @@ class UserBackendService implements IUserBackendService {
           throw error;
         },
       );
-      
+
       final baseUrl = cloudConfig.serverUrl;
       if (baseUrl.isEmpty) {
         return FlowyResult.failure(
@@ -208,7 +235,7 @@ class UserBackendService implements IUserBackendService {
             ..msg = 'Missing server URL',
         );
       }
-      
+
       // 获取用户的 access token
       final userResult = await UserBackendService.getCurrentUserProfile();
       final rawToken = userResult.fold(
@@ -227,7 +254,7 @@ class UserBackendService implements IUserBackendService {
             ..msg = 'Missing access token. Please login first.',
         );
       }
-      
+
       // 调用云端 API 发送手机验证码
       // 注意：手机号格式应由调用方确保（第三方绑定流程需要在调用前转换为 E.164 格式）
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
@@ -241,15 +268,16 @@ class UserBackendService implements IUserBackendService {
           'phone': phone,
         }),
       );
-      
+
       if (response.statusCode == 200) {
         // Check if response body contains error information
         try {
-          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+          final responseData =
+              jsonDecode(response.body) as Map<String, dynamic>;
           if (responseData.containsKey('code') && responseData['code'] != 0) {
             // Response contains error code
-            final errorMsg = responseData['message'] as String? ?? 
-                responseData['msg'] as String? ?? 
+            final errorMsg = responseData['message'] as String? ??
+                responseData['msg'] as String? ??
                 'Failed to send phone OTP';
             Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
             return FlowyResult.failure(
@@ -263,8 +291,8 @@ class UserBackendService implements IUserBackendService {
         }
         return FlowyResult.success(null);
       } else {
-        final errorMsg = response.body.isNotEmpty 
-            ? response.body 
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
             : 'Failed to send phone OTP (HTTP ${response.statusCode})';
         Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
         return FlowyResult.failure(
@@ -313,20 +341,21 @@ class UserBackendService implements IUserBackendService {
         (config) => config,
         (error) => throw error,
       );
-      
+
       // 获取当前用户 Profile（包含 token）
       final userProfileResult = await getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
         (profile) => profile,
         (error) => throw error,
       );
-      
+
       final baseUrl = cloudConfig.serverUrl;
       // userProfile.token 可能是 access_token，也可能是包含 access_token 的 JSON，需要归一化
       final token = _normalizeToken(userProfile.token);
-      
-      Log.info('[UserBackendService] Token length: ${token.length}, first 20 chars: ${token.length > 20 ? token.substring(0, 20) : token}');
-      
+
+      Log.info(
+          '[UserBackendService] Token length: ${token.length}, first 20 chars: ${token.length > 20 ? token.substring(0, 20) : token}');
+
       if (baseUrl.isEmpty || token.isEmpty) {
         return FlowyResult.failure(
           FlowyError()
@@ -334,7 +363,7 @@ class UserBackendService implements IUserBackendService {
             ..msg = 'Missing server URL or auth token',
         );
       }
-      
+
       // 调用 /api/user/verify-phone 端点
       // 注意：手机号格式应由调用方确保（第三方绑定流程需要在调用前转换为 E.164 格式）
       final uri = Uri.parse('$baseUrl/api/user/verify-phone');
@@ -349,7 +378,7 @@ class UserBackendService implements IUserBackendService {
           'otp': otp,
         }),
       );
-      
+
       // 解析响应体，检查是否有错误
       if (response.statusCode == 200) {
         // 即使状态码是 200，也要检查响应体中是否有错误
@@ -357,7 +386,9 @@ class UserBackendService implements IUserBackendService {
           try {
             final json = jsonDecode(response.body) as Map<String, dynamic>;
             if (json.containsKey('code') && json['code'] != 0) {
-              final errorMsg = json['message'] as String? ?? json['msg'] as String? ?? '绑定失败';
+              final errorMsg = json['message'] as String? ??
+                  json['msg'] as String? ??
+                  '绑定失败';
               Log.error('[UserBackendService] Verify phone failed: $errorMsg');
               return FlowyResult.failure(
                 FlowyError()
@@ -367,17 +398,21 @@ class UserBackendService implements IUserBackendService {
             }
           } catch (e) {
             // 响应体不是 JSON 或解析失败，但状态码是 200，认为成功
-            Log.info('[UserBackendService] Verify phone response is not JSON, but status is 200, treating as success');
+            Log.info(
+                '[UserBackendService] Verify phone response is not JSON, but status is 200, treating as success');
           }
         }
         return FlowyResult.success(null);
       } else {
         // 尝试解析错误响应
-        String errorMsg = 'Failed to verify phone (HTTP ${response.statusCode})';
+        String errorMsg =
+            'Failed to verify phone (HTTP ${response.statusCode})';
         if (response.body.isNotEmpty) {
           try {
             final json = jsonDecode(response.body) as Map<String, dynamic>;
-            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+            errorMsg = json['message'] as String? ??
+                json['msg'] as String? ??
+                errorMsg;
           } catch (e) {
             errorMsg = response.body;
           }
@@ -406,13 +441,15 @@ class UserBackendService implements IUserBackendService {
   ///   - codeSent=true：验证码已发送，可进入输入验证码页面
   ///   - phoneExists=true：手机号已被其他账号注册，前端应弹出"账号合并"确认框
   ///   - isOwnPhone=true：手机号是当前用户自己的
-  static Future<FlowyResult<PhoneBindSendResult, FlowyError>>
-      sendPhoneBindCode(String phone, {String? pendingToken}) async {
+  static Future<FlowyResult<PhoneBindSendResult, FlowyError>> sendPhoneBindCode(
+      String phone,
+      {String? pendingToken}) async {
     try {
       // OAuth pending 流程：发到 Gotrue；须先解析 URL，不能走 GetCloudConfig（无会话会失败）
       if (pendingToken != null && pendingToken.isNotEmpty) {
         final gotrueRoot = _gotrueRootUrlForOAuthPending();
-        Log.info('[sendPhoneBindCode] OAuth pending path, gotrueRoot: $gotrueRoot');
+        Log.info(
+            '[sendPhoneBindCode] OAuth pending path, gotrueRoot: $gotrueRoot');
         if (gotrueRoot.isEmpty) {
           Log.error('[sendPhoneBindCode] gotrueRoot is empty!');
           return FlowyResult.failure(
@@ -422,7 +459,8 @@ class UserBackendService implements IUserBackendService {
           );
         }
         final uri = Uri.parse('$gotrueRoot/send-phone-bind-code');
-        Log.info('[sendPhoneBindCode] POST $uri, body: phone=$phone, pending_token=${pendingToken.substring(0, 8)}...');
+        Log.info(
+            '[sendPhoneBindCode] POST $uri, body: phone=$phone, pending_token=${pendingToken.substring(0, 8)}...');
         http.Response response;
         try {
           response = await http.post(
@@ -435,7 +473,8 @@ class UserBackendService implements IUserBackendService {
               'pending_token': pendingToken,
             }),
           );
-          Log.info('[sendPhoneBindCode] response status: ${response.statusCode}, body: ${response.body}');
+          Log.info(
+              '[sendPhoneBindCode] response status: ${response.statusCode}, body: ${response.body}');
         } catch (e, st) {
           Log.error('[sendPhoneBindCode] http.post exception: $e', st);
           return FlowyResult.failure(
@@ -466,7 +505,9 @@ class UserBackendService implements IUserBackendService {
           String errorMsg = 'Request failed';
           try {
             final json = jsonDecode(response.body) as Map<String, dynamic>;
-            errorMsg = json['msg'] as String? ?? json['message'] as String? ?? errorMsg;
+            errorMsg = json['msg'] as String? ??
+                json['message'] as String? ??
+                errorMsg;
           } catch (_) {}
           return FlowyResult.failure(
             FlowyError()
@@ -540,7 +581,8 @@ class UserBackendService implements IUserBackendService {
         String errorMsg = 'Request failed';
         try {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
-          errorMsg = json['msg'] as String? ?? json['message'] as String? ?? errorMsg;
+          errorMsg =
+              json['msg'] as String? ?? json['message'] as String? ?? errorMsg;
         } catch (_) {}
         return FlowyResult.failure(
           FlowyError()
@@ -645,11 +687,14 @@ class UserBackendService implements IUserBackendService {
           );
         }
       } else {
-        String errorMsg = 'Failed to confirm phone bind (HTTP ${response.statusCode})';
+        String errorMsg =
+            'Failed to confirm phone bind (HTTP ${response.statusCode})';
         if (response.body.isNotEmpty) {
           try {
             final json = jsonDecode(response.body) as Map<String, dynamic>;
-            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+            errorMsg = json['message'] as String? ??
+                json['msg'] as String? ??
+                errorMsg;
           } catch (_) {}
         }
         return FlowyResult.failure(
@@ -871,7 +916,8 @@ class UserBackendService implements IUserBackendService {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/api/workspace/$workspaceId/collab/$objectId/members');
+      final uri = Uri.parse(
+          '$baseUrl/api/workspace/$workspaceId/collab/$objectId/members');
       final response = await http.get(
         uri,
         headers: {
@@ -886,7 +932,8 @@ class UserBackendService implements IUserBackendService {
         try {
           parsed = body.isNotEmpty ? jsonDecode(body) : null;
         } catch (e) {
-          Log.error('[UserBackendService] Failed to parse getCollabMembers response: $e');
+          Log.error(
+              '[UserBackendService] Failed to parse getCollabMembers response: $e');
           return FlowyResult.failure(
             FlowyError()
               ..code = ErrorCode.Internal
@@ -907,8 +954,13 @@ class UserBackendService implements IUserBackendService {
           if (parsed.containsKey('data') && parsed['data'] is List) {
             rawList = parsed['data'] as List<dynamic>;
           } else if (parsed.containsKey('code') && parsed['code'] != 0) {
-            final errMsg = (parsed['msg'] ?? parsed['message'] ?? parsed['error'] ?? 'Unknown error').toString();
-            Log.error('[UserBackendService] getCollabMembers returned error: $errMsg');
+            final errMsg = (parsed['msg'] ??
+                    parsed['message'] ??
+                    parsed['error'] ??
+                    'Unknown error')
+                .toString();
+            Log.error(
+                '[UserBackendService] getCollabMembers returned error: $errMsg');
             return FlowyResult.failure(
               FlowyError()
                 ..code = ErrorCode.Internal
@@ -930,16 +982,22 @@ class UserBackendService implements IUserBackendService {
         final members = rawList.map((e) {
           final map = e as Map<String, dynamic>;
           return CollabMember(
-            uid: (map['uid'] is num) ? (map['uid'] as num).toInt() : int.tryParse(map['uid']?.toString() ?? '0') ?? 0,
+            uid: (map['uid'] is num)
+                ? (map['uid'] as num).toInt()
+                : int.tryParse(map['uid']?.toString() ?? '0') ?? 0,
             name: (map['name'] as String?) ?? '',
             email: map['email'] as String?,
             avatarUrl: map['avatar_url'] as String?,
-            permissionId: (map['permission_id'] is num) ? (map['permission_id'] as num).toInt() : int.tryParse(map['permission_id']?.toString() ?? '0') ?? 0,
+            permissionId: (map['permission_id'] is num)
+                ? (map['permission_id'] as num).toInt()
+                : int.tryParse(map['permission_id']?.toString() ?? '0') ?? 0,
           );
         }).toList();
         return FlowyResult.success(members);
       } else {
-        final errorMsg = response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}';
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : 'HTTP ${response.statusCode}';
         Log.error('[UserBackendService] getCollabMembers failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
@@ -988,7 +1046,8 @@ class UserBackendService implements IUserBackendService {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/api/workspace/$workspaceId/collab/$objectId/members/$memberUid');
+      final uri = Uri.parse(
+          '$baseUrl/api/workspace/$workspaceId/collab/$objectId/members/$memberUid');
       final response = await http.patch(
         uri,
         headers: {
@@ -1001,7 +1060,9 @@ class UserBackendService implements IUserBackendService {
       if (response.statusCode == 200) {
         return FlowyResult.success(null);
       } else {
-        final errorMsg = response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}';
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : 'HTTP ${response.statusCode}';
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -1009,7 +1070,8 @@ class UserBackendService implements IUserBackendService {
         );
       }
     } catch (e) {
-      Log.error('[UserBackendService] Exception updateCollabMemberPermission: $e');
+      Log.error(
+          '[UserBackendService] Exception updateCollabMemberPermission: $e');
       return FlowyResult.failure(
         FlowyError()
           ..code = ErrorCode.Internal
@@ -1024,7 +1086,8 @@ class UserBackendService implements IUserBackendService {
     String objectId,
     int memberUid,
   ) async {
-    return await updateCollabMemberPermission(workspaceId, objectId, memberUid, 0);
+    return await updateCollabMemberPermission(
+        workspaceId, objectId, memberUid, 0);
   }
 
   Future<FlowyResult<void, FlowyError>> leaveWorkspace(
@@ -1092,7 +1155,8 @@ class UserBackendService implements IUserBackendService {
     String otp,
   ) async {
     try {
-      Log.info('[UserBackendService] 🔐 START verifyPhoneReauthentication for: $phone');
+      Log.info(
+          '[UserBackendService] 🔐 START verifyPhoneReauthentication for: $phone');
 
       // 获取当前用户配置
       final cloudConfigResult = await UserEventGetCloudConfig().send();
@@ -1143,7 +1207,8 @@ class UserBackendService implements IUserBackendService {
                 json['msg'] as String? ??
                 json['error'] as String? ??
                 '身份验证失败';
-            Log.error('[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
+            Log.error(
+                '[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
             return FlowyResult.failure(
               FlowyError()
                 ..code = ErrorCode.Internal
@@ -1164,7 +1229,8 @@ class UserBackendService implements IUserBackendService {
                 errorMsg;
           } catch (_) {}
         }
-        Log.error('[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
+        Log.error(
+            '[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
