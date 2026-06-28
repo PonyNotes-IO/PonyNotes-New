@@ -4,6 +4,8 @@ import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_menu_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_more_actions.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_pin_action.dart';
@@ -85,6 +87,7 @@ class _FavoriteGroupedViews extends StatelessWidget {
                 CalendarUnsavedGuard.instance.maybeConfirmLeave(
                   context,
                   () {
+                    getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(view);
                     context.read<TabsBloc>().openPlugin(view);
                     PopoverContainer.maybeOf(context)?.close();
                   },

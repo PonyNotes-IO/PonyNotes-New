@@ -5,7 +5,9 @@ import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_more_actions.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_pin_action.dart';
@@ -56,7 +58,7 @@ class _FavoriteFolderState extends State<FavoriteFolder> {
                   context
                       .read<FolderBloc>()
                       .add(const FolderEvent.expandOrUnExpand());
-                }),
+                },),
                 buildReorderListView(context, state),
                 if (state.isExpanded) ...[
                   // more button
@@ -149,15 +151,20 @@ class _FavoriteFolderState extends State<FavoriteFolder> {
       onTertiarySelected: (_, view) {
         CalendarUnsavedGuard.instance.maybeConfirmLeave(
           context,
-          () => context.read<TabsBloc>().openTab(view),
+          () {
+            getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(view);
+            context.read<TabsBloc>().openTab(view);
+          },
         );
       },
       onSelected: (_, view) {
         CalendarUnsavedGuard.instance.maybeConfirmLeave(
           context,
           () {
+            getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(view);
             if (HardwareKeyboard.instance.isControlPressed) {
               context.read<TabsBloc>().openTab(view);
+              return;
             }
             context.read<TabsBloc>().openPlugin(view);
           },

@@ -12,6 +12,7 @@ class MenuSharedState {
   final ValueNotifier<ViewPB?> _previousOpenViewNotifier =
       ValueNotifier<ViewPB?>(null);
   String? _openedFromFavoriteOrSharedViewId;
+  String? _sidebarExpandButtonViewId;
 
   ViewPB? get previousOpenView => _previousOpenViewNotifier.value;
   ValueNotifier<ViewPB?> get previousOpenViewNotifier =>
@@ -48,6 +49,7 @@ class MenuSharedState {
 
   void markOpenedFromFavoriteOrShared(ViewPB view) {
     _openedFromFavoriteOrSharedViewId = view.id;
+    _sidebarExpandButtonViewId = view.id;
   }
 
   bool isOpenedFromFavoriteOrShared(ViewPB? view) {
@@ -57,6 +59,16 @@ class MenuSharedState {
   void clearOpenedFromFavoriteOrShared([ViewPB? view]) {
     if (view == null || _openedFromFavoriteOrSharedViewId == view.id) {
       _openedFromFavoriteOrSharedViewId = null;
+    }
+  }
+
+  bool shouldShowSidebarExpandButton(ViewPB? view) {
+    return view != null && _sidebarExpandButtonViewId == view.id;
+  }
+
+  void clearSidebarExpandButton([ViewPB? view]) {
+    if (view == null || _sidebarExpandButtonViewId != null) {
+      _sidebarExpandButtonViewId = null;
     }
   }
 }

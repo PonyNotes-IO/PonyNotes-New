@@ -125,6 +125,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView();
           },
           openTab: (Plugin plugin, ViewPB view) {
+            if (!menuSharedState.isOpenedFromFavoriteOrShared(view)) {
+              menuSharedState.clearSidebarExpandButton(view);
+            }
             // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,通知 SpaceHub
             // 选中子视图,不替换 SpaceHub。
             if (!menuSharedState.isOpenedFromFavoriteOrShared(view) &&
@@ -147,6 +150,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             menuSharedState.clearOpenedFromFavoriteOrShared(view);
           },
           openPlugin: (Plugin plugin, ViewPB? view, bool setLatest) {
+            if (view != null &&
+                !menuSharedState.isOpenedFromFavoriteOrShared(view)) {
+              menuSharedState.clearSidebarExpandButton(view);
+            }
             // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub
             // 整个替换掉。文档内的 mention/sub_page 链接会直接 add 这个 event,
             // 绕过 openPlugin() 入口的判断,这里再判断一次。
