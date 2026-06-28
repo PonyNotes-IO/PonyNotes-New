@@ -34,33 +34,6 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
-if(MSVC)
-  add_compile_options(/FS)
-endif()
-
-find_program(NUGET nuget)
-if(NOT NUGET)
-  set(PONYNOTES_NUGET_DIR "${CMAKE_BINARY_DIR}/nuget")
-  set(PONYNOTES_NUGET_EXE "${PONYNOTES_NUGET_DIR}/nuget.exe")
-  if(NOT EXISTS "${PONYNOTES_NUGET_EXE}")
-    file(MAKE_DIRECTORY "${PONYNOTES_NUGET_DIR}")
-    file(DOWNLOAD
-      "https://dist.nuget.org/win-x86-commandline/v6.0.0/nuget.exe"
-      "${PONYNOTES_NUGET_EXE}"
-      STATUS PONYNOTES_NUGET_DOWNLOAD_STATUS
-    )
-    list(GET PONYNOTES_NUGET_DOWNLOAD_STATUS 0 PONYNOTES_NUGET_STATUS_CODE)
-    if(NOT PONYNOTES_NUGET_STATUS_CODE EQUAL 0)
-      message(FATAL_ERROR "Failed to download nuget.exe: ${PONYNOTES_NUGET_DOWNLOAD_STATUS}")
-    endif()
-  endif()
-  set(NUGET "${PONYNOTES_NUGET_EXE}" CACHE FILEPATH "Path to nuget.exe" FORCE)
-endif()
-
-# MSVC 14.51 turns the legacy /await + <experimental/coroutine> deprecation
-# into a hard STL1011 error for some Flutter Windows plugins.
-add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
-
 # Compilation settings that should be applied to most targets.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)
@@ -155,7 +128,9 @@ set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
 # Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
 
-set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
+endif()
 
 set(DART_FFI_DIR "${CMAKE_INSTALL_PREFIX}")
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
