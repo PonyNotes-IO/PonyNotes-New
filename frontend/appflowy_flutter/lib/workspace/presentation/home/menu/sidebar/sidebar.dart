@@ -1002,7 +1002,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       behavior: HitTestBehavior.opaque,
       onPointerDown: (_) {
         _isCollapseButtonTapped = true;
-        context.read<HomeSettingBloc>().collapseMenu();
+        FullWindowController.collapseMenuAndEnterFullWindow(context);
         // 300ms 后重置标志，允许"..."按钮的 hover 触发
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
@@ -1326,7 +1326,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         ),
         onTap: () {
           _headerActionsPopoverController.close();
-          context.read<HomeSettingBloc>().collapseMenu();
+          FullWindowController.collapseMenuAndEnterFullWindow(context);
         },
       ),
     );
@@ -1348,7 +1348,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             color: theme.iconColorScheme.secondary,
           ),
           onTap: () {
-            context.read<HomeSettingBloc>().collapseMenu();
+            FullWindowController.collapseMenuAndEnterFullWindow(context);
           },
         ),
       ),
@@ -1373,10 +1373,10 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         ),
         onTap: () {
           if (FullWindowController.isFullWindow.value) {
-            FullWindowController.exit();
+            FullWindowController.exitAndExpandMenu(context);
             return;
           }
-          FullWindowController.enter();
+          FullWindowController.toggleAndExpandMenu(context);
         },
       ),
     );

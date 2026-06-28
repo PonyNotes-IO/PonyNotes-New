@@ -286,7 +286,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             minHeight: AIWelcomeTheme.inputContainerHeight,
             // 有附件时允许高度扩展（附件区 + 滚动条额外 8px 空间）
             maxHeight: _attachments.isNotEmpty
-                ? AIWelcomeTheme.inputContainerHeight * 1.5 + 8
+                ? AIWelcomeTheme.inputContainerHeight * 1.5 + 20
                 : AIWelcomeTheme.inputContainerHeight,
           ),
           decoration: AIWelcomeTheme.inputContainerDecoration(context),
@@ -1099,14 +1099,14 @@ class _AIInputAreaState extends State<AIInputArea> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-                Text(
-                  remainingText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: remainingColor,
-                  ),
+              Text(
+                remainingText,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: remainingColor,
                 ),
+              ),
             ],
           ),
         );
@@ -1157,7 +1157,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     return Container(
       width: double.infinity,
       // 底部 padding 增加 8px 留出滚动条空间
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
@@ -1167,7 +1167,9 @@ class _AIInputAreaState extends State<AIInputArea> {
         ),
       ),
       child: Scrollbar(
-        controller: _attachmentScrollController.hasClients ? _attachmentScrollController : null,
+        controller: _attachmentScrollController.hasClients
+            ? _attachmentScrollController
+            : null,
         thumbVisibility: true,
         child: SingleChildScrollView(
           controller: _attachmentScrollController,

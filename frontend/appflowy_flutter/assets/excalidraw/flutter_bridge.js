@@ -110,6 +110,143 @@
         return fallbackValue;
     }
 
+    const pendingFlutterStorageSyncs = new Map();
+    const flutterStorageSyncTimers = new Map();
+    const lastSentFlutterStorageValues = new Map();
+    const flutterStorageSyncDelays = {
+        excalidraw: 280,
+        'excalidraw-state': 650,
+        'excalidraw-files': 900,
+        default: 500,
+    };
+    let pendingFilesSyncTimer = null;
+    let pendingFilesSyncKey = null;
+
+    function flutterStorageSyncDelayForKey(key) {
+        if (key === 'excalidraw' || key.endsWith('_excalidraw')) {
+            return flutterStorageSyncDelays.excalidraw;
+        }
+        if (key.endsWith('excalidraw-state')) {
+            return flutterStorageSyncDelays['excalidraw-state'];
+        }
+        if (key.endsWith('excalidraw-files')) {
+            return flutterStorageSyncDelays['excalidraw-files'];
+        }
+        return flutterStorageSyncDelays.default;
+    }
+
+    function flushFlutterStorageSync(key) {
+        const payload = pendingFlutterStorageSyncs.get(key);
+        if (!payload) return;
+
+        const timer = flutterStorageSyncTimers.get(key);
+        if (timer) {
+            clearTimeout(timer);
+            flutterStorageSyncTimers.delete(key);
+        }
+        pendingFlutterStorageSyncs.delete(key);
+
+        const value = typeof payload.valueProvider === 'function'
+            ? payload.valueProvider()
+            : payload.value;
+        const lastValue = lastSentFlutterStorageValues.get(key);
+        if (lastValue === value) {
+            return;
+        }
+        lastSentFlutterStorageValues.set(key, value);
+        window.flutter_inappwebview.callHandler('localStorageOnSet', { key, value });
+    }
+
+    function flushAllFlutterStorageSyncs() {
+        if (pendingFilesSyncTimer) {
+            clearTimeout(pendingFilesSyncTimer);
+            pendingFilesSyncTimer = null;
+            syncFilesFromScene(pendingFilesSyncKey);
+        }
+        for (const key of Array.from(pendingFlutterStorageSyncs.keys())) {
+            flushFlutterStorageSync(key);
+        }
+    }
+
+    function scheduleFlutterStorageSync(key, value) {
+        pendingFlutterStorageSyncs.set(
+            key,
+            typeof value === 'function' ? { key, valueProvider: value } : { key, value },
+        );
+
+        const existingTimer = flutterStorageSyncTimers.get(key);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+
+        flutterStorageSyncTimers.set(
+            key,
+            setTimeout(() => flushFlutterStorageSync(key), flutterStorageSyncDelayForKey(key)),
+        );
+    }
+
+    window.addEventListener('pagehide', flushAllFlutterStorageSyncs);
+    window.addEventListener('beforeunload', flushAllFlutterStorageSyncs);
+
+    function syncFilesFromScene(key) {
+        if (!window._excalidrawAPI) return;
+
+        try {
+            const api = window._excalidrawAPI;
+            let files = null;
+
+            if (typeof api.getFiles === 'function') {
+                files = api.getFiles();
+            } else if (typeof api.getSceneElements === 'function') {
+                const elements = api.getSceneElements();
+                if (elements && Array.isArray(elements)) {
+                    files = {};
+                    elements.forEach(el => {
+                        if (el.fileId && el.imageData) {
+                            files[el.fileId] = {
+                                id: el.fileId,
+                                data: el.imageData,
+                                created: Date.now(),
+                                mimeType: el.mimeType || 'image/png'
+                            };
+                        }
+                    });
+                }
+            }
+
+            if (!files || Object.keys(files).length === 0) return;
+
+            if (_initPayload && _initPayload.files && typeof _initPayload.files === 'object') {
+                for (const fileId of Object.keys(files)) {
+                    const initFile = _initPayload.files[fileId];
+                    if (initFile && initFile.url && typeof initFile.url === 'string' && initFile.url.startsWith('http')) {
+                        files[fileId].url = initFile.url;
+                    }
+                }
+            }
+
+            const filesKey = key + '-files';
+            const filesValue = JSON.stringify(files);
+            if (window._lastSentFiles !== filesValue) {
+                window._lastSentFiles = filesValue;
+                scheduleFlutterStorageSync(filesKey, filesValue);
+            }
+        } catch (e) {
+            console.error('[PonyNotes] Failed to sync files:', e);
+        }
+    }
+
+    function scheduleFilesSyncFromScene(key) {
+        pendingFilesSyncKey = key;
+        if (pendingFilesSyncTimer) {
+            clearTimeout(pendingFilesSyncTimer);
+        }
+        pendingFilesSyncTimer = setTimeout(() => {
+            pendingFilesSyncTimer = null;
+            syncFilesFromScene(pendingFilesSyncKey);
+        }, flutterStorageSyncDelays['excalidraw-files']);
+    }
+
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
@@ -118,74 +255,17 @@
         },
 
         setItem: function (key, value) {
-            const valueForSync = key.endsWith('excalidraw')
-                ? _getSceneElementsForSync(value)
-                : value;
             originalLocalStorage.setItem(scopedStorageKey(key), value);
             if (init) {
-                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: key, value: valueForSync });
+                scheduleFlutterStorageSync(
+                    key,
+                    key.endsWith('excalidraw') ? () => _getSceneElementsForSync(value) : value,
+                );
 
                 // 📸 关键修复：当 elements 更新时，自动捕获 files 并同步
                 // Excalidraw 不会将 files 写入 localStorage，我们需要手动提取
                 if (key.endsWith('excalidraw') && window._excalidrawAPI) {
-                    try {
-                        // ✅ 改进：使用更可靠的 API 获取 files
-                        const api = window._excalidrawAPI;
-                        let files = null;
-
-                        // 尝试多种方式获取 files
-                        if (typeof api.getFiles === 'function') {
-                            files = api.getFiles();
-                        } else if (typeof api.getSceneElements === 'function') {
-                            // 如果 getFiles 不可用，尝试从 elements 中提取
-                            const elements = api.getSceneElements();
-                            if (elements && Array.isArray(elements)) {
-                                files = {};
-                                elements.forEach(el => {
-                                    if (el.fileId && el.imageData) {
-                                        files[el.fileId] = {
-                                            id: el.fileId,
-                                            data: el.imageData,
-                                            created: Date.now(),
-                                            mimeType: el.mimeType || 'image/png'
-                                        };
-                                    }
-                                });
-                            }
-                        }
-
-                        if (files && Object.keys(files).length > 0) {
-                            // ✅ 关键修复：合并 _initPayload.files 中的 url 字段
-                            // 问题：api.getFiles() 返回的数据不包含 url 字段（因为 addFiles 注入时只有 dataURL）
-                            // 这会导致 Flutter 端的 _fullData['files'] 中的 url 被丢弃，
-                            // 造成每次操作都重新上传已有云 URL 的图片，上传失败时写入 base64 导致 Collab 同步失败
-                            // 修复：将 _initPayload.files 中保存的 url 合并回文件数据
-                            if (_initPayload && _initPayload.files && typeof _initPayload.files === 'object') {
-                                for (const fileId of Object.keys(files)) {
-                                    const initFile = _initPayload.files[fileId];
-                                    if (initFile && initFile.url && typeof initFile.url === 'string' && initFile.url.startsWith('http')) {
-                                        files[fileId].url = initFile.url;
-                                    }
-                                }
-                            }
-
-                            const filesKey = key + '-files'; // 定义一个虚拟key
-                            const filesValue = JSON.stringify(files);
-
-                            // 简单的防抖/去重，避免重复发送
-                            if (window._lastSentFiles !== filesValue) {
-                                window._lastSentFiles = filesValue;
-                                window.flutter_inappwebview.callHandler('localStorageOnSet', {
-                                    key: filesKey,
-                                    value: filesValue
-                                });
-                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length,
-                                    'with url:', Object.values(files).filter(f => f.url).length);
-                            }
-                        }
-                    } catch (e) {
-                        console.error('[PonyNotes] Failed to sync files:', e);
-                    }
+                    scheduleFilesSyncFromScene(key);
                 }
             }
         },
@@ -1541,7 +1621,7 @@
             const val = JSON.stringify(fullMap);
             if (window._lastSentFiles !== val) {
                 window._lastSentFiles = val;
-                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: 'excalidraw-files', value: val });
+                scheduleFlutterStorageSync('excalidraw-files', val);
             }
         } catch (e) { }
     }
@@ -1559,7 +1639,6 @@
             return;
         }
 
-        console.log('[PonyNotes] 🔔 Applying push update for:', data.key);
         try {
             if (data.key === 'elements') {
                 api.updateScene({ elements: data.value, commitToHistory: false });
@@ -1634,7 +1713,6 @@
             ) || [];
             const merged = _reconcileElements(current.slice(), remoteChanged || []);
             api.updateScene({ elements: merged, commitToHistory: false });
-            console.log('[PonyNotes] 🔁 Reconciled elements:', (remoteChanged || []).length, '-> total', merged.length);
         } catch (e) {
             console.error('[PonyNotes] ❌ pushWhiteboardElements failed:', e);
         }

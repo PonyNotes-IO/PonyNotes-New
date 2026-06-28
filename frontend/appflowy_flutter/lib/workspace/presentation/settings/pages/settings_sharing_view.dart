@@ -80,8 +80,6 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       description: '',
       autoSeparate: false,
       children: [
-        _buildTabSection(),
-        const VSpace(8),
         _buildTabContent(),
       ],
     );
@@ -115,8 +113,12 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
       final token = userProfile.token;
       if (token.isEmpty) {
-        Log.warn('[_loadUserSharedNotes] Token is empty, user may be in offline mode');
-        setState(() { _isLoadingShared = false; _sharedError = '需要登录才能查看共享笔记'; });
+        Log.warn(
+            '[_loadUserSharedNotes] Token is empty, user may be in offline mode');
+        setState(() {
+          _isLoadingShared = false;
+          _sharedError = '需要登录才能查看共享笔记';
+        });
         return;
       }
 
@@ -517,7 +519,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
             ),
           ),
           Expanded(
-            flex: 1,
+            flex: 2,
             child: FlowyText(
               '访问权限',
               fontSize: 14,
@@ -613,7 +615,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
             ),
           ),
           Expanded(
-            flex: 1,
+            flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -632,7 +634,13 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     foregroundColor: const Color(0xFFFF6B35),
                   ),
-                  child: const Text('查看邀请成员'),
+                  child: const Text(
+                    '查看成员',
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                    style: TextStyle(fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -837,4 +845,3 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
   }
 }
-

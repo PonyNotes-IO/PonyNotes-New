@@ -12,7 +12,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use tokio::sync::broadcast;
-use tracing::info;
+use tracing::trace;
 
 /// 通知类型：数据变更
 #[derive(Debug, Clone)]
@@ -91,7 +91,7 @@ impl Whiteboard {
 
           if is_elements_map {
             let mut changed_elements = Vec::new();
-            for (key, change) in key_changes.iter() {
+            for (key, _change) in key_changes.iter() {
               let id = key.to_string();
               let element = Self::map_string_value_to_json(target.get(txn, id.as_str()));
               changed_elements.push(serde_json::json!({
@@ -99,10 +99,7 @@ impl Whiteboard {
                 "element": element,
               }));
 
-              info!(
-                "[WBCollab] observe_deep: elements.{}, is_remote={}, change={:?}",
-                key, is_remote, change
-              );
+              trace!("[WBCollab] observe_deep: elements.{}, is_remote={}", key, is_remote);
             }
 
             if changed_elements.is_empty() {
@@ -132,10 +129,7 @@ impl Whiteboard {
                 "change_type": format!("{:?}", change),
               }).to_string();
 
-              info!(
-                "[WBCollab] observe_deep: key={}, is_remote={}, change={:?}",
-                key_str, is_remote, change
-              );
+              trace!("[WBCollab] observe_deep: key={}, is_remote={}", key_str, is_remote);
 
               let changed = WhiteboardChanged {
                 key: key_str,
@@ -390,7 +384,7 @@ impl Whiteboard {
 
     tokio::spawn(async move {
       while let Ok(changed) = rx.recv().await {
-        info!(
+        trace!(
           "[WBCollab] Broadcasting change: key={}, is_remote={}",
           changed.key, changed.is_remote
         );

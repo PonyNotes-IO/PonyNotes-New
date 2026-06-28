@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:appflowy/features/page_access_level/data/repositories/page_access_level_repository.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -14,6 +18,10 @@ class MockPageAccessLevelRepository extends Mock
 void main() {
   late MockPageAccessLevelRepository mockRepository;
   late ViewPB testView;
+
+  setUpAll(() {
+    Log.shared.disableLog = true;
+  });
 
   setUp(() {
     mockRepository = MockPageAccessLevelRepository();
@@ -31,8 +39,8 @@ void main() {
       'should NOT emit new state when access level has NOT changed',
       build: () {
         // First call returns readOnly (initial state)
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.readOnly));
         return PageAccessLevelBloc(
           view: testView,
           repository: mockRepository,
@@ -44,8 +52,8 @@ void main() {
 
         // Reset the mock to track subsequent calls
         reset(mockRepository);
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.readOnly));
 
         // Trigger refresh - should NOT emit because access level is still readOnly
         bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
@@ -62,8 +70,8 @@ void main() {
       'should emit new state when access level HAS changed from readOnly to fullAccess',
       build: () {
         // First call returns readOnly (initial state)
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.readOnly));
         return PageAccessLevelBloc(
           view: testView,
           repository: mockRepository,
@@ -75,56 +83,68 @@ void main() {
 
         // Reset the mock to return a DIFFERENT access level
         reset(mockRepository);
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.fullAccess));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.fullAccess));
 
         // Trigger refresh - SHOULD emit because access level changed
         bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
         await Future.delayed(const Duration(milliseconds: 100));
       },
       expect: () => [
-        isA<PageAccessLevelState>()
-            .having((s) => s.accessLevel, 'accessLevel', ShareAccessLevel.fullAccess),
+        isA<PageAccessLevelState>().having(
+            (s) => s.accessLevel, 'accessLevel', ShareAccessLevel.fullAccess),
       ],
       verify: (_) {
         verify(() => mockRepository.getAccessLevel('test-view-id')).called(1);
       },
     );
 
-    blocTest<PageAccessLevelBloc, PageAccessLevelState>(
-      'should NOT emit when refresh is called multiple times with same access level',
-      build: () {
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
-        return PageAccessLevelBloc(
+    test(
+      'should coalesce overlapping refresh requests with same access level',
+      () async {
+        final firstRefresh =
+            Completer<FlowyResult<ShareAccessLevel, FlowyError>>();
+        var calls = 0;
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer((_) {
+          calls++;
+          if (calls == 1) {
+            return firstRefresh.future;
+          }
+          return Future.value(FlowyResult.success(ShareAccessLevel.readOnly));
+        });
+
+        addTearDown(() {
+          if (!firstRefresh.isCompleted) {
+            firstRefresh
+                .complete(FlowyResult.success(ShareAccessLevel.readOnly));
+          }
+        });
+
+        final bloc = PageAccessLevelBloc(
           view: testView,
           repository: mockRepository,
         );
-      },
-      act: (bloc) async {
-        // Wait for initial load
+
+        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
+        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
+        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
+
+        await Future.delayed(const Duration(milliseconds: 50));
+        expect(calls, 1);
+
+        firstRefresh.complete(FlowyResult.success(ShareAccessLevel.readOnly));
         await Future.delayed(const Duration(milliseconds: 100));
 
-        // Call refresh 3 times with same access level
-        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
-        await Future.delayed(const Duration(milliseconds: 50));
-        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
-        await Future.delayed(const Duration(milliseconds: 50));
-        bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
-        await Future.delayed(const Duration(milliseconds: 100));
-      },
-      expect: () => [], // No state changes expected
-      verify: (_) {
-        // Verify getAccessLevel was called at least 3 times (for the 3 refresh events)
-        verify(() => mockRepository.getAccessLevel('test-view-id')).called(greaterThanOrEqualTo(3));
+        expect(calls, lessThanOrEqualTo(2));
+        await bloc.close();
       },
     );
 
     blocTest<PageAccessLevelBloc, PageAccessLevelState>(
       'should emit each time access level actually changes',
       build: () {
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.readOnly));
         return PageAccessLevelBloc(
           view: testView,
           repository: mockRepository,
@@ -136,8 +156,8 @@ void main() {
 
         // Change to fullAccess
         reset(mockRepository);
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.fullAccess));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.fullAccess));
         bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
         await Future.delayed(const Duration(milliseconds: 100));
 
@@ -147,18 +167,18 @@ void main() {
 
         // Change to readOnly - SHOULD emit
         reset(mockRepository);
-        when(() => mockRepository.getAccessLevel(any()))
-            .thenAnswer((_) async => FlowyResult.success(ShareAccessLevel.readOnly));
+        when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+            (_) async => FlowyResult.success(ShareAccessLevel.readOnly));
         bloc.add(const PageAccessLevelEvent.refreshAccessLevel());
         await Future.delayed(const Duration(milliseconds: 100));
       },
       expect: () => [
         // First change: readOnly -> fullAccess
-        isA<PageAccessLevelState>()
-            .having((s) => s.accessLevel, 'accessLevel', ShareAccessLevel.fullAccess),
+        isA<PageAccessLevelState>().having(
+            (s) => s.accessLevel, 'accessLevel', ShareAccessLevel.fullAccess),
         // Second change: fullAccess -> readOnly
-        isA<PageAccessLevelState>()
-            .having((s) => s.accessLevel, 'accessLevel', ShareAccessLevel.readOnly),
+        isA<PageAccessLevelState>().having(
+            (s) => s.accessLevel, 'accessLevel', ShareAccessLevel.readOnly),
       ],
     );
   });

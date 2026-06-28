@@ -251,7 +251,8 @@ class WhiteboardPage extends StatefulWidget {
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
 
-class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObserver {
+class _WhiteboardPageState extends State<WhiteboardPage>
+    with WidgetsBindingObserver {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
   bool get _showLegacyBlockingLoader => false;
@@ -278,7 +279,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     super.initState();
     // 注册应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
-    
+
     _sessionTraceId =
         ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
     _loadTraceId = ponyNotesDiagTraceId('whiteboard', widget.view.id);
@@ -481,19 +482,19 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     Log.info('[WhiteboardPage] 🔄 App lifecycle changed: $state');
-    
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       // 应用进入后台，标记状态
       _isAppInBackground = true;
       Log.info('[WhiteboardPage] ⏸️ App entering background');
-      
     } else if (state == AppLifecycleState.resumed) {
       // 应用回到前台，恢复操作
       _isAppInBackground = false;
       Log.info('[WhiteboardPage] ▶️ App resumed');
-      
+
       // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
       if (mounted) {
         setState(() {
@@ -507,7 +508,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   void dispose() {
     // 注销应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
-    
+
     _isDisposing = true;
     logDiagnosticEvent(
       'WhiteboardLoad',
@@ -523,14 +524,14 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     Log.info('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
     final adapter = _collabAdapter;
+    _collabAdapter = null;
 
     // 注销所有控制器（同步操作）
     _unregisterControllers();
 
-    // fire-and-forget：先 forceSync 完成后再 dispose adapter
+    // fire-and-forget：先停止 listener，再 forceSync，最后 dispose adapter。
     if (adapter != null) {
-      adapter.forceSync().then((_) {
-        _collabAdapter = null;
+      adapter.forceSyncAndDispose().then((_) {
         Log.info('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
         logDiagnosticEvent(
           'WhiteboardLoad',
@@ -543,9 +544,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
             'success': true,
           },
         );
-        adapter.dispose();
       }).catchError((e) {
-        _collabAdapter = null;
         Log.error('[WhiteboardPage] ❌ Force sync failed: $e');
         logDiagnosticEvent(
           'WhiteboardLoad',
@@ -560,7 +559,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
           },
           warning: true,
         );
-        adapter.dispose();
       });
     }
 
@@ -624,7 +622,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
         // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
         if (!_isDisposing && mounted) {
           for (final entry in data.entries) {
-            Log.info('[Whiteboard] 🔔 Pushing remote update: ${entry.key}');
             _webViewKey.currentState?.pushData(entry.key, entry.value);
           }
         }
@@ -876,10 +873,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
 
   @override
   Widget build(BuildContext context) {
-    Log.debug(
-      '🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData',
-    );
-
     // 监听主题变化
     final appearanceCubit = context.watch<AppearanceSettingsCubit>();
     final currentBrightness = Theme.of(context).brightness;
@@ -895,7 +888,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
     _lastBrightness = currentBrightness;
 
     if (_isLoadingData && _showLegacyBlockingLoader) {
-      Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         resizeToAvoidBottomInset: !PlatformInfo.isTablet,
         body: const Center(
@@ -911,19 +903,19 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
       );
     }
 
-    Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
       resizeToAvoidBottomInset: !PlatformInfo.isTablet,
       backgroundColor: _whiteboardCanvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
-        builder: (context, isFullWindow, _) {
+        child: _buildExcalidrawView(),
+        builder: (context, isFullWindow, excalidrawView) {
           return Stack(
             children: [
               const Positioned.fill(
                 child: ColoredBox(color: _whiteboardCanvasFallbackColor),
               ),
-              _buildExcalidrawView(),
+              excalidrawView!,
               if (_shouldRenderTopActionsBar(isFullWindow))
                 Positioned.fill(
                   child: _WhiteboardFloatingActionsOverlay(
@@ -1203,14 +1195,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> with WidgetsBindingObse
   }
 
   Widget _buildExcalidrawView() {
-    // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
-    // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
-    // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
-    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
-    Log.debug(
-      '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
-    );
-
     final webView = ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,

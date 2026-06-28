@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/navigation.dart';
+import 'package:appflowy/workspace/presentation/home/stable_visibility.dart';
 import 'package:appflowy/workspace/presentation/home/tabs/tabs_manager.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -45,7 +46,6 @@ typedef NavigationCallback = void Function(String id);
 abstract class HomeStackDelegate {
   void didDeleteStackWidget(ViewPB view, int? index);
 }
-
 
 Color homeContentBackgroundColor(BuildContext context) {
   return Theme.of(context).isLightMode
@@ -99,37 +99,43 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                     // 该偏移无论是否显示顶部 Tab 栏都生效（仅靠 Tab 栏的水平 menuSpacing
                     // 在“单文档无 Tab 栏”时不起作用，故此处补充垂直避让）。
                     // Windows/Linux：menuTopSpacing 恒为 0，此处无任何影响。详见 HomeLayout。
-                    if (widget.layout.menuTopSpacing > 0)
-                      SizedBox(height: widget.layout.menuTopSpacing),
-                    if (!isFullWindow && _shouldShowTabBar(state))
-                      Padding(
-                        padding:
-                            EdgeInsets.only(left: widget.layout.menuSpacing),
-                        child: Row(
-                          children: [
-                            _buildTopTabsLeadingPane(context, state),
-                            Expanded(
-                              child: TabsManager(
-                                onIndexChanged: (index) {
-                                  if (state.currentIndex != index) {
-                                    // Unfocus editor to hide selection toolbar
-                                    FocusScope.of(context).unfocus();
-
-                                    context
-                                        .read<TabsBloc>()
-                                        .add(TabsEvent.selectTab(index));
-                                  }
-                                },
+                    SizedBox(height: widget.layout.menuTopSpacing),
+                    HomeStackStableVisibility(
+                      visible: !isFullWindow && _shouldShowTabBar(state),
+                      child: _shouldShowTabBar(state)
+                          ? Padding(
+                              padding: EdgeInsets.only(
+                                left: widget.layout.menuSpacing,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                              child: Row(
+                                children: [
+                                  _buildTopTabsLeadingPane(context, state),
+                                  Expanded(
+                                    child: TabsManager(
+                                      onIndexChanged: (index) {
+                                        if (state.currentIndex != index) {
+                                          // Unfocus editor to hide selection toolbar
+                                          FocusScope.of(context).unfocus();
+
+                                          context.read<TabsBloc>().add(
+                                                TabsEvent.selectTab(index),
+                                              );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
                     // 工具栏行：在选项卡行下方、文档内容上方，右对齐显示当前标签页的操作按钮。
                     // 必须在 IndexedStack 外部构建，避免同帧内与 SpaceHub 内容并发触发
                     // ValueListenableBuilder 重建导致 "setState during build" 异常。
-                    if (!isFullWindow)
-                      _buildCurrentTabTrailingActionsRow(context, state),
+                    HomeStackStableVisibility(
+                      visible: !isFullWindow,
+                      child: _buildCurrentTabTrailingActionsRow(context, state),
+                    ),
                     Expanded(
                       child: Stack(
                         children: [
@@ -162,12 +168,14 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                               ],
                                             ),
                                           ),
-                                          if (!isFullWindow)
-                                            SecondaryView(
+                                          HomeStackStableVisibility(
+                                            visible: !isFullWindow,
+                                            child: SecondaryView(
                                               pageManager: pm,
                                               adaptedPercentageWidth:
                                                   constraints.maxWidth * 3 / 7,
                                             ),
+                                          ),
                                         ],
                                       );
                                     },
@@ -217,7 +225,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           if (rightBarItem == null) {
             return const SizedBox.shrink();
           }
-          if (rightBarItem is SizedBox && rightBarItem.width == 0 && rightBarItem.height == 0) {
+          if (rightBarItem is SizedBox &&
+              rightBarItem.width == 0 &&
+              rightBarItem.height == 0) {
             return const SizedBox.shrink();
           }
           return Container(
@@ -286,7 +296,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   ) {
     Widget? fullWindowMoreItem;
     var handlesFullWindowOverlayActionsInternally = false;
-    
+
     try {
       if (state.currentIndex >= 0 &&
           state.currentIndex < state.pageManagers.length) {
@@ -311,8 +321,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
       }
     } catch (error, stackTrace) {
       LogUtils.error(
-        '[HomeStack] Error building full window overlay actions: $error'
-      );
+          '[HomeStack] Error building full window overlay actions: $error');
       handlesFullWindowOverlayActionsInternally = false;
     }
 
@@ -443,12 +452,12 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   void onWindowFocus() {
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
-    
+
     // 添加 mounted 检查，避免 dispose 后调用 setState 导致崩溃
     if (!mounted) {
       return;
     }
-    
+
     setState(() {});
 
     // macOS 窗口最小化后长时间再打开时，需要确保窗口正确显示

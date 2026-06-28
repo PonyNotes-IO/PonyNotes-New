@@ -39,6 +39,9 @@ class SidebarCloudSyncButton extends StatefulWidget {
 
 class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     with SingleTickerProviderStateMixin {
+  static const Color _enabledCloudSyncColor = Color(0xFF4CAF50);
+  static const Color _disabledCloudSyncColor = Colors.grey;
+
   final GlobalKey _buttonKey = GlobalKey(); // 用于获取按钮位置
   late final AnimationController _rotationController;
 
@@ -188,14 +191,19 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
 
     // 保存原始 context，用于后续打开设置对话框
     final originalContext = context;
+    UserWorkspaceBloc? workspaceBloc;
+    try {
+      workspaceBloc = originalContext.read<UserWorkspaceBloc>();
+    } catch (e) {
+      Log.warn('[云同步弹框] UserWorkspaceBloc 不可用，使用传入的会员信息: $e');
+    }
 
     await showDialog(
       context: context,
       barrierColor: Colors.transparent,
       builder: (BuildContext dialogContext) {
         // 尝试获取 UserWorkspaceBloc，如果存在则监听状态变化
-        try {
-          final workspaceBloc = originalContext.read<UserWorkspaceBloc>();
+        if (workspaceBloc != null) {
           // 使用 BlocBuilder 监听 UserWorkspaceBloc 状态变化，自动更新会员信息
           return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
             bloc: workspaceBloc,
@@ -227,27 +235,28 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                 latestSubscriptionInfo,
                 latestCurrentSubscription,
                 latestIsCloudSyncEnabled,
+                workspaceBloc,
               );
             },
           );
-        } catch (e) {
-          // 如果 UserWorkspaceBloc 不存在，使用传入的会员信息
-          Log.warn('[云同步弹框] UserWorkspaceBloc 不可用，使用传入的会员信息: $e');
-          final membershipStatus = _determineMembershipStatus(
-            subscriptionInfo,
-            currentSubscription,
-          );
-          return _buildDialogContent(
-            originalContext, // 使用原始 context
-            dialogContext,
-            buttonPosition,
-            buttonSize,
-            membershipStatus,
-            subscriptionInfo,
-            currentSubscription,
-            isCloudSyncEnabled,
-          );
         }
+
+        // 如果 UserWorkspaceBloc 不存在，使用传入的会员信息
+        final membershipStatus = _determineMembershipStatus(
+          subscriptionInfo,
+          currentSubscription,
+        );
+        return _buildDialogContent(
+          originalContext, // 使用原始 context
+          dialogContext,
+          buttonPosition,
+          buttonSize,
+          membershipStatus,
+          subscriptionInfo,
+          currentSubscription,
+          isCloudSyncEnabled,
+          null,
+        );
       },
     );
   }
@@ -261,6 +270,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     WorkspaceSubscriptionInfoPB? subscriptionInfo,
     CurrentSubscription? currentSubscription,
     bool isCloudSyncEnabled,
+    UserWorkspaceBloc? workspaceBloc,
   ) {
     return Stack(
       children: [
@@ -276,35 +286,33 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               currentSubscription: currentSubscription,
               onToggle: (enabled) {
                 // 更新 UserWorkspaceBloc 中的云同步开关状态
-                try {
-                  final workspaceBloc = context.read<UserWorkspaceBloc>();
+                if (workspaceBloc != null) {
                   workspaceBloc.add(
                     UserWorkspaceEvent.updateCloudSyncEnabled(enabled: enabled),
                   );
                   Log.info('[云同步] 更新云同步开关状态: $enabled');
-                } catch (e, stackTrace) {
-                  Log.error('[云同步] 无法更新云同步开关状态: $e', e, stackTrace);
+                } else {
+                  Log.warn('[云同步] UserWorkspaceBloc 不可用，无法更新云同步开关状态');
                 }
                 debugPrint('云同步状态: ${enabled ? "已启用" : "已禁用"}');
                 Navigator.of(dialogContext).pop();
               },
               onUpgrade: () {
+                final settingsContext = this.context;
                 // 关闭云同步弹框
                 Navigator.of(dialogContext).pop();
                 // 打开设置对话框，并跳转到会员升级页面
-                try {
+                if (workspaceBloc != null && mounted) {
                   // 使用原始 context（不是 dialogContext）来打开设置对话框
-                  final userProfile =
-                      context.read<UserWorkspaceBloc>().state.userProfile;
-                  final workspaceBloc = context.read<UserWorkspaceBloc>();
+                  final userProfile = workspaceBloc.state.userProfile;
                   showSettingsDialog(
-                    context,
+                    settingsContext,
                     userProfile,
                     workspaceBloc,
                     SettingsPage.accountManagement,
                   );
-                } catch (e, stackTrace) {
-                  Log.error('无法打开设置对话框并跳转到会员升级页面: $e', e, stackTrace);
+                } else {
+                  Log.warn('无法打开设置对话框并跳转到会员升级页面: UserWorkspaceBloc 不可用');
                 }
               },
             ),
@@ -405,22 +413,30 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
             membershipStatus == CloudSyncMembershipStatus.storageFull;
 
     if (!isCloudSyncEnabled) {
+      if (_rotationController.isAnimating) {
+        _rotationController
+          ..stop()
+          ..reset();
+      }
+
       return SizedBox.square(
         key: _buttonKey,
         dimension: widget.buttonSize,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
-            FlowyButton(
-              useIntrinsicWidth: true,
-              margin: EdgeInsets.zero,
-              text: FlowySvg(
-                FlowySvgs.cloud_sync_m,
-                size: Size.square(widget.iconSize),
-                color: _neutralForeground(context),
-                opacity: _neutralOpacity(),
+            Center(
+              child: FlowyButton(
+                useIntrinsicWidth: true,
+                margin: EdgeInsets.zero,
+                text: FlowySvg(
+                  FlowySvgs.cloud_sync_m,
+                  size: Size.square(widget.iconSize),
+                  color: _disabledCloudSyncColor,
+                  opacity: 1.0,
+                ),
+                onTap: onTap,
               ),
-              onTap: onTap,
             ),
             if (hasWarning) _buildWarningDot(membershipStatus),
           ],
@@ -435,21 +451,21 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
 
     if (folderSyncState == null) {
       iconData = FlowySvgs.cloud_sync_m;
-      iconColor = Colors.grey;
-      labelColor = Colors.grey;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
     } else if (folderSyncState.isSyncing) {
       iconData = FlowySvgs.cloud_syncing_m;
-      iconColor = Colors.red;
-      labelColor = Colors.red;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
       if (!_rotationController.isAnimating) {
         _rotationController.repeat();
       }
     } else if (folderSyncState.isFinish) {
       iconData = FlowySvgs.cloud_sync_finish_m;
-      iconColor = Colors.green;
-      labelColor = Colors.green;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_synced.tr();
       if (_rotationController.isAnimating) {
         _rotationController
@@ -458,8 +474,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
       }
     } else {
       iconData = FlowySvgs.cloud_sync_m;
-      iconColor = Colors.grey;
-      labelColor = Colors.grey;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
       if (_rotationController.isAnimating) {
         _rotationController
@@ -484,18 +500,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                       child: FlowySvg(
                         iconData,
                         size: Size.square(widget.iconSize),
-                        color: widget.useHighContrastForeground
-                            ? iconColor
-                            : (widget.isHover ? Colors.white : iconColor),
+                        color: iconColor,
                         opacity: 1.0,
                       ),
                     )
                   : FlowySvg(
                       iconData,
                       size: Size.square(widget.iconSize),
-                      color: widget.useHighContrastForeground
-                          ? iconColor
-                          : (widget.isHover ? Colors.white : iconColor),
+                      color: iconColor,
                       opacity: 1.0,
                     ),
               onTap: onTap,

@@ -2,8 +2,8 @@ import 'dart:io' show Platform;
 
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -74,7 +74,7 @@ class SidebarTopMenu extends StatelessWidget {
           child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) =>
-                context.read<HomeSettingBloc>().collapseMenu(),
+                FullWindowController.collapseMenuAndEnterFullWindow(context),
             child: FlowyHover(
               child: SizedBox(
                 width: 24,

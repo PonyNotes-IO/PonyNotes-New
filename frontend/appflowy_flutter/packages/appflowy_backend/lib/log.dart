@@ -37,7 +37,12 @@ class Log {
     String levelPrefix = _getFlutterLevelPrefix(rustLevel);
     String formattedMessage = _formatMessageWithStackTrace(msg, stackTrace);
     String markedMessage = "$levelPrefix $formattedMessage";
-    rust_log(rustLevel, toNativeUtf8(markedMessage));
+    final nativeMessage = toNativeUtf8(markedMessage);
+    try {
+      rust_log(rustLevel, nativeMessage);
+    } finally {
+      ffi.malloc.free(nativeMessage);
+    }
 
     // Also output to Flutter console in debug mode for convenience
     if (shared.enableFlutterLog && kDebugMode) {
@@ -48,12 +53,18 @@ class Log {
   // Get Flutter log level prefix with emoji markers
   static String _getFlutterLevelPrefix(int rustLevel) {
     switch (rustLevel) {
-      case 0: return '🦋[FLUTTER-INFO]🦋';
-      case 1: return '🦋[FLUTTER-DEBUG]🦋';
-      case 2: return '🦋[FLUTTER-TRACE]🦋';
-      case 3: return '🦋[FLUTTER-WARN]🦋';
-      case 4: return '🦋[FLUTTER-ERROR]🦋';
-      default: return '🦋[FLUTTER-UNKNOWN]🦋';
+      case 0:
+        return '🦋[FLUTTER-INFO]🦋';
+      case 1:
+        return '🦋[FLUTTER-DEBUG]🦋';
+      case 2:
+        return '🦋[FLUTTER-TRACE]🦋';
+      case 3:
+        return '🦋[FLUTTER-WARN]🦋';
+      case 4:
+        return '🦋[FLUTTER-ERROR]🦋';
+      default:
+        return '🦋[FLUTTER-UNKNOWN]🦋';
     }
   }
 
