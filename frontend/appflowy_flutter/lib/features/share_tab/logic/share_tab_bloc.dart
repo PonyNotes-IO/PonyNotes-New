@@ -703,25 +703,31 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventUpdateSharedUsers event,
     Emitter<ShareTabState> emit,
   ) {
-    // FFI 通知下发的 SharedUserPB 不含 user_id 字段，
-    // 直接覆盖会导致后续权限变更因缺少 userId 而失败。
-    // 这里将 FFI 数据与现有数据合并：保留已有 userId。
+    // FFI 通知下发的 SharedUserPB 不含 user_id / uid / phone 字段，
+    // 直接覆盖会导致后续权限变更因缺少这些标识而失败（尤其手机号注册用户 email 为空）。
+    // 这里将 FFI 数据与现有数据（通常来自 HTTP，带完整 uid/phone/userId）合并：
+    // 按 userId → uid → phone → email 多键匹配，并回填 userId / uid / phone。
     final existingUsers = state.users;
     final mergedUsers = event.users.map((ffiUser) {
-      if (ffiUser.userId != null && ffiUser.userId!.isNotEmpty) {
-        return ffiUser; // FFI 数据已有 userId，直接使用
-      }
-      // 按 email 从现有列表中查找并保留 userId
       final existing = existingUsers.firstWhereOrNull(
         (u) =>
-            u.email.trim().toLowerCase() == ffiUser.email.trim().toLowerCase(),
+            (ffiUser.userId?.isNotEmpty == true && u.userId == ffiUser.userId) ||
+            (ffiUser.uid?.isNotEmpty == true && u.uid == ffiUser.uid) ||
+            (ffiUser.phone?.isNotEmpty == true && u.phone == ffiUser.phone) ||
+            (ffiUser.email.trim().isNotEmpty &&
+                u.email.trim().toLowerCase() ==
+                    ffiUser.email.trim().toLowerCase()),
       );
-      if (existing != null &&
-          existing.userId != null &&
-          existing.userId!.isNotEmpty) {
-        return ffiUser.copyWith(userId: existing.userId);
+      if (existing == null) {
+        return ffiUser;
       }
-      return ffiUser;
+      // FFI 自身字段优先，缺失时用现有列表回填
+      return ffiUser.copyWith(
+        userId:
+            ffiUser.userId?.isNotEmpty == true ? ffiUser.userId : existing.userId,
+        uid: ffiUser.uid?.isNotEmpty == true ? ffiUser.uid : existing.uid,
+        phone: ffiUser.phone?.isNotEmpty == true ? ffiUser.phone : existing.phone,
+      );
     }).toList();
 
     emit(
@@ -756,20 +762,41 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       return existing;
     }
 
-    final email = user.email.trim().toLowerCase();
-    if (email.isEmpty) {
-      return null;
-    }
-
+    // 拉取 HTTP 成员列表（带完整 uid/phone/userId），按 uid → phone → email 回退匹配。
+    // 手机号注册用户 email 为空，必须支持按 uid/phone 匹配。
     final httpUsers = await _getSharedUsers();
-    for (final u in httpUsers) {
-      final uid = u.userId;
-      if (u.email.trim().toLowerCase() == email &&
-          uid != null &&
-          uid.isNotEmpty) {
-        return uid;
+
+    // 1. 按 uid 匹配
+    final uid = user.uid;
+    if (uid != null && uid.isNotEmpty) {
+      for (final u in httpUsers) {
+        if (u.uid == uid && u.userId?.isNotEmpty == true) {
+          return u.userId;
+        }
       }
     }
+
+    // 2. 按 phone 匹配
+    final phone = user.phone;
+    if (phone != null && phone.isNotEmpty) {
+      for (final u in httpUsers) {
+        if (u.phone == phone && u.userId?.isNotEmpty == true) {
+          return u.userId;
+        }
+      }
+    }
+
+    // 3. 按 email 匹配
+    final email = user.email.trim().toLowerCase();
+    if (email.isNotEmpty) {
+      for (final u in httpUsers) {
+        if (u.email.trim().toLowerCase() == email &&
+            u.userId?.isNotEmpty == true) {
+          return u.userId;
+        }
+      }
+    }
+
     return null;
   }
 
