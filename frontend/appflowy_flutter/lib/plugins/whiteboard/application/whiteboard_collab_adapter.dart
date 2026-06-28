@@ -50,7 +50,10 @@ class WhiteboardCollabAdapter {
     'gridSize',
     'theme',
     'viewBackgroundColor',
-    'zoom',
+    // 【P2修复】移除 'zoom'：缩放/视口应是每个客户端的本地状态，不应跨端同步。
+    // 此前同步 zoom 却不同步 scrollX/scrollY，远程改 zoom 会让本地视口绕不同中心
+    // 缩放、把内容推出可视区——用户会误以为“缩放把笔画弄丢了”（实际只是移出视野，
+    // 非真丢数据）。协同白板里每人本就应各自控制自己的缩放与视口。
     'zenModeEnabled',
   };
 
@@ -359,6 +362,15 @@ class WhiteboardCollabAdapter {
             'elements': mergedElements,
           },
         });
+        return;
+      }
+
+      // 【根因B修复】到这里说明 elements 不是合法的增量(delta)更新。
+      // 非增量的 elements 值若不是合法的元素列表（如 Rust 旧数据迁移/边缘条件产生的
+      // null、字符串或其它非 List），绝不能透传给 WebView——
+      // updateScene({elements: null/非法}) 会把整块画板瞬间清空（“无操作即清空”路径）。
+      // 直接丢弃这种值，等正常的增量/全量 List 元素再同步。
+      if (key == 'elements' && parsedValue is! List) {
         return;
       }
 

@@ -118,7 +118,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   @override
   void didUpdateWidget(covariant ExcalidrawWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.reloadToken != widget.reloadToken &&
+    // 把真实数据补推进 WebView 的两种情形：
+    //   1) reloadToken 变化（如导入文件后强制重载）；
+    //   2) 【根因A修复】迟到数据：deferInitialDataLoad 模式下首帧 initialData 可能为
+    //      null，WebView 的 initData 会用 {} 把场景初始化为空；当真实数据随后加载
+    //      完成（initialDataLoaded 由 false→true）时，必须把真实数据补推进去，否则
+    //      画板会停留在“被清空”的状态——这正是“偶尔什么也没动画板就清空、重开又有”
+    //      的根因之一。
+    final reloadTokenChanged = oldWidget.reloadToken != widget.reloadToken;
+    final dataArrivedLate =
+        !oldWidget.initialDataLoaded && widget.initialDataLoaded;
+    if ((reloadTokenChanged || dataArrivedLate) &&
         widget.initialDataLoaded &&
         widget.initialData != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
