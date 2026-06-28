@@ -1141,6 +1141,13 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     }
   }
 
+  void _onExpandedChanged() {
+    // 文件夹展开/收起后，延迟一帧检查滚动状态
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScrollable();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // 受限成员权限检查（context.watch 实时响应权限变化）
@@ -1519,6 +1526,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                   isTablet: PlatformInfo.isTablet,
                   // 使用外部传入的选中状态，避免监听全局状态
                   isExternallySelected: widget.selectedView?.id == childView.id,
+                  onExpandedChanged: _onExpandedChanged,
                 );
               },
             ),
@@ -1603,6 +1611,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                 isTablet: PlatformInfo.isTablet,
                 // 使用外部传入的选中状态，避免监听全局状态
                 isExternallySelected: widget.selectedView?.id == childView.id,
+                onExpandedChanged: _onExpandedChanged,
               );
             },
           ),
