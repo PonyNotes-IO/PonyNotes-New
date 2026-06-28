@@ -75,6 +75,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
   bool _isInitializing = false; // ✅ 新增：用于跟踪初始化状态
+  bool _isDisposed = false;
   String? _loadingError;
   final _assetServer = LocalAssetServer();
   String? _whiteboardUrl;
@@ -84,8 +85,20 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
   Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
   final bool _perElementSyncEnabled = kWhiteboardPerElementSync;
-  bool _isPostingResizeNotification = false;
-  DateTime? _lastResizeNotificationAt;
+  Size? _stableWebViewSize;
+  Size? _pendingWebViewSize;
+  Timer? _webViewResizeSettleTimer;
+  static const _webViewResizeSettleDuration = Duration(milliseconds: 220);
+  static const _javaScriptHandlerNames = [
+    'readWhiteboardClipboard',
+    'initData',
+    'localStorageOnSet',
+    'localStorageOnRemove',
+    'localStorageOnClear',
+    'downloadCloudImages',
+    'onExport',
+    'onExportError',
+  ];
 
   @override
   void initState() {
@@ -120,14 +133,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     String tag = 'eval',
     int maxAttempts = 10,
     Duration initialDelay = const Duration(milliseconds: 60),
+    bool logFailures = true,
   }) async {
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
     var attempt = 0;
     var delay = initialDelay;
     while (mounted && attempt < maxAttempts) {
       attempt++;
       try {
         if (_controller != null &&
+            !_isDisposed &&
             _webViewCreated &&
             _pageLoaded &&
             !_isLoading) {
@@ -135,45 +150,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           return;
         }
       } on MissingPluginException catch (e) {
-        Log.warn(
-            '⚠️ [ExcalidrawWebView] MissingPluginException on $tag attempt#$attempt: $e');
+        if (logFailures) {
+          Log.warn(
+              '⚠️ [ExcalidrawWebView] MissingPluginException on $tag attempt#$attempt: $e');
+        }
       } catch (e) {
-        Log.error('⚠️ [ExcalidrawWebView] error on $tag attempt#$attempt: $e');
+        if (logFailures) {
+          Log.error(
+              '⚠️ [ExcalidrawWebView] error on $tag attempt#$attempt: $e');
+        }
       }
       await Future.delayed(delay);
       delay += const Duration(milliseconds: 60);
     }
-    Log.error(
-        '❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
-  }
-
-  Future<void> notifyContainerResized() async {
-    if (_isPostingResizeNotification) {
-      return;
-    }
-
-    final now = DateTime.now();
-    final lastResizeNotificationAt = _lastResizeNotificationAt;
-    if (lastResizeNotificationAt != null &&
-        now.difference(lastResizeNotificationAt) <
-            const Duration(milliseconds: 250)) {
-      return;
-    }
-
-    _isPostingResizeNotification = true;
-    _lastResizeNotificationAt = now;
-    try {
-      await _safeEvalJs('''
-        (function() {
-          const _api = window.excalidrawAPI || window.excalidrawAppRef ||
-            window.__EXCALIDRAW_API__ || window._excalidrawAPI;
-          if (_api && typeof _api.refresh === 'function') {
-            requestAnimationFrame(function() { _api.refresh(); });
-          }
-        })();
-      ''', tag: 'notifyContainerResized');
-    } finally {
-      _isPostingResizeNotification = false;
+    if (logFailures) {
+      Log.error(
+          '❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
     }
   }
 
@@ -193,6 +185,32 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       allowsInlineMediaPlayback: true,
       allowsBackForwardNavigationGestures: false,
     );
+  }
+
+  void _scheduleStableWebViewResize(Size nextSize) {
+    if (_isDisposed || nextSize.width <= 0 || nextSize.height <= 0) {
+      return;
+    }
+
+    final stableWebViewSize = _stableWebViewSize;
+    if (stableWebViewSize != null &&
+        (stableWebViewSize.width - nextSize.width).abs() < 1 &&
+        (stableWebViewSize.height - nextSize.height).abs() < 1) {
+      return;
+    }
+
+    _pendingWebViewSize = nextSize;
+    _webViewResizeSettleTimer?.cancel();
+    _webViewResizeSettleTimer = Timer(_webViewResizeSettleDuration, () {
+      if (!mounted || _isDisposed || _pendingWebViewSize == null) {
+        return;
+      }
+
+      setState(() {
+        _stableWebViewSize = _pendingWebViewSize;
+        _pendingWebViewSize = null;
+      });
+    });
   }
 
   Future<void> _loadExcalidrawHTML() async {
@@ -244,6 +262,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
       handlerName: "readWhiteboardClipboard",
       callback: (args) async {
+        if (_isDisposed) return null;
         try {
           final data = await ClipboardService().getData();
           final image = data.image;
@@ -279,6 +298,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
         handlerName: "initData",
         callback: (args) async {
+          if (_isDisposed) return null;
           Log.info(
               '[WBCollab][ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
 
@@ -381,6 +401,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
         handlerName: "localStorageOnSet",
         callback: (args) {
+          if (_isDisposed) return;
           if (args.isNotEmpty) {
             final arg = args[0];
             if (arg is Map &&
@@ -470,6 +491,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
       handlerName: "downloadCloudImages",
       callback: (args) async {
+        if (_isDisposed) return [];
         try {
           if (args.isEmpty) return [];
           final cloudFiles = args[0];
@@ -564,6 +586,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
       handlerName: "onExport",
       callback: (args) async {
+        if (_isDisposed) return;
         try {
           if (args.isEmpty) return;
           final payload = args[0];
@@ -583,6 +606,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
       handlerName: "onExportError",
       callback: (args) async {
+        if (_isDisposed) return;
         try {
           if (args.isEmpty) return;
           final payload = args[0];
@@ -671,7 +695,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
       await _improveContextMenuTextRendering();
-      await _installResizeGuard();
 
       // 设置主题
       final theme =
@@ -692,8 +715,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 导致点击/hover 都偏左一位。
       // 修复：CSS overscroll-behavior:none（映射 NSScrollView.elasticity=none）+
       //       initialUserScript 在 document-start 早期生效，阻止弹性回弹产生。
-      await _safeEvalJs(
-        '''
+      // 诊断注入仅在 debug 构建启用：clickDiag / scroll / device 日志会在全屏、
+      // 侧栏切换时被 focus/mouse/scroll 事件高频触发，经 onConsoleMessage 逐条
+      // 跨桥回传，在 Windows 上淹没 Flutter 主线程消息队列
+      // （Failed to post message to main thread）。功能性的滚动重置由
+      // forceResetScroll + CSS + initialUserScripts 兜底，与此诊断无关。
+      if (kDebugMode) {
+        await _safeEvalJs(
+          '''
         (function() {
           setTimeout(function() {
             // ===== 诊断：设备信息、弹性滚动状态和工具栏按钮位置 =====
@@ -751,13 +780,18 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }, 2500);
         })();
       ''',
-        tag: 'overscrollFix',
-      );
+          tag: 'overscrollFix',
+        );
+      }
 
       // ✅ 关键修复：在初始化完成后立即强制重置滚动偏移
       // 避免 macOS WKWebView 的 NSScrollView 弹性滚动导致的偏移
       await _safeEvalJs('''
         (function() {
+          // 日志仅在 debug 构建输出：以下 focus/mouse/可见性/滚动监控会在全屏、
+          // 侧栏切换时被高频触发；console 日志经 onConsoleMessage 逐条跨桥回传，
+          // 在 Windows 上会淹没 Flutter 主线程消息队列。功能逻辑保持不变。
+          const __pnDebug = $kDebugMode;
           // 立即重置滚动偏移
           const resetScroll = function() {
             window.scrollTo(0, 0);
@@ -789,7 +823,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           const scrollWatchdog = setInterval(function() {
             if (checkCount >= maxChecks) {
               clearInterval(scrollWatchdog);
-              console.log('[PonyNotes] ✅ 高频滚动监控结束');
+              if (__pnDebug) console.log('[PonyNotes] ✅ 高频滚动监控结束');
               // 切换到低频监控（每 500ms）
               startLowFrequencyWatchdog();
               return;
@@ -800,7 +834,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 document.documentElement.scrollLeft !== 0 ||
                 document.documentElement.scrollTop !== 0) {
               resetScroll();
-              console.log('[PonyNotes] ⚠️ 高频检测到意外滚动，已重置');
+              if (__pnDebug) console.log('[PonyNotes] ⚠️ 高频检测到意外滚动，已重置');
             }
             
             checkCount++;
@@ -815,7 +849,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   document.documentElement.scrollLeft !== 0 ||
                   document.documentElement.scrollTop !== 0) {
                 resetScroll();
-                console.log('[PonyNotes] ⚠️ 低频检测到意外滚动，已重置');
+                if (__pnDebug) console.log('[PonyNotes] ⚠️ 低频检测到意外滚动，已重置');
               }
             }, 500);
           };
@@ -824,7 +858,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           // 这是解决鼠标在白板区域外移动导致漂移的关键修复
           const onFocusChange = function() {
             resetScroll();
-            console.log('[PonyNotes] ⚠️ 焦点变化，重置滚动');
+            if (__pnDebug) console.log('[PonyNotes] ⚠️ 焦点变化，重置滚动');
           };
           
           // 监听各种焦点相关事件
@@ -844,7 +878,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           // ✅ 页面可见性变化时重置滚动
           document.addEventListener('visibilitychange', function() {
             resetScroll();
-            console.log('[PonyNotes] ⚠️ 页面可见性变化，重置滚动');
+            if (__pnDebug) console.log('[PonyNotes] ⚠️ 页面可见性变化，重置滚动');
           });
           
           // 保存到全局，便于调试
@@ -853,7 +887,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window._ponynotesResetScroll = resetScroll;
           window._ponynotesOnFocusChange = onFocusChange;
 
-          console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移，启动滚动监控');
+          if (__pnDebug) console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移，启动滚动监控');
         })();
       ''', tag: 'forceResetScroll');
 
@@ -1301,62 +1335,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     );
   }
 
-  /// 安装容器尺寸变化守护，确保 Excalidraw 在 Flutter 布局完成后正确知晓视口尺寸。
-  Future<void> _installResizeGuard() async {
-    await _safeEvalJs('''
-      (function() {
-        const refreshAfterStableResize = () => {
-          const _api = window.excalidrawAPI ||
-            window.__EXCALIDRAW_API__ ||
-            window._excalidrawAPI;
-          if (_api && typeof _api.refresh === 'function') {
-            _api.refresh();
-          }
-        };
-
-        if (window._ponynotesResizeObserver) {
-          window._ponynotesResizeObserver.disconnect();
-        }
-        if (window._ponynotesResizeHandler) {
-          window.removeEventListener('resize', window._ponynotesResizeHandler);
-        }
-
-        let lastWidth = 0;
-        let lastHeight = 0;
-        const onContainerResize = () => {
-          const root = document.querySelector('.excalidraw') || document.body;
-          const rect = root.getBoundingClientRect();
-          if (rect.width <= 0 || rect.height <= 0) {
-            return;
-          }
-          if (Math.abs(rect.width - lastWidth) < 1 &&
-              Math.abs(rect.height - lastHeight) < 1) {
-            return;
-          }
-          lastWidth = rect.width;
-          lastHeight = rect.height;
-          clearTimeout(window._ponynotesResizeTimer);
-          // ✅ 增加防抖延迟到 200ms，确保 Flutter 布局完全稳定后再刷新
-          // 作为子控件时，父容器尺寸变化可能更频繁，需要更长的稳定时间
-          window._ponynotesResizeTimer = setTimeout(refreshAfterStableResize, 200);
-        };
-
-        window._ponynotesResizeHandler = onContainerResize;
-        // 不再主动派发 window.resize。Excalidraw 自身已有 ResizeObserver，
-        // 这里仅在 Flutter 容器稳定后调用 refresh，避免合成 resize 反复改写 scroll。
-        window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
-        window._ponynotesResizeObserver.observe(document.body);
-        const root = document.querySelector('.excalidraw');
-        if (root) {
-          window._ponynotesResizeObserver.observe(root);
-        }
-
-        // 立即检查当前容器尺寸（初始化时 lastWidth=0 故必然触发一次）
-        onContainerResize();
-      })();
-    ''', tag: 'installResizeGuard');
-  }
-
   Future<void> _hideLoadingLogo() async {
     await _safeEvalJs('''
       (function() {
@@ -1641,7 +1619,36 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     // 服务器应该在应用关闭时统一清理，而不是在每个Widget dispose时
     // _assetServer.stop(); // ❌ 这会导致切换白板时服务器被停止
 
-    // flutter_inappwebview 的 controller 会自动清理
+    _isDisposed = true;
+    _webViewCreated = false;
+    _pageLoaded = false;
+    _webViewResizeSettleTimer?.cancel();
+    _webViewResizeSettleTimer = null;
+    _pendingWebViewSize = null;
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      for (final handlerName in _javaScriptHandlerNames) {
+        try {
+          controller.removeJavaScriptHandler(handlerName: handlerName);
+        } catch (_) {
+          // Controller may already be disposed by the platform view.
+        }
+      }
+      try {
+        controller.dispose();
+      } catch (_) {
+        // InAppWebView also disposes its controller during platform view teardown.
+      }
+    }
+
+    final initializationCompleter = _initializationCompleter;
+    if (initializationCompleter != null &&
+        !initializationCompleter.isCompleted) {
+      initializationCompleter.complete();
+    }
+    _initializationCompleter = null;
+
     super.dispose();
   }
 
@@ -1769,12 +1776,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         if (window.pushWhiteboardData) {
           window.pushWhiteboardData(${jsonEncode(pushPayload)});
         }
-      ''', tag: 'pushWhiteboardData');
-      Log.info(
-          '[WBCollab][ExcalidrawWebView] ✅ JS pushWhiteboardData called: key=$key');
+      ''', tag: 'pushWhiteboardData', maxAttempts: 1, logFailures: false);
     } catch (e) {
-      Log.error(
-          '[WBCollab][ExcalidrawWebView] ❌ pushData failed for key $key: $e');
+      Log.debug(
+          '[WBCollab][ExcalidrawWebView] pushData skipped for key $key: $e');
     }
   }
 
@@ -1800,13 +1805,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         if (window.pushWhiteboardElements) {
           window.pushWhiteboardElements(${jsonEncode(changed)});
         }
-      ''', tag: 'pushWhiteboardElements');
-      Log.info(
-        '[WBCollab][ExcalidrawWebView] ✅ JS pushWhiteboardElements called: count=${changed.length}',
-      );
+      ''', tag: 'pushWhiteboardElements', maxAttempts: 1, logFailures: false);
     } catch (e) {
-      Log.error(
-        '[WBCollab][ExcalidrawWebView] ❌ pushWhiteboardElements failed: $e',
+      Log.debug(
+        '[WBCollab][ExcalidrawWebView] pushWhiteboardElements skipped: $e',
       );
     }
   }
@@ -1905,32 +1907,38 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         // ✅ 使用整数尺寸，避免小数精度问题导致的布局抖动
         final width = constraints.maxWidth.floorToDouble();
         final height = constraints.maxHeight.floorToDouble();
+        final constrainedSize = Size(width, height);
+        _stableWebViewSize ??= constrainedSize;
+        _scheduleStableWebViewResize(constrainedSize);
+        final webViewSize = _stableWebViewSize ?? constrainedSize;
 
         return Stack(
           children: [
             // 使用明确尺寸约束包裹 InAppWebView，但不能把 key 绑定到尺寸。
             // 侧边栏伸缩/全屏会改变 width/height，尺寸 key 会销毁并重建原生 WebView。
-            SizedBox(
-              width: width,
-              height: height,
-              // ✅ 裁剪超出边界的内容，防止弹性回弹导致的视觉溢出
-              // clipBehavior: Clip.hardEdge,
-              child: InAppWebView(
-                // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key
-                // 原因：InAppWebView底层使用PlatformView与原生代码通信
-                // 问题：如果没有唯一key，Flutter可能会错误地复用或重复创建PlatformView
-                // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
-                // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
-                key: ValueKey(
-                    'inappwebview_${widget.viewId}_global_$_inAppWebViewInstanceId'),
-                initialUrlRequest: URLRequest(
-                  url: WebUri(_whiteboardUrl!),
-                ),
-                initialSettings: _settings,
-                // 在 document-start 阶段就禁用弹性回弹，比 onLoadStop 注入 CSS 更早
-                initialUserScripts: UnmodifiableListView([
-                  UserScript(
-                    source: '''
+            Positioned.fill(
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: webViewSize.width,
+                    height: webViewSize.height,
+                    child: InAppWebView(
+                      // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key
+                      // 原因：InAppWebView底层使用PlatformView与原生代码通信
+                      // 问题：如果没有唯一key，Flutter可能会错误地复用或重复创建PlatformView
+                      // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
+                      // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
+                      key: ValueKey(
+                          'inappwebview_${widget.viewId}_global_$_inAppWebViewInstanceId'),
+                      initialUrlRequest: URLRequest(
+                        url: WebUri(_whiteboardUrl!),
+                      ),
+                      initialSettings: _settings,
+                      // 在 document-start 阶段就禁用弹性回弹，比 onLoadStop 注入 CSS 更早
+                      initialUserScripts: UnmodifiableListView([
+                        UserScript(
+                          source: '''
                         document.documentElement.style.overscrollBehavior = 'none';
                         document.documentElement.style.overscrollBehaviorX = 'none';
                         document.documentElement.style.overscrollBehaviorY = 'none';
@@ -1939,139 +1947,138 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                         document.body.style.overscrollBehaviorY = 'none';
                         window.scrollTo(0, 0);
                       ''',
-                    injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                          injectionTime:
+                              UserScriptInjectionTime.AT_DOCUMENT_START,
+                        ),
+                      ]),
+                      webViewEnvironment: sharedWebViewEnvironment,
+
+                      onWebViewCreated: (controller) {
+                        _controller = controller;
+                        _webViewCreated = true;
+                        _setupJavaScriptHandlers(controller);
+                        // ✅ 修复：不再在 onWebViewCreated 中设置 localStorage
+                        // 原因：flutter_bridge.js 的 IIFE 会先清空当前白板的隔离缓存
+                        // 然后通过 initData handler 重新加载数据
+                        // 所以在这里设置 localStorage 是无用的（会被立即清空）
+                        Log.debug('🌐 [ExcalidrawWebView] WebView created');
+                      },
+
+                      shouldOverrideUrlLoading:
+                          (controller, navigationAction) async {
+                        // 允许加载本地服务器的所有资源
+                        final url = navigationAction.request.url.toString();
+                        if (url.startsWith('http://localhost:') ||
+                            url.startsWith('http://127.0.0.1:')) {
+                          Log.debug(
+                              '✅ [ExcalidrawWebView] Allowing navigation to: $url');
+                          return NavigationActionPolicy.ALLOW;
+                        }
+                        Log.debug(
+                            '⚠️ [ExcalidrawWebView] Blocking navigation to: $url');
+                        return NavigationActionPolicy.CANCEL;
+                      },
+
+                      onLoadStart: (controller, url) {
+                        if (mounted) {
+                          setState(() {
+                            _isLoading = true;
+                            _loadingError = null;
+                            _pageLoaded = false;
+                          });
+                        }
+                        Log.debug(
+                            '🔄 [ExcalidrawWebView] Loading started: $url');
+                      },
+
+                      onLoadStop: (controller, url) async {
+                        if (mounted && _controller != null) {
+                          setState(() {
+                            _isLoading = false;
+                            _pageLoaded = true;
+                          });
+
+                          // ✅ 关键：等待 initData 完成后再初始化 UI
+                          if (_initializationCompleter != null &&
+                              !_initializationCompleter!.isCompleted) {
+                            Log.info(
+                                '[ExcalidrawWebView] ⏳ Waiting for data initialization...');
+                            _isInitializing = true;
+                            setState(() {});
+
+                            try {
+                              await _initializationCompleter!.future.timeout(
+                                const Duration(seconds: 10),
+                                onTimeout: () {
+                                  Log.warn(
+                                      '[ExcalidrawWebView] ⏰ initData timeout, proceeding anyway');
+                                },
+                              );
+                              Log.info(
+                                  '[ExcalidrawWebView] ✅ Data initialization complete');
+                            } catch (e) {
+                              Log.warn(
+                                  '[ExcalidrawWebView] ⚠️ initData error: $e, proceeding anyway');
+                            }
+
+                            _isInitializing = false;
+                            if (mounted) {
+                              setState(() {});
+                            }
+                          }
+
+                          await _initializeExcalidraw();
+                        }
+                        Log.debug(
+                            '✅ [ExcalidrawWebView] Loading finished: $url');
+                      },
+
+                      onProgressChanged: (controller, progress) {
+                        // 可以在这里更新进度条
+                        // print('📊 [ExcalidrawWebView] Loading progress: $progress%');
+                      },
+
+                      onLoadError: (controller, url, code, message) {
+                        if (mounted) {
+                          setState(() {
+                            _isLoading = false;
+                            _loadingError = message;
+                          });
+                        }
+                        Log.error(
+                            '❌ [ExcalidrawWebView] Load error: $message (code: $code)');
+                        widget.onError?.call('WebView加载错误: $message');
+                      },
+
+                      onLoadHttpError:
+                          (controller, url, statusCode, description) {
+                        if (mounted) {
+                          setState(() {
+                            _isLoading = false;
+                            _loadingError = 'HTTP错误 $statusCode: $description';
+                          });
+                        }
+                        Log.error(
+                            '❌ [ExcalidrawWebView] HTTP error: $statusCode - $description');
+                      },
+
+                      onConsoleMessage: (controller, consoleMessage) {
+                        // 打印 WebView 控制台消息（用于调试）
+                        // 只打印关键日志，避免刷屏
+                        final message = consoleMessage.message;
+                        // 只打印包含特定关键词的日志
+                        if (message.contains('[PonyNotes]') ||
+                            message.contains('Error') ||
+                            message.contains('error') ||
+                            message.contains('Failed') ||
+                            message.contains('❌') ||
+                            message.contains('✅')) {
+                          Log.debug('[WebView Console] $message');
+                        }
+                      },
+                    ),
                   ),
-                ]),
-                webViewEnvironment: sharedWebViewEnvironment,
-
-                onWebViewCreated: (controller) {
-                  _controller = controller;
-                  _webViewCreated = true;
-                  _setupJavaScriptHandlers(controller);
-                  // ✅ 修复：不再在 onWebViewCreated 中设置 localStorage
-                  // 原因：flutter_bridge.js 的 IIFE 会先清空当前白板的隔离缓存
-                  // 然后通过 initData handler 重新加载数据
-                  // 所以在这里设置 localStorage 是无用的（会被立即清空）
-                  Log.debug('🌐 [ExcalidrawWebView] WebView created');
-                },
-
-                shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  // 允许加载本地服务器的所有资源
-                  final url = navigationAction.request.url.toString();
-                  if (url.startsWith('http://localhost:') ||
-                      url.startsWith('http://127.0.0.1:')) {
-                    Log.debug(
-                        '✅ [ExcalidrawWebView] Allowing navigation to: $url');
-                    return NavigationActionPolicy.ALLOW;
-                  }
-                  Log.debug(
-                      '⚠️ [ExcalidrawWebView] Blocking navigation to: $url');
-                  return NavigationActionPolicy.CANCEL;
-                },
-
-                onLoadStart: (controller, url) {
-                  if (mounted) {
-                    setState(() {
-                      _isLoading = true;
-                      _loadingError = null;
-                      _pageLoaded = false;
-                    });
-                  }
-                  Log.debug('🔄 [ExcalidrawWebView] Loading started: $url');
-                },
-
-                onLoadStop: (controller, url) async {
-                  if (mounted && _controller != null) {
-                    setState(() {
-                      _isLoading = false;
-                      _pageLoaded = true;
-                    });
-
-                    // ✅ 关键：等待 initData 完成后再初始化 UI
-                    if (_initializationCompleter != null &&
-                        !_initializationCompleter!.isCompleted) {
-                      Log.info(
-                          '[ExcalidrawWebView] ⏳ Waiting for data initialization...');
-                      _isInitializing = true;
-                      setState(() {});
-
-                      try {
-                        await _initializationCompleter!.future.timeout(
-                          const Duration(seconds: 10),
-                          onTimeout: () {
-                            Log.warn(
-                                '[ExcalidrawWebView] ⏰ initData timeout, proceeding anyway');
-                          },
-                        );
-                        Log.info(
-                            '[ExcalidrawWebView] ✅ Data initialization complete');
-                      } catch (e) {
-                        Log.warn(
-                            '[ExcalidrawWebView] ⚠️ initData error: $e, proceeding anyway');
-                      }
-
-                      _isInitializing = false;
-                      if (mounted) {
-                        setState(() {});
-                      }
-                    }
-
-                    await _initializeExcalidraw();
-
-                    // ✅ 关键修复：使用 postFrameCallback 确保 Flutter 布局完成后
-                    // 再通知 WebView 刷新，避免作为子控件时尺寸获取不准确
-                    WidgetsBinding.instance.addPostFrameCallback((_) async {
-                      if (mounted) {
-                        await Future.delayed(const Duration(milliseconds: 100));
-                        await notifyContainerResized();
-                      }
-                    });
-                  }
-                  Log.debug('✅ [ExcalidrawWebView] Loading finished: $url');
-                },
-
-                onProgressChanged: (controller, progress) {
-                  // 可以在这里更新进度条
-                  // print('📊 [ExcalidrawWebView] Loading progress: $progress%');
-                },
-
-                onLoadError: (controller, url, code, message) {
-                  if (mounted) {
-                    setState(() {
-                      _isLoading = false;
-                      _loadingError = message;
-                    });
-                  }
-                  Log.error(
-                      '❌ [ExcalidrawWebView] Load error: $message (code: $code)');
-                  widget.onError?.call('WebView加载错误: $message');
-                },
-
-                onLoadHttpError: (controller, url, statusCode, description) {
-                  if (mounted) {
-                    setState(() {
-                      _isLoading = false;
-                      _loadingError = 'HTTP错误 $statusCode: $description';
-                    });
-                  }
-                  Log.error(
-                      '❌ [ExcalidrawWebView] HTTP error: $statusCode - $description');
-                },
-
-                onConsoleMessage: (controller, consoleMessage) {
-                  // 打印 WebView 控制台消息（用于调试）
-                  // 只打印关键日志，避免刷屏
-                  final message = consoleMessage.message;
-                  // 只打印包含特定关键词的日志
-                  if (message.contains('[PonyNotes]') ||
-                      message.contains('Error') ||
-                      message.contains('error') ||
-                      message.contains('Failed') ||
-                      message.contains('❌') ||
-                      message.contains('✅')) {
-                    Log.debug('[WebView Console] $message');
-                  }
-                },
+                ),
               ),
             ), // InAppWebView
 

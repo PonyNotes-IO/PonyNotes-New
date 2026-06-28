@@ -39,7 +39,7 @@ class WhiteboardCollabAdapter {
   late final WhiteboardDataService _service;
   late final WhiteboardListener _listener;
 
-  static const _debounceDuration = Duration(milliseconds: 50);
+  static const _debounceDuration = Duration(milliseconds: 650);
   static const whiteboardElementsDeltaKey = '__whiteboard_elements_delta';
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
   // scrollX/scrollY 已从稳定键中移除：
@@ -220,8 +220,6 @@ class WhiteboardCollabAdapter {
         if (!newFileMap.containsKey('dataURL') &&
             existingData.containsKey('dataURL')) {
           newFileMap['dataURL'] = existingData['dataURL'];
-          Log.info(
-              '[WBCollab][WhiteboardCollabAdapter] 📸 Preserving local dataURL for $fileId during merge');
         }
 
         result[fileId] = newFileMap;
@@ -258,14 +256,6 @@ class WhiteboardCollabAdapter {
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
 
-        Log.info(
-            '[WBCollab][WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
-        if (_fullData.containsKey('files')) {
-          final files = _fullData['files'] as Map<String, dynamic>;
-          Log.info(
-              '[WBCollab][WhiteboardCollabAdapter] Files count: ${files.length}');
-        }
-
         success = await _service.saveWhiteboardData(viewId, _fullData);
       } else {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
@@ -278,8 +268,8 @@ class WhiteboardCollabAdapter {
         Log.warn(
             '[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
-        Log.info(
-            '[WBCollab][WhiteboardCollabAdapter] ✅ Sync completed: saved to server');
+        Log.debug(
+            '[WBCollab][WhiteboardCollabAdapter] Sync completed: saved to server');
       }
     } catch (e) {
       _hasUnsavedChanges = true;
@@ -322,20 +312,27 @@ class WhiteboardCollabAdapter {
     }
   }
 
+  Future<void> forceSyncAndDispose() async {
+    if (_disposed) {
+      return;
+    }
+
+    try {
+      await _listener.stop();
+      await forceSync();
+    } finally {
+      dispose();
+    }
+  }
+
   /// 处理来自实时通知的更新
   /// 由 WhiteboardListener 回调，payload 已在 Listener 中从 JSON 解析完毕
   void _onRemoteUpdate(String key, dynamic value, bool isRemote) {
     if (_disposed) return;
 
     try {
-      Log.info(
-          '[WBCollab][WhiteboardCollabAdapter] 🔔 Notification update: key=$key, isRemote=$isRemote');
-
       // 本地写入回声不再推回 WebView，避免自触发循环
       if (!isRemote) {
-        Log.debug(
-          '[WBCollab][WhiteboardCollabAdapter] Skip local echo notification for key=$key',
-        );
         return;
       }
 
@@ -362,9 +359,6 @@ class WhiteboardCollabAdapter {
             'elements': mergedElements,
           },
         });
-        Log.info(
-          '[WBCollab][WhiteboardCollabAdapter] ✅ Pushed elements delta to WebView: count=${changed.length}',
-        );
         return;
       }
 
@@ -376,8 +370,6 @@ class WhiteboardCollabAdapter {
         );
       } else {
         if (_deepEquality.equals(_fullData[key], parsedValue)) {
-          Log.debug(
-              '[WBCollab][WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
           return;
         }
         _fullData[key] = parsedValue;
@@ -385,8 +377,6 @@ class WhiteboardCollabAdapter {
 
       // 通知 WebView 更新
       onDataChanged({key: parsedValue});
-      Log.info(
-          '[WBCollab][WhiteboardCollabAdapter] ✅ Pushed to WebView: key=$key');
     } catch (e) {
       Log.error(
           '[WBCollab][WhiteboardCollabAdapter] ❌ Failed to process remote update: $e');

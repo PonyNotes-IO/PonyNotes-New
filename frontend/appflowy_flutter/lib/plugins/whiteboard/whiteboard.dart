@@ -524,14 +524,14 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     Log.info('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
     final adapter = _collabAdapter;
+    _collabAdapter = null;
 
     // 注销所有控制器（同步操作）
     _unregisterControllers();
 
-    // fire-and-forget：先 forceSync 完成后再 dispose adapter
+    // fire-and-forget：先停止 listener，再 forceSync，最后 dispose adapter。
     if (adapter != null) {
-      adapter.forceSync().then((_) {
-        _collabAdapter = null;
+      adapter.forceSyncAndDispose().then((_) {
         Log.info('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
         logDiagnosticEvent(
           'WhiteboardLoad',
@@ -544,9 +544,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
             'success': true,
           },
         );
-        adapter.dispose();
       }).catchError((e) {
-        _collabAdapter = null;
         Log.error('[WhiteboardPage] ❌ Force sync failed: $e');
         logDiagnosticEvent(
           'WhiteboardLoad',
@@ -561,7 +559,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
           },
           warning: true,
         );
-        adapter.dispose();
       });
     }
 
@@ -625,7 +622,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
         // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
         if (!_isDisposing && mounted) {
           for (final entry in data.entries) {
-            Log.info('[Whiteboard] 🔔 Pushing remote update: ${entry.key}');
             _webViewKey.currentState?.pushData(entry.key, entry.value);
           }
         }

@@ -69,6 +69,8 @@ class PageAccessLevelBloc
   DateTime? _lastRefreshAccessLevelTime;
   static const Duration _refreshAccessLevelThrottle =
       Duration(milliseconds: 150);
+  bool _isRefreshingAccessLevel = false;
+  bool _refreshAccessLevelAgain = false;
 
   @override
   Future<void> close() async {
@@ -261,32 +263,50 @@ class PageAccessLevelBloc
       return;
     }
 
-    final accessLevel = await repository.getAccessLevel(view.id);
-    final newAccessLevel = accessLevel.fold(
-      (accessLevel) => accessLevel,
-      (error) {
-        Log.warn('[PageAccessLevel] getAccessLevel failed: $error');
-        return ShareAccessLevel.readOnly;
-      },
-    );
+    if (_isRefreshingAccessLevel) {
+      _refreshAccessLevelAgain = true;
+      return;
+    }
 
-    Log.debug(
-      '[PageAccessLevel] polling refresh: '
-      'viewId=${view.id}, '
-      'current=${state.accessLevel}, '
-      'new=$newAccessLevel, '
-      'changed=${newAccessLevel != state.accessLevel}',
-    );
+    _isRefreshingAccessLevel = true;
+    try {
+      do {
+        _refreshAccessLevelAgain = false;
+        final accessLevel = await repository.getAccessLevel(view.id);
+        if (isClosed) {
+          return;
+        }
 
-    // 只在权限真正变化时才 emit，避免不必要的 UI 重建
-    if (newAccessLevel != state.accessLevel) {
-      Log.debug(
-          '[PageAccessLevel] access level changed: ${state.accessLevel} -> $newAccessLevel');
-      emit(
-        state.copyWith(
-          accessLevel: newAccessLevel,
-        ),
-      );
+        final newAccessLevel = accessLevel.fold(
+          (accessLevel) => accessLevel,
+          (error) {
+            Log.warn('[PageAccessLevel] getAccessLevel failed: $error');
+            return ShareAccessLevel.readOnly;
+          },
+        );
+
+        Log.debug(
+          '[PageAccessLevel] polling refresh: '
+          'viewId=${view.id}, '
+          'current=${state.accessLevel}, '
+          'new=$newAccessLevel, '
+          'changed=${newAccessLevel != state.accessLevel}',
+        );
+
+        // 只在权限真正变化时才 emit，避免不必要的 UI 重建
+        if (newAccessLevel != state.accessLevel) {
+          Log.debug(
+              '[PageAccessLevel] access level changed: ${state.accessLevel} -> $newAccessLevel');
+          emit(
+            state.copyWith(
+              accessLevel: newAccessLevel,
+            ),
+          );
+        }
+      } while (_refreshAccessLevelAgain && !isClosed);
+    } finally {
+      _isRefreshingAccessLevel = false;
+      _refreshAccessLevelAgain = false;
     }
   }
 }

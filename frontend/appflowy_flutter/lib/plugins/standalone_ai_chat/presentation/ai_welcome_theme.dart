@@ -133,7 +133,13 @@ class AIWelcomeTheme {
         color: backgroundColor(context),
         borderRadius:
             const BorderRadius.all(Radius.circular(containerBorderRadius)),
-        border: Border.all(color: const Color(0xFFE4E8F5)),
+        // 暗色模式下与主页「最近访问」方块卡片的外边框统一为同一 token 颜色
+        // （AppFlowyTheme.borderColorScheme.primary）；浅色模式维持设计稿的浅蓝描边。
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? AppFlowyTheme.of(context).borderColorScheme.primary
+              : const Color(0xFFE4E8F5),
+        ),
       );
 
   /// 模型选择按钮样式
