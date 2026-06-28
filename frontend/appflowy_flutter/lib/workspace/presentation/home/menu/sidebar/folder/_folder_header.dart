@@ -75,40 +75,39 @@ class _FolderHeaderState extends State<FolderHeader> {
     final theme = AppFlowyTheme.of(context);
     final alwaysShowButtons = widget.isTablet || PlatformInfo.isTablet;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: MouseRegion(
-        onEnter: (_) => isHovered.value = true,
-        onExit: (_) => isHovered.value = false,
-        child: Stack(
-          children: [
-            AFGhostIconTextButton.primary(
-              text: widget.title,
-              mainAxisAlignment: MainAxisAlignment.start,
-              onTap: widget.onPressed,
-              padding: sidebarEntryPaddingNoIcon,
-              borderRadius: theme.borderRadius.s,
-              iconBuilder: (context, isHover, disabled) => SizedBox.shrink(),
-              showExpandArrow: true,
-              isExpanded: widget.isExpanded,
+    return MouseRegion(
+      onEnter: (_) => isHovered.value = true,
+      onExit: (_) => isHovered.value = false,
+      child: Stack(
+        children: [
+          AFGhostIconTextButton.primary(
+            text: widget.title,
+            mainAxisAlignment: MainAxisAlignment.start,
+            size: AFButtonSize.s,
+            onTap: widget.onPressed,
+            padding: sidebarEntryPaddingNoIcon,
+            borderRadius: theme.borderRadius.s,
+            iconBuilder: (context, isHover, disabled) => SizedBox.shrink(),
+            showExpandArrow: true,
+            isExpanded: widget.isExpanded,
+            textStyle: sidebarTextStyle(context),
+          ),
+          Positioned(
+            right: 8,
+            top: 0.0,
+            bottom: 0.0,
+            child: Align(
+              child: alwaysShowButtons
+                  ? _buildAddButton()
+                  : ValueListenableBuilder(
+                      valueListenable: isHovered,
+                      builder: (context, onHover, child) =>
+                          Opacity(opacity: onHover ? 1 : 0, child: child),
+                      child: _buildAddButton(),
+                    ),
             ),
-            Positioned(
-              right: 8,
-              top: 0.0,
-              bottom: 0.0,
-              child: Align(
-                child: alwaysShowButtons
-                    ? _buildAddButton()
-                    : ValueListenableBuilder(
-                        valueListenable: isHovered,
-                        builder: (context, onHover, child) =>
-                            Opacity(opacity: onHover ? 1 : 0, child: child),
-                        child: _buildAddButton(),
-                      ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

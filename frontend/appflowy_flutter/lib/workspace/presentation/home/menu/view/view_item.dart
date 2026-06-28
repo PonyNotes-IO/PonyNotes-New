@@ -783,7 +783,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   Widget _buildNameText() {
     final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 12.0,
+          fontSize: 14.0,
           height: 1.35,
           leadingDistribution: TextLeadingDistribution.even,
         );

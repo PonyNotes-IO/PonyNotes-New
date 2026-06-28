@@ -20,20 +20,18 @@ class SidebarHomeButton extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
       builder: (context, state) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: AFGhostIconTextButton.primary(
-            text: '主页',
-            mainAxisAlignment: MainAxisAlignment.start,
-            onTap: () => _openHomePage(context, state),
-            padding: sidebarHomeEntryPadding,
-            borderRadius: theme.borderRadius.s,
-            textStyle: sidebarEntryTextStyle(context),
-            iconTextGap: sidebarEntryIconTextGap,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_home_s,
-              size: const Size.square(18.0),
-            ),
+        return AFGhostIconTextButton.primary(
+          text: '主页',
+          mainAxisAlignment: MainAxisAlignment.start,
+          onTap: () => _openHomePage(context, state),
+          padding: sidebarHomeEntryPadding,
+          borderRadius: theme.borderRadius.s,
+          textStyle: sidebarEntryTextStyle(context),
+          iconTextGap: sidebarEntryIconTextGap,
+          iconBuilder: (context, isHover, disabled) => FlowySvg(
+            FlowySvgs.icon_home_s,
+            size: const Size.square(18.0),
+            blendMode: null,
           ),
         );
       },

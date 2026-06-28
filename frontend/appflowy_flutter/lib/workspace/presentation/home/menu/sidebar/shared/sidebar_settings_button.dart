@@ -54,23 +54,21 @@ class _SidebarSettingsButtonState extends State<SidebarSettingsButton> {
     final theme = AppFlowyTheme.of(context);
     return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
       builder: (context, state) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: AFGhostIconTextButton.primary(
-            text: '设置',
-            mainAxisAlignment: MainAxisAlignment.start,
-            onTap: () => showSettingsDialog(
-              context,
-              userWorkspaceBloc: _userWorkspaceBloc,
-              passwordBloc: _passwordBloc,
-            ),
-            padding: sidebarEntryPadding,
-            borderRadius: theme.borderRadius.s,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_settings_s,
-              size: const Size.square(18.0),
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
+        return AFGhostIconTextButton.primary(
+          text: '设置',
+          mainAxisAlignment: MainAxisAlignment.start,
+          onTap: () => showSettingsDialog(
+            context,
+            userWorkspaceBloc: _userWorkspaceBloc,
+            passwordBloc: _passwordBloc,
+          ),
+          padding: sidebarEntryPadding,
+          borderRadius: theme.borderRadius.s,
+          iconBuilder: (context, isHover, disabled) => FlowySvg(
+            FlowySvgs.icon_settings_s,
+            size: const Size.square(18.0),
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+            blendMode: null,
           ),
         );
       },

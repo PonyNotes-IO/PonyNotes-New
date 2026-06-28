@@ -625,64 +625,63 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: DragTarget<ViewPB>(
-                      onWillAcceptWithDetails: (details) {
-                        final canAccept = _canAcceptDraggedView(details.data);
-                        if (canAccept && !_isDragHovering) {
-                          setState(() => _isDragHovering = true);
-                        }
-                        return canAccept;
-                      },
-                      onLeave: (_) {
-                        if (_isDragHovering) {
-                          setState(() => _isDragHovering = false);
-                        }
-                      },
-                      onAcceptWithDetails: (details) async {
-                        setState(() {
-                          _isDragHovering = false;
-                          _isExpanded = true;
-                        });
-                        unawaited(_loadUserSharedNotes(showLoading: false));
-                        await _openSharePanelForView(details.data);
-                      },
-                      builder: (context, candidateData, rejectedData) {
-                        final isActive =
-                            _isDragHovering || candidateData.isNotEmpty;
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 120),
-                          decoration: BoxDecoration(
-                            color: isActive
-                                ? Theme.of(context)
-                                    .colorScheme
-                                    .primary
-                                    .withValues(alpha: 0.10)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(
-                              theme.borderRadius.s,
-                            ),
+                  DragTarget<ViewPB>(
+                    onWillAcceptWithDetails: (details) {
+                      final canAccept = _canAcceptDraggedView(details.data);
+                      if (canAccept && !_isDragHovering) {
+                        setState(() => _isDragHovering = true);
+                      }
+                      return canAccept;
+                    },
+                    onLeave: (_) {
+                      if (_isDragHovering) {
+                        setState(() => _isDragHovering = false);
+                      }
+                    },
+                    onAcceptWithDetails: (details) async {
+                      setState(() {
+                        _isDragHovering = false;
+                        _isExpanded = true;
+                      });
+                      unawaited(_loadUserSharedNotes(showLoading: false));
+                      await _openSharePanelForView(details.data);
+                    },
+                    builder: (context, candidateData, rejectedData) {
+                      final isActive =
+                          _isDragHovering || candidateData.isNotEmpty;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.10)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(
+                            theme.borderRadius.s,
                           ),
-                          child: AFGhostIconTextButton.primary(
-                            text: '共享',
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            onTap: () {
-                              setState(() => _isExpanded = !_isExpanded);
-                              if (_isExpanded) {
-                                _loadUserSharedNotes(showLoading: false);
-                              }
-                            },
-                            padding: sidebarEntryPaddingNoIcon,
-                            borderRadius: theme.borderRadius.s,
-                            iconBuilder: (context, isHover, disabled) =>
-                                const SizedBox.shrink(),
-                            showExpandArrow: true,
-                            isExpanded: _isExpanded,
-                          ),
-                        );
-                      },
-                    ),
+                        ),
+                        child: AFGhostIconTextButton.primary(
+                          text: '共享',
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          size: AFButtonSize.s,
+                          onTap: () {
+                            setState(() => _isExpanded = !_isExpanded);
+                            if (_isExpanded) {
+                              _loadUserSharedNotes(showLoading: false);
+                            }
+                          },
+                          textStyle: sidebarTextStyle(context),
+                          padding: sidebarEntryPaddingNoIcon,
+                          borderRadius: theme.borderRadius.s,
+                          iconBuilder: (context, isHover, disabled) =>
+                              const SizedBox.shrink(),
+                          showExpandArrow: true,
+                          isExpanded: _isExpanded,
+                        ),
+                      );
+                    },
                   ),
                   if (_isExpanded)
                     Padding(

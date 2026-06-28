@@ -20,27 +20,24 @@ class SidebarAiButton extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
       builder: (context, state) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: AFGhostIconTextButton.primary(
-            text: '问AI',
-            mainAxisAlignment: MainAxisAlignment.start,
-            onTap: () => _openAiWelcomePage(context),
-            padding: sidebarEntryPadding,
-            borderRadius: theme.borderRadius.s,
-            textStyle: sidebarEntryTextStyle(context),
-            iconTextGap: sidebarEntryIconTextGap,
-            iconBuilder: (context, isHover, disabled) => Image.asset(
-              'assets/images/home_icon_ai.png',
-              width: 18,
-              height: 18,
-            ),
-            //     FlowySvg(
-            //   FlowySvgs.icon_ai_s,
-            //   size: const Size.square(16.0),
-            //   color: Theme.of(context).textTheme.bodyMedium?.color,
-            // ),
+        return AFGhostIconTextButton.primary(
+          text: '问AI',
+          mainAxisAlignment: MainAxisAlignment.start,
+          onTap: () => _openAiWelcomePage(context),
+          padding: sidebarEntryPadding,
+          borderRadius: theme.borderRadius.s,
+          textStyle: sidebarEntryTextStyle(context),
+          iconTextGap: sidebarEntryIconTextGap,
+          iconBuilder: (context, isHover, disabled) => Image.asset(
+            'assets/images/home_icon_ai.png',
+            width: 18,
+            height: 18,
           ),
+          //     FlowySvg(
+          //   FlowySvgs.icon_ai_s,
+          //   size: const Size.square(16.0),
+          //   color: Theme.of(context).textTheme.bodyMedium?.color,
+          // ),
         );
       },
     );

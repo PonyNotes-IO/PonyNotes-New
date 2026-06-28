@@ -15,21 +15,19 @@ class SidebarCalendarButton extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
       builder: (context, state) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: AFGhostIconTextButton.primary(
-            text: '日历',
-            mainAxisAlignment: MainAxisAlignment.start,
-            onTap: () => _openCalendar(context, state),
-            padding: sidebarEntryPadding,
-            borderRadius: theme.borderRadius.s,
-            textStyle: sidebarEntryTextStyle(context),
-            iconTextGap: sidebarEntryIconTextGap,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_calendar_s,
-              size: const Size.square(18.0),
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
+        return AFGhostIconTextButton.primary(
+          text: '日历',
+          mainAxisAlignment: MainAxisAlignment.start,
+          onTap: () => _openCalendar(context, state),
+          padding: sidebarEntryPadding,
+          borderRadius: theme.borderRadius.s,
+          textStyle: sidebarEntryTextStyle(context),
+          iconTextGap: sidebarEntryIconTextGap,
+          iconBuilder: (context, isHover, disabled) => FlowySvg(
+            FlowySvgs.icon_calendar_s,
+            size: const Size.square(18.0),
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+            blendMode: null,
           ),
         );
       },
