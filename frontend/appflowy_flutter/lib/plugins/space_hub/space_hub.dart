@@ -1129,8 +1129,7 @@ class _SpaceDocumentList extends StatelessWidget {
     }
 
     return Container(
-      // 仅保留左侧留白，避免右侧产生与分割线之间的空白带
-      margin: const EdgeInsets.only(left: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1160,16 +1159,9 @@ class _SpaceDocumentList extends StatelessWidget {
     return Container(
       padding: EdgeInsets.only(
         left: 16,
-        right: 16,
         top: 10,
         bottom: 4,
       ),
-      // decoration: BoxDecoration(
-      //   border: Border(
-      //     bottom: BorderSide(color: Theme.of(context).dividerColor),
-      //   ),
-      //   color: Theme.of(context).colorScheme.surfaceContainer,
-      // ),
       child: Row(
         children: [
           Expanded(

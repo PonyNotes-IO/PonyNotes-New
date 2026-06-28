@@ -52,8 +52,8 @@ class MainFlutterWindow: NSWindow {
     let titlebarView = closeButton.superview!
 
     self.layoutTrafficLightButton(titlebarView: titlebarView, button: closeButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 12)
-    self.layoutTrafficLightButton(titlebarView: titlebarView, button: minButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 30)
-    self.layoutTrafficLightButton(titlebarView: titlebarView, button: zoomButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 48)
+    self.layoutTrafficLightButton(titlebarView: titlebarView, button: minButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 32)
+    self.layoutTrafficLightButton(titlebarView: titlebarView, button: zoomButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 52)
 
     let customToolbar = NSTitlebarAccessoryViewController()
     let newView = NSView()

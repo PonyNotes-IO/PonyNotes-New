@@ -787,12 +787,13 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
           .toList(),
       buildChild: (controller) {
         return FlowyButton(
-          useIntrinsicWidth: true,
           expandText: false,
           text: FlowyText.regular(
             LocaleKeys.settings_appearance_members_removeMember.tr(),
             color: Theme.of(context).colorScheme.primary,
             fontSize: 12,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           onTap: () {
             controller.show();
@@ -895,17 +896,20 @@ class _MemberRoleActionList extends StatelessWidget {
       actions: roleOptions,
       buildChild: (controller) {
         return FlowyButton(
-          useIntrinsicWidth: true,
           onTap: () {
             controller.show();
           },
           text: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FlowyText.regular(
-                _getRoleDisplayName(member.role),
-                color: theme.textColorScheme.primary,
-                fontSize: 14,
+              Flexible(
+                child: FlowyText.regular(
+                  _getRoleDisplayName(member.role),
+                  color: theme.textColorScheme.primary,
+                  fontSize: 14,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               FlowySvg(FlowySvgs.arrow_down_s),
             ],

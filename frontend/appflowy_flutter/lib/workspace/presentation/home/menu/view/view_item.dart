@@ -782,15 +782,20 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Widget _buildNameText() {
+    bool isSelected = widget.isSelected;
+    if (widget.disableSelectedStatus == true) {
+      isSelected = false;
+    }
+
     final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
           fontSize: 14.0,
           height: 1.35,
           leadingDistribution: TextLeadingDistribution.even,
+          color: isSelected ? Theme.of(context).colorScheme.primary : null,
         );
 
     return GestureDetector(
       onDoubleTap: () {
-        // 双击开始重命名
         _startRenaming();
       },
       child: ConstrainedBox(

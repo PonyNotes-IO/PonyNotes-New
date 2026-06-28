@@ -29,7 +29,7 @@ class SidebarTopMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
       builder: (context, _) => SizedBox(
-        height: !UniversalPlatform.isWindows ? HomeSizes.topBarHeight : 45,
+        height: !UniversalPlatform.isWindows ? HomeSizes.topBarHeight - 15 : 45,
         child: MoveWindowDetector(
           child: Row(
             children: [
@@ -71,7 +71,7 @@ class SidebarTopMenu extends StatelessWidget {
       builder: (_, value, ___) => Opacity(
         opacity: value ? 1 : 0,
         child: Padding(
-          padding: const EdgeInsets.only(top: 12.0, right: 6.0),
+          padding: const EdgeInsets.only(top: 6.0, right: 6.0),
           child: Listener(
             behavior: HitTestBehavior.translucent,
             onPointerDown: (_) => _collapseSidebarOnly(context),
