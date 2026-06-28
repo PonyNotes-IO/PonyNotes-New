@@ -1356,7 +1356,12 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   }
 
   void _collapseSidebarOnly(BuildContext context) {
-    FullWindowController.collapseMenuAndEnterFullWindow(context);
+    // 仅收起左侧侧边栏（导航栏），不进入全窗口模式。
+    // 进入全窗口模式会把 SpaceHub 中间栏（文档列表，受 !isFullWindow 控制）一并隐藏，
+    // 这里只切换菜单状态，确保中间栏继续显示。
+    context.read<HomeSettingBloc>().add(
+          const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
+        );
   }
 
   Widget _buildHeaderFullWindowButton(
