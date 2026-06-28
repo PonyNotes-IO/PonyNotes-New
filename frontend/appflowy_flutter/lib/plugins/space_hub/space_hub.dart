@@ -1434,8 +1434,12 @@ class _SpaceDocumentList extends StatelessWidget {
                 return ViewItem(
                   key: ValueKey('space_hub_${childView.id}'),
                   view: childView,
+                  // 注意：spaceType 必须取自所在「空间」(spaceView) 的权限，
+                  // 不能取自 childView。childView 是普通文档，其 extra 为空，
+                  // spacePermission getter 会抛异常并回退为 private，导致在
+                  // 共享空间中新建的子页面被放入「私有 section」，其他成员看不到。
                   spaceType:
-                      childView.spacePermission == SpacePermission.private
+                      spaceView.spacePermission == SpacePermission.private
                           ? FolderSpaceType.private
                           : FolderSpaceType.public,
                   level: 0,
@@ -1512,7 +1516,9 @@ class _SpaceDocumentList extends StatelessWidget {
               return ViewItem(
                 key: ValueKey('space_hub_${childView.id}'),
                 view: childView,
-                spaceType: childView.spacePermission == SpacePermission.private
+                // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
+                // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
+                spaceType: spaceView.spacePermission == SpacePermission.private
                     ? FolderSpaceType.private
                     : FolderSpaceType.public,
                 level: 0,
