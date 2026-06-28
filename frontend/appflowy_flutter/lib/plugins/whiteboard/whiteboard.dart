@@ -406,20 +406,13 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       if (mounted && !_isDisposing) {
         setState(() {
           _initialData = sceneData;
-          _isLoadingData = true;
+          _isLoadingData = false;
           _importReloadCounter++;
           _webViewKey = GlobalKey<ExcalidrawWebViewState>(
             debugLabel:
                 'whiteboard_webview_${widget.view.id}_i$_importReloadCounter',
           );
         });
-        // 短暂延迟让 loading 指示器渲染出来
-        await Future.delayed(const Duration(milliseconds: 80));
-        if (mounted && !_isDisposing) {
-          setState(() {
-            _isLoadingData = false;
-          });
-        }
       }
 
       Log.info('[Whiteboard] 导入成功');
@@ -494,13 +487,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       // 应用回到前台，恢复操作
       _isAppInBackground = false;
       Log.info('[WhiteboardPage] ▶️ App resumed');
-
-      // 重新加载 WebView 内容（处理 macOS WebView 被释放的问题）
-      if (mounted) {
-        setState(() {
-          _importReloadCounter++; // 强制重建 WebView
-        });
-      }
     }
   }
 
@@ -1200,6 +1186,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       viewId: widget.view.id,
       sessionTraceId: _sessionTraceId,
       loadTraceId: _loadTraceId,
+      reloadToken: _importReloadCounter,
       initialData: _initialData,
       initialDataLoaded: !_isLoadingData,
       deferInitialDataLoad: true,

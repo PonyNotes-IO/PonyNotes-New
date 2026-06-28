@@ -33,6 +33,7 @@ class ExcalidrawWebView extends StatefulWidget {
     required this.viewId,
     required this.sessionTraceId,
     required this.loadTraceId,
+    this.reloadToken = 0,
     this.initialData,
     this.initialDataLoaded = false,
     this.deferInitialDataLoad = false,
@@ -44,6 +45,7 @@ class ExcalidrawWebView extends StatefulWidget {
   final String viewId;
   final String sessionTraceId;
   final String loadTraceId;
+  final int reloadToken;
   final Map<String, dynamic>? initialData;
   final bool initialDataLoaded;
   final bool deferInitialDataLoad;
@@ -116,7 +118,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   @override
   void didUpdateWidget(covariant ExcalidrawWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.initialDataLoaded &&
+    if (oldWidget.reloadToken != widget.reloadToken &&
         widget.initialDataLoaded &&
         widget.initialData != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1930,7 +1932,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
                       // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
                       key: ValueKey(
-                          'inappwebview_${widget.viewId}_global_$_inAppWebViewInstanceId'),
+                        'inappwebview_${widget.viewId}_r${widget.reloadToken}_global_$_inAppWebViewInstanceId',
+                      ),
                       initialUrlRequest: URLRequest(
                         url: WebUri(_whiteboardUrl!),
                       ),

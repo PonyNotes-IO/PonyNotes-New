@@ -1467,7 +1467,8 @@
     window.loadExcalidrawData = async function (data) {
         try {
             const api = await waitForExcalidrawAPI();
-            api.updateScene?.(data || {});
+            _initPayload = data || {};
+            await _restoreWhiteboardData(api);
         } catch (e) {
             console.error('[PonyNotes] loadExcalidrawData failed', e);
         }
