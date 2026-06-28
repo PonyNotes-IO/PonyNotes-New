@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
@@ -73,8 +74,7 @@ class SidebarTopMenu extends StatelessWidget {
           padding: const EdgeInsets.only(top: 12.0, right: 6.0),
           child: Listener(
             behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) =>
-                FullWindowController.collapseMenuAndEnterFullWindow(context),
+            onPointerDown: (_) => _collapseSidebarOnly(context),
             child: FlowyHover(
               child: SizedBox(
                 width: 24,
@@ -91,5 +91,9 @@ class SidebarTopMenu extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _collapseSidebarOnly(BuildContext context) {
+    FullWindowController.collapseMenuAndEnterFullWindow(context);
   }
 }

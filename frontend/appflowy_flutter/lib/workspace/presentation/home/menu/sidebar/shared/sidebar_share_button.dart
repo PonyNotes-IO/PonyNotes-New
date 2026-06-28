@@ -743,7 +743,9 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                 context,
                 () {
                   // 标记从共享列表打开，文档页面需要显示侧边栏展开按钮
-                  getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+                  getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                    view,
+                  );
                   context.read<TabsBloc>().openPlugin(view);
                 },
               );

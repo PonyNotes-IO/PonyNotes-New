@@ -61,61 +61,7 @@ class FlowyNavigation extends StatelessWidget {
   }
 
   Widget _renderCollapse(BuildContext context) {
-    return BlocBuilder<HomeSettingBloc, HomeSettingState>(
-      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-      builder: (context, state) {
-        if (state.menuStatus == MenuStatus.hidden) {
-          final textSpan = TextSpan(
-            children: [
-              TextSpan(
-                text: '${LocaleKeys.sideBar_openSidebar.tr()}\n',
-                style: context.tooltipTextStyle(),
-              ),
-              TextSpan(
-                text: Platform.isMacOS ? '⌘+.' : 'Ctrl+\\',
-                style: context
-                    .tooltipTextStyle()
-                    ?.copyWith(color: Theme.of(context).hintColor),
-              ),
-            ],
-          );
-          final theme = AppFlowyTheme.of(context);
-          return Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: Stack(
-                children: [
-                  FlowyTooltip(
-                    richMessage: textSpan,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () =>
-                          context.read<HomeSettingBloc>().collapseMenu(),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: FlowySvg(
-                          FlowySvgs.sidebar_collapse_custom_m,
-                          color: theme.iconColorScheme.secondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: NumberedRedDot.desktop(),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return const SizedBox.shrink();
-      },
-    );
+    return const SizedBox.shrink();
   }
 
   List<Widget> _renderNavigationItems(List<NavigationItem> items) {

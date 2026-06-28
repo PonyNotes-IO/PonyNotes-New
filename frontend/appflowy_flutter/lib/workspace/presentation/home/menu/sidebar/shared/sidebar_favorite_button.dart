@@ -146,7 +146,9 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             context,
             () {
               // 标记从最爱列表打开，文档页面需要显示侧边栏展开按钮
-              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                selectedView,
+              );
               context.read<TabsBloc>().openPlugin(selectedView);
             },
           );
@@ -155,7 +157,9 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
             () {
-              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                selectedView,
+              );
               context.read<TabsBloc>().openPlugin(selectedView);
             },
           );

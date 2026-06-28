@@ -68,6 +68,11 @@ class FullWindowController {
     }
   }
 
+  static void exitAndExpandMenu(BuildContext context) {
+    exit();
+    _expandMenuIfHidden(context);
+  }
+
   static void toggle() {
     if (!_canTransition()) {
       return;
@@ -111,11 +116,6 @@ class FullWindowController {
     }
 
     enter();
-  }
-
-  static void exitAndExpandMenu(BuildContext context) {
-    exit();
-    _expandMenuIfHidden(context);
   }
 
   static bool _expandMenuIfHidden(BuildContext context) {

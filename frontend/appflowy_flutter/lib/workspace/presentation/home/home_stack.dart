@@ -362,7 +362,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                     ),
                     onPressed: () {
                       if (mounted) {
-                        FullWindowController.exit();
+                        FullWindowController.exitAndExpandMenu(context);
                       }
                     },
                   ),
@@ -438,7 +438,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 onPressed: () {
-                  FullWindowController.toggle();
+                  if (isFullWindow) {
+                    FullWindowController.exitAndExpandMenu(context);
+                  } else {
+                    FullWindowController.enter();
+                  }
                 },
               ),
             ),
@@ -1170,7 +1174,6 @@ class _HomeTopBarState extends State<HomeTopBar>
         ),
         child: Row(
           children: [
-            _buildSidebarToggleButton(context),
             HSpace(widget.layout.menuSpacing),
             const Expanded(child: SizedBox.shrink()),
           ],
