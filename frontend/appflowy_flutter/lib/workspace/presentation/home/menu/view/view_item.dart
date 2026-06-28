@@ -615,13 +615,11 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         isRenaming ? _buildInlineRenameField() : _buildNameText();
 
     final children = [
-      const HSpace(2),
       // expand icon or placeholder
       widget.leftIconBuilder?.call(context, widget.view) ?? _buildLeftIcon(),
-      const HSpace(2),
       // icon
       _buildViewIconButton(),
-      const HSpace(6),
+      const HSpace(4),
       // title
       Expanded(
         child: widget.extendBuilder != null

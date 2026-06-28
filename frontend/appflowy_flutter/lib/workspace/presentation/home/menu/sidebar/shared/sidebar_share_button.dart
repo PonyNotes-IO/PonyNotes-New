@@ -17,8 +17,11 @@ import 'package:appflowy/plugins/shared/share/share_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -27,6 +30,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -686,8 +690,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                   if (_isExpanded)
                     Padding(
                       padding: const EdgeInsets.only(
-                        left: 8.0,
-                        right: 8.0,
                         bottom: 4.0,
                       ),
                       child: _buildUserSharedNotesList(context),
@@ -726,54 +728,32 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
 
     return Column(
       children: _userSharedNotes.map((view) {
-        final iconData = switch (view.layout) {
-          ViewLayoutPB.Grid => FlowySvgs.grid_s,
-          ViewLayoutPB.Board => FlowySvgs.board_s,
-          ViewLayoutPB.Calendar => FlowySvgs.date_s,
-          _ => FlowySvgs.document_s,
-        };
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2.0),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6.0),
-            onTap: () {
-              CalendarUnsavedGuard.instance.maybeConfirmLeave(
-                context,
-                () {
-                  // 标记从共享列表打开，文档页面需要显示侧边栏展开按钮
-                  getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
-                    view,
-                  );
-                  context.read<TabsBloc>().openPlugin(view);
-                },
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12.0,
-                vertical: 8.0,
-              ),
-              child: Row(
-                children: [
-                  FlowySvg(
-                    iconData,
-                    size: const Size.square(16.0),
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FlowyText.medium(
-                      view.name,
-                      fontSize: 13.0,
-                      figmaLineHeight: 16.0,
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        return ViewItem(
+          key: ValueKey('shared_${view.id}'),
+          spaceType: FolderSpaceType.favorite,
+          engagedInExpanding: false,
+          isFirstChild: view.id == _userSharedNotes.first.id,
+          view: view,
+          level: 0,
+          leftPadding: HomeSpaceViewSizes.leftPadding,
+          isFeedback: false,
+          isHovered: ValueNotifier(false),
+          isDraggable: false,
+          enableRightClickContext: false,
+          shouldRenderChildren: false,
+          shouldLoadChildViews: false,
+          isTablet: PlatformInfo.isTablet,
+          onSelected: (viewContext, selectedView) {
+            CalendarUnsavedGuard.instance.maybeConfirmLeave(
+              viewContext,
+              () {
+                getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                  selectedView,
+                );
+                viewContext.read<TabsBloc>().openPlugin(selectedView);
+              },
+            );
+          },
         );
       }).toList(),
     );
