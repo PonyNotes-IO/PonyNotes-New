@@ -666,7 +666,15 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 HomeSizes.minimumSpaceHubContentPeekWidth -
                 HomeSizes.spaceHubDividerWidth)
             .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity);
-        final floatingDocumentListTopInset = 0.0;
+        // 仅在 macOS 且“收起左侧边栏（浮动文档列表）”时，给中间栏（文档列表）顶部下移，
+        // 避开窗口左上角的红绿灯（关闭/最小化/最大化）按钮。
+        // 关键：该 inset 只作用于 documentListPanel 与分隔线，不作用于 rightPanel（白板/内容），
+        // 所以白板始终贴顶、深色主题下不会出现顶部黑边。
+        // Windows/Linux 或非收起态恒为 0（窗口按钮不在左上角，无需避让）。
+        final floatingDocumentListTopInset =
+            (useFloatingDocumentList && Platform.isMacOS)
+                ? HomeSizes.macOSTrafficLightsTopInset
+                : 0.0;
         final passiveFloatingDivider = Padding(
           padding: EdgeInsets.only(
             top: floatingDocumentListTopInset,
@@ -892,18 +900,33 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return _buildContentWithToolbar(
         view: view,
         viewInfoBloc: viewInfoBloc,
-        child: plugin.widgetBuilder.buildWidget(
-          context: PluginContext(
-            onDeleted: _onChildViewDeleted,
-            userProfile: userProfile, // 传入用户配置
+        // ⚠️ 关键修复（白板/folder 协同不同步的总根）：为白板等非文档视图加稳定 key
+        // （与上面 DocumentPage 的 ValueKey(view.id) 一致）。否则 SpaceHub 每次重建
+        // rightPanel 时，Flutter 会把这里的 widget 当作新实例 —— dispose 旧的
+        // WhiteboardPage、再建新的，造成 WhiteboardPage 反复 dispose+重建：
+        //   · WhiteboardPage.dispose() 会 closeWhiteboard → 紧接着重建又 openWhiteboard，
+        //     白板 collab 的同步流(SyncPlugin)被反复 close/重建；
+        //   · close→reopen 之间的空窗会漏掉服务器广播 → 广播序列出现缺口 →
+        //     collab 同步反复判定 missing update 而重启 → 永不收敛 →
+        //     白板内容与 folder 文档树都同步不过来；
+        //   · 同时 WebView 也被反复重建。
+        // 加稳定 key 后，同一 view 在 SpaceHub 重建期间复用同一个 State（didUpdateWidget
+        // 而非 dispose 重建），同步流保持单条、稳定。
+        child: KeyedSubtree(
+          key: ValueKey('space_hub_view_${view.id}'),
+          child: plugin.widgetBuilder.buildWidget(
+            context: PluginContext(
+              onDeleted: _onChildViewDeleted,
+              userProfile: userProfile, // 传入用户配置
+            ),
+            shrinkWrap: false,
+            data: view.layout == ViewLayoutPB.Whiteboard
+                ? const {
+                    'preferHostFullWindowMoreItem': true,
+                    'preferHostTopRightActions': true,
+                  }
+                : null,
           ),
-          shrinkWrap: false,
-          data: view.layout == ViewLayoutPB.Whiteboard
-              ? const {
-                  'preferHostFullWindowMoreItem': true,
-                  'preferHostTopRightActions': true,
-                }
-              : null,
         ),
       );
     } catch (e, stackTrace) {
