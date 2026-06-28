@@ -4,7 +4,6 @@ import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
-import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -94,6 +93,9 @@ class SidebarTopMenu extends StatelessWidget {
   }
 
   void _collapseSidebarOnly(BuildContext context) {
-    FullWindowController.collapseMenuAndEnterFullWindow(context);
+    // 只收起左侧边栏，不进入应用内全屏（全屏由右上角按钮单独控制）。
+    // 此前误调 collapseMenuAndEnterFullWindow 会强制进全屏、隐藏中间栏文档列表，
+    // 与“收侧栏后保留中间栏 + 避让 macOS 红绿灯”的设计冲突，故改回只收侧栏。
+    context.read<HomeSettingBloc>().collapseMenu();
   }
 }
