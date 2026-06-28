@@ -39,6 +39,9 @@ class SidebarCloudSyncButton extends StatefulWidget {
 
 class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     with SingleTickerProviderStateMixin {
+  static const Color _enabledCloudSyncColor = Color(0xFF4CAF50);
+  static const Color _disabledCloudSyncColor = Colors.grey;
+
   final GlobalKey _buttonKey = GlobalKey(); // 用于获取按钮位置
   late final AnimationController _rotationController;
 
@@ -405,6 +408,12 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
             membershipStatus == CloudSyncMembershipStatus.storageFull;
 
     if (!isCloudSyncEnabled) {
+      if (_rotationController.isAnimating) {
+        _rotationController
+          ..stop()
+          ..reset();
+      }
+
       return SizedBox.square(
         key: _buttonKey,
         dimension: widget.buttonSize,
@@ -417,8 +426,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               text: FlowySvg(
                 FlowySvgs.cloud_sync_m,
                 size: Size.square(widget.iconSize),
-                color: _neutralForeground(context),
-                opacity: _neutralOpacity(),
+                color: _disabledCloudSyncColor,
+                opacity: 1.0,
               ),
               onTap: onTap,
             ),
@@ -435,21 +444,21 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
 
     if (folderSyncState == null) {
       iconData = FlowySvgs.cloud_sync_m;
-      iconColor = Colors.grey;
-      labelColor = Colors.grey;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
     } else if (folderSyncState.isSyncing) {
       iconData = FlowySvgs.cloud_syncing_m;
-      iconColor = Colors.red;
-      labelColor = Colors.red;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
       if (!_rotationController.isAnimating) {
         _rotationController.repeat();
       }
     } else if (folderSyncState.isFinish) {
       iconData = FlowySvgs.cloud_sync_finish_m;
-      iconColor = Colors.green;
-      labelColor = Colors.green;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_synced.tr();
       if (_rotationController.isAnimating) {
         _rotationController
@@ -458,8 +467,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
       }
     } else {
       iconData = FlowySvgs.cloud_sync_m;
-      iconColor = Colors.grey;
-      labelColor = Colors.grey;
+      iconColor = _enabledCloudSyncColor;
+      labelColor = _enabledCloudSyncColor;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
       if (_rotationController.isAnimating) {
         _rotationController
@@ -484,18 +493,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                       child: FlowySvg(
                         iconData,
                         size: Size.square(widget.iconSize),
-                        color: widget.useHighContrastForeground
-                            ? iconColor
-                            : (widget.isHover ? Colors.white : iconColor),
+                        color: iconColor,
                         opacity: 1.0,
                       ),
                     )
                   : FlowySvg(
                       iconData,
                       size: Size.square(widget.iconSize),
-                      color: widget.useHighContrastForeground
-                          ? iconColor
-                          : (widget.isHover ? Colors.white : iconColor),
+                      color: iconColor,
                       opacity: 1.0,
                     ),
               onTap: onTap,
