@@ -269,7 +269,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               (user) => user,
               (error) => null,
             );
-            
+
             if (userProfile == null) {
               emit(
                 state.copyWith(
@@ -287,7 +287,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               (w) => w,
               (error) => null,
             );
-            
+
             if (workspace == null) {
               emit(
                 state.copyWith(
@@ -304,18 +304,18 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               workspaceId: workspace.id,
               userId: userProfile.id,
             );
-            
+
             // 先尝试获取私有空间
             final privateViewsResult = await workspaceService.getPrivateViews();
             final privateViews = privateViewsResult.fold(
               (views) => views,
               (error) => <ViewPB>[],
             );
-            
+
             ViewPB? mySpace = privateViews.firstWhereOrNull(
               (v) => v.isSpace && v.spacePermission == SpacePermission.private,
             );
-            
+
             // 如果没有找到，尝试从公共视图查找
             if (mySpace == null) {
               final publicViewsResult = await workspaceService.getPublicViews();
@@ -323,14 +323,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                 (views) => views,
                 (error) => <ViewPB>[],
               );
-              
+
               // 查找第一个空间作为目标（如果没有私有空间，使用工作区根目录）
               mySpace = publicViews.firstWhereOrNull((v) => v.isSpace);
             }
-            
+
             // 使用工作区ID作为父视图ID（如果没有找到空间）
             final targetParentId = mySpace?.id ?? workspace.id;
-            
+
             final result = await ViewBackendService.duplicate(
               view: view,
               openAfterDuplicate: true,
@@ -339,7 +339,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               suffix: ' (副本)',
               parentViewId: targetParentId,
             );
-            
+
             emit(
               result.fold(
                 (l) {
@@ -406,6 +406,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               ext: {},
               openAfterCreate: e.openAfterCreated,
               section: e.section,
+              index: 0,
             );
             emit(
               result.fold(
@@ -543,7 +544,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     ChildViewUpdatePB update,
   ) async {
     Log.info('[ViewBloc] _updateChildViews: viewId=${this.view.id}, parentViewId=${update.parentViewId}, createCount=${update.createChildViews.length}, deleteCount=${update.deleteChildViews.length}, updateCount=${update.updateChildViews.length}');
-    
+
     if (update.createChildViews.isNotEmpty) {
       // refresh the child views if the update isn't empty
       // because there's no info to get the inserted index.
@@ -558,7 +559,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     currentView.freeze();
     final childViews = [...currentView.childViews];
     Log.info('[ViewBloc] _updateChildViews: current childViews count=${childViews.length}');
-    
+
     if (update.deleteChildViews.isNotEmpty) {
       Log.info('[ViewBloc] _updateChildViews: deleting child views: ${update.deleteChildViews}');
       childViews.removeWhere((v) => update.deleteChildViews.contains(v.id));

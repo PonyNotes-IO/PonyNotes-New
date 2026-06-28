@@ -970,6 +970,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         layoutType: pluginBuilder.layoutType!,
         openAfterCreate: openAfterCreated,
         section: widget.spaceType.toViewSectionPB,
+        index: 0,
         // Ensure the backend receives view_type at creation time to avoid race where
         // the view is opened before extra metadata (view_type) is set.
         ext: const {'view_type': 'handwriting_saber'},
