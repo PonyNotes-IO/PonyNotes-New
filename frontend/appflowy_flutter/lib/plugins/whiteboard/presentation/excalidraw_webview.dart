@@ -715,8 +715,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 导致点击/hover 都偏左一位。
       // 修复：CSS overscroll-behavior:none（映射 NSScrollView.elasticity=none）+
       //       initialUserScript 在 document-start 早期生效，阻止弹性回弹产生。
-      await _safeEvalJs(
-        '''
+      // 诊断注入仅在 debug 构建启用：clickDiag / scroll / device 日志会在全屏、
+      // 侧栏切换时被 focus/mouse/scroll 事件高频触发，经 onConsoleMessage 逐条
+      // 跨桥回传，在 Windows 上淹没 Flutter 主线程消息队列
+      // （Failed to post message to main thread）。功能性的滚动重置由
+      // forceResetScroll + CSS + initialUserScripts 兜底，与此诊断无关。
+      if (kDebugMode) {
+        await _safeEvalJs(
+          '''
         (function() {
           setTimeout(function() {
             // ===== 诊断：设备信息、弹性滚动状态和工具栏按钮位置 =====
@@ -774,13 +780,18 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }, 2500);
         })();
       ''',
-        tag: 'overscrollFix',
-      );
+          tag: 'overscrollFix',
+        );
+      }
 
       // ✅ 关键修复：在初始化完成后立即强制重置滚动偏移
       // 避免 macOS WKWebView 的 NSScrollView 弹性滚动导致的偏移
       await _safeEvalJs('''
         (function() {
+          // 日志仅在 debug 构建输出：以下 focus/mouse/可见性/滚动监控会在全屏、
+          // 侧栏切换时被高频触发；console 日志经 onConsoleMessage 逐条跨桥回传，
+          // 在 Windows 上会淹没 Flutter 主线程消息队列。功能逻辑保持不变。
+          const __pnDebug = $kDebugMode;
           // 立即重置滚动偏移
           const resetScroll = function() {
             window.scrollTo(0, 0);
@@ -812,7 +823,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           const scrollWatchdog = setInterval(function() {
             if (checkCount >= maxChecks) {
               clearInterval(scrollWatchdog);
-              console.log('[PonyNotes] ✅ 高频滚动监控结束');
+              if (__pnDebug) console.log('[PonyNotes] ✅ 高频滚动监控结束');
               // 切换到低频监控（每 500ms）
               startLowFrequencyWatchdog();
               return;
@@ -823,7 +834,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 document.documentElement.scrollLeft !== 0 ||
                 document.documentElement.scrollTop !== 0) {
               resetScroll();
-              console.log('[PonyNotes] ⚠️ 高频检测到意外滚动，已重置');
+              if (__pnDebug) console.log('[PonyNotes] ⚠️ 高频检测到意外滚动，已重置');
             }
             
             checkCount++;
@@ -838,7 +849,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   document.documentElement.scrollLeft !== 0 ||
                   document.documentElement.scrollTop !== 0) {
                 resetScroll();
-                console.log('[PonyNotes] ⚠️ 低频检测到意外滚动，已重置');
+                if (__pnDebug) console.log('[PonyNotes] ⚠️ 低频检测到意外滚动，已重置');
               }
             }, 500);
           };
@@ -847,7 +858,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           // 这是解决鼠标在白板区域外移动导致漂移的关键修复
           const onFocusChange = function() {
             resetScroll();
-            console.log('[PonyNotes] ⚠️ 焦点变化，重置滚动');
+            if (__pnDebug) console.log('[PonyNotes] ⚠️ 焦点变化，重置滚动');
           };
           
           // 监听各种焦点相关事件
@@ -867,7 +878,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           // ✅ 页面可见性变化时重置滚动
           document.addEventListener('visibilitychange', function() {
             resetScroll();
-            console.log('[PonyNotes] ⚠️ 页面可见性变化，重置滚动');
+            if (__pnDebug) console.log('[PonyNotes] ⚠️ 页面可见性变化，重置滚动');
           });
           
           // 保存到全局，便于调试
@@ -876,7 +887,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window._ponynotesResetScroll = resetScroll;
           window._ponynotesOnFocusChange = onFocusChange;
 
-          console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移，启动滚动监控');
+          if (__pnDebug) console.log('[PonyNotes] ✅ 初始化完成，强制重置滚动偏移，启动滚动监控');
         })();
       ''', tag: 'forceResetScroll');
 
