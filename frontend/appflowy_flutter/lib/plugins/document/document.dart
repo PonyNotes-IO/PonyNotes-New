@@ -18,7 +18,9 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart'
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
@@ -192,6 +194,16 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
     return Stack(
       children: [
         child,
+        // 侧边栏收起后，在文档左上角显示"展开侧边栏"按钮。
+        // 仅当顶层文档（最爱/共享/最近等，直接打开为标签页）使用，
+        // SpaceHub 内嵌文档由中间栏头部的展开按钮负责，不走此分支。
+        Positioned(
+          top: 0,
+          left: 0,
+          child: _SidebarExpandFloatingButton(
+            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
+          ),
+        ),
         Positioned(
           top: 0,
           right: 0,
@@ -296,4 +308,63 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   List<NavigationItem> get navigationItems => [this];
+}
+
+/// 文档左上角的"展开侧边栏"浮动按钮。
+///
+/// 仅在以下条件同时满足时显示：
+///   - 侧边栏处于收起状态（[HomeSettingBloc.isMenuHidden]）；
+///   - 不处于应用内全窗口模式（全窗口模式下由右上角"退出应用内全屏"按钮负责）。
+///
+/// 用于最爱/共享/最近等直接作为标签页打开的顶层文档：这些页面没有 SpaceHub
+/// 中间栏，收起侧边栏后需要一个就地的入口重新展开。
+class _SidebarExpandFloatingButton extends StatelessWidget {
+  const _SidebarExpandFloatingButton({this.iconColorOverride});
+
+  final Color? iconColorOverride;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        if (isFullWindow) {
+          return const SizedBox.shrink();
+        }
+
+        final isMenuHidden = context.select<HomeSettingBloc, bool>(
+          (bloc) => bloc.isMenuHidden,
+        );
+        if (!isMenuHidden) {
+          return const SizedBox.shrink();
+        }
+
+        final iconColor =
+            iconColorOverride ?? Theme.of(context).colorScheme.onSurface;
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: HomeSizes.topActionBarHeight,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: FlowyTooltip(
+              message: '展开侧边栏',
+              child: SizedBox.square(
+                dimension: HomeSizes.topActionBarItemExtent,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: FlowySvg(
+                    FlowySvgs.sidebar_collapse_custom_m,
+                    size: const Size.square(20),
+                    color: iconColor,
+                  ),
+                  onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
