@@ -575,6 +575,8 @@ class _MemberList extends StatelessWidget {
   }
 }
 
+const double _memberActionColumnWidth = 72.0;
+
 class _MemberListHeader extends StatelessWidget {
   const _MemberListHeader();
 
@@ -620,7 +622,7 @@ class _MemberListHeader extends StatelessWidget {
         //   ),
         // ),
         // email column removed per design
-        Expanded(flex: 1, child: SizedBox(width: 24.0)),
+        const SizedBox(width: _memberActionColumnWidth),
       ],
     );
   }
@@ -708,7 +710,8 @@ class _MemberItemState extends State<_MemberItem> {
           flex: 2,
           child: () {
             // 不能修改自己的角色；myRole 无权限时也只显示文本
-            final isSelf = member.uid.toInt() != 0 && member.uid.toInt() == userProfile.id.toInt();
+            final isSelf = member.uid.toInt() != 0 &&
+                member.uid.toInt() == userProfile.id.toInt();
             return (!myRole.canUpdate || isSelf)
                 ? FlowyText.regular(
                     member.role.description,
@@ -731,12 +734,12 @@ class _MemberItemState extends State<_MemberItem> {
         //   ),
         // ),
         // email column removed per design; keep member.email available for internal logic (e.g., delete check)
-        Expanded(
-          flex: 1,
+        SizedBox(
+          width: _memberActionColumnWidth,
           child: myRole.isOwner &&
                   member.name != userProfile.name // can't delete self
               ? _MemberMoreActionList(member: member)
-              : SizedBox(width: 24.0),
+              : const SizedBox(width: 24.0),
         ),
       ],
     );
@@ -785,6 +788,7 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
       buildChild: (controller) {
         return FlowyButton(
           useIntrinsicWidth: true,
+          expandText: false,
           text: FlowyText.regular(
             LocaleKeys.settings_appearance_members_removeMember.tr(),
             color: Theme.of(context).colorScheme.primary,
@@ -800,7 +804,8 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
           case _MemberMoreAction.delete:
             final identifier = _memberIdentifier;
 
-            Log.info('准备删除成员: name=${widget.member.name}, identifier=$identifier, email=${widget.member.email}');
+            Log.info(
+                '准备删除成员: name=${widget.member.name}, identifier=$identifier, email=${widget.member.email}');
 
             showCancelAndDeleteDialog(
               context: context,
@@ -817,7 +822,8 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
                   return;
                 }
                 context.read<WorkspaceMemberBloc>().add(
-                      WorkspaceMemberEvent.removeWorkspaceMemberByEmail(identifier),
+                      WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
+                          identifier),
                     );
               },
               closeOnAction: true,
@@ -875,7 +881,7 @@ class _MemberRoleActionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    
+
     // 定义角色选项
     final roleOptions = [
       _RoleActionWrapper(AFRolePB.Owner, member),
@@ -889,7 +895,7 @@ class _MemberRoleActionList extends StatelessWidget {
       actions: roleOptions,
       buildChild: (controller) {
         return FlowyButton(
-          useIntrinsicWidth:true,
+          useIntrinsicWidth: true,
           onTap: () {
             controller.show();
           },
@@ -911,7 +917,7 @@ class _MemberRoleActionList extends StatelessWidget {
           controller.close();
           return;
         }
-        
+
         // 优先使用 uid 字符串，确保无 email 的手机号用户也能正确更新角色
         final memberIdentifier = member.uid.toInt() != 0
             ? member.uid.toString()
@@ -938,5 +944,4 @@ class _MemberRoleActionList extends StatelessWidget {
     }
     return "";
   }
-
 }
