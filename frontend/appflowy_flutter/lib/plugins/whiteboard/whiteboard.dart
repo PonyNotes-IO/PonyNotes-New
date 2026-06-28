@@ -877,10 +877,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   @override
   Widget build(BuildContext context) {
-    Log.debug(
-      '🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData',
-    );
-
     // 监听主题变化
     final appearanceCubit = context.watch<AppearanceSettingsCubit>();
     final currentBrightness = Theme.of(context).brightness;
@@ -896,7 +892,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     _lastBrightness = currentBrightness;
 
     if (_isLoadingData && _showLegacyBlockingLoader) {
-      Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         resizeToAvoidBottomInset: !PlatformInfo.isTablet,
         body: const Center(
@@ -912,7 +907,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       );
     }
 
-    Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
       resizeToAvoidBottomInset: !PlatformInfo.isTablet,
       backgroundColor: _whiteboardCanvasFallbackColor,
@@ -1205,14 +1199,6 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   }
 
   Widget _buildExcalidrawView() {
-    // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
-    // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
-    // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
-    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
-    Log.debug(
-      '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
-    );
-
     final webView = ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,

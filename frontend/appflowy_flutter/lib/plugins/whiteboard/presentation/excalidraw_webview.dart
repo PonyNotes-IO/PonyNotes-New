@@ -84,6 +84,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
   Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
   final bool _perElementSyncEnabled = kWhiteboardPerElementSync;
+  bool _isPostingResizeNotification = false;
+  DateTime? _lastResizeNotificationAt;
 
   @override
   void initState() {
@@ -146,15 +148,33 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   Future<void> notifyContainerResized() async {
-    await _safeEvalJs('''
-      (function() {
-        const _api = window.excalidrawAPI || window.excalidrawAppRef ||
-          window.__EXCALIDRAW_API__ || window._excalidrawAPI;
-        if (_api && typeof _api.refresh === 'function') {
-          requestAnimationFrame(function() { _api.refresh(); });
-        }
-      })();
-    ''', tag: 'notifyContainerResized');
+    if (_isPostingResizeNotification) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final lastResizeNotificationAt = _lastResizeNotificationAt;
+    if (lastResizeNotificationAt != null &&
+        now.difference(lastResizeNotificationAt) <
+            const Duration(milliseconds: 250)) {
+      return;
+    }
+
+    _isPostingResizeNotification = true;
+    _lastResizeNotificationAt = now;
+    try {
+      await _safeEvalJs('''
+        (function() {
+          const _api = window.excalidrawAPI || window.excalidrawAppRef ||
+            window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+          if (_api && typeof _api.refresh === 'function') {
+            requestAnimationFrame(function() { _api.refresh(); });
+          }
+        })();
+      ''', tag: 'notifyContainerResized');
+    } finally {
+      _isPostingResizeNotification = false;
+    }
   }
 
   void _initializeSettings() {
