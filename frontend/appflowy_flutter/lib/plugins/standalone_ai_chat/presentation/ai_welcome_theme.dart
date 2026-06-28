@@ -133,7 +133,7 @@ class AIWelcomeTheme {
         color: backgroundColor(context),
         borderRadius:
             const BorderRadius.all(Radius.circular(containerBorderRadius)),
-        border: Border.all(color: borderColor(context)),
+        border: Border.all(color: const Color(0xFFE4E8F5)),
       );
 
   /// 模型选择按钮样式
