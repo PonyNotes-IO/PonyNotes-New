@@ -57,6 +57,44 @@ typedef ViewItemRightIconsBuilder = List<Widget> Function(
 
 enum IgnoreViewType { none, hide, disable }
 
+class ViewItemStyle {
+  final Color? selectedTextColor;
+  final Color? selectedBackgroundColor;
+  final Color? hoverColor;
+  final Color? focusColor;
+
+  const ViewItemStyle({
+    this.selectedTextColor,
+    this.selectedBackgroundColor,
+    this.hoverColor,
+    this.focusColor,
+  });
+
+  static ViewItemStyle defaultStyle(BuildContext context) {
+    return ViewItemStyle(
+      selectedTextColor: Theme.of(context).colorScheme.primary,
+      selectedBackgroundColor: Theme.of(context).colorScheme.secondary,
+      hoverColor: const Color(0xFFF1F0EF),
+      focusColor: const Color(0xFFF1F0EF),
+    );
+  }
+
+  ViewItemStyle copyWith({
+    Color? selectedTextColor,
+    Color? selectedBackgroundColor,
+    Color? hoverColor,
+    Color? focusColor,
+  }) {
+    return ViewItemStyle(
+      selectedTextColor: selectedTextColor ?? this.selectedTextColor,
+      selectedBackgroundColor:
+          selectedBackgroundColor ?? this.selectedBackgroundColor,
+      hoverColor: hoverColor ?? this.hoverColor,
+      focusColor: focusColor ?? this.focusColor,
+    );
+  }
+}
+
 class ViewItem extends StatelessWidget {
   const ViewItem({
     super.key,
@@ -88,6 +126,7 @@ class ViewItem extends StatelessWidget {
     /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
     this.isExternallySelected,
     this.onExpandedChanged,
+    this.style,
   });
 
   final ViewPB view;
@@ -166,6 +205,8 @@ class ViewItem extends StatelessWidget {
 
   final VoidCallback? onExpandedChanged;
 
+  final ViewItemStyle? style;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -234,6 +275,7 @@ class ViewItem extends StatelessWidget {
             isTablet: isTablet,
             isExternallySelected: isExternallySelected,
             onExpandedChanged: onExpandedChanged,
+            style: style,
           );
 
           if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
@@ -291,6 +333,7 @@ class InnerViewItem extends StatefulWidget {
     this.isTablet = false,
     this.isExternallySelected,
     this.onExpandedChanged,
+    this.style,
   });
 
   final ViewPB view;
@@ -336,6 +379,8 @@ class InnerViewItem extends StatefulWidget {
 
   final VoidCallback? onExpandedChanged;
 
+  final ViewItemStyle? style;
+
   @override
   State<InnerViewItem> createState() => _InnerViewItemState();
 }
@@ -370,6 +415,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
         isSelected: widget.isExternallySelected!,
         isTablet: widget.isTablet,
         onExpandedChanged: widget.onExpandedChanged,
+        style: widget.style,
       );
     } else {
       // 否则监听全局状态
@@ -401,6 +447,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
             isSelected: isSelected,
             isTablet: widget.isTablet,
             onExpandedChanged: widget.onExpandedChanged,
+            style: widget.style,
           );
         },
       );
@@ -434,6 +481,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           engagedInExpanding: widget.engagedInExpanding,
           isTablet: widget.isTablet,
           onExpandedChanged: widget.onExpandedChanged,
+          style: widget.style,
         );
       }).toList();
 
@@ -524,6 +572,7 @@ class SingleInnerViewItem extends StatefulWidget {
     required this.isSelected,
     this.isTablet = false,
     this.onExpandedChanged,
+    this.style,
   });
 
   final ViewPB view;
@@ -559,6 +608,8 @@ class SingleInnerViewItem extends StatefulWidget {
   final bool isTablet;
 
   final VoidCallback? onExpandedChanged;
+
+  final ViewItemStyle? style;
 
   @override
   State<SingleInnerViewItem> createState() => _SingleInnerViewItemState();
@@ -610,8 +661,12 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       );
     }
 
+    final style = widget.style ?? ViewItemStyle.defaultStyle(context);
     return FlowyHover(
-      style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
+      style: HoverStyle(
+        hoverColor: isSelected ? style.selectedBackgroundColor : style.hoverColor,
+        foregroundColorOnHover: isSelected ? style.selectedTextColor : null,
+      ),
       resetHoverOnRebuild: widget.showActions || !isIconPickerOpened,
       buildWhenOnHover: () =>
           !widget.showActions &&
@@ -624,17 +679,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Widget _buildViewItem(bool onHover, [bool isSelected = false]) {
-    // 构建名称部分 - 内联编辑或普通文本
+    final style = widget.style ?? ViewItemStyle.defaultStyle(context);
     final nameWidget =
         isRenaming ? _buildInlineRenameField() : _buildNameText();
 
     final children = [
-      // expand icon or placeholder
       widget.leftIconBuilder?.call(context, widget.view) ?? _buildLeftIcon(),
-      // icon
       _buildViewIconButton(),
       const HSpace(4),
-      // title
       Expanded(
         child: widget.extendBuilder != null
             ? Row(
@@ -647,14 +699,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       ),
     ];
 
-    // hover action
-    // 在平板端，始终显示右侧按钮（因为没有鼠标悬停）
     if (widget.showActions || onHover || widget.isTablet) {
       if (widget.rightIconsBuilder != null) {
         children.addAll(widget.rightIconsBuilder!(context, widget.view));
       } else {
-        // ··· more action button
-        // 受限成员隐藏更多操作按钮
         if (!_isRestrictedMember) {
           children.add(
             _buildViewMoreActionButton(
@@ -671,11 +719,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             ),
           );
         }
-        // support add button for document, folder, and notebook layouts
         if (widget.view.layout == ViewLayoutPB.Document ||
             widget.view.layout == ViewLayoutPB.Folder ||
             widget.view.layout == ViewLayoutPB.Notebook) {
-          // + button
           children.add(const HSpace(8.0));
           children.add(_buildViewAddButton(context));
         }
@@ -683,43 +729,43 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       }
     }
 
-    final child = GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: () => widget.onSelected(context, widget.view),
-      onTertiaryTapDown: (_) =>
-          widget.onTertiarySelected?.call(context, widget.view),
-      child: SizedBox(
-        height: widget.height,
-        child: Padding(
-          padding: EdgeInsets.only(left: widget.level * widget.leftPadding),
-          child: Listener(
-            onPointerDown: (event) {
-              if (event.buttons == kSecondaryMouseButton &&
-                  widget.enableRightClickContext) {
-                // 受限成员禁止右键操作文件菜单
-                if (_isRestrictedMember) {
-                  showToastNotification(
-                    message: '无权限',
-                    type: ToastificationType.warning,
-                  );
-                  return;
-                }
-                viewMoreActionController.showAt(
-                  // We add some horizontal offset
-                  event.position + const Offset(4, 0),
+    final rowChild = SizedBox(
+      height: widget.height,
+      child: Padding(
+        padding: EdgeInsets.only(left: widget.level * widget.leftPadding),
+        child: Listener(
+          onPointerDown: (event) {
+            if (event.buttons == kSecondaryMouseButton &&
+                widget.enableRightClickContext) {
+              if (_isRestrictedMember) {
+                showToastNotification(
+                  message: '无权限',
+                  type: ToastificationType.warning,
                 );
+                return;
               }
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Row(children: children),
-          ),
+              viewMoreActionController.showAt(
+                event.position + const Offset(4, 0),
+              );
+            }
+          },
+          behavior: HitTestBehavior.opaque,
+          child: Row(children: children),
         ),
       ),
     );
 
+    Widget child = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => widget.onSelected(context, widget.view),
+      onTertiaryTapDown: (_) =>
+          widget.onTertiarySelected?.call(context, widget.view),
+      child: rowChild,
+    );
+
     if (isSelected) {
       final popoverController = getIt<RenameViewBloc>().state.controller;
-      return AppFlowyPopover(
+      child = AppFlowyPopover(
         controller: popoverController,
         triggerActions: PopoverTriggerFlags.none,
         offset: const Offset(0, 5),
@@ -799,10 +845,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       isSelected = false;
     }
 
+    final style = widget.style ?? ViewItemStyle.defaultStyle(context);
     final textStyle = sidebarEntryTextStyle(context).copyWith(
-          // height: 1.35,
-          // leadingDistribution: TextLeadingDistribution.even,
-          // color: isSelected ? Theme.of(context).colorScheme.primary : null,
+          color: isSelected ? style.selectedTextColor : null,
         );
 
     return GestureDetector(

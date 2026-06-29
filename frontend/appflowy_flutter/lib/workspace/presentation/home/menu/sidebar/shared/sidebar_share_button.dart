@@ -811,6 +811,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               },
             );
           },
+          style: sidebarViewItemStyle,
         );
       }).toList(),
     );
