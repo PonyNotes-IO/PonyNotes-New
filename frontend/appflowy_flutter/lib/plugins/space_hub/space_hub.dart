@@ -1203,7 +1203,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     );
     return Container(
       padding: EdgeInsets.only(
-        left: 16,
+        left: 20,
+        right: 16,
         top: 10,
         bottom: 4,
       ),
