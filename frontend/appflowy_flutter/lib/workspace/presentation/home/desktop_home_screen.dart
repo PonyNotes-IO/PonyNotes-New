@@ -99,21 +99,22 @@ class _SharedAccessRevocationListenerState
       if (!isOpen) {
         return;
       }
-      if (pageManagers.length > 1) {
-        // Other tabs remain — just drop the revoked view's tab.
-        tabsBloc.add(TabsEvent.closeTab(revokedViewId));
-      } else {
-        // The revoked view is the only open tab. TabsState.closeView refuses to
-        // close the last remaining tab (and documents open by replacing the
-        // current tab in place, so there is usually exactly one), which left the
-        // revoked document still editable. Navigate away by replacing it with a
-        // blank page — mirrors how a deleted view is handled in
-        // sidebar_sections_bloc.
+      final isCurrent =
+          tabsBloc.state.currentPageManager.plugin.id == revokedViewId;
+      if (isCurrent) {
+        // The user is viewing the revoked document. closeView refuses to close
+        // the last remaining tab (and documents open by replacing the current
+        // tab in place, so there is usually exactly one), which would leave the
+        // doc editable. Navigate back to the home page instead.
         tabsBloc.add(
           TabsEvent.openPlugin(
-            plugin: makePlugin(pluginType: PluginType.blank),
+            plugin: makePlugin(pluginType: PluginType.homepage),
           ),
         );
+      } else {
+        // The revoked view is open in a non-active tab — just drop that tab
+        // without disturbing the page the user is currently on.
+        tabsBloc.add(TabsEvent.closeTab(revokedViewId));
       }
     });
   }
