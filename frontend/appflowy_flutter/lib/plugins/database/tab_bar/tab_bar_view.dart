@@ -6,8 +6,6 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/database_controller.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
@@ -32,12 +30,10 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 import 'desktop/tab_bar_header.dart';
 import 'mobile/mobile_tab_bar_header.dart';
@@ -170,7 +166,6 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
           child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
             buildWhen: (p, c) => p.menuStatus != c.menuStatus,
             builder: (sidebarContext, menuState) {
-              final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
               return BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
                 builder: (innerContext, state) {
                   final layout = state.tabBars[state.selectedIndex].layout;
@@ -260,33 +255,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                     ],
                   );
 
-                  return Stack(
-                    children: [
-                      child,
-                      if (isSidebarHidden && !widget.isInSpaceHub)
-                        Positioned(
-                          top: 10,
-                          left: UniversalPlatform.isMacOS ? 88 : 16,
-                          child: FlowyTooltip(
-                            message: LocaleKeys.sideBar_openSidebar.tr(),
-                            child: FlowyIconButton(
-                              width: 24,
-                              icon: FlowySvg(
-                                FlowySvgs.sidebar_collapse_custom_m,
-                                size: const Size.square(24),
-                                color: Theme.of(context).iconTheme.color,
-                              ),
-                              onPressed: () =>
-                                  sidebarContext.read<HomeSettingBloc>().add(
-                                        const HomeSettingEvent.changeMenuStatus(
-                                          MenuStatus.expanded,
-                                        ),
-                                      ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
+                  return child;
                 },
               );
             },
