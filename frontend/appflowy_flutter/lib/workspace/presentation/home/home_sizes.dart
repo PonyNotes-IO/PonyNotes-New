@@ -26,7 +26,7 @@ class HomeSizes {
       minimumSidebarWidth + maximumSidebarResizeOffset;
   static const double minimumSpaceHubMiddlePaneWidth = 182;
   static const double defaultSpaceHubMiddlePaneWidth = 220;
-  static const double spaceHubDividerWidth = 4;
+  static const double spaceHubDividerWidth = 2;
   static const double spaceHubTopTabsLeadingWidth =
       defaultSpaceHubMiddlePaneWidth + spaceHubDividerWidth;
   static const double minimumThirdPaneActionPeekWidth = 640;

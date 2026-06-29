@@ -1812,7 +1812,7 @@ class _SpaceHubResizableDividerState
         color: Colors.transparent,
         child: Center(
           child: Container(
-            width: 1.0,
+            width: 2.0,
             color: Theme.of(context).dividerColor.withValues(alpha: 0.9),
           ),
         ),
