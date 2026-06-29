@@ -35,12 +35,13 @@ class _SidebarResizerState extends State<SidebarResizer> {
     // 当禁用时，使用简单的静态分隔线，不响应任何交互事件
     // 这样可以避免 MouseRegion 的 onEnter/onExit 触发 setState
     // 从而避免 WKWebView 布局偏移
+    // 使用透明色，避免灰色背景影响白板视图的视觉效果
     if (!widget.enabled) {
       return Container(
         width: 2,
         margin: const EdgeInsets.only(right: 2.0),
         height: MediaQuery.of(context).size.height,
-        color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+        color: Colors.transparent,
       );
     }
 
