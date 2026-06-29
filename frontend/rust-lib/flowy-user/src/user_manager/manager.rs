@@ -45,6 +45,7 @@ use flowy_user_pub::sql::*;
 
 const FOLDER_OBSERVABLE_SOURCE: &str = "Workspace";
 const DID_UPDATE_SHARED_USERS: i32 = 41;
+const DID_REMOVE_MY_SHARED_VIEW: i32 = 42;
 
 pub struct UserManager {
   pub(crate) cloud_service: Weak<dyn UserCloudServiceProvider>,
@@ -886,21 +887,36 @@ impl UserManager {
                   | "collab_shared"
                   | "collab_share_link_self_received"
               ) {
-                if let Some(view_id) = serde_json::from_str::<Value>(&notification.payload_json)
-                  .ok()
-                  .and_then(|value| {
-                    value
-                      .get("view_id")
-                      .and_then(|view_id| view_id.as_str())
-                      .map(ToString::to_string)
-                  })
-                {
-                  flowy_notification::NotificationBuilder::new(
-                    &view_id,
-                    DID_UPDATE_SHARED_USERS,
-                    FOLDER_OBSERVABLE_SOURCE,
-                  )
-                  .send();
+                if let Ok(payload) = serde_json::from_str::<Value>(&notification.payload_json) {
+                  if let Some(view_id) = payload
+                    .get("view_id")
+                    .and_then(|view_id| view_id.as_str())
+                    .map(ToString::to_string)
+                  {
+                    flowy_notification::NotificationBuilder::new(
+                      &view_id,
+                      DID_UPDATE_SHARED_USERS,
+                      FOLDER_OBSERVABLE_SOURCE,
+                    )
+                    .send();
+
+                    // A full access revocation (not just a permission downgrade)
+                    // is marked by `event == "access_removed"`. Emit a dedicated,
+                    // recipient-only notification so the sidebar drops the view
+                    // and closes its open tab, without touching other users' lists.
+                    let access_removed = payload
+                      .get("event")
+                      .and_then(|event| event.as_str())
+                      == Some("access_removed");
+                    if access_removed {
+                      flowy_notification::NotificationBuilder::new(
+                        &view_id,
+                        DID_REMOVE_MY_SHARED_VIEW,
+                        FOLDER_OBSERVABLE_SOURCE,
+                      )
+                      .send();
+                    }
+                  }
                 }
               }
 

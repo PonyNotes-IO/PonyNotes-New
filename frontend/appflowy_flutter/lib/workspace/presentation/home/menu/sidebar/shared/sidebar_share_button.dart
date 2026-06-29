@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
@@ -41,6 +40,9 @@ import 'package:http/http.dart' as http;
 
 import '../../../../../application/menu/sidebar_sections_bloc.dart';
 
+// Must match FOLDER_OBSERVABLE_SOURCE in the Rust notification layer.
+const String _folderObservableSource = 'Workspace';
+
 class SidebarShareButton extends StatefulWidget {
   const SidebarShareButton({super.key});
 
@@ -61,14 +63,14 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   final Duration _minRefreshInterval = const Duration(seconds: 2);
   StreamSubscription<void>? _shareSectionRefreshSub;
 
-  // Real-time refresh: when the owner removes/changes this user's access on
-  // another device, the backend pushes a `collab_permission_changed` system
-  // notification over the websocket, which the Rust layer surfaces as a
-  // DidUpdateSharedUsers/DidUpdateSharedViews folder notification. We listen
-  // without an objectId filter (broadcast) so a revoked document disappears
-  // from this sidebar immediately, without waiting for the user to re-expand
-  // the section or restart the app.
-  FolderNotificationParser? _sharedNotificationParser;
+  // Real-time, recipient-targeted revocation handling: when the owner fully
+  // removes THIS user's access to a shared view, the backend sends a
+  // `collab_permission_changed` notification (with `event: access_removed`)
+  // only to this user. The Rust layer surfaces it as a `DidRemoveMySharedView`
+  // folder notification whose id is the revoked view_id. We react only to that
+  // targeted signal — never to the broadcast DidUpdateSharedUsers — so the
+  // document disappears (and its tab closes) for the removed user alone,
+  // leaving other users' shared lists untouched.
   StreamSubscription? _sharedNotificationSub;
 
   @override
@@ -87,28 +89,49 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   void _initSharedNotificationListener() {
-    // No objectId is passed, so this catches the notification for any view_id.
-    _sharedNotificationParser = FolderNotificationParser(
-      callback: (ty, result) {
-        if (!mounted) {
-          return;
-        }
-        if (ty == FolderNotification.DidUpdateSharedUsers ||
-            ty == FolderNotification.DidUpdateSharedViews) {
-          _loadUserSharedNotes(showLoading: false);
-        }
-      },
-    );
-    _sharedNotificationSub = RustStreamReceiver.listen(
-      (observable) => _sharedNotificationParser?.parse(observable),
-    );
+    _sharedNotificationSub = RustStreamReceiver.listen((observable) {
+      if (!mounted) {
+        return;
+      }
+      if (observable.source != _folderObservableSource) {
+        return;
+      }
+      if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
+        return;
+      }
+      // The notification id carries the revoked view_id.
+      final revokedViewId = observable.id;
+      if (revokedViewId.isEmpty) {
+        return;
+      }
+      _handleSharedViewRevoked(revokedViewId);
+    });
+  }
+
+  /// Handles a targeted access revocation for [viewId]: drops it from this
+  /// user's shared list and closes its open tab (if any). Only the user whose
+  /// access was revoked receives the driving notification, so other users'
+  /// lists are unaffected.
+  void _handleSharedViewRevoked(String viewId) {
+    if (mounted) {
+      setState(() {
+        _userSharedNotes =
+            _userSharedNotes.where((view) => view.id != viewId).toList();
+      });
+    }
+
+    // Close the open tab for the revoked view, if it is currently open.
+    try {
+      context.read<TabsBloc>().add(TabsEvent.closeTab(viewId));
+    } catch (e) {
+      Log.warn('Failed to close tab for revoked view $viewId: $e');
+    }
   }
 
   @override
   void dispose() {
     _shareSectionRefreshSub?.cancel();
     _sharedNotificationSub?.cancel();
-    _sharedNotificationParser = null;
     WidgetsBinding.instance.removeObserver(this);
     _sharedSectionBloc.close();
     super.dispose();
