@@ -120,12 +120,8 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       });
     }
 
-    // Close the open tab for the revoked view, if it is currently open.
-    try {
-      context.read<TabsBloc>().add(TabsEvent.closeTab(viewId));
-    } catch (e) {
-      Log.warn('Failed to close tab for revoked view $viewId: $e');
-    }
+    // The home-level revocation listener closes open tabs. The sidebar only
+    // owns its local shared-list state.
   }
 
   @override
