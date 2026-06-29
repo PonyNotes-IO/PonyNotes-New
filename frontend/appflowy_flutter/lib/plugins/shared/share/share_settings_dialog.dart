@@ -18,6 +18,9 @@ class ShareSettingsDialog extends StatelessWidget {
 
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 600,
@@ -82,7 +85,7 @@ class _DialogHeader extends StatelessWidget {
           ),
           // 右上角关闭按钮
           IconButton(
-            icon: const Icon(Icons.close, size: 20),
+            icon: const Icon(Icons.close, size: 16),
             splashRadius: 18,
             onPressed: onClose,
           ),

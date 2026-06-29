@@ -44,13 +44,13 @@ class SidebarFolder extends StatelessWidget {
             // home button
             const SidebarHomeButton(),
             // AI button
-            // const VSpace(sidebarPrimaryEntryGap),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarAiButton(),
             // calendar button
-            // const VSpace(sidebarPrimaryEntryGap),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarCalendarButton(),
             // favorite
-            // const VSpace(sidebarPrimaryEntryGap),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
             // BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
             //   builder: (context, state) {
@@ -86,6 +86,7 @@ class SidebarFolder extends StatelessWidget {
                             views: privateSpaces,
                           ),
                           // 协作区 / 公共空间（仅 Space）
+                    const VSpace(sidebarPrimaryEntryGap),
                           PublicSectionFolder(
                             views: publicSpaces,
                           ),
@@ -99,6 +100,7 @@ class SidebarFolder extends StatelessWidget {
                 );
               },
             ),
+            const VSpace(sidebarPrimaryEntryGap),
             // 共享
             const SidebarShareButton(),
             // 模板
@@ -106,6 +108,7 @@ class SidebarFolder extends StatelessWidget {
             // const SidebarTemplateNewButton(),
             // NOTE: Trash and Settings moved to sidebar bottom area to keep them fixed.
           ],
+
         );
       },
     );

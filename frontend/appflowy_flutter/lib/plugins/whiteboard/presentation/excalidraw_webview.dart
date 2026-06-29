@@ -33,6 +33,7 @@ class ExcalidrawWebView extends StatefulWidget {
     required this.viewId,
     required this.sessionTraceId,
     required this.loadTraceId,
+    this.reloadToken = 0,
     this.initialData,
     this.initialDataLoaded = false,
     this.deferInitialDataLoad = false,
@@ -44,6 +45,7 @@ class ExcalidrawWebView extends StatefulWidget {
   final String viewId;
   final String sessionTraceId;
   final String loadTraceId;
+  final int reloadToken;
   final Map<String, dynamic>? initialData;
   final bool initialDataLoaded;
   final bool deferInitialDataLoad;
@@ -116,7 +118,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   @override
   void didUpdateWidget(covariant ExcalidrawWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!oldWidget.initialDataLoaded &&
+    // 把真实数据补推进 WebView 的两种情形：
+    //   1) reloadToken 变化（如导入文件后强制重载）；
+    //   2) 【根因A修复】迟到数据：deferInitialDataLoad 模式下首帧 initialData 可能为
+    //      null，WebView 的 initData 会用 {} 把场景初始化为空；当真实数据随后加载
+    //      完成（initialDataLoaded 由 false→true）时，必须把真实数据补推进去，否则
+    //      画板会停留在“被清空”的状态——这正是“偶尔什么也没动画板就清空、重开又有”
+    //      的根因之一。
+    final reloadTokenChanged = oldWidget.reloadToken != widget.reloadToken;
+    final dataArrivedLate =
+        !oldWidget.initialDataLoaded && widget.initialDataLoaded;
+    if ((reloadTokenChanged || dataArrivedLate) &&
         widget.initialDataLoaded &&
         widget.initialData != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1930,7 +1942,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
                       // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
                       key: ValueKey(
-                          'inappwebview_${widget.viewId}_global_$_inAppWebViewInstanceId'),
+                        'inappwebview_${widget.viewId}_r${widget.reloadToken}_global_$_inAppWebViewInstanceId',
+                      ),
                       initialUrlRequest: URLRequest(
                         url: WebUri(_whiteboardUrl!),
                       ),

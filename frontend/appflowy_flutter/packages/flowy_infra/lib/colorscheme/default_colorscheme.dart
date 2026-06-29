@@ -7,7 +7,7 @@ class ColorSchemeConstants {
   static const lightHover = Color(0xFFe0f8FF);
   static const lightSelector = Color(0xFFf2fcFF);
   static const lightBg1 = Color(0xFFf9f9f9);
-  static const lightBg2 = Color(0x0F1F2329);
+  static const lightBg2 = Color(0x0Dff3800);
   static const lightShader1 = Color(0xFF333333);
   static const lightShader3 = Color(0xFF828282);
   static const lightShader5 = Color(0xFFe0e0e0);
@@ -130,7 +130,7 @@ class DefaultColorScheme extends FlowyColorScheme {
           hint: const Color(0xFF59647a),
           primary: ColorSchemeConstants.darkMain2,
           onPrimary: ColorSchemeConstants.darkShader1,
-          hoverBG1: const Color(0x1AFFFFFF),
+          hoverBG1: const Color(0x0Dff3800),
           hoverBG2: ColorSchemeConstants.darkMain1,
           hoverBG3: ColorSchemeConstants.darkShader3,
           hoverFG: const Color(0xE5FFFFFF),

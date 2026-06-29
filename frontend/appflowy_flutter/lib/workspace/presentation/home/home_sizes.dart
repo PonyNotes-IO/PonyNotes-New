@@ -61,8 +61,8 @@ class HomeRadii {
 }
 
 class HomeSpaceViewSizes {
-  static const double leftPadding = 16.0;
-  static double get viewHeight => 32 * Sizes.hitScale;
+  static const double leftPadding = 6.0;
+  static double get viewHeight => 28 * Sizes.hitScale;
 
   // mobile, m represents mobile
   static const double mViewHeight = 48.0;

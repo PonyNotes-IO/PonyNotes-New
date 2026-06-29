@@ -73,9 +73,7 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
     final highlightColor =
         Theme.of(context).colorScheme.primary.withValues(alpha: 0.10);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: DragTarget<ViewPB>(
+    return DragTarget<ViewPB>(
         onWillAcceptWithDetails: (details) {
           final canAccept = _canAcceptDraggedView(details.data);
           if (canAccept && !_isDragHovering) {
@@ -119,11 +117,11 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
               iconBuilder: (context, isHover, disabled) =>
                   const SizedBox.shrink(),
               showExpandArrow: true,
+              textStyle: sidebarTextStyle(context),
               isExpanded: _isExpanded,
             ),
           );
         },
-      ),
     );
   }
 
@@ -146,7 +144,9 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             context,
             () {
               // 标记从最爱列表打开，文档页面需要显示侧边栏展开按钮
-              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                selectedView,
+              );
               context.read<TabsBloc>().openPlugin(selectedView);
             },
           );
@@ -155,7 +155,9 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
           CalendarUnsavedGuard.instance.maybeConfirmLeave(
             context,
             () {
-              getIt<MenuSharedState>().openedFromFavoriteOrShared = true;
+              getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(
+                selectedView,
+              );
               context.read<TabsBloc>().openPlugin(selectedView);
             },
           );

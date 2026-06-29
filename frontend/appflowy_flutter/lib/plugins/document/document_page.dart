@@ -26,6 +26,7 @@ import 'package:appflowy/workspace/application/action_navigation/action_navigati
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -91,7 +92,6 @@ class _DocumentPageState extends State<DocumentPage>
   //   - parentIsSpace == false 时，按钮显示（父级是普通文档，点击返回
   //     可回到父级文档页面）；
   //   - 无父级（parentViewId 为空）时，按钮不显示。
-  bool? _parentIsSpace;
   late final documentBloc = DocumentBloc(
       documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
@@ -100,30 +100,6 @@ class _DocumentPageState extends State<DocumentPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadParentIsSpace();
-  }
-
-  @override
-  void didUpdateWidget(covariant DocumentPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.view.parentViewId != widget.view.parentViewId) {
-      _parentIsSpace = null;
-      _loadParentIsSpace();
-    }
-  }
-
-  Future<void> _loadParentIsSpace() async {
-    final parentId = widget.view.parentViewId;
-    if (parentId.isEmpty) {
-      if (mounted) setState(() => _parentIsSpace = false);
-      return;
-    }
-    final result = await ViewBackendService.getView(parentId);
-    if (!mounted) return;
-    final parentView = result.toNullable();
-    setState(() {
-      _parentIsSpace = parentView?.isSpace ?? false;
-    });
   }
 
   @override
@@ -524,7 +500,7 @@ class _DocumentPageState extends State<DocumentPage>
         // 的主视图是 SpaceHub（不是普通 DocumentPage），不是"上一级文档"。
         // 无父级（parentViewId 为空）时同理，没有可返回的上一级文档。
         // _parentIsSpace == null 表示父级尚未查询完成，先按 false 渲染（保守不显示）
-        final showBackButton = _parentIsSpace == false;
+        const showBackButton = false;
         const double buttonSize = 24.0;
         // macOS 上系统窗口按钮（关闭、最小化、最大化）占据约 88 像素宽度，
         // 需要留出足够空间避免按钮被遮挡
@@ -535,6 +511,41 @@ class _DocumentPageState extends State<DocumentPage>
         return Stack(
           children: [
             editorContent,
+            BlocBuilder<HomeSettingBloc, HomeSettingState>(
+              buildWhen: (previous, current) =>
+                  previous.menuStatus != current.menuStatus,
+              builder: (context, menuState) {
+                final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+                final shouldShowExpandButton = isSidebarHidden &&
+                    getIt<MenuSharedState>().shouldShowSidebarExpandButton(widget.view);
+                if (!shouldShowExpandButton) {
+                  return const SizedBox.shrink();
+                }
+
+                final theme = AppFlowyTheme.of(context);
+                return Positioned(
+                  top: 10,
+                  left: UniversalPlatform.isMacOS ? 88 : 16,
+                  child: FlowyTooltip(
+                    message: LocaleKeys.sideBar_openSidebar.tr(),
+                    child: FlowyIconButton(
+                      width: 24,
+                      icon: FlowySvg(
+                        FlowySvgs.sidebar_collapse_custom_m,
+                        size: const Size.square(24),
+                        color: theme.iconColorScheme.primary,
+                      ),
+                      onPressed: () =>
+                          context.read<HomeSettingBloc>().add(
+                                const HomeSettingEvent.changeMenuStatus(
+                                  MenuStatus.expanded,
+                                ),
+                              ),
+                    ),
+                  ),
+                );
+              },
+            ),
             if (showBackButton)
               Positioned(
                 top: 10,

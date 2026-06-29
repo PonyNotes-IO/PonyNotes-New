@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -1002,7 +1002,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       behavior: HitTestBehavior.opaque,
       onPointerDown: (_) {
         _isCollapseButtonTapped = true;
-        FullWindowController.collapseMenuAndEnterFullWindow(context);
+        _collapseSidebarOnly(context);
         // 300ms 后重置标志，允许"..."按钮的 hover 触发
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
@@ -1326,7 +1326,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         ),
         onTap: () {
           _headerActionsPopoverController.close();
-          FullWindowController.collapseMenuAndEnterFullWindow(context);
+          _collapseSidebarOnly(context);
         },
       ),
     );
@@ -1348,11 +1348,20 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             color: theme.iconColorScheme.secondary,
           ),
           onTap: () {
-            FullWindowController.collapseMenuAndEnterFullWindow(context);
+            _collapseSidebarOnly(context);
           },
         ),
       ),
     );
+  }
+
+  void _collapseSidebarOnly(BuildContext context) {
+    // 仅收起左侧侧边栏（导航栏），不进入全窗口模式。
+    // 进入全窗口模式会把 SpaceHub 中间栏（文档列表，受 !isFullWindow 控制）一并隐藏，
+    // 这里只切换菜单状态，确保中间栏继续显示。
+    context.read<HomeSettingBloc>().add(
+          const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
+        );
   }
 
   Widget _buildHeaderFullWindowButton(

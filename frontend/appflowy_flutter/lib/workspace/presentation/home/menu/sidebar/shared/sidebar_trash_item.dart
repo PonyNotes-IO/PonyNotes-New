@@ -15,19 +15,17 @@ class SidebarTrashItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: AFGhostIconTextButton.primary(
-        text: LocaleKeys.trash_text.tr(),
-        mainAxisAlignment: MainAxisAlignment.start,
-        onTap: () => _openTrash(context),
-        padding: sidebarEntryPadding,
-        borderRadius: theme.borderRadius.s,
-        iconBuilder: (context, isHover, disabled) => FlowySvg(
-          FlowySvgs.icon_trash_s,
-          size: const Size.square(18.0),
-          color: Theme.of(context).textTheme.bodyMedium?.color,
-        ),
+    return AFGhostIconTextButton.primary(
+      text: LocaleKeys.trash_text.tr(),
+      mainAxisAlignment: MainAxisAlignment.start,
+      onTap: () => _openTrash(context),
+      padding: sidebarEntryPadding,
+      borderRadius: theme.borderRadius.s,
+      iconBuilder: (context, isHover, disabled) => FlowySvg(
+        FlowySvgs.icon_trash_s,
+        size: const Size.square(18.0),
+        color: Theme.of(context).textTheme.bodyMedium?.color,
+        blendMode: null,
       ),
     );
   }

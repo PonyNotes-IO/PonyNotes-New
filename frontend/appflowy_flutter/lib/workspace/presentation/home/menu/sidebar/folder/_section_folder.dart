@@ -215,9 +215,7 @@ class _SectionFolderState extends State<SectionFolder> {
       return const <Widget>[];
     }
 
-    final isIndentedSection = widget.spaceType == FolderSpaceType.private ||
-        widget.spaceType == FolderSpaceType.public;
-    final itemLevel = isIndentedSection ? 1 : 0;
+    final itemLevel = 0;
 
     return widget.views.map((view) {
       final isSpace = view.isSpace;
@@ -296,9 +294,7 @@ class _SectionFolderState extends State<SectionFolder> {
       ..parentViewId = parentViewId
       ..layout = ViewLayoutPB.Document;
 
-    final isIndentedSection = widget.spaceType == FolderSpaceType.private ||
-        widget.spaceType == FolderSpaceType.public;
-    final itemLevel = isIndentedSection ? 1 : 0;
+    final itemLevel = 0;
 
     return ViewItem(
       key: ValueKey('placeholder_${widget.spaceType.name}_$parentViewId'),

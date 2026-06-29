@@ -666,7 +666,15 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 HomeSizes.minimumSpaceHubContentPeekWidth -
                 HomeSizes.spaceHubDividerWidth)
             .clamp(HomeSizes.minimumSpaceHubMiddlePaneWidth, double.infinity);
-        final floatingDocumentListTopInset = 0.0;
+        // 仅在 macOS 且“收起左侧边栏（浮动文档列表）”时，给中间栏（文档列表）顶部下移，
+        // 避开窗口左上角的红绿灯（关闭/最小化/最大化）按钮。
+        // 关键：该 inset 只作用于 documentListPanel 与分隔线，不作用于 rightPanel（白板/内容），
+        // 所以白板始终贴顶、深色主题下不会出现顶部黑边。
+        // Windows/Linux 或非收起态恒为 0（窗口按钮不在左上角，无需避让）。
+        final floatingDocumentListTopInset =
+            (useFloatingDocumentList && Platform.isMacOS)
+                ? HomeSizes.macOSTrafficLightsTopInset
+                : 0.0;
         final passiveFloatingDivider = Padding(
           padding: EdgeInsets.only(
             top: floatingDocumentListTopInset,
@@ -892,18 +900,33 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return _buildContentWithToolbar(
         view: view,
         viewInfoBloc: viewInfoBloc,
-        child: plugin.widgetBuilder.buildWidget(
-          context: PluginContext(
-            onDeleted: _onChildViewDeleted,
-            userProfile: userProfile, // 传入用户配置
+        // ⚠️ 关键修复（白板/folder 协同不同步的总根）：为白板等非文档视图加稳定 key
+        // （与上面 DocumentPage 的 ValueKey(view.id) 一致）。否则 SpaceHub 每次重建
+        // rightPanel 时，Flutter 会把这里的 widget 当作新实例 —— dispose 旧的
+        // WhiteboardPage、再建新的，造成 WhiteboardPage 反复 dispose+重建：
+        //   · WhiteboardPage.dispose() 会 closeWhiteboard → 紧接着重建又 openWhiteboard，
+        //     白板 collab 的同步流(SyncPlugin)被反复 close/重建；
+        //   · close→reopen 之间的空窗会漏掉服务器广播 → 广播序列出现缺口 →
+        //     collab 同步反复判定 missing update 而重启 → 永不收敛 →
+        //     白板内容与 folder 文档树都同步不过来；
+        //   · 同时 WebView 也被反复重建。
+        // 加稳定 key 后，同一 view 在 SpaceHub 重建期间复用同一个 State（didUpdateWidget
+        // 而非 dispose 重建），同步流保持单条、稳定。
+        child: KeyedSubtree(
+          key: ValueKey('space_hub_view_${view.id}'),
+          child: plugin.widgetBuilder.buildWidget(
+            context: PluginContext(
+              onDeleted: _onChildViewDeleted,
+              userProfile: userProfile, // 传入用户配置
+            ),
+            shrinkWrap: false,
+            data: view.layout == ViewLayoutPB.Whiteboard
+                ? const {
+                    'preferHostFullWindowMoreItem': true,
+                    'preferHostTopRightActions': true,
+                  }
+                : null,
           ),
-          shrinkWrap: false,
-          data: view.layout == ViewLayoutPB.Whiteboard
-              ? const {
-                  'preferHostFullWindowMoreItem': true,
-                  'preferHostTopRightActions': true,
-                }
-              : null,
         ),
       );
     } catch (e, stackTrace) {
@@ -1070,8 +1093,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 }
 
 /// 空间文档列表组件（左侧）
-class _SpaceDocumentList extends StatelessWidget {
+class _SpaceDocumentList extends StatefulWidget {
   const _SpaceDocumentList({
+    super.key,
     required this.spaceView,
     required this.selectedView,
     required this.showHeader,
@@ -1086,6 +1110,43 @@ class _SpaceDocumentList extends StatelessWidget {
   final ValueChanged<ViewPB> onViewCreated;
   final void Function(ViewPB view) onViewSelectedWithRecent;
   final ScrollController scrollController;
+
+  @override
+  State<_SpaceDocumentList> createState() => _SpaceDocumentListState();
+}
+
+class _SpaceDocumentListState extends State<_SpaceDocumentList> {
+  final _showAddNoteButton = ValueNotifier(false);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scrollController.addListener(_checkScrollable);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScrollable();
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.scrollController.removeListener(_checkScrollable);
+    _showAddNoteButton.dispose();
+    super.dispose();
+  }
+
+  void _checkScrollable() {
+    if (widget.scrollController.hasClients) {
+      final scrollExtent = widget.scrollController.position.maxScrollExtent;
+      _showAddNoteButton.value = scrollExtent > 0;
+    }
+  }
+
+  void _onExpandedChanged() {
+    // 文件夹展开/收起后，延迟一帧检查滚动状态
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkScrollable();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1106,13 +1167,12 @@ class _SpaceDocumentList extends StatelessWidget {
     }
 
     return Container(
-      // 仅保留左侧留白，避免右侧产生与分割线之间的空白带
-      margin: const EdgeInsets.only(left: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 头部：空间名称 + 新增文档按钮
-          if (showHeader) ...[
+          if (widget.showHeader) ...[
             // Header stays here only in fullscreen, where HomeStack has no tabs.
             // 仅在应用内全屏保留列表头部；普通模式下由顶部预留区承载。
             _buildHeader(context, spaceBloc, isRestrictedMember),
@@ -1123,6 +1183,16 @@ class _SpaceDocumentList extends StatelessWidget {
             child: spaceBloc != null
                 ? _buildListFromSpaceBloc(context, spaceBloc, isRestrictedMember)
                 : _buildListFromBackend(context, isRestrictedMember),
+          ),
+          // 固定底部"新增笔记页"按钮（当列表超过一屏时显示）
+          ValueListenableBuilder<bool>(
+            valueListenable: _showAddNoteButton,
+            builder: (context, show, _) {
+              if (!show) {
+                return const SizedBox.shrink();
+              }
+              return _buildBottomAddNoteButton(isRestrictedMember);
+            },
           ),
         ],
       ),
@@ -1137,21 +1207,14 @@ class _SpaceDocumentList extends StatelessWidget {
     return Container(
       padding: EdgeInsets.only(
         left: 16,
-        right: 16,
         top: 10,
         bottom: 4,
       ),
-      // decoration: BoxDecoration(
-      //   border: Border(
-      //     bottom: BorderSide(color: Theme.of(context).dividerColor),
-      //   ),
-      //   color: Theme.of(context).colorScheme.surfaceContainer,
-      // ),
       child: Row(
         children: [
           Expanded(
             child: FlowyText(
-              spaceView.name,
+              widget.spaceView.name,
               fontSize: 16,
               fontWeight: FontWeight.w500,
             ),
@@ -1160,7 +1223,7 @@ class _SpaceDocumentList extends StatelessWidget {
             width: 24,
             height: 24,
             child: ViewAddButton(
-              parentViewId: spaceView.id,
+              parentViewId: widget.spaceView.id,
               onEditing: (_) {},
               enabled: !isRestrictedMember,
               onImportCompleted: (importedViews) async {
@@ -1168,7 +1231,7 @@ class _SpaceDocumentList extends StatelessWidget {
                 for (final view in importedViews) {
                   await ViewBackendService.moveViewV2(
                     viewId: view.id,
-                    newParentId: spaceView.id,
+                    newParentId: widget.spaceView.id,
                     prevViewId: null,  // null 表示移动到列表开头
                   );
                 }
@@ -1178,7 +1241,7 @@ class _SpaceDocumentList extends StatelessWidget {
                   spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
                 }
                 if (importedViews.isNotEmpty) {
-                  onViewCreated(importedViews.first);
+                  widget.onViewCreated(importedViews.first);
                 }
               },
               onSelected: (pluginBuilder, name, initialDataBytes,
@@ -1202,7 +1265,7 @@ class _SpaceDocumentList extends StatelessWidget {
                   final result = await ViewBackendService.createView(
                     name: finalName,
                     layoutType: layout,
-                    parentViewId: spaceView.id,
+                    parentViewId: widget.spaceView.id,
                     index: 0,
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
@@ -1233,7 +1296,7 @@ class _SpaceDocumentList extends StatelessWidget {
                       spaceBloc.add(
                           const SpaceEvent.didUpdateCurrentSpaceChildViews());
                       // 通知父组件新文档已创建，以便自动选中并显示
-                      onViewCreated(view);
+                      widget.onViewCreated(view);
                     },
                     (error) {
                       Log.error('Failed to create view: $error');
@@ -1243,7 +1306,7 @@ class _SpaceDocumentList extends StatelessWidget {
                   // Fallback: 直接创建文档
                   final result = await ViewBackendService.createView(
                     layoutType: layout,
-                    parentViewId: spaceView.id,
+                    parentViewId: widget.spaceView.id,
                     name: finalName,
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
@@ -1267,7 +1330,7 @@ class _SpaceDocumentList extends StatelessWidget {
                       }
                     }
                     // Fallback create success
-                    onViewCreated(view);
+                    widget.onViewCreated(view);
                   }, (error) {
                     Log.error('Failed to create view (fallback): $error');
                   });
@@ -1313,18 +1376,18 @@ class _SpaceDocumentList extends StatelessWidget {
         // 当 SpaceBloc 初始化完成后，如果当前空间不是目标空间，则打开目标空间
         if (state.isInitialized) {
           final currentSpace = state.currentSpace;
-          if (currentSpace?.id != spaceView.id) {
+          if (currentSpace?.id != widget.spaceView.id) {
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
             Future.microtask(() {
               // Log.info(
-              //   '[SpaceHub] dispatching SpaceEvent.open for spaceView=${spaceView.name}(${spaceView.id})',
+              //   '[SpaceHub] dispatching SpaceEvent.open for spaceView=${widget.spaceView.name}(${widget.spaceView.id})',
               // );
               if (!spaceBloc.isClosed) {
                 final currentState = spaceBloc.state;
                 // 再次检查，避免重复打开
                 if (currentState.isInitialized &&
-                    currentState.currentSpace?.id != spaceView.id) {
-                  spaceBloc.add(SpaceEvent.open(space: spaceView));
+                    currentState.currentSpace?.id != widget.spaceView.id) {
+                  spaceBloc.add(SpaceEvent.open(space: widget.spaceView));
                 }
               }
             });
@@ -1339,7 +1402,7 @@ class _SpaceDocumentList extends StatelessWidget {
           final prevSpace = previous.currentSpace;
 
           // 只关注与当前空间相关的变化
-          if (currSpace?.id != spaceView.id && prevSpace?.id != spaceView.id) {
+          if (currSpace?.id != widget.spaceView.id && prevSpace?.id != widget.spaceView.id) {
             // 两个状态都与目标空间无关，不需要重建
             return false;
           }
@@ -1386,7 +1449,7 @@ class _SpaceDocumentList extends StatelessWidget {
           }
 
           // 如果当前空间不是目标空间，显示加载中（等待 SpaceEvent.open 完成）
-          if (currentSpace?.id != spaceView.id) {
+          if (currentSpace?.id != widget.spaceView.id) {
             return const Center(
               child: CircularProgressIndicator.adaptive(),
             );
@@ -1396,13 +1459,18 @@ class _SpaceDocumentList extends StatelessWidget {
           final displaySpace = currentSpace!;
           final childViews = displaySpace.childViews;
 
+          // 列表内容变化后，在下一帧检查是否需要显示底部固定按钮
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkScrollable();
+          });
+
           return RawScrollbar(
             thickness: 0.5,
             radius: const Radius.circular(4),
             thumbVisibility: false,
-            controller: scrollController,
+            controller: widget.scrollController,
             child: ListView.builder(
-              controller: scrollController,
+              controller: widget.scrollController,
               itemCount: childViews.length + 1,
               itemBuilder: (context, index) {
                 if (index == childViews.length) {
@@ -1434,8 +1502,12 @@ class _SpaceDocumentList extends StatelessWidget {
                 return ViewItem(
                   key: ValueKey('space_hub_${childView.id}'),
                   view: childView,
+                  // 注意：spaceType 必须取自所在「空间」(spaceView) 的权限，
+                  // 不能取自 childView。childView 是普通文档，其 extra 为空，
+                  // spacePermission getter 会抛异常并回退为 private，导致在
+                  // 共享空间中新建的子页面被放入「私有 section」，其他成员看不到。
                   spaceType:
-                      childView.spacePermission == SpacePermission.private
+                      widget.spaceView.spacePermission == SpacePermission.private
                           ? FolderSpaceType.private
                           : FolderSpaceType.public,
                   level: 0,
@@ -1443,7 +1515,7 @@ class _SpaceDocumentList extends StatelessWidget {
                   onSelected: (itemContext, clickedView) {
                     // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
                     // 直接调用回调，不更新全局状态，避免整个页面刷新
-                    onViewSelectedWithRecent(clickedView);
+                    widget.onViewSelectedWithRecent(clickedView);
                   },
                   isFeedback: false,
                   shouldRenderChildren: true,
@@ -1453,7 +1525,8 @@ class _SpaceDocumentList extends StatelessWidget {
                   disableSelectedStatus: false,
                   isTablet: PlatformInfo.isTablet,
                   // 使用外部传入的选中状态，避免监听全局状态
-                  isExternallySelected: selectedView?.id == childView.id,
+                  isExternallySelected: widget.selectedView?.id == childView.id,
+                  onExpandedChanged: _onExpandedChanged,
                 );
               },
             ),
@@ -1466,7 +1539,7 @@ class _SpaceDocumentList extends StatelessWidget {
   Widget _buildListFromBackend(BuildContext context, bool isRestrictedMember) {
     final theme = AppFlowyTheme.of(context);
     return FutureBuilder<List<ViewPB>>(
-      future: _loadChildViews(spaceView.id),
+      future: _loadChildViews(widget.spaceView.id),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator.adaptive());
@@ -1474,13 +1547,18 @@ class _SpaceDocumentList extends StatelessWidget {
 
         final childViews = snapshot.data ?? const <ViewPB>[];
 
+        // 列表内容变化后，在下一帧检查是否需要显示底部固定按钮
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkScrollable();
+        });
+
         return RawScrollbar(
           thickness: 0.5,
           radius: const Radius.circular(4),
           thumbVisibility: false,
-          controller: scrollController,
+          controller: widget.scrollController,
           child: ListView.builder(
-            controller: scrollController,
+            controller: widget.scrollController,
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
@@ -1512,7 +1590,9 @@ class _SpaceDocumentList extends StatelessWidget {
               return ViewItem(
                 key: ValueKey('space_hub_${childView.id}'),
                 view: childView,
-                spaceType: childView.spacePermission == SpacePermission.private
+                // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
+                // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
+                spaceType: widget.spaceView.spacePermission == SpacePermission.private
                     ? FolderSpaceType.private
                     : FolderSpaceType.public,
                 level: 0,
@@ -1520,7 +1600,7 @@ class _SpaceDocumentList extends StatelessWidget {
                 onSelected: (itemContext, clickedView) {
                   // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
                   // 直接调用回调，不更新全局状态，避免整个页面刷新
-                  onViewSelectedWithRecent(clickedView);
+                  widget.onViewSelectedWithRecent(clickedView);
                 },
                 isFeedback: false,
                 shouldRenderChildren: true,
@@ -1530,13 +1610,39 @@ class _SpaceDocumentList extends StatelessWidget {
                 disableSelectedStatus: false,
                 isTablet: PlatformInfo.isTablet,
                 // 使用外部传入的选中状态，避免监听全局状态
-                isExternallySelected: selectedView?.id == childView.id,
+                isExternallySelected: widget.selectedView?.id == childView.id,
+                onExpandedChanged: _onExpandedChanged,
               );
             },
           ),
         );
       },
     );
+  }
+
+  Widget _buildBottomAddNoteButton(bool isRestrictedMember) {
+    final theme = AppFlowyTheme.of(context);
+    final addBtn = AFGhostIconTextButton.primary(
+      text: '新增笔记页',
+      mainAxisAlignment: MainAxisAlignment.start,
+      size: AFButtonSize.l,
+      onTap: () => _createNewNote(context),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 10,
+      ),
+      borderRadius: theme.borderRadius.s,
+      iconBuilder: (context, isHover, disabled) => const FlowySvg(
+        FlowySvgs.icon_add_new_s,
+        size: Size.square(16.0),
+      ),
+    );
+    if (isRestrictedMember) {
+      return IgnorePointer(
+        child: Opacity(opacity: 0.3, child: addBtn),
+      );
+    }
+    return addBtn;
   }
 
   Future<List<ViewPB>> _loadChildViews(String spaceId) async {
@@ -1552,9 +1658,10 @@ class _SpaceDocumentList extends StatelessWidget {
   Future<void> _createNewNote(BuildContext context) async {
     final result = await ViewBackendService.createView(
       layoutType: ViewLayoutPB.Document,
-      parentViewId: spaceView.id,
+      parentViewId: widget.spaceView.id,
       name: ViewLayoutPB.Document.defaultName,
       openAfterCreate: false,
+      index: 0,
     );
     result.fold(
       (view) {
@@ -1563,7 +1670,7 @@ class _SpaceDocumentList extends StatelessWidget {
             .read<SpaceBloc>()
             .add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
         // 通知父组件新文档已创建，以便自动选中并显示
-        onViewCreated(view);
+        widget.onViewCreated(view);
       },
       (error) {
         Log.error('Failed to create new note: $error');
@@ -1692,7 +1799,7 @@ class _SpaceHubResizableDividerState
         child: Center(
           child: Container(
             width: 1.0,
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.9),
           ),
         ),
       );

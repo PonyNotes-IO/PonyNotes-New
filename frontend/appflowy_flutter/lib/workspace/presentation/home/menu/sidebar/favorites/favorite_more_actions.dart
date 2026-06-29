@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -61,6 +62,7 @@ class FavoriteMoreActions extends StatelessWidget {
               break;
 
             case ViewMoreActionType.openInNewTab:
+              getIt<MenuSharedState>().markOpenedFromFavoriteOrShared(view);
               getIt<TabsBloc>().openTab(view);
               break;
             case ViewMoreActionType.duplicate:

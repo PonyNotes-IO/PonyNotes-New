@@ -272,7 +272,13 @@ class _UnifiedViewTopRightActionsContentState
                       size: const Size.square(20),
                       color: iconColor,
                     ),
-                    onTap: FullWindowController.toggle,
+                    onTap: () {
+                      if (isFullWindow) {
+                        FullWindowController.exitAndExpandMenu(context);
+                      } else {
+                        FullWindowController.enter();
+                      }
+                    },
                   ),
                 ),
               );

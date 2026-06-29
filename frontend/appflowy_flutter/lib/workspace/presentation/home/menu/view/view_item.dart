@@ -26,6 +26,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
@@ -86,6 +87,7 @@ class ViewItem extends StatelessWidget {
     this.isTablet = false,
     /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
     this.isExternallySelected,
+    this.onExpandedChanged,
   });
 
   final ViewPB view;
@@ -162,6 +164,8 @@ class ViewItem extends StatelessWidget {
   /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
   final bool? isExternallySelected;
 
+  final VoidCallback? onExpandedChanged;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -229,6 +233,7 @@ class ViewItem extends StatelessWidget {
             engagedInExpanding: engagedInExpanding,
             isTablet: isTablet,
             isExternallySelected: isExternallySelected,
+            onExpandedChanged: onExpandedChanged,
           );
 
           if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
@@ -285,6 +290,7 @@ class InnerViewItem extends StatefulWidget {
     required this.shouldIgnoreView,
     this.isTablet = false,
     this.isExternallySelected,
+    this.onExpandedChanged,
   });
 
   final ViewPB view;
@@ -328,6 +334,8 @@ class InnerViewItem extends StatefulWidget {
   /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
   final bool? isExternallySelected;
 
+  final VoidCallback? onExpandedChanged;
+
   @override
   State<InnerViewItem> createState() => _InnerViewItemState();
 }
@@ -361,6 +369,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
         shouldIgnoreView: widget.shouldIgnoreView,
         isSelected: widget.isExternallySelected!,
         isTablet: widget.isTablet,
+        onExpandedChanged: widget.onExpandedChanged,
       );
     } else {
       // 否则监听全局状态
@@ -391,6 +400,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
             shouldIgnoreView: widget.shouldIgnoreView,
             isSelected: isSelected,
             isTablet: widget.isTablet,
+            onExpandedChanged: widget.onExpandedChanged,
           );
         },
       );
@@ -423,6 +433,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           shouldIgnoreView: widget.shouldIgnoreView,
           engagedInExpanding: widget.engagedInExpanding,
           isTablet: widget.isTablet,
+          onExpandedChanged: widget.onExpandedChanged,
         );
       }).toList();
 
@@ -512,6 +523,7 @@ class SingleInnerViewItem extends StatefulWidget {
     required this.shouldIgnoreView,
     required this.isSelected,
     this.isTablet = false,
+    this.onExpandedChanged,
   });
 
   final ViewPB view;
@@ -545,6 +557,8 @@ class SingleInnerViewItem extends StatefulWidget {
 
   /// Whether the device is a tablet (no hover effect)
   final bool isTablet;
+
+  final VoidCallback? onExpandedChanged;
 
   @override
   State<SingleInnerViewItem> createState() => _SingleInnerViewItemState();
@@ -615,13 +629,11 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         isRenaming ? _buildInlineRenameField() : _buildNameText();
 
     final children = [
-      const HSpace(2),
       // expand icon or placeholder
       widget.leftIconBuilder?.call(context, widget.view) ?? _buildLeftIcon(),
-      const HSpace(2),
       // icon
       _buildViewIconButton(),
-      const HSpace(6),
+      const HSpace(4),
       // title
       Expanded(
         child: widget.extendBuilder != null
@@ -782,15 +794,19 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Widget _buildNameText() {
-    final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 12.0,
-          height: 1.35,
-          leadingDistribution: TextLeadingDistribution.even,
+    bool isSelected = widget.isSelected;
+    if (widget.disableSelectedStatus == true) {
+      isSelected = false;
+    }
+
+    final textStyle = sidebarEntryTextStyle(context).copyWith(
+          // height: 1.35,
+          // leadingDistribution: TextLeadingDistribution.even,
+          // color: isSelected ? Theme.of(context).colorScheme.primary : null,
         );
 
     return GestureDetector(
       onDoubleTap: () {
-        // 双击开始重命名
         _startRenaming();
       },
       child: ConstrainedBox(
@@ -916,6 +932,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       isExpanded: widget.isExpanded,
       leftPadding: widget.leftPadding,
       isHovered: widget.isHovered,
+      onExpandedChanged: widget.onExpandedChanged,
     );
   }
 
@@ -1482,6 +1499,7 @@ class ViewItemDefaultLeftIcon extends StatelessWidget {
     required this.isExpanded,
     required this.leftPadding,
     required this.isHovered,
+    this.onExpandedChanged,
   });
 
   final ViewPB view;
@@ -1489,6 +1507,7 @@ class ViewItemDefaultLeftIcon extends StatelessWidget {
   final bool isExpanded;
   final double leftPadding;
   final ValueNotifier<bool>? isHovered;
+  final VoidCallback? onExpandedChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1508,8 +1527,10 @@ class ViewItemDefaultLeftIcon extends StatelessWidget {
               : FlowySvgs.view_item_unexpand_s,
           size: const Size.square(16.0),
         ),
-        onTap: () =>
-            context.read<ViewBloc>().add(ViewEvent.setIsExpanded(!isExpanded)),
+        onTap: () {
+          context.read<ViewBloc>().add(ViewEvent.setIsExpanded(!isExpanded));
+          onExpandedChanged?.call();
+        },
       ),
     );
 

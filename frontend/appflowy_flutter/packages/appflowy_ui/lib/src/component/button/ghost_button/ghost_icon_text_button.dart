@@ -170,9 +170,9 @@ class AFGhostIconTextButton extends StatelessWidget {
       builder: (context, isHovering, disabled) {
         final textColor = this.textColor?.call(context, isHovering, disabled) ??
             theme.textColorScheme.primary;
-        final textStyle =
-            (this.textStyle ?? size.buildTextStyle(context)).copyWith(
-          color: textColor,
+        final baseTextStyle = this.textStyle ?? size.buildTextStyle(context);
+        final textStyle = baseTextStyle.copyWith(
+          color: baseTextStyle.color ?? textColor,
           height: 1.35,
           leadingDistribution: TextLeadingDistribution.even,
         );

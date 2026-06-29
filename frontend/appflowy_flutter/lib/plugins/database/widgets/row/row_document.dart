@@ -1,3 +1,4 @@
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/grid/application/row/row_document_bloc.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
@@ -139,6 +140,16 @@ class _RowEditor extends StatelessWidget {
                         child: AppFlowyEditorPage(
                           shrinkWrap: true,
                           autoFocus: false,
+                          // The row detail opens inside a FlowyOverlay that does
+                          // not inherit the database's PageAccessLevelBloc, so the
+                          // editor would otherwise fall back to read-only. Honor the
+                          // access level when it happens to be in scope, but default
+                          // to editable so the row note can always be typed into.
+                          editable: context
+                                  .watch<PageAccessLevelBloc?>()
+                                  ?.state
+                                  .isEditable ??
+                              true,
                           editorState: editorState,
                           styleCustomizer: EditorStyleCustomizer(
                             context: context,

@@ -11,6 +11,62 @@ void main() {
     expect(source, isNot(contains("ValueKey('whiteboard_container_")));
   });
 
+  test('whiteboard import reload token reaches the platform view key', () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+
+    expect(pageSource, contains('reloadToken: _importReloadCounter'));
+    expect(webViewSource, contains('final int reloadToken;'));
+    expect(webViewSource, contains('widget.reloadToken'));
+    expect(
+      webViewSource,
+      contains(
+        r'inappwebview_${widget.viewId}_r${widget.reloadToken}_global_$_inAppWebViewInstanceId',
+      ),
+    );
+  });
+
+  test('whiteboard import uses the full JS restoration path', () {
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+
+    expect(bridgeSource, contains('_initPayload = data || {};'));
+    expect(bridgeSource, contains('await _restoreWhiteboardData(api);'));
+    expect(pageSource, isNot(contains('Duration(milliseconds: 80)')));
+  });
+
+  test('whiteboard lifecycle resume does not consume the import reload token',
+      () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+
+    expect(
+      pageSource,
+      isNot(contains('_importReloadCounter++; // 强制重建 WebView')),
+    );
+  });
+
+  test('whiteboard only reloads imported data when the reload token changes',
+      () {
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+
+    expect(
+      webViewSource,
+      contains('oldWidget.reloadToken != widget.reloadToken'),
+    );
+    expect(
+      webViewSource,
+      isNot(contains('!oldWidget.initialDataLoaded &&')),
+    );
+  });
+
   test('whiteboard build path does not emit high-frequency logs', () {
     final source =
         File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();

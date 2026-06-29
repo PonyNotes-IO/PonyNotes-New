@@ -125,9 +125,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView();
           },
           openTab: (Plugin plugin, ViewPB view) {
+            if (!menuSharedState.isOpenedFromFavoriteOrShared(view)) {
+              menuSharedState.clearSidebarExpandButton(view);
+            }
             // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,通知 SpaceHub
             // 选中子视图,不替换 SpaceHub。
-            if (state.currentPageManager.plugin is SpaceHubPlugin) {
+            if (!menuSharedState.isOpenedFromFavoriteOrShared(view) &&
+                state.currentPageManager.plugin is SpaceHubPlugin) {
               try {
                 final spaceHubPlugin =
                     state.currentPageManager.plugin as SpaceHubPlugin;
@@ -143,12 +147,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             // 右侧辅助面板（AI 对话等）被清掉或被隐藏。
             emit(state.openView(plugin));
             _setLatestOpenView(view);
+            menuSharedState.clearOpenedFromFavoriteOrShared(view);
           },
           openPlugin: (Plugin plugin, ViewPB? view, bool setLatest) {
+            if (view != null &&
+                !menuSharedState.isOpenedFromFavoriteOrShared(view)) {
+              menuSharedState.clearSidebarExpandButton(view);
+            }
             // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub
             // 整个替换掉。文档内的 mention/sub_page 链接会直接 add 这个 event,
             // 绕过 openPlugin() 入口的判断,这里再判断一次。
-            if (view != null &&
+            if (!menuSharedState.isOpenedFromFavoriteOrShared(view) &&
+                view != null &&
                 state.currentPageManager.plugin is SpaceHubPlugin) {
               // 如果点击的是空间视图，应该打开新的 SpaceHub 实例，而不是在当前 SpaceHub 内显示
               if (!view.isSpace) {
@@ -167,6 +177,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             emit(state.openPlugin(plugin: plugin, setLatest: setLatest));
             if (setLatest) {
               _setLatestOpenView(view);
+              menuSharedState.clearOpenedFromFavoriteOrShared(view);
               if (view != null) _expandAncestors(view);
             }
           },
@@ -418,7 +429,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   void openTab(ViewPB view) {
     // ✅ 特殊情况:当前 plugin 是 SpaceHubPlugin 时,不应该把 SpaceHub 整个
     // 替换掉,而是通知 SpaceHubPlugin 选中该子视图。
-    if (state.currentPageManager.plugin is SpaceHubPlugin) {
+    if (!menuSharedState.isOpenedFromFavoriteOrShared(view) &&
+        state.currentPageManager.plugin is SpaceHubPlugin) {
       try {
         final plugin = state.currentPageManager.plugin as SpaceHubPlugin;
         plugin.selectViewInSpaceHub(view);
@@ -582,7 +594,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // 等链接,这些链接的点击也会走到 openPlugin。
     // 正确做法:把点击的 view 通知给 SpaceHubPlugin,让它选中该子视图
     // (在 rightPanel 内显示),保持 SpaceHub 整体布局不变。
-    if (state.currentPageManager.plugin is SpaceHubPlugin) {
+    if (!menuSharedState.isOpenedFromFavoriteOrShared(view) &&
+        state.currentPageManager.plugin is SpaceHubPlugin) {
       // 如果点击的是空间视图，应该打开新的 SpaceHub 实例，而不是在当前 SpaceHub 内显示
       if (view.isSpace) {
         Log.info(

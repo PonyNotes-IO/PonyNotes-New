@@ -91,6 +91,7 @@ class SidebarSpace extends StatelessWidget {
                           PrivateSectionFolder(
                             views: privateSpaces,
                           ),
+                    const VSpace(sidebarPrimaryEntryGap),
                           // 协作区 / 公共空间（仅 Space）
                           PublicSectionFolder(
                             views: publicSpaces,
@@ -105,7 +106,7 @@ class SidebarSpace extends StatelessWidget {
                 );
               },
             ),
-
+            const VSpace(sidebarPrimaryEntryGap),
             // 共享
             const SidebarShareButton(),
             // 发布
