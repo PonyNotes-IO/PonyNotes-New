@@ -64,10 +64,10 @@ iscc inno_setup_config.iss
 
 ## 注意事项
 
-- 默认安装到 `C:\Users\<用户名>\AppData\Local\Programs\AppFlowy`
-- 桌面快捷方式: `AppFlowy.lnk`
-- 开始菜单: `AppFlowy` 组
-- 支持自定义协议: `appflowy://`
+- 默认安装到 `C:\Users\<用户名>\AppData\Local\Programs\PonyNotes`
+- 桌面快捷方式: `PonyNotes.lnk`
+- 开始菜单: `PonyNotes` 组
+- 支持自定义协议: `ponynotes://`
 
 ## 版本更新
 
