@@ -96,9 +96,14 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       if (observable.source != _folderObservableSource) {
         return;
       }
-      // if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
-      //   return;
-      // }
+      // Only a targeted full-access revocation (DidRemoveMySharedView, ty=42)
+      // should drop a view from this user's shared list. Without this filter
+      // every Workspace folder notification — including the ones emitted when
+      // a shared doc is merely opened — would remove whatever view id it
+      // carries, making a still-shared doc vanish on click.
+      if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
+        return;
+      }
       // The notification id carries the revoked view_id.
       final revokedViewId = observable.id;
       if (revokedViewId.isEmpty) {
