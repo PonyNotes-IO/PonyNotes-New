@@ -40,6 +40,7 @@ class ExcalidrawWebView extends StatefulWidget {
     this.onDataChanged,
     this.onExport,
     this.onError,
+    this.onInitialReady,
   });
 
   final String viewId;
@@ -52,6 +53,7 @@ class ExcalidrawWebView extends StatefulWidget {
   final Function(String type, Map<String, dynamic> data)? onDataChanged;
   final Function(String format, dynamic data)? onExport;
   final Function(String error)? onError;
+  final VoidCallback? onInitialReady;
 
   @override
   State<ExcalidrawWebView> createState() => ExcalidrawWebViewState();
@@ -84,6 +86,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   late InAppWebViewSettings _settings;
   bool _webViewCreated = false;
   bool _pageLoaded = false;
+  bool _initialReadyNotified = false;
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
   Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
   final bool _perElementSyncEnabled = kWhiteboardPerElementSync;
@@ -1753,6 +1756,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
+  void _notifyInitialReadyOnce() {
+    if (_initialReadyNotified || _isDisposed) {
+      return;
+    }
+
+    _initialReadyNotified = true;
+    widget.onInitialReady?.call();
+  }
+
   /// 推送数据（公共方法，供外部调用）
   /// 用于实时、增量的同步变更（不刷新页面）
   Future<void> pushData(String key, dynamic value) async {
@@ -2041,6 +2053,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                           }
 
                           await _initializeExcalidraw();
+                          _notifyInitialReadyOnce();
                         }
                         Log.debug(
                             '✅ [ExcalidrawWebView] Loading finished: $url');

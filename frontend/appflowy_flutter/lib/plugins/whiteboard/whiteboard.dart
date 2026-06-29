@@ -259,6 +259,8 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   bool _isDisposing = false; // 标记是否正在销毁
   int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
   bool _isAppInBackground = false; // 标记应用是否在后台
+  bool _initialDataReadyForSync = false;
+  bool _webViewReadyForSync = false;
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -667,6 +669,9 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       if (data.isNotEmpty) {
         _collabAdapter?.setInitialData(data);
       }
+
+      _initialDataReadyForSync = true;
+      _collabAdapter?.markInitialDataReadyForAutoSync();
     }
 
     // debug log removed
@@ -683,6 +688,26 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
     // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
     _collabAdapter?.onWhiteboardDataChanged(type, data);
+  }
+
+  void _onWhiteboardInitialReady() {
+    if (_isDisposing || !mounted || _webViewReadyForSync) {
+      return;
+    }
+
+    _webViewReadyForSync = true;
+    _collabAdapter?.markWebViewReadyForAutoSync();
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'webview_initial_ready',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'initialDataReady': _initialDataReadyForSync,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+      },
+    );
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
@@ -1193,6 +1218,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       onDataChanged: _onWhiteboardDataChanged,
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
+      onInitialReady: _onWhiteboardInitialReady,
     );
 
     // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建

@@ -51,7 +51,8 @@ void main() {
     );
   });
 
-  test('whiteboard only reloads imported data when the reload token changes',
+  test(
+      'whiteboard reloads imported and late initial data through the restore path',
       () {
     final webViewSource = File(
       'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
@@ -63,7 +64,11 @@ void main() {
     );
     expect(
       webViewSource,
-      isNot(contains('!oldWidget.initialDataLoaded &&')),
+      contains('!oldWidget.initialDataLoaded && widget.initialDataLoaded'),
+    );
+    expect(
+      webViewSource,
+      contains('loadData(widget.initialData!)'),
     );
   });
 
@@ -119,6 +124,32 @@ void main() {
     expect(source, contains('Future<void> forceSyncAndDispose()'));
     expect(source, contains('await _listener.stop()'));
     expect(source, contains('dispose();'));
+  });
+
+  test(
+      'whiteboard startup gates local cloud sync until data and webview are ready',
+      () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+    final adapterSource = File(
+      'lib/plugins/whiteboard/application/whiteboard_collab_adapter.dart',
+    ).readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+
+    expect(adapterSource, contains('holdAutoSyncUntilReady'));
+    expect(adapterSource, contains('markInitialDataReadyForAutoSync'));
+    expect(adapterSource, contains('markWebViewReadyForAutoSync'));
+    expect(adapterSource, contains('Auto sync blocked by startup gate'));
+    expect(adapterSource, contains('holdAutoSyncUntilReady();'));
+    expect(
+      pageSource,
+      contains('_collabAdapter?.markInitialDataReadyForAutoSync();'),
+    );
+    expect(pageSource, contains('onInitialReady: _onWhiteboardInitialReady'));
+    expect(webViewSource, contains('final VoidCallback? onInitialReady;'));
+    expect(webViewSource, contains('_notifyInitialReadyOnce();'));
   });
 
   test('closing tabs disposes removed page managers', () {
