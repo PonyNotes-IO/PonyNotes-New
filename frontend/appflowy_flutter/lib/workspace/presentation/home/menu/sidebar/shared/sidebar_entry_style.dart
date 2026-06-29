@@ -25,7 +25,7 @@ TextStyle sidebarEntryTextStyle(BuildContext context) {
   return TextStyle(
     color: Theme.of(context).brightness == Brightness.light
         ? const Color(0xFF5F5E5A)
-        : const Color(0xFFBBC3CD),
+        : const Color(0xFFBCBAB7),
     fontSize: 14,
     fontWeight: FontWeight.w500,
   );
@@ -41,8 +41,12 @@ TextStyle sidebarTextStyle(BuildContext context) {
   );
 }
 
-const sidebarViewItemStyle = ViewItemStyle(
-  selectedTextColor: Color(0xFF2C2C2B),
-  selectedBackgroundColor: Color(0xFFF1F0EF),
-  hoverColor: Color(0xFFF1F0EF),
+ViewItemStyle sidebarViewItemStyle(BuildContext context) => ViewItemStyle(
+  selectedTextColor: Theme.of(context).brightness == Brightness.light
+      ? const Color(0xFF5F5E5A)
+      : const Color(0xFFFFFFFF),
+  selectedBackgroundColor: Theme.of(context).brightness == Brightness.light
+      ? Color(0xFFF1F0EF) : const Color(0xFF383838),
+  hoverColor: Theme.of(context).brightness == Brightness.light
+      ? Color(0xFFF1F0EF) : Color(0xFF2C2C2C),
 );

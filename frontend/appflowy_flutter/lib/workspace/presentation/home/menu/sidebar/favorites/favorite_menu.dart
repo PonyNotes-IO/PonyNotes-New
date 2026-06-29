@@ -113,7 +113,7 @@ class _FavoriteGroupedViews extends StatelessWidget {
                 FavoritePinAction(view: view),
                 const HSpace(4.0),
               ],
-              style: sidebarViewItemStyle,
+              style: sidebarViewItemStyle(context),
             ),
           )
           .toList(),

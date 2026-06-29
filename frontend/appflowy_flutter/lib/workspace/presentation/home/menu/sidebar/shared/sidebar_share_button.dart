@@ -96,9 +96,9 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       if (observable.source != _folderObservableSource) {
         return;
       }
-      if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
-        return;
-      }
+      // if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
+      //   return;
+      // }
       // The notification id carries the revoked view_id.
       final revokedViewId = observable.id;
       if (revokedViewId.isEmpty) {
@@ -811,7 +811,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               },
             );
           },
-          style: sidebarViewItemStyle,
+          style: sidebarViewItemStyle(context),
         );
       }).toList(),
     );

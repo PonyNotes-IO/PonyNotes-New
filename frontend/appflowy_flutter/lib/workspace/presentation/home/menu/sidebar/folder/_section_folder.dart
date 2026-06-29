@@ -267,7 +267,7 @@ class _SectionFolderState extends State<SectionFolder> {
         onTertiarySelected: (viewContext, selectedView) =>
             viewContext.read<TabsBloc>().openTab(selectedView),
         isHoverEnabled: widget.isHoverEnabled,
-        style: sidebarViewItemStyle,
+        style: sidebarViewItemStyle(context),
       );
     });
   }

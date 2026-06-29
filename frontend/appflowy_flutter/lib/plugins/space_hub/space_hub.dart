@@ -1474,29 +1474,36 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
               itemCount: childViews.length + 1,
               itemBuilder: (context, index) {
                 if (index == childViews.length) {
-                  final addBtn = AFGhostIconTextButton.primary(
-                    text: '新增笔记页', // 临时使用硬编码文本
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    size: AFButtonSize.l,
-                    onTap: () => _createNewNote(context),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    borderRadius: theme.borderRadius.s,
-                    iconBuilder: (context, isHover, disabled) => FlowySvg(
-                      FlowySvgs.view_item_add_s,
-                      size: const Size.square(16.0),
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: _showAddNoteButton,
+                    builder: (context, showBottomButton, _) {
+                      if (showBottomButton) {
+                        return const SizedBox.shrink();
+                      }
+                      final addBtn = AFGhostIconTextButton.primary(
+                        text: '新增笔记页',
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        size: AFButtonSize.l,
+                        onTap: () => _createNewNote(context),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        borderRadius: theme.borderRadius.s,
+                        iconBuilder: (context, isHover, disabled) => FlowySvg(
+                          FlowySvgs.view_item_add_s,
+                          size: const Size.square(16.0),
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                      );
+                      if (isRestrictedMember) {
+                        return IgnorePointer(
+                          child: Opacity(opacity: 0.3, child: addBtn),
+                        );
+                      }
+                      return addBtn;
+                    },
                   );
-                  // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
-                  if (isRestrictedMember) {
-                    return IgnorePointer(
-                      child: Opacity(opacity: 0.3, child: addBtn),
-                    );
-                  }
-                  return addBtn;
                 }
                 final childView = childViews[index];
                 return ViewItem(
@@ -1562,29 +1569,36 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
             itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
               if (index == childViews.length) {
-                final addBtn = AFGhostIconTextButton.primary(
-                  text: '新增日记页', // 临时使用硬编码文本
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  size: AFButtonSize.xl,
-                  onTap: () => _createNewNote(context),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  borderRadius: theme.borderRadius.s,
-                  iconBuilder: (context, isHover, disabled) => FlowySvg(
-                    FlowySvgs.view_item_add_s,
-                    size: const Size.square(16.0),
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _showAddNoteButton,
+                  builder: (context, showBottomButton, _) {
+                    if (showBottomButton) {
+                      return const SizedBox.shrink();
+                    }
+                    final addBtn = AFGhostIconTextButton.primary(
+                      text: '新增日记页',
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      size: AFButtonSize.xl,
+                      onTap: () => _createNewNote(context),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      borderRadius: theme.borderRadius.s,
+                      iconBuilder: (context, isHover, disabled) => FlowySvg(
+                        FlowySvgs.view_item_add_s,
+                        size: const Size.square(16.0),
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
+                    );
+                    if (isRestrictedMember) {
+                      return IgnorePointer(
+                        child: Opacity(opacity: 0.3, child: addBtn),
+                      );
+                    }
+                    return addBtn;
+                  },
                 );
-                // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
-                if (isRestrictedMember) {
-                  return IgnorePointer(
-                    child: Opacity(opacity: 0.3, child: addBtn),
-                  );
-                }
-                return addBtn;
               }
               final childView = childViews[index];
               return ViewItem(

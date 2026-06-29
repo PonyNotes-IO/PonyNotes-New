@@ -171,7 +171,7 @@ class _FavoriteFolderState extends State<FavoriteFolder> {
           },
         );
       },
-      style: sidebarViewItemStyle,
+      style: sidebarViewItemStyle(context),
     );
   }
 }

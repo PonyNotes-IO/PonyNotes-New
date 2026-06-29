@@ -72,10 +72,14 @@ class ViewItemStyle {
 
   static ViewItemStyle defaultStyle(BuildContext context) {
     return ViewItemStyle(
-      selectedTextColor: Theme.of(context).colorScheme.primary,
-      selectedBackgroundColor: Theme.of(context).colorScheme.secondary,
-      hoverColor: const Color(0xFFF1F0EF),
-      focusColor: const Color(0xFFF1F0EF),
+      selectedTextColor: Theme.of(context).brightness == Brightness.light
+          ? Theme.of(context).colorScheme.primary : const Color(0xFFFFFFFF),
+      selectedBackgroundColor: Theme.of(context).brightness == Brightness.light
+          ? Theme.of(context).colorScheme.secondary : const Color(0xFF383838),
+      hoverColor: Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFF1F0EF) : const Color(0xFF383838),
+      focusColor: Theme.of(context).brightness == Brightness.light
+          ? Color(0xFFF1F0EF) : Color(0xFF2C2C2C),
     );
   }
 
