@@ -893,25 +893,24 @@ impl UserManager {
                     .and_then(|view_id| view_id.as_str())
                     .map(ToString::to_string)
                   {
-                    flowy_notification::NotificationBuilder::new(
-                      &view_id,
-                      DID_UPDATE_SHARED_USERS,
-                      FOLDER_OBSERVABLE_SOURCE,
-                    )
-                    .send();
+                    let access_removed =
+                      payload.get("event").and_then(|event| event.as_str())
+                        == Some("access_removed");
 
-                    // A full access revocation (not just a permission downgrade)
-                    // is marked by `event == "access_removed"`. Emit a dedicated,
-                    // recipient-only notification so the sidebar drops the view
-                    // and closes its open tab, without touching other users' lists.
-                    let access_removed = payload
-                      .get("event")
-                      .and_then(|event| event.as_str())
-                      == Some("access_removed");
                     if access_removed {
+                      // Full access revocation is recipient-only. Keep it off the
+                      // generic shared-users refresh path so other share surfaces
+                      // do not reload and accidentally drop their sent entries.
                       flowy_notification::NotificationBuilder::new(
                         &view_id,
                         DID_REMOVE_MY_SHARED_VIEW,
+                        FOLDER_OBSERVABLE_SOURCE,
+                      )
+                      .send();
+                    } else {
+                      flowy_notification::NotificationBuilder::new(
+                        &view_id,
+                        DID_UPDATE_SHARED_USERS,
                         FOLDER_OBSERVABLE_SOURCE,
                       )
                       .send();
