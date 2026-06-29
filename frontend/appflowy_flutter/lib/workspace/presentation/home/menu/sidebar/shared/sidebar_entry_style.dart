@@ -23,7 +23,7 @@ const sidebarEntryIconTextGap = 7.0;
 TextStyle sidebarEntryTextStyle(BuildContext context) {
   return TextStyle(
     color: Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF2C2C2B)      // 亮色模式
+        ? const Color(0xFF5F5E5A)      // 亮色模式
         : const Color(0xFFBBC3CD),     // 暗黑模式
     fontSize: 14,
     fontWeight: FontWeight.w500,
@@ -35,7 +35,7 @@ TextStyle sidebarTextStyle(BuildContext context) {
     color: Theme
         .of(context)
         .brightness == Brightness.light
-        ? const Color(0xFF5F5E5A) // 亮色模式
+        ? const Color(0xFF91918E) // 亮色模式
         : const Color(0xFFBBC3CD), // 暗黑模式
     fontSize: 12,
     fontWeight: FontWeight.w500,

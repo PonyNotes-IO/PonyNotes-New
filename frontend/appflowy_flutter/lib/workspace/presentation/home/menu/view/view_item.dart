@@ -26,6 +26,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
@@ -798,11 +799,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       isSelected = false;
     }
 
-    final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 14.0,
-          height: 1.35,
-          leadingDistribution: TextLeadingDistribution.even,
-          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+    final textStyle = sidebarEntryTextStyle(context).copyWith(
+          // height: 1.35,
+          // leadingDistribution: TextLeadingDistribution.even,
+          // color: isSelected ? Theme.of(context).colorScheme.primary : null,
         );
 
     return GestureDetector(
