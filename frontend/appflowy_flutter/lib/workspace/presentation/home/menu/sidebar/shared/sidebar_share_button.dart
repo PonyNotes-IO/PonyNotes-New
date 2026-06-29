@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
@@ -26,7 +27,9 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
@@ -58,6 +61,16 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   final Duration _minRefreshInterval = const Duration(seconds: 2);
   StreamSubscription<void>? _shareSectionRefreshSub;
 
+  // Real-time refresh: when the owner removes/changes this user's access on
+  // another device, the backend pushes a `collab_permission_changed` system
+  // notification over the websocket, which the Rust layer surfaces as a
+  // DidUpdateSharedUsers/DidUpdateSharedViews folder notification. We listen
+  // without an objectId filter (broadcast) so a revoked document disappears
+  // from this sidebar immediately, without waiting for the user to re-expand
+  // the section or restart the app.
+  FolderNotificationParser? _sharedNotificationParser;
+  StreamSubscription? _sharedNotificationSub;
+
   @override
   void initState() {
     super.initState();
@@ -70,11 +83,32 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     _shareSectionRefreshSub = ShareSectionRefreshNotifier.stream.listen((_) {
       _loadUserSharedNotes(showLoading: false);
     });
+    _initSharedNotificationListener();
+  }
+
+  void _initSharedNotificationListener() {
+    // No objectId is passed, so this catches the notification for any view_id.
+    _sharedNotificationParser = FolderNotificationParser(
+      callback: (ty, result) {
+        if (!mounted) {
+          return;
+        }
+        if (ty == FolderNotification.DidUpdateSharedUsers ||
+            ty == FolderNotification.DidUpdateSharedViews) {
+          _loadUserSharedNotes(showLoading: false);
+        }
+      },
+    );
+    _sharedNotificationSub = RustStreamReceiver.listen(
+      (observable) => _sharedNotificationParser?.parse(observable),
+    );
   }
 
   @override
   void dispose() {
     _shareSectionRefreshSub?.cancel();
+    _sharedNotificationSub?.cancel();
+    _sharedNotificationParser = null;
     WidgetsBinding.instance.removeObserver(this);
     _sharedSectionBloc.close();
     super.dispose();
