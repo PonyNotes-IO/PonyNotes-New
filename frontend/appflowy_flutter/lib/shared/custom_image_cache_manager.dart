@@ -8,30 +8,50 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 
 class CustomImageCacheManager extends CacheManager implements ICache {
-  static CustomImageCacheManager? _instance;
-
-  static const key = 'image_cache';
-
-  static CustomImageCacheManager get instance {
-    if (_instance == null) {
-      _instance = CustomImageCacheManager._();
-    }
-    return _instance!;
-  }
 
   CustomImageCacheManager._()
       : super(
           Config(
             key,
             fileSystem: _LazyFileSystem(key),
+            maxNrOfCacheObjects: _maxCacheObjects,
+            stalePeriod: _cacheMaxAge,
           ),
         );
 
   factory CustomImageCacheManager() => instance;
+  static CustomImageCacheManager? _instance;
+
+  static const key = 'image_cache';
+
+  static const _maxCacheObjects = 200;
+  static const _cacheMaxAge = Duration(days: 7);
+
+  static CustomImageCacheManager get instance {
+    _instance ??= CustomImageCacheManager._();
+    return _instance!;
+  }
 
   @override
   Future<int> cacheSize() async {
-    return 0;
+    try {
+      final directory = await appFlowyApplicationDataDirectory();
+      final path = p.join(directory.path, key);
+      const fs = LocalFileSystem();
+      final dir = fs.directory(path);
+      if (await dir.exists()) {
+        int totalSize = 0;
+        await for (final entity in dir.list()) {
+          if (entity is File) {
+            totalSize += await entity.length();
+          }
+        }
+        return totalSize;
+      }
+      return 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   @override

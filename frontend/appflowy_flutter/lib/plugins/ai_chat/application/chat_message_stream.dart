@@ -26,6 +26,7 @@ class AnswerStream {
   final StreamController<String> _controller = StreamController.broadcast();
   late StreamSubscription<String> _subscription;
 
+  bool _isDisposed = false;
   bool _hasStarted = false;
   bool _aiLimitReached = false;
   bool _aiImageLimitReached = false;
@@ -59,9 +60,33 @@ class AnswerStream {
 
   /// Releases the resources used by the AnswerStream.
   Future<void> dispose() async {
-    await _controller.close();
-    await _subscription.cancel();
-    _port.close();
+    if (_isDisposed) return;
+    _isDisposed = true;
+
+    try {
+      await _controller.close();
+    } catch (_) {}
+
+    try {
+      await _subscription.cancel();
+    } catch (_) {}
+
+    try {
+      _port.close();
+    } catch (_) {}
+
+    _onData = null;
+    _onThinking = null;
+    _onStart = null;
+    _onEnd = null;
+    _onError = null;
+    _onLocalAIInitializing = null;
+    _onAIResponseLimit = null;
+    _onAIImageResponseLimit = null;
+    _onAIMaxRequired = null;
+    _onMetadata = null;
+    _onAIFollowUp = null;
+    _pendingAIMaxRequiredEvents.clear();
   }
 
   /// Handles incoming events from the underlying stream.
@@ -171,50 +196,16 @@ class QuestionStream {
   QuestionStream() {
     _port.handler = _controller.add;
     _subscription = _controller.stream.listen(
-      (event) {
-        if (event.startsWith("data:")) {
-          _hasStarted = true;
-          final newText = event.substring(5);
-          _text += newText;
-          if (_onData != null) {
-            _onData!(_text);
-          }
-        } else if (event.startsWith("message_id:")) {
-          final messageId = event.substring(11);
-          _onMessageId?.call(messageId);
-        } else if (event.startsWith("start_index_file:")) {
-          final indexName = event.substring(17);
-          _onFileIndexStart?.call(indexName);
-        } else if (event.startsWith("end_index_file:")) {
-          final indexName = event.substring(10);
-          _onFileIndexEnd?.call(indexName);
-        } else if (event.startsWith("index_file_error:")) {
-          final indexName = event.substring(16);
-          _onFileIndexError?.call(indexName);
-        } else if (event.startsWith("index_start:")) {
-          _onIndexStart?.call();
-        } else if (event.startsWith("index_end:")) {
-          _onIndexEnd?.call();
-        } else if (event.startsWith("done:")) {
-          _onDone?.call();
-        } else if (event.startsWith("error:")) {
-          _error = event.substring(5);
-          if (_onError != null) {
-            _onError!(_error!);
-          }
-        }
-      },
-      onError: (error) {
-        if (_onError != null) {
-          _onError!(error.toString());
-        }
-      },
+      _handleEvent,
+      onError: _handleError,
     );
   }
 
   final RawReceivePort _port = RawReceivePort();
   final StreamController<String> _controller = StreamController.broadcast();
   late StreamSubscription<String> _subscription;
+
+  bool _isDisposed = false;
   bool _hasStarted = false;
   String? _error;
   String _text = "";
@@ -234,10 +225,65 @@ class QuestionStream {
   String? get error => _error;
   String get text => _text;
 
+  void _handleEvent(String event) {
+    if (event.startsWith("data:")) {
+      _hasStarted = true;
+      final newText = event.substring(5);
+      _text += newText;
+      _onData?.call(_text);
+    } else if (event.startsWith("message_id:")) {
+      final messageId = event.substring(11);
+      _onMessageId?.call(messageId);
+    } else if (event.startsWith("start_index_file:")) {
+      final indexName = event.substring(17);
+      _onFileIndexStart?.call(indexName);
+    } else if (event.startsWith("end_index_file:")) {
+      final indexName = event.substring(10);
+      _onFileIndexEnd?.call(indexName);
+    } else if (event.startsWith("index_file_error:")) {
+      final indexName = event.substring(16);
+      _onFileIndexError?.call(indexName);
+    } else if (event.startsWith("index_start:")) {
+      _onIndexStart?.call();
+    } else if (event.startsWith("index_end:")) {
+      _onIndexEnd?.call();
+    } else if (event.startsWith("done:")) {
+      _onDone?.call();
+    } else if (event.startsWith("error:")) {
+      _error = event.substring(5);
+      _onError?.call(_error!);
+    }
+  }
+
+  void _handleError(dynamic error) {
+    _onError?.call(error.toString());
+  }
+
   Future<void> dispose() async {
-    await _controller.close();
-    await _subscription.cancel();
-    _port.close();
+    if (_isDisposed) return;
+    _isDisposed = true;
+
+    try {
+      await _controller.close();
+    } catch (_) {}
+
+    try {
+      await _subscription.cancel();
+    } catch (_) {}
+
+    try {
+      _port.close();
+    } catch (_) {}
+
+    _onData = null;
+    _onError = null;
+    _onMessageId = null;
+    _onFileIndexStart = null;
+    _onFileIndexEnd = null;
+    _onFileIndexError = null;
+    _onIndexStart = null;
+    _onIndexEnd = null;
+    _onDone = null;
   }
 
   void listen({

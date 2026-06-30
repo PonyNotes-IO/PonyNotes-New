@@ -75,9 +75,9 @@ class InitAppWidgetTask extends LaunchTask {
     
     _setPreferredOrientations();
 
-    PaintingBinding.instance.imageCache.maximumSize = 1000;
+    PaintingBinding.instance.imageCache.maximumSize = 500;
     PaintingBinding.instance.imageCache.maximumSizeBytes =
-        200 * 1024 * 1024;
+        100 * 1024 * 1024;
 
     await NotificationService.initialize();
 

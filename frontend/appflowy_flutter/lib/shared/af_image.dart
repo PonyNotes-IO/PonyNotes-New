@@ -4,8 +4,10 @@ import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:flutter/material.dart';
 
 import 'package:appflowy/shared/appflowy_network_image.dart';
+import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class AFImage extends StatelessWidget {
   const AFImage({
@@ -38,13 +40,13 @@ class AFImage extends StatelessWidget {
 
     Widget child;
     if (uploadType == FileUploadTypePB.NetworkFile) {
-      child = Image.network(
-        url,
+      child = CachedNetworkImage(
+        imageUrl: url,
         height: height,
         width: width,
         fit: fit,
-        isAntiAlias: true,
-        errorBuilder: (context, error, stackTrace) {
+        cacheManager: CustomImageCacheManager(),
+        errorWidget: (context, url, error) {
           logDiagnosticEvent(
             'ImageLoad',
             'af_image_error',
@@ -53,13 +55,11 @@ class AFImage extends StatelessWidget {
                 url,
                 source: 'AFImage.network',
                 error: error,
-                stackTrace: stackTrace,
               ),
               'uploadType': uploadType.name,
             },
             warning: true,
             error: error,
-            stackTrace: stackTrace,
           );
           return const SizedBox.shrink();
         },

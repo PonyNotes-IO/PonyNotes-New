@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async';
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:universal_platform/universal_platform.dart';
@@ -22,12 +23,18 @@ class MessageHeightConstants {
 class ChatMessageHeightManager {
   factory ChatMessageHeightManager() => _instance;
 
-  ChatMessageHeightManager._();
+  ChatMessageHeightManager._() {
+    _startPeriodicCleanup();
+  }
 
   static final ChatMessageHeightManager _instance =
       ChatMessageHeightManager._();
 
+  static const int _maxCacheSize = 500;
+  static const Duration _cleanupInterval = Duration(hours: 1);
+
   final Map<String, double> _heightCache = <String, double>{};
+  Timer? _cleanupTimer;
 
   double get defaultScreenOffset {
     if (PlatformInfo.isMobile) {
@@ -46,6 +53,7 @@ class ChatMessageHeightManager {
       return;
     }
 
+    _ensureCacheLimit();
     _heightCache[messageId] = height;
   }
 
@@ -58,8 +66,18 @@ class ChatMessageHeightManager {
       return;
     }
 
+    _ensureCacheLimit();
     _heightCache[messageId + MessageHeightConstants.withoutMinHeightSuffix] =
         height;
+  }
+
+  void _ensureCacheLimit() {
+    if (_heightCache.length >= _maxCacheSize) {
+      final keysToRemove = _heightCache.keys.take(_maxCacheSize ~/ 4).toList();
+      for (final key in keysToRemove) {
+        _heightCache.remove(key);
+      }
+    }
   }
 
   double? getCachedHeight({
@@ -157,5 +175,20 @@ class ChatMessageHeightManager {
 
   void clearCache() {
     _heightCache.clear();
+  }
+
+  void _startPeriodicCleanup() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = Timer.periodic(_cleanupInterval, (_) {
+      if (_heightCache.length > _maxCacheSize ~/ 2) {
+        _ensureCacheLimit();
+      }
+    });
+  }
+
+  void dispose() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
+    clearCache();
   }
 }

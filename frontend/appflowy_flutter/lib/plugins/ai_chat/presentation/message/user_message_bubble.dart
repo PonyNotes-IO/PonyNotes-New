@@ -15,28 +15,37 @@ import 'package:flutter_chat_core/flutter_chat_core.dart';
 import '../chat_avatar.dart';
 import '../layout_define.dart';
 
-class ChatUserMessageBubble extends StatelessWidget {
+class ChatUserMessageBubble extends StatefulWidget {
   const ChatUserMessageBubble({
     super.key,
     required this.message,
     required this.child,
     this.files = const [],
     this.images = const [],
-    this.imagePaths = const [], // 新增：图片文件路径列表
+    this.imagePaths = const [],
   });
 
   final Message message;
   final Widget child;
   final List<ChatFile> files;
-  final List<String> images; // base64编码的图片列表
-  final List<String> imagePaths; // 图片文件路径列表
+  final List<String> images;
+  final List<String> imagePaths;
+
+  @override
+  State<ChatUserMessageBubble> createState() => _ChatUserMessageBubbleState();
+}
+
+class _ChatUserMessageBubbleState extends State<ChatUserMessageBubble> {
+  @override
+  void initState() {
+    super.initState();
+    context
+        .read<ChatMemberBloc>()
+        .add(ChatMemberEvent.getMemberInfo(widget.message.author.id));
+  }
 
   @override
   Widget build(BuildContext context) {
-    context
-        .read<ChatMemberBloc>()
-        .add(ChatMemberEvent.getMemberInfo(message.author.id));
-
     return Padding(
       padding: AIChatUILayout.messageMargin,
       child: Column(
@@ -44,21 +53,21 @@ class ChatUserMessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // 显示图片缩略图
-          if (images.isNotEmpty || imagePaths.isNotEmpty) ...[
+          if (widget.images.isNotEmpty || widget.imagePaths.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(right: 32),
               child: _MessageImageList(
-                images: images,
-                imagePaths: imagePaths,
+                images: widget.images,
+                imagePaths: widget.imagePaths,
               ),
             ),
             const VSpace(6),
           ],
           // 显示文件列表
-          if (files.isNotEmpty) ...[
+          if (widget.files.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(right: 32),
-              child: _MessageFileList(files: files),
+              child: _MessageFileList(files: widget.files),
             ),
             const VSpace(6),
           ],
@@ -80,7 +89,7 @@ class ChatUserMessageBubble extends StatelessWidget {
   Widget _buildAvatar() {
     return BlocBuilder<ChatMemberBloc, ChatMemberState>(
       builder: (context, state) {
-        final member = state.members[message.author.id];
+        final member = state.members[widget.message.author.id];
         return SelectionContainer.disabled(
           child: ChatUserAvatar(
             iconUrl: member?.info.avatarUrl ?? "",
@@ -103,7 +112,7 @@ class ChatUserMessageBubble extends StatelessWidget {
           horizontal: 16.0,
           vertical: 8.0,
         ),
-        child: child,
+        child: widget.child,
       ),
     );
   }
