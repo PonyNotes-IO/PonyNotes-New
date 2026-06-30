@@ -691,6 +691,7 @@ class SpacePages extends StatelessWidget {
     this.disableSelectedStatus = false,
     this.onTertiarySelected,
     this.shouldIgnoreView,
+    this.isTablet = false,
   });
 
   final ViewPB space;
@@ -701,6 +702,7 @@ class SpacePages extends StatelessWidget {
   final ViewItemOnSelected onSelected;
   final ViewItemOnSelected? onTertiarySelected;
   final IgnoreViewType Function(ViewPB view)? shouldIgnoreView;
+  final bool isTablet;
 
   @override
   Widget build(BuildContext context) {
@@ -741,6 +743,7 @@ class SpacePages extends StatelessWidget {
                     // 不再附加「非 isSpace 一律 disable」：否则会误判普通文档页为不可选，
                     // 悬停一直提示 space_cannotMovePageToDatabase，且无法点击完成移动。
                     shouldIgnoreView: shouldIgnoreView,
+                    isTablet: isTablet,
                   ),
                 )
                 .toList(),

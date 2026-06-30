@@ -443,10 +443,11 @@ class _WorkspaceMenuItemState extends State<WorkspaceMenuItem> {
           ValueListenableBuilder(
             valueListenable: isHovered,
             builder: (context, value, child) {
+              final shouldShow = PlatformInfo.isTablet || value;
               return Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: Opacity(
-                  opacity: value ? 1.0 : 0.0,
+                  opacity: shouldShow ? 1.0 : 0.0,
                   child: child,
                 ),
               );
