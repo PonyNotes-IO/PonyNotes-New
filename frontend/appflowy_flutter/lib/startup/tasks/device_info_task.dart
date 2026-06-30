@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:version/version.dart';
 
 import '../startup.dart';
+import '../../user/application/auth/device_id.dart';
 
 class ApplicationInfo {
   static int androidSDKVersion = -1;
@@ -83,41 +84,33 @@ class ApplicationInfoTask extends LaunchTask {
         ApplicationInfo.androidSDKVersion = androidInfo.version.sdkInt;
       }
 
-      String? deviceId;
       String? architecture;
       String? os;
       try {
         if (Platform.isAndroid) {
           final AndroidDeviceInfo androidInfo =
               await deviceInfoPlugin.androidInfo;
-          deviceId = androidInfo.device;
           architecture = androidInfo.supportedAbis.firstOrNull;
           os = 'android';
         } else if (Platform.isIOS) {
           final IosDeviceInfo iosInfo = await deviceInfoPlugin.iosInfo;
-          deviceId = iosInfo.identifierForVendor;
           architecture = iosInfo.utsname.machine;
           os = 'ios';
         } else if (Platform.isMacOS) {
           final MacOsDeviceInfo macInfo = await deviceInfoPlugin.macOsInfo;
-          deviceId = macInfo.systemGUID;
           architecture = macInfo.arch;
           os = 'macos';
         } else if (Platform.isWindows) {
-          final WindowsDeviceInfo windowsInfo =
-              await deviceInfoPlugin.windowsInfo;
-          deviceId = windowsInfo.deviceId;
+          await deviceInfoPlugin.windowsInfo;
           // we only support x86_64 on Windows
           architecture = 'x86_64';
           os = 'windows';
         } else if (Platform.isLinux) {
-          final LinuxDeviceInfo linuxInfo = await deviceInfoPlugin.linuxInfo;
-          deviceId = linuxInfo.machineId;
+          await deviceInfoPlugin.linuxInfo;
           // we only support x86_64 on Linux
           architecture = 'x86_64';
           os = 'linux';
         } else {
-          deviceId = null;
           architecture = null;
           os = null;
         }
@@ -125,7 +118,7 @@ class ApplicationInfoTask extends LaunchTask {
         Log.error('Failed to get platform version, $e');
       }
 
-      ApplicationInfo.deviceId = deviceId ?? '';
+      ApplicationInfo.deviceId = await getDeviceId();
       ApplicationInfo.architecture = architecture ?? '';
       ApplicationInfo.os = os ?? '';
     } catch (e) {

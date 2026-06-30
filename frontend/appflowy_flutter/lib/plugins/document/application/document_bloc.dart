@@ -14,7 +14,7 @@ import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
-import 'package:appflowy/startup/tasks/device_info_task.dart';
+import 'package:appflowy/user/application/auth/device_id.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/color_to_hex_string.dart';
@@ -647,7 +647,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
       return;
     }
     final user = state.userProfilePB;
-    final deviceId = ApplicationInfo.deviceId;
+    final deviceId = await getDeviceId();
     if (!FeatureFlag.syncDocument.isOn || user == null) {
       return;
     }
@@ -676,7 +676,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   Future<void> _updateCollaborator() async {
     final user = state.userProfilePB;
-    final deviceId = ApplicationInfo.deviceId;
+    final deviceId = await getDeviceId();
     if (!FeatureFlag.syncDocument.isOn || user == null) {
       return;
     }

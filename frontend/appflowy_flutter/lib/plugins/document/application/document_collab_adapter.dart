@@ -5,7 +5,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:appflowy/plugins/document/application/document_diff.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/shared/list_extension.dart';
-import 'package:appflowy/startup/tasks/device_info_task.dart';
+import 'package:appflowy/user/application/auth/device_id.dart';
 import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/json_print.dart';
 import 'package:appflowy_backend/log.dart';
@@ -181,7 +181,7 @@ class DocumentCollabAdapter {
     DocumentAwarenessStatesPB states,
   ) async {
     final List<RemoteSelection> remoteSelections = [];
-    final deviceId = ApplicationInfo.deviceId;
+    final deviceId = await getDeviceId();
     // the values may be duplicated, sort by the timestamp and then filter the duplicated values
     final values = states.value.values
         .sorted(

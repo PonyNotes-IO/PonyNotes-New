@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:appflowy/plugins/document/application/document_awareness_metadata.dart';
 import 'package:appflowy/plugins/document/application/document_listener.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/auth/device_id.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -35,7 +35,7 @@ class DocumentCollaboratorsBloc
                     userProfile?.workspaceType == WorkspaceTypePB.ServerW,
               ),
             );
-            final deviceId = ApplicationInfo.deviceId;
+            final deviceId = await getDeviceId();
             if (userProfile != null) {
               _listener.start(
                 onDocAwarenessUpdate: (states) {
