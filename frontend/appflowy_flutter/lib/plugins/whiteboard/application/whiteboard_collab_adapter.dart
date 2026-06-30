@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_sync_gate.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_version_lock.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 
@@ -78,10 +79,12 @@ class WhiteboardCollabAdapter {
   // 缓存完整白板数据（全量状态）
   final Map<String, dynamic> _fullData = {};
   final WhiteboardSyncGate _syncGate = WhiteboardSyncGate();
+  final WhiteboardVersionLock _versionLock = WhiteboardVersionLock();
 
   // ✅ 修复：添加待处理的 files 数据
   final Map<String, dynamic> _pendingFiles = {};
   final Map<String, dynamic> _syncFiles = {};
+  int? _pendingRevision;
 
   void holdAutoSyncUntilReady() {
     _syncGate.hold();
@@ -129,20 +132,33 @@ class WhiteboardCollabAdapter {
 
   /// 设置初始数据
   /// ✅ 关键修复：标准化键名，避免 localStorage 原始键名和标准键名共存导致数据混乱
-  void setInitialData(Map<String, dynamic>? data) {
-    if (data != null) {
-      // 标准化键名后再设置
-      final normalized = _normalizeKeys(data);
-      if (_hasMeaningfulSceneChange(normalized)) {
-        _hasNonEmptyInitialData = true;
-      }
-      _fullData.addAll(normalized);
-      // 同时初始化 files 数据
-      if (normalized.containsKey('files') && normalized['files'] is Map) {
-        _fullData['files'] =
-            Map<String, dynamic>.from(normalized['files'] as Map);
-      }
+  bool setInitialData(Map<String, dynamic>? data) {
+    if (data == null) {
+      return false;
     }
+
+    // 标准化键名后再设置
+    final normalized = _normalizeKeys(data);
+    final incomingRevision = _tryParseRevision(normalized['revision']) ?? 0;
+    if (!_versionLock.shouldAccept(incomingRevision)) {
+      Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Dropping stale initial payload for $viewId: incomingRevision=$incomingRevision currentRevision=${_versionLock.revision}',
+      );
+      return false;
+    }
+
+    _seedRevision(incomingRevision);
+    if (_hasMeaningfulSceneChange(normalized)) {
+      _hasNonEmptyInitialData = true;
+    }
+    _fullData.addAll(normalized);
+    _fullData['revision'] = incomingRevision;
+    // 同时初始化 files 数据
+    if (normalized.containsKey('files') && normalized['files'] is Map) {
+      _fullData['files'] =
+          Map<String, dynamic>.from(normalized['files'] as Map);
+    }
+    return true;
   }
 
   /// ✅ 标准化键名：将 localStorage 原始键名转换为标准键名
@@ -177,6 +193,11 @@ class WhiteboardCollabAdapter {
           key,
           value is String ? _tryParseJson(value) : value,
         );
+      } else if (key == 'revision') {
+        final parsedRevision = _tryParseRevision(value);
+        if (parsedRevision != null) {
+          normalized[key] = parsedRevision;
+        }
       } else {
         normalized[key] = value;
       }
@@ -207,6 +228,33 @@ class WhiteboardCollabAdapter {
     return value;
   }
 
+  int? _tryParseRevision(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  void _seedRevision(dynamic revision) {
+    final parsed = _tryParseRevision(revision);
+    if (parsed == null) {
+      return;
+    }
+    _versionLock.seed(parsed);
+    _pendingRevision = parsed;
+  }
+
+  void _ensurePendingRevision() {
+    if (_pendingRevision != null) {
+      _fullData['revision'] = _pendingRevision;
+      return;
+    }
+
+    final nextRevision = _versionLock.bump();
+    _pendingRevision = nextRevision;
+    _fullData['revision'] = nextRevision;
+  }
+
   Map<String, dynamic> _sanitizeAppState(dynamic value) {
     if (value is! Map) {
       return <String, dynamic>{};
@@ -227,8 +275,21 @@ class WhiteboardCollabAdapter {
       return;
     }
 
+    final incomingRevision = _tryParseRevision(data['revision']);
+    if (incomingRevision != null && !_versionLock.shouldAccept(incomingRevision)) {
+      Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Dropping stale payload for $viewId: incomingRevision=$incomingRevision currentRevision=${_versionLock.revision}',
+      );
+      return;
+    }
+    if (incomingRevision != null) {
+      _seedRevision(incomingRevision);
+      _fullData['revision'] = incomingRevision;
+    }
+
     // 更新全量数据缓存
-    data.forEach((key, value) {
+    final sceneData = Map<String, dynamic>.from(data)..remove('revision');
+    sceneData.forEach((key, value) {
       final sanitizedValue = _sanitizeWhiteboardValue(key, value);
       if (key == 'files' && value is Map) {
         _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?,
@@ -241,11 +302,12 @@ class WhiteboardCollabAdapter {
 
     _hasUnsavedChanges = true;
     _pendingData.addAll(
-      data.map(
+      sceneData.map(
         (key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value)),
       ),
     );
     _pendingType = type;
+    _ensurePendingRevision();
 
     // 通知上层数据已变更（用于 UI 更新）
 
@@ -319,6 +381,8 @@ class WhiteboardCollabAdapter {
 
     _syncFiles.addAll(_pendingFiles);
     _pendingFiles.clear();
+    final revision = _pendingRevision ?? _versionLock.revision;
+    _fullData['revision'] = revision;
 
     try {
       var success = false;
@@ -329,7 +393,11 @@ class WhiteboardCollabAdapter {
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
 
-        success = await _service.saveWhiteboardData(viewId, _fullData);
+        success = await _service.saveWhiteboardData(
+          viewId,
+          _fullData,
+          revision: revision,
+        );
       } else {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
@@ -338,9 +406,12 @@ class WhiteboardCollabAdapter {
         _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
+        _pendingRevision = revision;
         Log.warn(
             '[WBCollab][WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
+        _versionLock.seed(revision);
+        _pendingRevision = null;
         Log.debug(
             '[WBCollab][WhiteboardCollabAdapter] Sync completed: saved to server');
       }
@@ -348,6 +419,7 @@ class WhiteboardCollabAdapter {
       _hasUnsavedChanges = true;
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
+      _pendingRevision = revision;
       Log.error('[WBCollab][WhiteboardCollabAdapter] ❌ Sync error: $e');
     } finally {
       _isSyncing = false;
@@ -464,12 +536,26 @@ class WhiteboardCollabAdapter {
 
   /// 处理来自实时通知的更新
   /// 由 WhiteboardListener 回调，payload 已在 Listener 中从 JSON 解析完毕
-  void _onRemoteUpdate(String key, dynamic value, bool isRemote) {
+  void _onRemoteUpdate(String key, dynamic value, bool isRemote, int? revision) {
     if (_disposed) return;
 
     try {
       // 本地写入回声不再推回 WebView，避免自触发循环
       if (!isRemote) {
+        return;
+      }
+
+      final remoteRevision = _tryParseRevision(revision);
+      if (remoteRevision != null) {
+        if (!_versionLock.shouldAccept(remoteRevision)) {
+          Log.info(
+            '[WBCollab][WhiteboardCollabAdapter] Dropping stale remote payload for $viewId: incomingRevision=$remoteRevision currentRevision=${_versionLock.revision}',
+          );
+          return;
+        }
+        _seedRevision(remoteRevision);
+        _fullData['revision'] = remoteRevision;
+      } else if (key == 'revision') {
         return;
       }
 

@@ -9,7 +9,12 @@ import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import '../../../core/notification/whiteboard_notification.dart';
 
-typedef OnWhiteboardRemoteUpdate = void Function(String key, dynamic value, bool isRemote);
+typedef OnWhiteboardRemoteUpdate = void Function(
+  String key,
+  dynamic value,
+  bool isRemote,
+  int? revision,
+);
 
 class WhiteboardListener {
   final String id;
@@ -59,15 +64,21 @@ class WhiteboardListener {
             return;
           }
 
-          final key = json['key'] as String?;
+          final key = json['key'] as String?; 
           final value = json['value'];
           final isRemote = json['is_remote'] == true;
+          final revision = json['revision'];
 
           if (key == null || value == null) {
             return;
           }
 
-          _onRemoteUpdate?.call(key, value, isRemote);
+          _onRemoteUpdate?.call(
+            key,
+            value,
+            isRemote,
+            revision is int ? revision : null,
+          );
         } catch (e) {
           Log.error('[WBCollab][WhiteboardListener] Failed to parse notification: $e');
         }

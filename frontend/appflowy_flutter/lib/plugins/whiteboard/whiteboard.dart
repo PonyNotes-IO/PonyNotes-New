@@ -261,6 +261,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   bool _isAppInBackground = false; // 标记应用是否在后台
   bool _initialDataReadyForSync = false;
   bool _webViewReadyForSync = false;
+  int _whiteboardRevision = 0;
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -668,6 +669,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       // 确保后续的增量更新能合并到完整的状态中
       if (data.isNotEmpty) {
         _collabAdapter?.setInitialData(data);
+        _whiteboardRevision = _extractRevision(data);
       }
 
       _initialDataReadyForSync = true;
@@ -684,10 +686,24 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       return;
     }
 
+    final incomingRevision = _extractRevision(data);
+    if (incomingRevision > 0 && incomingRevision < _whiteboardRevision) {
+      Log.info(
+        '[Whiteboard] Dropping stale data change for ${widget.view.id}: incomingRevision=$incomingRevision currentRevision=$_whiteboardRevision',
+      );
+      return;
+    }
+    if (incomingRevision > _whiteboardRevision) {
+      _whiteboardRevision = incomingRevision;
+    }
+
     // debug log removed
 
     // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
-    _collabAdapter?.onWhiteboardDataChanged(type, data);
+    _collabAdapter?.onWhiteboardDataChanged(
+      type,
+      {...data, 'revision': _whiteboardRevision},
+    );
   }
 
   void _onWhiteboardInitialReady() {
@@ -1272,6 +1288,14 @@ class _WhiteboardPageState extends State<WhiteboardPage>
         data['type'] == 'excalidraw' &&
         data.containsKey('elements') &&
         data['elements'] is List;
+  }
+
+  int _extractRevision(Map<String, dynamic> data) {
+    final revision = data['revision'];
+    if (revision is int) return revision;
+    if (revision is num) return revision.toInt();
+    if (revision is String) return int.tryParse(revision) ?? 0;
+    return 0;
   }
 }
 

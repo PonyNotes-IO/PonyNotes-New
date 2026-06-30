@@ -482,6 +482,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               }
 
               // 其他键直接传递（如 theme、language 等）
+              if (key == 'revision') {
+                return;
+              }
               final singleEntryMap = {key: value};
               widget.onDataChanged?.call('update', singleEntryMap);
             } else {

@@ -122,6 +122,7 @@ class WhiteboardDataService {
   Future<bool> saveWhiteboardData(
     String viewId,
     Map<String, dynamic> data, {
+    int? revision,
     String? traceId,
     String? sessionId,
     String source = 'collab-adapter',
@@ -135,6 +136,7 @@ class WhiteboardDataService {
         'sessionId': sessionId,
         'viewId': viewId,
         'source': source,
+        'revision': revision,
         'elementsCount': _countElements(data),
         'filesCount': _countFiles(data),
         'payloadBytes': _estimatePayloadBytes(data),
@@ -175,6 +177,7 @@ class WhiteboardDataService {
           'sessionId': sessionId,
           'viewId': viewId,
           'source': source,
+          'revision': revision,
           'storage': 'collab',
           'durationMs': stopwatch.elapsedMilliseconds,
           'elementsCount': _countElements(data),
@@ -196,6 +199,7 @@ class WhiteboardDataService {
         'sessionId': sessionId,
         'viewId': viewId,
         'source': source,
+        'revision': revision,
         'durationMs': stopwatch.elapsedMilliseconds,
         'fallback': 'file',
         'elementsCount': _countElements(data),
@@ -208,16 +212,17 @@ class WhiteboardDataService {
     logDiagnosticEvent(
       'WhiteboardLoad',
       'collab_sync_done',
-      {
-        'traceId': traceId,
-        'sessionId': sessionId,
-        'viewId': viewId,
-        'source': source,
-        'storage': fileSuccess ? 'file_fallback' : 'file_failed',
-        'durationMs': stopwatch.elapsedMilliseconds,
-        'elementsCount': _countElements(data),
-        'filesCount': _countFiles(data),
-        'payloadBytes': _estimatePayloadBytes(data),
+        {
+          'traceId': traceId,
+          'sessionId': sessionId,
+          'viewId': viewId,
+          'source': source,
+          'revision': revision,
+          'storage': fileSuccess ? 'file_fallback' : 'file_failed',
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'elementsCount': _countElements(data),
+          'filesCount': _countFiles(data),
+          'payloadBytes': _estimatePayloadBytes(data),
       },
       warning: !fileSuccess,
     );
@@ -393,6 +398,7 @@ class WhiteboardDataService {
       await saveWhiteboardData(
         viewId,
         fileData,
+        revision: _readRevision(fileData),
         traceId: traceId,
         sessionId: sessionId,
         source: 'file-fallback-backfill',
@@ -444,6 +450,7 @@ class WhiteboardDataService {
         'sessionId': sessionId,
         'viewId': viewId,
         'source': source,
+        'revision': _readRevision(fileData),
         'storage': 'file_fallback',
         'durationMs': stopwatch.elapsedMilliseconds,
         'elementsCount': _countElements(fileData),
@@ -683,6 +690,11 @@ class WhiteboardDataService {
     } catch (_) {
       return -1;
     }
+  }
+
+  int _readRevision(Map<String, dynamic> data) {
+    final value = data['revision'];
+    return value is int ? value : 0;
   }
 
   bool _isBlankWhiteboardData(Map<String, dynamic> data) {
