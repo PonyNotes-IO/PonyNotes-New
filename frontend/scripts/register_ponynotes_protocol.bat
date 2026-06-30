@@ -1,7 +1,7 @@
 @echo off
 REM Register a custom URL protocol to launch the App executable.
 REM Usage: register_ponynotes_protocol.bat "C:\Path\To\App.exe" [protocol_name]
-REM Example: register_ponynotes_protocol.bat "C:\Program Files\AppFlowy\AppFlowy.exe" appflowy
+REM Example: register_ponynotes_protocol.bat "C:\Program Files\PonyNotes\PonyNotes.exe" ponynotes
 
 if "%~1"=="" (
   echo [ERROR] Missing app executable path. Usage:
@@ -11,7 +11,7 @@ if "%~1"=="" (
 
 set "APP_EXE=%~1"
 set "PROTO=%~2"
-if "%PROTO%"=="" set "PROTO=appflowy"
+if "%PROTO%"=="" set "PROTO=ponynotes"
 
 echo Registering protocol "%PROTO%://" for executable: %APP_EXE%
 

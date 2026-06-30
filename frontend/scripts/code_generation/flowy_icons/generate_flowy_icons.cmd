@@ -13,6 +13,7 @@ cd ..\..\..\appflowy_flutter
 REM copy the resources/flowy_icons folder to
 REM   the appflowy_flutter/assets/flowy_icons directory
 echo Copying resources/flowy_icons to appflowy_flutter/assets/flowy_icons
+if exist assets\flowy_icons rmdir /s /q assets\flowy_icons
 xcopy /E /Y /I ..\resources\flowy_icons assets\flowy_icons
 if errorlevel 1 ( echo Error: Failed to copy flowy_icons & exit /b 1 )
 

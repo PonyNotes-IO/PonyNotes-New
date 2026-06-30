@@ -645,7 +645,9 @@ class _SelfHostSettingsState extends State<_SelfHostSettings> {
     } else if (type == AuthenticatorType.appflowyCloudDevelop) {
       // 为开发模式添加保存逻辑，使用本地开发服务器地址
       const developmentUrl = "http://localhost";
-      const developmentWebUrl = "https://test.xiaomabiji.com";
+      final developmentWebUrl = Env.baseWebDomain.isNotEmpty
+          ? Env.baseWebDomain
+          : ShareConstants.testBaseWebDomain;
       cloudUrlTextController.text = developmentUrl;
       webUrlTextController.text = developmentWebUrl;
 

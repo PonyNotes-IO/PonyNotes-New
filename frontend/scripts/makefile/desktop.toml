@@ -145,17 +145,21 @@ script_runner = "@duckscript"
 private = true
 script = [
   """
-    echo "🚀 🚀 🚀  AppFlowy-Core build success"
-    dart_ffi_dir= set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/windows/flutter/dart_ffi
+    echo "AppFlowy-Core build success"
+    dart_ffi_dir = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/windows/flutter/dart_ffi
     lib = set ${LIB_NAME}.${LIB_EXT}
+    source_dll = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/target/${RUST_COMPILE_TARGET}/${BUILD_FLAG}/${lib}
+    target_dll = set ${dart_ffi_dir}/${lib}
+    source_binding = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/${CARGO_MAKE_CRATE_NAME}/binding.h
+    target_binding = set ${dart_ffi_dir}/binding.h
 
-    # copy dll
-    cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/target/${RUST_COMPILE_TARGET}/${BUILD_FLAG}/${lib} \
-    ${dart_ffi_dir}/${lib}
+    exec powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path -LiteralPath '${target_dll}') { Set-ItemProperty -LiteralPath '${target_dll}' -Name IsReadOnly -Value $false }"
+    exec powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path -LiteralPath '${target_binding}') { Set-ItemProperty -LiteralPath '${target_binding}' -Name IsReadOnly -Value $false }"
 
-    # copy binding.h
-    cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/${CARGO_MAKE_CRATE_NAME}/binding.h \
-    ${dart_ffi_dir}/binding.h
+    echo Copying ${source_dll} to ${target_dll}
+    cp ${source_dll} ${target_dll}
+    echo Copying ${source_binding} to ${target_binding}
+    cp ${source_binding} ${target_binding}
   """,
 ]
 script_runner = "@duckscript"

@@ -86,8 +86,9 @@ std::string CheckPendingDeepLink() {
     return "";
   }
 
+  std::string dir_path = std::string(app_data_env) + "\\PonyNotes";
   std::string file_path =
-      std::string(app_data_env) + "\\PonyNotes\\deep_link.txt";
+      dir_path + "\\deep_link.txt";
 
   std::ifstream in_file(file_path);
   if (!in_file.is_open()) {
@@ -129,8 +130,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     if (!extracted_url.empty()) {
       char* app_data_env = std::getenv("APPDATA");
       if (app_data_env != nullptr) {
-        std::string file_path =
-            std::string(app_data_env) + "\\PonyNotes\\deep_link.txt";
+        std::string dir_path = std::string(app_data_env) + "\\PonyNotes";
+        CreateDirectoryA(dir_path.c_str(), NULL);
+        std::string file_path = dir_path + "\\deep_link.txt";
         std::ofstream out_file(file_path);
         if (out_file.is_open()) {
           out_file << extracted_url;

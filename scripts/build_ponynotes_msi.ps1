@@ -289,6 +289,7 @@ $directoryTreeText = ($directoryTree -join "`r`n")
 $upgradeCode = "{8FB60758-3C8A-48D1-BF9B-BA45111272ED}"
 $shortcutGuid = "{7E04BD95-23A0-4D09-A06A-4B874D789497}"
 $desktopShortcutGuid = "{E5886CC8-F134-401D-A3C1-64C72290E6DA}"
+$protocolGuid = "{4B6EEA91-0E83-4BC8-8A9A-D6F9DAB13D0E}"
 $escapedLicensePath = Convert-ToXmlAttribute $licensePath
 $escapedInstallFolderName = Convert-ToXmlAttribute $installFolderName
 $newerVersionMessage = Convert-ToXmlAttribute (ConvertFrom-UnicodeEscapes "\u5DF2\u5B89\u88C5\u66F4\u65B0\u7248\u672C\u7684 PonyNotes\u3002")
@@ -342,6 +343,15 @@ $directoryTreeText
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="PonyNotesUrlProtocol" Guid="$protocolGuid" Win64="yes">
+        <RegistryValue Root="HKCU" Key="Software\Classes\ponynotes" Type="string" Value="URL:PonyNotes" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\ponynotes" Name="URL Protocol" Type="string" Value="" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\ponynotes\DefaultIcon" Type="string" Value="[INSTALLFOLDER]PonyNotes.exe,0" />
+        <RegistryValue Root="HKCU" Key="Software\Classes\ponynotes\shell\open\command" Type="string" Value="&quot;[INSTALLFOLDER]PonyNotes.exe&quot; &quot;%1&quot;" />
+      </Component>
+    </DirectoryRef>
+
     <UI>
       <UIRef Id="WixUI_InstallDir" />
       <UIRef Id="WixUI_ErrorProgressText" />
@@ -352,6 +362,7 @@ $directoryTreeText
 $componentRefsText
       <ComponentRef Id="ApplicationShortcut" />
       <ComponentRef Id="DesktopShortcut" />
+      <ComponentRef Id="PonyNotesUrlProtocol" />
     </Feature>
   </Product>
 

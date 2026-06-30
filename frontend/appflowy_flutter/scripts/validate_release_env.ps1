@@ -34,6 +34,7 @@ function Get-DotEnvValue {
 
 $cloudUrl = Get-DotEnvValue 'APPFLOWY_CLOUD_URL'
 $authenticatorType = Get-DotEnvValue 'AUTHENTICATOR_TYPE'
+$baseWebDomain = Get-DotEnvValue 'BASE_WEB_DOMAIN'
 
 if ([string]::IsNullOrWhiteSpace($cloudUrl)) {
   Fail "APPFLOWY_CLOUD_URL is empty. Refusing to build a release with disabled cloud auth."
@@ -47,6 +48,20 @@ try {
 
 if (-not $uri.IsAbsoluteUri -or ($uri.Scheme -ne 'https' -and $uri.Scheme -ne 'http')) {
   Fail "APPFLOWY_CLOUD_URL must be an absolute http(s) URI."
+}
+
+if ([string]::IsNullOrWhiteSpace($baseWebDomain)) {
+  Fail "BASE_WEB_DOMAIN is empty. Share links would fall back to the default web domain."
+}
+
+try {
+  $baseWebUri = [System.Uri]::new($baseWebDomain)
+} catch {
+  Fail "BASE_WEB_DOMAIN is not a valid URI."
+}
+
+if (-not $baseWebUri.IsAbsoluteUri -or ($baseWebUri.Scheme -ne 'https' -and $baseWebUri.Scheme -ne 'http')) {
+  Fail "BASE_WEB_DOMAIN must be an absolute http(s) URI."
 }
 
 if ($authenticatorType -notmatch '^\d+$') {
@@ -80,4 +95,18 @@ if ($generatedCloudUrl -ne $cloudUrl) {
   Fail "Generated afCloudUrl does not match .env APPFLOWY_CLOUD_URL. Regenerate env.g.dart."
 }
 
-Write-Host "Release env OK: APPFLOWY_CLOUD_URL length=$($cloudUrl.Length), AUTHENTICATOR_TYPE=$authenticatorType"
+$generatedBaseWebDomainMatch = [regex]::Match(
+  $generatedContent,
+  "static const String baseWebDomain = '([^']*)';"
+)
+
+if (-not $generatedBaseWebDomainMatch.Success) {
+  Fail "Unable to read baseWebDomain from generated env file."
+}
+
+$generatedBaseWebDomain = $generatedBaseWebDomainMatch.Groups[1].Value
+if ($generatedBaseWebDomain -ne $baseWebDomain) {
+  Fail "Generated baseWebDomain does not match .env BASE_WEB_DOMAIN. Regenerate env.g.dart."
+}
+
+Write-Host "Release env OK: APPFLOWY_CLOUD_URL length=$($cloudUrl.Length), BASE_WEB_DOMAIN=$baseWebDomain, AUTHENTICATOR_TYPE=$authenticatorType"

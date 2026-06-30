@@ -34,6 +34,14 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# MSVC 14.51+ (VS 2026) turns the <experimental/coroutine> deprecation into a
+# hard static_assert (STL1011). Plugins such as flutter_inappwebview_windows and
+# permission_handler_windows still include the experimental coroutine header
+# (directly or via C++/WinRT), so silence it globally to keep them building.
+# Applied before the plugins are included below so it propagates to every
+# plugin subdirectory.
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_features(${TARGET} PUBLIC cxx_std_17)

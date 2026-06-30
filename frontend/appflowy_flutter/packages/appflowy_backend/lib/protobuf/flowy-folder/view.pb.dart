@@ -1,9 +1,13 @@
-///
+//
 //  Generated code. Do not modify.
 //  source: view.proto
 //
 // @dart = 2.12
-// ignore_for_file: annotate_overrides,camel_case_types,constant_identifier_names,directives_ordering,library_prefixes,non_constant_identifier_names,prefer_final_fields,return_of_invalid_type,unnecessary_const,unnecessary_import,unnecessary_this,unused_import,unused_shown_name
+
+// ignore_for_file: annotate_overrides, camel_case_types, comment_references
+// ignore_for_file: constant_identifier_names, library_prefixes
+// ignore_for_file: non_constant_identifier_names, prefer_final_fields
+// ignore_for_file: unnecessary_import, unnecessary_this, unused_import
 
 import 'dart:core' as $core;
 
@@ -11,44 +15,44 @@ import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
 
 import 'icon.pb.dart' as $0;
-
 import 'view.pbenum.dart';
 
 export 'view.pbenum.dart';
 
 class ChildViewUpdatePB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'ChildViewUpdatePB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'parentViewId')
-    ..pc<ViewPB>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'createChildViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
-    ..pPS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'deleteChildViews')
-    ..pc<ViewPB>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'updateChildViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  ChildViewUpdatePB._() : super();
   factory ChildViewUpdatePB({
     $core.String? parentViewId,
     $core.Iterable<ViewPB>? createChildViews,
     $core.Iterable<$core.String>? deleteChildViews,
     $core.Iterable<ViewPB>? updateChildViews,
   }) {
-    final _result = create();
+    final $result = create();
     if (parentViewId != null) {
-      _result.parentViewId = parentViewId;
+      $result.parentViewId = parentViewId;
     }
     if (createChildViews != null) {
-      _result.createChildViews.addAll(createChildViews);
+      $result.createChildViews.addAll(createChildViews);
     }
     if (deleteChildViews != null) {
-      _result.deleteChildViews.addAll(deleteChildViews);
+      $result.deleteChildViews.addAll(deleteChildViews);
     }
     if (updateChildViews != null) {
-      _result.updateChildViews.addAll(updateChildViews);
+      $result.updateChildViews.addAll(updateChildViews);
     }
-    return _result;
+    return $result;
   }
+  ChildViewUpdatePB._() : super();
   factory ChildViewUpdatePB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory ChildViewUpdatePB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'ChildViewUpdatePB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'parentViewId')
+    ..pc<ViewPB>(2, _omitFieldNames ? '' : 'createChildViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
+    ..pPS(3, _omitFieldNames ? '' : 'deleteChildViews')
+    ..pc<ViewPB>(4, _omitFieldNames ? '' : 'updateChildViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -58,8 +62,10 @@ class ChildViewUpdatePB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  ChildViewUpdatePB copyWith(void Function(ChildViewUpdatePB) updates) => super.copyWith((message) => updates(message as ChildViewUpdatePB)) as ChildViewUpdatePB; // ignore: deprecated_member_use
+  ChildViewUpdatePB copyWith(void Function(ChildViewUpdatePB) updates) => super.copyWith((message) => updates(message as ChildViewUpdatePB)) as ChildViewUpdatePB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static ChildViewUpdatePB create() => ChildViewUpdatePB._();
   ChildViewUpdatePB createEmptyInstance() => create();
@@ -88,36 +94,101 @@ class ChildViewUpdatePB extends $pb.GeneratedMessage {
 }
 
 enum ViewPB_OneOfIcon {
-  icon,
+  icon, 
   notSet
 }
 
 enum ViewPB_OneOfExtra {
-  extra,
+  extra, 
   notSet
 }
 
 enum ViewPB_OneOfCreatedBy {
-  createdBy,
+  createdBy, 
   notSet
 }
 
 enum ViewPB_OneOfLastEditedBy {
-  lastEditedBy,
+  lastEditedBy, 
   notSet
 }
 
 enum ViewPB_OneOfIsLocked {
-  isLocked,
+  isLocked, 
   notSet
 }
 
 enum ViewPB_OneOfWorkspaceId {
-  workspaceId,
+  workspaceId, 
   notSet
 }
 
 class ViewPB extends $pb.GeneratedMessage {
+  factory ViewPB({
+    $core.String? id,
+    $core.String? parentViewId,
+    $core.String? name,
+    $fixnum.Int64? createTime,
+    $core.Iterable<ViewPB>? childViews,
+    ViewLayoutPB? layout,
+    $0.ViewIconPB? icon,
+    $core.bool? isFavorite,
+    $core.String? extra,
+    $fixnum.Int64? createdBy,
+    $fixnum.Int64? lastEdited,
+    $fixnum.Int64? lastEditedBy,
+    $core.bool? isLocked,
+    $core.String? workspaceId,
+  }) {
+    final $result = create();
+    if (id != null) {
+      $result.id = id;
+    }
+    if (parentViewId != null) {
+      $result.parentViewId = parentViewId;
+    }
+    if (name != null) {
+      $result.name = name;
+    }
+    if (createTime != null) {
+      $result.createTime = createTime;
+    }
+    if (childViews != null) {
+      $result.childViews.addAll(childViews);
+    }
+    if (layout != null) {
+      $result.layout = layout;
+    }
+    if (icon != null) {
+      $result.icon = icon;
+    }
+    if (isFavorite != null) {
+      $result.isFavorite = isFavorite;
+    }
+    if (extra != null) {
+      $result.extra = extra;
+    }
+    if (createdBy != null) {
+      $result.createdBy = createdBy;
+    }
+    if (lastEdited != null) {
+      $result.lastEdited = lastEdited;
+    }
+    if (lastEditedBy != null) {
+      $result.lastEditedBy = lastEditedBy;
+    }
+    if (isLocked != null) {
+      $result.isLocked = isLocked;
+    }
+    if (workspaceId != null) {
+      $result.workspaceId = workspaceId;
+    }
+    return $result;
+  }
+  ViewPB._() : super();
+  factory ViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory ViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
   static const $core.Map<$core.int, ViewPB_OneOfIcon> _ViewPB_OneOfIconByTag = {
     7 : ViewPB_OneOfIcon.icon,
     0 : ViewPB_OneOfIcon.notSet
@@ -142,94 +213,30 @@ class ViewPB extends $pb.GeneratedMessage {
     14 : ViewPB_OneOfWorkspaceId.workspaceId,
     0 : ViewPB_OneOfWorkspaceId.notSet
   };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'ViewPB', createEmptyInstance: create)
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'ViewPB', createEmptyInstance: create)
     ..oo(0, [7])
     ..oo(1, [9])
     ..oo(2, [10])
     ..oo(3, [12])
     ..oo(4, [13])
     ..oo(5, [14])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'id')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'parentViewId')
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'name')
-    ..aInt64(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'createTime')
-    ..pc<ViewPB>(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'childViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
-    ..e<ViewLayoutPB>(6, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
-    ..aOM<$0.ViewIconPB>(7, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'icon', subBuilder: $0.ViewIconPB.create)
-    ..aOB(8, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'isFavorite')
-    ..aOS(9, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'extra')
-    ..aInt64(10, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'createdBy')
-    ..aInt64(11, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'lastEdited')
-    ..aInt64(12, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'lastEditedBy')
-    ..aOB(13, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'isLocked')
-    ..aOS(14, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'workspaceId')
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'parentViewId')
+    ..aOS(3, _omitFieldNames ? '' : 'name')
+    ..aInt64(4, _omitFieldNames ? '' : 'createTime')
+    ..pc<ViewPB>(5, _omitFieldNames ? '' : 'childViews', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
+    ..e<ViewLayoutPB>(6, _omitFieldNames ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
+    ..aOM<$0.ViewIconPB>(7, _omitFieldNames ? '' : 'icon', subBuilder: $0.ViewIconPB.create)
+    ..aOB(8, _omitFieldNames ? '' : 'isFavorite')
+    ..aOS(9, _omitFieldNames ? '' : 'extra')
+    ..aInt64(10, _omitFieldNames ? '' : 'createdBy')
+    ..aInt64(11, _omitFieldNames ? '' : 'lastEdited')
+    ..aInt64(12, _omitFieldNames ? '' : 'lastEditedBy')
+    ..aOB(13, _omitFieldNames ? '' : 'isLocked')
+    ..aOS(14, _omitFieldNames ? '' : 'workspaceId')
     ..hasRequiredFields = false
   ;
 
-  ViewPB._() : super();
-  factory ViewPB({
-    $core.String? id,
-    $core.String? parentViewId,
-    $core.String? name,
-    $fixnum.Int64? createTime,
-    $core.Iterable<ViewPB>? childViews,
-    ViewLayoutPB? layout,
-    $0.ViewIconPB? icon,
-    $core.bool? isFavorite,
-    $core.String? extra,
-    $fixnum.Int64? createdBy,
-    $fixnum.Int64? lastEdited,
-    $fixnum.Int64? lastEditedBy,
-    $core.bool? isLocked,
-    $core.String? workspaceId,
-  }) {
-    final _result = create();
-    if (id != null) {
-      _result.id = id;
-    }
-    if (parentViewId != null) {
-      _result.parentViewId = parentViewId;
-    }
-    if (name != null) {
-      _result.name = name;
-    }
-    if (createTime != null) {
-      _result.createTime = createTime;
-    }
-    if (childViews != null) {
-      _result.childViews.addAll(childViews);
-    }
-    if (layout != null) {
-      _result.layout = layout;
-    }
-    if (icon != null) {
-      _result.icon = icon;
-    }
-    if (isFavorite != null) {
-      _result.isFavorite = isFavorite;
-    }
-    if (extra != null) {
-      _result.extra = extra;
-    }
-    if (createdBy != null) {
-      _result.createdBy = createdBy;
-    }
-    if (lastEdited != null) {
-      _result.lastEdited = lastEdited;
-    }
-    if (lastEditedBy != null) {
-      _result.lastEditedBy = lastEditedBy;
-    }
-    if (isLocked != null) {
-      _result.isLocked = isLocked;
-    }
-    if (workspaceId != null) {
-      _result.workspaceId = workspaceId;
-    }
-    return _result;
-  }
-  factory ViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
-  factory ViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -239,8 +246,10 @@ class ViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  ViewPB copyWith(void Function(ViewPB) updates) => super.copyWith((message) => updates(message as ViewPB)) as ViewPB; // ignore: deprecated_member_use
+  ViewPB copyWith(void Function(ViewPB) updates) => super.copyWith((message) => updates(message as ViewPB)) as ViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static ViewPB create() => ViewPB._();
   ViewPB createEmptyInstance() => create();
@@ -391,28 +400,29 @@ class ViewPB extends $pb.GeneratedMessage {
 }
 
 class SectionViewsPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SectionViewsPB', createEmptyInstance: create)
-    ..e<ViewSectionPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
-    ..pc<ViewPB>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'views', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  SectionViewsPB._() : super();
   factory SectionViewsPB({
     ViewSectionPB? section,
     $core.Iterable<ViewPB>? views,
   }) {
-    final _result = create();
+    final $result = create();
     if (section != null) {
-      _result.section = section;
+      $result.section = section;
     }
     if (views != null) {
-      _result.views.addAll(views);
+      $result.views.addAll(views);
     }
-    return _result;
+    return $result;
   }
+  SectionViewsPB._() : super();
   factory SectionViewsPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SectionViewsPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SectionViewsPB', createEmptyInstance: create)
+    ..e<ViewSectionPB>(1, _omitFieldNames ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
+    ..pc<ViewPB>(2, _omitFieldNames ? '' : 'views', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -422,8 +432,10 @@ class SectionViewsPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SectionViewsPB copyWith(void Function(SectionViewsPB) updates) => super.copyWith((message) => updates(message as SectionViewsPB)) as SectionViewsPB; // ignore: deprecated_member_use
+  SectionViewsPB copyWith(void Function(SectionViewsPB) updates) => super.copyWith((message) => updates(message as SectionViewsPB)) as SectionViewsPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SectionViewsPB create() => SectionViewsPB._();
   SectionViewsPB createEmptyInstance() => create();
@@ -446,23 +458,24 @@ class SectionViewsPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedViewPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedViewPB', createEmptyInstance: create)
-    ..pc<ViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'items', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedViewPB._() : super();
   factory RepeatedViewPB({
     $core.Iterable<ViewPB>? items,
   }) {
-    final _result = create();
+    final $result = create();
     if (items != null) {
-      _result.items.addAll(items);
+      $result.items.addAll(items);
     }
-    return _result;
+    return $result;
   }
+  RepeatedViewPB._() : super();
   factory RepeatedViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedViewPB', createEmptyInstance: create)
+    ..pc<ViewPB>(1, _omitFieldNames ? '' : 'items', $pb.PbFieldType.PM, subBuilder: ViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -472,8 +485,10 @@ class RepeatedViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedViewPB copyWith(void Function(RepeatedViewPB) updates) => super.copyWith((message) => updates(message as RepeatedViewPB)) as RepeatedViewPB; // ignore: deprecated_member_use
+  RepeatedViewPB copyWith(void Function(RepeatedViewPB) updates) => super.copyWith((message) => updates(message as RepeatedViewPB)) as RepeatedViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedViewPB create() => RepeatedViewPB._();
   RepeatedViewPB createEmptyInstance() => create();
@@ -487,23 +502,24 @@ class RepeatedViewPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedFavoriteViewPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedFavoriteViewPB', createEmptyInstance: create)
-    ..pc<SectionViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SectionViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedFavoriteViewPB._() : super();
   factory RepeatedFavoriteViewPB({
     $core.Iterable<SectionViewPB>? items,
   }) {
-    final _result = create();
+    final $result = create();
     if (items != null) {
-      _result.items.addAll(items);
+      $result.items.addAll(items);
     }
-    return _result;
+    return $result;
   }
+  RepeatedFavoriteViewPB._() : super();
   factory RepeatedFavoriteViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedFavoriteViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedFavoriteViewPB', createEmptyInstance: create)
+    ..pc<SectionViewPB>(1, _omitFieldNames ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SectionViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -513,8 +529,10 @@ class RepeatedFavoriteViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedFavoriteViewPB copyWith(void Function(RepeatedFavoriteViewPB) updates) => super.copyWith((message) => updates(message as RepeatedFavoriteViewPB)) as RepeatedFavoriteViewPB; // ignore: deprecated_member_use
+  RepeatedFavoriteViewPB copyWith(void Function(RepeatedFavoriteViewPB) updates) => super.copyWith((message) => updates(message as RepeatedFavoriteViewPB)) as RepeatedFavoriteViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedFavoriteViewPB create() => RepeatedFavoriteViewPB._();
   RepeatedFavoriteViewPB createEmptyInstance() => create();
@@ -528,28 +546,29 @@ class RepeatedFavoriteViewPB extends $pb.GeneratedMessage {
 }
 
 class ReadRecentViewsPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'ReadRecentViewsPB', createEmptyInstance: create)
-    ..a<$fixnum.Int64>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'start', $pb.PbFieldType.OU6, defaultOrMaker: $fixnum.Int64.ZERO)
-    ..a<$fixnum.Int64>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'limit', $pb.PbFieldType.OU6, defaultOrMaker: $fixnum.Int64.ZERO)
-    ..hasRequiredFields = false
-  ;
-
-  ReadRecentViewsPB._() : super();
   factory ReadRecentViewsPB({
     $fixnum.Int64? start,
     $fixnum.Int64? limit,
   }) {
-    final _result = create();
+    final $result = create();
     if (start != null) {
-      _result.start = start;
+      $result.start = start;
     }
     if (limit != null) {
-      _result.limit = limit;
+      $result.limit = limit;
     }
-    return _result;
+    return $result;
   }
+  ReadRecentViewsPB._() : super();
   factory ReadRecentViewsPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory ReadRecentViewsPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'ReadRecentViewsPB', createEmptyInstance: create)
+    ..a<$fixnum.Int64>(1, _omitFieldNames ? '' : 'start', $pb.PbFieldType.OU6, defaultOrMaker: $fixnum.Int64.ZERO)
+    ..a<$fixnum.Int64>(2, _omitFieldNames ? '' : 'limit', $pb.PbFieldType.OU6, defaultOrMaker: $fixnum.Int64.ZERO)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -559,8 +578,10 @@ class ReadRecentViewsPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  ReadRecentViewsPB copyWith(void Function(ReadRecentViewsPB) updates) => super.copyWith((message) => updates(message as ReadRecentViewsPB)) as ReadRecentViewsPB; // ignore: deprecated_member_use
+  ReadRecentViewsPB copyWith(void Function(ReadRecentViewsPB) updates) => super.copyWith((message) => updates(message as ReadRecentViewsPB)) as ReadRecentViewsPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static ReadRecentViewsPB create() => ReadRecentViewsPB._();
   ReadRecentViewsPB createEmptyInstance() => create();
@@ -589,23 +610,24 @@ class ReadRecentViewsPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedRecentViewPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedRecentViewPB', createEmptyInstance: create)
-    ..pc<SectionViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SectionViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedRecentViewPB._() : super();
   factory RepeatedRecentViewPB({
     $core.Iterable<SectionViewPB>? items,
   }) {
-    final _result = create();
+    final $result = create();
     if (items != null) {
-      _result.items.addAll(items);
+      $result.items.addAll(items);
     }
-    return _result;
+    return $result;
   }
+  RepeatedRecentViewPB._() : super();
   factory RepeatedRecentViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedRecentViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedRecentViewPB', createEmptyInstance: create)
+    ..pc<SectionViewPB>(1, _omitFieldNames ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SectionViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -615,8 +637,10 @@ class RepeatedRecentViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedRecentViewPB copyWith(void Function(RepeatedRecentViewPB) updates) => super.copyWith((message) => updates(message as RepeatedRecentViewPB)) as RepeatedRecentViewPB; // ignore: deprecated_member_use
+  RepeatedRecentViewPB copyWith(void Function(RepeatedRecentViewPB) updates) => super.copyWith((message) => updates(message as RepeatedRecentViewPB)) as RepeatedRecentViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedRecentViewPB create() => RepeatedRecentViewPB._();
   RepeatedRecentViewPB createEmptyInstance() => create();
@@ -630,28 +654,29 @@ class RepeatedRecentViewPB extends $pb.GeneratedMessage {
 }
 
 class SectionViewPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SectionViewPB', createEmptyInstance: create)
-    ..aOM<ViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'item', subBuilder: ViewPB.create)
-    ..aInt64(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'timestamp')
-    ..hasRequiredFields = false
-  ;
-
-  SectionViewPB._() : super();
   factory SectionViewPB({
     ViewPB? item,
     $fixnum.Int64? timestamp,
   }) {
-    final _result = create();
+    final $result = create();
     if (item != null) {
-      _result.item = item;
+      $result.item = item;
     }
     if (timestamp != null) {
-      _result.timestamp = timestamp;
+      $result.timestamp = timestamp;
     }
-    return _result;
+    return $result;
   }
+  SectionViewPB._() : super();
   factory SectionViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SectionViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SectionViewPB', createEmptyInstance: create)
+    ..aOM<ViewPB>(1, _omitFieldNames ? '' : 'item', subBuilder: ViewPB.create)
+    ..aInt64(2, _omitFieldNames ? '' : 'timestamp')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -661,8 +686,10 @@ class SectionViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SectionViewPB copyWith(void Function(SectionViewPB) updates) => super.copyWith((message) => updates(message as SectionViewPB)) as SectionViewPB; // ignore: deprecated_member_use
+  SectionViewPB copyWith(void Function(SectionViewPB) updates) => super.copyWith((message) => updates(message as SectionViewPB)) as SectionViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SectionViewPB create() => SectionViewPB._();
   SectionViewPB createEmptyInstance() => create();
@@ -693,23 +720,24 @@ class SectionViewPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedViewIdPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedViewIdPB', createEmptyInstance: create)
-    ..pPS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'items')
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedViewIdPB._() : super();
   factory RepeatedViewIdPB({
     $core.Iterable<$core.String>? items,
   }) {
-    final _result = create();
+    final $result = create();
     if (items != null) {
-      _result.items.addAll(items);
+      $result.items.addAll(items);
     }
-    return _result;
+    return $result;
   }
+  RepeatedViewIdPB._() : super();
   factory RepeatedViewIdPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedViewIdPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedViewIdPB', createEmptyInstance: create)
+    ..pPS(1, _omitFieldNames ? '' : 'items')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -719,8 +747,10 @@ class RepeatedViewIdPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedViewIdPB copyWith(void Function(RepeatedViewIdPB) updates) => super.copyWith((message) => updates(message as RepeatedViewIdPB)) as RepeatedViewIdPB; // ignore: deprecated_member_use
+  RepeatedViewIdPB copyWith(void Function(RepeatedViewIdPB) updates) => super.copyWith((message) => updates(message as RepeatedViewIdPB)) as RepeatedViewIdPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedViewIdPB create() => RepeatedViewIdPB._();
   RepeatedViewIdPB createEmptyInstance() => create();
@@ -734,31 +764,84 @@ class RepeatedViewIdPB extends $pb.GeneratedMessage {
 }
 
 enum CreateViewPayloadPB_OneOfThumbnail {
-  thumbnail,
+  thumbnail, 
   notSet
 }
 
 enum CreateViewPayloadPB_OneOfIndex {
-  index_,
+  index_, 
   notSet
 }
 
 enum CreateViewPayloadPB_OneOfSection {
-  section,
+  section, 
   notSet
 }
 
 enum CreateViewPayloadPB_OneOfViewId {
-  viewId,
+  viewId, 
   notSet
 }
 
 enum CreateViewPayloadPB_OneOfExtra {
-  extra,
+  extra, 
   notSet
 }
 
 class CreateViewPayloadPB extends $pb.GeneratedMessage {
+  factory CreateViewPayloadPB({
+    $core.String? parentViewId,
+    $core.String? name,
+    $core.String? thumbnail,
+    ViewLayoutPB? layout,
+    $core.List<$core.int>? initialData,
+    $core.Map<$core.String, $core.String>? meta,
+    $core.bool? setAsCurrent,
+    $core.int? index,
+    ViewSectionPB? section,
+    $core.String? viewId,
+    $core.String? extra,
+  }) {
+    final $result = create();
+    if (parentViewId != null) {
+      $result.parentViewId = parentViewId;
+    }
+    if (name != null) {
+      $result.name = name;
+    }
+    if (thumbnail != null) {
+      $result.thumbnail = thumbnail;
+    }
+    if (layout != null) {
+      $result.layout = layout;
+    }
+    if (initialData != null) {
+      $result.initialData = initialData;
+    }
+    if (meta != null) {
+      $result.meta.addAll(meta);
+    }
+    if (setAsCurrent != null) {
+      $result.setAsCurrent = setAsCurrent;
+    }
+    if (index != null) {
+      $result.index = index;
+    }
+    if (section != null) {
+      $result.section = section;
+    }
+    if (viewId != null) {
+      $result.viewId = viewId;
+    }
+    if (extra != null) {
+      $result.extra = extra;
+    }
+    return $result;
+  }
+  CreateViewPayloadPB._() : super();
+  factory CreateViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory CreateViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
   static const $core.Map<$core.int, CreateViewPayloadPB_OneOfThumbnail> _CreateViewPayloadPB_OneOfThumbnailByTag = {
     3 : CreateViewPayloadPB_OneOfThumbnail.thumbnail,
     0 : CreateViewPayloadPB_OneOfThumbnail.notSet
@@ -779,78 +862,26 @@ class CreateViewPayloadPB extends $pb.GeneratedMessage {
     11 : CreateViewPayloadPB_OneOfExtra.extra,
     0 : CreateViewPayloadPB_OneOfExtra.notSet
   };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'CreateViewPayloadPB', createEmptyInstance: create)
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateViewPayloadPB', createEmptyInstance: create)
     ..oo(0, [3])
     ..oo(1, [8])
     ..oo(2, [9])
     ..oo(3, [10])
     ..oo(4, [11])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'parentViewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'name')
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'thumbnail')
-    ..e<ViewLayoutPB>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
-    ..a<$core.List<$core.int>>(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'initialData', $pb.PbFieldType.OY)
-    ..m<$core.String, $core.String>(6, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'meta', entryClassName: 'CreateViewPayloadPB.MetaEntry', keyFieldType: $pb.PbFieldType.OS, valueFieldType: $pb.PbFieldType.OS)
-    ..aOB(7, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'setAsCurrent')
-    ..a<$core.int>(8, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'index', $pb.PbFieldType.OU3)
-    ..e<ViewSectionPB>(9, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
-    ..aOS(10, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(11, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'extra')
+    ..aOS(1, _omitFieldNames ? '' : 'parentViewId')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..aOS(3, _omitFieldNames ? '' : 'thumbnail')
+    ..e<ViewLayoutPB>(4, _omitFieldNames ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
+    ..a<$core.List<$core.int>>(5, _omitFieldNames ? '' : 'initialData', $pb.PbFieldType.OY)
+    ..m<$core.String, $core.String>(6, _omitFieldNames ? '' : 'meta', entryClassName: 'CreateViewPayloadPB.MetaEntry', keyFieldType: $pb.PbFieldType.OS, valueFieldType: $pb.PbFieldType.OS)
+    ..aOB(7, _omitFieldNames ? '' : 'setAsCurrent')
+    ..a<$core.int>(8, _omitFieldNames ? '' : 'index', $pb.PbFieldType.OU3)
+    ..e<ViewSectionPB>(9, _omitFieldNames ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
+    ..aOS(10, _omitFieldNames ? '' : 'viewId')
+    ..aOS(11, _omitFieldNames ? '' : 'extra')
     ..hasRequiredFields = false
   ;
 
-  CreateViewPayloadPB._() : super();
-  factory CreateViewPayloadPB({
-    $core.String? parentViewId,
-    $core.String? name,
-    $core.String? thumbnail,
-    ViewLayoutPB? layout,
-    $core.List<$core.int>? initialData,
-    $core.Map<$core.String, $core.String>? meta,
-    $core.bool? setAsCurrent,
-    $core.int? index,
-    ViewSectionPB? section,
-    $core.String? viewId,
-    $core.String? extra,
-  }) {
-    final _result = create();
-    if (parentViewId != null) {
-      _result.parentViewId = parentViewId;
-    }
-    if (name != null) {
-      _result.name = name;
-    }
-    if (thumbnail != null) {
-      _result.thumbnail = thumbnail;
-    }
-    if (layout != null) {
-      _result.layout = layout;
-    }
-    if (initialData != null) {
-      _result.initialData = initialData;
-    }
-    if (meta != null) {
-      _result.meta.addAll(meta);
-    }
-    if (setAsCurrent != null) {
-      _result.setAsCurrent = setAsCurrent;
-    }
-    if (index != null) {
-      _result.index = index;
-    }
-    if (section != null) {
-      _result.section = section;
-    }
-    if (viewId != null) {
-      _result.viewId = viewId;
-    }
-    if (extra != null) {
-      _result.extra = extra;
-    }
-    return _result;
-  }
-  factory CreateViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
-  factory CreateViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -860,8 +891,10 @@ class CreateViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  CreateViewPayloadPB copyWith(void Function(CreateViewPayloadPB) updates) => super.copyWith((message) => updates(message as CreateViewPayloadPB)) as CreateViewPayloadPB; // ignore: deprecated_member_use
+  CreateViewPayloadPB copyWith(void Function(CreateViewPayloadPB) updates) => super.copyWith((message) => updates(message as CreateViewPayloadPB)) as CreateViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static CreateViewPayloadPB create() => CreateViewPayloadPB._();
   CreateViewPayloadPB createEmptyInstance() => create();
@@ -980,38 +1013,39 @@ class CreateViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class CreateOrphanViewPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'CreateOrphanViewPayloadPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'name')
-    ..e<ViewLayoutPB>(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
-    ..a<$core.List<$core.int>>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'initialData', $pb.PbFieldType.OY)
-    ..hasRequiredFields = false
-  ;
-
-  CreateOrphanViewPayloadPB._() : super();
   factory CreateOrphanViewPayloadPB({
     $core.String? viewId,
     $core.String? name,
     ViewLayoutPB? layout,
     $core.List<$core.int>? initialData,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (name != null) {
-      _result.name = name;
+      $result.name = name;
     }
     if (layout != null) {
-      _result.layout = layout;
+      $result.layout = layout;
     }
     if (initialData != null) {
-      _result.initialData = initialData;
+      $result.initialData = initialData;
     }
-    return _result;
+    return $result;
   }
+  CreateOrphanViewPayloadPB._() : super();
   factory CreateOrphanViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory CreateOrphanViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'CreateOrphanViewPayloadPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..e<ViewLayoutPB>(3, _omitFieldNames ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
+    ..a<$core.List<$core.int>>(4, _omitFieldNames ? '' : 'initialData', $pb.PbFieldType.OY)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1021,8 +1055,10 @@ class CreateOrphanViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  CreateOrphanViewPayloadPB copyWith(void Function(CreateOrphanViewPayloadPB) updates) => super.copyWith((message) => updates(message as CreateOrphanViewPayloadPB)) as CreateOrphanViewPayloadPB; // ignore: deprecated_member_use
+  CreateOrphanViewPayloadPB copyWith(void Function(CreateOrphanViewPayloadPB) updates) => super.copyWith((message) => updates(message as CreateOrphanViewPayloadPB)) as CreateOrphanViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static CreateOrphanViewPayloadPB create() => CreateOrphanViewPayloadPB._();
   CreateOrphanViewPayloadPB createEmptyInstance() => create();
@@ -1069,23 +1105,24 @@ class CreateOrphanViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class ViewIdPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'ViewIdPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'value')
-    ..hasRequiredFields = false
-  ;
-
-  ViewIdPB._() : super();
   factory ViewIdPB({
     $core.String? value,
   }) {
-    final _result = create();
+    final $result = create();
     if (value != null) {
-      _result.value = value;
+      $result.value = value;
     }
-    return _result;
+    return $result;
   }
+  ViewIdPB._() : super();
   factory ViewIdPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory ViewIdPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'ViewIdPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'value')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1095,8 +1132,10 @@ class ViewIdPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  ViewIdPB copyWith(void Function(ViewIdPB) updates) => super.copyWith((message) => updates(message as ViewIdPB)) as ViewIdPB; // ignore: deprecated_member_use
+  ViewIdPB copyWith(void Function(ViewIdPB) updates) => super.copyWith((message) => updates(message as ViewIdPB)) as ViewIdPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static ViewIdPB create() => ViewIdPB._();
   ViewIdPB createEmptyInstance() => create();
@@ -1116,28 +1155,29 @@ class ViewIdPB extends $pb.GeneratedMessage {
 }
 
 class SetPublishNamePB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SetPublishNamePB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'newName')
-    ..hasRequiredFields = false
-  ;
-
-  SetPublishNamePB._() : super();
   factory SetPublishNamePB({
     $core.String? viewId,
     $core.String? newName,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (newName != null) {
-      _result.newName = newName;
+      $result.newName = newName;
     }
-    return _result;
+    return $result;
   }
+  SetPublishNamePB._() : super();
   factory SetPublishNamePB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SetPublishNamePB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SetPublishNamePB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOS(2, _omitFieldNames ? '' : 'newName')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1147,8 +1187,10 @@ class SetPublishNamePB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SetPublishNamePB copyWith(void Function(SetPublishNamePB) updates) => super.copyWith((message) => updates(message as SetPublishNamePB)) as SetPublishNamePB; // ignore: deprecated_member_use
+  SetPublishNamePB copyWith(void Function(SetPublishNamePB) updates) => super.copyWith((message) => updates(message as SetPublishNamePB)) as SetPublishNamePB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SetPublishNamePB create() => SetPublishNamePB._();
   SetPublishNamePB createEmptyInstance() => create();
@@ -1177,38 +1219,39 @@ class SetPublishNamePB extends $pb.GeneratedMessage {
 }
 
 enum DeletedViewPB_OneOfIndex {
-  index_,
+  index_, 
   notSet
 }
 
 class DeletedViewPB extends $pb.GeneratedMessage {
-  static const $core.Map<$core.int, DeletedViewPB_OneOfIndex> _DeletedViewPB_OneOfIndexByTag = {
-    2 : DeletedViewPB_OneOfIndex.index_,
-    0 : DeletedViewPB_OneOfIndex.notSet
-  };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'DeletedViewPB', createEmptyInstance: create)
-    ..oo(0, [2])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..a<$core.int>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'index', $pb.PbFieldType.O3)
-    ..hasRequiredFields = false
-  ;
-
-  DeletedViewPB._() : super();
   factory DeletedViewPB({
     $core.String? viewId,
     $core.int? index,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (index != null) {
-      _result.index = index;
+      $result.index = index;
     }
-    return _result;
+    return $result;
   }
+  DeletedViewPB._() : super();
   factory DeletedViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory DeletedViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static const $core.Map<$core.int, DeletedViewPB_OneOfIndex> _DeletedViewPB_OneOfIndexByTag = {
+    2 : DeletedViewPB_OneOfIndex.index_,
+    0 : DeletedViewPB_OneOfIndex.notSet
+  };
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'DeletedViewPB', createEmptyInstance: create)
+    ..oo(0, [2])
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..a<$core.int>(2, _omitFieldNames ? '' : 'index', $pb.PbFieldType.O3)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1218,8 +1261,10 @@ class DeletedViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  DeletedViewPB copyWith(void Function(DeletedViewPB) updates) => super.copyWith((message) => updates(message as DeletedViewPB)) as DeletedViewPB; // ignore: deprecated_member_use
+  DeletedViewPB copyWith(void Function(DeletedViewPB) updates) => super.copyWith((message) => updates(message as DeletedViewPB)) as DeletedViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static DeletedViewPB create() => DeletedViewPB._();
   DeletedViewPB createEmptyInstance() => create();
@@ -1251,36 +1296,73 @@ class DeletedViewPB extends $pb.GeneratedMessage {
 }
 
 enum UpdateViewPayloadPB_OneOfName {
-  name,
+  name, 
   notSet
 }
 
 enum UpdateViewPayloadPB_OneOfDesc {
-  desc,
+  desc, 
   notSet
 }
 
 enum UpdateViewPayloadPB_OneOfThumbnail {
-  thumbnail,
+  thumbnail, 
   notSet
 }
 
 enum UpdateViewPayloadPB_OneOfLayout {
-  layout,
+  layout, 
   notSet
 }
 
 enum UpdateViewPayloadPB_OneOfIsFavorite {
-  isFavorite,
+  isFavorite, 
   notSet
 }
 
 enum UpdateViewPayloadPB_OneOfExtra {
-  extra,
+  extra, 
   notSet
 }
 
 class UpdateViewPayloadPB extends $pb.GeneratedMessage {
+  factory UpdateViewPayloadPB({
+    $core.String? viewId,
+    $core.String? name,
+    $core.String? desc,
+    $core.String? thumbnail,
+    ViewLayoutPB? layout,
+    $core.bool? isFavorite,
+    $core.String? extra,
+  }) {
+    final $result = create();
+    if (viewId != null) {
+      $result.viewId = viewId;
+    }
+    if (name != null) {
+      $result.name = name;
+    }
+    if (desc != null) {
+      $result.desc = desc;
+    }
+    if (thumbnail != null) {
+      $result.thumbnail = thumbnail;
+    }
+    if (layout != null) {
+      $result.layout = layout;
+    }
+    if (isFavorite != null) {
+      $result.isFavorite = isFavorite;
+    }
+    if (extra != null) {
+      $result.extra = extra;
+    }
+    return $result;
+  }
+  UpdateViewPayloadPB._() : super();
+  factory UpdateViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory UpdateViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
   static const $core.Map<$core.int, UpdateViewPayloadPB_OneOfName> _UpdateViewPayloadPB_OneOfNameByTag = {
     2 : UpdateViewPayloadPB_OneOfName.name,
     0 : UpdateViewPayloadPB_OneOfName.notSet
@@ -1305,59 +1387,23 @@ class UpdateViewPayloadPB extends $pb.GeneratedMessage {
     7 : UpdateViewPayloadPB_OneOfExtra.extra,
     0 : UpdateViewPayloadPB_OneOfExtra.notSet
   };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'UpdateViewPayloadPB', createEmptyInstance: create)
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'UpdateViewPayloadPB', createEmptyInstance: create)
     ..oo(0, [2])
     ..oo(1, [3])
     ..oo(2, [4])
     ..oo(3, [5])
     ..oo(4, [6])
     ..oo(5, [7])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'name')
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'desc')
-    ..aOS(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'thumbnail')
-    ..e<ViewLayoutPB>(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
-    ..aOB(6, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'isFavorite')
-    ..aOS(7, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'extra')
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..aOS(3, _omitFieldNames ? '' : 'desc')
+    ..aOS(4, _omitFieldNames ? '' : 'thumbnail')
+    ..e<ViewLayoutPB>(5, _omitFieldNames ? '' : 'layout', $pb.PbFieldType.OE, defaultOrMaker: ViewLayoutPB.Document, valueOf: ViewLayoutPB.valueOf, enumValues: ViewLayoutPB.values)
+    ..aOB(6, _omitFieldNames ? '' : 'isFavorite')
+    ..aOS(7, _omitFieldNames ? '' : 'extra')
     ..hasRequiredFields = false
   ;
 
-  UpdateViewPayloadPB._() : super();
-  factory UpdateViewPayloadPB({
-    $core.String? viewId,
-    $core.String? name,
-    $core.String? desc,
-    $core.String? thumbnail,
-    ViewLayoutPB? layout,
-    $core.bool? isFavorite,
-    $core.String? extra,
-  }) {
-    final _result = create();
-    if (viewId != null) {
-      _result.viewId = viewId;
-    }
-    if (name != null) {
-      _result.name = name;
-    }
-    if (desc != null) {
-      _result.desc = desc;
-    }
-    if (thumbnail != null) {
-      _result.thumbnail = thumbnail;
-    }
-    if (layout != null) {
-      _result.layout = layout;
-    }
-    if (isFavorite != null) {
-      _result.isFavorite = isFavorite;
-    }
-    if (extra != null) {
-      _result.extra = extra;
-    }
-    return _result;
-  }
-  factory UpdateViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
-  factory UpdateViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1367,8 +1413,10 @@ class UpdateViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  UpdateViewPayloadPB copyWith(void Function(UpdateViewPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateViewPayloadPB)) as UpdateViewPayloadPB; // ignore: deprecated_member_use
+  UpdateViewPayloadPB copyWith(void Function(UpdateViewPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateViewPayloadPB)) as UpdateViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static UpdateViewPayloadPB create() => UpdateViewPayloadPB._();
   UpdateViewPayloadPB createEmptyInstance() => create();
@@ -1460,33 +1508,34 @@ class UpdateViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class MoveViewPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'MoveViewPayloadPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..a<$core.int>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'from', $pb.PbFieldType.O3)
-    ..a<$core.int>(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'to', $pb.PbFieldType.O3)
-    ..hasRequiredFields = false
-  ;
-
-  MoveViewPayloadPB._() : super();
   factory MoveViewPayloadPB({
     $core.String? viewId,
     $core.int? from,
     $core.int? to,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (from != null) {
-      _result.from = from;
+      $result.from = from;
     }
     if (to != null) {
-      _result.to = to;
+      $result.to = to;
     }
-    return _result;
+    return $result;
   }
+  MoveViewPayloadPB._() : super();
   factory MoveViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory MoveViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'MoveViewPayloadPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..a<$core.int>(2, _omitFieldNames ? '' : 'from', $pb.PbFieldType.O3)
+    ..a<$core.int>(3, _omitFieldNames ? '' : 'to', $pb.PbFieldType.O3)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1496,8 +1545,10 @@ class MoveViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  MoveViewPayloadPB copyWith(void Function(MoveViewPayloadPB) updates) => super.copyWith((message) => updates(message as MoveViewPayloadPB)) as MoveViewPayloadPB; // ignore: deprecated_member_use
+  MoveViewPayloadPB copyWith(void Function(MoveViewPayloadPB) updates) => super.copyWith((message) => updates(message as MoveViewPayloadPB)) as MoveViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static MoveViewPayloadPB create() => MoveViewPayloadPB._();
   MoveViewPayloadPB createEmptyInstance() => create();
@@ -1535,21 +1586,50 @@ class MoveViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 enum MoveNestedViewPayloadPB_OneOfPrevViewId {
-  prevViewId,
+  prevViewId, 
   notSet
 }
 
 enum MoveNestedViewPayloadPB_OneOfFromSection {
-  fromSection,
+  fromSection, 
   notSet
 }
 
 enum MoveNestedViewPayloadPB_OneOfToSection {
-  toSection,
+  toSection, 
   notSet
 }
 
 class MoveNestedViewPayloadPB extends $pb.GeneratedMessage {
+  factory MoveNestedViewPayloadPB({
+    $core.String? viewId,
+    $core.String? newParentId,
+    $core.String? prevViewId,
+    ViewSectionPB? fromSection,
+    ViewSectionPB? toSection,
+  }) {
+    final $result = create();
+    if (viewId != null) {
+      $result.viewId = viewId;
+    }
+    if (newParentId != null) {
+      $result.newParentId = newParentId;
+    }
+    if (prevViewId != null) {
+      $result.prevViewId = prevViewId;
+    }
+    if (fromSection != null) {
+      $result.fromSection = fromSection;
+    }
+    if (toSection != null) {
+      $result.toSection = toSection;
+    }
+    return $result;
+  }
+  MoveNestedViewPayloadPB._() : super();
+  factory MoveNestedViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
+  factory MoveNestedViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
   static const $core.Map<$core.int, MoveNestedViewPayloadPB_OneOfPrevViewId> _MoveNestedViewPayloadPB_OneOfPrevViewIdByTag = {
     3 : MoveNestedViewPayloadPB_OneOfPrevViewId.prevViewId,
     0 : MoveNestedViewPayloadPB_OneOfPrevViewId.notSet
@@ -1562,46 +1642,18 @@ class MoveNestedViewPayloadPB extends $pb.GeneratedMessage {
     5 : MoveNestedViewPayloadPB_OneOfToSection.toSection,
     0 : MoveNestedViewPayloadPB_OneOfToSection.notSet
   };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'MoveNestedViewPayloadPB', createEmptyInstance: create)
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'MoveNestedViewPayloadPB', createEmptyInstance: create)
     ..oo(0, [3])
     ..oo(1, [4])
     ..oo(2, [5])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'newParentId')
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'prevViewId')
-    ..e<ViewSectionPB>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'fromSection', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
-    ..e<ViewSectionPB>(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'toSection', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOS(2, _omitFieldNames ? '' : 'newParentId')
+    ..aOS(3, _omitFieldNames ? '' : 'prevViewId')
+    ..e<ViewSectionPB>(4, _omitFieldNames ? '' : 'fromSection', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
+    ..e<ViewSectionPB>(5, _omitFieldNames ? '' : 'toSection', $pb.PbFieldType.OE, defaultOrMaker: ViewSectionPB.Private, valueOf: ViewSectionPB.valueOf, enumValues: ViewSectionPB.values)
     ..hasRequiredFields = false
   ;
 
-  MoveNestedViewPayloadPB._() : super();
-  factory MoveNestedViewPayloadPB({
-    $core.String? viewId,
-    $core.String? newParentId,
-    $core.String? prevViewId,
-    ViewSectionPB? fromSection,
-    ViewSectionPB? toSection,
-  }) {
-    final _result = create();
-    if (viewId != null) {
-      _result.viewId = viewId;
-    }
-    if (newParentId != null) {
-      _result.newParentId = newParentId;
-    }
-    if (prevViewId != null) {
-      _result.prevViewId = prevViewId;
-    }
-    if (fromSection != null) {
-      _result.fromSection = fromSection;
-    }
-    if (toSection != null) {
-      _result.toSection = toSection;
-    }
-    return _result;
-  }
-  factory MoveNestedViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
-  factory MoveNestedViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1611,8 +1663,10 @@ class MoveNestedViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  MoveNestedViewPayloadPB copyWith(void Function(MoveNestedViewPayloadPB) updates) => super.copyWith((message) => updates(message as MoveNestedViewPayloadPB)) as MoveNestedViewPayloadPB; // ignore: deprecated_member_use
+  MoveNestedViewPayloadPB copyWith(void Function(MoveNestedViewPayloadPB) updates) => super.copyWith((message) => updates(message as MoveNestedViewPayloadPB)) as MoveNestedViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static MoveNestedViewPayloadPB create() => MoveNestedViewPayloadPB._();
   MoveNestedViewPayloadPB createEmptyInstance() => create();
@@ -1677,28 +1731,29 @@ class MoveNestedViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class UpdateRecentViewPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'UpdateRecentViewPayloadPB', createEmptyInstance: create)
-    ..pPS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewIds')
-    ..aOB(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'addInRecent')
-    ..hasRequiredFields = false
-  ;
-
-  UpdateRecentViewPayloadPB._() : super();
   factory UpdateRecentViewPayloadPB({
     $core.Iterable<$core.String>? viewIds,
     $core.bool? addInRecent,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewIds != null) {
-      _result.viewIds.addAll(viewIds);
+      $result.viewIds.addAll(viewIds);
     }
     if (addInRecent != null) {
-      _result.addInRecent = addInRecent;
+      $result.addInRecent = addInRecent;
     }
-    return _result;
+    return $result;
   }
+  UpdateRecentViewPayloadPB._() : super();
   factory UpdateRecentViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory UpdateRecentViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'UpdateRecentViewPayloadPB', createEmptyInstance: create)
+    ..pPS(1, _omitFieldNames ? '' : 'viewIds')
+    ..aOB(2, _omitFieldNames ? '' : 'addInRecent')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1708,8 +1763,10 @@ class UpdateRecentViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  UpdateRecentViewPayloadPB copyWith(void Function(UpdateRecentViewPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateRecentViewPayloadPB)) as UpdateRecentViewPayloadPB; // ignore: deprecated_member_use
+  UpdateRecentViewPayloadPB copyWith(void Function(UpdateRecentViewPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateRecentViewPayloadPB)) as UpdateRecentViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static UpdateRecentViewPayloadPB create() => UpdateRecentViewPayloadPB._();
   UpdateRecentViewPayloadPB createEmptyInstance() => create();
@@ -1732,28 +1789,29 @@ class UpdateRecentViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class UpdateViewVisibilityStatusPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'UpdateViewVisibilityStatusPayloadPB', createEmptyInstance: create)
-    ..pPS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewIds')
-    ..aOB(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'isPublic')
-    ..hasRequiredFields = false
-  ;
-
-  UpdateViewVisibilityStatusPayloadPB._() : super();
   factory UpdateViewVisibilityStatusPayloadPB({
     $core.Iterable<$core.String>? viewIds,
     $core.bool? isPublic,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewIds != null) {
-      _result.viewIds.addAll(viewIds);
+      $result.viewIds.addAll(viewIds);
     }
     if (isPublic != null) {
-      _result.isPublic = isPublic;
+      $result.isPublic = isPublic;
     }
-    return _result;
+    return $result;
   }
+  UpdateViewVisibilityStatusPayloadPB._() : super();
   factory UpdateViewVisibilityStatusPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory UpdateViewVisibilityStatusPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'UpdateViewVisibilityStatusPayloadPB', createEmptyInstance: create)
+    ..pPS(1, _omitFieldNames ? '' : 'viewIds')
+    ..aOB(2, _omitFieldNames ? '' : 'isPublic')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1763,8 +1821,10 @@ class UpdateViewVisibilityStatusPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  UpdateViewVisibilityStatusPayloadPB copyWith(void Function(UpdateViewVisibilityStatusPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateViewVisibilityStatusPayloadPB)) as UpdateViewVisibilityStatusPayloadPB; // ignore: deprecated_member_use
+  UpdateViewVisibilityStatusPayloadPB copyWith(void Function(UpdateViewVisibilityStatusPayloadPB) updates) => super.copyWith((message) => updates(message as UpdateViewVisibilityStatusPayloadPB)) as UpdateViewVisibilityStatusPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static UpdateViewVisibilityStatusPayloadPB create() => UpdateViewVisibilityStatusPayloadPB._();
   UpdateViewVisibilityStatusPayloadPB createEmptyInstance() => create();
@@ -1787,37 +1847,16 @@ class UpdateViewVisibilityStatusPayloadPB extends $pb.GeneratedMessage {
 }
 
 enum DuplicateViewPayloadPB_OneOfParentViewId {
-  parentViewId,
+  parentViewId, 
   notSet
 }
 
 enum DuplicateViewPayloadPB_OneOfSuffix {
-  suffix,
+  suffix, 
   notSet
 }
 
 class DuplicateViewPayloadPB extends $pb.GeneratedMessage {
-  static const $core.Map<$core.int, DuplicateViewPayloadPB_OneOfParentViewId> _DuplicateViewPayloadPB_OneOfParentViewIdByTag = {
-    4 : DuplicateViewPayloadPB_OneOfParentViewId.parentViewId,
-    0 : DuplicateViewPayloadPB_OneOfParentViewId.notSet
-  };
-  static const $core.Map<$core.int, DuplicateViewPayloadPB_OneOfSuffix> _DuplicateViewPayloadPB_OneOfSuffixByTag = {
-    5 : DuplicateViewPayloadPB_OneOfSuffix.suffix,
-    0 : DuplicateViewPayloadPB_OneOfSuffix.notSet
-  };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'DuplicateViewPayloadPB', createEmptyInstance: create)
-    ..oo(0, [4])
-    ..oo(1, [5])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOB(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'openAfterDuplicate')
-    ..aOB(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'includeChildren')
-    ..aOS(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'parentViewId')
-    ..aOS(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'suffix')
-    ..aOB(6, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'syncAfterCreate')
-    ..hasRequiredFields = false
-  ;
-
-  DuplicateViewPayloadPB._() : super();
   factory DuplicateViewPayloadPB({
     $core.String? viewId,
     $core.bool? openAfterDuplicate,
@@ -1826,29 +1865,51 @@ class DuplicateViewPayloadPB extends $pb.GeneratedMessage {
     $core.String? suffix,
     $core.bool? syncAfterCreate,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (openAfterDuplicate != null) {
-      _result.openAfterDuplicate = openAfterDuplicate;
+      $result.openAfterDuplicate = openAfterDuplicate;
     }
     if (includeChildren != null) {
-      _result.includeChildren = includeChildren;
+      $result.includeChildren = includeChildren;
     }
     if (parentViewId != null) {
-      _result.parentViewId = parentViewId;
+      $result.parentViewId = parentViewId;
     }
     if (suffix != null) {
-      _result.suffix = suffix;
+      $result.suffix = suffix;
     }
     if (syncAfterCreate != null) {
-      _result.syncAfterCreate = syncAfterCreate;
+      $result.syncAfterCreate = syncAfterCreate;
     }
-    return _result;
+    return $result;
   }
+  DuplicateViewPayloadPB._() : super();
   factory DuplicateViewPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory DuplicateViewPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static const $core.Map<$core.int, DuplicateViewPayloadPB_OneOfParentViewId> _DuplicateViewPayloadPB_OneOfParentViewIdByTag = {
+    4 : DuplicateViewPayloadPB_OneOfParentViewId.parentViewId,
+    0 : DuplicateViewPayloadPB_OneOfParentViewId.notSet
+  };
+  static const $core.Map<$core.int, DuplicateViewPayloadPB_OneOfSuffix> _DuplicateViewPayloadPB_OneOfSuffixByTag = {
+    5 : DuplicateViewPayloadPB_OneOfSuffix.suffix,
+    0 : DuplicateViewPayloadPB_OneOfSuffix.notSet
+  };
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'DuplicateViewPayloadPB', createEmptyInstance: create)
+    ..oo(0, [4])
+    ..oo(1, [5])
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOB(2, _omitFieldNames ? '' : 'openAfterDuplicate')
+    ..aOB(3, _omitFieldNames ? '' : 'includeChildren')
+    ..aOS(4, _omitFieldNames ? '' : 'parentViewId')
+    ..aOS(5, _omitFieldNames ? '' : 'suffix')
+    ..aOB(6, _omitFieldNames ? '' : 'syncAfterCreate')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1858,8 +1919,10 @@ class DuplicateViewPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  DuplicateViewPayloadPB copyWith(void Function(DuplicateViewPayloadPB) updates) => super.copyWith((message) => updates(message as DuplicateViewPayloadPB)) as DuplicateViewPayloadPB; // ignore: deprecated_member_use
+  DuplicateViewPayloadPB copyWith(void Function(DuplicateViewPayloadPB) updates) => super.copyWith((message) => updates(message as DuplicateViewPayloadPB)) as DuplicateViewPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static DuplicateViewPayloadPB create() => DuplicateViewPayloadPB._();
   DuplicateViewPayloadPB createEmptyInstance() => create();
@@ -1930,38 +1993,39 @@ class DuplicateViewPayloadPB extends $pb.GeneratedMessage {
 }
 
 class SharePageWithUserPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SharePageWithUserPayloadPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..pPS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'emails')
-    ..e<AFAccessLevelPB>(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
-    ..aOB(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'autoConfirm')
-    ..hasRequiredFields = false
-  ;
-
-  SharePageWithUserPayloadPB._() : super();
   factory SharePageWithUserPayloadPB({
     $core.String? viewId,
     $core.Iterable<$core.String>? emails,
     AFAccessLevelPB? accessLevel,
     $core.bool? autoConfirm,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (emails != null) {
-      _result.emails.addAll(emails);
+      $result.emails.addAll(emails);
     }
     if (accessLevel != null) {
-      _result.accessLevel = accessLevel;
+      $result.accessLevel = accessLevel;
     }
     if (autoConfirm != null) {
-      _result.autoConfirm = autoConfirm;
+      $result.autoConfirm = autoConfirm;
     }
-    return _result;
+    return $result;
   }
+  SharePageWithUserPayloadPB._() : super();
   factory SharePageWithUserPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SharePageWithUserPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SharePageWithUserPayloadPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..pPS(2, _omitFieldNames ? '' : 'emails')
+    ..e<AFAccessLevelPB>(3, _omitFieldNames ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
+    ..aOB(4, _omitFieldNames ? '' : 'autoConfirm')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -1971,8 +2035,10 @@ class SharePageWithUserPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SharePageWithUserPayloadPB copyWith(void Function(SharePageWithUserPayloadPB) updates) => super.copyWith((message) => updates(message as SharePageWithUserPayloadPB)) as SharePageWithUserPayloadPB; // ignore: deprecated_member_use
+  SharePageWithUserPayloadPB copyWith(void Function(SharePageWithUserPayloadPB) updates) => super.copyWith((message) => updates(message as SharePageWithUserPayloadPB)) as SharePageWithUserPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SharePageWithUserPayloadPB create() => SharePageWithUserPayloadPB._();
   SharePageWithUserPayloadPB createEmptyInstance() => create();
@@ -2013,28 +2079,29 @@ class SharePageWithUserPayloadPB extends $pb.GeneratedMessage {
 }
 
 class RemoveUserFromSharedPagePayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RemoveUserFromSharedPagePayloadPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..pPS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'emails')
-    ..hasRequiredFields = false
-  ;
-
-  RemoveUserFromSharedPagePayloadPB._() : super();
   factory RemoveUserFromSharedPagePayloadPB({
     $core.String? viewId,
     $core.Iterable<$core.String>? emails,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (emails != null) {
-      _result.emails.addAll(emails);
+      $result.emails.addAll(emails);
     }
-    return _result;
+    return $result;
   }
+  RemoveUserFromSharedPagePayloadPB._() : super();
   factory RemoveUserFromSharedPagePayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RemoveUserFromSharedPagePayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RemoveUserFromSharedPagePayloadPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..pPS(2, _omitFieldNames ? '' : 'emails')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2044,8 +2111,10 @@ class RemoveUserFromSharedPagePayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RemoveUserFromSharedPagePayloadPB copyWith(void Function(RemoveUserFromSharedPagePayloadPB) updates) => super.copyWith((message) => updates(message as RemoveUserFromSharedPagePayloadPB)) as RemoveUserFromSharedPagePayloadPB; // ignore: deprecated_member_use
+  RemoveUserFromSharedPagePayloadPB copyWith(void Function(RemoveUserFromSharedPagePayloadPB) updates) => super.copyWith((message) => updates(message as RemoveUserFromSharedPagePayloadPB)) as RemoveUserFromSharedPagePayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RemoveUserFromSharedPagePayloadPB create() => RemoveUserFromSharedPagePayloadPB._();
   RemoveUserFromSharedPagePayloadPB createEmptyInstance() => create();
@@ -2068,37 +2137,16 @@ class RemoveUserFromSharedPagePayloadPB extends $pb.GeneratedMessage {
 }
 
 enum SharedUserPB_OneOfAvatarUrl {
-  avatarUrl,
+  avatarUrl, 
   notSet
 }
 
 enum SharedUserPB_OneOfUserId {
-  userId,
+  userId, 
   notSet
 }
 
 class SharedUserPB extends $pb.GeneratedMessage {
-  static const $core.Map<$core.int, SharedUserPB_OneOfAvatarUrl> _SharedUserPB_OneOfAvatarUrlByTag = {
-    5 : SharedUserPB_OneOfAvatarUrl.avatarUrl,
-    0 : SharedUserPB_OneOfAvatarUrl.notSet
-  };
-  static const $core.Map<$core.int, SharedUserPB_OneOfUserId> _SharedUserPB_OneOfUserIdByTag = {
-    6 : SharedUserPB_OneOfUserId.userId,
-    0 : SharedUserPB_OneOfUserId.notSet
-  };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SharedUserPB', createEmptyInstance: create)
-    ..oo(0, [5])
-    ..oo(1, [6])
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'email')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'name')
-    ..e<AFRolePB>(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'role', $pb.PbFieldType.OE, defaultOrMaker: AFRolePB.Owner, valueOf: AFRolePB.valueOf, enumValues: AFRolePB.values)
-    ..e<AFAccessLevelPB>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
-    ..aOS(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'avatarUrl')
-    ..aOS(6, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'userId')
-    ..hasRequiredFields = false
-  ;
-
-  SharedUserPB._() : super();
   factory SharedUserPB({
     $core.String? email,
     $core.String? name,
@@ -2107,29 +2155,51 @@ class SharedUserPB extends $pb.GeneratedMessage {
     $core.String? avatarUrl,
     $core.String? userId,
   }) {
-    final _result = create();
+    final $result = create();
     if (email != null) {
-      _result.email = email;
+      $result.email = email;
     }
     if (name != null) {
-      _result.name = name;
+      $result.name = name;
     }
     if (role != null) {
-      _result.role = role;
+      $result.role = role;
     }
     if (accessLevel != null) {
-      _result.accessLevel = accessLevel;
+      $result.accessLevel = accessLevel;
     }
     if (avatarUrl != null) {
-      _result.avatarUrl = avatarUrl;
+      $result.avatarUrl = avatarUrl;
     }
     if (userId != null) {
-      _result.userId = userId;
+      $result.userId = userId;
     }
-    return _result;
+    return $result;
   }
+  SharedUserPB._() : super();
   factory SharedUserPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SharedUserPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static const $core.Map<$core.int, SharedUserPB_OneOfAvatarUrl> _SharedUserPB_OneOfAvatarUrlByTag = {
+    5 : SharedUserPB_OneOfAvatarUrl.avatarUrl,
+    0 : SharedUserPB_OneOfAvatarUrl.notSet
+  };
+  static const $core.Map<$core.int, SharedUserPB_OneOfUserId> _SharedUserPB_OneOfUserIdByTag = {
+    6 : SharedUserPB_OneOfUserId.userId,
+    0 : SharedUserPB_OneOfUserId.notSet
+  };
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SharedUserPB', createEmptyInstance: create)
+    ..oo(0, [5])
+    ..oo(1, [6])
+    ..aOS(1, _omitFieldNames ? '' : 'email')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..e<AFRolePB>(3, _omitFieldNames ? '' : 'role', $pb.PbFieldType.OE, defaultOrMaker: AFRolePB.Owner, valueOf: AFRolePB.valueOf, enumValues: AFRolePB.values)
+    ..e<AFAccessLevelPB>(4, _omitFieldNames ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
+    ..aOS(5, _omitFieldNames ? '' : 'avatarUrl')
+    ..aOS(6, _omitFieldNames ? '' : 'userId')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2139,8 +2209,10 @@ class SharedUserPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SharedUserPB copyWith(void Function(SharedUserPB) updates) => super.copyWith((message) => updates(message as SharedUserPB)) as SharedUserPB; // ignore: deprecated_member_use
+  SharedUserPB copyWith(void Function(SharedUserPB) updates) => super.copyWith((message) => updates(message as SharedUserPB)) as SharedUserPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SharedUserPB create() => SharedUserPB._();
   SharedUserPB createEmptyInstance() => create();
@@ -2211,23 +2283,24 @@ class SharedUserPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedSharedUserPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedSharedUserPB', createEmptyInstance: create)
-    ..pc<SharedUserPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SharedUserPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedSharedUserPB._() : super();
   factory RepeatedSharedUserPB({
     $core.Iterable<SharedUserPB>? items,
   }) {
-    final _result = create();
+    final $result = create();
     if (items != null) {
-      _result.items.addAll(items);
+      $result.items.addAll(items);
     }
-    return _result;
+    return $result;
   }
+  RepeatedSharedUserPB._() : super();
   factory RepeatedSharedUserPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedSharedUserPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedSharedUserPB', createEmptyInstance: create)
+    ..pc<SharedUserPB>(1, _omitFieldNames ? '' : 'items', $pb.PbFieldType.PM, subBuilder: SharedUserPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2237,8 +2310,10 @@ class RepeatedSharedUserPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedSharedUserPB copyWith(void Function(RepeatedSharedUserPB) updates) => super.copyWith((message) => updates(message as RepeatedSharedUserPB)) as RepeatedSharedUserPB; // ignore: deprecated_member_use
+  RepeatedSharedUserPB copyWith(void Function(RepeatedSharedUserPB) updates) => super.copyWith((message) => updates(message as RepeatedSharedUserPB)) as RepeatedSharedUserPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedSharedUserPB create() => RepeatedSharedUserPB._();
   RepeatedSharedUserPB createEmptyInstance() => create();
@@ -2252,23 +2327,24 @@ class RepeatedSharedUserPB extends $pb.GeneratedMessage {
 }
 
 class GetSharedUsersPayloadPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'GetSharedUsersPayloadPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..hasRequiredFields = false
-  ;
-
-  GetSharedUsersPayloadPB._() : super();
   factory GetSharedUsersPayloadPB({
     $core.String? viewId,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
-    return _result;
+    return $result;
   }
+  GetSharedUsersPayloadPB._() : super();
   factory GetSharedUsersPayloadPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory GetSharedUsersPayloadPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'GetSharedUsersPayloadPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2278,8 +2354,10 @@ class GetSharedUsersPayloadPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  GetSharedUsersPayloadPB copyWith(void Function(GetSharedUsersPayloadPB) updates) => super.copyWith((message) => updates(message as GetSharedUsersPayloadPB)) as GetSharedUsersPayloadPB; // ignore: deprecated_member_use
+  GetSharedUsersPayloadPB copyWith(void Function(GetSharedUsersPayloadPB) updates) => super.copyWith((message) => updates(message as GetSharedUsersPayloadPB)) as GetSharedUsersPayloadPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static GetSharedUsersPayloadPB create() => GetSharedUsersPayloadPB._();
   GetSharedUsersPayloadPB createEmptyInstance() => create();
@@ -2299,43 +2377,44 @@ class GetSharedUsersPayloadPB extends $pb.GeneratedMessage {
 }
 
 enum SharedViewPB_OneOfWorkspaceId {
-  workspaceId,
+  workspaceId, 
   notSet
 }
 
 class SharedViewPB extends $pb.GeneratedMessage {
-  static const $core.Map<$core.int, SharedViewPB_OneOfWorkspaceId> _SharedViewPB_OneOfWorkspaceIdByTag = {
-    3 : SharedViewPB_OneOfWorkspaceId.workspaceId,
-    0 : SharedViewPB_OneOfWorkspaceId.notSet
-  };
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SharedViewPB', createEmptyInstance: create)
-    ..oo(0, [3])
-    ..aOM<ViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'view', subBuilder: ViewPB.create)
-    ..e<AFAccessLevelPB>(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'workspaceId')
-    ..hasRequiredFields = false
-  ;
-
-  SharedViewPB._() : super();
   factory SharedViewPB({
     ViewPB? view,
     AFAccessLevelPB? accessLevel,
     $core.String? workspaceId,
   }) {
-    final _result = create();
+    final $result = create();
     if (view != null) {
-      _result.view = view;
+      $result.view = view;
     }
     if (accessLevel != null) {
-      _result.accessLevel = accessLevel;
+      $result.accessLevel = accessLevel;
     }
     if (workspaceId != null) {
-      _result.workspaceId = workspaceId;
+      $result.workspaceId = workspaceId;
     }
-    return _result;
+    return $result;
   }
+  SharedViewPB._() : super();
   factory SharedViewPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SharedViewPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static const $core.Map<$core.int, SharedViewPB_OneOfWorkspaceId> _SharedViewPB_OneOfWorkspaceIdByTag = {
+    3 : SharedViewPB_OneOfWorkspaceId.workspaceId,
+    0 : SharedViewPB_OneOfWorkspaceId.notSet
+  };
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SharedViewPB', createEmptyInstance: create)
+    ..oo(0, [3])
+    ..aOM<ViewPB>(1, _omitFieldNames ? '' : 'view', subBuilder: ViewPB.create)
+    ..e<AFAccessLevelPB>(2, _omitFieldNames ? '' : 'accessLevel', $pb.PbFieldType.OE, defaultOrMaker: AFAccessLevelPB.ReadOnly, valueOf: AFAccessLevelPB.valueOf, enumValues: AFAccessLevelPB.values)
+    ..aOS(3, _omitFieldNames ? '' : 'workspaceId')
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2345,8 +2424,10 @@ class SharedViewPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SharedViewPB copyWith(void Function(SharedViewPB) updates) => super.copyWith((message) => updates(message as SharedViewPB)) as SharedViewPB; // ignore: deprecated_member_use
+  SharedViewPB copyWith(void Function(SharedViewPB) updates) => super.copyWith((message) => updates(message as SharedViewPB)) as SharedViewPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SharedViewPB create() => SharedViewPB._();
   SharedViewPB createEmptyInstance() => create();
@@ -2389,23 +2470,24 @@ class SharedViewPB extends $pb.GeneratedMessage {
 }
 
 class RepeatedSharedViewResponsePB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'RepeatedSharedViewResponsePB', createEmptyInstance: create)
-    ..pc<SharedViewPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'sharedViews', $pb.PbFieldType.PM, subBuilder: SharedViewPB.create)
-    ..hasRequiredFields = false
-  ;
-
-  RepeatedSharedViewResponsePB._() : super();
   factory RepeatedSharedViewResponsePB({
     $core.Iterable<SharedViewPB>? sharedViews,
   }) {
-    final _result = create();
+    final $result = create();
     if (sharedViews != null) {
-      _result.sharedViews.addAll(sharedViews);
+      $result.sharedViews.addAll(sharedViews);
     }
-    return _result;
+    return $result;
   }
+  RepeatedSharedViewResponsePB._() : super();
   factory RepeatedSharedViewResponsePB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory RepeatedSharedViewResponsePB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'RepeatedSharedViewResponsePB', createEmptyInstance: create)
+    ..pc<SharedViewPB>(1, _omitFieldNames ? '' : 'sharedViews', $pb.PbFieldType.PM, subBuilder: SharedViewPB.create)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2415,8 +2497,10 @@ class RepeatedSharedViewResponsePB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  RepeatedSharedViewResponsePB copyWith(void Function(RepeatedSharedViewResponsePB) updates) => super.copyWith((message) => updates(message as RepeatedSharedViewResponsePB)) as RepeatedSharedViewResponsePB; // ignore: deprecated_member_use
+  RepeatedSharedViewResponsePB copyWith(void Function(RepeatedSharedViewResponsePB) updates) => super.copyWith((message) => updates(message as RepeatedSharedViewResponsePB)) as RepeatedSharedViewResponsePB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static RepeatedSharedViewResponsePB create() => RepeatedSharedViewResponsePB._();
   RepeatedSharedViewResponsePB createEmptyInstance() => create();
@@ -2430,23 +2514,24 @@ class RepeatedSharedViewResponsePB extends $pb.GeneratedMessage {
 }
 
 class GetSharedViewSectionResponsePB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'GetSharedViewSectionResponsePB', createEmptyInstance: create)
-    ..e<SharedViewSectionPB>(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: SharedViewSectionPB.PrivateSection, valueOf: SharedViewSectionPB.valueOf, enumValues: SharedViewSectionPB.values)
-    ..hasRequiredFields = false
-  ;
-
-  GetSharedViewSectionResponsePB._() : super();
   factory GetSharedViewSectionResponsePB({
     SharedViewSectionPB? section,
   }) {
-    final _result = create();
+    final $result = create();
     if (section != null) {
-      _result.section = section;
+      $result.section = section;
     }
-    return _result;
+    return $result;
   }
+  GetSharedViewSectionResponsePB._() : super();
   factory GetSharedViewSectionResponsePB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory GetSharedViewSectionResponsePB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'GetSharedViewSectionResponsePB', createEmptyInstance: create)
+    ..e<SharedViewSectionPB>(1, _omitFieldNames ? '' : 'section', $pb.PbFieldType.OE, defaultOrMaker: SharedViewSectionPB.PrivateSection, valueOf: SharedViewSectionPB.valueOf, enumValues: SharedViewSectionPB.values)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2456,8 +2541,10 @@ class GetSharedViewSectionResponsePB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  GetSharedViewSectionResponsePB copyWith(void Function(GetSharedViewSectionResponsePB) updates) => super.copyWith((message) => updates(message as GetSharedViewSectionResponsePB)) as GetSharedViewSectionResponsePB; // ignore: deprecated_member_use
+  GetSharedViewSectionResponsePB copyWith(void Function(GetSharedViewSectionResponsePB) updates) => super.copyWith((message) => updates(message as GetSharedViewSectionResponsePB)) as GetSharedViewSectionResponsePB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static GetSharedViewSectionResponsePB create() => GetSharedViewSectionResponsePB._();
   GetSharedViewSectionResponsePB createEmptyInstance() => create();
@@ -2477,16 +2564,6 @@ class GetSharedViewSectionResponsePB extends $pb.GeneratedMessage {
 }
 
 class SaveSharedViewMetaPB extends $pb.GeneratedMessage {
-  static final $pb.BuilderInfo _i = $pb.BuilderInfo(const $core.bool.fromEnvironment('protobuf.omit_message_names') ? '' : 'SaveSharedViewMetaPB', createEmptyInstance: create)
-    ..aOS(1, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewId')
-    ..aOS(2, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'workspaceId')
-    ..aOS(3, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewName')
-    ..a<$core.int>(4, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'viewLayout', $pb.PbFieldType.O3)
-    ..a<$core.int>(5, const $core.bool.fromEnvironment('protobuf.omit_field_names') ? '' : 'permissionId', $pb.PbFieldType.O3)
-    ..hasRequiredFields = false
-  ;
-
-  SaveSharedViewMetaPB._() : super();
   factory SaveSharedViewMetaPB({
     $core.String? viewId,
     $core.String? workspaceId,
@@ -2494,26 +2571,37 @@ class SaveSharedViewMetaPB extends $pb.GeneratedMessage {
     $core.int? viewLayout,
     $core.int? permissionId,
   }) {
-    final _result = create();
+    final $result = create();
     if (viewId != null) {
-      _result.viewId = viewId;
+      $result.viewId = viewId;
     }
     if (workspaceId != null) {
-      _result.workspaceId = workspaceId;
+      $result.workspaceId = workspaceId;
     }
     if (viewName != null) {
-      _result.viewName = viewName;
+      $result.viewName = viewName;
     }
     if (viewLayout != null) {
-      _result.viewLayout = viewLayout;
+      $result.viewLayout = viewLayout;
     }
     if (permissionId != null) {
-      _result.permissionId = permissionId;
+      $result.permissionId = permissionId;
     }
-    return _result;
+    return $result;
   }
+  SaveSharedViewMetaPB._() : super();
   factory SaveSharedViewMetaPB.fromBuffer($core.List<$core.int> i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromBuffer(i, r);
   factory SaveSharedViewMetaPB.fromJson($core.String i, [$pb.ExtensionRegistry r = $pb.ExtensionRegistry.EMPTY]) => create()..mergeFromJson(i, r);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(_omitMessageNames ? '' : 'SaveSharedViewMetaPB', createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'viewId')
+    ..aOS(2, _omitFieldNames ? '' : 'workspaceId')
+    ..aOS(3, _omitFieldNames ? '' : 'viewName')
+    ..a<$core.int>(4, _omitFieldNames ? '' : 'viewLayout', $pb.PbFieldType.O3)
+    ..a<$core.int>(5, _omitFieldNames ? '' : 'permissionId', $pb.PbFieldType.O3)
+    ..hasRequiredFields = false
+  ;
+
   @$core.Deprecated(
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.deepCopy] instead. '
@@ -2523,8 +2611,10 @@ class SaveSharedViewMetaPB extends $pb.GeneratedMessage {
   'Using this can add significant overhead to your binary. '
   'Use [GeneratedMessageGenericExtensions.rebuild] instead. '
   'Will be removed in next major version')
-  SaveSharedViewMetaPB copyWith(void Function(SaveSharedViewMetaPB) updates) => super.copyWith((message) => updates(message as SaveSharedViewMetaPB)) as SaveSharedViewMetaPB; // ignore: deprecated_member_use
+  SaveSharedViewMetaPB copyWith(void Function(SaveSharedViewMetaPB) updates) => super.copyWith((message) => updates(message as SaveSharedViewMetaPB)) as SaveSharedViewMetaPB;
+
   $pb.BuilderInfo get info_ => _i;
+
   @$core.pragma('dart2js:noInline')
   static SaveSharedViewMetaPB create() => SaveSharedViewMetaPB._();
   SaveSharedViewMetaPB createEmptyInstance() => create();
@@ -2578,3 +2668,7 @@ class SaveSharedViewMetaPB extends $pb.GeneratedMessage {
   @$pb.TagNumber(5)
   void clearPermissionId() => clearField(5);
 }
+
+
+const _omitFieldNames = $core.bool.fromEnvironment('protobuf.omit_field_names');
+const _omitMessageNames = $core.bool.fromEnvironment('protobuf.omit_message_names');
