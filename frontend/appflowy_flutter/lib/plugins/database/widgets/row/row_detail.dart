@@ -145,7 +145,7 @@ class _RowDetailPageState extends State<RowDetailPage> {
                         top: calculateActionsOffset(
                           state.rowMeta.cover.data.isNotEmpty,
                         ),
-                        right: 12,
+                        right: 30,
                         child: Row(children: actions(context)),
                       ),
                       // 侧边栏收起时，在左上角显示展开按钮（不在 SpaceHub 中时显示）

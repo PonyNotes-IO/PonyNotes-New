@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_sync_gate.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 
@@ -26,9 +27,12 @@ class WhiteboardCollabAdapter {
   }) {
     _service = WhiteboardDataService();
     _listener = WhiteboardListener(id: viewId);
+    _syncGate.onOpened = _handleSyncGateOpened;
+    holdAutoSyncUntilReady();
     _listener.start(onRemoteUpdate: _onRemoteUpdate);
     Log.info(
-        '[WBCollab][WhiteboardCollabAdapter] Listener started for view: $viewId');
+      '[WBCollab][WhiteboardCollabAdapter] Listener started for view: $viewId',
+    );
   }
 
   final String viewId;
@@ -60,6 +64,7 @@ class WhiteboardCollabAdapter {
   bool _disposed = false;
   bool _isSyncing = false;
   bool _hasUnsavedChanges = false;
+  bool _hasNonEmptyInitialData = false;
 
   // 待同步的数据（增量）
   final Map<String, dynamic> _pendingData = {};
@@ -72,10 +77,55 @@ class WhiteboardCollabAdapter {
   Timer? _debounceTimer;
   // 缓存完整白板数据（全量状态）
   final Map<String, dynamic> _fullData = {};
+  final WhiteboardSyncGate _syncGate = WhiteboardSyncGate();
 
   // ✅ 修复：添加待处理的 files 数据
   final Map<String, dynamic> _pendingFiles = {};
   final Map<String, dynamic> _syncFiles = {};
+
+  void holdAutoSyncUntilReady() {
+    _syncGate.hold();
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+    Log.info(
+      '[WBCollab][WhiteboardCollabAdapter] Auto sync gate held for startup: $viewId',
+    );
+  }
+
+  void markInitialDataReadyForAutoSync() {
+    _syncGate.markInitialDataReady();
+    _flushPendingAfterGateIfOpen();
+  }
+
+  void markWebViewReadyForAutoSync() {
+    _syncGate.markWebViewReady();
+    _flushPendingAfterGateIfOpen();
+  }
+
+  void releaseAutoSyncGate({
+    WhiteboardSyncGateOpenReason reason = WhiteboardSyncGateOpenReason.manual,
+  }) {
+    _syncGate.release(reason);
+    _flushPendingAfterGateIfOpen();
+  }
+
+  void _handleSyncGateOpened(WhiteboardSyncGateOpenReason reason) {
+    Log.info(
+      '[WBCollab][WhiteboardCollabAdapter] Auto sync gate opened for $viewId, reason: $reason',
+    );
+    _flushPendingAfterGateIfOpen();
+  }
+
+  void _flushPendingAfterGateIfOpen() {
+    if (!_syncGate.canAutoSync || !_hasUnsavedChanges || _disposed) {
+      return;
+    }
+
+    Log.info(
+      '[WBCollab][WhiteboardCollabAdapter] Flushing pending sync after gate opened for $viewId, reason: ${_syncGate.openReason}',
+    );
+    _scheduleSync();
+  }
 
   /// 设置初始数据
   /// ✅ 关键修复：标准化键名，避免 localStorage 原始键名和标准键名共存导致数据混乱
@@ -83,6 +133,9 @@ class WhiteboardCollabAdapter {
     if (data != null) {
       // 标准化键名后再设置
       final normalized = _normalizeKeys(data);
+      if (_hasMeaningfulSceneChange(normalized)) {
+        _hasNonEmptyInitialData = true;
+      }
       _fullData.addAll(normalized);
       // 同时初始化 files 数据
       if (normalized.containsKey('files') && normalized['files'] is Map) {
@@ -196,7 +249,17 @@ class WhiteboardCollabAdapter {
 
     // 通知上层数据已变更（用于 UI 更新）
 
-    // 取消之前的防抖定时器，重新开始计时
+    if (!_syncGate.canAutoSync) {
+      Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Auto sync blocked by startup gate: $viewId, keys: ${data.keys.join(',')}',
+      );
+      return;
+    }
+
+    _scheduleSync();
+  }
+
+  void _scheduleSync() {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_debounceDuration, () {
       _syncImmediately();
@@ -237,6 +300,13 @@ class WhiteboardCollabAdapter {
   /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
   Future<void> _syncImmediately() async {
     if (!_hasUnsavedChanges || _isSyncing || _disposed) {
+      return;
+    }
+
+    if (!_syncGate.canAutoSync) {
+      Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Immediate sync skipped by startup gate: $viewId',
+      );
       return;
     }
 
@@ -287,10 +357,7 @@ class WhiteboardCollabAdapter {
 
     // 同步期间如果有新变更积累，安排下一次同步
     if (_hasUnsavedChanges && !_disposed) {
-      _debounceTimer?.cancel();
-      _debounceTimer = Timer(_debounceDuration, () {
-        _syncImmediately();
-      });
+      _scheduleSync();
     }
   }
 
@@ -311,8 +378,75 @@ class WhiteboardCollabAdapter {
     }
 
     if (_hasUnsavedChanges && !_disposed) {
+      if (!_syncGate.canAutoSync && !_shouldForceSyncWhileGateHeld()) {
+        Log.warn(
+          '[WBCollab][WhiteboardCollabAdapter] Force sync skipped by startup blank guard: $viewId, keys: ${_pendingData.keys.join(',')}, reason: ${_syncGate.openReason}',
+        );
+        return;
+      }
+      releaseAutoSyncGate();
       await _syncImmediately();
     }
+  }
+
+  bool _shouldForceSyncWhileGateHeld() {
+    if (_hasNonEmptyInitialData || _pendingType == 'delete') {
+      return true;
+    }
+
+    return _hasMeaningfulSceneChange(_pendingData);
+  }
+
+  bool _hasMeaningfulSceneChange(Map<String, dynamic> data) {
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (key == 'elements') {
+        if (value is List && value.isNotEmpty) {
+          return true;
+        }
+        if (value is! List) {
+          return true;
+        }
+        continue;
+      }
+
+      if (key == whiteboardElementsDeltaKey && value is Map) {
+        final changed = value['changed'];
+        if (changed is List && changed.isNotEmpty) {
+          return true;
+        }
+        continue;
+      }
+
+      if (key == 'files') {
+        if (value is Map && value.isNotEmpty) {
+          return true;
+        }
+        if (value is! Map) {
+          return true;
+        }
+        continue;
+      }
+
+      if (_isNonSceneMetadataKey(key)) {
+        continue;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  bool _isNonSceneMetadataKey(String key) {
+    return key == 'appState' ||
+        key == 'type' ||
+        key == 'version' ||
+        key == 'source' ||
+        key == 'savedAt' ||
+        key == 'viewId';
   }
 
   Future<void> forceSyncAndDispose() async {
@@ -462,5 +596,6 @@ class WhiteboardCollabAdapter {
     _fullData.clear();
     _pendingFiles.clear();
     _syncFiles.clear();
+    _syncGate.dispose();
   }
 }

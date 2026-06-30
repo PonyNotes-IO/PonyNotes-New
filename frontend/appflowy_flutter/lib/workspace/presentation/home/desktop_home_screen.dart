@@ -29,10 +29,12 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/sidebar.dart';
 import 'package:appflowy/workspace/presentation/widgets/edit_panel/panel_animation.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show UserProfilePB, UserWorkspacePB;
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -61,6 +63,72 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 
+class _SharedAccessRevocationListener extends StatefulWidget {
+  const _SharedAccessRevocationListener({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SharedAccessRevocationListener> createState() =>
+      _SharedAccessRevocationListenerState();
+}
+
+class _SharedAccessRevocationListenerState
+    extends State<_SharedAccessRevocationListener> {
+  static const String _folderObservableSource = 'Workspace';
+  StreamSubscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = RustStreamReceiver.listen((observable) {
+      if (!mounted || observable.source != _folderObservableSource) {
+        return;
+      }
+      if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
+        return;
+      }
+      final revokedViewId = observable.id;
+      if (revokedViewId.isEmpty) {
+        return;
+      }
+      final tabsBloc = getIt<TabsBloc>();
+      final pageManagers = tabsBloc.state.pageManagers;
+      final isOpen =
+          pageManagers.any((pm) => pm.plugin.id == revokedViewId);
+      if (!isOpen) {
+        return;
+      }
+      final isCurrent =
+          tabsBloc.state.currentPageManager.plugin.id == revokedViewId;
+      if (isCurrent) {
+        // The user is viewing the revoked document. closeView refuses to close
+        // the last remaining tab (and documents open by replacing the current
+        // tab in place, so there is usually exactly one), which would leave the
+        // doc editable. Navigate back to the home page instead.
+        tabsBloc.add(
+          TabsEvent.openPlugin(
+            plugin: makePlugin(pluginType: PluginType.homepage),
+          ),
+        );
+      } else {
+        // The revoked view is open in a non-active tab — just drop that tab
+        // without disturbing the page the user is currently on.
+        tabsBloc.add(TabsEvent.closeTab(revokedViewId));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class DesktopHomeScreen extends StatefulWidget {
   const DesktopHomeScreen({super.key});
 
@@ -88,7 +156,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final bool isTablet = PlatformInfo.isTablet;
-    
+
     return FutureBuilder<List<FlowyResult>>(
       future: _initFuture,
       builder: (context, snapshots) {
@@ -135,96 +203,99 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                     FavoriteBloc()..add(const FavoriteEvent.initial()),
               ),
             ],
-            child: Scaffold(
-              resizeToAvoidBottomInset: !PlatformInfo.isTablet,  // 防止全树重建
-              floatingActionButton:
-                  BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                buildWhen: (previous, current) =>
-                    previous.menuStatus != current.menuStatus,
-                builder: (context, state) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (enableMemoryLeakDetect)
-                        const FloatingActionButton(
-                          onPressed: dumpMemoryLeak,
-                          child: Icon(Icons.memory),
-                        ),
-                      const SizedBox(height: 12),
-                    ],
-                  );
-                },
-              ),
-              body: SafeArea(
-                top: isTablet,
-                bottom: isTablet,
-                child: BlocListener<HomeBloc, HomeState>(
-                  listenWhen: (previous, current) =>
-                      previous.latestView != current.latestView,
-                  listener: (context, state) {
-                    final view = state.latestView;
-                    if (view != null) {
-                      // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
-                      if (view.id.isEmpty) {
-                        Log.error(
-                          'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
-                        );
-                      } else {
-                        getIt<TabsBloc>().openPlugin(view);
-                      }
-
-                      _switchToSpace(view);
-                    }
+            child: _SharedAccessRevocationListener(
+              child: Scaffold(
+                resizeToAvoidBottomInset: !PlatformInfo.isTablet, // 防止全树重建
+                floatingActionButton:
+                    BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                  buildWhen: (previous, current) =>
+                      previous.menuStatus != current.menuStatus,
+                  builder: (context, state) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (enableMemoryLeakDetect)
+                          const FloatingActionButton(
+                            onPressed: dumpMemoryLeak,
+                            child: Icon(Icons.memory),
+                          ),
+                        const SizedBox(height: 12),
+                      ],
+                    );
                   },
-                  child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                    buildWhen: (previous, current) => previous != current,
-                    builder: (context, state) => BlocProvider(
-                      create: (_) => UserWorkspaceBloc(
-                        userProfile: userProfile,
-                        repository: RustWorkspaceRepositoryImpl(
-                          userId: userProfile.id,
-                        ),
-                      )
-                        ..add(UserWorkspaceEvent.initialize())
-                        ..add(UserWorkspaceEvent.fetchWorkspaces()),
-                      child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
-                        listenWhen: (previous, current) =>
-                            previous.currentWorkspace !=
-                                current.currentWorkspace ||
-                            previous.workspaces.length !=
-                                current.workspaces.length ||
-                            _workspacesChanged(
-                              previous.workspaces,
-                              current.workspaces,
-                            ) ||
-                            (previous.actionResult?.actionType ==
-                                        WorkspaceActionType.create &&
-                                    current.actionResult?.actionType ==
-                                        WorkspaceActionType.create &&
-                                    previous.actionResult?.isLoading !=
-                                        current.actionResult?.isLoading),
-                        listener: (context, state) {
-                          if (!context.mounted) {
-                            return;
-                          }
-
-                          CommandPalette.maybeOf(context)?.updateBlocs(
-                            workspaceBloc: context.read<UserWorkspaceBloc?>(),
-                            spaceBloc: context.read<SpaceBloc?>(),
+                ),
+                body: SafeArea(
+                  top: isTablet,
+                  bottom: isTablet,
+                  child: BlocListener<HomeBloc, HomeState>(
+                    listenWhen: (previous, current) =>
+                        previous.latestView != current.latestView,
+                    listener: (context, state) {
+                      final view = state.latestView;
+                      if (view != null) {
+                        // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
+                        if (view.id.isEmpty) {
+                          Log.error(
+                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
                           );
+                        } else {
+                          getIt<TabsBloc>().openPlugin(view);
+                        }
 
-                          _checkAndHandleWorkspaceRemoved(context, state);
-                        },
-                        child: _WorkspaceLifecycleRefresher(
-                          child: HomeHotKeys(
-                            userProfile: userProfile,
-                            child: FlowyContainer(
-                              Theme.of(context).colorScheme.surface,
-                              child: _buildBody(
-                                context,
-                                userProfile,
-                                workspaceLatest,
+                        _switchToSpace(view);
+                      }
+                    },
+                    child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                      buildWhen: (previous, current) => previous != current,
+                      builder: (context, state) => BlocProvider(
+                        create: (_) => UserWorkspaceBloc(
+                          userProfile: userProfile,
+                          repository: RustWorkspaceRepositoryImpl(
+                            userId: userProfile.id,
+                          ),
+                        )
+                          ..add(UserWorkspaceEvent.initialize())
+                          ..add(UserWorkspaceEvent.fetchWorkspaces()),
+                        child:
+                            BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                          listenWhen: (previous, current) =>
+                              previous.currentWorkspace !=
+                                  current.currentWorkspace ||
+                              previous.workspaces.length !=
+                                  current.workspaces.length ||
+                              _workspacesChanged(
+                                previous.workspaces,
+                                current.workspaces,
+                              ) ||
+                              (previous.actionResult?.actionType ==
+                                      WorkspaceActionType.create &&
+                                  current.actionResult?.actionType ==
+                                      WorkspaceActionType.create &&
+                                  previous.actionResult?.isLoading !=
+                                      current.actionResult?.isLoading),
+                          listener: (context, state) {
+                            if (!context.mounted) {
+                              return;
+                            }
+
+                            CommandPalette.maybeOf(context)?.updateBlocs(
+                              workspaceBloc: context.read<UserWorkspaceBloc?>(),
+                              spaceBloc: context.read<SpaceBloc?>(),
+                            );
+
+                            _checkAndHandleWorkspaceRemoved(context, state);
+                          },
+                          child: _WorkspaceLifecycleRefresher(
+                            child: HomeHotKeys(
+                              userProfile: userProfile,
+                              child: FlowyContainer(
+                                Theme.of(context).colorScheme.surface,
+                                child: _buildBody(
+                                  context,
+                                  userProfile,
+                                  workspaceLatest,
+                                ),
                               ),
                             ),
                           ),
@@ -269,9 +340,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     return BlocBuilder<TabsBloc, TabsState>(
       buildWhen: (previous, current) =>
           previous.currentPageManager.plugin.pluginType !=
-          current.currentPageManager.plugin.pluginType ||
+              current.currentPageManager.plugin.pluginType ||
           _getViewLayout(previous.currentPageManager) !=
-          _getViewLayout(current.currentPageManager),
+              _getViewLayout(current.currentPageManager),
       builder: (context, tabsState) {
         final currentLayout = _getViewLayout(tabsState.currentPageManager);
         final isWhiteboard = currentLayout == ViewLayoutPB.Whiteboard;
@@ -281,7 +352,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           valueListenable: spaceHubSelectedViewLayoutNotifier,
           builder: (context, spaceHubLayout, _) {
             // 任一为白板时，分割线都应该禁用
-            final isSpaceHubWhiteboard = spaceHubLayout == ViewLayoutPB.Whiteboard;
+            final isSpaceHubWhiteboard =
+                spaceHubLayout == ViewLayoutPB.Whiteboard;
             final shouldDisableResizer = isWhiteboard || isSpaceHubWhiteboard;
             final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
                 ? SidebarResizer(enabled: !shouldDisableResizer)
@@ -418,8 +490,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                   duration: layout.animDuration.inMilliseconds * 0.001,
                 )
                 .positioned(
-                  left:
-                      isSliderbarShowing && !isDrawerMenu ? layout.menuWidth : 0,
+                  left: isSliderbarShowing && !isDrawerMenu
+                      ? layout.menuWidth
+                      : 0,
                   top: isSliderbarShowing && !isDrawerMenu ? 0 : 52,
                   width: layout.notificationPanelWidth,
                   bottom: 0,
@@ -433,11 +506,13 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                   try {
                     buildContext.read<HomeSettingBloc>().add(
                           const HomeSettingEvent.changeMenuStatus(
-                              MenuStatus.hidden),
+                            MenuStatus.hidden,
+                          ),
                         );
                   } catch (e) {
                     Log.warn(
-                        '[DesktopHomeScreen] Error closing drawer menu: $e');
+                      '[DesktopHomeScreen] Error closing drawer menu: $e',
+                    );
                   }
                 },
                 child: ColoredBox(

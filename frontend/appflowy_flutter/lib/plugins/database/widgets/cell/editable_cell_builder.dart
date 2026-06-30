@@ -149,6 +149,7 @@ class EditableCellBuilder {
   EditableCellWidget buildCustom(
     CellContext cellContext, {
     required EditableCellSkinMap skinMap,
+    EditableCellStyle style = EditableCellStyle.desktopRowDetail,
   }) {
     final DatabaseController(:fieldController) = databaseController;
     final fieldType = fieldController.getField(cellContext.fieldId)!.fieldType;
@@ -156,89 +157,100 @@ class EditableCellBuilder {
     final key = ValueKey(
       "${databaseController.viewId}${cellContext.fieldId}${cellContext.rowId}",
     );
-    assert(skinMap.has(fieldType));
     return switch (fieldType) {
       FieldType.Checkbox => EditableCheckboxCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.checkboxSkin!,
+          skin: skinMap.checkboxSkin ?? IEditableCheckboxCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.Checklist => EditableChecklistCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.checklistSkin!,
+          skin: skinMap.checklistSkin ?? IEditableChecklistCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.CreatedTime => EditableTimestampCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.timestampSkin!,
+          skin: skinMap.timestampSkin ?? IEditableTimestampCellSkin.fromStyle(style),
           key: key,
           fieldType: FieldType.CreatedTime,
         ),
       FieldType.DateTime => EditableDateCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.dateSkin!,
+          skin: skinMap.dateSkin ?? IEditableDateCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.LastEditedTime => EditableTimestampCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.timestampSkin!,
+          skin: skinMap.timestampSkin ?? IEditableTimestampCellSkin.fromStyle(style),
           key: key,
           fieldType: FieldType.LastEditedTime,
         ),
       FieldType.MultiSelect => EditableSelectOptionCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.selectOptionSkin!,
+          skin: skinMap.selectOptionSkin ?? IEditableSelectOptionCellSkin.fromStyle(style),
           key: key,
           fieldType: FieldType.MultiSelect,
         ),
       FieldType.Number => EditableNumberCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.numberSkin!,
+          skin: skinMap.numberSkin ?? IEditableNumberCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.RichText => EditableTextCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.textSkin!,
+          skin: skinMap.textSkin ?? IEditableTextCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.SingleSelect => EditableSelectOptionCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.selectOptionSkin!,
+          skin: skinMap.selectOptionSkin ?? IEditableSelectOptionCellSkin.fromStyle(style),
           key: key,
           fieldType: FieldType.SingleSelect,
         ),
       FieldType.URL => EditableURLCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.urlSkin!,
+          skin: skinMap.urlSkin ?? IEditableURLCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.Relation => EditableRelationCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.relationSkin!,
+          skin: skinMap.relationSkin ?? IEditableRelationCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.Time => EditableTimeCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.timeSkin!,
+          skin: skinMap.timeSkin ?? IEditableTimeCellSkin.fromStyle(style),
           key: key,
         ),
       FieldType.Media => EditableMediaCell(
           databaseController: databaseController,
           cellContext: cellContext,
-          skin: skinMap.mediaSkin!,
-          style: EditableCellStyle.desktopGrid,
+          skin: skinMap.mediaSkin ?? IEditableMediaCellSkin.fromStyle(style),
+          style: style,
+          key: key,
+        ),
+      FieldType.Summary => EditableSummaryCell(
+          databaseController: databaseController,
+          cellContext: cellContext,
+          skin: skinMap.summarySkin ?? IEditableSummaryCellSkin.fromStyle(style),
+          key: key,
+        ),
+      FieldType.Translate => EditableTranslateCell(
+          databaseController: databaseController,
+          cellContext: cellContext,
+          skin: skinMap.translateSkin ?? IEditableTranslateCellSkin.fromStyle(style),
           key: key,
         ),
       _ => throw UnimplementedError(),
@@ -405,6 +417,8 @@ class EditableCellSkinMap {
     this.relationSkin,
     this.timeSkin,
     this.mediaSkin,
+    this.summarySkin,
+    this.translateSkin,
   });
 
   final IEditableCheckboxCellSkin? checkboxSkin;
@@ -418,6 +432,8 @@ class EditableCellSkinMap {
   final IEditableRelationCellSkin? relationSkin;
   final IEditableTimeCellSkin? timeSkin;
   final IEditableMediaCellSkin? mediaSkin;
+  final IEditableSummaryCellSkin? summarySkin;
+  final IEditableTranslateCellSkin? translateSkin;
 
   bool has(FieldType fieldType) {
     return switch (fieldType) {
@@ -435,6 +451,8 @@ class EditableCellSkinMap {
       FieldType.URL => urlSkin != null,
       FieldType.Time => timeSkin != null,
       FieldType.Media => mediaSkin != null,
+      FieldType.Summary => summarySkin != null,
+      FieldType.Translate => translateSkin != null,
       _ => throw UnimplementedError(),
     };
   }

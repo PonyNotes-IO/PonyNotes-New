@@ -12,11 +12,11 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_folder_header.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -267,6 +267,7 @@ class _SectionFolderState extends State<SectionFolder> {
         onTertiarySelected: (viewContext, selectedView) =>
             viewContext.read<TabsBloc>().openTab(selectedView),
         isHoverEnabled: widget.isHoverEnabled,
+        style: sidebarViewItemStyle(context),
       );
     });
   }

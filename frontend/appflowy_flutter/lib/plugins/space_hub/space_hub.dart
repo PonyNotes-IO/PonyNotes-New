@@ -1166,36 +1166,33 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
       spaceBloc = null;
     }
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 头部：空间名称 + 新增文档按钮
-          if (widget.showHeader) ...[
-            // Header stays here only in fullscreen, where HomeStack has no tabs.
-            // 仅在应用内全屏保留列表头部；普通模式下由顶部预留区承载。
-            _buildHeader(context, spaceBloc, isRestrictedMember),
-            VSpace(4),
-          ],
-          // 文档列表
-          Expanded(
-            child: spaceBloc != null
-                ? _buildListFromSpaceBloc(context, spaceBloc, isRestrictedMember)
-                : _buildListFromBackend(context, isRestrictedMember),
-          ),
-          // 固定底部"新增笔记页"按钮（当列表超过一屏时显示）
-          ValueListenableBuilder<bool>(
-            valueListenable: _showAddNoteButton,
-            builder: (context, show, _) {
-              if (!show) {
-                return const SizedBox.shrink();
-              }
-              return _buildBottomAddNoteButton(isRestrictedMember);
-            },
-          ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 头部：空间名称 + 新增文档按钮
+        if (widget.showHeader) ...[
+          // Header stays here only in fullscreen, where HomeStack has no tabs.
+          // 仅在应用内全屏保留列表头部；普通模式下由顶部预留区承载。
+          _buildHeader(context, spaceBloc, isRestrictedMember),
+          VSpace(4),
         ],
-      ),
+        // 文档列表
+        Expanded(
+          child: spaceBloc != null
+              ? _buildListFromSpaceBloc(context, spaceBloc, isRestrictedMember)
+              : _buildListFromBackend(context, isRestrictedMember),
+        ),
+        // 固定底部"新增笔记页"按钮（当列表超过一屏时显示）
+        ValueListenableBuilder<bool>(
+          valueListenable: _showAddNoteButton,
+          builder: (context, show, _) {
+            if (!show) {
+              return const SizedBox.shrink();
+            }
+            return _buildBottomAddNoteButton(isRestrictedMember);
+          },
+        ),
+      ],
     );
   }
 
@@ -1206,7 +1203,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     );
     return Container(
       padding: EdgeInsets.only(
-        left: 16,
+        left: 20,
+        right: 16,
         top: 10,
         bottom: 4,
       ),
@@ -1464,42 +1462,48 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
             _checkScrollable();
           });
 
-          return RawScrollbar(
-            thickness: 0.5,
-            radius: const Radius.circular(4),
-            thumbVisibility: false,
+          return ListView.builder(
             controller: widget.scrollController,
-            child: ListView.builder(
-              controller: widget.scrollController,
-              itemCount: childViews.length + 1,
-              itemBuilder: (context, index) {
-                if (index == childViews.length) {
-                  final addBtn = AFGhostIconTextButton.primary(
-                    text: '新增笔记页', // 临时使用硬编码文本
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    size: AFButtonSize.l,
-                    onTap: () => _createNewNote(context),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    borderRadius: theme.borderRadius.s,
-                    iconBuilder: (context, isHover, disabled) => FlowySvg(
-                      FlowySvgs.view_item_add_s,
-                      size: const Size.square(16.0),
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
-                  );
-                  // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
-                  if (isRestrictedMember) {
-                    return IgnorePointer(
-                      child: Opacity(opacity: 0.3, child: addBtn),
+            itemCount: childViews.length + 1,
+            itemBuilder: (context, index) {
+              if (index == childViews.length) {
+                return ValueListenableBuilder<bool>(
+                  valueListenable: _showAddNoteButton,
+                  builder: (context, showBottomButton, _) {
+                    if (showBottomButton) {
+                      return const SizedBox.shrink();
+                    }
+                    final addBtn = AFGhostIconTextButton.primary(
+                      text: '新增笔记页',
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      size: AFButtonSize.l,
+                      onTap: () => _createNewNote(context),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      borderRadius: theme.borderRadius.s,
+                      iconBuilder: (context, isHover, disabled) => FlowySvg(
+                        FlowySvgs.view_item_add_s,
+                        size: const Size.square(16.0),
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
+                      ),
                     );
-                  }
-                  return addBtn;
-                }
-                final childView = childViews[index];
-                return ViewItem(
+                    if (isRestrictedMember) {
+                      return IgnorePointer(
+                        child: Opacity(opacity: 0.3, child: addBtn),
+                      );
+                    }
+                    return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                        child: addBtn);
+                  },
+                );
+              }
+              final childView = childViews[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: ViewItem(
                   key: ValueKey('space_hub_${childView.id}'),
                   view: childView,
                   // 注意：spaceType 必须取自所在「空间」(spaceView) 的权限，
@@ -1527,9 +1531,9 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                   // 使用外部传入的选中状态，避免监听全局状态
                   isExternallySelected: widget.selectedView?.id == childView.id,
                   onExpandedChanged: _onExpandedChanged,
-                );
-              },
-            ),
+                ),
+              );
+            },
           );
         },
       ),
@@ -1552,69 +1556,70 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
           _checkScrollable();
         });
 
-        return RawScrollbar(
-          thickness: 0.5,
-          radius: const Radius.circular(4),
-          thumbVisibility: false,
+        return ListView.builder(
           controller: widget.scrollController,
-          child: ListView.builder(
-            controller: widget.scrollController,
-            itemCount: childViews.length + 1,
-            itemBuilder: (context, index) {
-              if (index == childViews.length) {
-                final addBtn = AFGhostIconTextButton.primary(
-                  text: '新增日记页', // 临时使用硬编码文本
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  size: AFButtonSize.xl,
-                  onTap: () => _createNewNote(context),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  borderRadius: theme.borderRadius.s,
-                  iconBuilder: (context, isHover, disabled) => FlowySvg(
-                    FlowySvgs.view_item_add_s,
-                    size: const Size.square(16.0),
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                );
-                // 受限成员禁用（保留在 tree 中，context.watch 实时响应权限变化）
-                if (isRestrictedMember) {
-                  return IgnorePointer(
-                    child: Opacity(opacity: 0.3, child: addBtn),
+          itemCount: childViews.length + 1,
+          itemBuilder: (context, index) {
+            if (index == childViews.length) {
+              return ValueListenableBuilder<bool>(
+                valueListenable: _showAddNoteButton,
+                builder: (context, showBottomButton, _) {
+                  if (showBottomButton) {
+                    return const SizedBox.shrink();
+                  }
+                  final addBtn = AFGhostIconTextButton.primary(
+                    text: '新增日记页',
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    size: AFButtonSize.xl,
+                    onTap: () => _createNewNote(context),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    borderRadius: theme.borderRadius.s,
+                    iconBuilder: (context, isHover, disabled) => FlowySvg(
+                      FlowySvgs.view_item_add_s,
+                      size: const Size.square(16.0),
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
                   );
-                }
-                return addBtn;
-              }
-              final childView = childViews[index];
-              return ViewItem(
-                key: ValueKey('space_hub_${childView.id}'),
-                view: childView,
-                // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
-                // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
-                spaceType: widget.spaceView.spacePermission == SpacePermission.private
-                    ? FolderSpaceType.private
-                    : FolderSpaceType.public,
-                level: 0,
-                leftPadding: 10,
-                onSelected: (itemContext, clickedView) {
-                  // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
-                  // 直接调用回调，不更新全局状态，避免整个页面刷新
-                  widget.onViewSelectedWithRecent(clickedView);
+                  if (isRestrictedMember) {
+                    return IgnorePointer(
+                      child: Opacity(opacity: 0.3, child: addBtn),
+                    );
+                  }
+                  return addBtn;
                 },
-                isFeedback: false,
-                shouldRenderChildren: true,
-                shouldLoadChildViews: true,
-                enableRightClickContext: true,
-                isHoverEnabled: true,
-                disableSelectedStatus: false,
-                isTablet: PlatformInfo.isTablet,
-                // 使用外部传入的选中状态，避免监听全局状态
-                isExternallySelected: widget.selectedView?.id == childView.id,
-                onExpandedChanged: _onExpandedChanged,
               );
-            },
-          ),
+            }
+            final childView = childViews[index];
+            return ViewItem(
+              key: ValueKey('space_hub_${childView.id}'),
+              view: childView,
+              // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
+              // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
+              spaceType: widget.spaceView.spacePermission == SpacePermission.private
+                  ? FolderSpaceType.private
+                  : FolderSpaceType.public,
+              level: 0,
+              leftPadding: 10,
+              onSelected: (itemContext, clickedView) {
+                // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
+                // 直接调用回调，不更新全局状态，避免整个页面刷新
+                widget.onViewSelectedWithRecent(clickedView);
+              },
+              isFeedback: false,
+              shouldRenderChildren: true,
+              shouldLoadChildViews: true,
+              enableRightClickContext: true,
+              isHoverEnabled: true,
+              disableSelectedStatus: false,
+              isTablet: PlatformInfo.isTablet,
+              // 使用外部传入的选中状态，避免监听全局状态
+              isExternallySelected: widget.selectedView?.id == childView.id,
+              onExpandedChanged: _onExpandedChanged,
+            );
+          },
         );
       },
     );
@@ -1798,7 +1803,7 @@ class _SpaceHubResizableDividerState
         color: Colors.transparent,
         child: Center(
           child: Container(
-            width: 1.0,
+            width: 2.0,
             color: Theme.of(context).dividerColor.withValues(alpha: 0.9),
           ),
         ),

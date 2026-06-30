@@ -42,6 +42,12 @@ pub enum FolderNotification {
 
   DidUpdateSharedViews = 40,
   DidUpdateSharedUsers = 41,
+
+  /// Trigger on the recipient's client only, when the owner fully revokes the
+  /// current user's access to a shared view. The notification `id` carries the
+  /// revoked `view_id`. The sidebar uses this to drop the view from the shared
+  /// list and close its open tab, without affecting other users' lists.
+  DidRemoveMySharedView = 42,
 }
 
 #[tracing::instrument(level = "trace", skip_all)]

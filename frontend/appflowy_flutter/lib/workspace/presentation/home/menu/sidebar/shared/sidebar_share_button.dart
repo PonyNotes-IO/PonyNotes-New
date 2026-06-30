@@ -26,7 +26,9 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
@@ -37,6 +39,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../../../application/menu/sidebar_sections_bloc.dart';
+
+// Must match FOLDER_OBSERVABLE_SOURCE in the Rust notification layer.
+const String _folderObservableSource = 'Workspace';
 
 class SidebarShareButton extends StatefulWidget {
   const SidebarShareButton({super.key});
@@ -58,6 +63,16 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   final Duration _minRefreshInterval = const Duration(seconds: 2);
   StreamSubscription<void>? _shareSectionRefreshSub;
 
+  // Real-time, recipient-targeted revocation handling: when the owner fully
+  // removes THIS user's access to a shared view, the backend sends a
+  // `collab_permission_changed` notification (with `event: access_removed`)
+  // only to this user. The Rust layer surfaces it as a `DidRemoveMySharedView`
+  // folder notification whose id is the revoked view_id. We react only to that
+  // targeted signal — never to the broadcast DidUpdateSharedUsers — so the
+  // document disappears (and its tab closes) for the removed user alone,
+  // leaving other users' shared lists untouched.
+  StreamSubscription? _sharedNotificationSub;
+
   @override
   void initState() {
     super.initState();
@@ -70,11 +85,54 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     _shareSectionRefreshSub = ShareSectionRefreshNotifier.stream.listen((_) {
       _loadUserSharedNotes(showLoading: false);
     });
+    _initSharedNotificationListener();
+  }
+
+  void _initSharedNotificationListener() {
+    _sharedNotificationSub = RustStreamReceiver.listen((observable) {
+      if (!mounted) {
+        return;
+      }
+      if (observable.source != _folderObservableSource) {
+        return;
+      }
+      // Only a targeted full-access revocation (DidRemoveMySharedView, ty=42)
+      // should drop a view from this user's shared list. Without this filter
+      // every Workspace folder notification — including the ones emitted when
+      // a shared doc is merely opened — would remove whatever view id it
+      // carries, making a still-shared doc vanish on click.
+      if (observable.ty != FolderNotification.DidRemoveMySharedView.value) {
+        return;
+      }
+      // The notification id carries the revoked view_id.
+      final revokedViewId = observable.id;
+      if (revokedViewId.isEmpty) {
+        return;
+      }
+      _handleSharedViewRevoked(revokedViewId);
+    });
+  }
+
+  /// Handles a targeted access revocation for [viewId]: drops it from this
+  /// user's shared list and closes its open tab (if any). Only the user whose
+  /// access was revoked receives the driving notification, so other users'
+  /// lists are unaffected.
+  void _handleSharedViewRevoked(String viewId) {
+    if (mounted) {
+      setState(() {
+        _userSharedNotes =
+            _userSharedNotes.where((view) => view.id != viewId).toList();
+      });
+    }
+
+    // The home-level revocation listener closes open tabs. The sidebar only
+    // owns its local shared-list state.
   }
 
   @override
   void dispose() {
     _shareSectionRefreshSub?.cancel();
+    _sharedNotificationSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _sharedSectionBloc.close();
     super.dispose();
@@ -754,6 +812,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               },
             );
           },
+          style: sidebarViewItemStyle(context),
         );
       }).toList(),
     );

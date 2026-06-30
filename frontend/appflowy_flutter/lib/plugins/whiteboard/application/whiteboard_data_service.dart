@@ -15,6 +15,41 @@ import 'package:path/path.dart' as p;
 
 import 'whiteboard_image_upload_service.dart';
 
+enum _CollabLoadStatus {
+  found,
+  empty,
+  failed,
+}
+
+class _CollabLoadResult {
+  const _CollabLoadResult._({
+    required this.status,
+    this.data,
+    this.errorMessage,
+  });
+
+  const _CollabLoadResult.found(Map<String, dynamic> data)
+      : this._(
+          status: _CollabLoadStatus.found,
+          data: data,
+        );
+
+  const _CollabLoadResult.empty()
+      : this._(
+          status: _CollabLoadStatus.empty,
+        );
+
+  const _CollabLoadResult.failed(String errorMessage)
+      : this._(
+          status: _CollabLoadStatus.failed,
+          errorMessage: errorMessage,
+        );
+
+  final _CollabLoadStatus status;
+  final Map<String, dynamic>? data;
+  final String? errorMessage;
+}
+
 class WhiteboardDataService {
   Future<String> _getWhiteboardDirectory() async {
     final basePath = await getIt<ApplicationDataStorage>().getPath();
@@ -312,10 +347,18 @@ class WhiteboardDataService {
       },
     );
 
-    await openWhiteboard(viewId: viewId);
+    final openResult = await openWhiteboard(viewId: viewId);
+    openResult.fold(
+      (_) {},
+      (error) => Log.warn(
+        '[WBCollab][WhiteboardDataService] openWhiteboard failed before load: ${error.msg}',
+      ),
+    );
 
-    final collabData = await _loadFromCollab(viewId);
-    if (collabData != null) {
+    final collabLoadResult = await _loadFromCollab(viewId);
+    final collabData = collabLoadResult.data;
+    if (collabLoadResult.status == _CollabLoadStatus.found &&
+        collabData != null) {
       logDiagnosticEvent(
         'WhiteboardLoad',
         'data_load_done',
@@ -334,14 +377,64 @@ class WhiteboardDataService {
       return collabData;
     }
 
-    print(
-        '[WBCollab][WhiteboardDataService] Collab not found, trying file system');
+    Log.info(
+      '[WBCollab][WhiteboardDataService] Collab ${collabLoadResult.status.name}, trying file system: $viewId',
+    );
     final fileData = await _loadFromFile(viewId);
 
-    await _saveToCollab(
-      viewId,
-      jsonEncode({'type': 'update', 'data': fileData}),
-    );
+    final shouldBackfillCollab =
+        collabLoadResult.status == _CollabLoadStatus.empty &&
+            !_isBlankWhiteboardData(fileData);
+
+    if (shouldBackfillCollab) {
+      Log.info(
+        '[WBCollab][WhiteboardDataService] Backfilling non-empty file fallback to empty collab: $viewId',
+      );
+      await saveWhiteboardData(
+        viewId,
+        fileData,
+        traceId: traceId,
+        sessionId: sessionId,
+        source: 'file-fallback-backfill',
+      );
+    } else if (collabLoadResult.status == _CollabLoadStatus.failed) {
+      Log.warn(
+        '[WBCollab][WhiteboardDataService] collab_load_failed_file_fallback_no_cloud_write: $viewId, error: ${collabLoadResult.errorMessage}',
+      );
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'collab_load_failed_file_fallback_no_cloud_write',
+        {
+          'traceId': traceId,
+          'sessionId': sessionId,
+          'viewId': viewId,
+          'source': source,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'error': collabLoadResult.errorMessage,
+          'elementsCount': _countElements(fileData),
+          'filesCount': _countFiles(fileData),
+          'payloadBytes': _estimatePayloadBytes(fileData),
+        },
+        warning: true,
+      );
+    } else if (_isBlankWhiteboardData(fileData)) {
+      Log.warn(
+        '[WBCollab][WhiteboardDataService] blank_file_fallback_no_cloud_write: $viewId',
+      );
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'blank_file_fallback_no_cloud_write',
+        {
+          'traceId': traceId,
+          'sessionId': sessionId,
+          'viewId': viewId,
+          'source': source,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'collabStatus': collabLoadResult.status.name,
+        },
+        warning: true,
+      );
+    }
 
     logDiagnosticEvent(
       'WhiteboardLoad',
@@ -362,7 +455,7 @@ class WhiteboardDataService {
     return fileData;
   }
 
-  Future<Map<String, dynamic>?> _loadFromCollab(String viewId) async {
+  Future<_CollabLoadResult> _loadFromCollab(String viewId) async {
     try {
       final payload = ViewIdPB()..value = viewId;
       final result = await WhiteboardEventGetWhiteboardData(payload).send();
@@ -370,16 +463,36 @@ class WhiteboardDataService {
       return result.fold(
         (data) {
           if (data.jsonData.isEmpty) {
-            return null;
+            return const _CollabLoadResult.empty();
           }
-          return jsonDecode(data.jsonData) as Map<String, dynamic>;
+          try {
+            final decoded = jsonDecode(data.jsonData);
+            if (decoded is Map<String, dynamic>) {
+              return _CollabLoadResult.found(decoded);
+            }
+            if (decoded is Map) {
+              return _CollabLoadResult.found(
+                Map<String, dynamic>.from(decoded),
+              );
+            }
+            return _CollabLoadResult.failed(
+              'Unexpected collab json type: ${decoded.runtimeType}',
+            );
+          } catch (e) {
+            return _CollabLoadResult.failed('Failed to decode collab data: $e');
+          }
         },
         (error) {
-          return null;
+          Log.warn(
+            '[WBCollab][WhiteboardDataService] _loadFromCollab failed: ${error.msg}',
+          );
+          return _CollabLoadResult.failed(error.msg);
         },
       );
     } catch (e) {
-      return null;
+      Log.warn(
+          '[WBCollab][WhiteboardDataService] _loadFromCollab exception: $e');
+      return _CollabLoadResult.failed(e.toString());
     }
   }
 
@@ -570,6 +683,10 @@ class WhiteboardDataService {
     } catch (_) {
       return -1;
     }
+  }
+
+  bool _isBlankWhiteboardData(Map<String, dynamic> data) {
+    return _countElements(data) == 0 && _countFiles(data) == 0;
   }
 
   Future<int?> getWhiteboardDataSize(String viewId) async {

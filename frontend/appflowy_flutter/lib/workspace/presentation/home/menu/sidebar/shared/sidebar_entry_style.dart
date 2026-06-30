@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 
 const sidebarSearchTopGap = 6.0;
 const sidebarSearchToEntryGroupGap = 0.0;
@@ -23,8 +24,8 @@ const sidebarEntryIconTextGap = 7.0;
 TextStyle sidebarEntryTextStyle(BuildContext context) {
   return TextStyle(
     color: Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF5F5E5A)      // 亮色模式
-        : const Color(0xFFBBC3CD),     // 暗黑模式
+        ? const Color(0xFF5F5E5A)
+        : const Color(0xFFBCBAB7),
     fontSize: 14,
     fontWeight: FontWeight.w500,
   );
@@ -32,12 +33,20 @@ TextStyle sidebarEntryTextStyle(BuildContext context) {
 
 TextStyle sidebarTextStyle(BuildContext context) {
   return TextStyle(
-    color: Theme
-        .of(context)
-        .brightness == Brightness.light
-        ? const Color(0xFF91918E) // 亮色模式
-        : const Color(0xFFBBC3CD), // 暗黑模式
+    color: Theme.of(context).brightness == Brightness.light
+        ? const Color(0xFF91918E)
+        : const Color(0xFFBBC3CD),
     fontSize: 12,
     fontWeight: FontWeight.w500,
   );
 }
+
+ViewItemStyle sidebarViewItemStyle(BuildContext context) => ViewItemStyle(
+  selectedTextColor: Theme.of(context).brightness == Brightness.light
+      ? const Color(0xFF5F5E5A)
+      : const Color(0xFFFFFFFF),
+  selectedBackgroundColor: Theme.of(context).brightness == Brightness.light
+      ? Color(0xFFF1F0EF) : const Color(0xFF383838),
+  hoverColor: Theme.of(context).brightness == Brightness.light
+      ? Color(0xFFF1F0EF) : Color(0xFF2C2C2C),
+);

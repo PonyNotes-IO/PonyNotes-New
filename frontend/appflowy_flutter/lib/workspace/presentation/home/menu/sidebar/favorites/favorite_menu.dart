@@ -10,6 +10,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favo
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_more_actions.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_pin_action.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -112,6 +113,7 @@ class _FavoriteGroupedViews extends StatelessWidget {
                 FavoritePinAction(view: view),
                 const HSpace(4.0),
               ],
+              style: sidebarViewItemStyle(context),
             ),
           )
           .toList(),
