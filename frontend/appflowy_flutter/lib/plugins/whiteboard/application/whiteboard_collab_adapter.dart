@@ -64,6 +64,7 @@ class WhiteboardCollabAdapter {
   bool _disposed = false;
   bool _isSyncing = false;
   bool _hasUnsavedChanges = false;
+  bool _hasNonEmptyInitialData = false;
 
   // 待同步的数据（增量）
   final Map<String, dynamic> _pendingData = {};
@@ -132,6 +133,9 @@ class WhiteboardCollabAdapter {
     if (data != null) {
       // 标准化键名后再设置
       final normalized = _normalizeKeys(data);
+      if (_hasMeaningfulSceneChange(normalized)) {
+        _hasNonEmptyInitialData = true;
+      }
       _fullData.addAll(normalized);
       // 同时初始化 files 数据
       if (normalized.containsKey('files') && normalized['files'] is Map) {
@@ -374,9 +378,75 @@ class WhiteboardCollabAdapter {
     }
 
     if (_hasUnsavedChanges && !_disposed) {
+      if (!_syncGate.canAutoSync && !_shouldForceSyncWhileGateHeld()) {
+        Log.warn(
+          '[WBCollab][WhiteboardCollabAdapter] Force sync skipped by startup blank guard: $viewId, keys: ${_pendingData.keys.join(',')}, reason: ${_syncGate.openReason}',
+        );
+        return;
+      }
       releaseAutoSyncGate();
       await _syncImmediately();
     }
+  }
+
+  bool _shouldForceSyncWhileGateHeld() {
+    if (_hasNonEmptyInitialData || _pendingType == 'delete') {
+      return true;
+    }
+
+    return _hasMeaningfulSceneChange(_pendingData);
+  }
+
+  bool _hasMeaningfulSceneChange(Map<String, dynamic> data) {
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (key == 'elements') {
+        if (value is List && value.isNotEmpty) {
+          return true;
+        }
+        if (value is! List) {
+          return true;
+        }
+        continue;
+      }
+
+      if (key == whiteboardElementsDeltaKey && value is Map) {
+        final changed = value['changed'];
+        if (changed is List && changed.isNotEmpty) {
+          return true;
+        }
+        continue;
+      }
+
+      if (key == 'files') {
+        if (value is Map && value.isNotEmpty) {
+          return true;
+        }
+        if (value is! Map) {
+          return true;
+        }
+        continue;
+      }
+
+      if (_isNonSceneMetadataKey(key)) {
+        continue;
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  bool _isNonSceneMetadataKey(String key) {
+    return key == 'appState' ||
+        key == 'type' ||
+        key == 'version' ||
+        key == 'source' ||
+        key == 'savedAt' ||
+        key == 'viewId';
   }
 
   Future<void> forceSyncAndDispose() async {
