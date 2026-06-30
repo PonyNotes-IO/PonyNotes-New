@@ -40,6 +40,10 @@ impl Whiteboard {
   /// 数据键
   const DATA_KEY: &'static str = "data";
   const ELEMENTS_KEY: &'static str = "elements";
+  /// 图片二进制表的键。与 elements 一样必须按 id 合并（union），
+  /// 不能整块覆盖，否则陈旧端的全量保存会抹掉其他端新加的图片，
+  /// 表现为「图片在其他用户处变占位图」「他人进入白板导致图片丢失」。
+  const FILES_KEY: &'static str = "files";
 
   /// 创建新白板（空白板）
   pub fn create(mut collab: Collab) -> Result<Self, Error> {
@@ -165,6 +169,8 @@ impl Whiteboard {
     for (k, v) in &whiteboard_data.0 {
       if k == Self::ELEMENTS_KEY {
         Self::update_elements_map(&self.data, &mut txn, v)?;
+      } else if k == Self::FILES_KEY {
+        Self::merge_files_map(&self.data, &mut txn, v)?;
       } else {
         let json = serde_json::to_string(v)
           .map_err(|e| anyhow!("Failed to serialize field '{}': {}", k, e))?;
@@ -208,6 +214,8 @@ impl Whiteboard {
         for (key, value) in data_map.iter() {
           if key == Self::ELEMENTS_KEY {
             Self::update_elements_map(&self.data, &mut txn, value)?;
+          } else if key == Self::FILES_KEY {
+            Self::merge_files_map(&self.data, &mut txn, value)?;
           } else {
             let json = serde_json::to_string(value)
               .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
@@ -323,6 +331,51 @@ impl Whiteboard {
       }
     }
 
+    Ok(())
+  }
+
+  /// 按图片 id 合并 files 表（union），而不是整块覆盖。
+  ///
+  /// 图片是内容寻址（fileId = 内容 SHA-1）且不可变，因此 union 永远安全：
+  /// - 已存在的 id：用新值覆盖（通常带更完整的云 url 元数据）；
+  /// - 仅本端有的 id：保留，绝不被陈旧端的全量保存抹掉。
+  ///
+  /// 这样即便某个端带着旧的 files 快照做全量保存，也不会丢失其他端新加的图片，
+  /// 并会在后续保存中收敛到所有端图片的并集。删除图片元素时 Excalidraw 仍保留
+  /// 其文件条目（孤儿文件，导出时清理），因此无需通过覆盖来「删」文件。
+  fn merge_files_map(
+    data: &MapRef,
+    txn: &mut collab::preclude::TransactionMut,
+    value: &serde_json::Value,
+  ) -> Result<(), Error> {
+    let Some(incoming) = value.as_object() else {
+      return Ok(());
+    };
+    if incoming.is_empty() {
+      // 空表不应清空已有图片
+      return Ok(());
+    }
+
+    // 读取并解析已有的 files 字符串
+    let mut merged = Self::map_string_value(data.get(txn, Self::FILES_KEY))
+      .and_then(|json| serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json).ok())
+      .unwrap_or_default();
+
+    let mut changed = false;
+    for (id, file) in incoming.iter() {
+      if merged.get(id) != Some(file) {
+        merged.insert(id.clone(), file.clone());
+        changed = true;
+      }
+    }
+
+    if !changed {
+      return Ok(());
+    }
+
+    let json = serde_json::to_string(&serde_json::Value::Object(merged))
+      .map_err(|e| anyhow!("Failed to serialize files map: {}", e))?;
+    data.insert(txn, Self::FILES_KEY, json.as_str());
     Ok(())
   }
 
@@ -549,6 +602,40 @@ mod tests {
     let element = elements.iter().find(|element| element["id"] == "a").unwrap();
     assert_eq!(element["version"], 2);
     assert_eq!(element["isDeleted"], true);
+  }
+
+  #[test]
+  fn test_files_union_merge_does_not_drop_existing_images() {
+    let collab = test_collab("wb-files-merge");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    // 端 A 添加图片 imgA
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"files":{"imgA":{"id":"imgA","url":"http://h/blob/a","mimeType":"image/png"}}}}"#,
+      )
+      .unwrap();
+
+    // 端 B 带着只含 imgB 的陈旧/局部快照做全量保存（旧代码会整块覆盖丢掉 imgA）
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"files":{"imgB":{"id":"imgB","url":"http://h/blob/b","mimeType":"image/png"}}}}"#,
+      )
+      .unwrap();
+
+    let data = whiteboard.get_data().unwrap();
+    let files = data.0["files"].as_object().unwrap();
+    assert!(files.contains_key("imgA"), "imgA must survive union-merge");
+    assert!(files.contains_key("imgB"), "imgB must be present");
+
+    // 空 files 表不应清空已有图片
+    whiteboard
+      .update_from_json(r#"{"type":"update","data":{"files":{}}}"#)
+      .unwrap();
+    let data = whiteboard.get_data().unwrap();
+    let files = data.0["files"].as_object().unwrap();
+    assert!(files.contains_key("imgA"));
+    assert!(files.contains_key("imgB"));
   }
 
   #[test]
