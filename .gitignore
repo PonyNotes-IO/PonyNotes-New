@@ -174,3 +174,4 @@ frontend/appflowy_flutter/.flyenv
 docs/
 AGENTS.md
 frontend/appflowy_flutter/.codegraph/daemon.pid
+frontend/scripts/windows_installer/AppFlowy/

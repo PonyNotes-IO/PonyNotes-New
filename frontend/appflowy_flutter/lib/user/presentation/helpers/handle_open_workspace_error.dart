@@ -1,6 +1,6 @@
-import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/auth/logout_relauncher.dart';
 import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/protobuf.dart';
@@ -27,8 +27,7 @@ void handleOpenWorkspaceError(BuildContext context, FlowyError error) {
         type: ToastificationType.error,
         callbacks: ToastificationCallbacks(
           onDismissed: (_) {
-            getIt<AuthService>().signOut();
-            runAppFlowy();
+            appLogoutRelauncher().logoutAndRelaunch();
           },
         ),
       );

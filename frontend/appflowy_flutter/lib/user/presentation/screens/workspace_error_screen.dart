@@ -1,6 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/auth/logout_relauncher.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -44,12 +43,10 @@ class WorkspaceErrorScreen extends StatelessWidget {
                 await state.workspaceState.when(
                   initial: () {},
                   logout: () async {
-                    await getIt<AuthService>().signOut();
-                    await runAppFlowy();
+                    await appLogoutRelauncher().logoutAndRelaunch();
                   },
                   reset: () async {
-                    await getIt<AuthService>().signOut();
-                    await runAppFlowy();
+                    await appLogoutRelauncher().logoutAndRelaunch();
                   },
                   restoreFromSnapshot: () {},
                   createNewWorkspace: () {},
