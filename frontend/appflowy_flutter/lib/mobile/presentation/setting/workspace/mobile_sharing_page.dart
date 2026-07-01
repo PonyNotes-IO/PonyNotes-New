@@ -2,11 +2,18 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
+import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
+import 'package:appflowy/features/share_tab/presentation/share_tab.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
+import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_publish_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
@@ -15,6 +22,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:http/http.dart' as http;
 import 'package:fixnum/fixnum.dart' as fixnum;
@@ -44,13 +52,59 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   bool _isLoadingPublished = true;
   String? _loadError;
 
+  // 工作区 ID 和类型
+  String _workspaceId = '';
+  WorkspaceTypePB _workspaceType = WorkspaceTypePB.LocalW;
+
   @override
   void initState() {
     super.initState();
+    PublishRefresh.notifier.addListener(_onPublishPing);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWorkspace();
       _loadSharedNotes();
       _loadPublishedViews();
     });
+  }
+
+  @override
+  void dispose() {
+    PublishRefresh.notifier.removeListener(_onPublishPing);
+    super.dispose();
+  }
+
+  Future<void> _loadWorkspace() async {
+    // 获取当前 workspace ID
+    final latestResult = await FolderEventGetCurrentWorkspaceSetting().send();
+    String wsId = '';
+    latestResult.fold((latest) => wsId = latest.workspaceId, (_) {});
+
+    if (wsId.isEmpty) {
+      // Fallback: 通过 getCurrentWorkspace 获取 ID
+      final wsResult = await UserBackendService.getCurrentWorkspace();
+      wsResult.fold((ws) => wsId = ws.id, (_) {});
+    }
+
+    if (wsId.isEmpty) return;
+
+    // 获取当前 workspace 的类型
+    final workspaceResult = await UserBackendService.getWorkspaceById(wsId);
+    final wsType = workspaceResult.fold(
+      (ws) => ws.workspaceType,
+      (_) => WorkspaceTypePB.LocalW,
+    );
+
+    if (mounted) {
+      setState(() {
+        _workspaceId = wsId;
+        _workspaceType = wsType;
+      });
+    }
+  }
+
+  void _onPublishPing() {
+    if (_isLoadingPublished) return;
+    _loadPublishedViews();
   }
 
   @override
@@ -70,48 +124,6 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     );
   }
 
-  Widget _buildUpgradePrompt() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF0E2),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Center(
-                child: Icon(
-                  Icons.lock_outline_rounded,
-                  size: 36,
-                  color: Color(0xFFFF6B35),
-                ),
-              ),
-            ),
-            const VSpace(20),
-            const FlowyText(
-              '升级会员解锁共享发布功能',
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-            const VSpace(10),
-            FlowyText(
-              '升级到标准版及以上套餐，即可共享笔记给他人协作，并将笔记发布为公开网页。',
-              fontSize: 13,
-              color: Colors.grey[500],
-              textAlign: TextAlign.center,
-              maxLines: 3,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTabSection() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -125,9 +137,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
             child: GestureDetector(
               onTap: () {
                 if (_currentTab != index) {
-                  setState(() {
-                    _currentTab = index;
-                  });
+                  setState(() => _currentTab = index);
                 }
               },
               child: Container(
@@ -171,90 +181,118 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
 
   Widget _buildSharedContent() {
     if (_isLoadingShared) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return SizedBox(
+        height: 240,
+        child: const Center(child: CircularProgressIndicator.adaptive()),
+      );
     }
     if (_sharedError != null && _sharedNotes.isEmpty) {
-      return Center(
-        child: FlowyText(
-          '加载失败：$_sharedError',
-          color: Colors.red,
+      return SizedBox(
+        height: 240,
+        child: Center(
+          child: FlowyText(
+            '加载失败：$_sharedError',
+            color: Colors.red,
+          ),
         ),
       );
     }
     if (_sharedNotes.isEmpty) {
-      return _buildEmptyState(
-        icon: FlowySvgs.share_s,
-        message: '暂无共享内容',
+      return SizedBox(
+        height: 240,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FlowySvg(
+                FlowySvgs.share_s,
+                size: const Size(48, 48),
+                color: Colors.grey[400],
+              ),
+              const VSpace(12),
+              FlowyText(
+                '暂无共享内容',
+                color: Colors.grey[500],
+              ),
+            ],
+          ),
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _sharedNotes.length,
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        color: Colors.grey[200],
-      ),
-      itemBuilder: (context, index) {
-        final view = _sharedNotes[index];
-        return _buildSharedListItem(view);
-      },
+    return Column(
+      children: [
+        for (int index = 0; index < _sharedNotes.length; index++) ...[
+          _buildSharedListItem(_sharedNotes[index]),
+          if (index != _sharedNotes.length - 1)
+            Divider(height: 1, color: Colors.grey[200]),
+        ],
+      ],
     );
   }
 
   Widget _buildPublishedContent() {
+    // 非 Server 用户不支持发布站点
+    if (_workspaceType == WorkspaceTypePB.LocalW) {
+      return SizedBox(
+        height: 320,
+        child: Center(
+          child: FlowyText(
+            '当前账户类型不支持发布功能',
+            color: Colors.grey[600],
+          ),
+        ),
+      );
+    }
+
     if (_isLoadingPublished) {
-      return const Center(child: CircularProgressIndicator.adaptive());
+      return SizedBox(
+        height: 320,
+        child: const Center(child: CircularProgressIndicator.adaptive()),
+      );
     }
     if (_loadError != null && _publishedViews.isEmpty) {
-      return Center(
-        child: FlowyText(
-          '加载失败：$_loadError',
-          color: Colors.red,
+      return SizedBox(
+        height: 320,
+        child: Center(
+          child: FlowyText(
+            '加载失败：$_loadError',
+            color: Colors.red,
+          ),
         ),
       );
     }
     if (_publishedViews.isEmpty) {
-      return _buildEmptyState(
-        icon: FlowySvgs.m_publish_s,
-        message: '暂无发布内容',
+      return SizedBox(
+        height: 320,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FlowySvg(
+                FlowySvgs.m_publish_s,
+                size: const Size(48, 48),
+                color: Colors.grey[400],
+              ),
+              const VSpace(12),
+              FlowyText(
+                '暂无发布内容',
+                color: Colors.grey[500],
+              ),
+            ],
+          ),
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _publishedViews.length,
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        color: Colors.grey[200],
-      ),
-      itemBuilder: (context, index) {
-        final view = _publishedViews[index];
-        return _buildPublishedListItem(view);
-      },
-    );
-  }
-
-  Widget _buildEmptyState({
-    required FlowySvgData icon,
-    required String message,
-  }) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          FlowySvg(
-            icon,
-            size: const Size(48, 48),
-            color: Colors.grey[400],
-          ),
-          const VSpace(12),
-          FlowyText(
-            message,
-            color: Colors.grey[500],
-          ),
+    return Column(
+      children: [
+        for (int index = 0; index < _publishedViews.length; index++) ...[
+          _buildPublishListItem(_publishedViews[index]),
+          if (index != _publishedViews.length - 1)
+            Divider(height: 1, color: Colors.grey[200]),
         ],
-      ),
+      ],
     );
   }
 
@@ -264,7 +302,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     final theme = AppFlowyTheme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: [
           Container(
@@ -296,72 +334,112 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
                 ),
                 const VSpace(4),
                 FlowyText(
-                  '$shareTime · 已共享',
+                  shareTime,
                   fontSize: 12,
                   color: theme.textColorScheme.secondary,
                 ),
               ],
             ),
           ),
-          Icon(
-            Icons.chevron_right,
-            color: Colors.grey[400],
+          TextButton(
+            onPressed: () => _showInviteMembersDialog(view),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFFF6B35),
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 28),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text(
+              '查看成员',
+              style: TextStyle(fontSize: 13),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPublishedListItem(PublishInfoViewPB view) {
-    final title = view.view.name.isNotEmpty ? view.view.name : '无标题';
-    final publishTime = view.info.publishTimestampSec.toInt() > 0
-        ? _formatTimestamp(view.info.publishTimestampSec.toInt())
-        : '未知';
+  Widget _buildPublishListItem(PublishInfoViewPB item) {
+    final String title =
+        item.view.name.isNotEmpty ? item.view.name : item.info.publishName;
+    final String publishTime = _formatPublishTime(
+      item.info.publishTimestampSec.toInt(),
+    );
+    final String publishUrl = ShareConstants.buildPublishUrl(
+      workspaceId: _workspaceId,
+      viewId: item.info.viewId,
+    );
     final theme = AppFlowyTheme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: FlowySvg(
+                    FlowySvgs.share_publish_s,
+                    size: const Size.square(20),
+                    color: const Color(0xFFFF6B35),
+                  ),
+                ),
+              ),
+              const HSpace(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FlowyText(
+                      title.isEmpty ? '无标题' : title,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textColorScheme.primary,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const VSpace(4),
+                    FlowyText(
+                      publishTime,
+                      fontSize: 12,
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const VSpace(8),
+          GestureDetector(
+            onTap: () => _openPublishUrl(publishUrl),
+            child: FlowyText.small(
+              publishUrl,
+              color: const Color(0xFF2563EB),
+              overflow: TextOverflow.ellipsis,
+              decoration: TextDecoration.underline,
             ),
-            child: const Center(
-              child: Icon(
-                Icons.public_outlined,
-                size: 20,
-                color: Color(0xFF4CAF50),
+          ),
+          const VSpace(6),
+          SizedBox(
+            height: 32,
+            child: TextButton(
+              onPressed: () => _openPublishUrl(publishUrl),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFFF6B35),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              child: const Text(
+                '打开网址',
+                style: TextStyle(fontSize: 13),
               ),
             ),
-          ),
-          const HSpace(12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                FlowyText(
-                  title,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: theme.textColorScheme.primary,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const VSpace(4),
-                FlowyText(
-                  '$publishTime · 已发布',
-                  fontSize: 12,
-                  color: theme.textColorScheme.secondary,
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: Colors.grey[400],
           ),
         ],
       ),
@@ -369,8 +447,55 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   }
 
   String _formatTimestamp(int timestamp) {
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-    return DateFormat('yyyy-MM-dd').format(date);
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      timestamp * 1000,
+      isUtc: true,
+    ).toLocal();
+    final two = (int v) => v.toString().padLeft(2, '0');
+    return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  String _formatPublishTime(int secondsSinceEpoch) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      secondsSinceEpoch * 1000,
+      isUtc: true,
+    ).toLocal();
+    final two = (int v) => v.toString().padLeft(2, '0');
+    return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
+  }
+
+  Future<void> _openPublishUrl(String url) async {
+    await afLaunchUrlString(url);
+  }
+
+  Future<void> _showInviteMembersDialog(ViewPB view) async {
+    if (_workspaceId.isEmpty) {
+      showToastNotification(message: '未找到工作区');
+      return;
+    }
+
+    if (_workspaceType == WorkspaceTypePB.LocalW) {
+      showToastNotification(message: '当前工作区暂不支持共享权限管理');
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return BlocProvider(
+          create: (_) => ShareTabBloc(
+            repository: RustShareWithUserRepositoryImpl(),
+            pageId: view.id,
+            workspaceId: _workspaceId,
+          )..add(ShareTabEvent.initialize()),
+          child: CollaboratorsDialog(
+            workspaceId: _workspaceId,
+            pageId: view.id,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadSharedNotes() async {
@@ -406,6 +531,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
       final accessToken = _extractAccessToken(token);
       if (accessToken == null || accessToken.isEmpty) {
         Log.error('Failed to extract access_token from token');
+        setState(() => _isLoadingShared = false);
         return;
       }
 
@@ -440,6 +566,9 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         _isLoadingShared = false;
         _sharedError = null;
       });
+
+      // 异步加载每个笔记的详细信息（包括标题）
+      _loadViewDetails(views);
     } catch (e) {
       Log.error('load shared pages exception: $e');
       if (!mounted) return;
@@ -527,24 +656,88 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     for (final entry in items) {
       if (entry is! Map<String, dynamic>) continue;
 
-      final viewId = entry['view_id']?.toString() ?? '';
-      final name = entry['name']?.toString() ?? '无标题';
-      final createTime = entry['create_time'];
-      int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      if (createTime is int) {
-        timestamp = createTime;
-      } else if (createTime is String) {
-        try {
-          timestamp = int.parse(createTime);
-        } catch (_) {}
-      }
+      // 根据 API 响应结构，支持多种字段名
+      final oid = (entry['oid'] ??
+              entry['object_id'] ??
+              entry['objectId'] ??
+              entry['view_id'] ??
+              '')
+          .toString();
+      if (oid.isEmpty) continue;
+
+      final timestampRaw = entry['created_at'] ?? entry['createdAt'] ?? entry['create_time'];
+      final createdSeconds = _parseTimestampSeconds(timestampRaw);
+      final name = (entry['name'] ?? '').toString();
+      final displayName = name.isNotEmpty ? name : '加载中...';
 
       final view = ViewPB()
-        ..id = viewId
-        ..name = name
-        ..createTime = fixnum.Int64(timestamp);
+        ..id = oid
+        ..name = displayName
+        ..createTime = fixnum.Int64(createdSeconds);
       views.add(view);
     }
+
+    views.sort((a, b) => b.createTime.toInt() - a.createTime.toInt());
     return views;
+  }
+
+  int _parseTimestampSeconds(dynamic raw) {
+    if (raw == null) {
+      return DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    }
+    if (raw is int) {
+      return raw > 1000000000000 ? raw ~/ 1000 : raw;
+    }
+    if (raw is double) {
+      final value = raw.toInt();
+      return value > 1000000000000 ? value ~/ 1000 : value;
+    }
+    if (raw is String && raw.isNotEmpty) {
+      final parsedDate = DateTime.tryParse(raw);
+      if (parsedDate != null) {
+        return parsedDate.millisecondsSinceEpoch ~/ 1000;
+      }
+      final parsedInt = int.tryParse(raw);
+      if (parsedInt != null) {
+        return parsedInt > 1000000000000 ? parsedInt ~/ 1000 : parsedInt;
+      }
+    }
+    return DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  }
+
+  Future<void> _loadViewDetails(List<ViewPB> views) async {
+    if (views.isEmpty || !mounted) return;
+
+    final updatedViews = <ViewPB>[];
+    bool hasUpdate = false;
+
+    for (final view in views) {
+      if (view.id.isEmpty) {
+        updatedViews.add(view);
+        continue;
+      }
+
+      try {
+        final viewResult = await ViewBackendService.getView(view.id);
+        viewResult.fold(
+          (detailedView) {
+            if (detailedView.name.isNotEmpty) {
+              updatedViews.add(detailedView);
+              hasUpdate = true;
+            } else {
+              updatedViews.add(view);
+            }
+          },
+          (_) => updatedViews.add(view),
+        );
+      } catch (e) {
+        Log.error('Failed to load view details for ${view.id}: $e');
+        updatedViews.add(view);
+      }
+    }
+
+    if (hasUpdate && mounted) {
+      setState(() => _sharedNotes = updatedViews);
+    }
   }
 }
