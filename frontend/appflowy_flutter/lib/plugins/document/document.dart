@@ -33,6 +33,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class DocumentPluginBuilder extends PluginBuilder {
   @override
@@ -199,7 +200,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
         // SpaceHub 内嵌文档由中间栏头部的展开按钮负责，不走此分支。
         Positioned(
           top: 0,
-          left: 0,
+          left: UniversalPlatform.isMacOS ? 100 : 16,
           child: _SidebarExpandFloatingButton(
             iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
           ),
