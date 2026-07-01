@@ -314,21 +314,17 @@ class WhiteboardCollabAdapter {
       return;
     }
 
-    final incomingRevision = _tryParseRevision(data['revision']);
-    if (incomingRevision != null &&
-        !_versionLock.shouldAccept(
-          incomingRevision,
-          sourceRank: WhiteboardSourceRank.session,
-        )) {
-      Log.info(
-        '[WBCollab][WhiteboardCollabAdapter] Dropping stale payload for $viewId: incomingRevision=$incomingRevision currentRevision=${_versionLock.revision}',
-      );
-      return;
-    }
-    if (incomingRevision != null) {
-      _seedRevision(incomingRevision);
-      _fullData['revision'] = incomingRevision;
-    }
+    // 【回退修复 2026-07-01】本地用户编辑一律放行，绝不按 revision 门控。
+    // 原因：这个回调只处理“用户在本机 WebView 上的实时绘制”（Excalidraw onChange →
+    // localStorageOnSet）。上游 version-lock 用 revision 门控本地编辑存在两个致命问题：
+    //   ① setInitialData 以 authority(rank=2) 锁定初始 revision 后，session 级本地编辑在相等
+    //      revision 上永远通不过 shouldAccept，revision 卡在 0，编辑全部被丢（344 次 0 保存）；
+    //   ② 即便放宽到“仅丢严格更旧”，本地 onChange 携带的 revision 是上一次推给 WebView 的
+    //      陈旧回声值，天然滞后于 _ensurePendingRevision 递增后的当前 HEAD（实测
+    //      incomingRevision=3 < currentRevision=4），连续绘制仍被成批丢弃、切换即丢。
+    // revision 只应服务于“对外保存的排序”（由 _ensurePendingRevision 赋值，Rust 侧只挡严格
+    // 更旧的跨端更新），绝不能用来拦截用户本机的实时绘制。空画布式清空由下方
+    // _withoutBlankElements 守卫拦截，不依赖 version-lock。
 
     // 【数据丢失根因修复】剔除清空画布式的空 elements([]) 写入，绝不写入全量缓存与
     // 待同步队列（详见 _isBlankElementsValue 说明）。仅对 'update' 生效，'delete' 走
