@@ -98,6 +98,18 @@ impl Whiteboard {
             for (key, _change) in key_changes.iter() {
               let id = key.to_string();
               let element = Self::map_string_value_to_json(target.get(txn, id.as_str()));
+              // 【元素丢失根因修复 2026-07-01】读到 null（键被移除/值不可解析的异常态）绝不能
+              // 作为“删除”广播出去。union-only 模型下元素键从不删除、合法删除是 isDeleted:true 的
+              // 非空元素；把 null 发给客户端会被 _mergeElementsDelta 当成删除，导致其他端元素莫名
+              // 消失。跳过 null，不发射该 delta。
+              if element.is_null() {
+                tracing::warn!(
+                  "[WBLoss] observe_deep skip null element id={}, is_remote={}",
+                  id,
+                  is_remote
+                );
+                continue;
+              }
               changed_elements.push(serde_json::json!({
                 "id": id,
                 "element": element,

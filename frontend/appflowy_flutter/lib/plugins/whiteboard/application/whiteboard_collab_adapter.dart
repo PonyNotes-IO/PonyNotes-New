@@ -710,11 +710,14 @@ class WhiteboardCollabAdapter {
       final remoteElement = change['element'];
       final localElement = byId[id];
       if (remoteElement is! Map) {
-        if (localElement is Map) {
-          byId[id] = {
-            ...localElement,
-            'isDeleted': true,
-          };
+        // 【元素丢失根因修复 2026-07-01】远程 delta 里 element 为 null，只可能来自 Rust
+        // observe_deep 读到“键被移除/值不可解析”的异常态。当前 union-only 模型下元素键从不
+        // 删除，合法删除一律是 isDeleted:true 的“非空 Map”。因此绝不能据 null 把本地存活元素
+        // 标记删除——这正是“多端协作时别人写的元素莫名消失”的真凶。保留本地，跳过。
+        if (localElement is Map && localElement['isDeleted'] != true) {
+          Log.warn(
+            '[WBLoss] Ignored spurious null-element delete for id=$id (kept local element)',
+          );
         }
         continue;
       }
@@ -730,6 +733,12 @@ class WhiteboardCollabAdapter {
           (remoteVersion == localVersion &&
               _elementVersionNonce(remoteElement) >
                   _elementVersionNonce(localElement))) {
+        // 【埋点】记录“存活元素被远程标记删除”的事件，便于定位非 null 路径的删除来源。
+        if (localElement['isDeleted'] != true && remoteElement['isDeleted'] == true) {
+          Log.warn(
+            '[WBLoss] element $id marked deleted by remote delta: localV=$localVersion remoteV=$remoteVersion',
+          );
+        }
         byId[id] = remoteElement;
       }
     }
