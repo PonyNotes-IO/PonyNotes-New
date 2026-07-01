@@ -7,8 +7,10 @@ edition = "2018"
 [lib]
 name = "dart_ffi"
 # this value will change depending on the target os
-# setup-crate-type task replaces "cdylib" with ${CRATE_TYPE} (cdylib for Android)
-crate-type = ["cdylib", "rlib"]
+# setup-crate-type task replaces "staticlib" with ${CRATE_TYPE}
+# (staticlib for macOS/iOS, cdylib for Android/Windows). 基线必须保持 "staticlib" 作为替换哨兵，
+# 否则 macOS 静态库构建会产出 .dylib 而非 libdart_ffi.a，导致 universal 打包失败。
+crate-type = ["staticlib"]
 
 
 [dependencies]
