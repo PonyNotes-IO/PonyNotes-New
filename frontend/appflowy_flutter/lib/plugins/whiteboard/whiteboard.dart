@@ -518,30 +518,20 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     // 注销所有控制器（同步操作）
     _unregisterControllers();
 
-    // 关闭后端白板资源：manager.close_whiteboard 会 whiteboards.remove(viewId)，
-    // 直接销毁 collab 并停止同步。因此绝不能与 forceSync 并行——必须等同步落盘/推送完成后再关闭。
-    final viewId = widget.view.id;
-    Future<void> closeWhiteboardResource() async {
-      try {
-        final service = WhiteboardDataService();
-        final result = await service.closeWhiteboard(viewId: viewId);
-        result.fold(
-          (_) => Log.info('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
-          (error) => Log.error(
-              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
-        );
-      } catch (e) {
-        Log.error('[WhiteboardPage] Exception closing whiteboard: $e');
-      }
-    }
-
-    // 【切换竞态修复 2026-07-01】串行化：先停 listener + forceSync（落盘并推送最后一批笔触），
-    // 完成后（成功或失败都要）再 closeWhiteboard 释放后端资源。
-    // 原实现二者并行 fire-and-forget，而 closeWhiteboard 是快 RPC、几乎必然先执行，会在
-    // forceSync 保存到达前就销毁 collab + 停同步，导致切走瞬间最后一批笔触丢失同步。
+    // 【协作丢元素根因修复 2026-07-01】页面 dispose 时不再 closeWhiteboard。
+    // 根因：白板页在协作/焦点/生命周期变化（多端来回切窗口时尤为频繁）下会被反复整页销毁重建，
+    // 而 manager.close_whiteboard 会 whiteboards.remove(viewId)，丢弃内存里“已与服务器实时同步”
+    // 的 collab；重建时又走 “not in cache → 从异步滞后的本地磁盘重载”，读到的是你“离开”期间其他
+    // 端新增元素尚未落盘的旧态，在重新 init_sync 补齐前这些元素从画面消失 —— 多端大量绘制时就表现
+    // 为“元素一点一点丢”（日志：get_whiteboard_data 同一板几秒内 136K↔126K↔36K 剧烈波动）。
+    // 改为让 collab 常驻管理器缓存并保持实时同步：页面重建直接命中缓存、复用当前已同步的内存态，
+    // 重开即完整、彻底消除“旧盘回退”窗口。这里仍停 listener + forceSync，把 WebView 最后一批改动
+    // 落进（仍存活的）collab；后端 collab 资源随会话保留（若担心内存/连接累积，后续可在 Rust
+    // manager 加 LRU 驱逐或“关闭 tab 才真正 close”的区分，见 devops-docs 记录）。
     if (adapter != null) {
       adapter.forceSyncAndDispose().then((_) {
-        Log.info('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
+        Log.info(
+            '[WhiteboardPage] ✅ Force sync completed, adapter disposed (collab kept alive & synced)');
         logDiagnosticEvent(
           'WhiteboardLoad',
           'page_dispose_force_sync_done',
@@ -568,10 +558,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
           },
           warning: true,
         );
-      }).whenComplete(closeWhiteboardResource);
-    } else {
-      // 无 adapter（异常兜底）时直接释放后端资源
-      closeWhiteboardResource();
+      });
     }
 
     super.dispose();
