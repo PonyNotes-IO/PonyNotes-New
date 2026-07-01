@@ -796,6 +796,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
           leftPadding: HomeSpaceViewSizes.leftPadding,
           isFeedback: false,
           isHovered: ValueNotifier(false),
+          isHoverEnabled: true,
           isDraggable: false,
           enableRightClickContext: false,
           shouldRenderChildren: false,

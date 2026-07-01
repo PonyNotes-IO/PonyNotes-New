@@ -162,6 +162,7 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             },
           );
         },
+        style: sidebarViewItemStyle(context),
       );
     }).toList();
   }
