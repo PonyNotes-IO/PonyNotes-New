@@ -163,104 +163,110 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                 ),
             ),
           ],
-          child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
-            buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-            builder: (sidebarContext, menuState) {
-              return BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
-                builder: (innerContext, state) {
-                  final layout = state.tabBars[state.selectedIndex].layout;
-                  final isCalendar = layout == ViewLayoutPB.Calendar;
-                  final databseBuilderSize =
-                      context.read<DatabasePluginWidgetBuilderSize>();
-                  final horizontalPadding =
-                      databseBuilderSize.horizontalPadding;
-                  final showActionWrapper = widget.showActions &&
-                      widget.actionBuilder != null &&
-                      widget.node != null;
-                  final Widget child = Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      VSpace(12),
-                      ValueListenableBuilder<bool>(
-                        valueListenable: state
-                            .tabBarControllerByViewId[state.parentView.id]!
-                            .controller
-                            .isLoading,
-                        builder: (_, value, ___) {
-                          if (value) {
-                            return const SizedBox.shrink();
-                          }
-
-                          Widget child = PlatformInfo.isDesktopOrTablet
-                              ? const TabBarHeader()
-                              : const MobileTabBarHeader();
-
-                          if (innerContext
-                              .watch<ViewBloc>()
-                              .state
-                              .view
-                              .isLocked) {
-                            child = IgnorePointer(
-                              child: child,
-                            );
-                          }
-
-                          if (showActionWrapper) {
-                            child = BlockComponentActionWrapper(
-                              node: widget.node!,
-                              actionBuilder: widget.actionBuilder!,
-                              child: Padding(
-                                padding:
-                                    EdgeInsets.only(right: horizontalPadding),
-                                child: child,
-                              ),
-                            );
-                          }
-
-                          if (PlatformInfo.isDesktopOrTablet) {
-                            child = Container(
-                              padding: EdgeInsets.fromLTRB(
-                                horizontalPadding + paddingLeft,
-                                25,
-                                horizontalPadding,
-                                0,
-                              ),
-                              child: child,
-                            );
-                          }
-
-                          return child;
-                        },
-                      ),
-                      pageSettingBarExtensionFromState(context, state),
-                      wrapContent(
-                        layout: layout,
-                        child: Padding(
-                          padding: (isCalendar && widget.shrinkWrap ||
-                                  showActionWrapper)
-                              ? EdgeInsets.only(left: 42 - horizontalPadding)
-                              : EdgeInsets.zero,
-                          child: Provider(
-                            create: (_) => DatabasePluginWidgetBuilderSize(
-                              horizontalPadding: horizontalPadding,
-                              paddingLeftWithMaxDocumentWidth: paddingLeft,
-                              verticalPadding:
-                                  databseBuilderSize.verticalPadding,
-                            ),
-                            child: pageContentFromState(context, state),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-
-                  return child;
-                },
-              );
-            },
-          ),
+          child: PlatformInfo.isDesktopOrTablet
+              ? BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                  buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                  builder: (sidebarContext, menuState) {
+                    return _buildTabBarContent(context, paddingLeft);
+                  },
+                )
+              : _buildTabBarContent(context, paddingLeft),
         );
+      },
+    );
+  }
+
+  Widget _buildTabBarContent(BuildContext context, double paddingLeft) {
+    return BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
+      builder: (innerContext, state) {
+        final layout = state.tabBars[state.selectedIndex].layout;
+        final isCalendar = layout == ViewLayoutPB.Calendar;
+        final databseBuilderSize =
+            context.read<DatabasePluginWidgetBuilderSize>();
+        final horizontalPadding =
+            databseBuilderSize.horizontalPadding;
+        final showActionWrapper = widget.showActions &&
+            widget.actionBuilder != null &&
+            widget.node != null;
+        final Widget child = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            VSpace(12),
+            ValueListenableBuilder<bool>(
+              valueListenable: state
+                  .tabBarControllerByViewId[state.parentView.id]!
+                  .controller
+                  .isLoading,
+              builder: (_, value, ___) {
+                if (value) {
+                  return const SizedBox.shrink();
+                }
+
+                Widget child = PlatformInfo.isDesktopOrTablet
+                    ? const TabBarHeader()
+                    : const MobileTabBarHeader();
+
+                if (innerContext
+                    .watch<ViewBloc>()
+                    .state
+                    .view
+                    .isLocked) {
+                  child = IgnorePointer(
+                    child: child,
+                  );
+                }
+
+                if (showActionWrapper) {
+                  child = BlockComponentActionWrapper(
+                    node: widget.node!,
+                    actionBuilder: widget.actionBuilder!,
+                    child: Padding(
+                      padding:
+                          EdgeInsets.only(right: horizontalPadding),
+                      child: child,
+                    ),
+                  );
+                }
+
+                if (PlatformInfo.isDesktopOrTablet) {
+                  child = Container(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding + paddingLeft,
+                      25,
+                      horizontalPadding,
+                      0,
+                    ),
+                    child: child,
+                  );
+                }
+
+                return child;
+              },
+            ),
+            pageSettingBarExtensionFromState(context, state),
+            wrapContent(
+              layout: layout,
+              child: Padding(
+                padding: (isCalendar && widget.shrinkWrap ||
+                        showActionWrapper)
+                    ? EdgeInsets.only(left: 42 - horizontalPadding)
+                    : EdgeInsets.zero,
+                child: Provider(
+                  create: (_) => DatabasePluginWidgetBuilderSize(
+                    horizontalPadding: horizontalPadding,
+                    paddingLeftWithMaxDocumentWidth: paddingLeft,
+                    verticalPadding:
+                        databseBuilderSize.verticalPadding,
+                  ),
+                  child: pageContentFromState(context, state),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        return child;
       },
     );
   }

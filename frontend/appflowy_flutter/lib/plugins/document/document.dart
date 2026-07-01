@@ -333,9 +333,14 @@ class _SidebarExpandFloatingButton extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        final isMenuHidden = context.select<HomeSettingBloc, bool>(
-          (bloc) => bloc.isMenuHidden,
-        );
+        bool isMenuHidden = true;
+        try {
+          isMenuHidden = context.select<HomeSettingBloc, bool>(
+            (bloc) => bloc.isMenuHidden,
+          );
+        } catch (_) {
+          // HomeSettingBloc not available (mobile mode)
+        }
         if (!isMenuHidden) {
           return const SizedBox.shrink();
         }
@@ -359,7 +364,13 @@ class _SidebarExpandFloatingButton extends StatelessWidget {
                     size: const Size.square(20),
                     color: iconColor,
                   ),
-                  onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
+                  onTap: () {
+                    try {
+                      context.read<HomeSettingBloc>().collapseMenu();
+                    } catch (_) {
+                      // HomeSettingBloc not available (mobile mode)
+                    }
+                  },
                 ),
               ),
             ),

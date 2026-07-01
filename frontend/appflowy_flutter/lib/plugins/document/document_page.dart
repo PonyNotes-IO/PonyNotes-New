@@ -511,41 +511,42 @@ class _DocumentPageState extends State<DocumentPage>
         return Stack(
           children: [
             editorContent,
-            BlocBuilder<HomeSettingBloc, HomeSettingState>(
-              buildWhen: (previous, current) =>
-                  previous.menuStatus != current.menuStatus,
-              builder: (context, menuState) {
-                final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
-                final shouldShowExpandButton = isSidebarHidden &&
-                    getIt<MenuSharedState>().shouldShowSidebarExpandButton(widget.view);
-                if (!shouldShowExpandButton) {
-                  return const SizedBox.shrink();
-                }
+            if (PlatformInfo.isDesktopOrTablet)
+              BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                buildWhen: (previous, current) =>
+                    previous.menuStatus != current.menuStatus,
+                builder: (context, menuState) {
+                  final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
+                  final shouldShowExpandButton = isSidebarHidden &&
+                      getIt<MenuSharedState>().shouldShowSidebarExpandButton(widget.view);
+                  if (!shouldShowExpandButton) {
+                    return const SizedBox.shrink();
+                  }
 
-                final theme = AppFlowyTheme.of(context);
-                return Positioned(
-                  top: 10,
-                  left: UniversalPlatform.isMacOS ? 88 : 16,
-                  child: FlowyTooltip(
-                    message: LocaleKeys.sideBar_openSidebar.tr(),
-                    child: FlowyIconButton(
-                      width: 24,
-                      icon: FlowySvg(
-                        FlowySvgs.sidebar_collapse_custom_m,
-                        size: const Size.square(24),
-                        color: theme.iconColorScheme.primary,
-                      ),
-                      onPressed: () =>
-                          context.read<HomeSettingBloc>().add(
-                                const HomeSettingEvent.changeMenuStatus(
-                                  MenuStatus.expanded,
+                  final theme = AppFlowyTheme.of(context);
+                  return Positioned(
+                    top: 10,
+                    left: UniversalPlatform.isMacOS ? 88 : 16,
+                    child: FlowyTooltip(
+                      message: LocaleKeys.sideBar_openSidebar.tr(),
+                      child: FlowyIconButton(
+                        width: 24,
+                        icon: FlowySvg(
+                          FlowySvgs.sidebar_collapse_custom_m,
+                          size: const Size.square(24),
+                          color: theme.iconColorScheme.primary,
+                        ),
+                        onPressed: () =>
+                            context.read<HomeSettingBloc>().add(
+                                  const HomeSettingEvent.changeMenuStatus(
+                                    MenuStatus.expanded,
+                                  ),
                                 ),
-                              ),
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
             if (showBackButton)
               Positioned(
                 top: 10,

@@ -174,7 +174,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
             )
           : MobileAppBar(
               title: '',
-              leading: title,
+              leading: Expanded(child: title),
               showBackButton: false,
               actions: actions,
             ) as PreferredSizeWidget,
