@@ -157,6 +157,11 @@ class WhiteboardCollabAdapter {
     if (_hasMeaningfulSceneChange(normalized)) {
       _hasNonEmptyInitialData = true;
     }
+    // 【数据丢失根因修复】保持"全量缓存中 elements 永不为空数组"的不变式：
+    // 空 elements([]) 只来自异常路径，不纳入缓存，避免后续被当作权威状态回写服务器。
+    if (_isBlankElementsValue(normalized['elements'])) {
+      normalized.remove('elements');
+    }
     _fullData.addAll(normalized);
     _fullData['revision'] = incomingRevision;
     // 同时初始化 files 数据
@@ -279,6 +284,31 @@ class WhiteboardCollabAdapter {
     return sanitized;
   }
 
+  /// 判断某个值是否是“空 elements”（长度为 0 的列表）。
+  ///
+  /// 【数据丢失根因修复】同步用的 elements 由 JS 端 getSceneElementsIncludingDeleted()
+  /// 采集：用户真实删除会保留 isDeleted 墓碑（数组非空），因此真正的空 [] 只可能来自
+  /// WebView 重新初始化 / 页面重载 / 远程空值回声等异常路径。当前 App 未接入任何会产生
+  /// 合法空数组的“清空画布”功能（window.clearCanvas 未定义、宿主也未调用），所以空 []
+  /// 一律视为异常，必须在本地写入、同步、远程推送三处丢弃，杜绝“某人网络抖动 → 空 []
+  /// 被持久化并广播 → 全体协作用户白板瞬间清空”。若将来接入真正的清空功能，应通过显式
+  /// 意图标志放行，而非放开此守卫。
+  bool _isBlankElementsValue(dynamic value) => value is List && value.isEmpty;
+
+  /// 返回移除了“空 elements([])”键后的数据副本（其它键原样保留）。
+  Map<String, dynamic> _withoutBlankElements(Map<String, dynamic> data) {
+    if (!data.containsKey('elements') ||
+        !_isBlankElementsValue(data['elements'])) {
+      return data;
+    }
+    Log.warn(
+      '[WBCollab][WhiteboardCollabAdapter] Dropped blank elements([]) local write for $viewId (spurious clear guard; existing content kept)',
+    );
+    final copy = Map<String, dynamic>.from(data);
+    copy.remove('elements');
+    return copy;
+  }
+
   void onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_disposed) {
       return;
@@ -300,9 +330,18 @@ class WhiteboardCollabAdapter {
       _fullData['revision'] = incomingRevision;
     }
 
-    // 更新全量数据缓存
+    // 【数据丢失根因修复】剔除清空画布式的空 elements([]) 写入，绝不写入全量缓存与
+    // 待同步队列（详见 _isBlankElementsValue 说明）。仅对 'update' 生效，'delete' 走
+    // 独立的删除路径，不受影响。
     final sceneData = Map<String, dynamic>.from(data)..remove('revision');
-    sceneData.forEach((key, value) {
+    final effectiveData =
+        type == 'update' ? _withoutBlankElements(sceneData) : sceneData;
+    if (effectiveData.isEmpty) {
+      return;
+    }
+
+    // 更新全量数据缓存
+    effectiveData.forEach((key, value) {
       final sanitizedValue = _sanitizeWhiteboardValue(key, value);
       if (key == 'files' && value is Map) {
         _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?,
@@ -315,7 +354,7 @@ class WhiteboardCollabAdapter {
 
     _hasUnsavedChanges = true;
     _pendingData.addAll(
-      sceneData.map(
+      effectiveData.map(
         (key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value)),
       ),
     );
@@ -404,6 +443,15 @@ class WhiteboardCollabAdapter {
         if (_syncFiles.isNotEmpty) {
           _fullData['files'] = _mergeFiles(
               _fullData['files'] as Map<String, dynamic>?, _syncFiles);
+        }
+
+        // 【数据丢失根因修复】兜底守卫：即便上游守卫全部失效，也绝不把空 elements([])
+        // 作为权威全量状态持久化到 Collab（会广播清空所有协作端）。
+        if (_isBlankElementsValue(_fullData['elements'])) {
+          _fullData.remove('elements');
+          Log.warn(
+            '[WBCollab][WhiteboardCollabAdapter] Stripped blank elements([]) before collab save for $viewId',
+          );
         }
 
         success = await _service.saveWhiteboardData(
@@ -610,6 +658,19 @@ class WhiteboardCollabAdapter {
       // updateScene({elements: null/非法}) 会把整块画板瞬间清空（“无操作即清空”路径）。
       // 直接丢弃这种值，等正常的增量/全量 List 元素再同步。
       if (key == 'elements' && parsedValue is! List) {
+        return;
+      }
+
+      // 【数据丢失根因修复】远程送来的“整块空 elements([])”绝不能推给 WebView：
+      // updateScene({elements: []}) 会把本地画板瞬间清空，随后本地 onChange 回声又把空
+      // 状态经本地同步路径持久化，形成“一人网络抖动 → 清空所有人”的放大回路。空 [] 只
+      // 来自异常端，直接丢弃，等正常的非空元素再同步。
+      if (key == 'elements' &&
+          parsedValue is List &&
+          parsedValue.isEmpty) {
+        Log.warn(
+          '[WBCollab][WhiteboardCollabAdapter] Ignored remote blank elements([]) for $viewId (spurious clear guard)',
+        );
         return;
       }
 
