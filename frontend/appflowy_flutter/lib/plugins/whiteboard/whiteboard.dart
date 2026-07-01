@@ -518,7 +518,27 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     // 注销所有控制器（同步操作）
     _unregisterControllers();
 
-    // fire-and-forget：先停止 listener，再 forceSync，最后 dispose adapter。
+    // 关闭后端白板资源：manager.close_whiteboard 会 whiteboards.remove(viewId)，
+    // 直接销毁 collab 并停止同步。因此绝不能与 forceSync 并行——必须等同步落盘/推送完成后再关闭。
+    final viewId = widget.view.id;
+    Future<void> closeWhiteboardResource() async {
+      try {
+        final service = WhiteboardDataService();
+        final result = await service.closeWhiteboard(viewId: viewId);
+        result.fold(
+          (_) => Log.info('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
+          (error) => Log.error(
+              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+        );
+      } catch (e) {
+        Log.error('[WhiteboardPage] Exception closing whiteboard: $e');
+      }
+    }
+
+    // 【切换竞态修复 2026-07-01】串行化：先停 listener + forceSync（落盘并推送最后一批笔触），
+    // 完成后（成功或失败都要）再 closeWhiteboard 释放后端资源。
+    // 原实现二者并行 fire-and-forget，而 closeWhiteboard 是快 RPC、几乎必然先执行，会在
+    // forceSync 保存到达前就销毁 collab + 停同步，导致切走瞬间最后一批笔触丢失同步。
     if (adapter != null) {
       adapter.forceSyncAndDispose().then((_) {
         Log.info('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
@@ -548,24 +568,11 @@ class _WhiteboardPageState extends State<WhiteboardPage>
           },
           warning: true,
         );
-      });
+      }).whenComplete(closeWhiteboardResource);
+    } else {
+      // 无 adapter（异常兜底）时直接释放后端资源
+      closeWhiteboardResource();
     }
-
-    // 关闭白板以释放后端资源（fire-and-forget）
-    final viewId = widget.view.id;
-    Future(() async {
-      try {
-        final service = WhiteboardDataService();
-        final result = await service.closeWhiteboard(viewId: viewId);
-        result.fold(
-          (_) => Log.info('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
-          (error) => Log.error(
-              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
-        );
-      } catch (e) {
-        Log.error('[WhiteboardPage] Exception closing whiteboard: $e');
-      }
-    });
 
     super.dispose();
     Log.info('[WhiteboardPage] ✅ Dispose completed (sync part)');
