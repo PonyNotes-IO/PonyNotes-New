@@ -27,6 +27,7 @@ enum MobileViewBottomSheetBodyAction {
   copyPublishLink,
   visitSite,
   copyShareLink,
+  share,
   updatePathName,
   lockPage;
 
@@ -178,6 +179,15 @@ class MobileViewBottomSheetBody extends StatelessWidget {
           iconSize: const Size.square(18),
           onTap: () => onAction(
             MobileViewBottomSheetBodyAction.copyShareLink,
+          ),
+        ),
+        _divider(),
+        MobileQuickActionButton(
+          text: '共享',
+          icon: FlowySvgs.share_s,
+          iconSize: const Size.square(18),
+          onTap: () => onAction(
+            MobileViewBottomSheetBodyAction.share,
           ),
         ),
         _divider(),

@@ -15,10 +15,14 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
@@ -112,6 +116,10 @@ class MobileViewPageMoreBottomSheet extends StatelessWidget {
         break;
       case MobileViewBottomSheetBodyAction.copyShareLink:
         _copyShareLink(context);
+        context.pop();
+        break;
+      case MobileViewBottomSheetBodyAction.share:
+        await _share(context);
         context.pop();
         break;
       case MobileViewBottomSheetBodyAction.updatePathName:
@@ -245,6 +253,91 @@ class MobileViewPageMoreBottomSheet extends StatelessWidget {
         message: LocaleKeys.shareAction_copyLinkToBlockFailed.tr(),
         type: ToastificationType.error,
       );
+    }
+  }
+
+  Future<void> _share(BuildContext context) async {
+    final shareState = context.read<ShareBloc>().state;
+    final viewId = shareState.viewId;
+    final workspaceId = shareState.workspaceId;
+
+    if (viewId.isEmpty || workspaceId.isEmpty) {
+      showToastNotification(
+        message: '分享失败: 无法获取文档信息',
+        type: ToastificationType.error,
+      );
+      return;
+    }
+
+    // 获取 view 详情，检查锁定状态
+    final viewResult = await ViewBackendService.getView(viewId);
+    await viewResult.fold(
+      (viewPB) async {
+        if (viewPB.isLocked) {
+          showToastNotification(
+            message: '分享失败: 笔记已锁定，无法分享',
+            type: ToastificationType.error,
+          );
+          return;
+        }
+
+        // 调用 updateViewsVisibility 将文档移入私有列表（创建共享链接）
+        final result = await ViewBackendService.updateViewsVisibility(
+          [viewPB],
+          false, // public = false，隐藏于工作区，仅通过链接可访问
+        );
+
+        result.fold(
+          (_) {
+            // 成功，构建分享链接并复制
+            final url = ShareConstants.buildShareUrl(
+              workspaceId: workspaceId,
+              viewId: viewId,
+              layout: viewPB.layout.value,
+            );
+            unawaited(
+              getIt<ClipboardService>().setData(
+                ClipboardServiceData(plainText: url),
+              ),
+            );
+            showToastNotification(
+              message: '已创建共享链接并复制到剪贴板',
+            );
+          },
+          (err) async {
+            showToastNotification(
+              message: await _getShareErrorMessage(err),
+              type: ToastificationType.error,
+            );
+          },
+        );
+      },
+      (err) {
+        showToastNotification(
+          message: '分享失败: 无法获取文档信息',
+          type: ToastificationType.error,
+        );
+      },
+    );
+  }
+
+  Future<String> _getShareErrorMessage(FlowyError err) async {
+    if (err.msg.isNotEmpty) {
+      return '分享失败: ${err.msg}';
+    }
+    switch (err.code) {
+      case ErrorCode.RecordNotFound:
+        return '分享失败: 笔记不存在或已被删除';
+      case ErrorCode.ViewIsLocked:
+        return '分享失败: 笔记已锁定，无法分享';
+      case ErrorCode.NotEnoughPermissions:
+      case ErrorCode.UserUnauthorized:
+        return '分享失败: 权限不足，无法分享此笔记';
+      case ErrorCode.NetworkError:
+      case ErrorCode.RequestTimeout:
+        return '分享失败: 网络连接超时，请检查网络后重试';
+      default:
+        return '分享失败: 未知错误，请稍后重试';
     }
   }
 
