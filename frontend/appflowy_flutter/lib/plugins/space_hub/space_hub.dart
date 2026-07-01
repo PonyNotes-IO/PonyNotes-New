@@ -851,6 +851,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         // 静默处理 ViewInfoBloc 创建错误
       }
 
+      final parentView = _getParentView(view);
+
       // 为文档、文件夹和笔记本类型的视图创建 DocumentPage
       try {
         final plugin = view.plugin();
@@ -889,6 +891,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 ],
                 viewInfoBloc: viewInfoBloc,
               ),
+              parentView: parentView,
             ),
           );
         }
@@ -928,6 +931,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 : null,
           ),
         ),
+        parentView: parentView,
       );
     } catch (e, stackTrace) {
       return Center(
@@ -955,12 +959,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     required ViewPB view,
     ViewInfoBloc? viewInfoBloc,
     required Widget child,
+    ViewPB? parentView,
   }) {
     if (viewInfoBloc == null) {
       return child;
     }
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
     final isHandwriting = isHandwritingNote(view);
+    final showBackButton = parentView != null;
     return Stack(
       children: [
         child,
@@ -974,14 +980,57 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               viewInfoBloc: viewInfoBloc,
               showCollaborators: FeatureFlag.syncDocument.isOn && !isWhiteboard,
               useFloatingSurface: true,
-              // 白板和手写笔记：隐藏分享按钮
               showShareButton: !isWhiteboard && !isHandwriting,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
         ),
+        if (showBackButton)
+          Positioned(
+            top: 8,
+            left: 12,
+            child: InkWell(
+              onTap: () => _selectViewInMiddlePanel(parentView),
+              child: FlowySvg(FlowySvgs.m_app_bar_back_s),
+            ),
+          ),
       ],
     );
+  }
+
+  ViewPB? _getParentView(ViewPB view) {
+    if (view.parentViewId.isEmpty) {
+      return null;
+    }
+
+    if (view.parentViewId == widget.spaceView.id) {
+      return null;
+    }
+
+    try {
+      final spaceBloc = context.read<SpaceBloc>();
+      final currentSpace = spaceBloc.state.currentSpace;
+      if (currentSpace != null) {
+        return _findParentView(currentSpace.childViews, view.parentViewId);
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  ViewPB? _findParentView(List<ViewPB> views, String parentViewId) {
+    for (final view in views) {
+      if (view.id == parentViewId) {
+        return view;
+      }
+      if (view.childViews.isNotEmpty) {
+        final found = _findParentView(view.childViews, parentViewId);
+        if (found != null) {
+          return found;
+        }
+      }
+    }
+    return null;
   }
 
   void _onChildViewDeleted(ViewPB deletedView, int? index) {
