@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -25,7 +24,7 @@ class MobileSharingPage extends StatefulWidget {
 
   static const routeName = '/mobile-sharing';
 
-  final UserWorkspaceState? workspaceState;
+  final Object? workspaceState;
 
   @override
   State<MobileSharingPage> createState() => _MobileSharingPageState();
@@ -56,33 +55,18 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.workspaceState;
-    if (state == null) {
-      return Scaffold(
-        appBar: MobileAppBar(
-          title: '共享发布',
-        ),
-        body: _buildUpgradePrompt(),
-      );
-    }
-
-    final subscriptionInfo = state.workspaceSubscriptionInfo;
-    final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
-
     return Scaffold(
       appBar: MobileAppBar(
         title: '共享发布',
       ),
-      body: isFree
-          ? _buildUpgradePrompt()
-          : Column(
-              children: [
-                _buildTabSection(),
-                Expanded(
-                  child: _buildTabContent(),
-                ),
-              ],
-            ),
+      body: Column(
+        children: [
+          _buildTabSection(),
+          Expanded(
+            child: _buildTabContent(),
+          ),
+        ],
+      ),
     );
   }
 
