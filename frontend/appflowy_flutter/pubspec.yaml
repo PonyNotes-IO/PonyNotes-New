@@ -176,7 +176,7 @@ dependencies:
   media_kit_libs_ios_video: ^1.1.4
   media_kit_libs_macos_video: 1.1.4
   # Add irondash_engine_context explicitly to ensure native libraries are included
-  irondash_engine_context: ^0.5.5
+  irondash_plus_engine_context: ^0.6.2
   ffi: ^2.1.0
   # webview_flutter: ^4.10.0  # 已替换为 flutter_inappwebview (支持 Windows)
   flutter_inappwebview: ^6.0.0

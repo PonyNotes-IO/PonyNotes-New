@@ -236,7 +236,11 @@ class _RowCoverState extends State<RowCover> {
       height: rowCoverHeight,
       child: MouseRegion(
         onEnter: (_) => setState(() => isOverlayButtonsHidden = false),
-        onExit: (_) => setState(() => isOverlayButtonsHidden = true),
+        onExit: (_) {
+          if (!PlatformInfo.isTablet) {
+            setState(() => isOverlayButtonsHidden = true);
+          }
+        },
         child: Stack(
           children: [
             SizedBox(
@@ -246,7 +250,7 @@ class _RowCoverState extends State<RowCover> {
                 userProfile: widget.userProfile,
               ),
             ),
-            if (!isOverlayButtonsHidden || isPopoverOpen)
+            if (!isOverlayButtonsHidden || isPopoverOpen || PlatformInfo.isTablet)
               _buildCoverOverlayButtons(context),
           ],
         ),
@@ -450,7 +454,7 @@ class _RowHeaderToolbarState extends State<RowHeaderToolbar> {
   final popoverController = PopoverController();
   final bool isDesktop = PlatformInfo.isDesktopOrTabletOrWeb;
 
-  bool isHidden = PlatformInfo.isDesktopOrTabletOrWeb;
+  bool isHidden = PlatformInfo.isDesktop;
   bool isPopoverOpen = false;
 
   @override
@@ -462,7 +466,11 @@ class _RowHeaderToolbarState extends State<RowHeaderToolbar> {
     return MouseRegion(
       opaque: false,
       onEnter: (_) => setState(() => isHidden = false),
-      onExit: isPopoverOpen ? null : (_) => setState(() => isHidden = true),
+      onExit: isPopoverOpen ? null : (_) {
+        if (!PlatformInfo.isTablet) {
+          setState(() => isHidden = true);
+        }
+      },
       child: Container(
         alignment: Alignment.bottomLeft,
         width: double.infinity,
@@ -470,7 +478,7 @@ class _RowHeaderToolbarState extends State<RowHeaderToolbar> {
         child: SizedBox(
           height: 28,
           child: Visibility(
-            visible: !isHidden || isPopoverOpen,
+            visible: !isHidden || isPopoverOpen || PlatformInfo.isTablet,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:provider/provider.dart';
 
 import 'accessory.dart';
@@ -73,9 +74,10 @@ class _CardEnterRegion extends StatelessWidget {
     return Selector<_CardContainerNotifier, bool>(
       selector: (context, notifier) => notifier.onEnter,
       builder: (context, onEnter, _) {
+        final shouldShowAccessory = PlatformInfo.isTablet || onEnter;
         final List<Widget> children = [
           child,
-          if (onEnter && shouldBuildAccessory)
+          if (shouldShowAccessory && shouldBuildAccessory)
             Positioned(
               top: 7.0,
               right: 7.0,
@@ -91,9 +93,12 @@ class _CardEnterRegion extends StatelessWidget {
           onEnter: (p) =>
               Provider.of<_CardContainerNotifier>(context, listen: false)
                   .onEnter = true,
-          onExit: (p) =>
+          onExit: (p) {
+            if (!PlatformInfo.isTablet) {
               Provider.of<_CardContainerNotifier>(context, listen: false)
-                  .onEnter = false,
+                  .onEnter = false;
+            }
+          },
           child: IntrinsicHeight(
             child: Stack(
               alignment: AlignmentDirectional.topEnd,

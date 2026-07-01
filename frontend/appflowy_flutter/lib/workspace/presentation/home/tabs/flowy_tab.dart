@@ -5,6 +5,7 @@ import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/gestures.dart';
@@ -114,7 +115,7 @@ class _FlowyTabState extends State<FlowyTab> {
                               ),
                               if (!widget.pageManager.isPinned) ...[
                                 Visibility(
-                                  visible: isHovering,
+                                  visible: isHovering || PlatformInfo.isTablet,
                                   child: SizedBox(
                                     width: 26,
                                     height: 26,

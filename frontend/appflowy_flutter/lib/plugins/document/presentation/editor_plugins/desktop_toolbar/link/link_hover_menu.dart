@@ -105,6 +105,18 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
         child: placeHolder,
       );
     }
+    if (PlatformInfo.isTablet) {
+      return GestureDetector(
+        onTap: () {
+          if (!isHoverMenuShowing) {
+            showLinkHoverMenu();
+          } else {
+            hoverMenuController.close();
+          }
+        },
+        child: buildHoverPopover(buildEditPopover(placeHolder)),
+      );
+    }
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (v) {

@@ -155,11 +155,13 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
 
   late final editorState = Provider.of<EditorState>(context, listen: false);
 
-  final showActionsNotifier = ValueNotifier<bool>(false);
+  final showActionsNotifier = ValueNotifier<bool>(PlatformInfo.isTablet);
   final imageStateNotifier =
       ValueNotifier<ResizableImageState>(ResizableImageState.loading);
 
-  bool alwaysShowMenu = false;
+  bool _alwaysShowMenu = false;
+  bool get alwaysShowMenu => PlatformInfo.isTablet || _alwaysShowMenu;
+  set alwaysShowMenu(bool value) => _alwaysShowMenu = value;
 
   /// 安全更新图片状态通知器。
   /// ResizableImage 会在 CachedNetworkImage 的 progressIndicatorBuilder/errorWidgetBuilder
