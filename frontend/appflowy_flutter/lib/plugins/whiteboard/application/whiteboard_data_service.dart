@@ -158,6 +158,7 @@ class WhiteboardDataService {
       }
     }
 
+    final effectiveRevision = revision ?? _readRevision(data);
     final collabData = _stripDataURLsForCollab(data);
     final collabPayloadBytes = _estimatePayloadBytes(collabData);
 
@@ -166,7 +167,13 @@ class WhiteboardDataService {
     );
     final collabSuccess = await _saveToCollab(
       viewId,
-      jsonEncode({'type': 'update', 'data': jsonEncode(collabData)}),
+      jsonEncode({
+        'type': 'update',
+        'data': jsonEncode({
+          ...collabData,
+          'revision': effectiveRevision,
+        }),
+      }),
     );
     if (collabSuccess) {
       logDiagnosticEvent(
@@ -190,10 +197,10 @@ class WhiteboardDataService {
     }
 
     Log.warn(
-        '[WBCollab][WhiteboardDataService] ⚠️ Collab save failed, falling back to file system');
+        '[WBCollab][WhiteboardDataService] ⚠️ Collab save failed, file fallback disabled for authority write: $viewId');
     logDiagnosticEvent(
       'WhiteboardLoad',
-      'collab_sync_fallback',
+      'collab_sync_failed_no_fallback',
       {
         'traceId': traceId,
         'sessionId': sessionId,
@@ -201,32 +208,13 @@ class WhiteboardDataService {
         'source': source,
         'revision': revision,
         'durationMs': stopwatch.elapsedMilliseconds,
-        'fallback': 'file',
         'elementsCount': _countElements(data),
         'filesCount': _countFiles(data),
         'payloadBytes': collabPayloadBytes,
       },
       warning: true,
     );
-    final fileSuccess = await _saveToFile(viewId, data);
-    logDiagnosticEvent(
-      'WhiteboardLoad',
-      'collab_sync_done',
-        {
-          'traceId': traceId,
-          'sessionId': sessionId,
-          'viewId': viewId,
-          'source': source,
-          'revision': revision,
-          'storage': fileSuccess ? 'file_fallback' : 'file_failed',
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'elementsCount': _countElements(data),
-          'filesCount': _countFiles(data),
-          'payloadBytes': _estimatePayloadBytes(data),
-      },
-      warning: !fileSuccess,
-    );
-    return fileSuccess;
+    return false;
   }
 
   Map<String, dynamic> _stripDataURLsForCollab(Map<String, dynamic> data) {
@@ -387,23 +375,7 @@ class WhiteboardDataService {
     );
     final fileData = await _loadFromFile(viewId);
 
-    final shouldBackfillCollab =
-        collabLoadResult.status == _CollabLoadStatus.empty &&
-            !_isBlankWhiteboardData(fileData);
-
-    if (shouldBackfillCollab) {
-      Log.info(
-        '[WBCollab][WhiteboardDataService] Backfilling non-empty file fallback to empty collab: $viewId',
-      );
-      await saveWhiteboardData(
-        viewId,
-        fileData,
-        revision: _readRevision(fileData),
-        traceId: traceId,
-        sessionId: sessionId,
-        source: 'file-fallback-backfill',
-      );
-    } else if (collabLoadResult.status == _CollabLoadStatus.failed) {
+    if (collabLoadResult.status == _CollabLoadStatus.failed) {
       Log.warn(
         '[WBCollab][WhiteboardDataService] collab_load_failed_file_fallback_no_cloud_write: $viewId, error: ${collabLoadResult.errorMessage}',
       );
@@ -451,11 +423,11 @@ class WhiteboardDataService {
         'viewId': viewId,
         'source': source,
         'revision': _readRevision(fileData),
-        'storage': 'file_fallback',
-        'durationMs': stopwatch.elapsedMilliseconds,
-        'elementsCount': _countElements(fileData),
-        'filesCount': _countFiles(fileData),
-        'payloadBytes': _estimatePayloadBytes(fileData),
+      'storage': 'file_fallback',
+      'durationMs': stopwatch.elapsedMilliseconds,
+      'elementsCount': _countElements(fileData),
+      'filesCount': _countFiles(fileData),
+      'payloadBytes': _estimatePayloadBytes(fileData),
       },
       warning: true,
     );

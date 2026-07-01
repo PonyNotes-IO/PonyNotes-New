@@ -140,14 +140,20 @@ class WhiteboardCollabAdapter {
     // 标准化键名后再设置
     final normalized = _normalizeKeys(data);
     final incomingRevision = _tryParseRevision(normalized['revision']) ?? 0;
-    if (!_versionLock.shouldAccept(incomingRevision)) {
+    if (!_versionLock.shouldAccept(
+      incomingRevision,
+      sourceRank: WhiteboardSourceRank.authority,
+    )) {
       Log.info(
         '[WBCollab][WhiteboardCollabAdapter] Dropping stale initial payload for $viewId: incomingRevision=$incomingRevision currentRevision=${_versionLock.revision}',
       );
       return false;
     }
 
-    _seedRevision(incomingRevision);
+    _seedRevision(
+      incomingRevision,
+      sourceRank: WhiteboardSourceRank.authority,
+    );
     if (_hasMeaningfulSceneChange(normalized)) {
       _hasNonEmptyInitialData = true;
     }
@@ -235,12 +241,15 @@ class WhiteboardCollabAdapter {
     return null;
   }
 
-  void _seedRevision(dynamic revision) {
+  void _seedRevision(
+    dynamic revision, {
+    WhiteboardSourceRank sourceRank = WhiteboardSourceRank.session,
+  }) {
     final parsed = _tryParseRevision(revision);
     if (parsed == null) {
       return;
     }
-    _versionLock.seed(parsed);
+    _versionLock.seed(parsed, sourceRank: sourceRank);
     _pendingRevision = parsed;
   }
 
@@ -276,7 +285,11 @@ class WhiteboardCollabAdapter {
     }
 
     final incomingRevision = _tryParseRevision(data['revision']);
-    if (incomingRevision != null && !_versionLock.shouldAccept(incomingRevision)) {
+    if (incomingRevision != null &&
+        !_versionLock.shouldAccept(
+          incomingRevision,
+          sourceRank: WhiteboardSourceRank.session,
+        )) {
       Log.info(
         '[WBCollab][WhiteboardCollabAdapter] Dropping stale payload for $viewId: incomingRevision=$incomingRevision currentRevision=${_versionLock.revision}',
       );
@@ -547,13 +560,19 @@ class WhiteboardCollabAdapter {
 
       final remoteRevision = _tryParseRevision(revision);
       if (remoteRevision != null) {
-        if (!_versionLock.shouldAccept(remoteRevision)) {
+        if (!_versionLock.shouldAccept(
+          remoteRevision,
+          sourceRank: WhiteboardSourceRank.authority,
+        )) {
           Log.info(
             '[WBCollab][WhiteboardCollabAdapter] Dropping stale remote payload for $viewId: incomingRevision=$remoteRevision currentRevision=${_versionLock.revision}',
           );
           return;
         }
-        _seedRevision(remoteRevision);
+        _seedRevision(
+          remoteRevision,
+          sourceRank: WhiteboardSourceRank.authority,
+        );
         _fullData['revision'] = remoteRevision;
       } else if (key == 'revision') {
         return;

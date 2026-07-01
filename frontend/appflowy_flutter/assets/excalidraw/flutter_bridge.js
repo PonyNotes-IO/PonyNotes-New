@@ -3,10 +3,10 @@
 // 这个文件将以阻塞行为模式，第一个执行。这时画板的任何代码还未初始化
 // ========================================================================
 // 功能列表：
-//  - localStorage hook，根据viewId隔离，并且同步到后端
+//  - localStorage hook，根据viewId隔离，仅作为短期镜像
 // ========================================================================
 // 目的：让每个白板视图(viewId)使用独立的localStorage命名空间
-// 原理：拦截localStorage API，自动添加viewId前缀
+// 原理：拦截localStorage API，自动添加viewId前缀，避免跨白板污染
 // ========================================================================
 (async function () {
     console.log('[PonyNotes] 🔐 Initializing localStorage isolation...');
@@ -250,8 +250,7 @@
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
-            const scopedValue = originalLocalStorage.getItem(scopedStorageKey(key));
-            return scopedValue !== null ? scopedValue : originalLocalStorage.getItem(key);
+            return originalLocalStorage.getItem(scopedStorageKey(key));
         },
 
         setItem: function (key, value) {
@@ -1536,15 +1535,6 @@
                 } catch (e) {
                     console.error('[PonyNotes] ❌ Failed to parse files from payload:', e);
                 }
-            }
-        }
-
-        if (!filesMap) {
-            const lsFiles = isolatedStorage.getItem('excalidraw-files');
-            if (lsFiles && lsFiles !== '{}' && lsFiles !== 'null') {
-                try {
-                    filesMap = JSON.parse(lsFiles);
-                } catch (e) { }
             }
         }
 

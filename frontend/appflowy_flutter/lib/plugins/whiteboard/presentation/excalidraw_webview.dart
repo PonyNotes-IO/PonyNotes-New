@@ -352,42 +352,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   '[WBCollab][ExcalidrawWebView] 📸 Files count: ${files.length}');
             }
 
-            // 设置数据到 LocalStorage
-            int setCount = 0;
-            for (final entry in normalizedData.entries) {
-              final key = entry.key;
-              final value = entry.value;
-
-              // 跳过非白板数据键
-              if (key == 'viewId' || key == 'savedAt' || key == '__test__') {
-                continue;
-              }
-
-              // 修复：确保 value 是 JSON 字符串
-              final stringValue = value is String ? value : jsonEncode(value);
-
-              // 映射标准键名到 Excalidraw 期望的 LocalStorage 键
-              String lsKey = key;
-              if (key == 'files') {
-                lsKey = 'excalidraw-files';
-              } else if (key == 'elements') {
-                lsKey = 'excalidraw';
-              } else if (key == 'appState') {
-                lsKey = 'excalidraw-state';
-              }
-
-              if (_controller == null || !mounted) return null;
-
-              await _controller!.webStorage.localStorage.setItem(
-                key: lsKey,
-                value: stringValue,
-              );
-              setCount++;
-            }
-
-            Log.info(
-                '[WBCollab][ExcalidrawWebView] ✅ Set $setCount items to localStorage');
-
             // ✅ 标记初始化完成
             if (!_initializationCompleter!.isCompleted) {
               _initializationCompleter!.complete();

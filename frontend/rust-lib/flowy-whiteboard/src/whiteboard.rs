@@ -208,6 +208,30 @@ impl Whiteboard {
       _ => HashMap::new(),
     };
 
+    let current_revision = self.stored_revision().unwrap_or(0);
+    let incoming_revision = data_map
+      .get("revision")
+      .and_then(|value| value.as_i64())
+      .unwrap_or(current_revision);
+    let incoming_is_blank = Self::is_blank_update_payload(&data_map);
+    if incoming_revision < current_revision {
+      tracing::info!(
+        "[WBCollab] Reject stale whiteboard update: incoming_revision={}, current_revision={}",
+        incoming_revision,
+        current_revision
+      );
+      return Ok(());
+    }
+
+    if wrapper.r#type != "delete"
+      && incoming_is_blank
+      && (data_map.contains_key(Self::ELEMENTS_KEY) || data_map.contains_key(Self::FILES_KEY))
+      && !self.is_blank_scene()
+    {
+      tracing::info!("[WBCollab] Reject blank whiteboard overwrite against non-empty scene");
+      return Ok(());
+    }
+
     let mut txn = self.collab.context.transact_mut();
     match wrapper.r#type.as_str() {
       "update" | "" => {
@@ -270,6 +294,48 @@ impl Whiteboard {
       serde_json::Value::Array(elements),
     );
     Ok(WhiteboardData(data_map))
+  }
+
+  fn stored_revision(&self) -> Option<i64> {
+    let txn = self.collab.context.transact();
+    self.data
+      .get(&txn, "revision")
+      .and_then(|value| Self::map_string_value_to_json(Some(value)).as_i64())
+  }
+
+  fn is_blank_scene(&self) -> bool {
+    let txn = self.collab.context.transact();
+    let has_elements = matches!(
+      self.data.get(&txn, Self::ELEMENTS_KEY),
+      Some(Out::YMap(elements_map)) if elements_map.iter(&txn).next().is_some()
+    );
+    if has_elements {
+      return false;
+    }
+
+    match self.data.get(&txn, Self::FILES_KEY) {
+      Some(Out::Any(Any::String(files_json))) => {
+        serde_json::from_str::<serde_json::Value>(&files_json)
+          .ok()
+          .and_then(|value| value.as_object().map(|object| object.is_empty()))
+          .unwrap_or(true)
+      }
+      _ => true,
+    }
+  }
+
+  fn is_blank_update_payload(data_map: &HashMap<String, serde_json::Value>) -> bool {
+    let elements_blank = data_map
+      .get(Self::ELEMENTS_KEY)
+      .and_then(|value| value.as_array())
+      .map(|elements| elements.is_empty())
+      .unwrap_or(true);
+    let files_blank = data_map
+      .get(Self::FILES_KEY)
+      .and_then(|value| value.as_object())
+      .map(|files| files.is_empty())
+      .unwrap_or(true);
+    elements_blank && files_blank
   }
 
   fn ensure_elements_map(
