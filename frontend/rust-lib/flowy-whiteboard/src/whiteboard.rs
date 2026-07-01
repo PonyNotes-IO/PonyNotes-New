@@ -208,20 +208,14 @@ impl Whiteboard {
       _ => HashMap::new(),
     };
 
-    let current_revision = self.stored_revision().unwrap_or(0);
-    let incoming_revision = data_map
-      .get("revision")
-      .and_then(|value| value.as_i64())
-      .unwrap_or(current_revision);
+    // 【协作丢元素修复 2026-07-01】移除文档级 revision 门控。
+    // 白板 elements 以 id→element 的 YMap 存储、按“元素级 version”合并（update_elements_map：
+    // 仅当 incoming_version < existing_version 才跳过“单个元素”），这才是正确的冲突粒度。
+    // 而文档级 revision 是单调标量，多端各自独立递增、天然乱序；用它“拒绝更旧”会把并发的合法
+    // 更新连同其中的新元素“整条”丢弃（日志实测 380 次 Reject stale，incoming/current 仅差 1~2
+    // 也被拒），这正是“多端大量绘制时元素一点一点丢失”的根因。这里不再按 revision 拒绝整条
+    // 更新，排序完全交由逐元素 version 合并处理。revision 字段仍随更新写入，仅留作调试/审计。
     let incoming_is_blank = Self::is_blank_update_payload(&data_map);
-    if incoming_revision < current_revision {
-      tracing::info!(
-        "[WBCollab] Reject stale whiteboard update: incoming_revision={}, current_revision={}",
-        incoming_revision,
-        current_revision
-      );
-      return Ok(());
-    }
 
     if wrapper.r#type != "delete"
       && incoming_is_blank
@@ -296,6 +290,8 @@ impl Whiteboard {
     Ok(WhiteboardData(data_map))
   }
 
+  // revision 门控已移除（改用逐元素 version 合并），此读取器暂保留供调试/未来使用。
+  #[allow(dead_code)]
   fn stored_revision(&self) -> Option<i64> {
     let txn = self.collab.context.transact();
     self.data
