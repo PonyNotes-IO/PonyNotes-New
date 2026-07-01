@@ -435,8 +435,9 @@ GoRoute _mobileSharingPageRoute() {
     parentNavigatorKey: AppGlobals.rootNavKey,
     path: MobileSharingPage.routeName,
     pageBuilder: (context, state) {
-      return const MaterialExtendedPage(
-        child: MobileSharingPage(),
+      final workspaceState = state.extra as UserWorkspaceState?;
+      return MaterialExtendedPage(
+        child: MobileSharingPage(workspaceState: workspaceState),
         name: MobileSharingPage.routeName,
       );
     },

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -16,15 +16,16 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:http/http.dart' as http;
 import 'package:fixnum/fixnum.dart' as fixnum;
 
 class MobileSharingPage extends StatefulWidget {
-  const MobileSharingPage({super.key});
+  const MobileSharingPage({super.key, this.workspaceState});
 
   static const routeName = '/mobile-sharing';
+
+  final UserWorkspaceState? workspaceState;
 
   @override
   State<MobileSharingPage> createState() => _MobileSharingPageState();
@@ -55,27 +56,33 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
-      builder: (context, state) {
-        final subscriptionInfo = state.workspaceSubscriptionInfo;
-        final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
+    final state = widget.workspaceState;
+    if (state == null) {
+      return Scaffold(
+        appBar: MobileAppBar(
+          title: '共享发布',
+        ),
+        body: _buildUpgradePrompt(),
+      );
+    }
 
-        return Scaffold(
-          appBar: MobileAppBar(
-            title: '共享发布',
-          ),
-          body: isFree
-              ? _buildUpgradePrompt()
-              : Column(
-                  children: [
-                    _buildTabSection(),
-                    Expanded(
-                      child: _buildTabContent(),
-                    ),
-                  ],
+    final subscriptionInfo = state.workspaceSubscriptionInfo;
+    final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
+
+    return Scaffold(
+      appBar: MobileAppBar(
+        title: '共享发布',
+      ),
+      body: isFree
+          ? _buildUpgradePrompt()
+          : Column(
+              children: [
+                _buildTabSection(),
+                Expanded(
+                  child: _buildTabContent(),
                 ),
-        );
-      },
+              ],
+            ),
     );
   }
 

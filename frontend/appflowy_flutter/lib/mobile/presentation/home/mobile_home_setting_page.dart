@@ -465,7 +465,13 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 ),
                 _SettingsItem(
                   label: '共享发布',
-                  onTap: () => context.push('/mobile-sharing'),
+                  onTap: () {
+                    UserWorkspaceState? workspaceState;
+                    try {
+                      workspaceState = context.read<UserWorkspaceBloc>().state;
+                    } catch (_) {}
+                    context.push(MobileSharingPage.routeName, extra: workspaceState);
+                  },
                 ),
                 _SettingsItem(
                   label: '通知设置',
