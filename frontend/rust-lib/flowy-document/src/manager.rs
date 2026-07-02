@@ -41,6 +41,17 @@ pub trait DocumentUserService: Send + Sync {
   fn device_id(&self) -> Result<String, FlowyError>;
   fn workspace_id(&self) -> Result<Uuid, FlowyError>;
   fn collab_db(&self, uid: i64) -> Result<Weak<CollabKVDB>, FlowyError>;
+
+  /// Resolve the OWNER workspace id for a (possibly shared) view from the local
+  /// `workspace_shared_view` table.
+  ///
+  /// Returns `None` when the view is not a cross-workspace shared view (i.e. it
+  /// belongs to the current workspace). Real-time collab is routed per
+  /// workspace on the server, so a shared document opened by a recipient MUST
+  /// sync under the owner's workspace, not the recipient's current workspace.
+  fn shared_view_source_workspace_id(&self, _view_id: &str) -> Option<String> {
+    None
+  }
 }
 
 pub trait DocumentSnapshotService: Send + Sync {
@@ -280,6 +291,18 @@ impl DocumentManager {
     workspace_id: Option<Uuid>,
   ) -> FlowyResult<Arc<RwLock<Document>>> {
     let uid = self.user_service.user_id()?;
+    // For a cross-workspace shared document opened by a recipient (e.g. via the
+    // shared list, or an invite deep link that passes no workspace_id), fall
+    // back to the OWNER workspace recorded locally in `workspace_shared_view`.
+    // Real-time collab is routed per workspace on the server, so without this
+    // the document would sync under the recipient's current workspace stream
+    // and neither side would see the other's edits.
+    let workspace_id = workspace_id.or_else(|| {
+      self
+        .user_service
+        .shared_view_source_workspace_id(&doc_id.to_string())
+        .and_then(|ws| Uuid::parse_str(&ws).ok())
+    });
     let mut doc_state = self.persistence()?.into_data_source();
     // If the document does not exist in local disk, try get the doc state from the cloud. This happens
     // When user_device_a create a document and user_device_b open the document.

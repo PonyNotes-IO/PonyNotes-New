@@ -19,9 +19,15 @@ abstract class PageAccessLevelRepository {
   Future<FlowyResult<void, FlowyError>> unlockView(String pageId);
 
   /// Gets the access level of the current user.
+  ///
+  /// [workspaceId] should be the OWNER workspace id of the (possibly shared)
+  /// document — never the caller's current workspace. Permission/member
+  /// lookups are scoped per workspace on the server, so for a cross-workspace
+  /// shared document the current workspace would query the wrong workspace.
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
-    String pageId,
-  );
+    String pageId, {
+    String? workspaceId,
+  });
 
   /// Gets the section type of the shared section.
   Future<FlowyResult<SharedSectionType, FlowyError>> getSectionType(

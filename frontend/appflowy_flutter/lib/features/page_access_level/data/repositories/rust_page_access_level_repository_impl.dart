@@ -73,8 +73,9 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   /// 6. 默认 → fullAccess
   @override
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
-    String pageId,
-  ) async {
+    String pageId, {
+    String? workspaceId,
+  }) async {
     final userResult = await UserBackendService.getCurrentUserProfile();
     final user = userResult.fold(
       (s) => s,
@@ -114,6 +115,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     final cloudAccessLevel = await _getCurrentUserAccessLevelFromCloud(
       pageId,
       authToken: authToken,
+      workspaceId: workspaceId,
     );
     if (cloudAccessLevel != null) {
       Log.debug(
@@ -130,6 +132,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       email: email,
       userId: userId,
       authToken: authToken,
+      workspaceId: workspaceId,
     );
     if (membersAccessLevel != null) {
       Log.debug(
@@ -440,12 +443,44 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     return workspaceResult;
   }
 
+  /// 解析用于"权限/成员"查询的 workspace id。
+  ///
+  /// 优先级（从高到低）：
+  /// 1. 调用方传入的 owner workspace（来自 view.workspaceId / 共享记录）
+  /// 2. 文档自身 getView 返回的 workspaceId（共享列表构造的 ViewPB 带 owner）
+  /// 3. 兜底：当前工作区（仅适用于本工作区的非共享文档）
+  ///
+  /// 绝不首选当前工作区：共享文档进入时当前工作区是接收者自己的工作区，
+  /// 用它拼 `/api/workspace/{workspace_id}/collab/...` 会查到错误的 workspace，
+  /// 导致权限/成员查不到、协作双向不可见。
+  Future<String?> _resolveWorkspaceId(
+    String pageId,
+    String? preferredWorkspaceId,
+  ) async {
+    if (preferredWorkspaceId != null && preferredWorkspaceId.isNotEmpty) {
+      return preferredWorkspaceId;
+    }
+
+    final viewResult = await ViewBackendService.getView(pageId);
+    final viewWorkspaceId = viewResult.fold(
+      (view) => view.hasWorkspaceId() ? view.workspaceId : '',
+      (_) => '',
+    );
+    if (viewWorkspaceId.isNotEmpty) {
+      return viewWorkspaceId;
+    }
+
+    final workspaceResult = await UserBackendService.getCurrentWorkspace();
+    return workspaceResult.fold((s) => s.id, (_) => null);
+  }
+
   /// 直接通过 HTTP 查询后端 collab members API 获取当前用户的权限。
   /// 绕过本地 SQLite 缓存，确保权限变更立即生效。
   /// API: GET /api/workspace/{workspace_id}/collab/{object_id}/members
   Future<ShareAccessLevel?> _getCurrentUserAccessLevelFromCloud(
     String pageId, {
     String? authToken,
+    String? workspaceId,
   }) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -457,14 +492,9 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         return null;
       }
 
-      final workspaceResult = await UserBackendService.getCurrentWorkspace();
-      final workspaceId = workspaceResult.fold(
-        (s) => s.id,
-        (_) => null,
-      );
-
-      if (workspaceId == null) {
-        Log.warn('[PageAccessLevel] Cannot get current workspace ID');
+      final resolvedWorkspaceId = await _resolveWorkspaceId(pageId, workspaceId);
+      if (resolvedWorkspaceId == null || resolvedWorkspaceId.isEmpty) {
+        Log.warn('[PageAccessLevel] Cannot resolve workspace ID');
         return null;
       }
 
@@ -476,7 +506,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       }
 
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/collab/$pageId/permission',
+        path: '/api/workspace/$resolvedWorkspaceId/collab/$pageId/permission',
       );
 
       // 带重试的请求：DNS/网络瞬时失败（例如 App 启动时网络尚未就绪）不应
@@ -561,6 +591,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     required String email,
     required int userId,
     String? authToken,
+    String? workspaceId,
   }) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -571,15 +602,10 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         return null;
       }
 
-      // 获取当前 workspace ID
-      final workspaceResult = await UserBackendService.getCurrentWorkspace();
-      final workspaceId = workspaceResult.fold(
-        (s) => s.id,
-        (_) => null,
-      );
-
-      if (workspaceId == null) {
-        Log.warn('[PageAccessLevel] 无法获取当前 workspace ID');
+      // 解析 owner workspace（共享文档不能用接收者的当前工作区）
+      final resolvedWorkspaceId = await _resolveWorkspaceId(pageId, workspaceId);
+      if (resolvedWorkspaceId == null || resolvedWorkspaceId.isEmpty) {
+        Log.warn('[PageAccessLevel] 无法解析 workspace ID');
         return null;
       }
 
@@ -591,7 +617,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
 
       // GET /api/workspace/{workspace_id}/collab/{object_id}/members
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/collab/$pageId/members',
+        path: '/api/workspace/$resolvedWorkspaceId/collab/$pageId/members',
       );
 
       Log.debug(
