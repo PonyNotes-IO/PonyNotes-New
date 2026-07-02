@@ -1344,8 +1344,13 @@ class AccountManagementBloc
             final userUuid = _getUserUuid();
             String payUrl = 
                 "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=$userUuid";
-            // 使用浏览器打开支付链接
-            await PaymentUtil.webPay(payUrl);
+
+            String? planCode;
+            if (selectedPlan != null && planConfigs.containsKey(selectedPlan)) {
+              planCode = planConfigs[selectedPlan]?.planCode;
+            }
+
+            await PaymentUtil.webPay(payUrl, plan: planCode);
 
             // 移除支付弹框显示，直接等待H5支付链接调用appScheme处理
             // 支付成功后会通过 PaymentDeepLinkHandler 处理

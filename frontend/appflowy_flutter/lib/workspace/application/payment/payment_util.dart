@@ -306,18 +306,18 @@ class PaymentUtil {
     }
   }
 
-  static Future<void> webPay(String payUrl) async {
+  static Future<void> webPay(String payUrl, {String? plan}) async {
     try {
       final uri = Uri.parse(payUrl);
 
-      await _showTabletPaymentWebView(uri.toString());
-      Log.info('[PaymentUtil] Opened payment URL in in-app webview: $payUrl');
+      await _showTabletPaymentWebView(uri.toString(), plan: plan);
+      Log.info('[PaymentUtil] Opened payment URL in in-app webview: $payUrl, plan: $plan');
     } catch (e, s) {
       Log.error('[PaymentUtil] Failed to open payment in browser: $e\n$s');
     }
   }
 
-  static Future<void> _showTabletPaymentWebView(String payUrl) async {
+  static Future<void> _showTabletPaymentWebView(String payUrl, {String? plan}) async {
     final context = AppGlobals.rootNavKey.currentContext;
     if (context == null) {
       Log.error('[PaymentUtil] No context available to show payment webview');
@@ -352,8 +352,17 @@ class PaymentUtil {
                 final url = navigationAction.request.url?.toString();
                 if (url != null && url.startsWith('ponynotes://')) {
                   Navigator.of(context).pop();
-                  final uri = Uri.parse(url);
+                  var uri = Uri.parse(url);
                   Log.info('[PaymentUtil] Handling payment deep link: $uri');
+
+                  if (uri.queryParameters['plan'] == null && plan != null) {
+                    Log.info('[PaymentUtil] Adding plan parameter: $plan');
+                    uri = uri.replace(queryParameters: {
+                      ...uri.queryParameters,
+                      'plan': plan,
+                    });
+                  }
+
                   await DeepLinkHandlerRegistry.instance.processDeepLink(
                     uri: uri,
                     onStateChange: (_, __) {},
