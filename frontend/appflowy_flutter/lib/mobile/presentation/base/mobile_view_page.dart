@@ -159,6 +159,9 @@ class _MobileViewPageState extends State<MobileViewPage> {
   ) {
     final isDocument = view?.layout.isDocumentView ?? false;
     final title = _buildTitle(context, view);
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final appBarHeight =
+        isDocument ? statusBarHeight + kToolbarHeight : kToolbarHeight;
     final actions = _buildAppBarActions(context, view);
     return Scaffold(
       extendBodyBehindAppBar: isDocument,
@@ -166,7 +169,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
           ? MobileViewPageImmersiveAppBar(
               preferredSize: Size(
                 double.infinity,
-                AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight,
+                appBarHeight,
               ),
               appBarOpacity: _appBarOpacity,
               actions: actions,
@@ -179,7 +182,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
               actions: actions,
             ) as PreferredSizeWidget,
       body: Padding(
-        padding: EdgeInsets.only(top: widget.bodyPaddingTop),
+        padding: EdgeInsets.only(top: isDocument ? appBarHeight : 0),
         child: isDocument
             ? Builder(
                 builder: (context) {

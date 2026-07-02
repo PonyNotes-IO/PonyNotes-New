@@ -41,39 +41,45 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
   @override
   Widget build(BuildContext context) {
     final afTheme = AppFlowyTheme.of(context);
-    final theme = Theme.of(context);
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final toolbarHeight = preferredSize.height - statusBarHeight;
+
     return ValueListenableBuilder(
       valueListenable: appBarOpacity,
       builder: (_, opacity, __) => Container(
-        height: 44,
+        height: preferredSize.height,
         decoration: BoxDecoration(
           color: AppBarTheme.of(context)
               .backgroundColor
               ?.withValues(alpha: opacity),
         ),
-        child: SafeArea(
-          bottom: false,
-          child: Row(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.only(top: 4.0, bottom: 4.0, left: 12.0),
-                child: _buildAppBarBackButton(context),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '',
-                  style: afTheme.textStyle.heading4.standard(
-                    color: afTheme.textColorScheme.primary,
+        child: Column(
+          children: [
+            SizedBox(height: statusBarHeight),
+            SizedBox(
+              height: toolbarHeight,
+              child: Row(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: _buildAppBarBackButton(context),
                   ),
-                  textAlign: TextAlign.center,
-                ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '',
+                      style: afTheme.textStyle.heading4.standard(
+                        color: afTheme.textColorScheme.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  ...actions,
+                  const SizedBox(width: 8),
+                ],
               ),
-              ...actions,
-              const SizedBox(width: 8),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -85,8 +91,8 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
       onTap: (context) => context.pop(),
       child: _ImmersiveAppBarButton(
         icon: FlowySvgs.mobile_return_s,
-        dimension: 30.0,
-        iconPadding: 3.0,
+        dimension: 32.0,
+        iconPadding: 2.0,
         iconSize: const Size(7, 12),
         isImmersiveMode:
             context.read<MobileViewPageBloc>().state.isImmersiveMode,
@@ -134,8 +140,8 @@ class MobileViewPageMoreButton extends StatelessWidget {
       },
       child: _ImmersiveAppBarButton(
         icon: FlowySvgs.m_app_bar_more_s,
-        dimension: 30.0,
-        iconPadding: 3.0,
+        dimension: 32.0,
+        iconPadding: 2.0,
         isImmersiveMode: isImmersiveMode,
         appBarOpacity: appBarOpacity,
       ),
@@ -191,8 +197,8 @@ class MobileViewPageLayoutButton extends StatelessWidget {
       },
       child: _ImmersiveAppBarButton(
         icon: FlowySvgs.m_layout_s,
-        dimension: 30.0,
-        iconPadding: 3.0,
+        dimension: 32.0,
+        iconPadding: 2.0,
         isImmersiveMode: isImmersiveMode,
         appBarOpacity: appBarOpacity,
       ),
