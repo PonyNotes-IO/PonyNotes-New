@@ -38,7 +38,10 @@ Future<void> _setAuthenticatorType(AuthenticatorType ty) async {
   }
 }
 
-const String kAppflowyCloudUrl = "https://xiaomabiji.com";
+// 生产后端 API 网关。注意必须带 api. 子域：裸域名 xiaomabiji.com 的 nginx
+// 未代理登录/OTP 等 API 路径（返回 405），只有 api.xiaomabiji.com 是完整 API 网关。
+// 该常量是 .env 缺失 APPFLOWY_CLOUD_URL 时的兜底值（CI 未注入时会用到）。
+const String kAppflowyCloudUrl = "https://api.xiaomabiji.com";
 
 /// Retrieves the currently set cloud type.
 ///
