@@ -4,6 +4,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/af_focus_manager.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
@@ -15,8 +16,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:universal_platform/universal_platform.dart';
-
-final GlobalKey _settingsDialogKey = GlobalKey();
 
 HotKeyItem openSettingsHotKey(
   BuildContext context,
@@ -30,7 +29,7 @@ HotKeyItem openSettingsHotKey(
         ],
       ),
       keyDownHandler: (_) {
-        if (_settingsDialogKey.currentContext == null) {
+        if (settingsDialogKey.currentContext == null) {
           showSettingsDialog(
             context,
             userWorkspaceBloc: context.read<UserWorkspaceBloc>(),
@@ -122,7 +121,7 @@ void showSettingsDialog(
   showDialog(
     context: context,
     builder: (dialogContext) => MultiBlocProvider(
-      key: _settingsDialogKey,
+      key: settingsDialogKey,
       providers: [
         passwordBloc != null
             ? BlocProvider<PasswordBloc>.value(

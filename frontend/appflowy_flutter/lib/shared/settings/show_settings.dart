@@ -10,7 +10,14 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-final GlobalKey _settingsDialogKey = GlobalKey();
+final GlobalKey settingsDialogKey = GlobalKey();
+
+void dismissSettingsDialog() {
+  final context = settingsDialogKey.currentContext;
+  if (context != null && Navigator.of(context).canPop()) {
+    Navigator.of(context).pop();
+  }
+}
 
 // show settings dialog with user profile for fully customized settings dialog
 void showSettingsDialog(
@@ -26,7 +33,7 @@ void showSettingsDialog(
   showDialog(
     context: context,
     builder: (dialogContext) => MultiBlocProvider(
-      key: _settingsDialogKey,
+      key: settingsDialogKey,
       providers: [
         BlocProvider<DocumentAppearanceCubit>.value(
           value: BlocProvider.of<DocumentAppearanceCubit>(dialogContext),

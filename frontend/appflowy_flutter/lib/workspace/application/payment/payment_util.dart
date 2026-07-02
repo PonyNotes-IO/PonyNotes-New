@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/platform_extension.dart';
@@ -350,6 +352,16 @@ class PaymentUtil {
                 final url = navigationAction.request.url?.toString();
                 if (url != null && url.startsWith('ponynotes://')) {
                   Navigator.of(context).pop();
+                  final uri = Uri.parse(url);
+                  Log.info('[PaymentUtil] Handling payment deep link: $uri');
+                  await DeepLinkHandlerRegistry.instance.processDeepLink(
+                    uri: uri,
+                    onStateChange: (_, __) {},
+                    onResult: (_, __) {},
+                    onError: (error) {
+                      Log.error('[PaymentUtil] Failed to process payment deep link: $error');
+                    },
+                  );
                   return NavigationActionPolicy.CANCEL;
                 }
                 return NavigationActionPolicy.ALLOW;

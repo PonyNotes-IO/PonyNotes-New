@@ -59,9 +59,11 @@ import 'home_layout.dart';
 import 'home_sizes.dart';
 import 'home_stack.dart';
 import 'menu/sidebar/space/shared_widget.dart';
+import 'upgrade_success_toast.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 
 class _SharedAccessRevocationListener extends StatefulWidget {
   const _SharedAccessRevocationListener({required this.child});
@@ -144,6 +146,10 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
 
   late final Future<List<FlowyResult>> _initFuture;
 
+  String? _upgradeSuccessMessage;
+  late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +157,30 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       FolderEventGetCurrentWorkspaceSetting().send(),
       getIt<AuthService>().getUser(),
     ]);
+
+    _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>();
+    _subscriptionSuccessListener = () {
+      if (!mounted) {
+        return;
+      }
+      final message = _subscriptionSuccessListenable.upgradeSuccessMessage;
+      setState(() {
+        _upgradeSuccessMessage = message;
+      });
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+  }
+
+  @override
+  void dispose() {
+    _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
+    super.dispose();
+  }
+
+  void _dismissUpgradeToast() {
+    setState(() {
+      _upgradeSuccessMessage = null;
+    });
   }
 
   @override
@@ -228,80 +258,89 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                 body: SafeArea(
                   top: isTablet,
                   bottom: isTablet,
-                  child: BlocListener<HomeBloc, HomeState>(
-                    listenWhen: (previous, current) =>
-                        previous.latestView != current.latestView,
-                    listener: (context, state) {
-                      final view = state.latestView;
-                      if (view != null) {
-                        // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
-                        if (view.id.isEmpty) {
-                          Log.error(
-                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
-                          );
-                        } else {
-                          getIt<TabsBloc>().openPlugin(view);
-                        }
-
-                        _switchToSpace(view);
-                      }
-                    },
-                    child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                      buildWhen: (previous, current) => previous != current,
-                      builder: (context, state) => BlocProvider(
-                        create: (_) => UserWorkspaceBloc(
-                          userProfile: userProfile,
-                          repository: RustWorkspaceRepositoryImpl(
-                            userId: userProfile.id,
-                          ),
-                        )
-                          ..add(UserWorkspaceEvent.initialize())
-                          ..add(UserWorkspaceEvent.fetchWorkspaces()),
-                        child:
-                            BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
-                          listenWhen: (previous, current) =>
-                              previous.currentWorkspace !=
-                                  current.currentWorkspace ||
-                              previous.workspaces.length !=
-                                  current.workspaces.length ||
-                              _workspacesChanged(
-                                previous.workspaces,
-                                current.workspaces,
-                              ) ||
-                              (previous.actionResult?.actionType ==
-                                      WorkspaceActionType.create &&
-                                  current.actionResult?.actionType ==
-                                      WorkspaceActionType.create &&
-                                  previous.actionResult?.isLoading !=
-                                      current.actionResult?.isLoading),
-                          listener: (context, state) {
-                            if (!context.mounted) {
-                              return;
+                  child: Stack(
+                    children: [
+                      BlocListener<HomeBloc, HomeState>(
+                        listenWhen: (previous, current) =>
+                            previous.latestView != current.latestView,
+                        listener: (context, state) {
+                          final view = state.latestView;
+                          if (view != null) {
+                            // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
+                            if (view.id.isEmpty) {
+                              Log.error(
+                                'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
+                              );
+                            } else {
+                              getIt<TabsBloc>().openPlugin(view);
                             }
 
-                            CommandPalette.maybeOf(context)?.updateBlocs(
-                              workspaceBloc: context.read<UserWorkspaceBloc?>(),
-                              spaceBloc: context.read<SpaceBloc?>(),
-                            );
-
-                            _checkAndHandleWorkspaceRemoved(context, state);
-                          },
-                          child: _WorkspaceLifecycleRefresher(
-                            child: HomeHotKeys(
+                            _switchToSpace(view);
+                          }
+                        },
+                        child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                          buildWhen: (previous, current) => previous != current,
+                          builder: (context, state) => BlocProvider(
+                            create: (_) => UserWorkspaceBloc(
                               userProfile: userProfile,
-                              child: FlowyContainer(
-                                Theme.of(context).colorScheme.surface,
-                                child: _buildBody(
-                                  context,
-                                  userProfile,
-                                  workspaceLatest,
+                              repository: RustWorkspaceRepositoryImpl(
+                                userId: userProfile.id,
+                              ),
+                            )
+                              ..add(UserWorkspaceEvent.initialize())
+                              ..add(UserWorkspaceEvent.fetchWorkspaces()),
+                            child:
+                                BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                              listenWhen: (previous, current) =>
+                                  previous.currentWorkspace !=
+                                      current.currentWorkspace ||
+                                  previous.workspaces.length !=
+                                      current.workspaces.length ||
+                                  _workspacesChanged(
+                                    previous.workspaces,
+                                    current.workspaces,
+                                  ) ||
+                                  (previous.actionResult?.actionType ==
+                                          WorkspaceActionType.create &&
+                                      current.actionResult?.actionType ==
+                                          WorkspaceActionType.create &&
+                                      previous.actionResult?.isLoading !=
+                                          current.actionResult?.isLoading),
+                              listener: (context, state) {
+                                if (!context.mounted) {
+                                  return;
+                                }
+
+                                CommandPalette.maybeOf(context)?.updateBlocs(
+                                  workspaceBloc: context.read<UserWorkspaceBloc?>(),
+                                  spaceBloc: context.read<SpaceBloc?>(),
+                                );
+
+                                _checkAndHandleWorkspaceRemoved(context, state);
+                              },
+                              child: _WorkspaceLifecycleRefresher(
+                                child: HomeHotKeys(
+                                  userProfile: userProfile,
+                                  child: FlowyContainer(
+                                    Theme.of(context).colorScheme.surface,
+                                    child: _buildBody(
+                                      context,
+                                      userProfile,
+                                      workspaceLatest,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                      if (_upgradeSuccessMessage != null)
+                        UpgradeSuccessOverlay(
+                          planName: _upgradeSuccessMessage!,
+                          onDismiss: _dismissUpgradeToast,
+                        ),
+                    ],
                   ),
                 ),
               ),

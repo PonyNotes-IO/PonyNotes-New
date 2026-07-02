@@ -1,5 +1,6 @@
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -19,6 +20,7 @@ class PaymentDeepLinkHandler extends DeepLinkHandler {
     Log.debug("Payment success deep link: ${uri.toString()}");
     final plan = uri.queryParameters['plan'];
     getIt<SubscriptionSuccessListenable>().onPaymentSuccess(plan);
+    dismissSettingsDialog();
     return FlowyResult.success(null);
   }
 }
