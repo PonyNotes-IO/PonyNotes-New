@@ -64,12 +64,6 @@ class MobileViewPage extends StatefulWidget {
 }
 
 class _MobileViewPageState extends State<MobileViewPage> {
-  // used to determine if the user has scrolled down and show the app bar in immersive mode
-  ScrollNotificationObserverState? _scrollNotificationObserver;
-
-  // control the app bar opacity when in immersive mode
-  final ValueNotifier<double> _appBarOpacity = ValueNotifier(1.0);
-
   @override
   void initState() {
     super.initState();
@@ -79,13 +73,6 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
   @override
   void dispose() {
-    _appBarOpacity.dispose();
-
-    // there's no need to remove the listener, because the observer will be disposed when the widget is unmounted.
-    // inside the observer, the listener will be removed automatically.
-    // _scrollNotificationObserver?.removeListener(_onScrollNotification);
-    _scrollNotificationObserver = null;
-
     super.dispose();
   }
 
@@ -157,41 +144,14 @@ class _MobileViewPageState extends State<MobileViewPage> {
     ViewPB? view,
     Widget child,
   ) {
+    // NOTE: MobileViewPageImmersiveAppBar / MobileAppBar have been intentionally
+    // hidden on mobile so that the document page can render its own toolbar at
+    // the top without producing a stacked dual AppBar. The body sits flush
+    // against the status bar; the inner DocumentPage toolbar adds its own
+    // status-bar padding.
     final isDocument = view?.layout.isDocumentView ?? false;
-    final title = _buildTitle(context, view);
-    final statusBarHeight = MediaQuery.of(context).padding.top;
-    final appBarHeight =
-        isDocument ? statusBarHeight + kToolbarHeight : kToolbarHeight;
-    final actions = _buildAppBarActions(context, view);
     return Scaffold(
-      extendBodyBehindAppBar: isDocument,
-      appBar: isDocument
-          ? MobileViewPageImmersiveAppBar(
-              preferredSize: Size(
-                double.infinity,
-                appBarHeight,
-              ),
-              appBarOpacity: _appBarOpacity,
-              actions: actions,
-              view: view,
-            )
-          : MobileAppBar(
-              title: '',
-              leading: Expanded(child: title),
-              showBackButton: false,
-              actions: actions,
-            ) as PreferredSizeWidget,
-      body: Padding(
-        padding: EdgeInsets.only(top: isDocument ? appBarHeight : 0),
-        child: isDocument
-            ? Builder(
-                builder: (context) {
-                  _rebuildScrollNotificationObserver(context);
-                  return child;
-                },
-              )
-            : SafeArea(child: child),
-      ),
+      body: isDocument ? child : SafeArea(child: child),
     );
   }
 
@@ -235,232 +195,5 @@ class _MobileViewPageState extends State<MobileViewPage> {
         );
       },
     );
-  }
-
-  // Document:
-  //  - [ collaborators, sync_indicator, layout_button, more_button]
-  // Database:
-  //  - [ sync_indicator, more_button]
-  List<Widget> _buildAppBarActions(BuildContext context, ViewPB? view) {
-    if (view == null) {
-      return [];
-    }
-
-    final isImmersiveMode =
-        context.read<MobileViewPageBloc>().state.isImmersiveMode;
-    final isLocked =
-        context.read<PageAccessLevelBloc?>()?.state.isLocked ?? false;
-    final accessLevel = context.read<PageAccessLevelBloc>().state.accessLevel;
-    final actions = <Widget>[];
-
-    if (FeatureFlag.syncDocument.isOn) {
-      // only document supports displaying collaborators.
-      if (view.layout.isDocumentView) {
-        actions.addAll([
-          DocumentCollaborators(
-            width: 60,
-            height: 44,
-            fontSize: 14,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            view: view,
-          ),
-          const HSpace(12.0),
-        ]);
-      }
-    }
-
-    if (view.layout.isDocumentView && !isLocked) {
-      actions.addAll([
-        MobileViewPageLayoutButton(
-          view: view,
-          isImmersiveMode: isImmersiveMode,
-          appBarOpacity: _appBarOpacity,
-          tabs: widget.tabs,
-        ),
-      ]);
-    }
-
-    if (widget.showMoreButton && accessLevel != ShareAccessLevel.readOnly) {
-      actions.addAll([
-        MobileViewPageMoreButton(
-          view: view,
-          isImmersiveMode: isImmersiveMode,
-          appBarOpacity: _appBarOpacity,
-        ),
-      ]);
-    } else {
-      actions.addAll([
-        const HSpace(18.0),
-      ]);
-    }
-
-    return actions;
-  }
-
-  Widget _buildTitle(BuildContext context, ViewPB? view) {
-    final icon = view?.icon;
-    return ValueListenableBuilder(
-      valueListenable: _appBarOpacity,
-      builder: (_, value, child) {
-        if (value < 0.99) {
-          return Padding(
-            padding: const EdgeInsets.only(left: 6.0),
-            child: _buildLockStatus(context, view),
-          );
-        }
-
-        final name =
-            widget.fixedTitle ?? view?.nameOrDefault ?? widget.title ?? '';
-
-        return Opacity(
-          opacity: value,
-          child: Row(
-            children: [
-              if (icon != null && icon.value.isNotEmpty) ...[
-                RawEmojiIconWidget(
-                  emoji: icon.toEmojiIconData(),
-                  emojiSize: 15,
-                ),
-                const HSpace(4),
-              ],
-              Flexible(
-                child: FlowyText.medium(
-                  name,
-                  fontSize: 15.0,
-                  overflow: TextOverflow.ellipsis,
-                  figmaLineHeight: 18.0,
-                ),
-              ),
-              const HSpace(4.0),
-              _buildLockStatusIcon(context, view),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLockStatus(BuildContext context, ViewPB? view) {
-    if (view == null || view.layout == ViewLayoutPB.Chat) {
-      return const SizedBox.shrink();
-    }
-
-    return BlocConsumer<PageAccessLevelBloc, PageAccessLevelState>(
-      listenWhen: (previous, current) =>
-          previous.isLoadingLockStatus == current.isLoadingLockStatus &&
-          current.isLoadingLockStatus == false,
-      listener: (context, state) {
-        if (state.isLocked) {
-          showToastNotification(
-            message: LocaleKeys.lockPage_pageLockedToast.tr(),
-          );
-
-          EditorNotification.exitEditing().post();
-        }
-      },
-      builder: (context, state) {
-        if (state.isLocked) {
-          return LockedPageStatus();
-        } else if (!state.isLocked && state.lockCounter > 0) {
-          return ReLockedPageStatus();
-        }
-        return const SizedBox.shrink();
-      },
-    );
-  }
-
-  Widget _buildLockStatusIcon(BuildContext context, ViewPB? view) {
-    if (view == null || view.layout == ViewLayoutPB.Chat) {
-      return const SizedBox.shrink();
-    }
-
-    return BlocConsumer<PageAccessLevelBloc, PageAccessLevelState>(
-      listenWhen: (previous, current) =>
-          previous.isLoadingLockStatus == current.isLoadingLockStatus &&
-          current.isLoadingLockStatus == false,
-      listener: (context, state) {
-        if (state.isLocked) {
-          showToastNotification(
-            message: LocaleKeys.lockPage_pageLockedToast.tr(),
-          );
-        }
-      },
-      builder: (context, state) {
-        if (state.isLocked) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              context.read<PageAccessLevelBloc>().add(
-                    const PageAccessLevelEvent.unlock(),
-                  );
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(
-                top: 4.0,
-                right: 8,
-                bottom: 4.0,
-              ),
-              child: FlowySvg(
-                FlowySvgs.lock_page_fill_s,
-                blendMode: null,
-              ),
-            ),
-          );
-        } else if (!state.isLocked && state.lockCounter > 0) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              context.read<PageAccessLevelBloc>().add(
-                    const PageAccessLevelEvent.lock(),
-                  );
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(
-                top: 4.0,
-                right: 8,
-                bottom: 4.0,
-              ),
-              child: FlowySvg(
-                FlowySvgs.unlock_page_s,
-                color: Color(0xFF8F959E),
-                blendMode: null,
-              ),
-            ),
-          );
-        }
-        return const SizedBox.shrink();
-      },
-    );
-  }
-
-  void _rebuildScrollNotificationObserver(BuildContext context) {
-    _scrollNotificationObserver?.removeListener(_onScrollNotification);
-    _scrollNotificationObserver = ScrollNotificationObserver.maybeOf(context);
-    _scrollNotificationObserver?.addListener(_onScrollNotification);
-  }
-
-  // immersive mode related
-  // auto show or hide the app bar based on the scroll position
-  void _onScrollNotification(ScrollNotification notification) {
-    if (_scrollNotificationObserver == null) {
-      return;
-    }
-
-    if (notification is ScrollUpdateNotification &&
-        defaultScrollNotificationPredicate(notification)) {
-      final ScrollMetrics metrics = notification.metrics;
-      double height =
-          MediaQuery.of(context).padding.top + widget.bodyPaddingTop;
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        height += AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight;
-      }
-      final progress = (metrics.pixels / height).clamp(0.0, 1.0);
-      // reduce the sensitivity of the app bar opacity change
-      if ((progress - _appBarOpacity.value).abs() >= 0.1 ||
-          progress == 0 ||
-          progress == 1.0) {
-        _appBarOpacity.value = progress;
-      }
-    }
   }
 }

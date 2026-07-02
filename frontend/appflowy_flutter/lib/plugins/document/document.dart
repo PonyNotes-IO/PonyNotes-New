@@ -30,6 +30,7 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -192,6 +193,21 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
     required Widget child,
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+
+    // On mobile, the floating top-left/right action overlays are not used:
+    //   - the inner DocumentPage._buildTopBar renders the back button + the
+    //     collaborators / share / favorite / more actions on a single row;
+    //   - the legacy _SidebarExpandFloatingButton assumes a HomeSettingBloc
+    //     (desktop only) and would otherwise render a no-op "expand sidebar"
+    //     icon on mobile.
+    // Stacking these Positioned overlays on top of the inner toolbar would
+    // also cause vertical misalignment, since the toolbar lives inside the
+    // editor Column (under the status bar) while the overlays are pinned to
+    // (top: 0).
+    if (PlatformInfo.isMobile) {
+      return child;
+    }
+
     return Stack(
       children: [
         child,

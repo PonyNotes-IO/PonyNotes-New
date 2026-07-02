@@ -86,17 +86,24 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
   }
 
   Widget _buildAppBarBackButton(BuildContext context) {
+    final afTheme = AppFlowyTheme.of(context);
     return AppBarButton(
       padding: EdgeInsets.zero,
       onTap: (context) => context.pop(),
-      child: _ImmersiveAppBarButton(
-        icon: FlowySvgs.mobile_return_s,
-        dimension: 32.0,
-        iconPadding: 2.0,
-        iconSize: const Size(7, 12),
-        isImmersiveMode:
-            context.read<MobileViewPageBloc>().state.isImmersiveMode,
-        appBarOpacity: appBarOpacity,
+      child: ValueListenableBuilder(
+        valueListenable: appBarOpacity,
+        builder: (_, opacity, __) {
+          final isImmersiveMode =
+              context.read<MobileViewPageBloc>().state.isImmersiveMode;
+          final color = isImmersiveMode && opacity < 0.99
+              ? Colors.white
+              : afTheme.iconColorScheme.primary;
+          return FlowySvg(
+            FlowySvgs.mobile_return_s,
+            size: const Size(7, 12),
+            color: color,
+          );
+        },
       ),
     );
   }

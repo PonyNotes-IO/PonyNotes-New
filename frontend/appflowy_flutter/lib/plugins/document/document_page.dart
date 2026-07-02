@@ -11,6 +11,7 @@ import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/banner.dart';
 import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/document/presentation/editor_drop_handler.dart';
+import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/ai/widgets/ai_writer_scroll_wrapper.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/cover/document_immersive_cover.dart';
@@ -571,47 +572,91 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   Widget _buildTopBar(BuildContext context) {
+    // 移动端独占的工具栏：替换之前外层 MobileViewPageImmersiveAppBar，
+    // 避免出现"两层顶部栏"的视觉冗余。返回按钮位于左侧，其它动作保持
+    // 在右侧。桌面端已经有独立的 UnifiedViewTopRightActions 浮层，不在此
+    // 处重复渲染。
+    if (!PlatformInfo.isMobile) {
+      return const SizedBox.shrink();
+    }
+
     // 优先使用传入的 ViewInfoBloc，确保和 DocumentPage 注册 EditorState 使用同一个实例
     final effectiveViewInfoBloc = widget.viewInfoBloc;
 
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final afTheme = AppFlowyTheme.of(context);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16.0,
+      padding: EdgeInsets.only(
+        top: statusBarHeight,
+        left: 4.0,
+        right: 16.0,
+        bottom: 8.0,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Share and favorite actions - only show in space hub
-          if (widget.showShareAndFavorite)
-            Row(
-              children: [
-                if (FeatureFlag.syncDocument.isOn) ...[
-                  DocumentCollaborators(
-                    key: ValueKey('collaborators_${widget.view.id}'),
-                    width: 120,
-                    height: 32,
-                    view: widget.view,
-                  ),
-                  const SizedBox(width: 16),
-                ] else
-                  const SizedBox(width: 8),
-                ViewFavoriteButton(
-                  key: ValueKey('favorite_button_${widget.view.id}'),
-                  view: widget.view,
-                ),
-                const SizedBox(width: 10),
-                ShareButton(
-                  key: ValueKey('share_button_${widget.view.id}'),
-                  view: widget.view,
-                ),
-                const SizedBox(width: 4),
-                if (effectiveViewInfoBloc != null)
-                  MoreViewActions(
-                      view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
-                else
-                  MoreViewActions(view: widget.view),
-              ],
+          // 左侧：返回箭头（继承自原外层 MobileViewPageImmersiveAppBar
+          // 视觉规范，保持与其它 MobileViewPage 入口一致）
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                EditorNotification.exitEditing().post();
+                if (Navigator.canPop(context)) {
+                  Navigator.maybePop(context);
+                } else {
+                  context.read<TabsBloc>().add(
+                        TabsEvent.openPlugin(
+                          plugin: makePlugin(pluginType: PluginType.homepage),
+                        ),
+                      );
+                }
+              },
+              icon: FlowySvg(
+                FlowySvgs.mobile_return_s,
+                size: const Size(7, 12),
+                color: afTheme.iconColorScheme.primary,
+              ),
             ),
+          ),
+          const Spacer(),
+          // Share and favorite actions. On mobile the outer
+          // MobileViewPageImmersiveAppBar / UnifiedViewTopRightActions
+          // overlays are intentionally not rendered (see document.dart's
+          // _buildContentWithToolbar), so we always render this row here to
+          // keep parity with the legacy mobile toolbar.
+          Row(
+            children: [
+              if (FeatureFlag.syncDocument.isOn) ...[
+                DocumentCollaborators(
+                  key: ValueKey('collaborators_${widget.view.id}'),
+                  width: 120,
+                  height: 32,
+                  view: widget.view,
+                ),
+                const SizedBox(width: 16),
+              ] else
+                const SizedBox(width: 8),
+              ViewFavoriteButton(
+                key: ValueKey('favorite_button_${widget.view.id}'),
+                view: widget.view,
+              ),
+              const SizedBox(width: 10),
+              ShareButton(
+                key: ValueKey('share_button_${widget.view.id}'),
+                view: widget.view,
+              ),
+              const SizedBox(width: 4),
+              if (effectiveViewInfoBloc != null)
+                MoreViewActions(
+                    view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
+              else
+                MoreViewActions(view: widget.view),
+            ],
+          ),
         ],
       ),
     );
