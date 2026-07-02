@@ -132,7 +132,10 @@ class PageAccessLevelBloc
     }
 
     final result = await repository.getView(view.id);
-    final accessLevel = await repository.getAccessLevel(view.id);
+    final accessLevel = await repository.getAccessLevel(
+      view.id,
+      workspaceId: view.hasWorkspaceId() ? view.workspaceId : null,
+    );
     final latestView = result.fold(
       (view) => view,
       (_) => view,
@@ -272,7 +275,10 @@ class PageAccessLevelBloc
     try {
       do {
         _refreshAccessLevelAgain = false;
-        final accessLevel = await repository.getAccessLevel(view.id);
+        final accessLevel = await repository.getAccessLevel(
+      view.id,
+      workspaceId: view.hasWorkspaceId() ? view.workspaceId : null,
+    );
         if (isClosed) {
           return;
         }

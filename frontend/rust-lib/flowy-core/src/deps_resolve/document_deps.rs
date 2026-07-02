@@ -110,4 +110,20 @@ impl DocumentUserService for DocumentUserImpl {
       .ok_or(FlowyError::internal().with_context("Unexpected error: UserSession is None"))?
       .get_collab_db(uid)
   }
+
+  fn shared_view_source_workspace_id(&self, view_id: &str) -> Option<String> {
+    use flowy_sqlite::prelude::*;
+    use flowy_sqlite::schema::workspace_shared_view;
+
+    let user = self.0.upgrade()?;
+    let uid = user.user_id().ok()?;
+    let mut conn = user.get_sqlite_connection(uid).ok()?;
+
+    workspace_shared_view::table
+      .filter(workspace_shared_view::view_id.eq(view_id))
+      .filter(workspace_shared_view::uid.eq(uid))
+      .select(workspace_shared_view::workspace_id)
+      .first::<String>(&mut conn)
+      .ok()
+  }
 }
