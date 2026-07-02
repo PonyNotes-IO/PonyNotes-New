@@ -38,9 +38,13 @@ class WhiteboardImageUploadService {
   /// This is useful for tracking uploaded images
   static Future<UploadedImageMetadata> uploadImageWithMetadata(
     Uint8List imageBytes,
-    String originalFileName,
-  ) async {
-    final fileName = _generateUniqueFileName(originalFileName);
+    String originalFileName, {
+    // 【存储爆炸修复 2026-07-02】exactFileName=true 时按传入名原样上传（内容寻址、幂等覆盖），
+    // 不再追加时间戳+UUID 生成新名。默认 false 保持旧行为供其它调用方使用。
+    bool exactFileName = false,
+  }) async {
+    final fileName =
+        exactFileName ? originalFileName : _generateUniqueFileName(originalFileName);
     final fileUrl = await uploadImage(imageBytes, fileName);
     final fileHash = _calculateFileHash(imageBytes);
 
@@ -184,8 +188,16 @@ class WhiteboardImageUploadService {
     Map<String, dynamic>? originalFileData,
   }) async {
     try {
-      final originalFileName = parsed.originalFileName ?? 'image_$fileId.png';
-      final metadata = await uploadImageWithMetadata(parsed.bytes, originalFileName);
+      // 【存储爆炸修复 2026-07-02】文件名改为内容寻址：fileId 即 Excalidraw 对图片内容的
+      // SHA-1，同一张图永远映射到同一个 blob 名。此前用 时间戳+UUID 生成唯一名，一旦上游
+      // url 字段丢失触发重传，每次都会新建一个 blob、永不覆盖——协作时曾单日泄漏 12 万个
+      // 文件/110GB。内容寻址后即使再发生重传也只是幂等覆盖同名对象，存储不再增长。
+      final ext = _extensionForMimeType(parsed.mimeType);
+      final metadata = await uploadImageWithMetadata(
+        parsed.bytes,
+        'whiteboard_image_$fileId$ext',
+        exactFileName: true,
+      );
 
       // ⚡ 写入本地磁盘缓存：导入图片上传成功后立即落盘，
       // 这样首次切换视图回来即可命中本地缓存，无需回源云端下载。
@@ -222,6 +234,23 @@ class WhiteboardImageUploadService {
           'uploadError': e.toString(),
         };
       }
+    }
+  }
+
+  /// mimeType → 文件扩展名（内容寻址命名用）
+  static String _extensionForMimeType(String mimeType) {
+    switch (mimeType) {
+      case 'image/jpeg':
+      case 'image/jpg':
+        return '.jpg';
+      case 'image/gif':
+        return '.gif';
+      case 'image/webp':
+        return '.webp';
+      case 'image/svg+xml':
+        return '.svg';
+      default:
+        return '.png';
     }
   }
 

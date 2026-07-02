@@ -398,6 +398,17 @@ class WhiteboardCollabAdapter {
           newFileMap['dataURL'] = existingData['dataURL'];
         }
 
+        // 【存储爆炸修复 2026-07-02】必须同样保留已有的云 url 及上传元数据：
+        // JS 侧同步来的 files 永远只有 dataURL、不带 url，旧逻辑用它整条替换会把上一次
+        // 上传写回的 url 冲掉 → processFilesForUpload 的 skip 判断(有 url 才跳过)失效 →
+        // 协作期间每次保存(约 3-4 秒一次)把画板上所有图片全部重新上传。配合“每次上传都
+        // 生成新文件名”，单账号一天就泄漏了 12 万个文件/110GB 云存储。
+        for (final key in const ['url', 'fileName', 'fileSize', 'uploadedAt']) {
+          if (!newFileMap.containsKey(key) && existingData.containsKey(key)) {
+            newFileMap[key] = existingData[key];
+          }
+        }
+
         result[fileId] = newFileMap;
       } else {
         result[fileId] = newData;
