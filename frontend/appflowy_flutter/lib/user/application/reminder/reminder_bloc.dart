@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/inbox/application/inbox_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
 import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -468,6 +469,13 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       reminder.isRead = true;
 
       await _reminderService.updateReminder(reminder: reminder);
+      // 系统通知(分享邀请/权限变更)由服务端 af_notification 生成，reminder.id 即通知 UUID。
+      // 必须把已读同步到服务端，否则后端 get_pending 仍视为未读，WS 重连时会把该通知以
+      // 未读重新推送、覆盖本地已读（这正是"已读又变未读"的根因）。
+      final cloudType = reminder.meta['cloud_notification_type'];
+      if (cloudType != null && cloudType.isNotEmpty) {
+        unawaited(InboxService().markAsRead(reminder.id));
+      }
       Log.info('Mark reminder ${reminder.id} as read');
     }
 

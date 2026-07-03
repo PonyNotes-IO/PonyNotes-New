@@ -71,7 +71,8 @@ class InboxService {
     final title =
         (payload['title'] as String?) ?? _defaultTitle(notificationType);
     final message = (payload['message'] as String?) ?? '';
-    final processed = (n['processed'] as bool?) ?? false;
+    // 已读以服务端 is_read 为准（processed 只表示"已投递"，不是已读）。
+    final isRead = (n['is_read'] as bool?) ?? false;
 
     DateTime createdAt = DateTime.now();
     try {
@@ -89,7 +90,7 @@ class InboxService {
       date: _formatDate(createdAt),
       createdAt: createdAt,
       updatedAt: createdAt,
-      isRead: processed,
+      isRead: isRead,
       source: _sourceFromType(notificationType),
       tags: _tagsFromType(notificationType),
     );
@@ -180,12 +181,45 @@ class InboxService {
     return rawToken;
   }
 
+  /// 标记单条通知为已读（账号级持久化到服务端，避免刷新后又变未读）。
   Future<void> markAsRead(String itemId) async {
-    // processed 标志由服务端在 WS 推送时自动更新，客户端无需额外请求
+    if (itemId.isEmpty) return;
+    await _postNotification('/api/user/notifications/$itemId/read');
   }
 
+  /// 全部标记已读。
   Future<void> markAllAsRead() async {
-    // 同上
+    await _postNotification('/api/user/notifications/read-all');
+  }
+
+  /// 向通知相关接口发 POST（自动带 baseUrl + Bearer token）。
+  Future<void> _postNotification(String path) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) return;
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold((user) => user.token, (_) => '');
+      final token = _normalizeToken(rawToken);
+      if (token.isEmpty) return;
+
+      final uri = Uri.parse('$baseUrl$path');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200) {
+        Log.error(
+          '[InboxService] POST $path failed: HTTP ${response.statusCode}',
+        );
+      }
+    } catch (e) {
+      Log.error('[InboxService] POST $path error: $e');
+    }
   }
 
   Future<void> toggleStar(String itemId, bool isStarred) async {
