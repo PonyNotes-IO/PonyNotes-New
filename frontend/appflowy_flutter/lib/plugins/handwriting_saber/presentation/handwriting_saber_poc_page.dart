@@ -3985,7 +3985,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     // ✅ 计算页面坐标变换参数
     final double scale = pageDisplayWidth / page.size.width;
-    final double offsetX = (screenWidth - pageDisplayWidth) / 2;
+    final double offsetX = pageDisplayWidth <= screenWidth 
+        ? (screenWidth - pageDisplayWidth) / 2 
+        : 0;
     final double offsetY = 0; // 页面顶部对齐
 
     // ✅ 额外检查：确保scale有效
@@ -4124,9 +4126,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       child: Container(
         width: screenWidth,
         height: pageDisplayHeight,
-        alignment: Alignment.topCenter,
         child: SizedBox(
-          width: pageDisplayWidth,
+          width: math.max(screenWidth, pageDisplayWidth),
           height: pageDisplayHeight,
           child: Stack(
             clipBehavior: Clip.none,
@@ -5475,12 +5476,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                     },
                                   ),
                                 ),
-                                // ✅ 缩放级别指示器（右下角显示当前缩放百分比）
-                                Positioned(
-                                  right: 16,
-                                  bottom: 16,
-                                  child: _buildZoomIndicator(zoomLevel),
-                                ),
                               ],
                             );
                           },
@@ -5493,6 +5488,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             ),
           ],
         ),
+          ),
+          // ✅ 缩放级别指示器（固定在右下角，不随视图缩放而改变位置）
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: ValueListenableBuilder<double>(
+              valueListenable: _zoomLevelNotifier,
+              builder: (context, zoomLevel, _) {
+                return _buildZoomIndicator(zoomLevel);
+              },
+            ),
           ),
           // 导入时的加载遮罩
           if (_isImporting)
