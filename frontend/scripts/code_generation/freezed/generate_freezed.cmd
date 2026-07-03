@@ -27,16 +27,24 @@ for /D %%d in (*) do (
     cd "%%d"
 
     REM Check if the subdirectory contains a pubspec.yaml file
+    REM Only run build_runner in packages that declare it (align with generate_freezed.sh),
+    REM otherwise "dart run build_runner" fails in e.g. appflowy_backend and aborts the loop,
+    REM leaving later packages (flowy_infra) without generated files.
     if exist "pubspec.yaml" (
-        echo Generating freezed files in %%d...
-        echo Please wait while we clean the project and fetch the dependencies.
-        call flutter pub get
-        if errorlevel 1 ( echo Error: flutter pub get failed in %%d & cd .. & cd /d "%original_dir%" & exit /b 1 )
-        call dart run build_runner clean
-        if errorlevel 1 ( echo Warning: build_runner clean failed in %%d, continuing... )
-        call dart run build_runner build -d
-        if errorlevel 1 ( echo Error: build_runner build failed in %%d & cd .. & cd /d "%original_dir%" & exit /b 1 )
-        echo Done running build command in %%d
+        findstr /C:"build_runner" pubspec.yaml >nul 2>&1
+        if errorlevel 1 (
+            echo No build_runner dependency in %%d. Skipping.
+        ) else (
+            echo Generating freezed files in %%d...
+            echo Please wait while we clean the project and fetch the dependencies.
+            call flutter pub get
+            if errorlevel 1 ( echo Error: flutter pub get failed in %%d & cd .. & cd /d "%original_dir%" & exit /b 1 )
+            call dart run build_runner clean
+            if errorlevel 1 ( echo Warning: build_runner clean failed in %%d, continuing... )
+            call dart run build_runner build -d
+            if errorlevel 1 ( echo Error: build_runner build failed in %%d & cd .. & cd /d "%original_dir%" & exit /b 1 )
+            echo Done running build command in %%d
+        )
     ) else (
         echo No pubspec.yaml found in %%d, it can't be a Dart project. Skipping.
     )

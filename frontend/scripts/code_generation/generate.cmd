@@ -12,6 +12,7 @@ cd language_files
 REM Allow execution permissions on CI
 chmod +x generate_language_files.cmd
 call generate_language_files.cmd %*
+if errorlevel 1 ( echo Error: language files generation failed & cd /d "%original_dir%" & exit /b 1 )
 
 REM Return to the main script directory
 cd ..
@@ -22,6 +23,7 @@ cd freezed
 REM Allow execution permissions on CI
 chmod +x generate_freezed.cmd
 call generate_freezed.cmd %*
+if errorlevel 1 ( echo Error: freezed generation failed & cd /d "%original_dir%" & exit /b 1 )
 
 REM Return to the main script directory
 cd ..
@@ -31,6 +33,7 @@ cd flowy_icons
 REM Allow execution permissions on CI
 chmod +x generate_flowy_icons.cmd
 call generate_flowy_icons.cmd %*
+if errorlevel 1 ( echo Error: flowy icons generation failed & cd /d "%original_dir%" & exit /b 1 )
 
 REM Return to the original directory
 cd /d "%original_dir%"
