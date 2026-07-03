@@ -86,6 +86,7 @@ class AppFlowyCloudMockAuthService implements AuthService {
   @override
   Future<void> signOut() async {
     await _appFlowyAuthService.signOut();
+    UserBackendService.clearCurrentUserProfileCache();
   }
 
   @override

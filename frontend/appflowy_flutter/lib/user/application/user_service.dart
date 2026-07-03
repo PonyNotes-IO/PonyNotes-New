@@ -126,6 +126,12 @@ class UserBackendService implements IUserBackendService {
 
   final Int64 userId;
 
+  static void clearCurrentUserProfileCache() {
+    _currentUserProfileInFlight = null;
+    _cachedCurrentUserProfile = null;
+    _cachedCurrentUserProfileAt = null;
+  }
+
   static Future<FlowyResult<UserProfilePB, FlowyError>>
       getCurrentUserProfile() async {
     final cachedAt = _cachedCurrentUserProfileAt;

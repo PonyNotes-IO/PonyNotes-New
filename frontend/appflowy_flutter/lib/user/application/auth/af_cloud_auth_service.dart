@@ -127,6 +127,8 @@ class AppFlowyCloudAuthService implements AuthService {
     await _backendAuthService.signOut();
     // Clear stored refresh token on logout
     await _clearRefreshToken();
+    // Clear cached user profile to prevent stale authentication state after logout
+    UserBackendService.clearCurrentUserProfileCache();
   }
 
   @override
