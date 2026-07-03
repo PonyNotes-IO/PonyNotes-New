@@ -31,6 +31,10 @@ class ChatMessageHandler {
   /// Maps real message IDs to temporary streaming message IDs
   final HashMap<String, String> _temporaryMessageIDMap = HashMap();
   
+  /// 【修复并发竞态】存储当前正在发送的消息的临时ID映射
+  /// key: 服务器返回的问题ID或临时问题ID, value: 对应的临时答案ID
+  final HashMap<String, String> _pendingAnswerStreamIds = HashMap();
+  
   /// 【修复消息重复】追踪已处理的消息ID，防止通过不同callback重复处理同一条消息
   final Set<String> _processedMessageIds = {};
   
@@ -46,8 +50,9 @@ class ChatMessageHandler {
         messageId;
   }
 
-  String answerStreamMessageId = '';
-  String questionStreamMessageId = '';
+  /// 获取当前正在发送的答案流消息ID列表
+  /// 用于在停止流时查找并删除未开始的答案消息
+  Iterable<String> get currentAnswerStreamMessageIds => _pendingAnswerStreamIds.values;
 
   /// Create a message from ChatMessagePB object
   Message createTextMessage(ChatMessagePB message) {
@@ -220,12 +225,19 @@ class ChatMessageHandler {
     required Int64 questionMessageId,
     String? fakeQuestionMessageId,
   }) {
-    answerStreamMessageId = fakeQuestionMessageId == null
+    final answerStreamMsgId = fakeQuestionMessageId == null
         ? (questionMessageId + 1).toString()
         : "${fakeQuestionMessageId}_ans";
 
+    /// 【修复并发竞态】将临时答案ID与问题ID关联存储
+    /// 这样即使并发发送多条消息，也能正确匹配答案
+    if (fakeQuestionMessageId != null) {
+      _pendingAnswerStreamIds[fakeQuestionMessageId] = answerStreamMsgId;
+    }
+    _pendingAnswerStreamIds[questionMessageId.toString()] = answerStreamMsgId;
+
     return TextMessage(
-      id: answerStreamMessageId,
+      id: answerStreamMsgId,
       text: '',
       author: User(id: "streamId:${nanoid()}"),
       metadata: {
@@ -243,7 +255,7 @@ class ChatMessageHandler {
     Map<String, dynamic>? sentMetadata,
   ) {
     final now = DateTime.now();
-    questionStreamMessageId = timestamp().toString();
+    final questionStreamMsgId = timestamp().toString();
 
     // 构建 metadata，包含图片和文件附件数据
     final metadata = <String, dynamic>{
@@ -271,7 +283,7 @@ class ChatMessageHandler {
     return TextMessage(
       author: User(id: userId),
       metadata: metadata,
-      id: questionStreamMessageId,
+      id: questionStreamMsgId,
       createdAt: now,
       text: '',
     );
@@ -351,57 +363,53 @@ class ChatMessageHandler {
     Log.info('   - 标记消息为已处理，当前已处理消息数: ${_processedMessageIds.length}');
     
     // 3 means message response from AI
-    if (pb.authorType == 3 && answerStreamMessageId.isNotEmpty) {
-      Log.info('   - 这是AI消息，建立ID映射');
-      Log.info('   - 真实ID: $messageIdStr');
-      Log.info('   - 临时ID: $answerStreamMessageId');
-      _temporaryMessageIDMap.putIfAbsent(
-        messageIdStr,
-        () => answerStreamMessageId,
-      );
+    if (pb.authorType == 3) {
+      /// 【修复并发竞态】根据问题ID查找对应的临时答案ID
+      /// 因为AI答案的messageId通常是问题ID+1，所以尝试多种匹配方式
+      String? tempAnswerId;
       
-      // 清理消息ID映射表，防止内存溢出
-      if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
-        final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
-        final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
-        for (final key in keysToRemove) {
-          _temporaryMessageIDMap.remove(key);
-        }
+      /// 尝试1：直接使用问题ID（AI答案的messageId = questionId + 1，所以问题ID = answerId - 1）
+      final questionIdStr = (pb.messageId - 1).toString();
+      if (_pendingAnswerStreamIds.containsKey(questionIdStr)) {
+        tempAnswerId = _pendingAnswerStreamIds[questionIdStr];
+        Log.info('   - 这是AI消息，通过问题ID($questionIdStr)找到临时答案ID: $tempAnswerId');
       }
       
-      answerStreamMessageId = '';
-      Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
-    }
-
-    // 1 means message response from User
-    if (pb.authorType == 1 && questionStreamMessageId.isNotEmpty) {
-      Log.info('   - 这是用户消息，建立ID映射');
-      Log.info('   - 真实ID: $messageIdStr');
-      Log.info('   - 临时ID: $questionStreamMessageId');
-      _temporaryMessageIDMap.putIfAbsent(
-        messageIdStr,
-        () => questionStreamMessageId,
-      );
-      
-      // 清理消息ID映射表，防止内存溢出
-      if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
-        final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
-        final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
-        for (final key in keysToRemove) {
-          _temporaryMessageIDMap.remove(key);
-        }
+      /// 尝试2：使用消息ID本身（可能存在其他映射方式）
+      if (tempAnswerId == null && _pendingAnswerStreamIds.containsKey(messageIdStr)) {
+        tempAnswerId = _pendingAnswerStreamIds[messageIdStr];
+        Log.info('   - 这是AI消息，通过消息ID找到临时答案ID: $tempAnswerId');
       }
       
-      questionStreamMessageId = '';
-      Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
+      if (tempAnswerId != null) {
+        Log.info('   - 建立ID映射: 真实ID($messageIdStr) -> 临时ID($tempAnswerId)');
+        _temporaryMessageIDMap.putIfAbsent(
+          messageIdStr,
+          () => tempAnswerId!,
+        );
+        
+        /// 【修复并发竞态】从pending映射中移除，避免被其他消息错误使用
+        _pendingAnswerStreamIds.remove(questionIdStr);
+        _pendingAnswerStreamIds.remove(messageIdStr);
+        
+        // 清理消息ID映射表，防止内存溢出
+        if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
+          final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
+          final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
+          for (final key in keysToRemove) {
+            _temporaryMessageIDMap.remove(key);
+          }
+        }
+        
+        Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
+      } else {
+        Log.info('   - AI消息但未找到对应的临时答案ID（可能是历史消息或并发竞态已被处理）');
+        Log.info('   - 当前pending映射: $_pendingAnswerStreamIds');
+      }
     }
     
     if (pb.authorType != 1 && pb.authorType != 3) {
       Log.info('   - authorType不是1或3，跳过映射');
-    }
-    
-    if (pb.authorType == 1 && questionStreamMessageId.isEmpty) {
-      Log.info('ℹ️  用户消息但questionStreamMessageId为空（可能是从服务器加载的历史消息）');
     }
     
     return true; // 返回true表示这是新消息，应该继续处理

@@ -378,11 +378,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     // Remove the non-started message from the list
-    final message = chatController.messages.lastWhereOrNull(
-      (e) => e.id == _messageHandler.answerStreamMessageId,
-    );
-    if (message != null) {
-      await chatController.remove(message);
+    // 查找所有正在发送中的答案消息
+    for (final answerId in _messageHandler.currentAnswerStreamMessageIds) {
+      final message = chatController.messages.lastWhereOrNull(
+        (e) => e.id == answerId,
+      );
+      if (message != null) {
+        await chatController.remove(message);
+      }
     }
 
     await _streamManager.disposeAnswerStream();
