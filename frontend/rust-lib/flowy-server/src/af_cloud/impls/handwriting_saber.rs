@@ -43,11 +43,19 @@ where
       .doc_state
       .to_vec();
 
-    check_request_workspace_id_is_match(
+    // 【共享文档修复 2026-07-03】显式 workspace 拉取(共享手写跨 workspace)不因当前
+    // workspace 不同而丢弃,降级为日志(同 document.rs,详见该处注释)。
+    if let Err(err) = check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
       format!("get handwriting saber doc state:{}", handwriting_saber_id),
-    )?;
+    ) {
+      tracing::info!(
+        "cross-workspace fetch for shared handwriting {} ({})",
+        handwriting_saber_id,
+        err
+      );
+    }
 
     Ok(doc_state)
   }

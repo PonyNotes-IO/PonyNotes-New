@@ -44,11 +44,19 @@ where
       .doc_state
       .to_vec();
 
-    check_request_workspace_id_is_match(
+    // 【共享文档修复 2026-07-03】显式 workspace 拉取(共享白板跨 workspace)不因当前
+    // workspace 不同而丢弃,降级为日志(同 document.rs,详见该处注释)。
+    if let Err(err) = check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
       format!("[WBCollab] get whiteboard doc state:{}", whiteboard_id),
-    )?;
+    ) {
+      tracing::info!(
+        "[WBCollab] cross-workspace fetch for shared whiteboard {} ({})",
+        whiteboard_id,
+        err
+      );
+    }
 
     tracing::info!("[WBCollab] ✅ get_whiteboard_doc_state success, bytes={}", doc_state.len());
     Ok(doc_state)

@@ -47,11 +47,22 @@ where
       .doc_state
       .to_vec();
 
-    check_request_workspace_id_is_match(
+    // 【共享文档修复 2026-07-03】不再用"当前 workspace"比对拦截显式 workspace 请求。
+    // 该检查的本意是防"请求期间用户切换 workspace"的竞态;但共享文档的拉取本来就显式
+    // 指向文档 owner 的 workspace,与当前 workspace 天然不等,数据已按 document_id 成功
+    // 取回却在此被丢弃,导致被分享者打开共享文档报 Internal。参数即显式意图,按
+    // document_id 使用结果不存在串仓风险,降级为日志。
+    if let Err(err) = check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
       format!("get document doc state:{}", document_id),
-    )?;
+    ) {
+      tracing::info!(
+        "get_document_doc_state: cross-workspace fetch for shared document {} ({})",
+        document_id,
+        err
+      );
+    }
 
     Ok(doc_state)
   }
@@ -83,11 +94,18 @@ where
       .encode_collab
       .doc_state
       .to_vec();
-    check_request_workspace_id_is_match(
+    // 【共享文档修复 2026-07-03】同上:显式 workspace 拉取不因当前 workspace 不同而丢弃。
+    if let Err(err) = check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
       format!("Get {} document", document_id),
-    )?;
+    ) {
+      tracing::info!(
+        "get_document_data: cross-workspace fetch for shared document {} ({})",
+        document_id,
+        err
+      );
+    }
     let collab = Collab::new_with_source(
       CollabOrigin::Empty,
       document_id.to_string().as_str(),
