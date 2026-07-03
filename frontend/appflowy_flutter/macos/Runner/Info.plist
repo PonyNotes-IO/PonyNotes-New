@@ -56,7 +56,7 @@
 		<key>NSPrincipalClass</key>
 		<string>NSApplication</string>
 		<key>SUPublicEDKey</key>
-		<string>Bs++IOmOwYmNTjMMC2jMqLNldP+mndDp/LwujCg2/kw=</string>
+		<string>ftHVQYMrivs1oNdnYkCcEH5EuMsAIWgXpFFn7I4pYns=</string>
 		<key>SUAllowsAutomaticUpdates</key>
 		<false />
 		<!-- ⚠️ 禁用 Impeller 渲染引擎（Flutter 3.35 macOS WebView 漂移修复） -->
