@@ -33,6 +33,8 @@ abstract class AIRepository {
     List<String> sourceIds = const [],
     List<AiWriterRecord> history = const [],
     required CompletionTypePB completionType,
+    bool enableDeepThinking = false,
+    bool enableWebSearch = false,
     required Future<void> Function() onStart,
     required Future<void> Function(String text) processMessage,
     required Future<void> Function(String text) processAssistMessage,
@@ -61,6 +63,8 @@ class AppFlowyAIService implements AIRepository {
     List<String> sourceIds = const [],
     List<AiWriterRecord> history = const [],
     required CompletionTypePB completionType,
+    bool enableDeepThinking = false,
+    bool enableWebSearch = false,
     required Future<void> Function() onStart,
     required Future<void> Function(String text) processMessage,
     required Future<void> Function(String text) processAssistMessage,
@@ -92,6 +96,8 @@ class AppFlowyAIService implements AIRepository {
         ...sourceIds,
       ].unique(),
       history: records,
+      enableThinking: enableDeepThinking,
+      enableWebSearch: enableWebSearch,
     );
 
     return AIEventCompleteText(payload).send().fold(

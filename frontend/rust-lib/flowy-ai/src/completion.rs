@@ -128,7 +128,6 @@ impl CompletionTask {
         // 【修复】当object_id为空时，不设置metadata，因为metadata中的object_id是必需的
         // 这样文档内向AI提问时即使不传objectId也能正常工作
         let metadata = if self.context.object_id.is_empty() {
-          // object_id为空时，不设置metadata
           None
         } else {
           match Uuid::from_str(&self.context.object_id) {
@@ -142,10 +141,11 @@ impl CompletionTask {
                 .custom_prompt
                 .map(|v| CustomPrompt { system: v }),
               prompt_id: self.context.prompt_id.clone(),
+              enable_thinking: self.context.enable_thinking,
+              enable_web_search: self.context.enable_web_search,
             }),
             Err(e) => {
               error!("Invalid uuid: {}, error: {}", self.context.object_id, e);
-              // 发送错误到客户端
               let _ = sink
                 .send(StreamMessage::OnError(format!("Invalid object_id: {}", self.context.object_id)).to_string())
                 .await;

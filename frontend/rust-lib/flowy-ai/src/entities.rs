@@ -472,6 +472,12 @@ pub struct CompleteTextPB {
 
   #[pb(index = 9, one_of)]
   pub prompt_id: Option<String>,
+
+  #[pb(index = 10)]
+  pub enable_thinking: bool,
+
+  #[pb(index = 11)]
+  pub enable_web_search: bool,
 }
 
 #[derive(Default, ProtoBuf, Clone, Debug)]

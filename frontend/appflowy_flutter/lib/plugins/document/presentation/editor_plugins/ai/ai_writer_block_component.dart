@@ -486,12 +486,18 @@ class MainContentArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AiWriterCubit, AiWriterState>(
-      builder: (context, state) {
+    return BlocListener<AIPromptInputBloc, AIPromptInputState>(
+      listener: (context, state) {
         final cubit = context.read<AiWriterCubit>();
+        cubit.enableDeepThinkingNotifier.value = state.enableDeepThinking;
+        cubit.enableWebSearchNotifier.value = state.enableWebSearch;
+      },
+      child: BlocBuilder<AiWriterCubit, AiWriterState>(
+        builder: (context, state) {
+          final cubit = context.read<AiWriterCubit>();
 
-        if (state is ReadyAiWriterState) {
-          return DesktopPromptInput(
+          if (state is ReadyAiWriterState) {
+            return DesktopPromptInput(
             isStreaming: false,
             hideDecoration: true,
             hideFormats: [
@@ -600,6 +606,7 @@ class MainContentArea extends StatelessWidget {
         }
         return const SizedBox.shrink();
       },
+      ),
     );
   }
 }

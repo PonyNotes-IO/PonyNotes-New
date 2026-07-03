@@ -32,6 +32,8 @@ class AiWriterCubit extends Cubit<AiWriterState> {
   })  : _aiService = getIt<AIRepository>(),
         _textRobot = MarkdownTextRobot(editorState: editorState),
         selectedSourcesNotifier = ValueNotifier([documentId]),
+        enableDeepThinkingNotifier = ValueNotifier(false),
+        enableWebSearchNotifier = ValueNotifier(false),
         super(IdleAiWriterState());
 
   final String documentId;
@@ -46,10 +48,14 @@ class AiWriterCubit extends Cubit<AiWriterState> {
 
   final List<AiWriterRecord> records = [];
   final ValueNotifier<List<String>> selectedSourcesNotifier;
+  final ValueNotifier<bool> enableDeepThinkingNotifier;
+  final ValueNotifier<bool> enableWebSearchNotifier;
 
   @override
   Future<void> close() async {
     selectedSourcesNotifier.dispose();
+    enableDeepThinkingNotifier.dispose();
+    enableWebSearchNotifier.dispose();
     await super.close();
   }
 
@@ -388,6 +394,8 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       history: records,
       sourceIds: [],  // 不传sourceIds，避免RAG检索
       completionType: command.toCompletionType(),
+      enableDeepThinking: enableDeepThinkingNotifier.value,
+      enableWebSearch: enableWebSearchNotifier.value,
       onStart: () async {
         final position = await ensurePreviousNodeIsEmptyParagraph(
           editorState,
@@ -485,6 +493,8 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       sourceIds: selectedSourcesNotifier.value,
       format: predefinedFormat,
       promptId: promptId,
+      enableDeepThinking: enableDeepThinkingNotifier.value,
+      enableWebSearch: enableWebSearchNotifier.value,
       onStart: () async {
         final position = await ensurePreviousNodeIsEmptyParagraph(
           editorState,
@@ -573,6 +583,8 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       completionType: command.toCompletionType(),
       history: records,
       sourceIds: selectedSourcesNotifier.value,
+      enableDeepThinking: enableDeepThinkingNotifier.value,
+      enableWebSearch: enableWebSearchNotifier.value,
       onStart: () async {
         await formatSelection(
           editorState,
@@ -678,6 +690,8 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       sourceIds: selectedSourcesNotifier.value,
       format: predefinedFormat,
       promptId: promptId,
+      enableDeepThinking: enableDeepThinkingNotifier.value,
+      enableWebSearch: enableWebSearchNotifier.value,
       onStart: () async {
         records.add(
           AiWriterRecord.user(
