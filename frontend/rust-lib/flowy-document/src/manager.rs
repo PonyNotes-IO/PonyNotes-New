@@ -249,11 +249,24 @@ impl DocumentManager {
     workspace_id: Option<Uuid>,
   ) -> FlowyResult<Arc<RwLock<Document>>> {
     let db = self.user_service.collab_db(uid)?;
-    let workspace_id = workspace_id.unwrap_or(self.user_service.workspace_id()?);
-    let collab_object =
+    let current_workspace_id = self.user_service.workspace_id()?;
+    let workspace_id = workspace_id.unwrap_or(current_workspace_id);
+    // 【共享文档修复 2026-07-03】跨 workspace 共享文档(owner workspace ≠ 当前 workspace)
+    // 使用显式 workspace 构建 collab:上游(2fd263730)已按 owner workspace 路由权限与同步,
+    // 但 collab_object 的一致性硬检查会拒绝不等于当前 workspace 的值,导致共享文档一律
+    // "workspace_id not match" 打不开(Internal)。普通文档仍走带硬检查的原路径。
+    let collab_object = if workspace_id != current_workspace_id {
+      self.collab_builder()?.collab_object_with_explicit_workspace(
+        &workspace_id,
+        uid,
+        doc_id,
+        CollabType::Document,
+      )?
+    } else {
       self
         .collab_builder()?
-        .collab_object(&workspace_id, uid, doc_id, CollabType::Document)?;
+        .collab_object(&workspace_id, uid, doc_id, CollabType::Document)?
+    };
     let document = self
       .collab_builder()?
       .create_document(

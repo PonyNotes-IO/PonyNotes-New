@@ -150,6 +150,33 @@ impl AppFlowyCollabBuilder {
     ))
   }
 
+  /// 【共享文档修复 2026-07-03】构建"显式指定 workspace"的 collab 对象,跳过
+  /// 与当前 workspace 的一致性硬检查。
+  ///
+  /// 仅限跨 workspace 共享文档场景:被分享者打开他人 workspace 的文档时,collab
+  /// 必须按文档 owner workspace 构建(权限查询与实时同步据此路由;服务端 WS 层的
+  /// 对象级路由会把消息桥接到该 workspace 的房间)。此前 2fd263730 把 owner
+  /// workspace 传入打开链路,但 collab_object 的硬检查未放行,导致共享文档一律
+  /// 报 "workspace_id not match" → 打不开(Internal)。
+  ///
+  /// 普通文档请继续使用 [Self::collab_object](硬检查防止异步竞态下的 workspace 串仓)。
+  pub fn collab_object_with_explicit_workspace(
+    &self,
+    workspace_id: &Uuid,
+    uid: i64,
+    object_id: &Uuid,
+    collab_type: CollabType,
+  ) -> Result<CollabObject, Error> {
+    let device_id = self.workspace_integrate.device_id()?;
+    Ok(CollabObject::new(
+      uid,
+      object_id.to_string(),
+      collab_type,
+      workspace_id.to_string(),
+      device_id,
+    ))
+  }
+
   #[allow(clippy::too_many_arguments)]
   #[instrument(
     level = "trace",
