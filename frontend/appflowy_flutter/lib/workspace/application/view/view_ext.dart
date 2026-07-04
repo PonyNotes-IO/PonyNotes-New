@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
@@ -53,6 +54,10 @@ class ViewExtKeys {
   static String spaceIconKey = 'space_icon';
   static String spaceIconColorKey = 'space_icon_color';
   static String spacePermissionKey = 'space_permission';
+
+  // whiteboard collaboration
+  static String whiteboardRoomIdKey = 'whiteboard_room_id';
+  static String whiteboardRoomKeyKey = 'whiteboard_room_key';
 }
 
 extension MinimalViewExtension on FolderViewMinimalPB {
@@ -507,4 +512,32 @@ extension ViewFinder on List<ViewPB> {
 
     return null;
   }
+}
+
+extension WhiteboardViewExtension on ViewPB {
+  String? get whiteboardRoomId {
+    try {
+      if (extra.isNotEmpty) {
+        final ext = jsonDecode(extra);
+        return ext[ViewExtKeys.whiteboardRoomIdKey] as String?;
+      }
+    } catch (e) {
+      Log.debug('[WhiteboardViewExtension] Failed to parse extra: $e');
+    }
+    return null;
+  }
+
+  String? get whiteboardRoomKey {
+    try {
+      if (extra.isNotEmpty) {
+        final ext = jsonDecode(extra);
+        return ext[ViewExtKeys.whiteboardRoomKeyKey] as String?;
+      }
+    } catch (e) {
+      Log.debug('[WhiteboardViewExtension] Failed to parse extra: $e');
+    }
+    return null;
+  }
+
+  bool get hasWhiteboardRoom => whiteboardRoomId != null && whiteboardRoomKey != null;
 }

@@ -6,10 +6,15 @@ import 'package:flutter/material.dart';
 
 class ViewPluginNotifier extends PluginNotifier<DeletedViewPB?> {
   ViewPluginNotifier({
-    required this.view,
-  }) : _viewListener = ViewListener(viewId: view.id) {
+    required ViewPB view,
+  })  : _view = view,
+        viewNotifier = ValueNotifier(view),
+        _viewListener = ViewListener(viewId: view.id) {
     _viewListener?.start(
-      onViewUpdated: (updatedView) => view = updatedView,
+      onViewUpdated: (updatedView) {
+        _view = updatedView;
+        viewNotifier.value = updatedView;
+      },
       onViewMoveToTrash: (result) => result.fold(
         (deletedView) => isDeleted.value = deletedView,
         (err) => Log.error(err),
@@ -17,7 +22,14 @@ class ViewPluginNotifier extends PluginNotifier<DeletedViewPB?> {
     );
   }
 
-  ViewPB view;
+  ViewPB _view;
+  ViewPB get view => _view;
+  set view(ViewPB value) {
+    _view = value;
+    viewNotifier.value = value;
+  }
+
+  final ValueNotifier<ViewPB> viewNotifier;
   final ViewListener? _viewListener;
 
   @override
@@ -26,6 +38,7 @@ class ViewPluginNotifier extends PluginNotifier<DeletedViewPB?> {
   @override
   void dispose() {
     isDeleted.dispose();
+    viewNotifier.dispose();
     _viewListener?.stop();
   }
 }

@@ -46,6 +46,7 @@ class ViewBackendService {
     int? index,
     ViewSectionPB? section,
     final String? viewId,
+    String? extra,
   }) {
     final payload = CreateViewPayloadPB.create()
       ..parentViewId = parentViewId
@@ -68,6 +69,10 @@ class ViewBackendService {
 
     if (viewId != null) {
       payload.viewId = viewId;
+    }
+
+    if (extra != null) {
+      payload.extra = extra;
     }
 
     return FolderEventCreateView(payload).send();
