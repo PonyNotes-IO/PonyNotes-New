@@ -29,6 +29,8 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -143,7 +145,6 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    // debug logs removed
     final widget = MultiBlocProvider(
       providers: [
         BlocProvider<ViewInfoBloc>.value(
@@ -157,14 +158,12 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
         view: view,
         viewInfoBloc: bloc,
         pageAccessLevelBloc: pageAccessLevelBloc,
-        child: WhiteboardPage(
-          key: ValueKey('whiteboard_page_${notifier.view.id}'),
-          view: notifier.view,
+        child: WhiteboardRouter(
+          notifier: notifier,
           onViewChanged: (view) => notifier.view = view,
         ),
       ),
     );
-    // debug log removed
     return widget;
   }
 

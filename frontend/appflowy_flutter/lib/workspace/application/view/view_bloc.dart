@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/view/expanded_views_cache.dart';
@@ -13,6 +15,7 @@ import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -399,6 +402,15 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               return;
             }
 
+            String? roomId;
+            String? roomKey;
+            
+            if (e.layoutType == ViewLayoutPB.Whiteboard) {
+              roomId = WhiteboardRoomService.generateRoomId();
+              roomKey = WhiteboardRoomService.generateRoomKey();
+              Log.debug('🔑 [Whiteboard] Generated roomId=$roomId (length=${roomId.length}), roomKey=$roomKey (length=${roomKey.length})');
+            }
+
             final result = await ViewBackendService.createView(
               parentViewId: view.id,
               name: e.name,
@@ -408,6 +420,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               section: e.section,
               index: 0,
             );
+
+            await result.fold((createdView) async {
+              if (createdView.layout == ViewLayoutPB.Whiteboard && roomId != null && roomKey != null) {
+                await WhiteboardRoomService.saveRoom(createdView.id, roomId, roomKey);
+                Log.debug('✅ [Whiteboard] Saved room to local storage: viewId=${createdView.id}, roomId=$roomId');
+              }
+            }, (_) {});
+
             emit(
               result.fold(
                 (view) => state.copyWith(
