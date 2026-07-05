@@ -29,13 +29,23 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   @override
   void initState() {
     super.initState();
+    Log.info('🚀 [WhiteboardRouter] initState called for view: ${widget.notifier.view.id}');
     _tryFetchRoomInfo(widget.notifier.view);
+  }
+
+  @override
+  void dispose() {
+    Log.info('💀 [WhiteboardRouter] dispose called for view: ${widget.notifier.view.id}');
+    Log.info('💀 [WhiteboardRouter] Disposing with roomId: $_roomId, roomKey: $_roomKey');
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(covariant WhiteboardRouter oldWidget) {
     super.didUpdateWidget(oldWidget);
+    Log.info('🔄 [WhiteboardRouter] didUpdateWidget: oldView=${oldWidget.notifier.view.id}, newView=${widget.notifier.view.id}');
     if (oldWidget.notifier.view.id != widget.notifier.view.id) {
+      Log.info('🔄 [WhiteboardRouter] View changed, resetting roomId/roomKey');
       _roomId = null;
       _roomKey = null;
       _tryFetchRoomInfo(widget.notifier.view);
@@ -95,9 +105,12 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       final newRoomId = WhiteboardRoomService.generateRoomId();
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
       
-      await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
-      Log.debug('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
+      Log.info('🆕 [WhiteboardRouter] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${view.id}');
       
+      await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
+      Log.info('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
+      
+      Log.info('📤 [WhiteboardRouter] Saving room info to server...');
       final saveResult = await WhiteboardDataService().saveWhiteboardData(
         view.id,
         {
@@ -108,9 +121,21 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       );
       
       if (saveResult) {
-        Log.debug('✅ [WhiteboardRouter] Saved room info to server: roomId=$newRoomId');
+        Log.info('✅ [WhiteboardRouter] SUCCESSFULLY saved room info to server: roomId=$newRoomId, roomKey=$newRoomKey');
+        // 立即验证：尝试从服务端读取回来
+        Log.info('🔍 [WhiteboardRouter] Verifying save by loading from server...');
+        final verifyData = await WhiteboardDataService().loadWhiteboardData(view.id, source: 'room-verify');
+        final verifyRoomId = verifyData['roomId'];
+        final verifyRoomKey = verifyData['roomKey'];
+        Log.info('🔍 [WhiteboardRouter] Verification result: roomId=$verifyRoomId, roomKey=$verifyRoomKey');
+        if (verifyRoomId == newRoomId && verifyRoomKey == newRoomKey) {
+          Log.info('✅✅ [WhiteboardRouter] VERIFICATION PASSED: saved and loaded roomId/roomKey match!');
+        } else {
+          Log.error('❌❌ [WhiteboardRouter] VERIFICATION FAILED: saved roomId=$newRoomId, loaded roomId=$verifyRoomId');
+          Log.error('❌❌ [WhiteboardRouter] VERIFICATION FAILED: saved roomKey=$newRoomKey, loaded roomKey=$verifyRoomKey');
+        }
       } else {
-        Log.warn('⚠️ [WhiteboardRouter] Failed to save room info to server');
+        Log.error('❌ [WhiteboardRouter] FAILED to save room info to server');
       }
       
       setState(() {
