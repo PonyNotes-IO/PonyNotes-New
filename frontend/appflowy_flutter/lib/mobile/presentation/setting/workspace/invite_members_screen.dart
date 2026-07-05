@@ -1,12 +1,13 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
-import 'package:appflowy/mobile/presentation/setting/workspace/add_members_screen.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_dialog.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/shared/af_role_pb_extension.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/members/invitation/m_invite_member_by_email.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/invitation/m_invite_member_by_link.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -19,7 +20,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 import 'member_list.dart';
@@ -38,10 +38,9 @@ class InviteMembersScreen extends StatelessWidget {
     return Scaffold(
       appBar: MobileAppBar(
         title: '空间成员',
+        actions: [_buildAddMemberButton(context)],
       ),
-      body: const _InviteMemberPage(
-        workspaceName: null,
-      ),
+      body: const _InviteMemberPage(),
       resizeToAvoidBottomInset: false,
     );
   }
@@ -50,19 +49,33 @@ class InviteMembersScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(right: 20),
       child: GestureDetector(
-        onTap: () {
-          context.push(AddMembersScreen.routeName);
-        },
+        onTap: () => _showInviteByEmailSheet(context),
         child: FlowySvg(FlowySvgs.add_thin_s),
       ),
+    );
+  }
+
+  void _showInviteByEmailSheet(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showHeader: true,
+      title: '添加成员',
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppFlowyTheme.of(ctx).spacing.l,
+          ),
+          child: const MInviteMemberByEmail(),
+        );
+      },
     );
   }
 }
 
 class _InviteMemberPage extends StatefulWidget {
-  const _InviteMemberPage({required this.workspaceName});
-
-  final String? workspaceName;
+  const _InviteMemberPage();
 
   @override
   State<_InviteMemberPage> createState() => _InviteMemberPageState();
@@ -94,8 +107,6 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    // workspaceName 从 widget 属性获取
-    final workspaceName = widget.workspaceName;
 
     return FutureBuilder(
       future: userProfile,
@@ -165,7 +176,6 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
                           members: filteredMembers,
                           userProfile: userProfile,
                           myRole: state.myRole,
-                          workspaceName: workspaceName,
                         ),
                       ),
                     ] else if (_searchQuery.isNotEmpty) ...[

@@ -10,9 +10,9 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
+
+const double _memberActionColumnWidth = 36.0;
 
 class MobileMemberList extends StatelessWidget {
   const MobileMemberList({
@@ -20,13 +20,11 @@ class MobileMemberList extends StatelessWidget {
     required this.members,
     required this.myRole,
     required this.userProfile,
-    required this.workspaceName,
   });
 
   final List<WorkspaceMemberPB> members;
   final AFRolePB myRole;
   final UserProfilePB userProfile;
-  final String? workspaceName;
 
   @override
   Widget build(BuildContext context) {
@@ -41,26 +39,22 @@ class MobileMemberList extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: SingleChildScrollView(
-        child: SlidableAutoCloseBehavior(
-          child: SeparatedColumn(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            separatorBuilder: () => Divider(
-              color: theme.borderColorScheme.primary,
-              height: 1,
-            ),
-            children: [
-              // 表头
-              _MemberListHeader(),
-              ...members.map(
-                (member) => _MemberItem(
-                  member: member,
-                  myRole: myRole,
-                  userProfile: userProfile,
-                  workspaceName: workspaceName,
-                ),
-              ),
-            ],
+        child: SeparatedColumn(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          separatorBuilder: () => Divider(
+            color: theme.borderColorScheme.primary,
+            height: 1,
           ),
+          children: [
+            const _MemberListHeader(),
+            ...members.map(
+              (member) => _MemberItem(
+                member: member,
+                myRole: myRole,
+                userProfile: userProfile,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -80,22 +74,12 @@ class _MemberListHeader extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Text(
               LocaleKeys.settings_appearance_members_user.tr(),
               style: theme.textStyle.body.standard(
                 color: theme.textColorScheme.secondary,
               ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              '团队协作区',
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.secondary,
-              ),
-              textAlign: TextAlign.center,
             ),
           ),
           Expanded(
@@ -108,6 +92,7 @@ class _MemberListHeader extends StatelessWidget {
               textAlign: TextAlign.end,
             ),
           ),
+          const SizedBox(width: _memberActionColumnWidth),
         ],
       ),
     );
@@ -119,22 +104,21 @@ class _MemberItem extends StatelessWidget {
     required this.member,
     required this.myRole,
     required this.userProfile,
-    required this.workspaceName,
   });
 
   final WorkspaceMemberPB member;
   final AFRolePB myRole;
   final UserProfilePB userProfile;
-  final String? workspaceName;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final isSelf = member.uid.toInt() != 0 && member.uid.toInt() == userProfile.id.toInt();
+    final isSelf = member.uid.toInt() != 0 &&
+        member.uid.toInt() == userProfile.id.toInt();
     final canDelete = myRole.canDelete && member.name != userProfile.name;
     final canUpdateRole = myRole.canUpdate && !isSelf;
 
-    Widget child = Container(
+    return Container(
       padding: EdgeInsets.symmetric(
         vertical: theme.spacing.m,
       ),
@@ -147,9 +131,9 @@ class _MemberItem extends StatelessWidget {
             size: AFAvatarSize.s,
           ),
           HSpace(8),
-          // 用户名和邮箱
+          // 用户名
           Expanded(
-            flex: 3,
+            flex: 4,
             child: Text(
               member.name,
               style: theme.textStyle.body.enhanced(
@@ -159,67 +143,38 @@ class _MemberItem extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // 团队协作区
-          Expanded(
-            flex: 2,
-            child: Text(
-              workspaceName ?? '—',
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.primary,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-          ),
           // 角色
           Expanded(
             flex: 2,
             child: canUpdateRole
                 ? _MemberRoleActionList(member: member)
-                : Text(
-                    _getRoleDisplayName(member.role),
-                    style: theme.textStyle.body.standard(
-                      color: theme.textColorScheme.primary,
+                : Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      _getRoleDisplayName(member.role),
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    textAlign: TextAlign.end,
                   ),
+          ),
+          // 常驻操作列（与电脑端保持一致）
+          SizedBox(
+            width: _memberActionColumnWidth,
+            child: canDelete
+                ? Align(
+                    alignment: Alignment.center,
+                    child: _MemberRemoveIconButton(
+                      onTap: () => _confirmAndRemove(context),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
     );
-
-    if (canDelete) {
-      child = Slidable(
-        key: ValueKey(member.name),
-        endActionPane: ActionPane(
-          extentRatio: 1 / 6.0,
-          motion: const ScrollMotion(),
-          children: [
-            CustomSlidableAction(
-              backgroundColor: const Color(0xE5515563),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                bottomLeft: Radius.circular(10),
-              ),
-              onPressed: (context) {
-                HapticFeedback.mediumImpact();
-                _showDeleteMenu(context);
-              },
-              padding: EdgeInsets.zero,
-              child: const FlowySvg(
-                FlowySvgs.three_dots_s,
-                size: Size.square(24),
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        child: child,
-      );
-    }
-
-    return child;
   }
 
   String _getRoleDisplayName(AFRolePB role) {
@@ -234,37 +189,99 @@ class _MemberItem extends StatelessWidget {
     return "";
   }
 
-  void _showDeleteMenu(BuildContext context) {
+  void _confirmAndRemove(BuildContext context) {
     final workspaceMemberBloc = context.read<WorkspaceMemberBloc>();
+    final memberIdentifier = member.uid.toInt() != 0
+        ? member.uid.toString()
+        : (member.email.isNotEmpty ? member.email : member.name);
+
     showMobileBottomSheet(
       context,
       showDragHandle: true,
       showDivider: false,
       useRootNavigator: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (context) {
-        return FlowyOptionTile.text(
-          text: LocaleKeys.settings_appearance_members_removeFromWorkspace.tr(),
-          height: 52.0,
-          textColor: Theme.of(context).colorScheme.error,
-          leftIcon: FlowySvg(
-            FlowySvgs.trash_s,
-            size: const Size.square(18),
-            color: Theme.of(context).colorScheme.error,
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppFlowyTheme.of(sheetCtx).spacing.l,
+                  vertical: AppFlowyTheme.of(sheetCtx).spacing.l,
+                ),
+                child: Text(
+                  '确定要将「${member.name}」移出空间吗？',
+                  style: AppFlowyTheme.of(sheetCtx)
+                      .textStyle
+                      .heading4
+                      .standard(
+                        color: AppFlowyTheme.of(sheetCtx)
+                            .textColorScheme
+                            .primary,
+                      ),
+                ),
+              ),
+              FlowyOptionTile.text(
+                text: '移出空间',
+                textColor: Theme.of(sheetCtx).colorScheme.error,
+                leftIcon: FlowySvg(
+                  FlowySvgs.trash_s,
+                  size: const Size.square(18),
+                  color: Theme.of(sheetCtx).colorScheme.error,
+                ),
+                showTopBorder: true,
+                showBottomBorder: false,
+                onTap: () {
+                  workspaceMemberBloc.add(
+                    WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
+                      memberIdentifier,
+                    ),
+                  );
+                  Navigator.of(sheetCtx).pop();
+                },
+              ),
+              FlowyOptionTile.text(
+                text: '取消',
+                showTopBorder: false,
+                showBottomBorder: false,
+                onTap: () => Navigator.of(sheetCtx).pop(),
+              ),
+              SizedBox(height: AppFlowyTheme.of(sheetCtx).spacing.m),
+            ],
           ),
-          showTopBorder: false,
-          showBottomBorder: false,
-          onTap: () {
-            final memberIdentifier = member.uid.toInt() != 0
-                ? member.uid.toString()
-                : (member.email.isNotEmpty ? member.email : member.name);
-            workspaceMemberBloc.add(
-              WorkspaceMemberEvent.removeWorkspaceMemberByEmail(memberIdentifier),
-            );
-            Navigator.of(context).pop();
-          },
         );
       },
+    );
+  }
+}
+
+class _MemberRemoveIconButton extends StatelessWidget {
+  const _MemberRemoveIconButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Center(
+            child: FlowySvg(
+              FlowySvgs.trash_s,
+              size: const Size.square(18),
+              color: theme.iconColorScheme.secondary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -286,10 +303,14 @@ class _MemberRoleActionList extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(
-            _getRoleDisplayName(member.role),
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
+          Flexible(
+            child: Text(
+              _getRoleDisplayName(member.role),
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.primary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           HSpace(4),
@@ -342,16 +363,16 @@ class _MemberRoleActionList extends StatelessWidget {
                 return FlowyOptionTile.text(
                   text: _getRoleDisplayName(role) + (isSelected ? ' ✓' : ''),
                   height: 52.0,
-                  textColor: isSelected
-                      ? theme.textColorScheme.primary
-                      : theme.textColorScheme.primary,
+                  textColor: theme.textColorScheme.primary,
                   showTopBorder: false,
                   showBottomBorder: false,
                   onTap: () {
                     if (!isSelected) {
                       final memberIdentifier = member.uid.toInt() != 0
                           ? member.uid.toString()
-                          : (member.email.isNotEmpty ? member.email : member.name);
+                          : (member.email.isNotEmpty
+                              ? member.email
+                              : member.name);
                       workspaceMemberBloc.add(
                         WorkspaceMemberEvent.updateWorkspaceMember(
                           memberIdentifier,

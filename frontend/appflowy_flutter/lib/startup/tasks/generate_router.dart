@@ -26,7 +26,6 @@ import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/language/language_picker_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/launch_settings_page.dart';
-import 'package:appflowy/mobile/presentation/setting/workspace/add_members_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/invite_members_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_space_management_page.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_sharing_page.dart';
@@ -136,7 +135,6 @@ GoRouter generateRouter(Widget child) {
 
         // invite members
         _mobileInviteMembersPageRoute(),
-        _mobileAddMembersPageRoute(),
       ],
 
       // Desktop and Mobile
@@ -277,19 +275,6 @@ GoRoute _mobileInviteMembersPageRoute() {
       return const MaterialExtendedPage(
         child: InviteMembersScreen(),
         name: InviteMembersScreen.routeName,
-      );
-    },
-  );
-}
-
-GoRoute _mobileAddMembersPageRoute() {
-  return GoRoute(
-    parentNavigatorKey: AppGlobals.rootNavKey,
-    path: AddMembersScreen.routeName,
-    pageBuilder: (context, state) {
-      return const MaterialExtendedPage(
-        child: AddMembersScreen(),
-        name: AddMembersScreen.routeName,
       );
     },
   );
