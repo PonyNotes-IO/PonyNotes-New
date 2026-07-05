@@ -66,16 +66,9 @@ class _SettingsPlanComparisonDialogState
         }
 
         if (readyState.successfulPlanUpgrade != null) {
-          showConfirmDialog(
-            context: context,
-            title: LocaleKeys.settings_comparePlanDialog_paymentSuccess_title
-                .tr(args: [readyState.successfulPlanUpgrade!.label]),
-            description: LocaleKeys
-                .settings_comparePlanDialog_paymentSuccess_description
-                .tr(args: [readyState.successfulPlanUpgrade!.label]),
-            confirmLabel: LocaleKeys.button_close.tr(),
-            onConfirm: (_) {},
-          );
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
         }
 
         setState(() => currentInfo = readyState.subscriptionInfo);
