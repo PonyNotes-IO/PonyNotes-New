@@ -2,7 +2,7 @@ use crate::entities::WhiteboardData;
 use crate::notification::{whiteboard_notification_send_json, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Any, Collab, CollabBuilder, DeepObservable, Map, MapRef, Out};
+use collab::preclude::{Any, Collab, CollabBuilder, DeepObservable, GetString, Map, MapRef, Out, ReadTxn};
 use collab::preclude::Subscription;
 use collab::preclude::Event;
 use collab::util::MapExt;
@@ -97,7 +97,7 @@ impl Whiteboard {
             let mut changed_elements = Vec::new();
             for (key, _change) in key_changes.iter() {
               let id = key.to_string();
-              let element = Self::map_string_value_to_json(target.get(txn, id.as_str()));
+              let element = Self::map_string_value_to_json(target.get(txn, id.as_str()), txn);
               // 【元素丢失根因修复 2026-07-01】读到 null（键被移除/值不可解析的异常态）绝不能
               // 作为“删除”广播出去。union-only 模型下元素键从不删除、合法删除是 isDeleted:true 的
               // 非空元素；把 null 发给客户端会被 _mergeElementsDelta 当成删除，导致其他端元素莫名
@@ -136,7 +136,7 @@ impl Whiteboard {
           } else {
             for (key, change) in key_changes.iter() {
               let key_str = key.to_string();
-              let value = Self::map_string_value_to_json(target.get(txn, key_str.as_str()));
+              let value = Self::map_string_value_to_json(target.get(txn, key_str.as_str()), txn);
 
               let event_json = serde_json::json!({
                 "key": key_str,
@@ -280,7 +280,7 @@ impl Whiteboard {
       if key == Self::ELEMENTS_KEY {
         continue;
       }
-      let value = Self::map_string_value_to_json(Some(v));
+      let value = Self::map_string_value_to_json(Some(v), &txn);
       if !value.is_null() {
         data_map.insert(key, value);
       }
@@ -289,7 +289,7 @@ impl Whiteboard {
     let mut elements = Vec::new();
     if let Some(Out::YMap(elements_map)) = self.data.get(&txn, Self::ELEMENTS_KEY) {
       for (_id, value) in elements_map.iter(&txn) {
-        let element = Self::map_string_value_to_json(Some(value));
+        let element = Self::map_string_value_to_json(Some(value), &txn);
         if !element.is_null() {
           elements.push(element);
         }
@@ -308,7 +308,7 @@ impl Whiteboard {
     let txn = self.collab.context.transact();
     self.data
       .get(&txn, "revision")
-      .and_then(|value| Self::map_string_value_to_json(Some(value)).as_i64())
+      .and_then(|value| Self::map_string_value_to_json(Some(value), &txn).as_i64())
   }
 
   fn is_blank_scene(&self) -> bool {
@@ -386,7 +386,7 @@ impl Whiteboard {
       };
 
       let incoming_version = Self::element_version(element);
-      let existing_json = Self::map_string_value(elements_map.get(txn, id));
+      let existing_json = Self::map_string_value(elements_map.get(txn, id), txn);
       let existing_version = existing_json
         .as_deref()
         .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
@@ -431,7 +431,7 @@ impl Whiteboard {
     }
 
     // 读取并解析已有的 files 字符串
-    let mut merged = Self::map_string_value(data.get(txn, Self::FILES_KEY))
+    let mut merged = Self::map_string_value(data.get(txn, Self::FILES_KEY), txn)
       .and_then(|json| serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json).ok())
       .unwrap_or_default();
 
@@ -460,17 +460,24 @@ impl Whiteboard {
       .unwrap_or(0)
   }
 
-  fn map_string_value(value: Option<Out>) -> Option<String> {
+  fn map_string_value<T: ReadTxn>(value: Option<Out>, txn: &T) -> Option<String> {
     match value {
       Some(Out::Any(Any::String(value))) => Some(value.to_string()),
+      Some(Out::YText(value)) => Some(value.get_string(txn)),
       _ => None,
     }
   }
 
-  fn map_string_value_to_json(value: Option<Out>) -> serde_json::Value {
-    Self::map_string_value(value)
-      .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok())
-      .unwrap_or(serde_json::Value::Null)
+  fn map_string_value_to_json<T: ReadTxn>(value: Option<Out>, txn: &T) -> serde_json::Value {
+    if let Some(string_value) = Self::map_string_value(value, txn) {
+      if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&string_value) {
+        json_value
+      } else {
+        serde_json::Value::String(string_value)
+      }
+    } else {
+      serde_json::Value::Null
+    }
   }
 
   /// 导出为 Excalidraw JSON 格式

@@ -85,12 +85,22 @@ class WhiteboardDataService {
   Future<FlowyResult<void, FlowyError>> createWhiteboard({
     required String viewId,
     Map<String, dynamic>? initialData,
+    String? roomId,
+    String? roomKey,
   }) async {
     try {
       final payload = CreateWhiteboardPayloadPB()..viewId = viewId;
 
-      if (initialData != null) {
-        payload.initialData = jsonEncode(initialData);
+      final data = initialData != null ? Map<String, dynamic>.from(initialData) : <String, dynamic>{};
+      if (roomId != null && roomId.isNotEmpty) {
+        data['roomId'] = roomId;
+      }
+      if (roomKey != null && roomKey.isNotEmpty) {
+        data['roomKey'] = roomKey;
+      }
+
+      if (data.isNotEmpty) {
+        payload.initialData = jsonEncode(data);
       }
 
       return await WhiteboardEventCreateWhiteboard(payload).send();
@@ -165,15 +175,21 @@ class WhiteboardDataService {
     Log.debug(
       '[WBCollab][WhiteboardDataService] Saving whiteboard to collab: $viewId',
     );
+    Log.debug('[WBCollab][WhiteboardDataService] collabData keys: ${collabData.keys}');
+    Log.debug('[WBCollab][WhiteboardDataService] collabData: $collabData');
+
+    final payload = {
+      'type': 'update',
+      'data': jsonEncode({
+        ...collabData,
+        'revision': effectiveRevision,
+      }),
+    };
+    Log.debug('[WBCollab][WhiteboardDataService] Full payload: $payload');
+
     final collabSuccess = await _saveToCollab(
       viewId,
-      jsonEncode({
-        'type': 'update',
-        'data': jsonEncode({
-          ...collabData,
-          'revision': effectiveRevision,
-        }),
-      }),
+      jsonEncode(payload),
     );
     if (collabSuccess) {
       logDiagnosticEvent(
@@ -442,17 +458,22 @@ class WhiteboardDataService {
       return result.fold(
         (data) {
           if (data.jsonData.isEmpty) {
+            Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: empty jsonData');
             return const _CollabLoadResult.empty();
           }
+          Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData length=${data.jsonData.length}');
+          Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData=$data.jsonData');
           try {
             final decoded = jsonDecode(data.jsonData);
+            Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: decoded type=${decoded.runtimeType}');
             if (decoded is Map<String, dynamic>) {
+              Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: decoded keys=${decoded.keys}');
               return _CollabLoadResult.found(decoded);
             }
             if (decoded is Map) {
-              return _CollabLoadResult.found(
-                Map<String, dynamic>.from(decoded),
-              );
+              final result = Map<String, dynamic>.from(decoded);
+              Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: converted keys=${result.keys}');
+              return _CollabLoadResult.found(result);
             }
             return _CollabLoadResult.failed(
               'Unexpected collab json type: ${decoded.runtimeType}',
