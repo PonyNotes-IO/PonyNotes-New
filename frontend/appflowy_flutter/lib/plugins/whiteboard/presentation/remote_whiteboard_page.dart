@@ -153,7 +153,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     final encodedNickname = Uri.encodeComponent(_userNickname ?? '');
     Log.info('[RemoteWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
     
-    final url = 'https://xm-arts.xiaomabiji.com/#room=${widget.roomId},${widget.roomKey}&ua=$encodedNickname';
+    final url = 'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname#room=${widget.roomId},${widget.roomKey}';
     Log.info('[RemoteWhiteboard] ✅ Built URL: $url');
     return url;
   }
