@@ -1326,60 +1326,27 @@ class _SupportCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text(
-              '联系与支持',
+              '支持',
               style: theme.textStyle.heading4.standard(
                 color: theme.textColorScheme.primary,
               ),
             ),
           ),
-          _SettingsLinkItem(
-            label: '加入 Discord',
-            onTap: () => afLaunchUrlString('https://discord.gg/JucBXeU2FE'),
-          ),
           _SettingsActionItem(
-            label: '上报问题',
-            onTap: () => _showReportIssueSheet(context),
+            label: '清除缓存',
+            onTap: () async {
+              await getIt<FlowyCacheManager>().clearAllCache();
+              if (context.mounted) {
+                showToastNotification(
+                  message: LocaleKeys
+                      .settings_manageDataPage_cache_dialog_successHint
+                      .tr(),
+                );
+              }
+            },
           ),
         ],
       ),
-    );
-  }
-
-  void _showReportIssueSheet(BuildContext context) {
-    showMobileBottomSheet(
-      context,
-      showDragHandle: true,
-      showHeader: true,
-      title: '上报问题',
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (ctx) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FlowyOptionTile.text(
-              showTopBorder: false,
-              text: 'GitHub 上报问题',
-              onTap: () {
-                final String os = io.Platform.operatingSystem;
-                afLaunchUrlString(
-                  'https://github.com/AppFlowy-IO/AppFlowy/issues/new'
-                  '?assignees=&labels=&projects=&template=bug_report.yaml'
-                  '&title=[Bug]%20Mobile:%20&version=${ApplicationInfo.applicationVersion}&os=$os',
-                );
-                Navigator.pop(ctx);
-              },
-            ),
-            FlowyOptionTile.text(
-              showTopBorder: false,
-              text: '导出日志文件',
-              onTap: () {
-                shareLogFiles(ctx);
-                Navigator.pop(ctx);
-              },
-            ),
-          ],
-        );
-      },
     );
   }
 }

@@ -90,7 +90,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
           _hasRequestedCode = true;
         });
         _startCountdown();
-        showToastNotification(message: 'Code sent to $email');
+        showToastNotification(message: '验证码已发送至 $email');
       },
       (error) {
         if (!mounted) return;
