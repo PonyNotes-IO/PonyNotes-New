@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
 use std::sync::{Arc, Weak};
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 
 /// 白板用户服务 trait
@@ -210,7 +210,7 @@ impl WhiteboardManager {
 
     // 检查白板是否已存在于本地磁盘
     let exists = self.is_whiteboard_exist(view_id).await.unwrap_or(false);
-    info!("[Whiteboard] Whiteboard {} exists on local disk: {}", view_id, exists);
+    info!("[Whiteboard] 🔍 Whiteboard {} exists on local disk: {}", view_id, exists);
 
     // 确定数据源：本地磁盘 或 云端
     let data_source = if exists {
@@ -252,9 +252,11 @@ impl WhiteboardManager {
         wb
       },
       Err(e) => {
-        info!("[Whiteboard] ⚠️ Failed to open whiteboard ({}), creating new data structure", e);
+        error!("[Whiteboard] ❌ Failed to open whiteboard ({}), creating new data structure", e);
         // Collab 文档存在但数据结构未初始化，重新创建数据结构
+        // ⚠️ 注意：如果 exists=true，这里会使用磁盘数据源重新加载，避免覆盖原有数据
         let data_source = if exists {
+          info!("[Whiteboard] 🔍 Whiteboard exists on disk, using disk data source to preserve existing data");
           CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id).into_data_source()
         } else {
           DataSource::Disk(None)
@@ -267,15 +269,19 @@ impl WhiteboardManager {
         let wb = Whiteboard::create(collab)
           .map_err(|e| internal_error(format!("Failed to create whiteboard data structure: {}", e)))?;
         
-        // 保存初始化后的数据结构到磁盘
-        let encoded = wb.encode_collab()
-          .map_err(internal_error)?;
-        self
-          .persistence()?
-          .save_collab_to_disk(&view_id.to_string(), encoded)
-          .map_err(internal_error)?;
-        
-        info!("[Whiteboard] ✅ Initialized whiteboard data structure and saved: {}", view_id);
+        // 只有当本地不存在时才保存，避免覆盖已有数据
+        if !exists {
+          let encoded = wb.encode_collab()
+            .map_err(internal_error)?;
+          self
+            .persistence()?
+            .save_collab_to_disk(&view_id.to_string(), encoded)
+            .map_err(internal_error)?;
+          
+          info!("[Whiteboard] ✅ Initialized whiteboard data structure and saved: {}", view_id);
+        } else {
+          warn!("[Whiteboard] ⚠️ Skipping save to disk because whiteboard already exists");
+        }
         wb
       }
     };
