@@ -71,6 +71,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
               return NavigationActionPolicy.ALLOW;
             },
           ),
+          Positioned(child: Text("${widget.roomId},${widget.roomKey}")),
           if (_isLoading)
             const Positioned.fill(
               child: Center(
