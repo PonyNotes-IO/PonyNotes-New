@@ -3,6 +3,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 
@@ -56,6 +57,37 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
         });
+      }
+
+      final whiteboardData = await WhiteboardDataService().loadWhiteboardData(view.id);
+      Log.debug('🔍 [WhiteboardRouter] Loaded whiteboard data keys: ${whiteboardData.keys}');
+      Log.debug('🔍 [WhiteboardRouter] Full whiteboard data: $whiteboardData');
+      
+      final serverRoomId = whiteboardData['roomId'];
+      final serverRoomKey = whiteboardData['roomKey'];
+      Log.debug('🔍 [WhiteboardRouter] serverRoomId type: ${serverRoomId.runtimeType}, value: $serverRoomId');
+      Log.debug('🔍 [WhiteboardRouter] serverRoomKey type: ${serverRoomKey.runtimeType}, value: $serverRoomKey');
+
+      if (serverRoomId != null && serverRoomId.toString().isNotEmpty && serverRoomKey != null && serverRoomKey.toString().isNotEmpty) {
+        final roomIdStr = serverRoomId is String ? serverRoomId : serverRoomId.toString();
+        final roomKeyStr = serverRoomKey is String ? serverRoomKey : serverRoomKey.toString();
+        
+        Log.debug('🟢 [WhiteboardRouter] Found room in server data: roomId=$roomIdStr');
+        
+        if (roomIdStr != _roomId || roomKeyStr != _roomKey) {
+          await WhiteboardRoomService.saveRoom(view.id, roomIdStr, roomKeyStr);
+          Log.debug('✅ [WhiteboardRouter] Synced server room to local storage: roomId=$roomIdStr');
+        }
+        
+        setState(() {
+          _roomId = roomIdStr;
+          _roomKey = roomKeyStr;
+        });
+        return;
+      }
+
+      if (_roomId != null && _roomKey != null) {
+        Log.debug('🟢 [WhiteboardRouter] Using existing room from local storage: roomId=$_roomId');
         return;
       }
 
@@ -64,7 +96,22 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
       
       await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
-      Log.debug('✅ [WhiteboardRouter] Generated and saved new room: viewId=${view.id}, roomId=$newRoomId');
+      Log.debug('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
+      
+      final saveResult = await WhiteboardDataService().saveWhiteboardData(
+        view.id,
+        {
+          'roomId': newRoomId,
+          'roomKey': newRoomKey,
+        },
+        source: 'room-init',
+      );
+      
+      if (saveResult) {
+        Log.debug('✅ [WhiteboardRouter] Saved room info to server: roomId=$newRoomId');
+      } else {
+        Log.warn('⚠️ [WhiteboardRouter] Failed to save room info to server');
+      }
       
       setState(() {
         _roomId = newRoomId;
@@ -83,7 +130,7 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
         if (_roomId != null && _roomKey != null) {
-          Log.debug('🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId');
+          Log.debug('🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
           return RemoteWhiteboardPage(
             key: ValueKey('remote_whiteboard_page_${view.id}'),
             view: view,
