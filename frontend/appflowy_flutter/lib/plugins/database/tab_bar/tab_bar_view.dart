@@ -523,6 +523,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     bool showTopRightActions = true,
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
+    final isGrid = view.layout == ViewLayoutPB.Grid;
     return Stack(
       children: [
         child,
@@ -535,7 +536,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
               viewInfoBloc: viewInfoBloc,
               pageAccessLevelBloc: pageAccessLevelBloc,
               useFloatingSurface: true,
-              showShareButton: !isWhiteboard,
+              showShareButton: !isWhiteboard && !isGrid,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
