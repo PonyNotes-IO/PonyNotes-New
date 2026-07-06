@@ -991,7 +991,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             left: 12,
             child: InkWell(
               onTap: () => _selectViewInMiddlePanel(parentView),
-              child: FlowySvg(FlowySvgs.m_app_bar_back_s),
+              child: FlowySvg(FlowySvgs.m_app_bar_back_s,size: Size(18, 18),),
             ),
           ),
       ],
