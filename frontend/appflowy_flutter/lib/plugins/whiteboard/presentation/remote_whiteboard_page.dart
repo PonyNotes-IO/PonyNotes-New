@@ -148,14 +148,19 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                   },
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
                     final url = navigationAction.request.url?.toString();
+                    final headers = navigationAction.request.headers;
+                    final filename = headers != null ? 
+                      (headers['Content-Disposition']?.split('filename=').last ?? 
+                       headers['content-disposition']?.split('filename=').last ?? 'download') : 'download';
+                    
                     if (url != null && url.startsWith('blob:')) {
-                      Log.info('[RemoteWhiteboard] 🚫 Blocking blob navigation, starting download: $url');
-                      _downloadBlobUrl(controller, url, 'download');
+                      Log.info('[RemoteWhiteboard] 🚫 Blocking blob navigation, starting download: $url, filename: $filename');
+                      _downloadBlobUrl(controller, url, filename.replaceAll('"', ''));
                       return NavigationActionPolicy.CANCEL;
                     }
                     if (url != null && url.startsWith('data:')) {
-                      Log.info('[RemoteWhiteboard] 🚫 Blocking data URL navigation, starting download: $url');
-                      _saveDataUrlToFile(url, 'download');
+                      Log.info('[RemoteWhiteboard] 🚫 Blocking data URL navigation, starting download: $url, filename: $filename');
+                      _saveDataUrlToFile(url, filename.replaceAll('"', ''));
                       return NavigationActionPolicy.CANCEL;
                     }
                     return NavigationActionPolicy.ALLOW;
@@ -384,6 +389,10 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
         return 'gif';
       case 'application/pdf':
         return 'pdf';
+      case 'application/vnd.excalidraw+json':
+        return 'excalidraw';
+      case 'application/json':
+        return 'json';
       default:
         return '';
     }
@@ -410,8 +419,11 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
           (bytes[0] == 0x3C && bytes[1] == 0x3F)) {
         return 'svg';
       }
+      if (bytes[0] == 0x7B) {
+        return 'json';
+      }
     }
-    return 'png';
+    return 'bin';
   }
 
   String _ensureFilenameExtension(String filename, String ext) {
