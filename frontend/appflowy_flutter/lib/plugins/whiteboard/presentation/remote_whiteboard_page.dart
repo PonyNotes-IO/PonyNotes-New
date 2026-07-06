@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -349,30 +350,20 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
       await file.writeAsBytes(bytes);
       Log.info('[RemoteWhiteboard] ✅ File saved: ${file.path}');
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('图片已保存到: ${file.path}'),
-            action: SnackBarAction(
-              label: '打开',
-              onPressed: () => OpenFilex.open(file.path),
-            ),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+      showToastNotification(
+        message: '文件已保存到: ${file.path.split('/').last}',
+        type: ToastificationType.success,
+        description: file.path,
+      );
       
       await OpenFilex.open(file.path);
     } catch (e) {
       Log.error('[RemoteWhiteboard] ❌ _saveBase64ToFile error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存图片失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      showToastNotification(
+        message: '保存文件失败',
+        type: ToastificationType.error,
+        description: e.toString(),
+      );
     }
   }
 
