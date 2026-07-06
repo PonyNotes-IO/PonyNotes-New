@@ -1,3 +1,4 @@
+import 'package:appflowy/core/helpers/native_url_opener.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
@@ -18,11 +19,13 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flowy_infra_ui/widget/rounded_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:url_launcher/url_launcher.dart' as launcher;
 
 class PublishTab extends StatelessWidget {
   const PublishTab({
@@ -48,7 +51,19 @@ class PublishTab extends StatelessWidget {
             url: state.url,
             pathName: state.pathName,
             namespace: state.namespace,
-            onVisitSite: (url) => afLaunchUrlString(url),
+            onVisitSite: (url) async {
+              // Try the native bridge first on Android — it bypasses the broken
+              // url_launcher_android 6.x Pigeon channel and goes straight to
+              // Intent.ACTION_VIEW. Falls back to url_launcher on other platforms
+              // and when the bridge fails.
+              final opened = await NativeUrlOpener.open(url);
+              if (!opened) {
+                await afLaunchUrlString(
+                  url,
+                  mode: launcher.LaunchMode.externalApplication,
+                );
+              }
+            },
             onUnPublish: () {
               context.read<ShareBloc>().add(const ShareEvent.unPublish());
             },
@@ -199,24 +214,31 @@ class _PublishedWidgetState extends State<_PublishedWidget> {
           },
         ),
         const VSpace(16),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Spacer(),
-            UnPublishButton(
-              onUnPublish: widget.onUnPublish,
-            ),
-            const HSpace(6),
-            _buildVisitSiteButton(),
-          ],
+        Builder(
+          builder: (context) {
+            // Mobile screens are too narrow to fit two 108px buttons side by side
+            // inside the share dialog; shrink the buttons to avoid overflow.
+            final buttonWidth = PlatformInfo.isMobile ? 90.0 : 108.0;
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                UnPublishButton(
+                  width: buttonWidth,
+                  onUnPublish: widget.onUnPublish,
+                ),
+                const HSpace(6),
+                _buildVisitSiteButton(width: buttonWidth),
+              ],
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildVisitSiteButton() {
+  Widget _buildVisitSiteButton({double width = 108}) {
     return RoundedTextButton(
-      width: 108,
+      width: width,
       height: 36,
       onPressed: () {
         final url = context.read<ShareBloc>().state.url;
@@ -235,14 +257,16 @@ class UnPublishButton extends StatelessWidget {
   const UnPublishButton({
     super.key,
     required this.onUnPublish,
+    this.width = 108,
   });
 
   final VoidCallback onUnPublish;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 108,
+      width: width,
       height: 36,
       child: FlowyButton(
         decoration: BoxDecoration(

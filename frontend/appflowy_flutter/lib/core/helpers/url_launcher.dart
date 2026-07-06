@@ -101,6 +101,7 @@ Future<bool> afLaunchUrlString(
   bool addingHttpSchemeWhenFailed = false,
   BuildContext? context,
   OnFailureCallback? onFailure,
+  launcher.LaunchMode mode = launcher.LaunchMode.platformDefault,
 }) async {
   final Uri uri;
   try {
@@ -116,6 +117,7 @@ Future<bool> afLaunchUrlString(
     addingHttpSchemeWhenFailed: addingHttpSchemeWhenFailed,
     context: context,
     onFailure: onFailure,
+    mode: mode,
   );
 }
 

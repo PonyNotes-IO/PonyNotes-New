@@ -1,10 +1,17 @@
 package com.xiaomabiji.app.note
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
-class MainActivity: FlutterActivity() {
+class MainActivity : FlutterActivity() {
+    private val channelName = "com.xiaomabiji.app.note/open_url"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Prevent black screen by ensuring the window has a solid background
@@ -12,6 +19,40 @@ class MainActivity: FlutterActivity() {
         window.setBackgroundDrawableResource(android.R.color.white)
         // Keep screen on during initial load to prevent display sleep issues
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // Bypass url_launcher_android 6.x Pigeon channel (which fails to register
+        // on this project due to AGP/plugin compileSdk mismatches) by providing
+        // our own MethodChannel that opens URLs via ACTION_VIEW.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openUrl" -> {
+                        val url = call.argument<String>("url")
+                        if (url.isNullOrEmpty()) {
+                            result.error("INVALID_URL", "url is null or empty", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: ActivityNotFoundException) {
+                            result.error(
+                                "NO_APP",
+                                "No activity found to handle the url",
+                                null,
+                            )
+                        } catch (e: Throwable) {
+                            result.error("OPEN_URL_FAILED", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     override fun onResume() {
