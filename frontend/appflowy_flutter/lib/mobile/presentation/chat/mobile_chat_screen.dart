@@ -3,8 +3,7 @@ import 'dart:convert';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/plugins/ai_chat/application/ai_chat_prelude.dart';
-import 'package:appflowy/plugins/ai_chat/presentation/chat_page/load_chat_message_status_ready.dart';
+import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
@@ -18,7 +17,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -46,10 +44,7 @@ class MobileChatScreen extends StatefulWidget {
 }
 
 class _MobileChatScreenState extends State<MobileChatScreen> {
-  ChatBloc? _chatBloc;
-  AIPromptInputBloc? _promptInputBloc;
-
-  // Parsed from extra
+  // Parsed from extra — only used in the welcome (no-id) path
   String? _initialMessage;
   String? _preferredModelId;
   bool _enableDeepThinking = false;
@@ -63,7 +58,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   void initState() {
     super.initState();
     _parseExtra();
-    _initBlocs();
+    _loadProfile();
   }
 
   void _parseExtra() {
@@ -77,44 +72,13 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     } catch (_) {}
   }
 
-  Future<void> _initBlocs() async {
+  Future<void> _loadProfile() async {
     final profileResult = await UserBackendService.getCurrentUserProfile();
     _userProfile = profileResult.fold((p) => p, (_) => null);
-
-    if (widget.id != null) {
-      _chatBloc = ChatBloc(
-        chatId: widget.id!,
-        userId: _userProfile?.id.toString() ?? '',
-        initialMessage: _initialMessage,
-        preferredModelId: _preferredModelId,
-        enableDeepThinking: _enableDeepThinking,
-        enableWebSearch: _enableWebSearch,
-      );
-      _promptInputBloc = AIPromptInputBloc(
-        objectId: widget.id!,
-        predefinedFormat: PredefinedFormat(
-          imageFormat: ImageFormat.text,
-          textFormat: TextFormat.bulletList,
-        ),
-      );
-      AIChatViewService.getCurrentWorkspaceId().then((workspaceId) {
-        if (workspaceId != null && !_chatBloc!.isClosed) {
-          _chatBloc!.add(ChatEvent.setWorkspaceId(workspaceId));
-        }
-      });
-    }
-
     if (mounted) setState(() => _isLoading = false);
   }
 
-  @override
-  void dispose() {
-    _chatBloc?.close();
-    _promptInputBloc?.close();
-    super.dispose();
-  }
-
-  bool get _hasChat => widget.id != null && _chatBloc != null;
+  bool get _hasChat => widget.id != null;
 
   @override
   Widget build(BuildContext context) {
@@ -134,22 +98,15 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     }
 
     if (_hasChat) {
-      return MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: _chatBloc!),
-          BlocProvider.value(value: _promptInputBloc!),
-        ],
-        child: BlocBuilder<ChatBloc, ChatState>(
-          builder: (context, chatState) {
-            if (_chatBloc!.chatController.messages.isNotEmpty) {
-              return _buildChatLayout(context);
-            }
-            if (chatState.loadingState is LoadChatMessageStatusReady) {
-              return _buildWelcomeLayout(context);
-            }
-            return const Center(child: CircularProgressIndicator.adaptive());
-          },
-        ),
+      // Use MobileViewPage to render the chat view — it provides every
+      // dependency (ChatBloc, ViewBloc, UserWorkspaceBloc, …) via the
+      // shared AIChatPagePlugin → AIChatPage → ChatContentPage chain,
+      // and parses initial_message from view.extra automatically.
+      return MobileViewPage(
+        key: ValueKey('mobile_chat_${widget.id}'),
+        id: widget.id!,
+        title: widget.title,
+        viewLayout: ViewLayoutPB.Chat,
       );
     }
 
@@ -273,20 +230,6 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     _sendMessage(text, modelId: modelId, enableDeepThinking: deepThinking, enableWebSearch: webSearch);
   }
 
-  Widget _buildChatLayout(BuildContext context) {
-    final view = ViewPB.create()..id = widget.id!;
-
-    return Scaffold(
-      body: SafeArea(
-        child: LoadChatMessageStatusReady(
-          view: view,
-          userProfile: _userProfile!,
-          chatController: _chatBloc!.chatController,
-        ),
-      ),
-    );
-  }
-
   Future<void> _sendMessage(
     String message, {
     String? modelId,
@@ -325,7 +268,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       }
 
       if (mounted) {
-        context.push(
+        context.go(
           '${MobileChatScreen.routeName}'
           '?${MobileChatScreen.viewId}=${view.id}'
           '&${MobileChatScreen.viewTitle}=${Uri.encodeComponent(view.name)}',
@@ -334,6 +277,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     } catch (e) {
       Log.error('[MobileAI] 发送消息失败: $e');
       _showError('发送消息失败');
+    } finally {
       if (mounted) setState(() => _isSending = false);
     }
   }
