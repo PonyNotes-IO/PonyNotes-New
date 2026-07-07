@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flutter/material.dart';
 
 class UserAvatar extends StatelessWidget {
@@ -11,6 +13,7 @@ class UserAvatar extends StatelessWidget {
     required this.size,
     this.isHovering = false,
     this.decoration,
+    this.userProfilePB,
   });
 
   final String iconUrl;
@@ -21,6 +24,8 @@ class UserAvatar extends StatelessWidget {
 
   // If true, a border will be applied on top of the avatar
   final bool isHovering;
+
+  final UserProfilePB? userProfilePB;
 
   @override
   Widget build(BuildContext context) {
@@ -51,15 +56,21 @@ class UserAvatar extends StatelessWidget {
       );
     }
 
-    // 判断是本地路径还是网络 URL
     if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
-      return AFAvatar(
-        url: iconUrl,
-        name: name,
-        size: size,
+      return ClipOval(
+        child: FlowyNetworkImage(
+          url: iconUrl,
+          userProfilePB: userProfilePB,
+          width: size.size,
+          height: size.size,
+          fit: BoxFit.cover,
+          errorWidgetBuilder: (context, url, error) => AFAvatar(
+            name: name,
+            size: size,
+          ),
+        ),
       );
     } else {
-      // 本地文件路径
       final file = File(iconUrl);
       if (file.existsSync()) {
         return ClipOval(

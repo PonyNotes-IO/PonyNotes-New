@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/util/log_utils.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
@@ -808,42 +811,20 @@ class _HomePageState extends State<HomePage> {
       return const SizedBox.shrink();
     }
 
-    // 检查是否是当前用户创建的视图
     final isCurrentUser =
         view.hasCreatedBy() && view.createdBy == userProfile.id;
-
     if (!isCurrentUser) {
       return const SizedBox.shrink();
     }
 
-    final iconUrl = userProfile.iconUrl;
-    if (iconUrl.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // 检查是否是URL
-    if (isURL(iconUrl)) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: SizedBox(
-          width: 15,
-          height: 15,
-          child: FlowyNetworkImage(
-            url: iconUrl,
-            fit: BoxFit.cover,
-          ),
-        ),
-      );
-    }
-
-    // 如果是emoji或其他，使用UserAvatar组件
     return SizedBox(
       width: 15,
       height: 15,
       child: UserAvatar(
-        iconUrl: iconUrl,
+        iconUrl: userProfile.iconUrl,
         name: userProfile.name,
         size: AFAvatarSize.xs,
+        userProfilePB: userProfile,
       ),
     );
   }
