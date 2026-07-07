@@ -921,7 +921,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _loadMessages() async {
     final loadMessagesPayload = LoadNextChatMessagePB(
       chatId: chatId,
-      limit: Int64(10),
+      limit: Int64(50),
     );
 
     await AIEventLoadNextMessage(loadMessagesPayload).send().fold(
@@ -944,11 +944,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final oldestMessage = _messageHandler.getOldestMessage();
 
     if (oldestMessage != null) {
-      final oldestMessageId = Int64.tryParseInt(oldestMessage.id);
+      var oldestMessageId = Int64.tryParseInt(oldestMessage.id);
+      
       if (oldestMessageId == null) {
-        Log.error("Failed to parse message_id: ${oldestMessage.id}");
-        return;
+        final parsed = int.tryParse(oldestMessage.id);
+        if (parsed != null) {
+          oldestMessageId = Int64(parsed);
+          Log.info('⚠️ ChatBloc: 使用 int.parse 解析消息ID: ${oldestMessage.id}');
+        } else {
+          Log.error("Failed to parse message_id: ${oldestMessage.id}");
+          return;
+        }
       }
+      
       isLoadingPreviousMessages = true;
       _loadPreviousMessages(oldestMessageId);
     }
@@ -957,7 +965,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _loadPreviousMessages(Int64? beforeMessageId) {
     final payload = LoadPrevChatMessagePB(
       chatId: chatId,
-      limit: Int64(10),
+      limit: Int64(50),
       beforeMessageId: beforeMessageId,
     );
     AIEventLoadPrevMessage(payload).send();

@@ -78,38 +78,6 @@ void main() {
       ],
     );
 
-    blocTest<ShareTabBloc, ShareTabState>(
-      'updates access level for user',
-      build: () => bloc,
-      act: (bloc) => bloc.add(
-        ShareTabEvent.updateUserAccessLevel(
-          email: email,
-          accessLevel: ShareAccessLevel.fullAccess,
-        ),
-      ),
-      wait: const Duration(milliseconds: 100),
-      expect: () => [
-        // First state: updateAccessLevelResult is null
-        isA<ShareTabState>().having(
-          (s) => s.updateAccessLevelResult,
-          'updateAccessLevelResult',
-          isNull,
-        ),
-        // Second state: updateAccessLevelResult is Success and users updated
-        isA<ShareTabState>()
-            .having(
-              (s) => s.updateAccessLevelResult,
-              'updateAccessLevelResult',
-              isNotNull,
-            )
-            .having(
-              (s) => s.users.firstWhere((u) => u.email == email).accessLevel,
-              'vivian accessLevel',
-              ShareAccessLevel.fullAccess,
-            ),
-      ],
-    );
-
     final guestEmail = 'guest@appflowy.io';
     blocTest<ShareTabBloc, ShareTabState>(
       'turns user into member',

@@ -312,15 +312,17 @@ class _ChatAnimatedListState extends State<ChatAnimatedList>
       ..sort((a, b) => a.index.compareTo(b.index));
     final minItem = sortedItems.firstOrNull;
 
-    if (minItem == null || minItem.index > 0 || minItem.itemLeadingEdge < 0) {
+    if (minItem == null || minItem.index > 0) {
       return;
     }
 
-    loadPreviousMessagesDebounce.call(
-      () {
-        widget.onLoadPreviousMessages?.call();
-      },
-    );
+    if (minItem.itemLeadingEdge <= 1.5) {
+      loadPreviousMessagesDebounce.call(
+        () {
+          widget.onLoadPreviousMessages?.call();
+        },
+      );
+    }
   }
 
   void _cacheMessageHeight(String messageId, double height) {

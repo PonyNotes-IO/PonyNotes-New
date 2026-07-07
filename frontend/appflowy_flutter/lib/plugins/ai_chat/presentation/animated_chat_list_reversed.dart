@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:appflowy/util/debounce.dart';
 import 'package:diffutil_dart/diffutil.dart' as diffutil;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -55,6 +56,10 @@ class ChatAnimatedListReversedState extends State<ChatAnimatedListReversed>
   bool _userHasScrolled = false;
   bool _isScrollingToBottom = false;
   String _lastInsertedMessageId = '';
+
+  final loadPreviousMessagesDebounce = Debounce(
+    duration: const Duration(milliseconds: 200),
+  );
 
   @override
   void initState() {
@@ -367,9 +372,13 @@ class ChatAnimatedListReversedState extends State<ChatAnimatedListReversed>
   }
 
   void _handleLoadPreviousMessages() {
-    if (widget.scrollController.offset >=
-        widget.scrollController.position.maxScrollExtent) {
-      widget.onLoadPreviousMessages?.call();
+    final maxExtent = widget.scrollController.position.maxScrollExtent;
+    if (maxExtent > 0 && widget.scrollController.offset >= maxExtent - 100) {
+      loadPreviousMessagesDebounce.call(
+        () {
+          widget.onLoadPreviousMessages?.call();
+        },
+      );
     }
   }
 }
