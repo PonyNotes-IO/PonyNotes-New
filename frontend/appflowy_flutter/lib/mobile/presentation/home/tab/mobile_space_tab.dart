@@ -21,8 +21,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 
-import 'ai_bubble_button.dart';
-
 final ValueNotifier<int> mobileCreateNewAIChatNotifier = ValueNotifier(0);
 
 class MobileHomePageTab extends StatefulWidget {
@@ -46,7 +44,6 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     super.initState();
 
     mobileCreateNewPageNotifier.addListener(_createNewDocument);
-    mobileCreateNewAIChatNotifier.addListener(_createNewAIChat);
     mobileLeaveWorkspaceNotifier.addListener(_leaveWorkspace);
   }
 
@@ -56,7 +53,6 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     tabController?.dispose();
 
     mobileCreateNewPageNotifier.removeListener(_createNewDocument);
-    mobileCreateNewAIChatNotifier.removeListener(_createNewAIChat);
     mobileLeaveWorkspaceNotifier.removeListener(_leaveWorkspace);
 
     super.dispose();
@@ -165,19 +161,7 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
         case MobileSpaceTabType.recent:
           return const MobileRecentSpace();
         case MobileSpaceTabType.spaces:
-          final showAIFloatingButton =
-              widget.userProfile.workspaceType == WorkspaceTypePB.ServerW;
-          return Stack(
-            children: [
-              MobileHomeSpace(userProfile: widget.userProfile),
-              if (showAIFloatingButton)
-                Positioned(
-                  right: 20,
-                  bottom: MediaQuery.of(context).padding.bottom + 16,
-                  child: FloatingAIEntryV2(),
-                ),
-            ],
-          );
+          return MobileHomeSpace(userProfile: widget.userProfile);
         case MobileSpaceTabType.favorites:
           return MobileFavoriteSpace(userProfile: widget.userProfile);
         case MobileSpaceTabType.shared:
@@ -198,8 +182,6 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
 
   // quick create new page when clicking the add button in navigation bar
   void _createNewDocument() => _createNewPage(ViewLayoutPB.Document);
-
-  void _createNewAIChat() => _createNewPage(ViewLayoutPB.Chat);
 
   void _createNewPage(ViewLayoutPB layout) {
     if (context.read<SpaceBloc>().state.spaces.isNotEmpty) {
