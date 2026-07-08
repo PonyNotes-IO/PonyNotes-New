@@ -88,9 +88,13 @@ class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
                               if (sub != null &&
                                   (sub.planCode?.isNotEmpty ?? false)) {
                                 final planCode = sub.planCode!.toLowerCase();
+                                // 服务端真实免费版 plan_code 是 "mfb"（此前误写成
+                                // 字母顺序颠倒的 "fmb"，导致免费版用户的 planCode
+                                // 'mfb' 永远匹配不上排除列表，被错误当作付费会员，
+                                // 绕过了"云同步为会员专享"的限制）。
                                 if (planCode != 'free' &&
                                     planCode != 'freeplan' &&
-                                    planCode != 'fmb') {
+                                    planCode != 'mfb') {
                                   final end = uwState.currentSubscription
                                       ?.subscription?.endDate;
                                   if (end == null ||

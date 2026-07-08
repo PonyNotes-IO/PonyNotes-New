@@ -144,7 +144,6 @@ class SettingsDialogBloc
       (cloudSetting) {
         final whiteList = [
           "https://api.xiaomabiji.com",
-          "https://api.xiaomabiji.com",
         ];
 
         return whiteList.contains(cloudSetting.serverUrl);

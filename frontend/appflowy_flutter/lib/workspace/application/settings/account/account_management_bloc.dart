@@ -144,7 +144,7 @@ class AccountManagementBloc
       add(const AccountManagementEvent.loadSubscriptionPlans());
     };
     _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
-    
+
     on<AccountManagementEvent>((event, emit) async {
       await event.when(
         initial: () async => _initial(emit),
@@ -205,7 +205,8 @@ class AccountManagementBloc
         if (parts.length >= 2) {
           final payloadPart = parts[1];
           // base64url -> base64，并补齐 padding
-          var normalized = payloadPart.replaceAll('-', '+').replaceAll('_', '/');
+          var normalized =
+              payloadPart.replaceAll('-', '+').replaceAll('_', '/');
           while (normalized.length % 4 != 0) {
             normalized += '=';
           }
@@ -222,7 +223,12 @@ class AccountManagementBloc
     return userProfile.id.toString();
   }
 
-  /// 接口 plan_code 与会员级别对应：fmb=免费, standard=Stand, professor=Pro, hiclass=Hiclass
+  /// 接口 plan_code 与会员级别对应：fmb=免费, standard=Stand, profersor=Pro, hiclass=Hiclass
+  ///
+  /// 注意：服务端实际的专业版 plan_code 是 "profersor"（缺一个字母的拼写，非
+  /// "professor"），线上 af_subscription_plans 表里就是这个值。之前这里只识别
+  /// "professor"/"pro"，导致真实专业版用户的当前套餐在 [_emitSubscriptionInfo]
+  /// 里被错误映射成 null → 兜底显示成免费版。此处补上真实值，与服务端保持一致。
   WorkspacePlanPB? _mapPlanCodeToPb(String code) {
     final lower = code.toLowerCase();
     switch (lower) {
@@ -232,6 +238,7 @@ class AccountManagementBloc
       case 'standard':
       case 'stand':
         return WorkspacePlanPB.StandPlan;
+      case 'profersor':
       case 'professor':
       case 'pro':
         return WorkspacePlanPB.ProPlan;
@@ -291,7 +298,8 @@ class AccountManagementBloc
 
     // 从服务器重新获取订阅信息
     try {
-      final currentSubscription = await SubscriptionService().getCurrentSubscription(
+      final currentSubscription =
+          await SubscriptionService().getCurrentSubscription(
         userProfile: userProfile,
         caller: 'AccountManagementBloc._loadSubscriptionInfo',
       );
@@ -308,8 +316,7 @@ class AccountManagementBloc
     CurrentSubscription? subscription,
   ) {
     // 使用获取到的订阅信息
-    final planCode =
-        subscription?.subscription?.planCode ?? 'free_local';
+    final planCode = subscription?.subscription?.planCode ?? 'free_local';
     final mappedPlan = _mapPlanCodeToPb(planCode);
     final currentPlan = mappedPlan ?? WorkspacePlanPB.FreePlan;
 
@@ -582,7 +589,7 @@ class AccountManagementBloc
       int skippedType = 0;
       int skippedCode = 0;
       int skippedMap = 0;
-      
+
       for (final item in data) {
         processed++;
         if (item is! Map<String, dynamic>) {
@@ -590,14 +597,14 @@ class AccountManagementBloc
           Log.warn('跳过非Map类型数据：${item.runtimeType}');
           continue;
         }
-        
+
         final codeStr = item['plan_code'] as String? ?? '';
         if (codeStr.isEmpty) {
           skippedCode++;
           Log.warn('跳过plan_code为空的数据：$item');
           continue;
         }
-        
+
         final mappedPlan = _mapPlanCodeToPb(codeStr);
         if (mappedPlan == null) {
           skippedMap++;
@@ -606,13 +613,15 @@ class AccountManagementBloc
           if (codeStr.toLowerCase().contains('free')) {
             configs[WorkspacePlanPB.FreePlan] = RemotePlan.fromJson(item);
             Log.info('已将 $codeStr 映射为 FreePlan');
-          } else if (codeStr.toLowerCase().contains('standard') || codeStr.toLowerCase().contains('stand')) {
+          } else if (codeStr.toLowerCase().contains('standard') ||
+              codeStr.toLowerCase().contains('stand')) {
             configs[WorkspacePlanPB.StandPlan] = RemotePlan.fromJson(item);
             Log.info('已将 $codeStr 映射为 StandPlan');
           } else if (codeStr.toLowerCase().contains('pro')) {
             configs[WorkspacePlanPB.ProPlan] = RemotePlan.fromJson(item);
             Log.info('已将 $codeStr 映射为 ProPlan');
-          } else if (codeStr.toLowerCase().contains('hiclass') || codeStr.toLowerCase().contains('hi-class')) {
+          } else if (codeStr.toLowerCase().contains('hiclass') ||
+              codeStr.toLowerCase().contains('hi-class')) {
             configs[WorkspacePlanPB.HiclassPlan] = RemotePlan.fromJson(item);
             Log.info('已将 $codeStr 映射为 HiclassPlan');
           } else {
@@ -623,7 +632,7 @@ class AccountManagementBloc
           Log.info('成功映射 plan_code: $codeStr → $mappedPlan');
         }
       }
-      
+
       Log.info('订阅计划数据处理完成：');
       Log.info('- 原始数据：${data.length} 条');
       Log.info('- 处理数据：$processed 条');
@@ -632,7 +641,6 @@ class AccountManagementBloc
       Log.info('- 跳过无法映射：$skippedMap 条');
       Log.info('- 最终配置：${configs.length} 条');
       Log.info('- 配置详情：${configs.keys}');
-
 
       state.maybeWhen(
         orElse: () {},
@@ -702,8 +710,6 @@ class AccountManagementBloc
       );
     }
   }
-
-
 
   void _selectPlan(WorkspacePlanPB plan, Emitter<AccountManagementState> emit) {
     state.maybeWhen(
@@ -775,8 +781,6 @@ class AccountManagementBloc
       },
     );
   }
-
-
 
   void _setAgreedProtocols(bool agreed, Emitter<AccountManagementState> emit) {
     state.maybeWhen(
@@ -1190,9 +1194,8 @@ class AccountManagementBloc
             return;
           }
 
-          final billingType = selectedDuration == PurchaseDurationOption.monthly
-              ? 0
-              : 1;
+          final billingType =
+              selectedDuration == PurchaseDurationOption.monthly ? 0 : 1;
 
           emit(
             AccountManagementState.ready(
@@ -1335,14 +1338,14 @@ class AccountManagementBloc
           // 设置会员升级参数
           String? planIdValue = '$planId';
 
-          if(!PaymentDevConfig.enableTestMode) {
+          if (!PaymentDevConfig.enableTestMode) {
             // 1. 获取当前云端配置（拿到 serverUrl）
             final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
             final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
             // final baseUrl = "https://www.xiaomabiji.com";
             //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
             final userUuid = _getUserUuid();
-            String payUrl = 
+            String payUrl =
                 "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=$userUuid";
 
             String? planCode;
@@ -1357,18 +1360,18 @@ class AccountManagementBloc
             state.maybeWhen(
               orElse: () {},
               ready: (
-                  subscriptionInfo,
-                  planConfigs,
-                  selectedPlan,
-                  selectedDuration,
-                  selectedTab,
-                  agreedProtocols,
-                  isLoadingSubscription,
-                  isLoadingPlans,
-                  isProcessingPayment,
-                  error,
-                  paymentResult,
-                  ) {
+                subscriptionInfo,
+                planConfigs,
+                selectedPlan,
+                selectedDuration,
+                selectedTab,
+                agreedProtocols,
+                isLoadingSubscription,
+                isLoadingPlans,
+                isProcessingPayment,
+                error,
+                paymentResult,
+              ) {
                 emit(
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
@@ -1419,14 +1422,14 @@ class AccountManagementBloc
       String? planIdValue,
       int? billingType,
       WorkspaceSubscriptionInfoPB? subscriptionInfo,
-        required Map<WorkspacePlanPB, RemotePlan> planConfigs,
-        WorkspacePlanPB? selectedPlan,
-        required PurchaseDurationOption selectedDuration,
-        required MembershipTab selectedTab,
-        required bool agreedProtocols,
-        required bool isLoadingSubscription,
-        required bool isLoadingPlans,
-        required bool isProcessingPayment,
+      required Map<WorkspacePlanPB, RemotePlan> planConfigs,
+      WorkspacePlanPB? selectedPlan,
+      required PurchaseDurationOption selectedDuration,
+      required MembershipTab selectedTab,
+      required bool agreedProtocols,
+      required bool isLoadingSubscription,
+      required bool isLoadingPlans,
+      required bool isProcessingPayment,
       String? error,
       String? paymentResult}) async {
     // 这里同样使用用户 UUID 作为 userInfo，保持与网页支付入口一致
@@ -1446,7 +1449,7 @@ class AccountManagementBloc
         // 可选：微信支付场景必传
         planId: planIdValue,
         // 会员升级时设置
-        billingType: billingType == 0 ? 'monthly' : 'yearly' );
+        billingType: billingType == 0 ? 'monthly' : 'yearly');
 
     final orderResult = await PaymentApi.createPaymentOrder(createRequest);
 
@@ -1539,8 +1542,6 @@ class AccountManagementBloc
       await _startPaymentPolling(order.orderNo, emit);
     }
   }
-
-
 
   /// 启动支付结果轮询
   ///
@@ -1709,14 +1710,17 @@ class AccountManagementEvent with _$AccountManagementEvent {
   const factory AccountManagementEvent.loadSubscriptionPlans() =
       _LoadSubscriptionPlans;
 
-  const factory AccountManagementEvent.selectPlan(WorkspacePlanPB plan) = _SelectPlan;
+  const factory AccountManagementEvent.selectPlan(WorkspacePlanPB plan) =
+      _SelectPlan;
 
   const factory AccountManagementEvent.selectDuration(
       PurchaseDurationOption duration) = _SelectDuration;
 
-  const factory AccountManagementEvent.setAgreedProtocols(bool agreed) = _SetAgreedProtocols;
+  const factory AccountManagementEvent.setAgreedProtocols(bool agreed) =
+      _SetAgreedProtocols;
 
-  const factory AccountManagementEvent.switchTab(MembershipTab tab) = _SwitchTab;
+  const factory AccountManagementEvent.switchTab(MembershipTab tab) =
+      _SwitchTab;
 
   const factory AccountManagementEvent.createOrUpdateSubscription(
     int planId,

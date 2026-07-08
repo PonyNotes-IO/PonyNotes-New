@@ -23,6 +23,12 @@ class SubscriptionService {
 
   SubscriptionService._internal();
 
+  http.Client _httpClient = http.Client();
+
+  /// 仅供测试注入 mock http client 使用，生产代码不要调用。
+  @visibleForTesting
+  set httpClientForTesting(http.Client client) => _httpClient = client;
+
   CurrentSubscription? get cachedCurrentSubscription =>
       _isCacheValid() ? _cachedSubscription : null;
 
@@ -231,7 +237,7 @@ class SubscriptionService {
       }
 
       final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/current');
-      final response = await http.get(
+      final response = await _httpClient.get(
         uri,
         headers: {
           'Authorization': 'Bearer $accessToken',
