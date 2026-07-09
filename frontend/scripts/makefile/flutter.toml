@@ -196,8 +196,10 @@ script_runner = "@shell"
 # runner 上稳定触发 "thread 'main' has overflowed its stack"（cargo-make 自身
 # 是 Rust 程序，Windows 主线程默认栈更小；glob_cp 对 **/* 的递归遍历在这棵较深/较
 # 大的构建产物目录树上会栈溢出，macOS/Linux 用的是普通 shell cp -R 未受影响）。
-# 改成和 copy-to-product-macos/-linux 一致的 @shell + cp -R，规避 duckscript 内置
-# 递归实现的问题；CI 的 windows runner 已确认可用 Git Bash。
+# 改成和 copy-to-product-macos/-linux 一致的 cp -R 写法，但 script_runner 不能沿用
+# "@shell"——cargo-make 的 "@shell" 在 Windows 上默认走 cmd.exe（报
+# "'product_path' is not recognized as an internal or external command"），
+# 必须显式指定 "bash" 才会用 Git Bash 执行（CI 的 windows runner 已确认可用）。
 script = [
   """
   product_path=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/product/${APP_VERSION}
@@ -212,7 +214,7 @@ script = [
   ${output_path}/${product}
   """,
 ]
-script_runner = "@shell"
+script_runner = "bash"
 
 
 # The following tasks will create an archive that will be used on the GitHub Releases section
