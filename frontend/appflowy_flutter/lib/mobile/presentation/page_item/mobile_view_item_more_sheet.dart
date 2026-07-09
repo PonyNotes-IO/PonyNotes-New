@@ -18,11 +18,20 @@ class MobileViewItemMoreSheet extends StatelessWidget {
     required this.view,
     required this.spaceType,
     required this.favoriteBloc,
+    this.viewBloc,
   });
 
   final ViewPB view;
   final FolderSpaceType spaceType;
   final FavoriteBloc favoriteBloc;
+
+  /// Forwarded to [MobileViewItemBottomSheet.viewBloc].
+  ///
+  /// When the sheet is presented via `useRootNavigator: true`, the sheet's
+  /// `BuildContext` is detached from this widget's ancestor BlocProvider
+  /// tree, so the caller must pass the [ViewBloc] explicitly to ensure
+  /// delete / duplicate / rename events still dispatch.
+  final ViewBloc? viewBloc;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +39,7 @@ class MobileViewItemMoreSheet extends StatelessWidget {
       view: view,
       actions: _buildActions(view),
       favoriteBloc: favoriteBloc,
+      viewBloc: viewBloc,
     );
   }
 

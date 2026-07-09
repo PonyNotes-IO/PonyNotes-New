@@ -13,7 +13,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
   });
 
   final ViewPB view;
-  final void Function(ViewLayoutPB layout) onAction;
+  final void Function(ViewLayoutPB layout, {String? extra}) onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +73,47 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           showTopBorder: false,
           showBottomBorder: false,
           onTap: () => onAction(ViewLayoutPB.Chat),
+        ),
+        FlowyOptionTile.text(
+          text: LocaleKeys.menuAppHeader_defaultNewFolderName.tr(),
+          height: 52.0,
+          leftIcon: const Text('\u{1F4C2}', style: TextStyle(fontSize: 20)),
+          showTopBorder: false,
+          showBottomBorder: false,
+          onTap: () => onAction(ViewLayoutPB.Folder),
+        ),
+        FlowyOptionTile.text(
+          text: LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
+          height: 52.0,
+          leftIcon: const Text('\u{1F4D3}', style: TextStyle(fontSize: 20)),
+          showTopBorder: false,
+          showBottomBorder: false,
+          onTap: () => onAction(ViewLayoutPB.Notebook),
+        ),
+        FlowyOptionTile.text(
+          text: LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
+          height: 52.0,
+          leftIcon: const FlowySvg(
+            FlowySvgs.icon_board_s,
+            size: Size.square(20),
+          ),
+          showTopBorder: false,
+          showBottomBorder: false,
+          onTap: () => onAction(ViewLayoutPB.Whiteboard),
+        ),
+        FlowyOptionTile.text(
+          text: '手记',
+          height: 52.0,
+          leftIcon: const FlowySvg(
+            FlowySvgs.icon_document_s,
+            size: Size.square(20),
+          ),
+          showTopBorder: false,
+          showBottomBorder: false,
+          onTap: () => onAction(
+            ViewLayoutPB.Document,
+            extra: '{"view_type": "handwriting_saber"}',
+          ),
         ),
       ],
     );

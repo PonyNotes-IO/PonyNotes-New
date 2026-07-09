@@ -326,6 +326,16 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
 
   void _showMoreActionSheet(BuildContext context) {
     final favoriteBloc = widget.favoriteBloc ?? context.read<FavoriteBloc>();
+    // ✅ Capture the existing ViewBloc (scoped to this MobileViewItem) so
+    // the bottom sheet can dispatch events even though it uses
+    // `useRootNavigator: true`, which detaches the sheet from our
+    // ancestor BlocProvider tree.
+    //
+    // Without this, tap on actions like delete/duplicate/rename would
+    // throw `ProviderNotFoundException: Could not find the correct
+    // Provider<ViewBloc>` because the sheet's BuildContext can no longer
+    // walk up to the original BlocProvider.
+    final viewBloc = context.read<ViewBloc>();
     showMobileBottomSheet(
       context,
       showDragHandle: true,
@@ -333,10 +343,14 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
       useRootNavigator: true,
       backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (sheetContext) {
-        return MobileViewItemMoreSheet(
-          view: widget.view,
-          spaceType: widget.spaceType,
-          favoriteBloc: favoriteBloc,
+        return BlocProvider<ViewBloc>.value(
+          value: viewBloc,
+          child: MobileViewItemMoreSheet(
+            view: widget.view,
+            spaceType: widget.spaceType,
+            favoriteBloc: favoriteBloc,
+            viewBloc: viewBloc,
+          ),
         );
       },
     );
@@ -356,13 +370,14 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: widget.view,
-          onAction: (layout) {
+          onAction: (layout, {String? extra}) {
             Navigator.of(sheetContext).pop();
             context.read<ViewBloc>().add(
                   ViewEvent.createView(
                     layout.defaultName,
                     layout,
                     section: widget.spaceType.toViewSectionPB,
+                    extra: extra,
                   ),
                 );
             context

@@ -408,14 +408,37 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               section: e.section,
               index: 0,
             );
+            // If the caller supplied an `extra` payload (e.g. mobile
+            // marks the view as handwriting_saber via
+            // `{"view_type":"handwriting_saber"}`), write it into the
+            // view's `extra` field in a follow-up update. This only
+            // runs when `extra != null` so existing desktop callers
+            // that do not pass `extra` are unaffected.
+            var emittedView = result.fold(
+              (v) => v,
+              (_) => null,
+            );
+            FlowyResult<void, FlowyError>? extraResult;
+            if (emittedView != null && e.extra != null) {
+              final updateResult = await ViewBackendService.updateView(
+                viewId: emittedView.id,
+                extra: e.extra,
+              );
+              extraResult = updateResult.fold(
+                (_) => FlowyResult<void, FlowyError>.success(null),
+                (err) => FlowyResult<void, FlowyError>.failure(err),
+              );
+            }
             emit(
               result.fold(
                 (view) => state.copyWith(
                   lastCreatedView: view,
-                  successOrFailure: FlowyResult.success(null),
+                  successOrFailure: extraResult ?? FlowyResult.success(null),
                 ),
                 (error) => state.copyWith(
-                  successOrFailure: FlowyResult.failure(error),
+                  successOrFailure: FlowyResult<void, FlowyError>.failure(
+                    error,
+                  ),
                 ),
               ),
             );
@@ -800,6 +823,13 @@ class ViewEvent with _$ViewEvent {
     /// open the view after created
     @Default(true) bool openAfterCreated,
     ViewSectionPB? section,
+    /// Optional JSON string to be written into the created view's
+    /// `extra` field right after creation. Used by mobile to mark
+    /// special view types (e.g. HandwritingSaber uses
+    /// `{"view_type":"handwriting_saber"}`). Null = no follow-up
+    /// `updateView` call. Has no effect on desktop code paths that
+    /// do not pass this argument.
+    String? extra,
   }) = CreateView;
 
   const factory ViewEvent.viewDidUpdate(

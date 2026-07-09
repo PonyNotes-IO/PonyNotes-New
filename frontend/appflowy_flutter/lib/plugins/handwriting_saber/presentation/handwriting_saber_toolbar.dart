@@ -41,6 +41,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
     this.showPageManager = false, // ✅ 是否显示页面管理器
     this.onTogglePageManager, // ✅ 切换页面管理器显示回调
+    this.showBackButton = false,
+    this.onBackPressed,
   });
 
   final Tool currentTool;
@@ -70,6 +72,17 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
   final bool showPageManager; // ✅ 是否显示页面管理器
   final VoidCallback? onTogglePageManager; // ✅ 切换页面管理器显示回调
+
+  /// Whether to show a leading "back" button on the left edge of the
+  /// toolbar. Defaults to false so the desktop build (which uses the
+  /// same widget but is hosted inside the home stack / tab bar)
+  /// keeps its existing layout. The mobile entry point is expected
+  /// to opt in by passing `showBackButton: true`.
+  final bool showBackButton;
+
+  /// Called when the leading back button is tapped. If null the
+  /// toolbar will pop the current route via `Navigator.pop`.
+  final VoidCallback? onBackPressed;
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -103,6 +116,23 @@ class HandwritingSaberToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // ✅ 主工具栏
+          //
+          // 之前 toolbar 把所有内容（撤销、工具、颜色、粗细、导入、背景…）
+          // 装进一个横向 SingleChildScrollView。我们后来在 Row 最前面加
+          // 了"返回"按钮, 这一改动又让 toolbar 内容变得更宽, 在窄屏
+          // 手机上进一步把最右侧的颜色 / 导入按钮推出可视区域。
+          //
+          // 现在改成: 外层 Row + 内部 SingleChildScrollView。
+          // - 返回按钮位于最左侧 (仅 mobile, showBackButton 控制),
+          //   不参与 toolbar 的横向滚动;
+          // - 主 toolbar 用 Expanded 占据剩余宽度, 横向滚动内部 Row
+          //   的原有内容完全不变 (撤销/恢复/工具/颜色/粗细/导入/背景…),
+          //   因此 desktop 上 showBackButton=false 时整个 toolbar 与原
+          //   行为完全等价。
+          //
+          // Container 的 surface / shadow / border 统一包住整条横向栏,
+          // 包括左侧的返回按钮 (mobile) 或紧贴左侧边缘 (desktop, 占位
+          // SizedBox.shrink)。
           Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
@@ -123,37 +153,49 @@ class HandwritingSaberToolbar extends StatelessWidget {
                 ),
               ],
             ),
-            // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // ✅ 撤销/恢复按钮
-                  _buildUndoRedoButtons(),
-                  _buildDivider(),
-                  // ✅ 工具选择（分组显示）
-                  _buildToolSelectorGrouped(),
-                  // ✅ 分隔线
-                  _buildDivider(),
-                  // ✅ 颜色选择
-                  _buildColorSelector(),
-                  // ✅ 填充颜色选择（仅形状工具显示）
-                  if (_isShapeTool(currentTool.toolId) &&
-                      onFillColorChanged != null) ...[
-                    const SizedBox(width: 8),
-                    _buildFillColorSelector(),
-                  ],
-                  // ✅ 分隔线
-                  _buildDivider(),
-                  // ✅ 粗细调整
-                  _buildStrokeWidthSelector(),
-                  // ✅ 分隔线
-                  _buildDivider(),
-                  // ✅ 其他工具（PDF导入、背景模式、文本编辑）
-                  _buildOtherToolsSection(),
-                ],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                // ✅ 移动端显示返回按钮; 桌面端留空, 保证原有外观
+                if (showBackButton)
+                  _buildLeadingBackButton(context)
+                else
+                  const SizedBox.shrink(),
+                Expanded(
+                  // ✅ 使用SingleChildScrollView包裹工具栏主体，确保所有内容都可以横向滚动
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // ✅ 撤销/恢复按钮
+                        _buildUndoRedoButtons(),
+                        _buildDivider(),
+                        // ✅ 工具选择（分组显示）
+                        _buildToolSelectorGrouped(),
+                        // ✅ 分隔线
+                        _buildDivider(),
+                        // ✅ 颜色选择
+                        _buildColorSelector(),
+                        // ✅ 填充颜色选择（仅形状工具显示）
+                        if (_isShapeTool(currentTool.toolId) &&
+                            onFillColorChanged != null) ...[
+                          const SizedBox(width: 8),
+                          _buildFillColorSelector(),
+                        ],
+                        // ✅ 分隔线
+                        _buildDivider(),
+                        // ✅ 粗细调整
+                        _buildStrokeWidthSelector(),
+                        // ✅ 分隔线
+                        _buildDivider(),
+                        // ✅ 其他工具（PDF导入、背景模式、文本编辑）
+                        _buildOtherToolsSection(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           // ✅ Quill 富文本工具栏（只在文本编辑模式下显示）
@@ -171,6 +213,32 @@ class HandwritingSaberToolbar extends StatelessWidget {
         height: 28,
         margin: const EdgeInsets.symmetric(horizontal: 4),
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+      ),
+    );
+  }
+
+  /// ✅ 构建工具栏最左侧的返回按钮（仅移动端使用）
+  ///
+  /// 点击行为：
+  /// - 如果调用方传入了 [onBackPressed]，调用它；
+  /// - 否则调用 [Navigator.pop]，把当前路由出栈。
+  Widget _buildLeadingBackButton(BuildContext context) {
+    return Tooltip(
+      message: '返回',
+      child: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+        onPressed: () {
+          if (onBackPressed != null) {
+            onBackPressed!.call();
+          } else {
+            Navigator.maybePop(context);
+          }
+        },
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(
+          minWidth: 34,
+          minHeight: 34,
+        ),
       ),
     );
   }

@@ -99,6 +99,32 @@ class SidebarSectionsBloc
               },
             );
           },
+          createRootViewInSectionWithLayout:
+              (name, section, index, layout, extra) async {
+            final result = await _workspaceService.createView(
+              name: name,
+              viewSection: section,
+              index: index,
+              layout: layout,
+              extra: extra,
+            );
+            result.fold(
+              (view) => emit(
+                state.copyWith(
+                  lastCreatedRootView: view,
+                  createRootViewResult: FlowyResult.success(null),
+                ),
+              ),
+              (error) {
+                Log.error('Failed to create root view with layout: $error');
+                emit(
+                  state.copyWith(
+                    createRootViewResult: FlowyResult.failure(error),
+                  ),
+                );
+              },
+            );
+          },
           receiveSectionViewsUpdate: (sectionViews) async {
             final section = sectionViews.section;
             switch (section) {
@@ -287,6 +313,13 @@ class SidebarSectionsEvent with _$SidebarSectionsEvent {
     required ViewSectionPB viewSection,
     int? index,
   }) = _CreateRootViewInSection;
+  const factory SidebarSectionsEvent.createRootViewInSectionWithLayout({
+    required String name,
+    required ViewSectionPB viewSection,
+    int? index,
+    required ViewLayoutPB layout,
+    String? extra,
+  }) = _CreateRootViewInSectionWithLayout;
   const factory SidebarSectionsEvent.moveRootView({
     required int fromIndex,
     required int toIndex,

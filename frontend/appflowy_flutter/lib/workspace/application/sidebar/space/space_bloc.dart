@@ -503,7 +503,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             await _setSpaceExpandStatus(space, isExpanded);
             emit(state.copyWith(isExpanded: isExpanded));
           },
-          createPage: (name, layout, index, openAfterCreate) async {
+          createPage: (name, layout, index, openAfterCreate, extra) async {
             final parentViewId = state.currentSpace?.id;
             if (parentViewId == null) {
               return;
@@ -526,12 +526,36 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               index: index,
               openAfterCreate: openAfterCreate,
             );
+            // If the caller supplied an `extra` payload (e.g. mobile
+            // marks the view as handwriting_saber via
+            // `{"view_type":"handwriting_saber"}`), write it into the
+            // view's `extra` field in a follow-up update. This only
+            // runs when `extra != null` so existing callers that do
+            // not pass `extra` are unaffected.
+            final extraError = await result.fold(
+              (view) async {
+                if (extra == null) {
+                  return null;
+                }
+                final updateResult = await ViewBackendService.updateView(
+                  viewId: view.id,
+                  extra: extra,
+                );
+                return updateResult.fold(
+                  (_) => null,
+                  (err) => err,
+                );
+              },
+              (error) async => error,
+            );
             result.fold(
               (view) {
                 emit(
                   state.copyWith(
                     lastCreatedPage: openAfterCreate ? view : null,
-                    createPageResult: FlowyResult.success(null),
+                    createPageResult: extraError == null
+                        ? FlowyResult.success(null)
+                        : FlowyResult.failure(extraError),
                   ),
                 );
               },
@@ -1320,6 +1344,13 @@ class SpaceEvent with _$SpaceEvent {
     required ViewLayoutPB layout,
     int? index,
     required bool openAfterCreate,
+    /// Optional JSON string to be written into the created view's
+    /// `extra` field right after creation. Used by mobile to mark
+    /// special view types (e.g. HandwritingSaber uses
+    /// `{"view_type":"handwriting_saber"}`). Null means no
+    /// follow-up `updateView` call. Has no effect on existing
+    /// callers that do not pass this argument.
+    String? extra,
   }) = _CreatePage;
   const factory SpaceEvent.delete(ViewPB? space) = _Delete;
   const factory SpaceEvent.didReceiveSpaceUpdate() = _DidReceiveSpaceUpdate;
