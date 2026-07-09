@@ -192,21 +192,27 @@ script = [
 script_runner = "@shell"
 
 [tasks.copy-to-product-windows]
+# 2026-07-08: 原先用 @duckscript 的 glob_cp 递归拷贝 Release 目录，在 Windows
+# runner 上稳定触发 "thread 'main' has overflowed its stack"（cargo-make 自身
+# 是 Rust 程序，Windows 主线程默认栈更小；glob_cp 对 **/* 的递归遍历在这棵较深/较
+# 大的构建产物目录树上会栈溢出，macOS/Linux 用的是普通 shell cp -R 未受影响）。
+# 改成和 copy-to-product-macos/-linux 一致的 @shell + cp -R，规避 duckscript 内置
+# 递归实现的问题；CI 的 windows runner 已确认可用 Git Bash。
 script = [
   """
-  product_path= set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/product/${APP_VERSION}
-  output_path= set ${product_path}/${TARGET_OS}
-  if is_path_exists ${output_path}
-    rm -r ${output_path}/
+  product_path=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/product/${APP_VERSION}
+  output_path=${product_path}/${TARGET_OS}
+  if [ -d "${output_path}" ]; then
+    rm -rf ${output_path}/
   fi
-  mkdir ${output_path}
+  mkdir -p ${output_path}
 
-  product= set ${PRODUCT_NAME}
-  glob_cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/${TARGET_OS}/${BUILD_ARCHS}/runner/${FLUTTER_OUTPUT_DIR}/**/* \
+  product=${PRODUCT_NAME}
+  cp -R ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/${TARGET_OS}/${BUILD_ARCHS}/runner/${FLUTTER_OUTPUT_DIR} \
   ${output_path}/${product}
   """,
 ]
-script_runner = "@duckscript"
+script_runner = "@shell"
 
 
 # The following tasks will create an archive that will be used on the GitHub Releases section
