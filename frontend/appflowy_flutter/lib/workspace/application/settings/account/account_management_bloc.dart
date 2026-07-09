@@ -249,6 +249,51 @@ class AccountManagementBloc
     }
   }
 
+  /// 套餐等级：Free=0 < Stand=1 < Pro=2 < Hiclass=3（枚举值即级别，
+  /// 与服务端 get_plan_level 的排序保持一致）
+  int _planLevelOf(WorkspacePlanPB plan) => plan.value;
+
+  /// 会员规则：高级别会员生效期间，不允许购买更低级别套餐
+  /// （与服务端 subscribe_plan 的规则2对齐；支付走 H5 网页链路不经过
+  /// 云端 subscribe 校验，客户端必须在发起支付前拦截）
+  bool _isDowngradePurchase(WorkspacePlanPB target, WorkspacePlanPB? current) {
+    if (current == null || current == WorkspacePlanPB.FreePlan) {
+      return false;
+    }
+    return _planLevelOf(target) < _planLevelOf(current);
+  }
+
+  String _planDisplayName(
+    WorkspacePlanPB plan,
+    Map<WorkspacePlanPB, RemotePlan> planConfigs,
+  ) {
+    final cn = planConfigs[plan]?.planNameCn;
+    if (cn != null && cn.isNotEmpty) {
+      return cn;
+    }
+    switch (plan) {
+      case WorkspacePlanPB.FreePlan:
+        return '免费版';
+      case WorkspacePlanPB.StandPlan:
+        return '标准版';
+      case WorkspacePlanPB.ProPlan:
+        return '专业版';
+      case WorkspacePlanPB.HiclassPlan:
+        return '高级版';
+      default:
+        return plan.name;
+    }
+  }
+
+  String _downgradeBlockedMessage(
+    WorkspacePlanPB target,
+    WorkspacePlanPB current,
+    Map<WorkspacePlanPB, RemotePlan> planConfigs,
+  ) {
+    return '当前${_planDisplayName(current, planConfigs)}会员生效期间，'
+        '不能购买更低级别的${_planDisplayName(target, planConfigs)}';
+  }
+
   Future<void> _initial(Emitter<AccountManagementState> emit) async {
     emit(const AccountManagementState.loading());
     // 1. 先获取当前会员信息，确保后续接口都能拿到最新的订阅计划
@@ -727,6 +772,26 @@ class AccountManagementBloc
         error,
         paymentResult,
       ) {
+        // 高级别会员生效期间禁止选择更低级别套餐，直接提示并保持原选中项
+        final currentPlan = subscriptionInfo?.plan;
+        if (_isDowngradePurchase(plan, currentPlan)) {
+          emit(
+            AccountManagementState.ready(
+              subscriptionInfo: subscriptionInfo,
+              planConfigs: planConfigs,
+              selectedPlan: selectedPlan,
+              selectedDuration: selectedDuration,
+              selectedTab: selectedTab,
+              agreedProtocols: agreedProtocols,
+              isLoadingSubscription: isLoadingSubscription,
+              isLoadingPlans: isLoadingPlans,
+              isProcessingPayment: isProcessingPayment,
+              error: _downgradeBlockedMessage(plan, currentPlan!, planConfigs),
+              paymentResult: paymentResult,
+            ),
+          );
+          return;
+        }
         emit(
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
@@ -1188,6 +1253,33 @@ class AccountManagementBloc
                 isLoadingPlans: isLoadingPlans,
                 isProcessingPayment: false,
                 error: '无法获取计划ID，暂无法订阅',
+                paymentResult: paymentResult,
+              ),
+            );
+            return;
+          }
+
+          // 发起支付前的硬校验：高级别会员生效期间禁止购买更低级别套餐。
+          // 支付链路走 H5 网页（不经过云端 subscribe 接口的规则校验），
+          // 一旦放行支付成功就会被支付后端直接入账，因此必须在这里拦截。
+          final currentPlan = subscriptionInfo?.plan;
+          if (_isDowngradePurchase(effectivePlan, currentPlan)) {
+            emit(
+              AccountManagementState.ready(
+                subscriptionInfo: subscriptionInfo,
+                planConfigs: planConfigs,
+                selectedPlan: selectedPlan,
+                selectedDuration: selectedDuration,
+                selectedTab: selectedTab,
+                agreedProtocols: agreedProtocols,
+                isLoadingSubscription: isLoadingSubscription,
+                isLoadingPlans: isLoadingPlans,
+                isProcessingPayment: false,
+                error: _downgradeBlockedMessage(
+                  effectivePlan,
+                  currentPlan!,
+                  planConfigs,
+                ),
                 paymentResult: paymentResult,
               ),
             );
@@ -1801,6 +1893,36 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
 }
 
 extension AccountManagementStateExtension on AccountManagementState {
+  /// 当前生效的订阅套餐（非用户选中的套餐）
+  WorkspacePlanPB? get currentSubscriptionPlan {
+    return maybeWhen(
+      orElse: () => null,
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        selectedPlan,
+        selectedDuration,
+        selectedTab,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) =>
+          subscriptionInfo?.plan,
+    );
+  }
+
+  /// 该套餐是否低于当前生效套餐（高级别会员生效期间禁止购买低级别）
+  bool isPlanBelowCurrent(WorkspacePlanPB plan) {
+    final current = currentSubscriptionPlan;
+    if (current == null || current == WorkspacePlanPB.FreePlan) {
+      return false;
+    }
+    return plan.value < current.value;
+  }
+
   bool get isLoading {
     return maybeWhen(
       orElse: () => true,

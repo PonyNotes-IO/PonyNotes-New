@@ -661,13 +661,17 @@ class _AccountManagementViewState extends State<AccountManagementView>
   }) {
     final config = state.getPlanConfig(plan);
     final isSelected = plan == effectivePlan;
+    // 高级别会员生效期间，低级别套餐不可购买：置灰展示，点击由 bloc 拦截并提示
+    final isBelowCurrent = state.isPlanBelowCurrent(plan);
     return GestureDetector(
       onTap: () {
         context.read<AccountManagementBloc>().add(
               AccountManagementEvent.selectPlan(plan),
             );
       },
-      child: Container(
+      child: Opacity(
+        opacity: isBelowCurrent ? 0.45 : 1.0,
+        child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
           color: isSelected
@@ -805,6 +809,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                       ),
             ],
           ),
+        ),
         ),
       ),
     );
