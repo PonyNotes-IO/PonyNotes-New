@@ -4129,9 +4129,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         _endStroke();
       },
-      child: Container(
-        width: screenWidth,
-        height: pageDisplayHeight,
+      child: SizedBox(
         child: SizedBox(
           width: math.max(screenWidth, pageDisplayWidth),
           height: pageDisplayHeight,
