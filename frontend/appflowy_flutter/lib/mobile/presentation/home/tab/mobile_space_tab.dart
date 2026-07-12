@@ -1,4 +1,3 @@
-import 'package:appflowy/features/shared_section/presentation/m_shared_section.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/home/favorite_folder/favorite_space.dart';
@@ -138,10 +137,14 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     if (tabController != null) {
       return;
     }
+    if (state.tabsOrder.isEmpty) {
+      return;
+    }
+    final defaultIndex = state.tabsOrder.indexOf(state.defaultTab);
     tabController = TabController(
       length: state.tabsOrder.length,
       vsync: this,
-      initialIndex: state.tabsOrder.indexOf(state.defaultTab),
+      initialIndex: defaultIndex < 0 ? 0 : defaultIndex,
     );
     tabController?.addListener(_onTabChange);
   }
@@ -155,29 +158,23 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
         .add(SpaceOrderEvent.open(tabController!.index));
   }
 
+  Widget _buildTab(MobileSpaceTabType tab) {
+    // Defensive: every unknown/legacy enum value falls back to an empty widget
+    // instead of returning null, which would crash TabBarView with
+    // `Null is not a subtype of StatefulWidget` at StatefulElement.update.
+    switch (tab) {
+      case MobileSpaceTabType.recent:
+        return const MobileRecentSpace();
+      case MobileSpaceTabType.spaces:
+        return MobileHomeSpace(userProfile: widget.userProfile);
+      case MobileSpaceTabType.favorites:
+        return MobileFavoriteSpace(userProfile: widget.userProfile);
+    }
+    return const SizedBox.shrink();
+  }
+
   List<Widget> _buildTabs(SpaceOrderState state) {
-    return state.tabsOrder.map((tab) {
-      switch (tab) {
-        case MobileSpaceTabType.recent:
-          return const MobileRecentSpace();
-        case MobileSpaceTabType.spaces:
-          return MobileHomeSpace(userProfile: widget.userProfile);
-        case MobileSpaceTabType.favorites:
-          return MobileFavoriteSpace(userProfile: widget.userProfile);
-        case MobileSpaceTabType.shared:
-          final workspaceId = context
-              .read<UserWorkspaceBloc>()
-              .state
-              .currentWorkspace
-              ?.workspaceId;
-          if (workspaceId == null) {
-            return const SizedBox.shrink();
-          }
-          return MSharedSection(
-            workspaceId: workspaceId,
-          );
-      }
-    }).toList();
+    return state.tabsOrder.map(_buildTab).whereType<Widget>().toList();
   }
 
   // quick create new page when clicking the add button in navigation bar
