@@ -13,10 +13,6 @@ import 'chat_entity.dart';
 import 'chat_message_stream.dart';
 
 /// Returns current Unix timestamp (seconds since epoch)
-int timestamp() {
-  return DateTime.now().millisecondsSinceEpoch ~/ 1000;
-}
-
 /// Handles message creation and manipulation for the chat system
 class ChatMessageHandler {
   ChatMessageHandler({
@@ -30,14 +26,18 @@ class ChatMessageHandler {
 
   /// Maps real message IDs to temporary streaming message IDs
   final HashMap<String, String> _temporaryMessageIDMap = HashMap();
-  
+
+  final HashMap<String, String> _temporaryQuestionIdMap = HashMap();
+
+  static const _isTemporaryQuestionKey = 'is_temporary_question';
+
   /// 【修复并发竞态】存储当前正在发送的消息的临时ID映射
   /// key: 服务器返回的问题ID或临时问题ID, value: 对应的临时答案ID
   final HashMap<String, String> _pendingAnswerStreamIds = HashMap();
-  
+
   /// 【修复消息重复】追踪已处理的消息ID，防止通过不同callback重复处理同一条消息
   final Set<String> _processedMessageIds = {};
-  
+
   // 缓存大小限制：最多缓存 1000 个消息ID映射和已处理消息ID，防止内存溢出
   static const int _maxMessageIdMapSize = 1000;
   static const int _maxProcessedIdsSize = 1000;
@@ -50,9 +50,17 @@ class ChatMessageHandler {
         messageId;
   }
 
+  void registerTemporaryQuestion({
+    required String temporaryMessageId,
+    required Int64 questionMessageId,
+  }) {
+    _temporaryQuestionIdMap[questionMessageId.toString()] = temporaryMessageId;
+  }
+
   /// 获取当前正在发送的答案流消息ID列表
   /// 用于在停止流时查找并删除未开始的答案消息
-  Iterable<String> get currentAnswerStreamMessageIds => _pendingAnswerStreamIds.values;
+  Iterable<String> get currentAnswerStreamMessageIds =>
+      _pendingAnswerStreamIds.values;
 
   /// Create a message from ChatMessagePB object
   Message createTextMessage(ChatMessagePB message) {
@@ -65,7 +73,13 @@ class ChatMessageHandler {
     List<String>? preservedImagePaths; // 新增：保存图片路径
 
     /// If the message id is in the temporary map, we will use the previous fake message id
-    if (_temporaryMessageIDMap.containsKey(messageId)) {
+    if (message.authorType == Int64(1)) {
+      final temporaryQuestionId = _temporaryQuestionIdMap.remove(messageId) ??
+          _findTemporaryQuestionId(message.content);
+      if (temporaryQuestionId != null) {
+        messageId = temporaryQuestionId;
+      }
+    } else if (_temporaryMessageIDMap.containsKey(messageId)) {
       final mappedId = _temporaryMessageIDMap[messageId]!;
       Log.info('🔄 MessageHandler.createTextMessage: 使用映射ID');
       Log.info('   - 真实ID: $originalMessageId');
@@ -85,9 +99,12 @@ class ChatMessageHandler {
           preservedHasImages = existingMeta['has_images'] as bool;
         }
         // 新增：复制图片路径
-        if (existingMeta['image_paths'] != null && existingMeta['image_paths'] is List) {
-          preservedImagePaths = (existingMeta['image_paths'] as List).cast<String>();
-          Log.info('📸 MessageHandler: 从临时消息复制 ${preservedImagePaths.length} 个图片路径');
+        if (existingMeta['image_paths'] != null &&
+            existingMeta['image_paths'] is List) {
+          preservedImagePaths =
+              (existingMeta['image_paths'] as List).cast<String>();
+          Log.info(
+              '📸 MessageHandler: 从临时消息复制 ${preservedImagePaths.length} 个图片路径');
         }
       }
 
@@ -106,15 +123,19 @@ class ChatMessageHandler {
         final existingMeta = existingMessage.metadata!;
         if (existingMeta['images'] != null && existingMeta['images'] is List) {
           preservedImages = (existingMeta['images'] as List).cast<String>();
-          Log.info('📸 MessageHandler: 从现有消息复制 ${preservedImages.length} 张图片（无映射情况）');
+          Log.info(
+              '📸 MessageHandler: 从现有消息复制 ${preservedImages.length} 张图片（无映射情况）');
         }
         if (existingMeta['has_images'] != null) {
           preservedHasImages = existingMeta['has_images'] as bool;
         }
         // 新增：复制图片路径
-        if (existingMeta['image_paths'] != null && existingMeta['image_paths'] is List) {
-          preservedImagePaths = (existingMeta['image_paths'] as List).cast<String>();
-          Log.info('📸 MessageHandler: 从现有消息复制 ${preservedImagePaths.length} 个图片路径（无映射情况）');
+        if (existingMeta['image_paths'] != null &&
+            existingMeta['image_paths'] is List) {
+          preservedImagePaths =
+              (existingMeta['image_paths'] as List).cast<String>();
+          Log.info(
+              '📸 MessageHandler: 从现有消息复制 ${preservedImagePaths.length} 个图片路径（无映射情况）');
         }
       }
     }
@@ -122,7 +143,8 @@ class ChatMessageHandler {
     final metadata = (message.metadata.isEmpty || message.metadata == 'null')
         ? '{}'
         : message.metadata;
-    Log.info('📋 MessageHandler: 原始metadata字符串: ${metadata.length > 200 ? metadata.substring(0, 200) + "..." : metadata}');
+    Log.info(
+        '📋 MessageHandler: 原始metadata字符串: ${metadata.length > 200 ? metadata.substring(0, 200) + "..." : metadata}');
     Log.info('📋 MessageHandler: 消息ID: $messageId, 作者ID: ${message.authorId}');
 
     // 尝试从metadata字符串中解析图片数据
@@ -133,9 +155,11 @@ class ChatMessageHandler {
 
     try {
       final metadataJson = jsonDecode(metadata);
-      Log.info('📋 MessageHandler: 解析后的metadata类型: ${metadataJson.runtimeType}');
+      Log.info(
+          '📋 MessageHandler: 解析后的metadata类型: ${metadataJson.runtimeType}');
       if (metadataJson is Map<String, dynamic>) {
-        Log.info('📋 MessageHandler: metadata键列表: ${metadataJson.keys.toList()}');
+        Log.info(
+            '📋 MessageHandler: metadata键列表: ${metadataJson.keys.toList()}');
         // 提取思考过程文本
         if (metadataJson['thinking_text'] != null) {
           serverThinkingText = metadataJson['thinking_text'] as String?;
@@ -145,9 +169,11 @@ class ChatMessageHandler {
             serverImages = (metadataJson['images'] as List)
                 .map((e) => e.toString())
                 .toList();
-            Log.info('📸 MessageHandler: 从metadata提取到 ${serverImages.length} 张图片');
+            Log.info(
+                '📸 MessageHandler: 从metadata提取到 ${serverImages.length} 张图片');
           } else {
-            Log.warn('⚠️ MessageHandler: images字段不是List类型，是: ${metadataJson['images'].runtimeType}');
+            Log.warn(
+                '⚠️ MessageHandler: images字段不是List类型，是: ${metadataJson['images'].runtimeType}');
           }
         } else {
           Log.info('📋 MessageHandler: metadata中没有images字段');
@@ -156,9 +182,12 @@ class ChatMessageHandler {
           serverHasImages = metadataJson['has_images'] as bool;
         }
         // 新增：提取图片路径
-        if (metadataJson['image_paths'] != null && metadataJson['image_paths'] is List) {
-          serverImagePaths = (metadataJson['image_paths'] as List).cast<String>();
-          Log.info('📸 MessageHandler: 从metadata提取到 ${serverImagePaths.length} 个图片路径');
+        if (metadataJson['image_paths'] != null &&
+            metadataJson['image_paths'] is List) {
+          serverImagePaths =
+              (metadataJson['image_paths'] as List).cast<String>();
+          Log.info(
+              '📸 MessageHandler: 从metadata提取到 ${serverImagePaths.length} 个图片路径');
         }
       } else if (metadataJson is List) {
         Log.info('📋 MessageHandler: metadata是List类型（可能是旧格式），尝试查找图片数据');
@@ -166,14 +195,17 @@ class ChatMessageHandler {
         for (final item in metadataJson) {
           if (item is Map<String, dynamic> && item['images'] != null) {
             if (item['images'] is List) {
-              serverImages = (item['images'] as List).map((e) => e.toString()).toList();
-              Log.info('📸 MessageHandler: 从List格式metadata中提取到 ${serverImages.length} 张图片');
+              serverImages =
+                  (item['images'] as List).map((e) => e.toString()).toList();
+              Log.info(
+                  '📸 MessageHandler: 从List格式metadata中提取到 ${serverImages.length} 张图片');
               break;
             }
           }
         }
       } else {
-        Log.info('📋 MessageHandler: metadata不是Map或List类型，是: ${metadataJson.runtimeType}');
+        Log.info(
+            '📋 MessageHandler: metadata不是Map或List类型，是: ${metadataJson.runtimeType}');
       }
     } catch (e) {
       // 解析失败，忽略
@@ -252,17 +284,20 @@ class ChatMessageHandler {
   /// Create a streaming question message
   Message createQuestionStreamMessage(
     QuestionStream stream,
-    Map<String, dynamic>? sentMetadata,
-  ) {
+    Map<String, dynamic>? sentMetadata, {
+    required String text,
+  }) {
     final now = DateTime.now();
-    final questionStreamMsgId = timestamp().toString();
+    final questionStreamMsgId =
+        DateTime.now().microsecondsSinceEpoch.toString();
 
     // 构建 metadata，包含图片和文件附件数据
     final metadata = <String, dynamic>{
       "$QuestionStream": stream,
       "chatId": chatId,
+      _isTemporaryQuestionKey: true,
     };
-    
+
     // 复制 sentMetadata 中的附件相关字段
     if (sentMetadata != null) {
       // 文件列表
@@ -272,7 +307,8 @@ class ChatMessageHandler {
       // 图片数据（base64编码）- 用于发送到服务器
       if (sentMetadata['images'] != null) {
         metadata['images'] = sentMetadata['images'];
-        Log.info('📸 MessageHandler: 将 ${(sentMetadata['images'] as List).length} 张图片添加到消息metadata');
+        Log.info(
+            '📸 MessageHandler: 将 ${(sentMetadata['images'] as List).length} 张图片添加到消息metadata');
       }
       // 图片标志
       if (sentMetadata['has_images'] != null) {
@@ -285,8 +321,19 @@ class ChatMessageHandler {
       metadata: metadata,
       id: questionStreamMsgId,
       createdAt: now,
-      text: '',
+      text: text,
     );
+  }
+
+  String? _findTemporaryQuestionId(String content) {
+    return chatController.messages
+        .whereType<TextMessage>()
+        .lastWhereOrNull(
+          (message) =>
+              message.metadata?[_isTemporaryQuestionKey] == true &&
+              message.text == content,
+        )
+        ?.id;
   }
 
   /// Clear error messages from the chat
@@ -335,22 +382,23 @@ class ChatMessageHandler {
   /// Returns true if this is a new message that should be processed, false if it's a duplicate
   bool processReceivedMessage(ChatMessagePB pb) {
     final messageIdStr = pb.messageId.toString();
-    
+
     Log.info('📨 MessageHandler.processReceivedMessage 被调用');
     Log.info('   - messageId: $messageIdStr');
     Log.info('   - authorType: ${pb.authorType}');
-    Log.info('   - content: ${pb.content.substring(0, pb.content.length > 50 ? 50 : pb.content.length)}...');
-    
+    Log.info(
+        '   - content: ${pb.content.substring(0, pb.content.length > 50 ? 50 : pb.content.length)}...');
+
     // 【关键修复】检查消息是否已经处理过
     if (_processedMessageIds.contains(messageIdStr)) {
       Log.info('✅ MessageHandler: 消息已处理过，跳过重复处理');
       Log.info('   - 已处理消息ID集合: $_processedMessageIds');
       return false; // 返回false表示应该跳过这条消息
     }
-    
+
     // 标记消息为已处理
     _processedMessageIds.add(messageIdStr);
-    
+
     // 清理已处理消息ID集合，防止内存溢出
     if (_processedMessageIds.length > _maxProcessedIdsSize) {
       final toRemove = _processedMessageIds.length - _maxProcessedIdsSize ~/ 2;
@@ -359,59 +407,62 @@ class ChatMessageHandler {
         _processedMessageIds.remove(id);
       }
     }
-    
+
     Log.info('   - 标记消息为已处理，当前已处理消息数: ${_processedMessageIds.length}');
-    
+
     // 3 means message response from AI
     if (pb.authorType == 3) {
       /// 【修复并发竞态】根据问题ID查找对应的临时答案ID
       /// 因为AI答案的messageId通常是问题ID+1，所以尝试多种匹配方式
       String? tempAnswerId;
-      
+
       /// 尝试1：直接使用问题ID（AI答案的messageId = questionId + 1，所以问题ID = answerId - 1）
       final questionIdStr = (pb.messageId - 1).toString();
       if (_pendingAnswerStreamIds.containsKey(questionIdStr)) {
         tempAnswerId = _pendingAnswerStreamIds[questionIdStr];
         Log.info('   - 这是AI消息，通过问题ID($questionIdStr)找到临时答案ID: $tempAnswerId');
       }
-      
+
       /// 尝试2：使用消息ID本身（可能存在其他映射方式）
-      if (tempAnswerId == null && _pendingAnswerStreamIds.containsKey(messageIdStr)) {
+      if (tempAnswerId == null &&
+          _pendingAnswerStreamIds.containsKey(messageIdStr)) {
         tempAnswerId = _pendingAnswerStreamIds[messageIdStr];
         Log.info('   - 这是AI消息，通过消息ID找到临时答案ID: $tempAnswerId');
       }
-      
+
       if (tempAnswerId != null) {
         Log.info('   - 建立ID映射: 真实ID($messageIdStr) -> 临时ID($tempAnswerId)');
         _temporaryMessageIDMap.putIfAbsent(
           messageIdStr,
           () => tempAnswerId!,
         );
-        
+
         /// 【修复并发竞态】从pending映射中移除，避免被其他消息错误使用
         _pendingAnswerStreamIds.remove(questionIdStr);
         _pendingAnswerStreamIds.remove(messageIdStr);
-        
+
         // 清理消息ID映射表，防止内存溢出
         if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
-          final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
-          final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
+          final toRemove =
+              _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
+          final keysToRemove =
+              _temporaryMessageIDMap.keys.take(toRemove).toList();
           for (final key in keysToRemove) {
             _temporaryMessageIDMap.remove(key);
           }
         }
-        
+
         Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
       } else {
         Log.info('   - AI消息但未找到对应的临时答案ID（可能是历史消息或并发竞态已被处理）');
         Log.info('   - 当前pending映射: $_pendingAnswerStreamIds');
       }
     }
-    
+
     if (pb.authorType != 1 && pb.authorType != 3) {
       Log.info('   - authorType不是1或3，跳过映射');
     }
-    
+
     return true; // 返回true表示这是新消息，应该继续处理
   }
 }

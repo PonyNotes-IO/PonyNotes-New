@@ -5,6 +5,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
+const sidebarUpgradeLightBackground = Color(0xFFFFF5F2);
+const sidebarUpgradeDarkBackground = Color(0xFF373737);
+const sidebarUpgradeButtonColor = Color(0xFFFF3800);
+
 class SidebarUpgradeApplicationButton extends StatelessWidget {
   const SidebarUpgradeApplicationButton({
     super.key,
@@ -54,7 +58,6 @@ class SidebarUpgradeApplicationButton extends StatelessWidget {
             figmaLineHeight: 18,
           ),
         ),
-        const Spacer(),
         FlowyButton(
           useIntrinsicWidth: true,
           text: const FlowySvg(FlowySvgs.upgrade_close_s),
@@ -88,7 +91,7 @@ class SidebarUpgradeApplicationButton extends StatelessWidget {
             vertical: 6,
           ),
           decoration: ShapeDecoration(
-            color: const Color(0xFFA44AFD),
+            color: sidebarUpgradeButtonColor,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(9),
             ),
@@ -107,6 +110,6 @@ class SidebarUpgradeApplicationButton extends StatelessWidget {
 
 extension on BuildContext {
   Color get sidebarUpgradeButtonBackground => Theme.of(this).isLightMode
-      ? const Color(0xB2EBE4FF)
-      : const Color(0xB239275B);
+      ? sidebarUpgradeLightBackground
+      : sidebarUpgradeDarkBackground;
 }

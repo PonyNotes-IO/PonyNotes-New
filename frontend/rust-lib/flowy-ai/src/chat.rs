@@ -316,7 +316,17 @@ impl Chat {
               Err(err) => {
                 if err.code == ErrorCode::RequestTimeout || err.code == ErrorCode::Internal {
                   error!("[Chat] unexpected stream error: {}", err);
-                  let _ = answer_sink.send(StreamMessage::Done.to_string()).await;
+                  let message = sanitize_ai_error_message(&err.msg);
+                  let _ = answer_sink
+                    .send(StreamMessage::OnError(message).to_string())
+                    .await;
+                  let pb = ChatMessageErrorPB {
+                    chat_id: chat_id.to_string(),
+                    error_message: err.to_string(),
+                  };
+                  chat_notification_builder(chat_id, ChatNotification::StreamChatMessageError)
+                    .payload(pb)
+                    .send();
                   break; // 跳出循环，避免无限重试
                 } else {
                   error!("[Chat] failed to stream answer: {}", err);
