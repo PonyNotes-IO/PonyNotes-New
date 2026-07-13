@@ -11,6 +11,7 @@ import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/database/widgets/cell/editable_cell_builder.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -368,6 +369,15 @@ class _RowEnterRegionState extends State<_RowEnterRegion> {
 
   @override
   Widget build(BuildContext context) {
+    if (PlatformInfo.isTablet) {
+      _rowStateNotifier.onEnter = true;
+      return ChangeNotifierProvider.value(
+        value: _rowStateNotifier,
+        child: GestureDetector(
+          child: widget.child,
+        ),
+      );
+    }
     return ChangeNotifierProvider.value(
       value: _rowStateNotifier,
       child: MouseRegion(

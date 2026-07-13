@@ -706,15 +706,21 @@ class RowActionButton extends StatelessWidget {
     return AppFlowyPopover(
       direction: PopoverDirection.bottomWithLeftAligned,
       popupBuilder: (context) => RowActionList(rowController: rowController),
-      child: FlowyTooltip(
-        message: LocaleKeys.grid_rowPage_moreRowActions.tr(),
-        child: FlowyIconButton(
-          width: 20,
-          height: 20,
-          icon: const FlowySvg(FlowySvgs.details_horizontal_s),
-          iconColorOnHover: Theme.of(context).colorScheme.onSurface,
-        ),
-      ),
+      child: PlatformInfo.isTablet
+          ? FlowyIconButton(
+              width: 20,
+              height: 20,
+              icon: const FlowySvg(FlowySvgs.details_horizontal_s),
+            )
+          : FlowyTooltip(
+              message: LocaleKeys.grid_rowPage_moreRowActions.tr(),
+              child: FlowyIconButton(
+                width: 20,
+                height: 20,
+                icon: const FlowySvg(FlowySvgs.details_horizontal_s),
+                iconColorOnHover: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
     );
   }
 }

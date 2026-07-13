@@ -172,6 +172,10 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    if (PlatformInfo.isTablet) {
+      forceShowBlockAction = true;
+    }
+
     if (widget.useViewInfoBloc) {
       viewInfoBloc.add(
         ViewInfoEvent.registerEditorState(editorState: widget.editorState),
@@ -330,6 +334,10 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
   @override
   void dispose() {
+    if (PlatformInfo.isTablet) {
+      forceShowBlockAction = false;
+    }
+
     widget.editorState.selectionNotifier.removeListener(onSelectionChanged);
     widget.editorState.service.keyboardService?.unregisterInterceptor(
       editorKeyboardInterceptor,
