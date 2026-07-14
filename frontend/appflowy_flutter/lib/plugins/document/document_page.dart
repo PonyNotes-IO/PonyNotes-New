@@ -512,42 +512,11 @@ class _DocumentPageState extends State<DocumentPage>
         return Stack(
           children: [
             editorContent,
-            if (PlatformInfo.isDesktopOrTablet)
-              BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                buildWhen: (previous, current) =>
-                    previous.menuStatus != current.menuStatus,
-                builder: (context, menuState) {
-                  final isSidebarHidden = menuState.menuStatus == MenuStatus.hidden;
-                  final shouldShowExpandButton = isSidebarHidden &&
-                      getIt<MenuSharedState>().shouldShowSidebarExpandButton(widget.view);
-                  if (!shouldShowExpandButton) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final theme = AppFlowyTheme.of(context);
-                  return Positioned(
-                    top: 10,
-                    left: UniversalPlatform.isMacOS ? 88 : 16,
-                    child: FlowyTooltip(
-                      message: LocaleKeys.sideBar_openSidebar.tr(),
-                      child: FlowyIconButton(
-                        width: 24,
-                        icon: FlowySvg(
-                          FlowySvgs.sidebar_collapse_custom_m,
-                          size: const Size.square(24),
-                          color: theme.iconColorScheme.primary,
-                        ),
-                        onPressed: () =>
-                            context.read<HomeSettingBloc>().add(
-                                  const HomeSettingEvent.changeMenuStatus(
-                                    MenuStatus.expanded,
-                                  ),
-                                ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            // 【修复重复按钮】此处原有一个"从最爱/共享打开的文档"专用的侧边栏
+            // 展开按钮，与 DocumentPlugin 外层（document.dart）对所有顶层标签页
+            // 文档统一显示的 _SidebarExpandFloatingButton 同时出现，导致共享文档
+            // 收起侧边栏后左上角出现两个展开按钮。统一由外层浮动按钮负责，
+            // 此处不再重复渲染。
             if (showBackButton)
               Positioned(
                 top: 10,
