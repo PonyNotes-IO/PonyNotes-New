@@ -6,6 +6,7 @@ import 'package:appflowy/mobile/presentation/database/board/mobile_board_screen.
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_grid_screen.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
+import 'package:appflowy/mobile/presentation/whiteboard/mobile_whiteboard_screen.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
@@ -63,6 +64,8 @@ extension on ViewPB {
         return MobileBoardScreen.routeName;
       case ViewLayoutPB.Chat:
         return MobileChatScreen.routeName;
+      case ViewLayoutPB.Whiteboard:
+        return MobileWhiteboardScreen.routeName;
 
       default:
         throw UnimplementedError('routeName for $this is not implemented');
@@ -96,6 +99,11 @@ extension on ViewPB {
         return {
           MobileChatScreen.viewId: id,
           MobileChatScreen.viewTitle: name,
+        };
+      case ViewLayoutPB.Whiteboard:
+        return {
+          MobileWhiteboardScreen.viewId: id,
+          MobileWhiteboardScreen.viewTitle: name,
         };
       default:
         throw UnimplementedError(

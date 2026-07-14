@@ -12,6 +12,7 @@ import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dar
 import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_grid_screen.dart';
 import 'package:appflowy/mobile/presentation/favorite/mobile_favorite_page.dart';
+import 'package:appflowy/mobile/presentation/whiteboard/mobile_whiteboard_screen.dart';
 import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_multiple_select_page.dart';
 import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_screen.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
@@ -96,6 +97,7 @@ GoRouter generateRouter(Widget child) {
         _mobileCalendarPageRoute(),
         _mobileNewEventPageRoute(),
         _mobileChatScreenRoute(),
+        _mobileWhiteboardScreenRoute(),
         // card detail page
         _mobileCardDetailScreenRoute(),
         _mobileDateCellEditScreenRoute(),
@@ -790,6 +792,23 @@ GoRoute _mobileChatScreenRoute() {
 
       return MaterialExtendedPage(
         child: MobileChatScreen(id: id, title: title, extra: extra),
+      );
+    },
+  );
+}
+
+GoRoute _mobileWhiteboardScreenRoute() {
+  return GoRoute(
+    path: MobileWhiteboardScreen.routeName,
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    pageBuilder: (context, state) {
+      final id = state.uri.queryParameters[MobileWhiteboardScreen.viewId]!;
+      final title = state.uri.queryParameters[MobileWhiteboardScreen.viewTitle];
+      return MaterialExtendedPage(
+        child: MobileWhiteboardScreen(
+          id: id,
+          title: title,
+        ),
       );
     },
   );
