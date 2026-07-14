@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:path_provider/path_provider.dart';
@@ -36,6 +37,20 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   void initState() {
     super.initState();
     _loadUserNickname();
+  }
+
+  @override
+  void dispose() {
+    // 【白板丢内容修复】销毁 WebView 前尽力触发一次退出保存（dispose 为同步方法，
+    // 无法 await；即使本调用未及执行，守护脚本每 3 秒的兜底保存也已把丢失窗口
+    // 压缩到最近 3 秒以内）
+    _controller?.evaluateJavascript(
+      source: 'window.__xmForceSave && window.__xmForceSave("dispose");',
+    ).catchError((e) {
+      Log.warn('[RemoteWhiteboard] 退出保存触发失败: $e');
+      return null;
+    });
+    super.dispose();
   }
 
   Future<void> _loadUserNickname() async {
@@ -89,6 +104,12 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                     allowUniversalAccessFromFileURLs: true,
                   ),
                   initialUserScripts: UnmodifiableListView([
+                    // 【白板丢内容修复】持久化守护脚本：兜底保存 + 空场景防覆盖 +
+                    // 退出保存入口（必须 AT_DOCUMENT_START，先于页面首次场景加载）
+                    UserScript(
+                      source: whiteboardGuardScript,
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                    ),
                     UserScript(
                       source: '''
                         (function() {
@@ -146,6 +167,26 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                       _loadingError = error.description;
                     });
                     Log.error('❌ [RemoteWhiteboard] Load error: ${error.type} - ${error.description}');
+                  },
+                  // 【白板丢内容修复】把页面 console 输出写入客户端日志，
+                  // 页内 JS 故障（此前完全不可见）从此可以在 log 文件中定位
+                  onConsoleMessage: (controller, consoleMessage) {
+                    final msg = consoleMessage.message;
+                    final level = consoleMessage.messageLevel;
+                    if (level == ConsoleMessageLevel.ERROR) {
+                      Log.error('[RemoteWhiteboard][JS] $msg');
+                    } else if (level == ConsoleMessageLevel.WARNING) {
+                      Log.warn('[RemoteWhiteboard][JS] $msg');
+                    } else {
+                      Log.info('[RemoteWhiteboard][JS] $msg');
+                    }
+                  },
+                  // 【白板丢内容修复】WebView 内容进程被系统终止（内存压力等）时
+                  // 自动重载页面，避免停留在"白屏假活"状态（网络进程仍存活、
+                  // 页面 JS 已死，绘制与保存全部静默失效）
+                  onWebContentProcessDidTerminate: (controller) async {
+                    Log.error('[RemoteWhiteboard] ⚠️ WebView 内容进程已终止，自动重新加载白板页面');
+                    await controller.reload();
                   },
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
                     final url = navigationAction.request.url?.toString();
