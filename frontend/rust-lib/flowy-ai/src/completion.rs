@@ -125,25 +125,14 @@ impl CompletionTask {
         let completion_history = Some(self.context.history.iter().map(Into::into).collect());
         let format = self.context.format.map(Into::into).unwrap_or_default();
         
-        // 【修复】当object_id为空时，不设置metadata，因为metadata中的object_id是必需的
-        // 这样文档内向AI提问时即使不传objectId也能正常工作
-        let metadata = if self.context.object_id.is_empty() {
-          None
+        // 【修复】object_id 为空时（文档内向AI提问不传 objectId），仍需构造 metadata，
+        // 否则 enable_thinking / enable_web_search 开关会随 metadata 一起丢失；
+        // 此时 object_id 使用 nil UUID 占位（云端会话接口不会读取该 metadata 的 object_id）
+        let object_id = if self.context.object_id.is_empty() {
+          Uuid::nil()
         } else {
           match Uuid::from_str(&self.context.object_id) {
-            Ok(object_id) => Some(CompletionMetadata {
-              object_id,
-              workspace_id: Some(self.workspace_id),
-              rag_ids: Some(self.context.rag_ids),
-              completion_history,
-              custom_prompt: self
-                .context
-                .custom_prompt
-                .map(|v| CustomPrompt { system: v }),
-              prompt_id: self.context.prompt_id.clone(),
-              enable_thinking: self.context.enable_thinking,
-              enable_web_search: self.context.enable_web_search,
-            }),
+            Ok(object_id) => object_id,
             Err(e) => {
               error!("Invalid uuid: {}, error: {}", self.context.object_id, e);
               let _ = sink
@@ -153,6 +142,19 @@ impl CompletionTask {
             },
           }
         };
+        let metadata = Some(CompletionMetadata {
+          object_id,
+          workspace_id: Some(self.workspace_id),
+          rag_ids: Some(self.context.rag_ids),
+          completion_history,
+          custom_prompt: self
+            .context
+            .custom_prompt
+            .map(|v| CustomPrompt { system: v }),
+          prompt_id: self.context.prompt_id.clone(),
+          enable_thinking: self.context.enable_thinking,
+          enable_web_search: self.context.enable_web_search,
+        });
         
         let params = CompleteTextParams {
           text: self.context.text,

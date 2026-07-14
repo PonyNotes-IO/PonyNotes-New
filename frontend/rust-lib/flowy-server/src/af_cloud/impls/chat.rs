@@ -227,19 +227,34 @@ where
     let token = client.get_access_token().ok();
     
     // 将 CompleteTextParams 转换为 ChatRequestParams 格式
+    // 【修复】从 metadata 中读取深度思考/联网搜索开关，透传给 AI 会话接口
+    // （此前被硬编码为 false，导致文档内问AI的联网搜索不生效）
+    let enable_thinking = params
+      .metadata
+      .as_ref()
+      .map(|m| m.enable_thinking)
+      .unwrap_or(false);
+    let enable_web_search = params
+      .metadata
+      .as_ref()
+      .map(|m| m.enable_web_search)
+      .unwrap_or(false);
     let message = params.text;
     let preferred_model = Some(ai_model.name);
-    
-    info!("[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}", message.len());
-    
+
+    info!(
+      "[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}, enable_thinking: {}, enable_web_search: {}",
+      message.len(), enable_thinking, enable_web_search
+    );
+
     // 调用 /api/ai/chat/session 接口（传递workspace_id用于协作区场景）
     let session_stream = stream_ai_session(
       base_url,
       &message,
       preferred_model,
       token,
-      false, // enable_thinking - 文档内问AI暂时不支持深度思考
-      false, // enable_web_search - 文档内问AI暂时不支持全网搜索
+      enable_thinking,
+      enable_web_search,
       Some(workspace_id.to_string()), // workspace_id用于协作区资源归属
     ).await?;
     
