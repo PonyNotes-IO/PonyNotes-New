@@ -11,6 +11,51 @@ import 'package:intl/intl.dart';
 class InboxService {
   InboxService();
 
+  /// 【全局通知】拉取当前用户的账号级通知原始列表（跨所有工作区，最多 100 条）。
+  ///
+  /// 返回服务端原始字段（id / workspace_id / notification_type / payload /
+  /// created_at / is_read / is_archived），供 ReminderBloc 转换为全局通知条目。
+  /// 网络失败时返回 null（调用方保留上一次的缓存，避免离线时通知列表清空）。
+  Future<List<Map<String, dynamic>>?> loadNotificationsRaw() async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        return null;
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold((user) => user.token, (_) => '');
+      final token = _normalizeToken(rawToken);
+      if (token.isEmpty) {
+        return null;
+      }
+
+      final uri = Uri.parse('$baseUrl/api/user/notifications');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        Log.error(
+          '[InboxService] Failed to fetch notifications: HTTP ${response.statusCode}',
+        );
+        return null;
+      }
+
+      final jsonData = json.decode(response.body) as Map<String, dynamic>;
+      final notifications = (jsonData['notifications'] as List<dynamic>?) ?? [];
+      return notifications.cast<Map<String, dynamic>>();
+    } catch (e) {
+      Log.error('[InboxService] Error fetching notifications: $e');
+      return null;
+    }
+  }
+
   /// 从服务端拉取当前用户的最近通知（最多 50 条）
   Future<List<InboxItem>> loadItems() async {
     try {
@@ -96,7 +141,10 @@ class InboxService {
     );
   }
 
-  String _defaultTitle(String notificationType) {
+  String _defaultTitle(String notificationType) => defaultTitleFor(notificationType);
+
+  /// 各类通知的默认标题（payload 未携带 title 时的兜底文案）。
+  static String defaultTitleFor(String notificationType) {
     switch (notificationType) {
       case 'reminder':
         return '工作区邀请';
@@ -190,6 +238,28 @@ class InboxService {
   /// 全部标记已读。
   Future<void> markAllAsRead() async {
     await _postNotification('/api/user/notifications/read-all');
+  }
+
+  /// 归档单条通知（服务端持久化，归档同时置已读；跨工作区/设备一致）。
+  Future<void> archive(String itemId) async {
+    if (itemId.isEmpty) return;
+    await _postNotification('/api/user/notifications/$itemId/archive');
+  }
+
+  /// 取消归档单条通知。
+  Future<void> unarchive(String itemId) async {
+    if (itemId.isEmpty) return;
+    await _postNotification('/api/user/notifications/$itemId/unarchive');
+  }
+
+  /// 归档全部通知。
+  Future<void> archiveAll() async {
+    await _postNotification('/api/user/notifications/archive-all');
+  }
+
+  /// 取消归档全部通知。
+  Future<void> unarchiveAll() async {
+    await _postNotification('/api/user/notifications/unarchive-all');
   }
 
   /// 向通知相关接口发 POST（自动带 baseUrl + Bearer token）。

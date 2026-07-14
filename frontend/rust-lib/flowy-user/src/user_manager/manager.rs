@@ -819,18 +819,16 @@ impl UserManager {
       meta,
     };
 
-    // 添加 Reminder
-    match self.add_reminder(reminder_pb).await {
-      Ok(_) => {
-        info!("Successfully created reminder for system notification: {}", id);
-      },
-      Err(e) => {
-        error!(
-          "Failed to create reminder for system notification {}: {:?}",
-          id, e
-        );
-      },
-    }
+    // 【全局通知改造】不再把云端通知写入 user-awareness reminder 存储：
+    // 该存储按 (用户, 工作区) 隔离，通知会落在"接收时恰好活跃的工作区"里，
+    // 导致切换工作区后时有时无、重连补发还会在多个工作区堆积副本。
+    // 通知的唯一权威源是服务端 af_notification（账号级），Flutter 侧
+    // ReminderBloc 直接从 /api/user/notifications 拉取全局列表；
+    // 这里只推送实时信号触发其刷新。
+    send_notification("user_reminder", UserNotification::DidUpdateReminder)
+      .payload(reminder_pb)
+      .send();
+    info!("Forwarded system notification {} to Flutter as refresh signal", id);
   }
 
   /// 订阅系统通知并处理
@@ -942,28 +940,17 @@ impl UserManager {
                 meta,
               };
 
-              // Clone before moving into add_reminder so we can send the push
-              let reminder_pb_for_push = reminder_pb.clone();
-
-              match manager.add_reminder(reminder_pb).await {
-                Ok(_) => {
-                  info!(
-                    "Successfully created reminder for system notification: {}",
-                    notification.id
-                  );
-                  // Push real-time notification to Flutter so ReminderBloc updates
-                  // immediately without waiting for the 30-second periodic refresh.
-                  send_notification("user_reminder", UserNotification::DidUpdateReminder)
-                    .payload(reminder_pb_for_push)
-                    .send();
-                },
-                Err(e) => {
-                  error!(
-                    "Failed to create reminder for system notification {}: {:?}",
-                    notification.id, e
-                  );
-                },
-              }
+              // 【全局通知改造】不再写入按 (用户, 工作区) 隔离的 user-awareness
+              // reminder 存储（那是"切换工作区后通知时有时无/重复"的根因），
+              // 只把实时信号推给 Flutter，由 ReminderBloc 从服务端账号级接口
+              // /api/user/notifications 拉取全局通知列表。
+              send_notification("user_reminder", UserNotification::DidUpdateReminder)
+                .payload(reminder_pb)
+                .send();
+              info!(
+                "Forwarded system notification {} to Flutter as refresh signal",
+                notification.id
+              );
 
               // 当用户被移出工作区时，立即处理：
               // 1. 从 payload_json 中解析被移除的 workspace_id

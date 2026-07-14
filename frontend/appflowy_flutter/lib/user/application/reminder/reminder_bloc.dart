@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:convert';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
@@ -18,6 +18,7 @@ import 'package:appflowy/workspace/application/action_navigation/navigation_acti
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -77,6 +78,81 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
 
   final List<ViewPB> _allViews = [];
 
+  /// 【全局通知】账号级云端通知缓存（来自 /api/user/notifications，跨所有工作区）。
+  /// 拉取失败（离线等）时沿用上一次的缓存，避免通知列表被清空。
+  List<ReminderPB> _cloudReminders = [];
+
+  /// 云端系统/协作通知的元数据 key（Rust 转发与服务端转换共用同一约定）
+  static const _cloudNotificationTypeKey = 'cloud_notification_type';
+  static const _cloudPayloadKey = 'payload';
+
+  /// 是否为云端通知（区别于用户自设的日程提醒）。
+  /// 兼容历史遗留：早期版本把云通知副本写入了各工作区的 reminder 存储，
+  /// 这些副本带有 payload/cloud_notification_type 元数据，一并识别为云通知。
+  static bool _isCloudNotification(ReminderPB reminder) =>
+      (reminder.meta[_cloudNotificationTypeKey]?.isNotEmpty ?? false) ||
+      reminder.meta.containsKey(_cloudPayloadKey);
+
+  /// 把服务端账号级通知转换为通知面板使用的 ReminderPB。
+  /// 字段映射与 Rust 侧此前的转换逻辑保持一致（meta 键、时间单位为秒）。
+  ReminderPB _cloudNotificationToReminder(Map<String, dynamic> n) {
+    final type = (n['notification_type'] as String?) ?? 'system';
+    final payload = n['payload'] as Map<String, dynamic>? ?? {};
+    final isArchived = (n['is_archived'] as bool?) ?? false;
+
+    int createdAtSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final createdAtStr = n['created_at'] as String?;
+    if (createdAtStr != null) {
+      final parsed = DateTime.tryParse(createdAtStr);
+      if (parsed != null) {
+        createdAtSeconds = parsed.millisecondsSinceEpoch ~/ 1000;
+      }
+    }
+
+    final meta = <String, String>{
+      ReminderMetaKeys.notificationType: type == 'mention' ? 'mention' : 'system',
+      _cloudNotificationTypeKey: type,
+      _cloudPayloadKey: jsonEncode(payload),
+      ReminderMetaKeys.createdAt: createdAtSeconds.toString(),
+      if (isArchived) ReminderMetaKeys.isArchived: true.toString(),
+    };
+
+    return ReminderPB(
+      id: (n['id'] as String?) ?? '',
+      objectId: (n['workspace_id'] as String?) ?? '',
+      scheduledAt: Int64(createdAtSeconds),
+      isAck: true,
+      isRead: (n['is_read'] as bool?) ?? false,
+      title: (payload['title'] as String?) ??
+          InboxService.defaultTitleFor(type),
+      message: (payload['message'] as String?) ?? '',
+      meta: meta,
+    );
+  }
+
+  /// 同步本地缓存中云端通知的已读/归档状态（服务端写入是异步的，
+  /// 先行更新缓存保证下一次 emit 前状态一致）。
+  void _updateCloudReminderCache(
+    String reminderId, {
+    bool? isRead,
+    bool? isArchived,
+  }) {
+    final index = _cloudReminders.indexWhere((r) => r.id == reminderId);
+    if (index == -1) {
+      return;
+    }
+    final item = _cloudReminders[index];
+    item.freeze();
+    _cloudReminders[index] = item.rebuild((update) {
+      if (isRead != null) {
+        update.isRead = isRead;
+      }
+      if (isArchived != null) {
+        update.meta[ReminderMetaKeys.isArchived] = isArchived.toString();
+      }
+    });
+  }
+
   void _dispatch() {
     on<ReminderEvent>(
       (event, emit) async {
@@ -86,6 +162,18 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
           },
           refresh: () async {
             final result = await _reminderService.fetchReminders();
+
+            // 【全局通知】从服务端拉取账号级通知（跨所有工作区）。
+            // 通知的唯一权威源是服务端 af_notification；本地按工作区隔离的
+            // reminder 存储只保留"用户自设的日程提醒"职责。
+            final cloudRaw = await InboxService().loadNotificationsRaw();
+            if (cloudRaw != null) {
+              _cloudReminders = cloudRaw
+                  .map(_cloudNotificationToReminder)
+                  .where((r) => r.id.isNotEmpty)
+                  .toList();
+            }
+
             final views = await ViewBackendService.getAllViews();
             views.onSuccess((views) {
               _allViews.clear();
@@ -93,7 +181,14 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             });
 
             await result.fold(
-              (reminders) async {
+              (localReminders) async {
+                // 本地存储只保留日程提醒；历史版本写入的云通知副本
+                // （按工作区隔离、时有时无的根源）一律丢弃，以服务端全局列表为准
+                final scheduleReminders = localReminders
+                    .where((r) => !_isCloudNotification(r))
+                    .toList();
+                final reminders = [..._cloudReminders, ...scheduleReminders];
+
                 final availableReminders =
                     await filterAvailableReminders(reminders);
                 // Separate archived reminders
@@ -238,9 +333,33 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             }
 
             final newReminder = updateObject.merge(a: reminder);
-            final failureOrUnit = await _reminderService.updateReminder(
-              reminder: newReminder,
-            );
+
+            // 【全局通知】云端通知的状态变更持久化到服务端（账号级、跨工作区
+            // 一致），不写本地 reminder 存储（云通知已不在本地存储中）。
+            final FlowyResult<void, FlowyError> failureOrUnit;
+            if (_isCloudNotification(reminder)) {
+              if (updateObject.isArchived != null) {
+                unawaited(
+                  updateObject.isArchived!
+                      ? InboxService().archive(reminder.id)
+                      : InboxService().unarchive(reminder.id),
+                );
+              }
+              // 归档同时置已读（服务端同语义）；单独标记已读也同步服务端
+              if (updateObject.isRead == true || updateObject.isArchived == true) {
+                unawaited(InboxService().markAsRead(reminder.id));
+              }
+              _updateCloudReminderCache(
+                reminder.id,
+                isRead: newReminder.isRead,
+                isArchived: updateObject.isArchived,
+              );
+              failureOrUnit = FlowyResult.success(null);
+            } else {
+              failureOrUnit = await _reminderService.updateReminder(
+                reminder: newReminder,
+              );
+            }
 
             Log.info('Updating reminder: ${newReminder.id}');
 
@@ -465,17 +584,26 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       );
     }
 
-    for (final reminder in remindersToUpdate) {
-      reminder.isRead = true;
-
-      await _reminderService.updateReminder(reminder: reminder);
-      // 系统通知(分享邀请/权限变更)由服务端 af_notification 生成，reminder.id 即通知 UUID。
-      // 必须把已读同步到服务端，否则后端 get_pending 仍视为未读，WS 重连时会把该通知以
-      // 未读重新推送、覆盖本地已读（这正是"已读又变未读"的根因）。
-      final cloudType = reminder.meta['cloud_notification_type'];
-      if (cloudType != null && cloudType.isNotEmpty) {
+    // 【全局通知】云端通知的已读只持久化到服务端（账号级唯一真相），
+    // 本地日程提醒仍写 Rust reminder 存储。全量标记时用批量接口减少请求。
+    final cloudToUpdate =
+        remindersToUpdate.where(_isCloudNotification).toList();
+    if (reminderIds == null && cloudToUpdate.isNotEmpty) {
+      unawaited(InboxService().markAllAsRead());
+    } else {
+      for (final reminder in cloudToUpdate) {
         unawaited(InboxService().markAsRead(reminder.id));
       }
+    }
+
+    for (final reminder in remindersToUpdate) {
+      if (_isCloudNotification(reminder)) {
+        _updateCloudReminderCache(reminder.id, isRead: true);
+        Log.info('Mark cloud notification ${reminder.id} as read');
+        continue;
+      }
+      reminder.isRead = true;
+      await _reminderService.updateReminder(reminder: reminder);
       Log.info('Mark reminder ${reminder.id} as read');
     }
 
@@ -518,7 +646,34 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       );
     }
 
+    // 【全局通知】云端通知的归档持久化到服务端（账号级，跨工作区/设备一致），
+    // 本地日程提醒仍写 Rust reminder 存储。全量操作时用批量接口。
+    final cloudToUpdate =
+        remindersToUpdate.where(_isCloudNotification).toList();
+    if (reminderIds == null && cloudToUpdate.isNotEmpty) {
+      unawaited(
+        isArchived ? InboxService().archiveAll() : InboxService().unarchiveAll(),
+      );
+    } else {
+      for (final reminder in cloudToUpdate) {
+        unawaited(
+          isArchived
+              ? InboxService().archive(reminder.id)
+              : InboxService().unarchive(reminder.id),
+        );
+      }
+    }
+
     for (final reminder in remindersToUpdate) {
+      if (_isCloudNotification(reminder)) {
+        _updateCloudReminderCache(
+          reminder.id,
+          isRead: isArchived ? true : null,
+          isArchived: isArchived,
+        );
+        Log.info('Cloud notification ${reminder.id} is archived: $isArchived');
+        continue;
+      }
       reminder.isRead = isArchived;
       reminder.meta[ReminderMetaKeys.isArchived] = isArchived.toString();
       await _reminderService.updateReminder(reminder: reminder);
