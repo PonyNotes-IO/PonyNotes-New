@@ -16,6 +16,7 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -404,11 +405,24 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
 
             String? roomId;
             String? roomKey;
-            
+
             if (e.layoutType == ViewLayoutPB.Whiteboard) {
-              roomId = WhiteboardRoomService.generateRoomId();
-              roomKey = WhiteboardRoomService.generateRoomKey();
-              Log.debug('🔑 [Whiteboard] Generated roomId=$roomId (length=${roomId.length}), roomKey=$roomKey (length=${roomKey.length})');
+              // 阶段1：仅协作空间白板生成 room（走 A 套 room 协作）；
+              // 私有空间白板走纯本地存储 + 静默云备份（B 套本地 collab），不生成 room。
+              // section 与空间权限一一对应，优先用它快速判定；
+              // section 未指定时回退到父视图所属空间（默认协作，保持既有行为）。
+              bool isPrivateSpace = isPrivateSectionOrNull(e.section) ??
+                  await isViewInPrivateSpace(view);
+
+              if (isPrivateSpace) {
+                Log.info(
+                  '🔒 [Whiteboard] 私有空间白板，跳过 room 生成（走本地存储 + 云备份）: parent=${view.id}',
+                );
+              } else {
+                roomId = WhiteboardRoomService.generateRoomId();
+                roomKey = WhiteboardRoomService.generateRoomKey();
+                Log.debug('🔑 [Whiteboard] 协作空间白板，生成 roomId=$roomId (length=${roomId.length}), roomKey=$roomKey (length=${roomKey.length})');
+              }
             }
 
             final result = await ViewBackendService.createView(

@@ -2997,6 +2997,7 @@
     "duplicate": "Duplicate Space",
     "movePageToSpace": "Move page to space",
     "cannotMovePageToDatabase": "Cannot move page to database",
+    "whiteboardCrossSpaceNotSupported": "Whiteboards can't be moved across spaces yet (coming soon)",
     "switchSpace": "Switch space",
     "spaceNameCannotBeEmpty": "Space name cannot be empty",
     "success": {

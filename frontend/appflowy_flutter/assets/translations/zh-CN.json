@@ -3054,6 +3054,7 @@
     "duplicate": "复制空间",
     "movePageToSpace": "将页面移动到空间",
     "cannotMovePageToDatabase": "无法将页面移动到该位置",
+    "whiteboardCrossSpaceNotSupported": "白板暂不支持跨空间移动（即将支持）",
     "switchSpace": "切换空间",
     "spaceNameCannotBeEmpty": "空间名称不能为空",
     "success": {

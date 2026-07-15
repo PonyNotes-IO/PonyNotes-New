@@ -1494,18 +1494,6 @@ void moveViewCrossSpace(
     return;
   }
 
-  final currentSpace = context.read<SpaceBloc>().state.currentSpace;
-  if (currentSpace != null &&
-      toSpace != null &&
-      currentSpace.id != toSpace.id) {
-    Log.info(
-      'Move view(${from.name}) to another space(${toSpace.name}), unpublish the view',
-    );
-    context.read<ViewBloc>().add(const ViewEvent.unpublish(sync: false));
-
-    switchToSpaceNotifier.value = toSpace;
-  }
-
   // 计算源、目标所属的 section（私有/协作），用于跨空间移动时同步切换 section。
   // 源 section 依据当前视图在侧栏所处的分区；目标 section 依据目标空间的权限类型。
   // 若源与目标 section 相同（同区内移动），后端会跳过 section 变更，无副作用。
@@ -1521,6 +1509,33 @@ void moveViewCrossSpace(
     toSection = toSpace.spacePermission == SpacePermission.private
         ? ViewSectionPB.Private
         : ViewSectionPB.Public;
+  }
+
+  // 安全保护：白板内容绑定在协作 room（若依服务端）或本地 collab（私有）上，
+  // 跨空间移动只切换 section、不会搬运内容，会导致移动后白板显示为空。
+  // 在内容迁移（阶段4）完成前，拦截白板在私有↔协作空间之间的跨空间移动。
+  // 仅当 section 真正发生变化（跨私有/协作）时拦截，同空间内移动不受影响。
+  final isCrossSectionMove = fromSection != null &&
+      toSection != null &&
+      fromSection != toSection;
+  if (view.layout == ViewLayoutPB.Whiteboard && isCrossSectionMove) {
+    showToastNotification(
+      message: LocaleKeys.space_whiteboardCrossSpaceNotSupported.tr(),
+      type: ToastificationType.warning,
+    );
+    return;
+  }
+
+  final currentSpace = context.read<SpaceBloc>().state.currentSpace;
+  if (currentSpace != null &&
+      toSpace != null &&
+      currentSpace.id != toSpace.id) {
+    Log.info(
+      'Move view(${from.name}) to another space(${toSpace.name}), unpublish the view',
+    );
+    context.read<ViewBloc>().add(const ViewEvent.unpublish(sync: false));
+
+    switchToSpaceNotifier.value = toSpace;
   }
 
   context

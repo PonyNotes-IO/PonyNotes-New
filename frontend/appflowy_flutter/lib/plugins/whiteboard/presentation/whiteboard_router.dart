@@ -4,6 +4,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 
@@ -25,12 +26,17 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   String? _roomId;
   String? _roomKey;
   bool _isFetching = false;
+  // 是否属于私有空间：
+  // - true  私有空间白板 -> 始终走 B 套本地 collab（本地权威 + 静默云备份），忽略 room；
+  // - false 协作空间白板 -> 维持现状（有 room 走 RemoteWhiteboardPage）；
+  // - null  尚未判定完成（判定完成前不拉取/生成 room，默认渲染 B 套本地页）。
+  bool? _isPrivateSpace;
 
   @override
   void initState() {
     super.initState();
     Log.info('🚀 [WhiteboardRouter] initState called for view: ${widget.notifier.view.id}');
-    _tryFetchRoomInfo(widget.notifier.view);
+    _resolveSpaceThenFetch(widget.notifier.view);
   }
 
   @override
@@ -48,8 +54,39 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       Log.info('🔄 [WhiteboardRouter] View changed, resetting roomId/roomKey');
       _roomId = null;
       _roomKey = null;
-      _tryFetchRoomInfo(widget.notifier.view);
+      _isPrivateSpace = null;
+      _resolveSpaceThenFetch(widget.notifier.view);
     }
+  }
+
+  /// 先判定白板所属空间，再决定是否拉取/生成 room。
+  ///
+  /// 私有空间白板：始终走 B 套本地 collab（本地权威 + 静默云备份），
+  /// 不建 room、不连 xm-arts，因此完全跳过 room 拉取与自动生成逻辑。
+  /// 协作空间白板：维持现状，正常拉取/生成 room。
+  Future<void> _resolveSpaceThenFetch(ViewPB view) async {
+    bool isPrivate = false;
+    try {
+      isPrivate = await isViewInPrivateSpace(view);
+    } catch (e) {
+      Log.warn('⚠️ [WhiteboardRouter] 判定空间失败，按协作空间处理: $e');
+      isPrivate = false;
+    }
+
+    if (!mounted) return;
+    setState(() => _isPrivateSpace = isPrivate);
+
+    if (isPrivate) {
+      Log.info(
+        '🔒 [WhiteboardRouter] 私有空间白板，走本地 collab（B 套），忽略 room: ${view.id}',
+      );
+      return;
+    }
+
+    Log.info(
+      '🤝 [WhiteboardRouter] 协作空间白板，维持 room 流程: ${view.id}',
+    );
+    await _tryFetchRoomInfo(view);
   }
 
   Future<void> _tryFetchRoomInfo(ViewPB view) async {
@@ -154,6 +191,24 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
+        // 空间归属判定完成前，先渲染中性占位，避免在（协作空间）判定窗口内
+        // 误挂载 B 套本地 collab 页而触发多余的云端 collab 初始化。
+        if (_isPrivateSpace == null) {
+          return const ColoredBox(
+            color: Color(0xFFFFFFFF),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        // 私有空间白板：始终渲染 B 套 WhiteboardPage（本地 collab + 静默云备份），忽略 room。
+        if (_isPrivateSpace == true) {
+          Log.debug('🔒 [WhiteboardRouter] 私有空间，使用本地 WhiteboardPage（B 套）: ${view.id}');
+          return WhiteboardPage(
+            key: ValueKey('whiteboard_page_${view.id}'),
+            view: view,
+            onViewChanged: widget.onViewChanged,
+          );
+        }
+        // 协作空间白板：有 room 走 RemoteWhiteboardPage（A 套），否则回退 B 套。
         if (_roomId != null && _roomKey != null) {
           Log.debug('🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
           return RemoteWhiteboardPage(
