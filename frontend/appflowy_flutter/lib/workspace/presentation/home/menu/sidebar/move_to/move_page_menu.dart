@@ -47,10 +47,20 @@ class _MovePageMenuState extends State<MovePageMenu> {
       create: (_) => SpaceSearchBloc()..add(const SpaceSearchEvent.initial()),
       child: BlocBuilder<SpaceBloc, SpaceState>(
         builder: (context, state) {
-          final space = state.currentSpace;
-          if (space == null) {
+          final spaceBloc = context.read<SpaceBloc>();
+          // 目标空间列表：协作（公共）空间 + 私有空间，支持文档在两类空间之间移动。
+          final publicSpaces = spaceBloc.publicSpaces;
+          final privateSpaces = spaceBloc.privateSpaces;
+          if (publicSpaces.isEmpty && privateSpaces.isEmpty) {
             return const SizedBox.shrink();
           }
+
+          // 搜索结果为扁平视图列表，无法直接推断其所属空间，
+          // 回退到当前空间或第一个可用空间作为移动上下文。
+          final searchFallbackSpace = state.currentSpace ??
+              (publicSpaces.isNotEmpty
+                  ? publicSpaces.first
+                  : privateSpaces.first);
 
           return Column(
             children: [
@@ -62,12 +72,17 @@ class _MovePageMenuState extends State<MovePageMenu> {
               ),
               const VSpace(10),
               BlocBuilder<SpaceSearchBloc, SpaceSearchState>(
-                builder: (context, state) {
-                  if (state.queryResults == null) {
-                    return Expanded(child: _buildSpace(space));
+                builder: (context, searchState) {
+                  if (searchState.queryResults == null) {
+                    return Expanded(
+                      child: _buildAllSpaces(publicSpaces, privateSpaces),
+                    );
                   }
                   return Expanded(
-                    child: _buildGroupedViews(space, state.queryResults!),
+                    child: _buildGroupedViews(
+                      searchFallbackSpace,
+                      searchState.queryResults!,
+                    ),
                   );
                 },
               ),
@@ -88,7 +103,44 @@ class _MovePageMenuState extends State<MovePageMenu> {
     );
   }
 
-  Column _buildSpace(ViewPB space) {
+  /// 展示所有可作为移动目标的空间（协作空间在前，私有空间在后）。
+  /// 每个空间为一组：点击空间标题移动到空间根目录，
+  /// 展开可移动到空间内的具体页面，从而支持文档在私有空间↔协作空间之间移动。
+  Widget _buildAllSpaces(
+    List<ViewPB> publicSpaces,
+    List<ViewPB> privateSpaces,
+  ) {
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (publicSpaces.isNotEmpty) ...[
+            _buildSectionHeader(LocaleKeys.space_publicPermission.tr()),
+            ...publicSpaces.map(_buildSpaceGroup),
+          ],
+          if (privateSpaces.isNotEmpty) ...[
+            if (publicSpaces.isNotEmpty) const VSpace(8),
+            _buildSectionHeader(LocaleKeys.space_privatePermission.tr()),
+            ...privateSpaces.map(_buildSpaceGroup),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: FlowyText.medium(
+        title,
+        fontSize: 12.0,
+        color: Theme.of(context).hintColor,
+      ),
+    );
+  }
+
+  Widget _buildSpaceGroup(ViewPB space) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -119,31 +171,27 @@ class _MovePageMenuState extends State<MovePageMenu> {
             onTap: () => widget.onSelected(space, space),
           ),
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const ClampingScrollPhysics(),
-            child: SpacePages(
-              key: ValueKey(space.id),
-              space: space,
-              isHovered: isHoveredNotifier,
-              isExpandedNotifier: isExpandedNotifier,
-              shouldIgnoreView: (view) {
-                if (_shouldIgnoreView(view, widget.sourceView)) {
-                  return IgnoreViewType.hide;
-                }
-                // 仅禁用数据库视图（Grid/Board/Calendar），允许 Document/Folder/Notebook
-                if (view.layout.isDatabaseView) {
-                  return IgnoreViewType.disable;
-                }
-                return IgnoreViewType.none;
-              },
-              // hide the hover status and disable the editing actions
-              disableSelectedStatus: true,
-              // hide the ... and + buttons
-              rightIconsBuilder: (context, view) => [],
-              onSelected: (_, view) => widget.onSelected(space, view),
-            ),
-          ),
+        SpacePages(
+          key: ValueKey(space.id),
+          space: space,
+          isHovered: isHoveredNotifier,
+          isExpandedNotifier: isExpandedNotifier,
+          shouldIgnoreView: (view) {
+            if (_shouldIgnoreView(view, widget.sourceView)) {
+              return IgnoreViewType.hide;
+            }
+            // 仅禁用数据库视图（Grid/Board/Calendar），
+            // 允许 Document/Folder/Notebook/Whiteboard 作为移动目标
+            if (view.layout.isDatabaseView) {
+              return IgnoreViewType.disable;
+            }
+            return IgnoreViewType.none;
+          },
+          // hide the hover status and disable the editing actions
+          disableSelectedStatus: true,
+          // hide the ... and + buttons
+          rightIconsBuilder: (context, view) => [],
+          onSelected: (_, view) => widget.onSelected(space, view),
         ),
       ],
     );

@@ -1506,7 +1506,26 @@ void moveViewCrossSpace(
     switchToSpaceNotifier.value = toSpace;
   }
 
-  context.read<ViewBloc>().add(ViewEvent.move(from, toId, null, null, null));
+  // 计算源、目标所属的 section（私有/协作），用于跨空间移动时同步切换 section。
+  // 源 section 依据当前视图在侧栏所处的分区；目标 section 依据目标空间的权限类型。
+  // 若源与目标 section 相同（同区内移动），后端会跳过 section 变更，无副作用。
+  ViewSectionPB? fromSection;
+  if (spaceType == FolderSpaceType.private) {
+    fromSection = ViewSectionPB.Private;
+  } else if (spaceType == FolderSpaceType.public) {
+    fromSection = ViewSectionPB.Public;
+  }
+
+  ViewSectionPB? toSection;
+  if (toSpace != null && toSpace.isSpace) {
+    toSection = toSpace.spacePermission == SpacePermission.private
+        ? ViewSectionPB.Private
+        : ViewSectionPB.Public;
+  }
+
+  context
+      .read<ViewBloc>()
+      .add(ViewEvent.move(from, toId, null, fromSection, toSection));
 }
 
 void moveViewToSectionPlaceholder(
