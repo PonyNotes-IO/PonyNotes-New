@@ -1,3 +1,5 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class MobileEmptyNotification extends StatelessWidget {
@@ -21,7 +23,7 @@ class MobileEmptyNotification extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              '你将在这里收到@提及、剪藏、提醒、系统通知',
+              LocaleKeys.notificationHub_noNotifications.tr(),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,

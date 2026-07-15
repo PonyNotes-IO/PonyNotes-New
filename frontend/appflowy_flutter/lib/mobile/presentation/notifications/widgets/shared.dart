@@ -141,6 +141,13 @@ class _NotificationContentState extends State<NotificationContent> {
     return BlocBuilder<NotificationReminderBloc, NotificationReminderState>(
       builder: (context, state) {
         final view = state.view;
+        final isRead = widget.reminder.isRead;
+
+        if (view == null &&
+            state.status == NotificationReminderStatus.loaded) {
+          return _buildSystemNotificationContent(state, isRead);
+        }
+
         if (view == null) {
           return const SizedBox.shrink();
         }
@@ -150,16 +157,13 @@ class _NotificationContentState extends State<NotificationContent> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Opacity(
-              opacity: widget.reminder.isRead ? 0.6 : 1.0,
+              opacity: isRead ? 0.6 : 1.0,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // title & time
-                  _buildHeader(state.scheduledAt, !widget.reminder.isRead),
-                  // page name
+                  _buildHeader(state.scheduledAt, !isRead),
                   _buildPageName(context, state.isLocked, state.pageTitle),
-                  // content
                   _buildContent(view, nodes: state.nodes),
                 ],
               ),
@@ -167,6 +171,63 @@ class _NotificationContentState extends State<NotificationContent> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildSystemNotificationContent(
+    NotificationReminderState state,
+    bool isRead,
+  ) {
+    final primaryTextColor = isRead
+        ? theme.textColorScheme.secondary
+        : theme.textColorScheme.primary;
+
+    return Opacity(
+      opacity: isRead ? 0.6 : 1.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 22,
+            child: Row(
+              children: [
+                Expanded(
+                  child: FlowyText.medium(
+                    state.pageTitle.isNotEmpty
+                        ? state.pageTitle
+                        : widget.reminder.title,
+                    fontSize: 14,
+                    figmaLineHeight: 22,
+                    color: primaryTextColor,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (state.scheduledAt.isNotEmpty)
+                  FlowyText.regular(
+                    state.scheduledAt,
+                    fontSize: 12,
+                    figmaLineHeight: 16,
+                    color: theme.textColorScheme.secondary,
+                  ),
+                if (!isRead) ...[
+                  HSpace(4),
+                  const UnreadRedDot(),
+                ],
+              ],
+            ),
+          ),
+          const VSpace(4),
+          FlowyText.regular(
+            widget.reminder.message,
+            fontSize: 13,
+            figmaLineHeight: 18,
+            color: theme.textColorScheme.secondary,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
