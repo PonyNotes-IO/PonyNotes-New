@@ -9,8 +9,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'widgets/tab_bar.dart';
-
 final PropertyValueNotifier<List<String>> mSelectedNotificationIds =
     PropertyValueNotifier([]);
 
@@ -67,35 +65,8 @@ class _MobileNotificationsScreenV2State
   void _onRefresh() => getIt<ReminderBloc>().add(const ReminderEvent.refresh());
 }
 
-class MobileNotificationsTab extends StatefulWidget {
+class MobileNotificationsTab extends StatelessWidget {
   const MobileNotificationsTab({super.key});
-
-  @override
-  State<MobileNotificationsTab> createState() => _MobileNotificationsTabState();
-}
-
-class _MobileNotificationsTabState extends State<MobileNotificationsTab>
-    with SingleTickerProviderStateMixin {
-  late TabController tabController;
-
-  final tabs = [
-    NotificationTabType.mention,
-    NotificationTabType.clip,
-    NotificationTabType.reminder,
-    NotificationTabType.system,
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    tabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,16 +76,9 @@ class _MobileNotificationsTabState extends State<MobileNotificationsTab>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const MobileNotificationPageHeader(),
-            MobileNotificationTabBar(
-              tabController: tabController,
-              tabs: tabs,
-            ),
             const VSpace(12.0),
             Expanded(
-              child: TabBarView(
-                controller: tabController,
-                children: tabs.map((e) => NotificationTab(tabType: e)).toList(),
-              ),
+              child: NotificationTab(tabType: NotificationTabType.system),
             ),
           ],
         ),

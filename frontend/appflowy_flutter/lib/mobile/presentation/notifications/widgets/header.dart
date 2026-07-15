@@ -47,8 +47,8 @@ class MobileNotificationPageHeader extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: const Text(
-              '消息通知',
+            child: Text(
+              LocaleKeys.notificationHub_tabs_system.tr(),
               textAlign: TextAlign.center,
             ),
           ),

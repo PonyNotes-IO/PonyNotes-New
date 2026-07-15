@@ -110,8 +110,11 @@ class MobileSpace extends StatelessWidget {
       enableScrollable: true,
       bottomSheetPadding: context.bottomSheetPadding(),
       builder: (_) {
-        return BlocProvider.value(
-          value: context.read<SpaceBloc>(),
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: context.read<SpaceBloc>()),
+            BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
+          ],
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8.0),
             child: MobileSpaceMenu(),
