@@ -18,8 +18,11 @@ import '../startup.dart';
 class AutoUpdateTask extends LaunchTask {
   AutoUpdateTask();
 
+  // 更新源走七牛 CDN(国内可稳定访问;GitHub Release 保留作为备份源)。
+  // appcast 由发版脚本上传到 releases/latest/ 并刷新 CDN,
+  // 安装包在 releases/{版本}/ 下(见 scripts/release_all_platforms.sh)。
   static const _feedUrl =
-      'https://github.com/PonyNotes-IO/PonyNotes-New/releases/latest/download/appcast-{os}-{arch}.xml';
+      'https://oss.xiaomabiji.com/releases/latest/appcast-{os}-{arch}.xml';
   final _listener = _AppFlowyAutoUpdaterListener();
 
   @override
