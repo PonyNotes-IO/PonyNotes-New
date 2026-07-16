@@ -107,7 +107,7 @@ class _MobileSpaceTabBarState extends State<MobileSpaceTabBar> {
             ),
           ),
           _buildSyncButton(context),
-          Spacer(),
+          HSpace(50),
           _buildImportButton(context),
         ],
       ),
