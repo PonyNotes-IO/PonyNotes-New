@@ -160,8 +160,44 @@ class _HomePage extends StatefulWidget {
   State<_HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<_HomePage> {
+class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
   Loading? loadingIndicator;
+  DateTime? _lastRefreshTime;
+  static const Duration _refreshDebounceDuration = Duration(seconds: 1);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshWorkspaceList();
+    }
+  }
+
+  void _refreshWorkspaceList() {
+    final now = DateTime.now();
+    if (_lastRefreshTime != null &&
+        now.difference(_lastRefreshTime!) <= _refreshDebounceDuration) {
+      return;
+    }
+    _lastRefreshTime = now;
+
+    final workspaceBloc = context.read<UserWorkspaceBloc?>();
+    if (workspaceBloc != null) {
+      Log.info('MobileHomePage: page visible, fetchWorkspaces');
+      workspaceBloc.add(UserWorkspaceEvent.fetchWorkspaces());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
