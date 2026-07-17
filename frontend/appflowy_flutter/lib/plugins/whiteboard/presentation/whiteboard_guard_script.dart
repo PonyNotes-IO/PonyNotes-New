@@ -161,10 +161,14 @@ const String whiteboardGuardScript = r'''
     }
     // 版本没变化或画布从未有过内容：无需保存
     if (v === lastSavedVersion || v === 0) return Promise.resolve(true);
-    // 本地画布为空（含仅剩删除墓碑）但服务器有内容：兜底保存不做清空操作，
-    // 合法的"全部删除"仍由页面自身管线（健康时）保存
-    if (liveCount === 0 && lastServerVersion !== null && lastServerVersion > 0) {
-      console.warn('[XMGuard] 跳过兜底保存：本地画布为空而服务器有内容');
+    // 【向网页机制看齐 · 空场景绝不强推】只要当前活元素为 0（含"全部删除只剩墓碑"
+    // 这种 version>0 但实际为空的情况），一律不强制保存。切换视图时 excalidraw 组件
+    // 卸载/远端广播清空会造成过渡性空场景，XMGuard 的强推(interval/visibilitychange/
+    // dispose)若把它推到协作服务器就会覆盖真数据——这正是网页客户端(无 XMGuard 强推)
+    // 不丢、而本客户端丢的根因。此处无条件拦截，不再依赖 lastServerVersion(它可能因
+    // 仅走 websocket 同步而为 null，导致漏判)。合法的"全部删除"由页面自身保存管线处理。
+    if (liveCount === 0) {
+      console.warn('[XMGuard] 跳过强制保存：当前画布为空(活元素0)，不覆盖协作内容 原因=' + reason);
       return Promise.resolve(false);
     }
     saving = true;
