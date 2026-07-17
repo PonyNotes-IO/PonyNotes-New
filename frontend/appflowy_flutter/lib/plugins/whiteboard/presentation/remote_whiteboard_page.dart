@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_mirror_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -34,6 +35,10 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   bool _isLoading = true;
   String? _loadingError;
   String? _userNickname;
+  // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
+  final WhiteboardMirrorService _mirrorService = WhiteboardMirrorService();
+  // Flutter 侧再做一次按 sceneVersion 去重，避免重复落盘。
+  int _lastMirroredVersion = -1;
 
   @override
   void initState() {
@@ -177,6 +182,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                   onWebViewCreated: (controller) {
                     _controller = controller;
                     _setupDownloadHandler(controller);
+                    _setupMirrorHandler(controller);
                   },
                   onLoadStart: (controller, url) {
                     setState(() {
@@ -330,6 +336,46 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
           }
           
           await _saveBase64ToFile(base64Data, filename, mimeType);
+        }
+      },
+    );
+  }
+
+  /// 注册「本地镜像」回传通道（严格单向：只写「服务器 → 本地」）。
+  ///
+  /// XMGuard 在 room 场景加载/保存成功后，把**已解密**的活场景快照通过此 handler 回传，
+  /// 由本方法写入独立的本地镜像文件（`{userId}/whiteboard_mirrors/{viewId}.json`）。
+  /// 这里没有、也绝不会有任何「本地 → room」的写回分支，杜绝本地推空覆盖真数据。
+  /// 纯旁路：任何异常静默吞掉，不影响在线协作。
+  void _setupMirrorHandler(InAppWebViewController controller) {
+    controller.addJavaScriptHandler(
+      handlerName: 'saveWhiteboardMirror',
+      callback: (args) async {
+        try {
+          if (args.isEmpty) return;
+          final raw = args[0];
+          final Map<String, dynamic> payload = raw is String
+              ? (jsonDecode(raw) as Map<String, dynamic>)
+              : Map<String, dynamic>.from(raw as Map);
+
+          final version = payload['sceneVersion'];
+          final versionInt = version is int
+              ? version
+              : (version is num ? version.toInt() : -1);
+          // Flutter 侧按版本去重，避免重复落盘。
+          if (versionInt >= 0 && versionInt == _lastMirroredVersion) {
+            return;
+          }
+
+          final saved = await _mirrorService.saveMirror(
+            widget.view.id,
+            payload,
+          );
+          if (saved && versionInt >= 0) {
+            _lastMirroredVersion = versionInt;
+          }
+        } catch (e) {
+          Log.warn('[RemoteWhiteboard] 本地镜像回传处理失败(已忽略): $e');
         }
       },
     );

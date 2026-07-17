@@ -3733,5 +3733,10 @@
     "step3": "3. 选择「更换计划」",
     "title": "升级到专业版",
     "upgradeSteps": "如何在小马笔记中升级您的计划："
+  },
+  "whiteboard": {
+    "offlineReadOnlyTitle": "离线只读",
+    "offlineReadOnlyHint": "当前网络不可用，展示本地镜像，仅供浏览",
+    "offlineMirrorMissing": "暂无本地镜像可供离线浏览"
   }
 }

@@ -3666,5 +3666,10 @@
   },
   "shareSection": {
     "shared": "Shared with me"
+  },
+  "whiteboard": {
+    "offlineReadOnlyTitle": "Offline (read-only)",
+    "offlineReadOnlyHint": "Network unavailable. Showing local mirror for viewing only.",
+    "offlineMirrorMissing": "No local mirror available for offline viewing"
   }
 }

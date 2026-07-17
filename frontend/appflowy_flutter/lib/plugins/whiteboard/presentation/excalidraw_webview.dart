@@ -1699,6 +1699,26 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
+  /// 进入/退出只读浏览模式（公共方法，供外部调用）。
+  ///
+  /// 用于「断网离线只读镜像」场景：以 Excalidraw viewMode 渲染本地镜像，
+  /// 禁止编辑、仅保留浏览与缩放。直接调用 Excalidraw API 的 updateScene，
+  /// 绕过只保留稳定键的 pickStableAppState，确保 viewModeEnabled 生效。
+  Future<void> setViewMode(bool enabled) async {
+    try {
+      await _safeEvalJs('''
+        (function() {
+          var api = window._excalidrawAPI || window.excalidrawAPI || window.__EXCALIDRAW_API__;
+          if (api && typeof api.updateScene === 'function') {
+            api.updateScene({ appState: { viewModeEnabled: $enabled }, commitToHistory: false });
+          }
+        })();
+      ''', tag: 'setViewMode($enabled)');
+    } catch (e) {
+      Log.warn('[ExcalidrawWebView] setViewMode 失败: $e');
+    }
+  }
+
   /// 加载数据（公共方法，供外部调用）
   /// 注意：此方法会重置整个场景
   Future<void> loadData(Map<String, dynamic> data) async {

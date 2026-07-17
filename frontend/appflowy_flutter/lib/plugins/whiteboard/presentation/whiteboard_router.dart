@@ -1,12 +1,20 @@
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_mirror_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/offline_whiteboard_mirror_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
+
+/// 协作白板 room 服务（xm-arts）主机，用于离线可达性轻量探测。
+const String _kRoomHost = 'https://xm-arts.xiaomabiji.com/';
 
 class WhiteboardRouter extends StatefulWidget {
   const WhiteboardRouter({
@@ -32,6 +40,14 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   // - null  尚未判定完成（判定完成前不拉取/生成 room，默认渲染 B 套本地页）。
   bool? _isPrivateSpace;
 
+  // room 服务（xm-arts）是否可达：
+  // - null  尚未探测完成（协作空间下探测完成前渲染占位，避免误挂载 A 套）；
+  // - true  可达 -> 走现状 A 套 room（可编辑），在线协作零改动；
+  // - false 不可达 -> 若有本地镜像则走离线只读镜像页，否则仍尝试在线（不误判）。
+  bool? _roomReachable;
+  // 断网时本地是否存在可用镜像（决定是否切「离线只读」）。
+  bool _hasMirror = false;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +71,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       _roomId = null;
       _roomKey = null;
       _isPrivateSpace = null;
+      _roomReachable = null;
+      _hasMirror = false;
       _resolveSpaceThenFetch(widget.notifier.view);
     }
   }
@@ -87,6 +105,64 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       '🤝 [WhiteboardRouter] 协作空间白板，维持 room 流程: ${view.id}',
     );
     await _tryFetchRoomInfo(view);
+    // room 信息就绪后，探测 room 服务可达性以决定「在线 A 套」还是「离线只读镜像」。
+    await _resolveRoomReachability(view);
+  }
+
+  /// 探测 room 服务可达性 + 本地镜像可用性，决定协作白板的渲染分支。
+  ///
+  /// 可达 -> A 套 room（可编辑，在线协作零改动）；
+  /// 不可达且有镜像 -> 离线只读镜像页；
+  /// 不可达且无镜像 -> 仍尝试在线（不误判）。
+  Future<void> _resolveRoomReachability(ViewPB view) async {
+    final reachable = await _probeRoomReachable();
+    // 仅在不可达时才检查本地镜像，节省 IO。
+    final hasMirror =
+        reachable ? false : await WhiteboardMirrorService().hasMirror(view.id);
+
+    if (!mounted) return;
+    setState(() {
+      _roomReachable = reachable;
+      _hasMirror = hasMirror;
+    });
+    Log.info(
+      '📶 [WhiteboardRouter] room 可达性=$reachable, 本地镜像=$hasMirror, view=${view.id}',
+    );
+  }
+
+  /// 轻量探测 room 服务（xm-arts）是否可达。
+  ///
+  /// 先看系统连通性（none 直接判离线），再对 room 主机发一次带超时的 HEAD，
+  /// 任何 HTTP 响应（含 4xx/5xx）都视为「服务可达」；超时/连接错误视为「离线」。
+  /// 探测是只读的旁路操作，绝不触碰 room 数据。
+  Future<bool> _probeRoomReachable() async {
+    try {
+      final conn = await Connectivity().checkConnectivity();
+      if (conn == ConnectivityResult.none) {
+        Log.info('[WhiteboardRouter] connectivity=none，判定 room 离线');
+        return false;
+      }
+    } catch (e) {
+      Log.warn('[WhiteboardRouter] connectivity 检查异常(忽略): $e');
+    }
+
+    HttpClient? client;
+    try {
+      client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
+      final request = await client
+          .headUrl(Uri.parse(_kRoomHost))
+          .timeout(const Duration(seconds: 3));
+      final response =
+          await request.close().timeout(const Duration(seconds: 3));
+      await response.drain<void>();
+      return true;
+    } catch (e) {
+      Log.info('[WhiteboardRouter] xm-arts 探测失败，判定离线: $e');
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
   }
 
   Future<void> _tryFetchRoomInfo(ViewPB view) async {
@@ -208,7 +284,26 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
             onViewChanged: widget.onViewChanged,
           );
         }
-        // 协作空间白板：有 room 走 RemoteWhiteboardPage（A 套），否则回退 B 套。
+        // 协作空间白板：room 可达性探测完成前先渲染占位，避免误挂载 A 套。
+        if (_roomReachable == null) {
+          return const ColoredBox(
+            color: Color(0xFFFFFFFF),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        // 断网且本地有镜像：切「离线只读镜像」页（禁止编辑，仅浏览）。
+        // 本页无任何写回路径，镜像绝不上传/覆盖 room。
+        if (_roomReachable == false && _hasMirror) {
+          Log.info(
+            '📴 [WhiteboardRouter] room 不可达且有本地镜像，进入离线只读: ${view.id}',
+          );
+          return OfflineWhiteboardMirrorPage(
+            key: ValueKey('offline_mirror_${view.id}'),
+            view: view,
+          );
+        }
+        // 可达（或离线但无镜像，不误判）：维持现状 A 套 room。
+        // 有 room 走 RemoteWhiteboardPage（A 套），否则回退 B 套。
         if (_roomId != null && _roomKey != null) {
           Log.debug('🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
           return RemoteWhiteboardPage(

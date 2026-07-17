@@ -75,6 +75,8 @@ const String whiteboardGuardScript = r'''
                 lastServerVersion = v;
               }
               log('已加载服务器场景 version=' + v);
+              // 【本地镜像·单向下载】服务器场景加载成功后，等场景应用到画布再镜像一次。
+              scheduleMirror('scene-get');
             }).catch(function () {});
           }
         } catch (e) {}
@@ -87,6 +89,8 @@ const String whiteboardGuardScript = r'''
             var saved = JSON.parse(init.body);
             var v = Number(saved && saved.sceneVersion) || 0;
             if (v > (lastServerVersion || 0)) lastServerVersion = v;
+            // 【本地镜像·单向下载】保存成功即代表服务器已有该新版本，镜像一份到本地。
+            scheduleMirror('scene-post');
           }
         } catch (e) {}
         return resp;
@@ -217,6 +221,96 @@ const String whiteboardGuardScript = r'''
     } catch (e) {
       return -1;
     }
+  }
+
+  // ---- 本地镜像：严格单向「服务器 → 本地」下载 ----
+  // 只读取当前画布的已解密场景，通过 callHandler('saveWhiteboardMirror', ...) 回传 Flutter
+  // 存本地镜像文件。绝不回推 room：这里没有、也不会有任何写服务器的分支。
+  // 去重：按 sceneVersion；节流：两次镜像至少间隔 minMirrorIntervalMs，避免大场景频繁大回传卡顿。
+  var lastMirroredVersion = -1;
+  var lastMirrorTime = 0;
+  var mirrorTimer = null;
+  var minMirrorIntervalMs = 2000;
+
+  function doReportMirror(reason) {
+    var c = findCollab();
+    if (!c || !c.excalidrawAPI) return;
+    var els, liveEls, v, files, appState;
+    try {
+      var all = c.excalidrawAPI.getSceneElementsIncludingDeleted();
+      v = sceneVersion(all);
+      // 只镜像「活元素」快照（排除墓碑），减小体积、便于离线只读渲染。
+      liveEls = [];
+      for (var i = 0; i < all.length; i++) {
+        if (!all[i].isDeleted) liveEls.push(all[i]);
+      }
+    } catch (e) {
+      return;
+    }
+    // 【红线·空场景绝不镜像】活元素为 0 一律跳过，杜绝空场景把本地有效镜像抹掉。
+    if (!liveEls.length) return;
+    // 版本无变化：无需重复镜像。
+    if (v === lastMirroredVersion) return;
+
+    try {
+      files = (typeof c.excalidrawAPI.getFiles === 'function')
+        ? (c.excalidrawAPI.getFiles() || {}) : {};
+    } catch (e) { files = {}; }
+    try {
+      var st = (typeof c.excalidrawAPI.getAppState === 'function')
+        ? c.excalidrawAPI.getAppState() : {};
+      appState = {
+        viewBackgroundColor: st && st.viewBackgroundColor,
+        gridSize: st && st.gridSize
+      };
+    } catch (e) { appState = {}; }
+
+    // 仅保留被当前活元素引用到的文件，避免把整块无关 base64 一起回传。
+    var usedFiles = {};
+    try {
+      var used = {};
+      for (var j = 0; j < liveEls.length; j++) {
+        if (liveEls[j].fileId) used[liveEls[j].fileId] = true;
+      }
+      for (var fid in files) {
+        if (Object.prototype.hasOwnProperty.call(files, fid) && used[fid]) {
+          usedFiles[fid] = files[fid];
+        }
+      }
+    } catch (e) { usedFiles = files; }
+
+    var payload;
+    try {
+      payload = JSON.stringify({
+        sceneVersion: v,
+        elements: liveEls,
+        files: usedFiles,
+        appState: appState
+      });
+    } catch (e) { return; }
+
+    try {
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler('saveWhiteboardMirror', payload);
+        lastMirroredVersion = v;
+        lastMirrorTime = Date.now();
+        log('已回传本地镜像 version=' + v + ' 活元素=' + liveEls.length +
+            ' files=' + Object.keys(usedFiles).length + ' 原因=' + reason);
+      }
+    } catch (e) {
+      // 纯旁路：镜像失败绝不影响在线协作。
+    }
+  }
+
+  // 节流调度：GET 场景加载后需给画布应用留时间，故用短延时；两次镜像间隔不小于阈值。
+  function scheduleMirror(reason) {
+    if (mirrorTimer) return;
+    var elapsed = Date.now() - lastMirrorTime;
+    var wait = elapsed >= minMirrorIntervalMs ? 600 : (minMirrorIntervalMs - elapsed);
+    mirrorTimer = setTimeout(function () {
+      mirrorTimer = null;
+      try { doReportMirror(reason); } catch (e) {}
+    }, wait);
   }
 
   // ---- 第 3 层：暴露给 Flutter 侧的退出保存入口（返回 Promise，保存真正完成后 resolve）----
