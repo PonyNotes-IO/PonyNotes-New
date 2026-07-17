@@ -106,6 +106,8 @@
             <string>_dartVmService._tcp</string>
     </array>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Looking for local tcp Bonjour service for Flutter debugging.</string>
+	<string>Looking for local tcp Bonjour service for Flutter debugging.</string>
+	<key>SKProductsRequestUsageDescription</key>
+	<string>用于查询内购产品信息，以便用户购买会员服务</string>
 </dict>
 </plist>

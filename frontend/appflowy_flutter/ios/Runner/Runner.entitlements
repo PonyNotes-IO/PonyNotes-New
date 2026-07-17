@@ -15,5 +15,7 @@
 		<string>applinks:test.www.xiaomabiji.com</string>
 		<string>applinks:test.www.xiaomabiji.io</string>
 	</array>
+	<key>com.apple.developer.in-app-purchase</key>
+	<true/>
 </dict>
 </plist>

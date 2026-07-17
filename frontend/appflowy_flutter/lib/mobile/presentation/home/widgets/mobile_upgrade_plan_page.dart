@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
@@ -141,6 +145,7 @@ class _UpgradePlanBody extends StatefulWidget {
 class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   int _selectedPlanIndex = 2; // 默认选中专业版（第3个）
   bool _isProcessingPayment = false;
+  PaymentMethod? _selectedPaymentMethod;
 
   static const _plans = [
     _PlanConfig('student', '学生版', 5.0, 50.0, '1GB', '3个', '50次/月',
@@ -157,6 +162,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     final plan = _plans[_selectedPlanIndex];
     final isYearly = widget.billingPeriod == _BillingPeriod.yearly;
     final billingType = isYearly ? 'yearly' : 'monthly';
+    final price = isYearly ? plan.priceAnnual : plan.priceMonthly;
 
     setState(() => _isProcessingPayment = true);
 
@@ -164,21 +170,188 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       final userProfile = await UserBackendService.getCurrentUserProfile();
       final userUuid = userProfile.fold((p) => p.id.toString(), (_) => '');
 
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
-      final payUrl =
-          '$baseUrl/price?planId=${plan.id}&billingType=$billingType&userInfo=$userUuid';
+      final paymentMethods = PaymentPlatformSupport.getAvailableMethods();
+      if (paymentMethods.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('当前平台暂不支持支付')),
+          );
+        }
+        return;
+      }
 
-      await PaymentUtil.webPay(payUrl);
+      PaymentMethod paymentMethod;
+      if (_selectedPaymentMethod != null &&
+          paymentMethods.contains(_selectedPaymentMethod)) {
+        paymentMethod = _selectedPaymentMethod!;
+      } else {
+        if (Platform.isIOS) {
+          paymentMethod = PaymentMethod.applePay;
+        } else {
+          final alipayIndex = paymentMethods.indexOf(PaymentMethod.alipay);
+          if (alipayIndex >= 0) {
+            paymentMethod = PaymentMethod.alipay;
+          } else {
+            paymentMethod = paymentMethods.first;
+          }
+        }
+        setState(() => _selectedPaymentMethod = paymentMethod);
+      }
+
+      Log.info('[MobileUpgradePlan] 支付方式: $paymentMethod, 平台: ${Platform.operatingSystem}');
+
+      if (Platform.isIOS) {
+        await _handleIOSPayment(paymentMethod, plan, price, billingType, userUuid);
+      } else {
+        await _handleAndroidPayment(paymentMethod, plan, price, billingType, userUuid);
+      }
     } catch (e) {
+      Log.error('[MobileUpgradePlan] 支付异常: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('支付失败: $e')),
+          SnackBar(content: Text('支付异常: $e')),
         );
       }
     } finally {
       if (mounted) setState(() => _isProcessingPayment = false);
     }
+  }
+
+  Future<void> _handleIOSPayment(
+    PaymentMethod paymentMethod,
+    _PlanConfig plan,
+    double price,
+    String billingType,
+    String userUuid,
+  ) async {
+    Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay 内购');
+
+    final productId = _getProductId(plan.id, billingType);
+    if (productId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('暂不支持该套餐的 Apple Pay 支付')),
+        );
+      }
+      return;
+    }
+
+    final extra = <String, dynamic>{
+      'productId': productId,
+      'planId': plan.id,
+      'billingType': billingType,
+      'userInfo': userUuid,
+    };
+
+    final paymentResult = await PaymentUtil.pay(
+      method: paymentMethod,
+      amount: (price * 100).toInt(),
+      currency: 'CNY',
+      orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
+      extra: extra,
+    );
+
+    if (mounted) {
+      if (paymentResult.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(paymentResult.message)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('支付失败: ${paymentResult.message}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleAndroidPayment(
+    PaymentMethod paymentMethod,
+    _PlanConfig plan,
+    double price,
+    String billingType,
+    String userUuid,
+  ) async {
+    Log.info('[MobileUpgradePlan] Android 使用 $paymentMethod 支付');
+
+    final paymentType = switch (paymentMethod) {
+      PaymentMethod.wechatPay => PaymentType.wechatPay,
+      PaymentMethod.alipay => PaymentType.alipay,
+      _ => PaymentType.alipay,
+    };
+
+    final createRequest = PaymentCreateRequest(
+      amount: price.toString(),
+      paymentType: paymentType,
+      userInfo: userUuid,
+      productName: plan.name,
+      planId: plan.id,
+      billingType: billingType,
+    );
+
+    Log.info('[MobileUpgradePlan] 创建支付订单: plan=${plan.name}, price=$price, billingType=$billingType, paymentType=$paymentType');
+
+    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+
+    if (orderResult.isFailure) {
+      final error = orderResult.fold((_) => null, (e) => e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('创建订单失败: ${error?.msg ?? '未知错误'}')),
+        );
+      }
+      return;
+    }
+
+    final orderData = orderResult.fold((r) => r, (_) => null);
+    if (orderData?.data == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('订单数据为空')),
+        );
+      }
+      return;
+    }
+
+    final orderNo = orderData!.data!.orderNo;
+    Log.info('[MobileUpgradePlan] 订单创建成功: orderNo=$orderNo');
+
+    final extra = <String, dynamic>{
+      'payUrl': orderData.data?.payUrl,
+    };
+
+    final paymentResult = await PaymentUtil.pay(
+      method: paymentMethod,
+      amount: (price * 100).toInt(),
+      currency: 'CNY',
+      orderId: orderNo,
+      extra: extra,
+    );
+
+    if (mounted) {
+      if (paymentResult.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(paymentResult.message)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('支付失败: ${paymentResult.message}')),
+        );
+      }
+    }
+  }
+
+  String? _getProductId(String planId, String billingType) {
+    final productIds = <String, String>{
+      'student_monthly': 'com.ponynotes.student.monthly',
+      'student_yearly': 'com.ponynotes.student.yearly',
+      'standard_monthly': 'com.ponynotes.standard.monthly',
+      'standard_yearly': 'com.ponynotes.standard.yearly',
+      'pro_monthly': 'com.ponynotes.pro.monthly',
+      'pro_yearly': 'com.ponynotes.pro.yearly',
+      'premium_monthly': 'com.ponynotes.premium.monthly',
+      'premium_yearly': 'com.ponynotes.premium.yearly',
+    };
+    return productIds['${planId}_$billingType'];
   }
 
   @override
@@ -239,6 +412,8 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
           const SizedBox(height: 16),
           _buildUpgradePlanCards(),
           const SizedBox(height: 24),
+          _buildPaymentMethodSelector(theme),
+          const SizedBox(height: 16),
           _buildConfirmPayButton(theme),
           const SizedBox(height: 24),
           _buildBenefitIcons(),
@@ -421,6 +596,94 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPaymentMethodSelector(AppFlowyThemeData theme) {
+    final paymentMethods = PaymentPlatformSupport.getAvailableMethods();
+    if (paymentMethods.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (_selectedPaymentMethod == null) {
+      if (Platform.isIOS) {
+        _selectedPaymentMethod = PaymentMethod.applePay;
+      } else {
+        final alipayIndex = paymentMethods.indexOf(PaymentMethod.alipay);
+        if (alipayIndex >= 0) {
+          _selectedPaymentMethod = PaymentMethod.alipay;
+        } else {
+          _selectedPaymentMethod = paymentMethods.first;
+        }
+      }
+    }
+
+    final methodNames = <PaymentMethod, String>{
+      PaymentMethod.applePay: 'Apple Pay',
+      PaymentMethod.wechatPay: '微信支付',
+      PaymentMethod.alipay: '支付宝',
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '支付方式',
+          style: theme.textStyle.body
+              .standard(color: theme.textColorScheme.primary)
+              .copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: paymentMethods.map((method) {
+            final isSelected = _selectedPaymentMethod == method;
+            final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _selectedPaymentMethod = method),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.white)
+                        : (isDarkMode ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5)),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected
+                          ? const Color(0xFFFF3800)
+                          : (isDarkMode ? const Color(0xFF3A3A3A) : Colors.transparent),
+                      width: isSelected ? 2 : 0,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    methodNames[method] ?? method.name,
+                    style: theme.textStyle.body.standard(
+                      color: isSelected
+                          ? theme.textColorScheme.primary
+                          : theme.textColorScheme.secondary,
+                    ).copyWith(
+                      fontSize: 13,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
