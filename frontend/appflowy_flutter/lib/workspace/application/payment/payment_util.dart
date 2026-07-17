@@ -1,18 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/webview2_task.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 enum PaymentMethod {
   applePay,
@@ -53,6 +59,17 @@ class PaymentPlatformSupport {
       ];
     }
 
+    if (Platform.isIOS) {
+      return [PaymentMethod.applePay];
+    }
+
+    if (Platform.isAndroid) {
+      return [
+        PaymentMethod.wechatPay,
+        PaymentMethod.alipay,
+      ];
+    }
+
     if (PlatformInfo.isDesktopOrTablet) {
       return [PaymentMethod.wechatPay];
     }
@@ -64,14 +81,14 @@ class PaymentPlatformSupport {
   }
 
   static bool get isApplePayAvailable =>
-      Platform.isMacOS && getAvailableMethods().contains(PaymentMethod.applePay);
+      (Platform.isMacOS || Platform.isIOS) && getAvailableMethods().contains(PaymentMethod.applePay);
 
   static bool get isWeChatPayAvailable =>
-      Platform.isWindows &&
+      (Platform.isWindows || Platform.isAndroid) &&
       getAvailableMethods().contains(PaymentMethod.wechatPay);
 
   static bool get isAlipayAvailable =>
-      Platform.isWindows &&
+      (Platform.isWindows || Platform.isAndroid) &&
       getAvailableMethods().contains(PaymentMethod.alipay);
 }
 
@@ -211,6 +228,7 @@ class PaymentUtil {
       } else if (purchaseDetails.status == PurchaseStatus.purchased ||
           purchaseDetails.status == PurchaseStatus.restored) {
         Log.info('Apple Pay: 购买成功');
+        _onPurchaseSuccess(purchaseDetails);
         if (purchaseDetails.pendingCompletePurchase) {
           _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
@@ -228,43 +246,181 @@ class PaymentUtil {
     }
   }
 
+  static Future<void> _onPurchaseSuccess(PurchaseDetails purchaseDetails) async {
+    try {
+      final productId = purchaseDetails.productID;
+      final transactionId = purchaseDetails.purchaseID;
+      Log.info('Apple Pay: 处理购买成功，productId: $productId, transactionId: $transactionId');
+
+      await _verifyAndUpdateSubscription(productId, transactionId);
+    } catch (e, s) {
+      Log.error('Apple Pay: 处理购买成功异常: $e\n$s');
+    }
+  }
+
+  static Future<void> _verifyAndUpdateSubscription(String productId, String? transactionId) async {
+    try {
+      final planInfo = _parseProductId(productId);
+      if (planInfo == null) {
+        Log.error('Apple Pay: 无法解析 productId: $productId');
+        return;
+      }
+
+      final planId = planInfo['planId'] ?? '';
+      final billingType = planInfo['billingType'] ?? 'monthly';
+
+      Log.info('Apple Pay: 调用后端更新会员订阅，planId: $planId, billingType: $billingType');
+
+      await _updateSubscription(planId, billingType, transactionId);
+    } catch (e, s) {
+      Log.error('Apple Pay: 验证并更新订阅异常: $e\n$s');
+    }
+  }
+
+  static Map<String, String>? _parseProductId(String productId) {
+    final parts = productId.split('.');
+    if (parts.length < 3) {
+      return null;
+    }
+
+    final planName = parts[parts.length - 2];
+    final billingType = parts[parts.length - 1];
+
+    const planIdMap = {
+      'student': '1',
+      'standard': '2',
+      'pro': '3',
+      'premium': '4',
+    };
+
+    final planId = planIdMap[planName];
+    if (planId == null) {
+      Log.error('Apple Pay: 未知的套餐名称: $planName');
+      return null;
+    }
+
+    return {
+      'planId': planId,
+      'billingType': billingType,
+      'planName': planName,
+    };
+  }
+
+  static Future<void> _updateSubscription(String planId, String billingType, String? transactionId) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      if (baseUrl.isEmpty) {
+        Log.error('Apple Pay: serverUrl 为空');
+        return;
+      }
+
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final UserProfilePB userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      String? accessToken;
+      try {
+        final decoded = jsonDecode(userProfile.token);
+        if (decoded is Map<String, dynamic>) {
+          accessToken = decoded['access_token'] as String?;
+        }
+      } catch (_) {
+        accessToken = userProfile.token;
+      }
+
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Apple Pay: 无法提取 access_token');
+        return;
+      }
+
+      final uri = Uri.parse('$baseUrl/api/subscription/subscribe');
+
+      final requestBody = jsonEncode({
+        'plan_id': int.tryParse(planId) ?? 1,
+        'billing_type': billingType,
+        'transaction_id': transactionId,
+      });
+
+      final response = await http.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: requestBody,
+      );
+
+      if (response.statusCode == 200) {
+        Log.info('Apple Pay: 会员订阅更新成功！');
+      } else {
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : '更新会员订阅失败 (HTTP ${response.statusCode})';
+        Log.error('Apple Pay: $errorMsg');
+      }
+    } catch (e, s) {
+      Log.error('Apple Pay: 更新订阅异常: $e\n$s');
+    }
+  }
+
   static Future<PaymentResult> _payWithWeChat({
     required int amount,
     required String currency,
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
-    if (!Platform.isWindows) {
-      return PaymentResult.failure(message: '当前平台不支持微信支付');
+    if (Platform.isWindows) {
+      try {
+        final result = await _channel.invokeMapMethod<String, dynamic>(
+          'startWeChatPay',
+          <String, dynamic>{
+            'amount': amount,
+            'currency': currency,
+            'orderId': orderId,
+            'extra': extra ?? <String, dynamic>{},
+          },
+        );
+
+        final success = result?['success'] == true;
+        final message = (result?['message'] as String?) ?? '';
+        final paidOrderId = result?['orderId'] as String?;
+
+        return success
+            ? PaymentResult.success(
+                message: message.isEmpty ? '支付成功' : message,
+                orderId: paidOrderId ?? orderId,
+              )
+            : PaymentResult.failure(
+                message: message.isEmpty ? '支付失败' : message,
+              );
+      } catch (e, s) {
+        Log.error('微信支付异常: $e\n$s');
+        return PaymentResult.failure(message: '微信支付异常');
+      }
     }
 
-    try {
-      final result = await _channel.invokeMapMethod<String, dynamic>(
-        'startWeChatPay',
-        <String, dynamic>{
-          'amount': amount,
-          'currency': currency,
-          'orderId': orderId,
-          'extra': extra ?? <String, dynamic>{},
-        },
-      );
-
-      final success = result?['success'] == true;
-      final message = (result?['message'] as String?) ?? '';
-      final paidOrderId = result?['orderId'] as String?;
-
-      return success
-          ? PaymentResult.success(
-              message: message.isEmpty ? '支付成功' : message,
-              orderId: paidOrderId ?? orderId,
-            )
-          : PaymentResult.failure(
-              message: message.isEmpty ? '支付失败' : message,
-            );
-    } catch (e, s) {
-      Log.error('微信支付异常: $e\n$s');
-      return PaymentResult.failure(message: '微信支付异常');
+    if (Platform.isAndroid) {
+      try {
+        final payUrl = extra?['payUrl'] as String?;
+        if (payUrl != null && payUrl.isNotEmpty) {
+          return _launchWeChatApp(payUrl, orderId);
+        }
+        return PaymentResult.failure(message: '缺少支付链接');
+      } catch (e, s) {
+        Log.error('微信支付异常: $e\n$s');
+        return PaymentResult.failure(message: '微信支付异常');
+      }
     }
+
+    return PaymentResult.failure(message: '当前平台不支持微信支付');
   }
 
   static Future<PaymentResult> _payWithAlipay({
@@ -273,36 +429,117 @@ class PaymentUtil {
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
-    if (!Platform.isWindows) {
-      return PaymentResult.failure(message: '当前平台不支持支付宝支付');
+    if (Platform.isWindows) {
+      try {
+        final result = await _channel.invokeMapMethod<String, dynamic>(
+          'startAlipayPay',
+          <String, dynamic>{
+            'amount': amount,
+            'currency': currency,
+            'orderId': orderId,
+            'extra': extra ?? <String, dynamic>{},
+          },
+        );
+
+        final success = result?['success'] == true;
+        final message = (result?['message'] as String?) ?? '';
+        final paidOrderId = result?['orderId'] as String?;
+
+        return success
+            ? PaymentResult.success(
+                message: message.isEmpty ? '支付成功' : message,
+                orderId: paidOrderId ?? orderId,
+              )
+            : PaymentResult.failure(
+                message: message.isEmpty ? '支付失败' : message,
+              );
+      } catch (e, s) {
+        Log.error('支付宝支付异常: $e\n$s');
+        return PaymentResult.failure(message: '支付宝支付异常');
+      }
     }
 
+    if (Platform.isAndroid) {
+      try {
+        final payUrl = extra?['payUrl'] as String?;
+        if (payUrl != null && payUrl.isNotEmpty) {
+          return _launchAlipayApp(payUrl, orderId);
+        }
+        return PaymentResult.failure(message: '缺少支付链接');
+      } catch (e, s) {
+        Log.error('支付宝支付异常: $e\n$s');
+        return PaymentResult.failure(message: '支付宝支付异常');
+      }
+    }
+
+    return PaymentResult.failure(message: '当前平台不支持支付宝支付');
+  }
+
+  static Future<PaymentResult> _launchWeChatApp(String payUrl, String orderId) async {
     try {
-      final result = await _channel.invokeMapMethod<String, dynamic>(
-        'startAlipayPay',
-        <String, dynamic>{
-          'amount': amount,
-          'currency': currency,
-          'orderId': orderId,
-          'extra': extra ?? <String, dynamic>{},
-        },
-      );
-
-      final success = result?['success'] == true;
-      final message = (result?['message'] as String?) ?? '';
-      final paidOrderId = result?['orderId'] as String?;
-
-      return success
-          ? PaymentResult.success(
-              message: message.isEmpty ? '支付成功' : message,
-              orderId: paidOrderId ?? orderId,
-            )
-          : PaymentResult.failure(
-              message: message.isEmpty ? '支付失败' : message,
-            );
+      final wechatUrl = Uri.parse(payUrl);
+      
+      if (await canLaunchUrl(wechatUrl)) {
+        await launchUrl(wechatUrl, mode: LaunchMode.externalApplication);
+        Log.info('[PaymentUtil] 已启动微信 App: $payUrl');
+        return PaymentResult.success(
+          message: '请在微信中完成支付',
+          orderId: orderId,
+        );
+      } else {
+        Log.info('[PaymentUtil] 未安装微信 App，尝试通过网页支付');
+        await _showTabletPaymentWebView(payUrl);
+        return PaymentResult.success(
+          message: '请完成网页支付',
+          orderId: orderId,
+        );
+      }
     } catch (e, s) {
-      Log.error('支付宝支付异常: $e\n$s');
-      return PaymentResult.failure(message: '支付宝支付异常');
+      Log.error('[PaymentUtil] 启动微信失败: $e\n$s');
+      try {
+        await _showTabletPaymentWebView(payUrl);
+        return PaymentResult.success(
+          message: '请完成网页支付',
+          orderId: orderId,
+        );
+      } catch (webError) {
+        Log.error('[PaymentUtil] 网页支付也失败: $webError');
+        return PaymentResult.failure(message: '无法启动微信，请检查是否安装微信 App');
+      }
+    }
+  }
+
+  static Future<PaymentResult> _launchAlipayApp(String payUrl, String orderId) async {
+    try {
+      final alipayUrl = Uri.parse(payUrl);
+      
+      if (await canLaunchUrl(alipayUrl)) {
+        await launchUrl(alipayUrl, mode: LaunchMode.externalApplication);
+        Log.info('[PaymentUtil] 已启动支付宝 App: $payUrl');
+        return PaymentResult.success(
+          message: '请在支付宝中完成支付',
+          orderId: orderId,
+        );
+      } else {
+        Log.info('[PaymentUtil] 未安装支付宝 App，尝试通过网页支付');
+        await _showTabletPaymentWebView(payUrl);
+        return PaymentResult.success(
+          message: '请完成网页支付',
+          orderId: orderId,
+        );
+      }
+    } catch (e, s) {
+      Log.error('[PaymentUtil] 启动支付宝失败: $e\n$s');
+      try {
+        await _showTabletPaymentWebView(payUrl);
+        return PaymentResult.success(
+          message: '请完成网页支付',
+          orderId: orderId,
+        );
+      } catch (webError) {
+        Log.error('[PaymentUtil] 网页支付也失败: $webError');
+        return PaymentResult.failure(message: '无法启动支付宝，请检查是否安装支付宝 App');
+      }
     }
   }
 
