@@ -112,7 +112,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       (user) async {
         if (mounted) {
           setState(() => _userProfile = user);
-          _loadSubscriptionInfo();
+          await _loadSubscriptionInfo();
         }
       },
       (error) => Log.error('Failed to get user: ${error.msg}'),
@@ -875,11 +875,12 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (workspaceUsage != null)
-                        Row(
+                      Row(
                           children: [
                             Text(
-                              '${workspaceUsage!.currentBlobInGb}G / ${workspaceUsage!.totalBlobInGb}G',
+                              workspaceUsage != null
+                                  ? '${workspaceUsage!.totalBlobInGb}GB / ${((workspaceUsage!.storageBytesLimit.toInt() - workspaceUsage!.storageBytes.toInt()) / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB'
+                                  : '加载中...',
                               style: const TextStyle(
                                 color: Colors.black,
                                 fontSize: 14,
@@ -912,9 +913,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                               ),
                             ),
                           ],
-                        )
-                      else
-                        const SizedBox(),
+                        ),
                       GestureDetector(
                         onTap: onUpgrade,
                         child: Container(

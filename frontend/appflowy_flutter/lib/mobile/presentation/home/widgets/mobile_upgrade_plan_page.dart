@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/env/cloud_env.dart';
@@ -11,6 +12,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import 'mobile_recharge_records_page.dart';
 import 'mobile_upgrade_plan_card.dart';
@@ -40,6 +42,15 @@ class _PlanConfig {
 }
 
 enum _BillingPeriod { monthly, yearly }
+
+String _formatStorage(int? cloudStorageGb) {
+  if (cloudStorageGb == null) return '';
+  if (cloudStorageGb >= 1024) {
+    return '${(cloudStorageGb / 1024).toStringAsFixed(1)}TB';
+  } else {
+    return '${cloudStorageGb}GB';
+  }
+}
 
 class MobileUpgradePlanPage extends StatefulWidget {
   const MobileUpgradePlanPage({
@@ -142,21 +153,158 @@ class _UpgradePlanBody extends StatefulWidget {
   State<_UpgradePlanBody> createState() => _UpgradePlanBodyState();
 }
 
+class _RemotePlanInfo {
+  final int? cloudStorageGb;
+  final int? collaborativeWorkspaceLimit;
+  final int? aiChatCountPerMonth;
+
+  const _RemotePlanInfo({
+    this.cloudStorageGb,
+    this.collaborativeWorkspaceLimit,
+    this.aiChatCountPerMonth,
+  });
+
+  factory _RemotePlanInfo.fromJson(Map<String, dynamic> json) {
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString());
+    }
+
+    return _RemotePlanInfo(
+      cloudStorageGb: parseInt(json['cloud_storage_gb']),
+      collaborativeWorkspaceLimit:
+          parseInt(json['collaborative_workspace_limit']),
+      aiChatCountPerMonth: parseInt(json['ai_chat_count_per_month']),
+    );
+  }
+}
+
 class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
-  int _selectedPlanIndex = 2; // 默认选中专业版（第3个）
+  int _selectedPlanIndex = 2;
   bool _isProcessingPayment = false;
   PaymentMethod? _selectedPaymentMethod;
+  Map<String, _RemotePlanInfo> _remotePlanInfos = {};
 
   static const _plans = [
     _PlanConfig('student', '学生版', 5.0, 50.0, '1GB', '3个', '50次/月',
-        Color(0xFFFFFFFF), Color(0xFF2EACB2)),
+        Color(0xFFFFFFFF), Color(0xFF2EACB2),),
     _PlanConfig('standard', '标准版', 9.0, 99.0, '10GB', '5个工作区', '300次/月',
-        Color(0xFFF9D8A7), Color(0xFF343543)),
+        Color(0xFFF9D8A7), Color(0xFF343543),),
     _PlanConfig('pro', '专业版', 15.0, 158.0, '50GB', '10个工作区', '1200次/月',
-        Color(0xFFFFE4C4), Color(0xFF371A0D)),
+        Color(0xFFFFE4C4), Color(0xFF371A0D),),
     _PlanConfig('premium', '高级版', 29.0, 298.0, '150GB', '18个工作区', '3000次/月',
-        Color(0xFFADD8E6), Color(0xFF1E3A5F)),
+        Color(0xFFADD8E6), Color(0xFF1E3A5F),),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRemotePlanInfo();
+  }
+
+  Future<void> _loadRemotePlanInfo() async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        Log.warn('订阅计划接口 baseUrl 为空，使用本地默认配置');
+        return;
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold((user) => user, (_) => null);
+      if (userProfile == null) {
+        Log.warn('无法获取用户信息，使用本地默认配置');
+        return;
+      }
+
+      String? accessToken;
+      try {
+        final decoded = jsonDecode(userProfile.token);
+        if (decoded is Map<String, dynamic>) {
+          accessToken = decoded['access_token'] as String?;
+        }
+      } catch (_) {
+        accessToken = userProfile.token;
+      }
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.warn('订阅计划接口无法获取 access_token，使用本地默认配置');
+        return;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(path: 'api/subscription/plans');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        Log.warn(
+            '订阅计划接口返回非 200: ${response.statusCode}, body: ${response.body}');
+        return;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      if (code != 0) {
+        Log.warn('订阅计划接口返回错误 code=$code');
+        return;
+      }
+
+      final data = decoded['data'];
+      if (data is! List) {
+        Log.warn('订阅计划接口 data 非数组');
+        return;
+      }
+
+      final Map<String, _RemotePlanInfo> remoteInfos = {};
+      for (final item in data) {
+        if (item is! Map<String, dynamic>) continue;
+        final planCode = item['plan_code'] as String?;
+        if (planCode == null || planCode.isEmpty) continue;
+        remoteInfos[planCode.toLowerCase()] = _RemotePlanInfo.fromJson(item);
+      }
+
+      if (mounted) {
+        setState(() => _remotePlanInfos = remoteInfos);
+      }
+    } catch (e) {
+      Log.error('加载远程计划信息失败: $e');
+    }
+  }
+
+  _PlanConfig _getPlanWithRemoteInfo(_PlanConfig plan) {
+    final remoteInfo = _remotePlanInfos[plan.id.toLowerCase()] ??
+        _remotePlanInfos[plan.name.toLowerCase()];
+
+    if (remoteInfo == null) return plan;
+
+    final storage = remoteInfo.cloudStorageGb != null
+        ? _formatStorage(remoteInfo.cloudStorageGb)
+        : plan.storage;
+    final workspaces = remoteInfo.collaborativeWorkspaceLimit != null
+        ? '${remoteInfo.collaborativeWorkspaceLimit}个工作区'
+        : plan.workspaces;
+    final aiQuota = remoteInfo.aiChatCountPerMonth != null
+        ? '${remoteInfo.aiChatCountPerMonth}次/月'
+        : plan.aiQuota;
+
+    return _PlanConfig(
+      plan.id,
+      plan.name,
+      plan.priceMonthly,
+      plan.priceAnnual,
+      storage,
+      workspaces,
+      aiQuota,
+      plan.priceColor,
+      plan.priceBgColor,
+    );
+  }
 
   Future<void> _confirmAndPay() async {
     final plan = _plans[_selectedPlanIndex];
@@ -428,67 +576,30 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          UpgradePlanCard(
-            planName: '学生版',
-            priceMonthly: '¥5',
-            priceAnnual: '¥50',
-            storage: '1GB',
-            workspaces: '3个',
-            aiQuota: '50次/月',
-            priceColor: const Color(0xFFFFFFFF),
-            priceBgColor: const Color(0xFF2EACB2),
-            isYearly: widget.billingPeriod == _BillingPeriod.yearly,
-            isSelected: _selectedPlanIndex == 0,
-            onTap: () => setState(() => _selectedPlanIndex = 0),
-          ),
-          const SizedBox(width: 12),
-          UpgradePlanCard(
-            planName: '标准版',
-            priceMonthly: '¥9',
-            priceAnnual: '¥99',
-            storage: '10GB',
-            workspaces: '5个工作区',
-            aiQuota: '300次/月',
-            priceColor: const Color(0xFFF9D8A7),
-            priceBgColor: const Color(0xFF343543),
-            priceColor2: Colors.white,
-            isYearly: widget.billingPeriod == _BillingPeriod.yearly,
-            isSelected: _selectedPlanIndex == 1,
-            onTap: () => setState(() => _selectedPlanIndex = 1),
-          ),
-          const SizedBox(width: 12),
-          UpgradePlanCard(
-            planName: '专业版',
-            priceMonthly: '¥15',
-            priceAnnual: '¥158',
-            storage: '50GB',
-            workspaces: '10个工作区',
-            aiQuota: '1200次/月',
-            priceColor: const Color(0xFFFFE4C4),
-            priceBgColor: const Color(0xFF371A0D),
-            priceColor2: const Color(0xFFF9D8A7),
-            isHighlighted: true,
-            isYearly: widget.billingPeriod == _BillingPeriod.yearly,
-            isSelected: _selectedPlanIndex == 2,
-            onTap: () => setState(() => _selectedPlanIndex = 2),
-          ),
-          const SizedBox(width: 12),
-          UpgradePlanCard(
-            planName: '高级版',
-            priceMonthly: '¥29',
-            priceAnnual: '¥298',
-            storage: '150GB',
-            workspaces: '18个工作区',
-            aiQuota: '3000次/月',
-            priceColor: const Color(0xFFADD8E6),
-            priceBgColor: const Color(0xFF1E3A5F),
-            priceColor2: const Color(0xFFF9D8A7),
-            isYearly: widget.billingPeriod == _BillingPeriod.yearly,
-            isSelected: _selectedPlanIndex == 3,
-            onTap: () => setState(() => _selectedPlanIndex = 3),
-          ),
+          for (int i = 0; i < _plans.length; i++) ...[
+            _buildPlanCard(_getPlanWithRemoteInfo(_plans[i]), i),
+            if (i < _plans.length - 1) const SizedBox(width: 12),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPlanCard(_PlanConfig plan, int index) {
+    return UpgradePlanCard(
+      planName: plan.name,
+      priceMonthly: '¥${plan.priceMonthly.toInt()}',
+      priceAnnual: '¥${plan.priceAnnual.toInt()}',
+      storage: plan.storage,
+      workspaces: plan.workspaces,
+      aiQuota: plan.aiQuota,
+      priceColor: plan.priceColor,
+      priceBgColor: plan.priceBgColor,
+      priceColor2: index == 1 ? Colors.white : (index >= 2 ? const Color(0xFFF9D8A7) : null),
+      isHighlighted: index == 2,
+      isYearly: widget.billingPeriod == _BillingPeriod.yearly,
+      isSelected: _selectedPlanIndex == index,
+      onTap: () => setState(() => _selectedPlanIndex = index),
     );
   }
 
