@@ -143,7 +143,11 @@
     "verifying": "验证中...",
     "youAreInLocalMode": "您当前处于本地模式",
     "signInWithWeChat": "继续使用微信登录",
-    "signInWithDouYin": "继续使用抖音登录"
+    "signInWithDouYin": "继续使用抖音登录",
+    "weChatNotInstalledTitle": "未检测到微信客户端",
+    "weChatNotInstalledMessage": "请先在手机上安装微信，然后再次尝试登录。如微信已安装，请尝试重启本应用后再试。",
+    "douYinNotInstalledTitle": "未检测到抖音客户端",
+    "douYinNotInstalledMessage": "请先在手机上安装抖音，然后再次尝试登录。"
   },
   "workspace": {
     "chooseWorkspace": "选择您的工作区",
@@ -3318,7 +3322,7 @@
     "criticalUpdateTitle": "需要更新才能使用",
     "criticalUpdateDescription": "我们已进行改进以提升您的体验！ 请从 {currentVersion} 更新至 {newVersion} 以继续使用应用程序。",
     "criticalUpdateButton": "更新",
-    "bannerUpdateTitle": "新版本发布",
+    "bannerUpdateTitle": "新版本发布!",
     "bannerUpdateDescription": "取得最新功能和修复。点击「更新」即可立即安装",
     "bannerUpdateButton": "更新",
     "settingsUpdateTitle": "版本 ({newVersion}) 可用!",

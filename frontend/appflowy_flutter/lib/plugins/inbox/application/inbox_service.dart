@@ -85,6 +85,23 @@ class InboxService {
     final payload = notification['payload'] as Map<String, dynamic>? ?? {};
     final createdAt = _parseCreatedAt(notification['created_at'] as String?);
 
+    // 注意:ReminderPB.meta 是 $pb.PbMap<String, String>,其构造器参数期望
+    // Iterable<MapEntry<String, String>>,而不是普通 Map<String, String>。
+    // Flutter 3.35 (Dart 3.8+) 对 map literal 与 spread 表达式在
+    // 模糊类型推断时报 ambiguous,因此显式构造 MapEntry 列表传入。
+    final metaEntries = <MapEntry<String, String>>[
+      MapEntry<String, String>(
+        'notification_type',
+        notificationType == 'mention' ? 'mention' : 'system',
+      ),
+      MapEntry<String, String>('cloud_notification_type', notificationType),
+      MapEntry<String, String>('payload', jsonEncode(payload)),
+      MapEntry<String, String>(
+        'created_at',
+        createdAt.millisecondsSinceEpoch.toString(),
+      ),
+    ];
+
     return ReminderPB(
       id: id,
       objectId: (notification['workspace_id'] as String?) ?? '',
@@ -93,13 +110,7 @@ class InboxService {
       isRead: (notification['is_read'] as bool?) ?? false,
       title: (payload['title'] as String?) ?? _defaultTitle(notificationType),
       message: (payload['message'] as String?) ?? '',
-      meta: {
-        'notification_type':
-            notificationType == 'mention' ? 'mention' : 'system',
-        'cloud_notification_type': notificationType,
-        'payload': jsonEncode(payload),
-        'created_at': createdAt.millisecondsSinceEpoch.toString(),
-      },
+      meta: metaEntries,
     );
   }
 

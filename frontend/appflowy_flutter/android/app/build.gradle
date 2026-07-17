@@ -82,6 +82,9 @@ android {
        }
     }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
         release {
             signingConfig signingConfigs.release
         }
@@ -94,5 +97,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-    implementation 'com.tencent.mm.opensdk:wechat-sdk-android:6.8.24'
+    // 微信 SDK：6.8.38（最新稳定版）
+    // Android 14/15 的 PendingIntent BAL opt-in 应由 SDK 6.8.34+ 内置处理，
+    // 因此我们改回用 wxApi.sendReq() 走 SDK 内部的 MMessageActV2 流程，不再手动绕过。
+    implementation 'com.tencent.mm.opensdk:wechat-sdk-android:6.8.38'
 }

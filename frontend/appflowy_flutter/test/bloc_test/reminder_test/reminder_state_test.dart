@@ -14,7 +14,11 @@ ReminderPB reminder({
       scheduledAt: Int64(DateTime.now()
           .subtract(const Duration(minutes: 1))
           .millisecondsSinceEpoch),
-      meta: isGlobal ? {'cloud_notification_type': 'collab_shared'} : {},
+      meta: isGlobal
+          ? const [
+              MapEntry<String, String>('cloud_notification_type', 'collab_shared'),
+            ]
+          : const <MapEntry<String, String>>[],
     );
 
 void main() {

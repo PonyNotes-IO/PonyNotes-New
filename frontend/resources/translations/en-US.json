@@ -137,7 +137,11 @@
     "backToModifyContact": "Back to modify contact",
     "backToOtherLoginMethods": "Back to other login methods",
     "signInWithWeChat": "Continue with WeChat",
-    "signInWithDouYin": "Continue with Douyin"
+    "signInWithDouYin": "Continue with Douyin",
+    "weChatNotInstalledTitle": "WeChat not detected",
+    "weChatNotInstalledMessage": "Please install WeChat on your device and try again. If WeChat is already installed, restart this app and try once more.",
+    "douYinNotInstalledTitle": "Douyin not detected",
+    "douYinNotInstalledMessage": "Please install Douyin on your device and try again."
   },
   "workspace": {
     "chooseWorkspace": "Choose your workspace",

@@ -883,18 +883,42 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 1. 获取微信授权码
     final codeResult = await WeChatLoginService.instance.getAuthorizationCode();
-    
+
     await codeResult.fold(
       (code) async {
         await _completeWeChatLogin(emit, code);
       },
       (error) {
+        // 用户主动取消微信授权对话框是正常流程，不应作为错误提示。
+        // WeChatLoginService 在检测到取消时返回以 "CANCELLED:" 开头的失败信息。
+        if (error.startsWith(WeChatLoginService.cancelledPrefix)) {
+          Log.info('🟢[SignInBloc] WeChat login cancelled by user, reset to idle state');
+          emit(
+            state.copyWith(
+              isSubmitting: false,
+              emailError: null,
+              passwordError: null,
+              successOrFail: null,
+            ),
+          );
+          return;
+        }
         Log.error('🟢[SignInBloc] Failed to get WeChat authorization code: $error');
+
+        // 区分「未安装微信」和其它错误：前者用专属引导文案，避免出现
+        // "出现错误，请稍后再试" 这种让用户摸不着头脑的通用提示。
+        String userMessage;
+        if (error == WeChatLoginService.notInstalledError) {
+          userMessage = LocaleKeys.signIn_weChatNotInstalledMessage.tr();
+        } else {
+          userMessage = LocaleKeys.signIn_generalError.tr();
+        }
+
         emit(
-          _stateFromCode(
+          _stateFromCodeWithMessage(
             FlowyError.create()
               ..code = ErrorCode.Internal
-              ..msg = error,
+              ..msg = userMessage,
           ),
         );
       },
@@ -1008,11 +1032,20 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       },
       (error) {
         Log.error('🟢[SignInBloc] Failed to get DouYin authorization code: $error');
+
+        // 区分「未安装抖音」和其它错误：前者用专属引导文案。
+        String userMessage;
+        if (error == DouYinLoginService.notInstalledError) {
+          userMessage = LocaleKeys.signIn_douYinNotInstalledMessage.tr();
+        } else {
+          userMessage = LocaleKeys.signIn_generalError.tr();
+        }
+
         emit(
-          _stateFromCode(
+          _stateFromCodeWithMessage(
             FlowyError.create()
               ..code = ErrorCode.Internal
-              ..msg = error,
+              ..msg = userMessage,
           ),
         );
       },
@@ -1135,6 +1168,21 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           ),
         );
     }
+  }
+
+  /// 与 [_stateFromCode] 类似，但跳过 Email/PasswordFormatInvalid 这种会
+  /// 把 error.msg 写到 emailError/passwordError 字段的分支，直接把 msg 当作
+  /// 显示给用户看的 toast 来呈现。
+  ///
+  /// 用于第三方登录（如微信 / 抖音）场景：传入的错误类型是 ErrorCode.Internal
+  /// 但 msg 已经是经过挑选的友好文案（例如「未安装微信」），不应再被通用分支
+  /// 覆盖。
+  SignInState _stateFromCodeWithMessage(FlowyError error) {
+    Log.error('SignInState _stateFromCodeWithMessage: ${error.msg}');
+    return state.copyWith(
+      isSubmitting: false,
+      successOrFail: FlowyResult.failure(FlowyError(msg: error.msg)),
+    );
   }
 }
 

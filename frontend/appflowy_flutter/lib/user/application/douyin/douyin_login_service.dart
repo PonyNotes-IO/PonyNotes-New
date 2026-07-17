@@ -27,6 +27,12 @@ class DouYinLoginService {
   String _initState = "none";
   String _code = "";
 
+  /// Sentinel value returned in [getAuthorizationCode] when the device does not
+  /// have the Douyin app installed. Callers (e.g. SignInBloc) match this
+  /// exact string to display a friendly installation hint instead of the
+  /// generic error toast.
+  static const String notInstalledError = 'Douyin is not installed on this device';
+
   /// Gets the authorization code from DouYin
   /// 
   /// Returns the authorization code that can be used to exchange for access token
@@ -65,7 +71,7 @@ class DouYinLoginService {
       // 2. Check if DouYin is installed
       final isInstalled = await isDouYinInstalled();
       if (!isInstalled) {
-        return FlowyResult.failure('DouYin is not installed on this device');
+        return FlowyResult.failure(notInstalledError);
       }
 
       // 3. Set up event listener for login response

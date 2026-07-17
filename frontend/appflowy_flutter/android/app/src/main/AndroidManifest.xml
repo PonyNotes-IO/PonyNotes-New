@@ -66,6 +66,16 @@
     <meta-data android:name="io.flutter.embedding.android.EnableImpeller"
       android:value="false" />
 
+    <!-- WeChat 微信登录回调 Activity：微信 SDK 完成授权后会回调这个 Activity
+         必须使用与 SDK 文档一致的 taskAffinity，否则在 Android 14+ 上拉不起微信 -->
+    <activity
+        android:name=".wechat.WXEntryActivity"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:taskAffinity="${applicationId}.wxapi"
+        android:excludeFromRecents="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
     <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
     <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
       <intent-filter>
@@ -80,13 +90,7 @@
         android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
         android:exported="false"
         android:stopWithTask="false"/>
-    
-    <!-- WeChat SDK Configuration -->
-    <activity
-        android:name=".wxapi.WXEntryActivity"
-        android:exported="true"
-        android:launchMode="singleTop"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
   </application>
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

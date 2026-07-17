@@ -185,6 +185,8 @@ dependencies:
   in_app_purchase: ^3.2.3
   decimal: ^2.3.0
   # WeChat SDK
+  # 注意:fluwx 仅在 iOS 端使用 (Android 端因腾讯 SDK 6.8.34 的 PendingIntent bug,
+  # 改用 MainActivity.kt 内自写的 WeChatBridge 通过 MethodChannel 调用)
   fluwx: ^5.7.5
   douyin_login: ^1.0.6
   # Check if app is installed
