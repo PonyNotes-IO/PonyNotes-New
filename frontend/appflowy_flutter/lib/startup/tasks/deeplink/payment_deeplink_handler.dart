@@ -11,7 +11,10 @@ import 'package:flutter/material.dart';
 class PaymentDeepLinkHandler extends DeepLinkHandler {
   @override
   bool canHandle(Uri uri) {
-    return uri.host == 'payment-success';
+    return uri.host == 'payment-success' ||
+           (uri.scheme == 'https' && 
+            (uri.host == 'www.xiaomabiji.com' || uri.host == 'www.xiaomabiji.io') &&
+            uri.path.startsWith('/payment-success'));
   }
 
   @override
