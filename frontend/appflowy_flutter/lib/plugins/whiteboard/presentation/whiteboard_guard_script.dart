@@ -6,8 +6,10 @@
 /// 且页面在"画布为空 + 房间已连接"状态下 20 秒后会把空场景回写，覆盖服务器已有内容。
 ///
 /// 本脚本在客户端 WebView 内提供三层防护，使客户端编辑达到与浏览器一致的持久化效果：
-/// 1. 兜底保存：每 3 秒检测场景版本变化，直接调用页面内部 Collab.saveCollabRoomToFirebase
-///    强制保存（不依赖页面自身的 onChange 管线）；pagehide/visibilitychange 时同样触发；
+/// 1. 改动防抖保存：短轮询检测场景版本变化，改动后 ~500ms 防抖直接调用页面内部
+///    Collab.saveCollabRoomToFirebase 强制保存（不依赖页面自身的 onChange 管线），
+///    把"最后一笔编辑未保存窗口"从 3 秒缩小到 <1 秒；另有每 5 秒兜底轮询防漏检；
+///    pagehide/visibilitychange 时同样触发；
 /// 2. 空场景防覆盖：拦截页面的 fetch，阻断 sceneVersion=0 的空场景 POST 覆盖服务器非空内容；
 /// 3. 对外暴露 window.__xmForceSave(reason)，供 Flutter 侧在销毁 WebView 前触发退出保存。
 ///
@@ -134,9 +136,11 @@ const String whiteboardGuardScript = r'''
     return null;
   }
 
-  // ---- 第 1 层：版本变化检测 + 兜底保存 ----
-  var lastSavedVersion = -1;
-  var saving = false;
+  // ---- 第 1 层：改动防抖保存（改动后 ~500ms 防抖，缩小未保存窗口）----
+  var lastSavedVersion = -1;   // 已成功落盘的版本
+  var lastSeenVersion = -1;    // 上一次轮询看到的版本（用于检测改动）
+  var savingPromise = null;    // 进行中的保存链（null 表示空闲），用于串行化，flush 时不漏最后一笔
+  var debounceTimer = null;
 
   function sceneVersion(els) {
     var s = 0;
@@ -144,8 +148,8 @@ const String whiteboardGuardScript = r'''
     return s;
   }
 
-  function forceSave(reason) {
-    if (saving) return Promise.resolve(false);
+  // 真正执行一次保存（原有"不推空"守卫与非空正常保存流程逻辑零改动）
+  function doSaveOnce(reason) {
     var c = findCollab();
     if (!c || !c.excalidrawAPI) return Promise.resolve(false);
     var els, liveCount, v;
@@ -171,7 +175,6 @@ const String whiteboardGuardScript = r'''
       console.warn('[XMGuard] 跳过强制保存：当前画布为空(活元素0)，不覆盖协作内容 原因=' + reason);
       return Promise.resolve(false);
     }
-    saving = true;
     return Promise.resolve(c.saveCollabRoomToFirebase(els)).then(function () {
       lastSavedVersion = v;
       log('兜底保存成功 version=' + v + ' 元素数=' + els.length + ' 原因=' + reason);
@@ -180,15 +183,59 @@ const String whiteboardGuardScript = r'''
     }).catch(function (e) {
       console.warn('[XMGuard] 兜底保存失败: ' + (e && e.message));
       return false;
-    }).finally(function () {
-      saving = false;
     });
   }
 
-  // ---- 第 3 层：暴露给 Flutter 侧的退出保存入口 ----
+  // 串行化保存：若已有保存在进行，链在其后再存一次，保证捕获最新版本
+  // （切走白板 flush 时即便有防抖保存正在进行，也不会漏掉最后一笔改动）
+  function forceSave(reason) {
+    if (savingPromise) {
+      savingPromise = savingPromise.then(function () { return doSaveOnce(reason); });
+    } else {
+      savingPromise = doSaveOnce(reason);
+    }
+    var p = savingPromise;
+    var clear = function () { if (savingPromise === p) savingPromise = null; };
+    p.then(clear, clear);
+    return p;
+  }
+
+  // 改动检测 → 500ms 防抖保存：连续绘制不断重置计时，停手 ~500ms 后保存一次
+  function scheduleDebouncedSave() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function () {
+      debounceTimer = null;
+      forceSave('debounce');
+    }, 500);
+  }
+
+  function currentVersion() {
+    var c = findCollab();
+    if (!c || !c.excalidrawAPI) return -1;
+    try {
+      return sceneVersion(c.excalidrawAPI.getSceneElementsIncludingDeleted());
+    } catch (e) {
+      return -1;
+    }
+  }
+
+  // ---- 第 3 层：暴露给 Flutter 侧的退出保存入口（返回 Promise，保存真正完成后 resolve）----
   window.__xmForceSave = forceSave;
 
-  setInterval(function () { forceSave('interval'); }, 3000);
+  // 短轮询检测场景版本变化（发现改动即启动/重置 500ms 防抖）
+  setInterval(function () {
+    var v = currentVersion();
+    if (v < 0) return;
+    if (lastSeenVersion === -1) { lastSeenVersion = v; return; }
+    if (v !== lastSeenVersion) {
+      lastSeenVersion = v;
+      scheduleDebouncedSave();
+    }
+  }, 300);
+
+  // 兜底轮询：防止漏检，每 5 秒强制冲刷一次（主保存仍靠防抖）
+  setInterval(function () { forceSave('interval-fallback'); }, 5000);
+
   window.addEventListener('pagehide', function () { forceSave('pagehide'); });
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') forceSave('visibilitychange');

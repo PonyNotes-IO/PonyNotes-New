@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
 import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/util.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/expand_views.dart';
@@ -85,6 +86,15 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   void _dispatch() {
     on<TabsEvent>(
       (event, emit) async {
+        // 【慢机器多人协作丢最后编辑修复】切换/关闭标签会同步 dispose 当前 plugin
+        // （含 A 套协作白板 RemoteWhiteboardPage 的 InAppWebView）。在真正 emit
+        // 触发 dispose 之前，先 await 一次已挂载协作白板的退出冲刷保存（各自带 2s
+        // 超时兜底），把最后一小段编辑推到协作服务器，避免慢机器上 WebView 被销毁前
+        // 保存尚未完成而丢内容。未改动的白板会因"版本未变"守卫快速返回，几乎零开销。
+        if (WhiteboardExitFlush.instance.hasActive &&
+            _willTearDownActivePlugin(event)) {
+          await WhiteboardExitFlush.instance.flushAll();
+        }
         // event.when 内部启动的异步回调(goBackToPreviousView)不会被 on handler
         // 顶层 await,bloc 会立即认为 handler 完成 → emit.isDone = true →
         // 异步回调里的 await 之后所有逻辑被 abort。所以在这里显式 await。
@@ -309,6 +319,21 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
           await pendingAsync;
         }
       },
+    );
+  }
+
+  /// 判断事件是否会同步销毁/替换当前已挂载的 plugin
+  /// （进而 dispose 其中的协作白板 WebView，需要先冲刷保存）。
+  bool _willTearDownActivePlugin(TabsEvent event) {
+    return event.maybeWhen(
+      openTab: (_, __) => true,
+      openPlugin: (_, __, ___) => true,
+      closeTab: (_) => true,
+      closeCurrentTab: () => true,
+      closeOtherTabs: (_) => true,
+      goBackToPreviousView: () => true,
+      switchWorkspace: (_) => true,
+      orElse: () => false,
     );
   }
 

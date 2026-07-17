@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -36,14 +38,21 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   @override
   void initState() {
     super.initState();
+    // 【慢机器丢最后编辑修复】注册"切走前冲刷保存"回调，供上游 TabsBloc 在真正
+    // dispose 本页前 await（保证最后一次保存在 WebView 销毁前完成或超时）。
+    // 用本 State 实例作为 key，避免同一 viewId 新旧页面重建时互相误删注册项。
+    WhiteboardExitFlush.instance.register(this, _flushSave);
     _loadUserNickname();
   }
 
   @override
   void dispose() {
-    // 【白板丢内容修复】销毁 WebView 前尽力触发一次退出保存（dispose 为同步方法，
-    // 无法 await；即使本调用未及执行，守护脚本每 3 秒的兜底保存也已把丢失窗口
-    // 压缩到最近 3 秒以内）
+    // 注销冲刷回调（本页已销毁，不再参与上游冲刷）
+    WhiteboardExitFlush.instance.unregister(this);
+    // 【白板丢内容修复】销毁 WebView 前再尽力触发一次退出保存作为兜底：
+    // 正常切换/关闭标签已由上游 TabsBloc await _flushSave 完成冲刷；此处覆盖
+    // 少数不经 TabsBloc 的销毁路径（如应用关闭、路由异常）。dispose 为同步方法、
+    // 无法 await，配合守护脚本的 500ms 防抖保存，丢失窗口已压缩到 <1 秒。
     _controller?.evaluateJavascript(
       source: 'window.__xmForceSave && window.__xmForceSave("dispose");',
     ).catchError((e) {
@@ -51,6 +60,27 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
       return null;
     });
     super.dispose();
+  }
+
+  /// 切走白板前的"冲刷保存"：触发退出保存并等待其真正完成，最多等待 2 秒。
+  ///
+  /// 使用 callAsyncJavaScript 直接 await 页面内 __xmForceSave 返回的 Promise
+  /// （该 Promise 在 saveCollabRoomToFirebase 真正落盘后才 resolve），从而在
+  /// WebView 被销毁前把最后一小段编辑推到协作服务器。超时兜底确保绝不卡住 UI。
+  Future<void> _flushSave() async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      await controller.callAsyncJavaScript(
+        functionBody:
+            'return await (window.__xmForceSave ? window.__xmForceSave("flush") : false);',
+      ).timeout(const Duration(seconds: 2));
+      Log.info('[RemoteWhiteboard] 切走前冲刷保存完成 view=${widget.view.id}');
+    } on TimeoutException {
+      Log.warn('[RemoteWhiteboard] 切走前冲刷保存超时(2s)，继续销毁 view=${widget.view.id}');
+    } catch (e) {
+      Log.warn('[RemoteWhiteboard] 切走前冲刷保存失败: $e');
+    }
   }
 
   Future<void> _loadUserNickname() async {
