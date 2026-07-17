@@ -14,6 +14,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -47,8 +48,7 @@ class MobileSpace extends StatelessWidget {
               MobileSpaceSection(
                 title: LocaleKeys.space_privateSpace.tr(),
                 spaces: privateSpaces,
-                isExpanded: state.isExpanded,
-                onHeaderPressed: () => _showSpaceMenu(context),
+                spaceType: FolderSpaceType.private,
                 onAddPressed: () => _showCreatePageMenu(
                   context,
                   privateSpaces.isNotEmpty
@@ -64,8 +64,7 @@ class MobileSpace extends StatelessWidget {
               MobileSpaceSection(
                 title: LocaleKeys.sideBar_workspace.tr(),
                 spaces: publicSpaces,
-                isExpanded: state.isExpanded,
-                onHeaderPressed: () => _showSpaceMenu(context),
+                spaceType: FolderSpaceType.public,
                 onAddPressed: () => _showCreatePageMenu(
                   context,
                   publicSpaces.isNotEmpty
@@ -79,8 +78,7 @@ class MobileSpace extends StatelessWidget {
               MobileSpaceSection(
                 title: LocaleKeys.space_mySpace.tr(),
                 spaces: publicSpaces,
-                isExpanded: state.isExpanded,
-                onHeaderPressed: () => _showSpaceMenu(context),
+                spaceType: FolderSpaceType.public,
                 onAddPressed: () => _showCreatePageMenu(
                   context,
                   publicSpaces.isNotEmpty
@@ -91,34 +89,6 @@ class MobileSpace extends StatelessWidget {
               ),
             ],
           ],
-        );
-      },
-    );
-  }
-
-  void _showSpaceMenu(BuildContext context) {
-    showMobileBottomSheet(
-      context,
-      showDivider: false,
-      showHeader: true,
-      showDragHandle: true,
-      showCloseButton: true,
-      showDoneButton: true,
-      useRootNavigator: true,
-      title: LocaleKeys.space_title.tr(),
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      enableScrollable: true,
-      bottomSheetPadding: context.bottomSheetPadding(),
-      builder: (_) {
-        return MultiBlocProvider(
-          providers: [
-            BlocProvider.value(value: context.read<SpaceBloc>()),
-            BlocProvider.value(value: context.read<UserWorkspaceBloc>()),
-          ],
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: MobileSpaceMenu(),
-          ),
         );
       },
     );
@@ -163,16 +133,14 @@ class MobileSpaceSection extends StatelessWidget {
     super.key,
     required this.title,
     required this.spaces,
-    required this.isExpanded,
-    required this.onHeaderPressed,
+    required this.spaceType,
     required this.onAddPressed,
     required this.favoriteBloc,
   });
 
   final String title;
   final List<ViewPB> spaces;
-  final bool isExpanded;
-  final VoidCallback onHeaderPressed;
+  final FolderSpaceType spaceType;
   final VoidCallback onAddPressed;
   final FavoriteBloc favoriteBloc;
 
@@ -182,47 +150,58 @@ class MobileSpaceSection extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final borderColor = Theme.of(context).isLightMode
-        ? const Color(0xFFE9E9EC)
-        : const Color(0x1AFFFFFF);
+    return BlocProvider<FolderBloc>(
+      create: (context) => FolderBloc(type: spaceType)
+        ..add(const FolderEvent.initial()),
+      child: BlocBuilder<FolderBloc, FolderState>(
+        builder: (context, state) {
+          final borderColor = Theme.of(context).isLightMode
+              ? const Color(0xFFE9E9EC)
+              : const Color(0x1AFFFFFF);
 
-    return Column(
-      children: [
-        MobileSpaceSectionHeader(
-          title: title,
-          onPressed: onHeaderPressed,
-          onAdded: onAddPressed,
-        ),
-        if (isExpanded)
-          Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: HomeSpaceViewSizes.mHorizontalPadding,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor, width: 0.5),
-            ),
-            child: Column(
-              children: [
-                for (int i = 0; i < spaces.length; i++) ...[
-                  if (i > 0)
-                    Divider(
-                      height: 0.5,
-                      thickness: 0.5,
-                      color: borderColor,
-                      indent: HomeSpaceViewSizes.mHorizontalPadding,
-                      endIndent: HomeSpaceViewSizes.mHorizontalPadding,
-                    ),
-                  _SpaceItem(
-                    space: spaces[i],
-                    favoriteBloc: favoriteBloc,
+          return Column(
+            children: [
+              MobileSpaceSectionHeader(
+                title: title,
+                isExpanded: state.isExpanded,
+                onPressed: () => context
+                    .read<FolderBloc>()
+                    .add(const FolderEvent.expandOrUnExpand()),
+                onAdded: onAddPressed,
+              ),
+              if (state.isExpanded)
+                Container(
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: HomeSpaceViewSizes.mHorizontalPadding,
                   ),
-                ],
-              ],
-            ),
-          ),
-      ],
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor, width: 0.5),
+                  ),
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < spaces.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 0.5,
+                            thickness: 0.5,
+                            color: borderColor,
+                            indent: HomeSpaceViewSizes.mHorizontalPadding,
+                            endIndent: HomeSpaceViewSizes.mHorizontalPadding,
+                          ),
+                        MobileSpaceItem(
+                          space: spaces[i],
+                          favoriteBloc: favoriteBloc,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -233,11 +212,13 @@ class MobileSpaceSectionHeader extends StatefulWidget {
     required this.title,
     required this.onPressed,
     required this.onAdded,
+    required this.isExpanded,
   });
 
   final String title;
   final VoidCallback onPressed;
   final VoidCallback onAdded;
+  final bool isExpanded;
 
   @override
   State<MobileSpaceSectionHeader> createState() =>
@@ -245,121 +226,262 @@ class MobileSpaceSectionHeader extends StatefulWidget {
 }
 
 class _MobileSpaceSectionHeaderState extends State<MobileSpaceSectionHeader> {
+  double _turns = 0;
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onPressed,
-      child: SizedBox(
-        height: 48,
-        child: Row(
-          children: [
-            const HSpace(HomeSpaceViewSizes.mHorizontalPadding),
-            Expanded(
-              child: FlowyText.medium(
+    return SizedBox(
+      height: 48,
+      child: Row(
+        children: [
+          const HSpace(HomeSpaceViewSizes.mHorizontalPadding),
+          Expanded(
+            child: FlowyButton(
+              text: FlowyText.medium(
                 widget.title,
                 lineHeight: 1.15,
                 fontSize: 16.0,
               ),
-            ),
-            const HSpace(HomeSpaceViewSizes.mHorizontalPadding),
-            GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: widget.onAdded,
-              child: Container(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: HomeSpaceViewSizes.mHorizontalPadding,
-                  vertical: 8.0,
-                ),
+              margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 2.0),
+              expandText: false,
+              iconPadding: 2,
+              mainAxisAlignment: MainAxisAlignment.start,
+              rightIcon: AnimatedRotation(
+                duration: const Duration(milliseconds: 200),
+                turns: _turns,
                 child: const FlowySvg(
-                  FlowySvgs.m_space_add_s,
+                  FlowySvgs.m_spaces_expand_s,
                 ),
               ),
+              onTap: () {
+                setState(() {
+                  _turns = widget.isExpanded ? -0.25 : 0;
+                });
+                widget.onPressed();
+              },
             ),
-          ],
-        ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: widget.onAdded,
+            child: Container(
+              margin: const EdgeInsets.symmetric(
+                horizontal: HomeSpaceViewSizes.mHorizontalPadding,
+                vertical: 8.0,
+              ),
+              child: const FlowySvg(
+                FlowySvgs.m_space_add_s,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SpaceItem extends StatelessWidget {
-  const _SpaceItem({required this.space, required this.favoriteBloc});
+class MobileSpaceItem extends StatefulWidget {
+  const MobileSpaceItem({
+    super.key,
+    required this.space,
+    required this.favoriteBloc,
+  });
 
   final ViewPB space;
   final FavoriteBloc favoriteBloc;
 
   @override
-  Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) =>
-          ViewBloc(view: space)..add(const ViewEvent.initial()),
-      child: BlocBuilder<ViewBloc, ViewState>(
-        builder: (context, state) {
-          final spaceType =
-              space.spacePermission == SpacePermission.publicToAll
-                  ? FolderSpaceType.public
-                  : FolderSpaceType.private;
-          final childViews = state.view.childViews.unique((view) => view.id);
-          if (childViews.length != state.view.childViews.length) {
-            final duplicatedViews = state.view.childViews
-                .where((view) => childViews.contains(view))
-                .toList();
-            Log.error('some view id are duplicated: $duplicatedViews');
-          }
-          return Column(
-            children: childViews.asMap().entries.map((entry) {
-              final index = entry.key;
-              final view = entry.value;
-              return Column(
-                children: [
-                  if (index > 0)
-                    const Divider(
-                      height: 0.5,
-                      thickness: 0.5,
-                      indent: HomeSpaceViewSizes.mHorizontalPadding,
-                      endIndent: HomeSpaceViewSizes.mHorizontalPadding,
-                    ),
-                  MobileViewItem(
-                    key: ValueKey(
-                      '${space.id} ${view.id}',
-                    ),
-                    spaceType: spaceType,
-                    isFirstChild: view.id == state.view.childViews.first.id,
-                    view: view,
-                    level: 0,
-                    leftPadding: HomeSpaceViewSizes.leftPadding,
-                    isFeedback: false,
-                    favoriteBloc: favoriteBloc,
-                    onSelected: (v) => context.pushView(
-                      v,
-                      tabs: [
-                        PickerTabType.emoji,
-                        PickerTabType.icon,
-                        PickerTabType.custom,
-                      ].map((e) => e.name).toList(),
-                    ),
-                    endActionPane: (context) {
-                      final view = context.read<ViewBloc>().state.view;
-                      final actions = [
-                        MobilePaneActionType.more,
-                        if (view.layout == ViewLayoutPB.Document)
-                          MobilePaneActionType.add,
-                      ];
-                      return buildEndActionPane(
-                        context,
-                        actions,
-                        spaceType: spaceType,
-                        spaceRatio: actions.length == 1 ? 3 : 4,
-                      );
-                    },
+  State<MobileSpaceItem> createState() => _MobileSpaceItemState();
+}
+
+class _MobileSpaceItemState extends State<MobileSpaceItem> {
+  late bool _isExpanded;
+  double _turns = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = true;
+  }
+
+  void _toggleExpand() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      _turns = _isExpanded ? 0 : -0.25;
+    });
+    context.read<SpaceBloc>().add(SpaceEvent.expand(widget.space, _isExpanded));
+  }
+
+  void _showCreatePageMenu() {
+    final title = widget.space.name;
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      title: title,
+      showDragHandle: true,
+      showCloseButton: true,
+      useRootNavigator: true,
+      showDivider: false,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return AddNewPageWidgetBottomSheet(
+          view: widget.space,
+          onAction: (layout) {
+            Navigator.of(sheetContext).pop();
+            context.read<SpaceBloc>().add(
+                  SpaceEvent.createPage(
+                    name: layout.defaultName,
+                    layout: layout,
+                    index: 0,
+                    openAfterCreate: true,
                   ),
-                ],
-              );
-            }).toList(),
-          );
-        },
-      ),
+                );
+            context.read<SpaceBloc>().add(
+                  SpaceEvent.expand(widget.space, true),
+                );
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = Theme.of(context).isLightMode
+        ? const Color(0xFFE9E9EC)
+        : const Color(0x1AFFFFFF);
+
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              const HSpace(HomeSpaceViewSizes.mHorizontalPadding),
+              SpaceIcon(
+                dimension: 28,
+                textDimension: 18,
+                cornerRadius: 8,
+                space: widget.space,
+                svgSize: 16,
+              ),
+              const HSpace(12),
+              Expanded(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: _toggleExpand,
+                  child: FlowyText.medium(
+                    widget.space.name,
+                    fontSize: 15,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              AnimatedRotation(
+                duration: const Duration(milliseconds: 200),
+                turns: _turns,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: _toggleExpand,
+                  child: const FlowySvg(
+                    FlowySvgs.m_spaces_expand_s,
+                  ),
+                ),
+              ),
+              const HSpace(8),
+              SpaceMenuItemTrailing(
+                space: widget.space,
+                currentSpace: null,
+              ),
+              const HSpace(8),
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _showCreatePageMenu,
+                child: const FlowySvg(
+                  FlowySvgs.m_space_add_s,
+                ),
+              ),
+              const HSpace(HomeSpaceViewSizes.mHorizontalPadding),
+            ],
+          ),
+        ),
+        if (_isExpanded)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: BlocProvider(
+              create: (context) =>
+                  ViewBloc(view: widget.space)..add(const ViewEvent.initial()),
+              child: BlocBuilder<ViewBloc, ViewState>(
+                builder: (context, state) {
+                  final spaceType =
+                      widget.space.spacePermission == SpacePermission.publicToAll
+                          ? FolderSpaceType.public
+                          : FolderSpaceType.private;
+                  final childViews =
+                      state.view.childViews.unique((view) => view.id);
+                  if (childViews.length != state.view.childViews.length) {
+                    final duplicatedViews = state.view.childViews
+                        .where((view) => childViews.contains(view))
+                        .toList();
+                    Log.error('some view id are duplicated: $duplicatedViews');
+                  }
+                  return Column(
+                    children: childViews.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final view = entry.value;
+                      return Column(
+                        children: [
+                          if (index > 0)
+                            Divider(
+                              height: 0.5,
+                              thickness: 0.5,
+                              color: borderColor,
+                            ),
+                          MobileViewItem(
+                            key: ValueKey(
+                              '${widget.space.id} ${view.id}',
+                            ),
+                            spaceType: spaceType,
+                            isFirstChild: view.id ==
+                                state.view.childViews.first.id,
+                            view: view,
+                            level: 0,
+                            leftPadding: HomeSpaceViewSizes.leftPadding,
+                            isFeedback: false,
+                            favoriteBloc: widget.favoriteBloc,
+                            onSelected: (v) => context.pushView(
+                              v,
+                              tabs: [
+                                PickerTabType.emoji,
+                                PickerTabType.icon,
+                                PickerTabType.custom,
+                              ].map((e) => e.name).toList(),
+                            ),
+                            endActionPane: (context) {
+                              final view =
+                                  context.read<ViewBloc>().state.view;
+                              final actions = [
+                                MobilePaneActionType.more,
+                                if (view.layout == ViewLayoutPB.Document)
+                                  MobilePaneActionType.add,
+                              ];
+                              return buildEndActionPane(
+                                context,
+                                actions,
+                                spaceType: spaceType,
+                                spaceRatio: actions.length == 1 ? 3 : 4,
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

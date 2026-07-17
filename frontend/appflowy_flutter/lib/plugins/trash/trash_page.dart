@@ -40,7 +40,7 @@ class _TrashPageState extends State<TrashPage> {
   Widget build(BuildContext context) {
     const horizontalPadding = 80.0;
     return BlocProvider(
-      create: (context) => getIt<TrashBloc>()..add(const TrashEvent.initial()),
+      create: (context) => TrashBloc()..add(const TrashEvent.initial()),
       child: BlocBuilder<TrashBloc, TrashState>(
         builder: (context, state) {
           return SizedBox.expand(

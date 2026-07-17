@@ -11,6 +11,7 @@ import 'package:appflowy/mobile/presentation/base/view_page/app_bar_buttons.dart
 import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_mobile_state_container.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
+import 'package:appflowy/plugins/document/application/document_sync_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
@@ -120,6 +121,11 @@ class _MobileViewPageState extends State<MobileViewPage> {
                 BlocProvider(
                   create: (_) => DocumentPageStyleBloc(view: view)
                     ..add(const DocumentPageStyleEvent.initial()),
+                ),
+              if (view.layout.isDocumentView)
+                BlocProvider(
+                  create: (_) => DocumentSyncBloc(view: view)
+                    ..add(DocumentSyncEvent.initial()),
                 ),
               if (view.layout.isDocumentView || view.layout.isDatabaseView)
                 BlocProvider(

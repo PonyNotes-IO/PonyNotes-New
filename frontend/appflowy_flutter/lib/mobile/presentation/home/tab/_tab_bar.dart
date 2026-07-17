@@ -1,9 +1,14 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/home/tab/_round_underline_tab_indicator.dart';
 import 'package:appflowy/mobile/presentation/home/tab/space_order_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/import/import_panel.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:reorderable_tabbar/reorderable_tabbar.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileSpaceTabBar extends StatefulWidget {
   const MobileSpaceTabBar({
@@ -58,46 +63,98 @@ class _MobileSpaceTabBarState extends State<MobileSpaceTabBar> {
 
     return SizedBox(
       height: widget.height,
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Row(
         children: [
-          Container(
-            height: widget.height,
-            padding: const EdgeInsets.only(left: 8.0, top: 0.0),
-            child: ReorderableTabBar(
-              controller: widget.tabController,
-              tabs: widget.tabs.map((e) => Tab(text: e.tr)).toList(),
-              indicatorSize: TabBarIndicatorSize.label,
-              isScrollable: true,
-              labelStyle: labelStyle,
-              labelColor: const Color(0xFFFF3800),
-              unselectedLabelColor: baseStyle?.color,
-              labelPadding: const EdgeInsets.symmetric(horizontal: 12.0),
-              unselectedLabelStyle: unselectedLabelStyle,
-              overlayColor: WidgetStateProperty.all(Colors.transparent),
-              indicator: const RoundUnderlineTabIndicator(
-                width: 56.0,
-                borderSide: BorderSide(
-                  color: Colors.transparent,
-                  width: 6,
+          Expanded(
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  height: widget.height,
+                  padding: const EdgeInsets.only(left: 8.0, top: 0.0),
+                  child: ReorderableTabBar(
+                    controller: widget.tabController,
+                    tabs: widget.tabs.map((e) => Tab(text: e.tr)).toList(),
+                    indicatorSize: TabBarIndicatorSize.label,
+                    isScrollable: true,
+                    labelStyle: labelStyle,
+                    labelColor: const Color(0xFFFF3800),
+                    unselectedLabelColor: baseStyle?.color,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 12.0),
+                    unselectedLabelStyle: unselectedLabelStyle,
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
+                    indicator: const RoundUnderlineTabIndicator(
+                      width: 56.0,
+                      borderSide: BorderSide(
+                        color: Colors.transparent,
+                        width: 6,
+                      ),
+                    ),
+                    onReorder: widget.onReorder,
+                  ),
                 ),
-              ),
-              onReorder: widget.onReorder,
+                AnimatedBuilder(
+                  animation: widget.tabController,
+                  builder: (context, child) {
+                    final length = widget.tabController.length;
+                    if (length == 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return _buildIndicator(context);
+                  },
+                ),
+              ],
             ),
           ),
-          AnimatedBuilder(
-            animation: widget.tabController,
-            builder: (context, child) {
-              final length = widget.tabController.length;
-              if (length == 0) {
-                return const SizedBox.shrink();
-              }
-              return _buildIndicator(context);
-            },
-          ),
+          _buildSyncButton(context),
+          HSpace(50),
+          _buildImportButton(context),
         ],
       ),
     );
+  }
+
+  Widget _buildSyncButton(BuildContext context) {
+    return const SidebarCloudSyncButton(
+      useHighContrastForeground: true,
+      buttonSize: 28.0,
+      iconSize: 22.0,
+    );
+  }
+
+  Widget _buildImportButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: FlowyButton(
+        useIntrinsicWidth: true,
+        margin: EdgeInsets.zero,
+        text: const FlowySvg(
+          FlowySvgs.icon_import_mobile_lg,
+          size: Size.square(24),
+        ),
+        onTap: () => _openImportPanel(context),
+      ),
+    );
+  }
+
+  void _openImportPanel(BuildContext context) {
+    try {
+      final workspaceBloc = context.read<UserWorkspaceBloc>();
+      final currentWorkspace = workspaceBloc.state.currentWorkspace;
+      if (currentWorkspace != null) {
+        showImportPanel(
+          currentWorkspace.workspaceId,
+          context,
+          (type, name, document, importedViews) {
+            if (importedViews != null && importedViews.isNotEmpty) {
+              showToastNotification(message: '成功导入 ${importedViews.length} 个文件');
+            }
+          },
+        );
+      }
+    } catch (e) {
+      showToastNotification(message: '打开导入页面时发生错误: $e');
+    }
   }
 
   Widget _buildIndicator(BuildContext context) {

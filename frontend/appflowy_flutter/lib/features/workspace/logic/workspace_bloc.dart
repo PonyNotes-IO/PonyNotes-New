@@ -820,6 +820,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         ),
       ),
     );
+
+    if (currentWorkspace != null) {
+      _startFolderSyncStateListener(currentWorkspace.workspaceId);
+    }
   }
 
   // Helper methods
