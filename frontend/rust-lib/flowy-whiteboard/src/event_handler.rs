@@ -4,7 +4,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder::entities::ViewIdPB;
 use lib_dispatch::prelude::{AFPluginData, AFPluginState, data_result_ok, DataResult};
 use std::sync::{Arc, Weak};
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 use uuid::Uuid;
 
 fn upgrade_manager(
@@ -45,26 +45,22 @@ pub(crate) async fn create_whiteboard_handler(
 }
 
 /// 打开白板处理器
-#[instrument(level = "info", skip_all, err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) async fn open_whiteboard_handler(
   data: AFPluginData<ViewIdPB>,
   manager: AFPluginState<Weak<WhiteboardManager>>,
 ) -> DataResult<WhiteboardDataPB, FlowyError> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
-  info!("[Whiteboard] =====================================================");
-  info!("[Whiteboard] open_whiteboard_handler called");
-  info!("[Whiteboard] ViewID: {}", payload.value);
-  
+
+  debug!("[Whiteboard] open_whiteboard_handler called, ViewID: {}", payload.value);
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[Whiteboard] Calling manager.get_whiteboard_data...");
   let json_data = manager.get_whiteboard_data(&view_id).await?;
-  info!("[Whiteboard] ✅ Got whiteboard data, length: {} bytes", json_data.len());
-  info!("[Whiteboard] =====================================================");
-  
+  debug!("[Whiteboard] Got whiteboard data, length: {} bytes", json_data.len());
+
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,
     json_data,
@@ -72,26 +68,25 @@ pub(crate) async fn open_whiteboard_handler(
 }
 
 /// 更新白板处理器
-#[instrument(level = "info", skip_all, err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) async fn update_whiteboard_handler(
   data: AFPluginData<UpdateWhiteboardPayloadPB>,
   manager: AFPluginState<Weak<WhiteboardManager>>,
 ) -> FlowyResult<()> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
-  info!("[Whiteboard] =====================================================");
-  info!("[Whiteboard] update_whiteboard_handler called");
-  info!("[Whiteboard] ViewID: {}", payload.view_id);
-  info!("[Whiteboard] JSON data length: {} bytes", payload.json_data.len());
-  
+
+  debug!(
+    "[Whiteboard] update_whiteboard_handler called, ViewID: {}, JSON data length: {} bytes",
+    payload.view_id,
+    payload.json_data.len()
+  );
+
   let view_id = Uuid::parse_str(&payload.view_id)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[Whiteboard] Calling manager.update_whiteboard...");
   manager.update_whiteboard(&view_id, &payload.json_data).await?;
-  info!("[Whiteboard] ✅ update_whiteboard completed successfully");
-  info!("[Whiteboard] =====================================================");
+  debug!("[Whiteboard] update_whiteboard completed successfully");
   Ok(())
 }
 
@@ -128,26 +123,22 @@ pub(crate) async fn delete_whiteboard_handler(
 }
 
 /// 获取白板数据处理器
-#[instrument(level = "info", skip_all, err)]
+#[instrument(level = "debug", skip_all, err)]
 pub(crate) async fn get_whiteboard_data_handler(
   data: AFPluginData<ViewIdPB>,
   manager: AFPluginState<Weak<WhiteboardManager>>,
 ) -> DataResult<WhiteboardDataPB, FlowyError> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
-  info!("[Whiteboard] =====================================================");
-  info!("[Whiteboard] get_whiteboard_data_handler called");
-  info!("[Whiteboard] ViewID: {}", payload.value);
-  
+
+  debug!("[Whiteboard] get_whiteboard_data_handler called, ViewID: {}", payload.value);
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[Whiteboard] Calling manager.get_whiteboard_data...");
   let json_data = manager.get_whiteboard_data(&view_id).await?;
-  info!("[Whiteboard] ✅ Got whiteboard data, length: {} bytes", json_data.len());
-  info!("[Whiteboard] =====================================================");
-  
+  debug!("[Whiteboard] Got whiteboard data, length: {} bytes", json_data.len());
+
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,
     json_data,

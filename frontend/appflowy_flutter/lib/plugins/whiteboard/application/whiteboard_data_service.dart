@@ -270,21 +270,14 @@ class WhiteboardDataService {
     String viewId,
     Map<String, dynamic> data,
   ) async {
-    Log.info(
-        '[WBCollab][WhiteboardDataService] =====================================================');
-    Log.info('[WBCollab][WhiteboardDataService] deleteWhiteboardData() called');
-    Log.info('[WBCollab][WhiteboardDataService] ViewID: $viewId');
-    Log.info(
-        '[WBCollab][WhiteboardDataService] =====================================================');
+    Log.debug('[WBCollab][WhiteboardDataService] deleteWhiteboardData() called, ViewID: $viewId');
 
-    Log.info(
-        '[WBCollab][WhiteboardDataService] Step 1: Trying to save to Collab backend...');
     final collabSuccess = await _saveToCollab(
       viewId,
       jsonEncode({'type': 'delete', 'data': jsonEncode(data)}),
     );
     if (collabSuccess) {
-      Log.info(
+      Log.debug(
           '[WBCollab][WhiteboardDataService] Saved delete event to Collab successfully: $viewId');
       return true;
     }

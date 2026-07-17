@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
 use std::sync::{Arc, Weak};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 /// 白板用户服务 trait
@@ -172,8 +172,9 @@ impl WhiteboardManager {
   /// 如果白板已在缓存中，直接返回
   /// 否则从磁盘加载，如果本地不存在则尝试从云端获取
   pub async fn open_whiteboard(&self, view_id: &Uuid) -> FlowyResult<Arc<RwLock<Whiteboard>>> {
-    info!("[Whiteboard] 🔵 open_whiteboard called for view: {}", view_id);
-    
+    // open_whiteboard 在每次保存时都会被调用（命中缓存后快速返回），降为 trace 避免 Windows 日志开销。
+    trace!("[Whiteboard] open_whiteboard called for view: {}", view_id);
+
     // 检查缓存
     if let Some(whiteboard) = self.whiteboards.get(view_id) {
       trace!("[Whiteboard] Whiteboard {} found in cache", view_id);
@@ -182,7 +183,7 @@ impl WhiteboardManager {
 
     // 创建白板实例（会自动配置持久化）
     let whiteboard = self.create_whiteboard_instance(view_id, true).await?;
-    
+
     // 缓存
     self.whiteboards.insert(*view_id, whiteboard.clone());
 
@@ -313,29 +314,28 @@ impl WhiteboardManager {
     view_id: &Uuid,
     json_data: &str,
   ) -> FlowyResult<()> {
-    info!("[Whiteboard] Manager.update_whiteboard called");
-    info!("[Whiteboard] ViewID: {}", view_id);
-    info!("[Whiteboard] JSON data length: {} bytes", json_data.len());
-    
-    info!("[Whiteboard] Opening whiteboard...");
+    // 每次保存都会走这里，全部降为 debug/trace 以减少 Windows 上的日志开销。
+    debug!(
+      "[Whiteboard] Manager.update_whiteboard called, ViewID: {}, JSON data length: {} bytes",
+      view_id,
+      json_data.len()
+    );
+
     let whiteboard = self.open_whiteboard(view_id).await?;
-    info!("[Whiteboard] ✅ Whiteboard opened");
-    
-    info!("[Whiteboard] Acquiring write lock...");
+    trace!("[Whiteboard] Whiteboard opened, acquiring write lock...");
     let mut wb = whiteboard.write().await;
-    info!("[Whiteboard] ✅ Write lock acquired");
-    
-    info!("[Whiteboard] Calling wb.update_from_json...");
+    trace!("[Whiteboard] Write lock acquired, calling wb.update_from_json...");
+
     wb.update_from_json(json_data)
       .map_err(|e| internal_error(format!("Failed to update whiteboard: {}", e)))?;
 
-    info!("[Whiteboard] ✅✅✅ Updated whiteboard successfully: {}", view_id);
+    debug!("[Whiteboard] Updated whiteboard successfully: {}", view_id);
     Ok(())
   }
 
   /// 获取白板数据
   pub async fn get_whiteboard_data(&self, view_id: &Uuid) -> FlowyResult<String> {
-    info!("[Whiteboard] 🔵 get_whiteboard_data called for view: {}", view_id);
+    debug!("[Whiteboard] get_whiteboard_data called for view: {}", view_id);
     let whiteboard = self.open_whiteboard(view_id).await?;
     let wb = whiteboard.read().await;
     wb.to_json()

@@ -209,8 +209,9 @@ impl Whiteboard {
   /// 前端发送格式：{"type": "update", "data": "{\"elements\":..., \"files\":..., \"appState\":...}"}
   /// 这里的 data 字段是 JSON 字符串，需要二次解析
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
-    tracing::info!("[WBCollab] 🔍 update_from_json called, len: {}", json_str.len());
-    tracing::info!("[WBCollab] 🔍 update_from_json raw: {}", json_str);
+    // 每次保存都会打印，Windows 上每条日志都有成本；降为 debug/trace（trace 才输出全量 JSON）。
+    tracing::debug!("[WBCollab] update_from_json called, len: {}", json_str.len());
+    tracing::trace!("[WBCollab] update_from_json raw: {}", json_str);
 
     #[derive(serde::Deserialize)]
     struct UpdateWrapper {
@@ -225,23 +226,23 @@ impl Whiteboard {
 
     let data_map: HashMap<String, serde_json::Value> = match wrapper.data {
       serde_json::Value::String(data_str) => {
-        tracing::info!("[WBCollab] 🔍 update_from_json nested data_str: {}", data_str);
+        tracing::trace!("[WBCollab] update_from_json nested data_str: {}", data_str);
         serde_json::from_str(&data_str)
           .map_err(|e| anyhow!("Failed to parse nested data JSON: {}", e))?
       },
       serde_json::Value::Object(map) => {
-        tracing::info!("[WBCollab] 🔍 update_from_json object keys: {:?}", map.keys());
+        tracing::debug!("[WBCollab] update_from_json object keys: {:?}", map.keys());
         map.into_iter().collect()
       },
       _ => HashMap::new(),
     };
 
-    tracing::info!("[WBCollab] 🔍 update_from_json data_map keys: {:?}", data_map.keys());
+    tracing::debug!("[WBCollab] update_from_json data_map keys: {:?}", data_map.keys());
     if data_map.contains_key("roomId") {
-      tracing::info!("[WBCollab] ✅ roomId found in update data: {}", data_map["roomId"]);
+      tracing::debug!("[WBCollab] roomId found in update data: {}", data_map["roomId"]);
     }
     if data_map.contains_key("roomKey") {
-      tracing::info!("[WBCollab] ✅ roomKey found in update data: {}", data_map["roomKey"]);
+      tracing::debug!("[WBCollab] roomKey found in update data: {}", data_map["roomKey"]);
     }
 
     // 【协作丢元素修复 2026-07-01】移除文档级 revision 门控。
@@ -258,7 +259,7 @@ impl Whiteboard {
       && (data_map.contains_key(Self::ELEMENTS_KEY) || data_map.contains_key(Self::FILES_KEY))
       && !self.is_blank_scene()
     {
-      tracing::info!("[WBCollab] Reject blank whiteboard overwrite against non-empty scene");
+      tracing::debug!("[WBCollab] Reject blank whiteboard overwrite against non-empty scene");
       return Ok(());
     }
 
@@ -273,23 +274,23 @@ impl Whiteboard {
           } else {
             let json = serde_json::to_string(value)
               .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
-            tracing::info!("[WBCollab] 🔍 Inserting key='{}' with value='{}' (type={})", key, json, value.as_str().unwrap_or("non-string"));
+            tracing::trace!("[WBCollab] Inserting key='{}' with value='{}' (type={})", key, json, value.as_str().unwrap_or("non-string"));
             if key == "roomId" || key == "roomKey" {
-              tracing::info!("[WBCollab] ✅ Saving {} to collab: {}", key, json);
+              tracing::debug!("[WBCollab] Saving {} to collab: {}", key, json);
             }
             self.data.insert(&mut txn, key.as_str(), json.as_str());
           }
         }
         // 验证保存后的数据
         if data_map.contains_key("roomId") || data_map.contains_key("roomKey") {
-          tracing::info!("[WBCollab] 🔍 Verifying roomId/roomKey after insert:");
+          tracing::debug!("[WBCollab] Verifying roomId/roomKey after insert:");
           if let Some(saved_room_id) = Self::map_string_value(self.data.get(&txn, "roomId"), &txn) {
-            tracing::info!("[WBCollab] ✅ Verified roomId: {}", saved_room_id);
+            tracing::debug!("[WBCollab] Verified roomId: {}", saved_room_id);
           } else {
             tracing::error!("[WBCollab] ❌ roomId not found after insert!");
           }
           if let Some(saved_room_key) = Self::map_string_value(self.data.get(&txn, "roomKey"), &txn) {
-            tracing::info!("[WBCollab] ✅ Verified roomKey: {}", saved_room_key);
+            tracing::debug!("[WBCollab] Verified roomKey: {}", saved_room_key);
           } else {
             tracing::error!("[WBCollab] ❌ roomKey not found after insert!");
           }
@@ -326,14 +327,14 @@ impl Whiteboard {
       if !value.is_null() {
         data_map.insert(key.clone(), value);
         if key == "roomId" || key == "roomKey" {
-          tracing::info!("[WBCollab] ✅ Found {} in stored data: {}", key, data_map[&key]);
+          tracing::debug!("[WBCollab] Found {} in stored data: {}", key, data_map[&key]);
         }
       } else {
         tracing::warn!("[WBCollab] ⚠️ Value for key '{}' is null", key);
       }
     }
     
-    tracing::info!("[WBCollab] 🔍 get_data returning keys: {:?}", data_map.keys());
+    tracing::debug!("[WBCollab] get_data returning keys: {:?}", data_map.keys());
 
     let mut elements = Vec::new();
     if let Some(Out::YMap(elements_map)) = self.data.get(&txn, Self::ELEMENTS_KEY) {

@@ -44,7 +44,11 @@ class WhiteboardCollabAdapter {
   late final WhiteboardDataService _service;
   late final WhiteboardListener _listener;
 
-  static const _debounceDuration = Duration(milliseconds: 650);
+  // 防抖窗口：合并快速连续的绘制/拖动，减少 save 频率（尤其 Windows：每次 save 都要
+  // 大字符串 FFI 编组 + 逐元素 CRDT 合并 + 写 RocksDB）。650ms → 900ms 明显减少高频
+  // 拖拽时的 save 次数，又不至于让停笔后落库明显延迟。销毁/切换前有 forceSync 兜底，
+  // 加大窗口不会丢数据。
+  static const _debounceDuration = Duration(milliseconds: 900);
   static const whiteboardElementsDeltaKey = '__whiteboard_elements_delta';
   static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
   // scrollX/scrollY 已从稳定键中移除：
@@ -85,6 +89,16 @@ class WhiteboardCollabAdapter {
   final Map<String, dynamic> _pendingFiles = {};
   final Map<String, dynamic> _syncFiles = {};
   int? _pendingRevision;
+
+  // 【增量保存】出问题时置 false 回退到"每次全量发送整个场景"的旧路径。
+  static const bool _incrementalSaveEnabled = true;
+
+  // 【增量保存】已成功保存到 Rust 的元素 version 快照（elementId -> version）。
+  // 只把相对该快照有变化的元素（新增 / version 增大 / 删除墓碑）经 FFI 发给 Rust，
+  // 未变元素不再重复传输。空快照 => 本次保存退化为全量（首次打开 / 保存失败后的兜底）。
+  // 正确性：Rust update_elements_map 本就按元素级 version 合并（incoming < existing 才跳过），
+  // 所以"只发变更元素"与"全量发送"在 Rust 端产生完全相同的结果，union 语义与逐元素排序不变。
+  final Map<String, int> _lastSentElementVersions = {};
 
   void holdAutoSyncUntilReady() {
     _syncGate.hold();
@@ -360,7 +374,8 @@ class WhiteboardCollabAdapter {
     // 通知上层数据已变更（用于 UI 更新）
 
     if (!_syncGate.canAutoSync) {
-      Log.info(
+      // 每次编辑（gate 关闭期间）都会触发，降为 debug 以减少 Windows 日志开销。
+      Log.debug(
         '[WBCollab][WhiteboardCollabAdapter] Auto sync blocked by startup gate: $viewId, keys: ${data.keys.join(',')}',
       );
       return;
@@ -461,11 +476,44 @@ class WhiteboardCollabAdapter {
           );
         }
 
+        // 【增量保存】构造本次要发送的 payload：默认拷贝全量缓存，再把 elements 替换为
+        // "自上次成功保存以来的变更元素"。files/appState/revision 等仍随全量发送
+        //（files 在 Rust 端 union 合并、appState 很小，无需增量）。
+        final payload = Map<String, dynamic>.from(_fullData);
+        List<Map<String, dynamic>>? sentElements;
+        if (_incrementalSaveEnabled && _fullData['elements'] is List) {
+          final delta = _computeElementsDelta(_fullData['elements'] as List);
+          if (delta.isEmpty) {
+            // 本次没有元素变化：不发送 elements 键，避免重复经 FFI 传全量场景。
+            payload.remove('elements');
+            // 同时剥掉空 files({})，否则会触发 Rust 的"空场景覆盖非空场景"守卫，
+            // 连带把本次的 appState 变更一起丢弃。
+            final files = payload['files'];
+            if (files is Map && files.isEmpty) {
+              payload.remove('files');
+            }
+          } else {
+            payload['elements'] = delta;
+          }
+          sentElements = delta;
+        }
+
         success = await _service.saveWhiteboardData(
           viewId,
-          _fullData,
+          payload,
           revision: revision,
         );
+
+        // saveWhiteboardData 会把上传后带回云 url 的 files 重新赋值到传入 map 上；
+        // 写回全量缓存，保持"图片已有 url 才跳过重传"的防存储爆炸逻辑（与旧路径一致）。
+        if (payload['files'] is Map) {
+          _fullData['files'] = payload['files'];
+        }
+
+        // 仅在保存成功后推进"已发送 version 快照"；失败则保持不变，下次自动重发这些变更。
+        if (success && sentElements != null) {
+          _commitSentElementVersions(sentElements);
+        }
       } else {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
@@ -757,6 +805,43 @@ class WhiteboardCollabAdapter {
     return byId.values.toList(growable: false);
   }
 
+  /// 【增量保存】计算相对"上次成功保存"的变更元素集合。
+  ///
+  /// 输入为 JS 端 getSceneElementsIncludingDeleted() 采集的完整场景（含删除墓碑）。
+  /// 返回需要发送给 Rust 的元素：
+  /// - 新增元素（快照里没有该 id）；
+  /// - version 增大的元素（Excalidraw 每次改动都会递增 version）；
+  /// - 删除墓碑（删除会保留 isDeleted:true 且 version 递增的元素，天然落入"version 增大"）。
+  /// 未变元素不返回，避免重复经 FFI 传给 Rust。删除通过墓碑发送、绝不靠"漏发"，符合正确性红线。
+  List<Map<String, dynamic>> _computeElementsDelta(List<dynamic> fullElements) {
+    final delta = <Map<String, dynamic>>[];
+    for (final element in fullElements) {
+      if (element is! Map) {
+        continue;
+      }
+      final id = element['id'];
+      if (id is! String) {
+        continue;
+      }
+      final version = _elementVersion(element);
+      final lastVersion = _lastSentElementVersions[id];
+      if (lastVersion == null || version > lastVersion) {
+        delta.add(Map<String, dynamic>.from(element));
+      }
+    }
+    return delta;
+  }
+
+  /// 【增量保存】保存成功后，把本次已持久化到 Rust 的元素 version 记入快照，供下次增量比对。
+  void _commitSentElementVersions(List<Map<String, dynamic>> sentElements) {
+    for (final element in sentElements) {
+      final id = element['id'];
+      if (id is String) {
+        _lastSentElementVersions[id] = _elementVersion(element);
+      }
+    }
+  }
+
   int _elementVersion(Map element) {
     final version = element['version'];
     return version is int ? version : 0;
@@ -778,6 +863,7 @@ class WhiteboardCollabAdapter {
     _fullData.clear();
     _pendingFiles.clear();
     _syncFiles.clear();
+    _lastSentElementVersions.clear();
     _syncGate.dispose();
   }
 }
