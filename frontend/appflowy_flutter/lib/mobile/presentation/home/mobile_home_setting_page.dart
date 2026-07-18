@@ -49,6 +49,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/settings/plan/settings_plan_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
@@ -163,13 +164,24 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       userId: _userProfile!.id,
     );
 
-    final results = await Future.wait([
-      UserBackendService.getWorkspaceSubscriptionInfo(workspaceId),
-      service.getWorkspaceUsage(),
+    final subscriptionFuture =
+        UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+    final usageFuture = service.getWorkspaceUsage();
+    final currentSubscriptionFuture = SubscriptionService()
+        .getCurrentSubscription(
+      userProfile: _userProfile!,
+      caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
+    );
+
+    await Future.wait([
+      subscriptionFuture,
+      usageFuture,
+      currentSubscriptionFuture,
     ]);
 
-    final subscriptionResult = results[0];
-    final usageResult = results[1];
+    final subscriptionResult = await subscriptionFuture;
+    final usageResult = await usageFuture;
+    final currentSubscription = await currentSubscriptionFuture;
 
     subscriptionResult.fold(
       (info) {
@@ -189,6 +201,10 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       },
       (error) => Log.error('Failed to load workspace usage: ${error.msg}'),
     );
+
+    if (mounted && currentSubscription != null) {
+      setState(() => _currentSubscription = currentSubscription);
+    }
   }
 
   String _getTitle() {
@@ -414,6 +430,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 subscriptionInfo: subscriptionInfo!,
                 workspaceUsage: workspaceUsage,
                 onUpgrade: () => _showUpgradeDialog(context),
+                currentSubscription: currentSubscription,
               ),
             if (subscriptionInfo != null) const SizedBox(height: 16),
             _SettingsGroupCard(
@@ -781,11 +798,13 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     required this.subscriptionInfo,
     this.workspaceUsage,
     required this.onUpgrade,
+    this.currentSubscription,
   });
 
   final WorkspaceSubscriptionInfoPB subscriptionInfo;
   final WorkspaceUsagePB? workspaceUsage;
   final VoidCallback onUpgrade;
+  final CurrentSubscription? currentSubscription;
 
   String _formatDateRange(int endDate, RecurringIntervalPB? interval) {
     final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
@@ -808,14 +827,50 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     return '$startStr至$endStr';
   }
 
+  String _getPlanDisplayName() {
+    final summary = currentSubscription?.subscription;
+    final planNameFromSummary = summary?.planNameCn?.isNotEmpty == true
+        ? summary!.planNameCn!
+        : (summary?.planCode?.isNotEmpty == true ? summary!.planCode! : null);
+
+    if (planNameFromSummary != null) {
+      return planNameFromSummary;
+    }
+
+    return subscriptionInfo.label;
+  }
+
+  String? _getValidityText() {
+    final summary = currentSubscription?.subscription;
+    if (summary?.endDate != null) {
+      final endDate = summary!.endDate!;
+      if (summary.startDate != null) {
+        final startDate = summary.startDate!;
+        return '有效期：${startDate.year}.${startDate.month.toString().padLeft(2, '0')}.${startDate.day.toString().padLeft(2, '0')}至${endDate.year}.${endDate.month.toString().padLeft(2, '0')}.${endDate.day.toString().padLeft(2, '0')}';
+      }
+      return '有效期：${endDate.year}.${endDate.month.toString().padLeft(2, '0')}.${endDate.day.toString().padLeft(2, '0')}';
+    }
+
+    if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
+        subscriptionInfo.plan.value != 0) {
+      return _formatDateRange(
+          subscriptionInfo.planSubscription.endDate.toInt(),
+          subscriptionInfo.planSubscription.interval);
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final planName = _getPlanDisplayName();
+    final validityText = _getValidityText();
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
           width: 1,
@@ -839,7 +894,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  subscriptionInfo.label,
+                  planName,
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 14,
@@ -847,19 +902,16 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
-                    subscriptionInfo.plan.value != 0)
+                if (validityText != null)
                   Text(
-                    _formatDateRange(
-                        subscriptionInfo.planSubscription.endDate.toInt(),
-                        subscriptionInfo.planSubscription.interval),
+                    validityText,
                     style: const TextStyle(
                       color: Colors.black,
                       fontSize: 12,
                     ),
                   ),
                 const SizedBox(height: 2),
-                if (subscriptionInfo.plan.value == 0)
+                if (subscriptionInfo.plan.value == 0 && validityText == null)
                   Text(
                     subscriptionInfo.info,
                     style: const TextStyle(
