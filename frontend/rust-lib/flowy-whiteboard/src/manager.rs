@@ -19,36 +19,6 @@ use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 /// 白板用户服务 trait
-/// 【临时诊断开关 2026-07-18】是否关闭白板的云端实时同步（WebSocket）。
-///
-/// 背景：用户实测 Windows 私有空间白板「联网时绘制卡顿、断网时流畅」，macOS 无此问题。
-/// 日志已排除焦点抖动、通知串台、资料请求风暴等因素，且绘制过程本身不产生日志，
-/// 无法从日志进一步定位。云端实时同步是唯一「每次绘制都发生、且仅联网存在」的活动，
-/// 故加此开关做 A/B 验证：关掉后若不卡，即可确认根因。
-///
-/// 两种开启方式（满足任一即关闭同步），**改动后需重启应用**：
-/// 1. 环境变量 `PONYNOTES_DISABLE_WB_CLOUD_SYNC=1`；
-/// 2. 在可执行文件同级目录放一个名为 `disable_whiteboard_cloud_sync` 的文件（内容任意）。
-///
-/// 关闭期间白板仍完整读写本地存储（RocksDB + 本地 collab），只是不与云端实时同步，
-/// 因此**不会丢数据**，但该设备的改动在关闭期间不会备份到云端、也收不到其它设备的改动。
-/// 诊断结束后应移除本开关。
-pub fn is_whiteboard_cloud_sync_disabled() -> bool {
-  // 每次白板打开时判定一次即可，开销可忽略，且便于用户改完重启就生效。
-  if matches!(
-    std::env::var("PONYNOTES_DISABLE_WB_CLOUD_SYNC").as_deref(),
-    Ok("1") | Ok("true") | Ok("TRUE")
-  ) {
-    return true;
-  }
-
-  std::env::current_exe()
-    .ok()
-    .and_then(|exe| exe.parent().map(|dir| dir.join("disable_whiteboard_cloud_sync")))
-    .map(|marker| marker.exists())
-    .unwrap_or(false)
-}
-
 pub trait WhiteboardUserService: Send + Sync {
   fn user_id(&self) -> Result<i64, FlowyError>;
   fn device_id(&self) -> Result<String, FlowyError>;
@@ -212,10 +182,7 @@ impl WhiteboardManager {
     }
 
     // 创建白板实例（会自动配置持久化）
-    // 【临时诊断开关 2026-07-18】云端同步可被关闭，用于定位「联网时绘制卡顿、
-    // 断网时流畅」的根因（详见 devops-docs/2026-07-18-白板联网卡顿诊断开关.md）。
-    let sync_enable = !is_whiteboard_cloud_sync_disabled();
-    let whiteboard = self.create_whiteboard_instance(view_id, sync_enable).await?;
+    let whiteboard = self.create_whiteboard_instance(view_id, true).await?;
 
     // 缓存
     self.whiteboards.insert(*view_id, whiteboard.clone());
