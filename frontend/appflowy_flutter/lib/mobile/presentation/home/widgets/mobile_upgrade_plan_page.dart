@@ -1029,17 +1029,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Center(
-          child: Text(
-            '¥${formatCurrency(price)}$suffix',
-            style: theme.textStyle.body
-                .standard(
-                  color: theme.textColorScheme.secondary,
-                )
-                .copyWith(fontSize: 12),
-          ),
-        ),
       ],
     );
   }

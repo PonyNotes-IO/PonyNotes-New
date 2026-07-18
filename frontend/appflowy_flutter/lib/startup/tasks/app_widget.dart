@@ -355,8 +355,11 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
         overlays: [],
       );
       SystemChrome.setSystemUIOverlayStyle(
-        const SystemUiOverlayStyle(
+        SystemUiOverlayStyle(
           systemNavigationBarColor: Colors.transparent,
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness:
+              state.themeMode == ThemeMode.dark ? Brightness.light : Brightness.dark,
         ),
       );
     }
