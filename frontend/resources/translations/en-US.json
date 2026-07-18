@@ -2998,6 +2998,9 @@
     "movePageToSpace": "Move page to space",
     "cannotMovePageToDatabase": "Cannot move page to database",
     "whiteboardCrossSpaceNotSupported": "Whiteboards can't be moved across spaces yet (coming soon)",
+    "whiteboardMigrating": "Migrating whiteboard content…",
+    "whiteboardMigrationFailed": "Whiteboard migration failed. The move was canceled (content preserved).",
+    "whiteboardMigrationSuccess": "Whiteboard moved",
     "switchSpace": "Switch space",
     "spaceNameCannotBeEmpty": "Space name cannot be empty",
     "success": {

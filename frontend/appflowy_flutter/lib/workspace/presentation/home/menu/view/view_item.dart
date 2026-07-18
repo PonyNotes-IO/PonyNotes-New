@@ -28,6 +28,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
@@ -1511,17 +1512,22 @@ void moveViewCrossSpace(
         : ViewSectionPB.Public;
   }
 
-  // 安全保护：白板内容绑定在协作 room（若依服务端）或本地 collab（私有）上，
-  // 跨空间移动只切换 section、不会搬运内容，会导致移动后白板显示为空。
-  // 在内容迁移（阶段4）完成前，拦截白板在私有↔协作空间之间的跨空间移动。
-  // 仅当 section 真正发生变化（跨私有/协作）时拦截，同空间内移动不受影响。
+  // 白板跨空间移动：内容绑定在协作 room（若依，加密）或本地 collab（私有）上，
+  // 仅切 section 不会搬运内容。阶段4起，跨私有↔协作时先做「内容迁移」（加解密委托
+  // xm-arts webview 完成），迁移成功后才切 section；失败则中止、绝不切区（白板不会变空）。
+  // 仅 section 真正变化（跨私有/协作）时触发迁移，同空间内移动不受影响。
   final isCrossSectionMove = fromSection != null &&
       toSection != null &&
       fromSection != toSection;
   if (view.layout == ViewLayoutPB.Whiteboard && isCrossSectionMove) {
-    showToastNotification(
-      message: LocaleKeys.space_whiteboardCrossSpaceNotSupported.tr(),
-      type: ToastificationType.warning,
+    _migrateWhiteboardThenMove(
+      context,
+      toSpace,
+      view,
+      fromSection,
+      toSection,
+      from,
+      toId,
     );
     return;
   }
@@ -1541,6 +1547,61 @@ void moveViewCrossSpace(
   context
       .read<ViewBloc>()
       .add(ViewEvent.move(from, toId, null, fromSection, toSection));
+}
+
+/// 白板跨空间移动：先做内容迁移（加解密委托 xm-arts webview），成功后再切 section。
+///
+/// 数据安全红线：迁移失败绝不切 section。两个方向的源内容在迁移期间均保留，
+/// 因此即便迁移或切区失败，白板也不会变空。
+Future<void> _migrateWhiteboardThenMove(
+  BuildContext context,
+  ViewPB? toSpace,
+  ViewPB view,
+  ViewSectionPB fromSection,
+  ViewSectionPB toSection,
+  ViewPB from,
+  String toId,
+) async {
+  // 在任何 await 前捕获 bloc，避免 await 后再用 context.read。
+  final viewBloc = context.read<ViewBloc>();
+  final spaceBloc = context.read<SpaceBloc>();
+  final toPrivate = toSection == ViewSectionPB.Private;
+
+  if (!context.mounted) return;
+  final ok = toPrivate
+      ? await WhiteboardMigrationService.migratePublicToPrivate(
+          context: context,
+          view: view,
+        )
+      : await WhiteboardMigrationService.migratePrivateToPublic(
+          context: context,
+          view: view,
+        );
+
+  if (!ok) {
+    showToastNotification(
+      message: LocaleKeys.space_whiteboardMigrationFailed.tr(),
+      type: ToastificationType.error,
+    );
+    return;
+  }
+
+  // 迁移成功（内容已安全到达目标存储）后才切 section。
+  final currentSpace = spaceBloc.state.currentSpace;
+  if (currentSpace != null && toSpace != null && currentSpace.id != toSpace.id) {
+    Log.info(
+      'Move whiteboard(${from.name}) to another space(${toSpace.name}), unpublish the view',
+    );
+    viewBloc.add(const ViewEvent.unpublish(sync: false));
+    switchToSpaceNotifier.value = toSpace;
+  }
+
+  viewBloc.add(ViewEvent.move(from, toId, null, fromSection, toSection));
+
+  showToastNotification(
+    message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),
+    type: ToastificationType.success,
+  );
 }
 
 void moveViewToSectionPlaceholder(

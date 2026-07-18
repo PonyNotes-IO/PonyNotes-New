@@ -3055,6 +3055,9 @@
     "movePageToSpace": "将页面移动到空间",
     "cannotMovePageToDatabase": "无法将页面移动到该位置",
     "whiteboardCrossSpaceNotSupported": "白板暂不支持跨空间移动（即将支持）",
+    "whiteboardMigrating": "正在迁移白板内容…",
+    "whiteboardMigrationFailed": "白板内容迁移失败，已取消移动（内容未丢失）",
+    "whiteboardMigrationSuccess": "白板已移动",
     "switchSpace": "切换空间",
     "spaceNameCannotBeEmpty": "空间名称不能为空",
     "success": {
