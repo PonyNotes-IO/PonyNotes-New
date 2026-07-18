@@ -70,6 +70,21 @@ class HomeStack extends StatefulWidget {
 }
 
 class _HomeStackState extends State<HomeStack> with WindowListener {
+  /// 上一次因窗口获得焦点而整树重建的时间。
+  DateTime? _lastFocusRebuildAt;
+
+  /// 窗口失去焦点的时间（用于区分「真正切走再切回」与「内部焦点抖动」）。
+  DateTime? _blurredAt;
+
+  /// 失焦时长低于该阈值的 focus 事件视为「内部焦点抖动」，不触发重建。
+  ///
+  /// 用户真正切走再切回（Alt-Tab、点其它应用）间隔远大于该值；
+  /// 而 WebView2 子窗口夺焦引起的 blur→focus 弹跳是毫秒级的。
+  static const _focusBounceThreshold = Duration(milliseconds: 250);
+
+  /// 两次焦点重建之间的最小间隔，兜底防止任何未预料的高频 focus 事件打穿。
+  static const _focusRebuildThrottle = Duration(milliseconds: 800);
+
   @override
   void initState() {
     super.initState();
@@ -452,6 +467,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   }
 
   @override
+  void onWindowBlur() {
+    _blurredAt = DateTime.now();
+  }
+
+  @override
   void onWindowFocus() {
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
@@ -461,12 +481,44 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
       return;
     }
 
-    setState(() {});
-
-    // macOS 窗口最小化后长时间再打开时，需要确保窗口正确显示
+    // macOS 窗口最小化后长时间再打开时，需要确保窗口正确显示。
+    // 该逻辑与下面的重建节流无关，任何 focus 事件都应执行。
     if (Platform.isMacOS) {
       refreshMacOSWindowAfterMinimize();
     }
+
+    // 【卡顿根因修复 2026-07-18】此处原为无条件 setState(() {})，即每个 focus
+    // 事件都整树重建 HomeStack（其下即 PageStack → 当前页面，含白板 WebView）。
+    //
+    // Windows 上白板是 WebView2 承载的 excalidraw，用户在画布上绘制时子窗口会夺取
+    // 焦点，Flutter 窗口随即收到 blur→focus 弹跳，于是「绘制 → 夺焦 → onWindowFocus
+    // → 整树重建 → WebView 宿主重建 → 再次夺焦」形成自持循环：日志实测每秒 1~2 次、
+    // 单次会话 197 次焦点翻转，与 WhiteboardRouter.didUpdateWidget 的 188 次几乎 1:1。
+    // 绘制期间反复重建 WebView 宿主，正是「卡顿 / 笔迹不跟手」的直接原因。
+    // （见 runwen-logs/log.2026-07-18 与
+    //   devops-docs/2026-07-18-白板卡顿与加载慢四处根因定位修复.md）
+    //
+    // 修复思路：保留 window_manager 在 Windows 上「获得焦点后重绘一次」的本意，
+    // 但只对**真正的窗口切换**生效：
+    // - 失焦时长 < 250ms 视为内部焦点抖动（WebView2 夺焦），跳过重建；
+    // - 再加 800ms 节流兜底，防止任何未预料的高频 focus 事件打穿。
+    // 用户 Alt-Tab 切走再切回的间隔远大于这两个阈值，重绘行为不受影响。
+    final now = DateTime.now();
+
+    final blurredAt = _blurredAt;
+    _blurredAt = null;
+    if (blurredAt != null && now.difference(blurredAt) < _focusBounceThreshold) {
+      return;
+    }
+
+    final lastRebuild = _lastFocusRebuildAt;
+    if (lastRebuild != null &&
+        now.difference(lastRebuild) < _focusRebuildThrottle) {
+      return;
+    }
+    _lastFocusRebuildAt = now;
+
+    setState(() {});
   }
 }
 
