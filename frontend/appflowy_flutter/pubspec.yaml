@@ -348,6 +348,19 @@ flutter:
     - assets/excalidraw/assets/locales/
     - assets/navigation/
     - assets/excalidraw/fonts/
+    # 【加载慢修复 2026-07-18】Flutter 的目录声明**不递归**包含子目录，
+    # 只写 assets/excalidraw/fonts/ 时下面这些字体子目录一个都不会被打包，
+    # 运行时 excalidraw 取字体全部 "Unable to load asset" 并反复重试
+    # （日志实测 Xiaolai 单次会话失败 36 次），拖慢白板首屏与视图切换，
+    # 中文手写字体 Xiaolai 缺失还会导致中文回退渲染。故逐个显式声明。
+    - assets/excalidraw/fonts/CascadiaCode/
+    - assets/excalidraw/fonts/ComicShanns/
+    - assets/excalidraw/fonts/Excalifont/
+    - assets/excalidraw/fonts/LiberationSans/
+    - assets/excalidraw/fonts/Lilita/
+    - assets/excalidraw/fonts/Nunito/
+    - assets/excalidraw/fonts/Virgil/
+    - assets/excalidraw/fonts/Xiaolai/
     - assets/excalidraw/locales/
 
     # The following assets will be excluded in release.

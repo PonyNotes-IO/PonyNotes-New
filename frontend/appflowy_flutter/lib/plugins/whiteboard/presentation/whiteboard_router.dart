@@ -65,9 +65,14 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   @override
   void didUpdateWidget(covariant WhiteboardRouter oldWidget) {
     super.didUpdateWidget(oldWidget);
-    Log.info('🔄 [WhiteboardRouter] didUpdateWidget: oldView=${oldWidget.notifier.view.id}, newView=${widget.notifier.view.id}');
+    // 【卡顿修复 2026-07-18】此处原有一条无条件 Log.info。白板页在绘制期间会被父级
+    // 频繁重建（日志实测 188 次/会话，且 oldView==newView 即视图并未变化），每条日志
+    // 都要经 FFI 转到 Rust 并落盘，白白占用绘制帧时间。改为只在视图真正切换时记录。
     if (oldWidget.notifier.view.id != widget.notifier.view.id) {
-      Log.info('🔄 [WhiteboardRouter] View changed, resetting roomId/roomKey');
+      Log.info(
+        '🔄 [WhiteboardRouter] View changed, resetting roomId/roomKey: '
+        '${oldWidget.notifier.view.id} → ${widget.notifier.view.id}',
+      );
       _roomId = null;
       _roomKey = null;
       _isPrivateSpace = null;

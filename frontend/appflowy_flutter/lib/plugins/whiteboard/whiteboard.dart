@@ -478,18 +478,27 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    Log.info('[WhiteboardPage] 🔄 App lifecycle changed: $state');
+    // 【卡顿修复 2026-07-18】Windows 上 WebView 与 Flutter 窗口互抢焦点，会让生命周期
+    // 在 inactive/resumed 之间高频翻转（日志实测约每秒 1~2 次、单次会话 197 次）。
+    // 原实现每次翻转都无条件打 2 条 INFO 日志（合计约 790 条），每条都经 FFI 落盘，
+    // 在绘制期间挤占帧时间。改为：只在标记位真正变化时才记录，且降为 debug。
+    final isBackground = state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive;
 
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      // 应用进入后台，标记状态
-      _isAppInBackground = true;
-      Log.info('[WhiteboardPage] ⏸️ App entering background');
-    } else if (state == AppLifecycleState.resumed) {
-      // 应用回到前台，恢复操作
-      _isAppInBackground = false;
-      Log.info('[WhiteboardPage] ▶️ App resumed');
+    if (state != AppLifecycleState.resumed && !isBackground) {
+      // detached/hidden 等其余状态不改变前后台标记，直接忽略。
+      return;
     }
+
+    if (isBackground == _isAppInBackground) {
+      // 状态未变（焦点抖动导致的重复回调），无需处理，也不记录日志。
+      return;
+    }
+
+    _isAppInBackground = isBackground;
+    Log.debug(
+      '[WhiteboardPage] 生命周期变化: $state (isBackground=$isBackground)',
+    );
   }
 
   @override

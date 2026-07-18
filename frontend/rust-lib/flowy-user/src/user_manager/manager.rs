@@ -1161,20 +1161,41 @@ pub fn upsert_user_profile_change(
   mut conn: DBConnection,
   changeset: UserTableChangeset,
 ) -> FlowyResult<()> {
-  tracing::info!(
-    "💾 [upsert_user_profile_change] Updating local DB with changeset: phone={:?}",
-    changeset.phone_number
-  );
+  // 【性能修复 2026-07-18】原实现无条件写库并广播 DidUpdateUserProfile 通知。
+  // 由于每次云端刷新都会走到这里，即使资料毫无变化也会发通知 → 前端监听者 emit →
+  // 组件重建 → 重建过程中的 bloc 再次请求用户资料 → 触发又一次刷新，形成自持的
+  // 请求风暴（日志实测稳定 102 次/分钟，见 runwen-logs/log.2026-07-18）。
+  // 改为「仅在资料确有变化时才通知」，从根上切断该回环。
+  let before = select_user_profile(uid, workspace_id, &mut conn).ok();
   update_user_profile(&mut conn, changeset)?;
   let user = select_user_profile(uid, workspace_id, &mut conn)?;
-  tracing::info!(
-    "💾 [upsert_user_profile_change] After update, local DB has: phone={:?}",
-    user.phone
-  );
+
+  let unchanged = before
+    .as_ref()
+    .is_some_and(|prev| is_same_visible_user_profile(prev, &user));
+  if unchanged {
+    return Ok(());
+  }
+
   send_notification(uid, UserNotification::DidUpdateUserProfile)
     .payload(UserProfilePB::from(user))
     .send();
   Ok(())
+}
+
+/// 比较两份用户资料在「前端可见字段」上是否一致。
+///
+/// 刻意不比较 `updated_at`：该时间戳由服务端维护，即便内容未变也可能变动，
+/// 若参与比较会让上面的「无变化不通知」失效，请求风暴依旧。
+fn is_same_visible_user_profile(a: &UserProfile, b: &UserProfile) -> bool {
+  a.uid == b.uid
+    && a.email == b.email
+    && a.name == b.name
+    && a.icon_url == b.icon_url
+    && a.phone == b.phone
+    && a.token == b.token
+    && a.auth_type == b.auth_type
+    && a.workspace_type == b.workspace_type
 }
 
 #[instrument(level = "info", skip_all, err)]

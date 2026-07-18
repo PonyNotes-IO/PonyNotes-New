@@ -94,49 +94,40 @@ pub async fn get_user_profile_handler(
   let manager = upgrade_manager(manager)?;
   let session = manager.get_session()?;
 
-  tracing::info!("🔄 [get_user_profile_handler] Step 1: Reading from local disk");
+  // 【性能修复 2026-07-18】本函数原先「force=true 绕过 5s 防抖 + await 云端往返」才返回。
+  // 而客户端有多处轮询会调用它（工作区角色 3s、成员列表 3s、每个打开的协作页 10s 等），
+  // 实测 Windows 端稳定 102 次/分钟的阻塞式云端请求（28 分钟内 2975 次），持续占用
+  // 事件线程并触发全局重建，是白板绘制卡顿、笔迹不跟手的主因（见 runwen-logs/log.2026-07-18）。
+  //
+  // 改为「本地优先返回 + 后台防抖刷新」：
+  // - 立即返回本地磁盘资料，调用方不再等待网络；
+  // - 云端刷新放到后台且 force=false，复用已有的 5 秒防抖，避免请求风暴；
+  // - 刷新到新数据时仍会通过 DidUpdateUserProfile 通知前端（手机号/邮箱等同步能力保留，
+  //   只是由「同步阻塞到达」变为「异步到达」）。
   let mut user_profile = manager
     .get_user_profile_from_disk(session.user_id, &session.workspace_id)
     .await?;
-  tracing::info!(
-    "🔄 [get_user_profile_handler] Step 1 result: phone={:?}",
-    user_profile.phone
-  );
 
-  // Refresh the user profile from cloud and wait for it to complete
-  // This ensures we get the latest user profile including phone number
-  // Use force=true to bypass debounce check
-  tracing::info!("🔄 [get_user_profile_handler] Step 2: Refreshing from cloud (forced)");
-  let refresh_result = manager
-    .refresh_user_profile_with_force(&user_profile, &session.workspace_id, true)
-    .await;
-  tracing::info!(
-    "🔄 [get_user_profile_handler] Step 2 result: {:?}",
-    refresh_result
-  );
-  
-  // Re-fetch the user profile from disk after refresh
-  tracing::info!("🔄 [get_user_profile_handler] Step 3: Re-reading from local disk");
-  user_profile = manager
-    .get_user_profile_from_disk(session.user_id, &session.workspace_id)
-    .await?;
-  tracing::info!(
-    "🔄 [get_user_profile_handler] Step 3 result: phone={:?}",
-    user_profile.phone
-  );
+  // 后台刷新：不 await，不阻塞调用方；失败仅记 debug，不影响本次返回。
+  {
+    let manager = manager.clone();
+    let old_profile = user_profile.clone();
+    let workspace_id = session.workspace_id.clone();
+    tokio::spawn(async move {
+      if let Err(err) = manager
+        .refresh_user_profile(&old_profile, &workspace_id)
+        .await
+      {
+        tracing::debug!("[get_user_profile_handler] 后台刷新用户资料失败: {:?}", err);
+      }
+    });
+  }
 
   // When the user is logged in with a local account, the email field is a placeholder and should
   // not be exposed to the client. So we set the email field to an empty string.
   if user_profile.auth_type == AuthType::Local {
     user_profile.email = "".to_string();
   }
-
-  tracing::info!(
-    "🔄 [get_user_profile_handler] Final result: email={}, phone={:?}, name={}",
-    user_profile.email,
-    user_profile.phone,
-    user_profile.name
-  );
 
   data_result_ok(user_profile.into())
 }
