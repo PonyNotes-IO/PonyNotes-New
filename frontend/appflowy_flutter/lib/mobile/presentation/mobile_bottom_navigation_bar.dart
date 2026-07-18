@@ -17,6 +17,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -133,16 +134,23 @@ class _MobileBottomNavigationBarState extends State<MobileBottomNavigationBar> {
         _buildNotificationNavigationBar(context),
     };
 
-    return Scaffold(
-      body: widget.navigationShell,
-      extendBody: true,
-      bottomNavigationBar: AnimatedSwitcher(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            Theme.of(context).brightness == Brightness.light ? Brightness.dark : Brightness.light,
+      ),
+      child: Scaffold(
+        body: widget.navigationShell,
+        extendBody: true,
+        bottomNavigationBar: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
         switchInCurve: Curves.easeInOut,
         switchOutCurve: Curves.easeInOut,
         transitionBuilder: _transitionBuilder,
         child: _bottomNavigationBar,
       ),
+    ),
     );
   }
 

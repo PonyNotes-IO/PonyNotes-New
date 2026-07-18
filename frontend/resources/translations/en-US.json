@@ -1096,7 +1096,9 @@
       "storageAddon": "空间补充包",
       "storageSpace": "存储空间",
       "paidMonthly": "月付",
-      "paidYearly": "年付"
+      "paidMonthlyMobile": "月付会员",
+      "paidYearly": "年付",
+      "paidYearlyMobile": "年付会员"
     },
     "comparePlanDialog": {
       "title": "Compare & select plan",
