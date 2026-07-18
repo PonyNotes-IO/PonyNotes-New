@@ -539,6 +539,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
         builder: (context) => MobileUpgradePlanPage(
           subscriptionInfo: subscriptionInfo,
           workspaceId: workspaceId,
+          userProfile: userProfile,
+          currentSubscription: currentSubscription,
         ),
       ),
     );
