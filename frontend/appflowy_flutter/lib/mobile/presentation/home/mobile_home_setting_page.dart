@@ -227,23 +227,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     final theme = Theme.of(context);
     final isMenu = _currentSection == MobileSettingsSection.menu;
 
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          border: Border(
-            bottom: BorderSide(
-              color: theme.dividerColor.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            IconButton(
+    return IconButton(
               onPressed: () {
                 if (isMenu) {
                   Navigator.pop(context);
@@ -256,22 +240,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                 size: const Size(7, 12),
                 color: afTheme.iconColorScheme.primary,
               ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                _getTitle(),
-                style: afTheme.textStyle.heading4.standard(
-                  color: afTheme.textColorScheme.primary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(width: 48),
-          ],
-        ),
-      ),
-    );
+            );
   }
 
   @override
@@ -282,8 +251,12 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       key: _scaffoldKey,
       backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildAppBar(context),
+          Padding(
+            padding: const EdgeInsets.only(top: 25.0,left: 8),
+            child: _buildAppBar(context),
+          ),
           Expanded(
             child: _buildContent(),
           ),
@@ -431,7 +404,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           children: [
             _UserProfileHeader(userProfile: userProfile),
