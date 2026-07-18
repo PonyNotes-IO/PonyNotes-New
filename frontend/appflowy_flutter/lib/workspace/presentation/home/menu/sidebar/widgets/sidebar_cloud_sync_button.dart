@@ -62,6 +62,13 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     return 0.7;
   }
 
+  /// 会员/订阅信息是否已经请求过，避免在 build 中反复派发。
+  ///
+  /// 【卡顿根因修复 2026-07-18】见下方 build 中的详细说明：这两个请求在
+  /// 本项目部署下**永远不会把状态填上**，若不加此标记就会无限重发。
+  bool _subscriptionRequested = false;
+  bool _workspaceSubscriptionRequested = false;
+
   @override
   void initState() {
     super.initState();
@@ -94,21 +101,55 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
           final isQuickEntryUser =
               workspaceState.userProfile.userAuthType != AuthTypePB.Server;
 
-          // 如果会员信息还没有加载，触发获取
-          if (currentSubscription == null) {
-            workspaceBloc.add(UserWorkspaceEvent.fetchCurrentSubscription());
-          }
+          // 【卡顿根因修复 2026-07-18】此处原先直接在 builder 中派发 bloc 事件，
+          // 且只以「状态为 null」作为条件，形成了自持的无限循环：
+          //
+          //   builder 执行 → subscriptionInfo == null → 派发 fetch 事件
+          //     → _onFetchWorkspaceSubscriptionInfo 先 await isBillingEnabled()
+          //       （一次 FFI 往返 GetCloudConfig）
+          //     → 该函数的白名单只含 beta/test.appflowy.cloud，本项目服务器
+          //       api.xiaomabiji.com 永远不在其中 ⇒ 恒定返回 false
+          //     → 命中 `if (!enabled) return;` 直接返回，状态永远保持 null
+          //     → 任何一次状态变更引起重建 → 回到第一步 → ∞
+          //
+          // 后果：稳定产生约 29 次/分钟的**纯浪费 FFI 往返**。而 dart-ffi 启用了
+          // local_set，所有 FFI 事件串行在同一条线程上，白板保存要和这些请求抢
+          // 同一条线程，绘制期间即表现为卡顿、笔迹不跟手。
+          // 联网才卡、断网不卡，正是因为断网时这些请求快速失败、重建链路大幅减弱。
+          // （实测对照见 runwen-logs/windows{卡顿,不卡}的日志/，
+          //   两台同为 1.0.19、同样新建空白板：卡顿端 29 次/分，流畅端 0 次/分。）
+          //
+          // 修复：① 改为「只请求一次」，杜绝条件永不满足导致的无限重发；
+          //       ② 用 addPostFrameCallback 把派发移出 build 阶段，
+          //          避免在 build 中触发 bloc 状态变更（Flutter 反模式）。
+          final workspaceId = workspaceState.currentWorkspace?.workspaceId;
+          final needSubscription =
+              currentSubscription == null && !_subscriptionRequested;
+          final needWorkspaceSubscription = subscriptionInfo == null &&
+              !_workspaceSubscriptionRequested &&
+              workspaceId != null &&
+              workspaceId.isNotEmpty;
 
-          // 如果工作空间订阅信息还没有加载，触发获取
-          if (subscriptionInfo == null) {
-            final workspaceId = workspaceState.currentWorkspace?.workspaceId;
-            if (workspaceId != null && workspaceId.isNotEmpty) {
-              workspaceBloc.add(
-                UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
-                  workspaceId: workspaceId,
-                ),
-              );
+          if (needSubscription || needWorkspaceSubscription) {
+            if (needSubscription) _subscriptionRequested = true;
+            if (needWorkspaceSubscription) {
+              _workspaceSubscriptionRequested = true;
             }
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              if (needSubscription) {
+                workspaceBloc.add(
+                  UserWorkspaceEvent.fetchCurrentSubscription(),
+                );
+              }
+              if (needWorkspaceSubscription) {
+                workspaceBloc.add(
+                  UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
+                    workspaceId: workspaceId,
+                  ),
+                );
+              }
+            });
           }
 
           final membershipStatus = _determineMembershipStatus(

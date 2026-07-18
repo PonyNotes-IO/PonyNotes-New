@@ -450,7 +450,22 @@ class BillingGateGuard extends StatelessWidget {
   }
 }
 
-Future<bool> isBillingEnabled() async {
+/// 【卡顿根因修复 2026-07-18】缓存 billing 判定结果。
+///
+/// 该判定只取决于服务器地址（运行时不会变化），但原实现每次调用都要发一次
+/// FFI 往返（`UserEventGetCloudConfig`）并打一条 warn。由于本项目服务器
+/// `api.xiaomabiji.com` 永远不在下面的白名单内，结果恒为 false——调用方若在
+/// 高频路径上（如 widget 重建触发的订阅信息拉取）就会持续空转。
+///
+/// dart-ffi 启用了 local_set，所有 FFI 事件串行在同一条线程上，这些空转会与
+/// 白板保存抢占同一条线程，绘制期间表现为卡顿。故在此缓存，从源头消除重复往返。
+Future<bool>? _cachedBillingEnabled;
+
+Future<bool> isBillingEnabled() {
+  return _cachedBillingEnabled ??= _resolveBillingEnabled();
+}
+
+Future<bool> _resolveBillingEnabled() async {
   final result = await UserEventGetCloudConfig().send();
   return result.fold(
     (cloudSetting) {
@@ -464,12 +479,15 @@ Future<bool> isBillingEnabled() async {
 
       final isWhiteListed = whiteList.contains(cloudSetting.serverUrl);
       if (!isWhiteListed) {
-        Log.warn("Billing is not enabled for server ${cloudSetting.serverUrl}");
+        // 只在首次判定时记录一次，避免刷屏。
+        Log.info("Billing is not enabled for server ${cloudSetting.serverUrl}");
       }
       return isWhiteListed;
     },
     (err) {
       Log.error("Failed to get cloud config: $err");
+      // 失败不缓存，允许下次重试。
+      _cachedBillingEnabled = null;
       return false;
     },
   );
