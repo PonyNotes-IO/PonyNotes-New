@@ -349,6 +349,23 @@ class _ShareTabState extends State<ShareTab> {
     BuildContext context,
     ShareTabState shareState,
   ) {
+    // 【健壮性修复 2026-07-19】复制分享链接的成功/失败提示改由此处统一反馈。
+    //
+    // 原实现在按钮 onTap 中「派发事件后立刻无条件弹出『已复制』」，完全不等写入结果。
+    // 一旦服务端未写入邀请记录（如鉴权失效返回 401），用户拿到的是**死链**——
+    // 接收方打开只会转圈失败，而分享者以为分享成功。
+    // 详见 devops-docs/2026-07-19-全线登录失败故障复盘-gotrue端口未发布.md
+    if (shareState.linkCopied) {
+      showToastNotification(
+        message: LocaleKeys.shareTab_copiedLinkToClipboard.tr(),
+      );
+    } else if (shareState.errorMessage.isNotEmpty) {
+      showToastNotification(
+        message: shareState.errorMessage,
+        type: ToastificationType.error,
+      );
+    }
+
     final shareResult = shareState.shareResult;
     if (shareResult != null) {
       shareResult.fold((success) {
@@ -660,18 +677,12 @@ class _ShareTabState extends State<ShareTab> {
                 return;
               }
 
-              // 已连接云服务，视为已同步或会自动同步，允许复制链接
+              // 已连接云服务，视为已同步或会自动同步，允许复制链接。
+              // 成功/失败提示由 _onListenShareWithUserState 依据实际写入结果给出，
+              // 此处不再无条件弹「已复制」（否则写入失败时用户会拿到死链而不自知）。
               context.read<ShareTabBloc>().add(
                     ShareTabEvent.copyShareLink(link: shareLink),
                   );
-
-              if (FlowyRunner.currentMode.isUnitTest) {
-                return;
-              }
-
-              showToastNotification(
-                message: LocaleKeys.shareTab_copiedLinkToClipboard.tr(),
-              );
             },
           ),
           HSpace(theme.spacing.s),

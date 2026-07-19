@@ -3345,6 +3345,7 @@
     "anyoneInGroupWithLinkCanEdit": "该群组中持有链接的成员可编辑",
     "copyLink": "复制链接",
     "copiedLinkToClipboard": "链接已复制到剪贴板",
+    "createShareLinkFailed": "分享创建失败，链接未生成，请重试",
     "removeAccess": "移除访问权限",
     "turnIntoMember": "转为成员",
     "you": "(你)",

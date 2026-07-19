@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/data/repositories/share_with_user_repository.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
@@ -19,6 +20,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
 import 'package:collection/collection.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:http/http.dart' as http;
 
 export 'share_tab_event.dart';
@@ -303,9 +305,29 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventCopyShareLink event,
     Emitter<ShareTabState> emit,
   ) async {
-    // 在复制链接之前，先调用API创建邀请记录
-    // 这样"共享"菜单就能显示这个邀请
-    await _createShareLinkInvite();
+    // 在复制链接之前，先调用API创建邀请记录，这样"共享"菜单才能显示这个邀请。
+    //
+    // 【健壮性修复 2026-07-19】此处原先忽略创建结果，无论成功与否都把链接复制给用户，
+    // UI 侧也无条件弹出"已复制"提示。一旦创建失败（例如鉴权失效），用户拿到的是一个
+    // **服务端没有邀请记录的死链**——接收方打开只会一直转圈然后失败，而分享者毫不知情。
+    //
+    // 真实事故：2026-07-19 gotrue 故障期间 access_token 无法刷新，
+    // `POST /api/workspace/{ws}/collab/{oid}/invite-link` 全部返回 401，
+    // 分享记录未写入，但链接照常复制给了用户（链接是客户端本地拼接的，不依赖接口）。
+    // 详见 devops-docs/2026-07-19-全线登录失败故障复盘-gotrue端口未发布.md
+    //
+    // 改为：创建失败时**不复制链接**并回传错误，由 UI 明确提示用户重试。
+    final created = await _createShareLinkInvite();
+
+    if (!created) {
+      emit(
+        state.copyWith(
+          linkCopied: false,
+          errorMessage: LocaleKeys.shareTab_createShareLinkFailed.tr(),
+        ),
+      );
+      return;
+    }
 
     getIt<ClipboardService>().setData(
       ClipboardServiceData(
@@ -316,12 +338,16 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     emit(
       state.copyWith(
         linkCopied: true,
+        errorMessage: '',
       ),
     );
   }
 
-  /// 调用后端API创建邀请链接记录
-  Future<void> _createShareLinkInvite() async {
+  /// 调用后端API创建邀请链接记录。
+  ///
+  /// 返回 true 表示服务端已成功写入邀请记录（链接可被接收方正常打开）；
+  /// 返回 false 表示未写入——此时**不应把链接交给用户**，否则就是一个死链。
+  Future<bool> _createShareLinkInvite() async {
     try {
       // 获取当前用户信息
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -332,14 +358,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (userProfile == null) {
         Log.warn('[ShareTabBloc] 获取用户信息失败');
-        return;
+        return false;
       }
 
       // 获取 auth token
       final authToken = userProfile.token;
       if (authToken.isEmpty) {
         Log.warn('[ShareTabBloc] Auth token 为空');
-        return;
+        return false;
       }
 
       // 提取 access token
@@ -355,7 +381,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (accessToken == null) {
         Log.warn('[ShareTabBloc] access_token 为空');
-        return;
+        return false;
       }
 
       // 获取 base URL
@@ -364,7 +390,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (baseUrl.isEmpty) {
         Log.warn('[ShareTabBloc] Base URL 为空');
-        return;
+        return false;
       }
 
       // 构建 API URL
@@ -396,11 +422,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
         _refreshSharedUsers();
         ShareSectionRefreshNotifier.notify();
+        return true;
       } else {
         Log.warn('[ShareTabBloc] 创建邀请链接失败: HTTP ${response.statusCode}');
+        return false;
       }
     } catch (e, stackTrace) {
       Log.error('[ShareTabBloc] 创建邀请链接时出错: $e', stackTrace);
+      return false;
     }
   }
 

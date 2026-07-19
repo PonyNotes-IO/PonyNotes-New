@@ -3619,6 +3619,7 @@
     "anyoneInGroupWithLinkCanEdit": "Anyone in this group with the link can edit",
     "copyLink": "Copy link",
     "copiedLinkToClipboard": "Copied link to clipboard",
+    "createShareLinkFailed": "Failed to create the share link. Please try again.",
     "removeAccess": "Remove access",
     "turnIntoMember": "Turn into Member",
     "you": "(You)",
