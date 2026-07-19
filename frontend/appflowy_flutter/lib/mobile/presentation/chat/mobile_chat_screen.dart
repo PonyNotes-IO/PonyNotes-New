@@ -4,6 +4,7 @@ import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
+import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
@@ -120,7 +121,13 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       child: Row(
         children: [
           IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(BottomNavigationBarItemType.home.routeName!);
+              }
+            },
             icon: const FlowySvg(FlowySvgs.mobile_return_s),
           ),
           Expanded(
@@ -268,7 +275,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       }
 
       if (mounted) {
-        context.go(
+        context.pushReplacement(
           '${MobileChatScreen.routeName}'
           '?${MobileChatScreen.viewId}=${view.id}'
           '&${MobileChatScreen.viewTitle}=${Uri.encodeComponent(view.name)}',

@@ -89,7 +89,13 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
     final afTheme = AppFlowyTheme.of(context);
     return AppBarButton(
       padding: EdgeInsets.zero,
-      onTap: (context) => context.pop(),
+      onTap: (context) {
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/home');
+        }
+      },
       child: ValueListenableBuilder(
         valueListenable: appBarOpacity,
         builder: (_, opacity, __) {

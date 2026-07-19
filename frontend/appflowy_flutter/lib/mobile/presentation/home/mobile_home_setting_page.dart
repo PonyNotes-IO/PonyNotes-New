@@ -49,6 +49,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/settings/plan/settings_plan_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
@@ -59,6 +60,8 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../ai/service/ai_usage_summary.dart';
 
 enum MobileSettingsSection {
   menu,
@@ -161,13 +164,24 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       userId: _userProfile!.id,
     );
 
-    final results = await Future.wait([
-      UserBackendService.getWorkspaceSubscriptionInfo(workspaceId),
-      service.getWorkspaceUsage(),
+    final subscriptionFuture =
+        UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+    final usageFuture = service.getWorkspaceUsage();
+    final currentSubscriptionFuture = SubscriptionService()
+        .getCurrentSubscription(
+      userProfile: _userProfile!,
+      caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
+    );
+
+    await Future.wait([
+      subscriptionFuture,
+      usageFuture,
+      currentSubscriptionFuture,
     ]);
 
-    final subscriptionResult = results[0];
-    final usageResult = results[1];
+    final subscriptionResult = await subscriptionFuture;
+    final usageResult = await usageFuture;
+    final currentSubscription = await currentSubscriptionFuture;
 
     subscriptionResult.fold(
       (info) {
@@ -187,6 +201,10 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       },
       (error) => Log.error('Failed to load workspace usage: ${error.msg}'),
     );
+
+    if (mounted && currentSubscription != null) {
+      setState(() => _currentSubscription = currentSubscription);
+    }
   }
 
   String _getTitle() {
@@ -225,23 +243,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     final theme = Theme.of(context);
     final isMenu = _currentSection == MobileSettingsSection.menu;
 
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: theme.scaffoldBackgroundColor,
-          border: Border(
-            bottom: BorderSide(
-              color: theme.dividerColor.withValues(alpha: 0.5),
-              width: 0.5,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            IconButton(
+    return IconButton(
               onPressed: () {
                 if (isMenu) {
                   Navigator.pop(context);
@@ -254,22 +256,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                 size: const Size(7, 12),
                 color: afTheme.iconColorScheme.primary,
               ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                _getTitle(),
-                style: afTheme.textStyle.heading4.standard(
-                  color: afTheme.textColorScheme.primary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(width: 48),
-          ],
-        ),
-      ),
-    );
+            );
   }
 
   @override
@@ -280,8 +267,12 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       key: _scaffoldKey,
       backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildAppBar(context),
+          Padding(
+            padding: const EdgeInsets.only(top: 25.0,left: 8),
+            child: _buildAppBar(context),
+          ),
           Expanded(
             child: _buildContent(),
           ),
@@ -429,7 +420,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
 
     return SingleChildScrollView(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           children: [
             _UserProfileHeader(userProfile: userProfile),
@@ -439,6 +430,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 subscriptionInfo: subscriptionInfo!,
                 workspaceUsage: workspaceUsage,
                 onUpgrade: () => _showUpgradeDialog(context),
+                currentSubscription: currentSubscription,
               ),
             if (subscriptionInfo != null) const SizedBox(height: 16),
             _SettingsGroupCard(
@@ -497,6 +489,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                   showBottomDivider: false,
                 ),
               ],
+              workspaceUsage: workspaceUsage,
             ),
             const VSpace(16),
             _SettingsGroupCard(
@@ -621,22 +614,24 @@ class _SettingsItem {
 }
 
 class _SettingsGroupCard extends StatelessWidget {
-  const _SettingsGroupCard({required this.items});
+  const _SettingsGroupCard({
+    required this.items,
+    this.workspaceUsage,
+  });
 
   final List<_SettingsItem> items;
+  final WorkspaceUsagePB? workspaceUsage;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final isLightMode = Theme.of(context).brightness == Brightness.light;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.borderColorScheme.primary
-              .withValues(alpha: isLightMode ? 0.3 : 0.08),
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
           width: 1,
         ),
       ),
@@ -659,6 +654,7 @@ class _SettingsGroupCard extends StatelessWidget {
                 endIndent: 16,
               ),
           ],
+
         ],
       ),
     );
@@ -802,149 +798,264 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     required this.subscriptionInfo,
     this.workspaceUsage,
     required this.onUpgrade,
+    this.currentSubscription,
   });
 
   final WorkspaceSubscriptionInfoPB subscriptionInfo;
   final WorkspaceUsagePB? workspaceUsage;
   final VoidCallback onUpgrade;
+  final CurrentSubscription? currentSubscription;
 
-  String _formatDateRange(int endDate) {
+  String _formatDateRange(int endDate, RecurringIntervalPB? interval) {
     final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day);
+    DateTime start;
+
+    if (interval == RecurringIntervalPB.Year) {
+      start = DateTime(end.year - 1, end.month, end.day);
+    } else {
+      if (end.month == 1) {
+        start = DateTime(end.year - 1, 12, end.day);
+      } else {
+        start = DateTime(end.year, end.month - 1, end.day);
+      }
+    }
+
     final startStr =
-        '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+        '${start.year}.${start.month.toString().padLeft(2, '0')}.${start.day.toString().padLeft(2, '0')}';
     final endStr =
-        '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    return '$startStr ~ $endStr';
+        '${end.year}.${end.month.toString().padLeft(2, '0')}.${end.day.toString().padLeft(2, '0')}';
+    return '$startStr至$endStr';
+  }
+
+  String _getPlanDisplayName() {
+    final summary = currentSubscription?.subscription;
+    final planNameFromSummary = summary?.planNameCn?.isNotEmpty == true
+        ? summary!.planNameCn!
+        : (summary?.planCode?.isNotEmpty == true ? summary!.planCode! : null);
+
+    if (planNameFromSummary != null) {
+      return planNameFromSummary;
+    }
+
+    return subscriptionInfo.label;
+  }
+
+  String? _getValidityText() {
+    final summary = currentSubscription?.subscription;
+    if (summary?.endDate != null) {
+      final endDate = summary!.endDate!;
+      if (summary.startDate != null) {
+        final startDate = summary.startDate!;
+        return '有效期：${startDate.year}.${startDate.month.toString().padLeft(2, '0')}.${startDate.day.toString().padLeft(2, '0')}至${endDate.year}.${endDate.month.toString().padLeft(2, '0')}.${endDate.day.toString().padLeft(2, '0')}';
+      }
+      return '有效期：${endDate.year}.${endDate.month.toString().padLeft(2, '0')}.${endDate.day.toString().padLeft(2, '0')}';
+    }
+
+    if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
+        subscriptionInfo.plan.value != 0) {
+      return _formatDateRange(
+          subscriptionInfo.planSubscription.endDate.toInt(),
+          subscriptionInfo.planSubscription.interval);
+    }
+
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final planName = _getPlanDisplayName();
+    final validityText = _getValidityText();
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = constraints.maxWidth;
-        final cardHeight = cardWidth / (704 / 268);
-
-        return UnconstrainedBox(
-          child: SizedBox(
-            width: cardWidth,
-            height: cardHeight,
-            child: Container(
-              decoration: const BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage('assets/navigation/m_setting_profile.png'),
-                  fit: BoxFit.cover,
-                ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/navigation/m_setting_profile.png'),
+                fit: BoxFit.fill,
               ),
-              padding: const EdgeInsets.all(16),
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+            padding: const EdgeInsets.only(top: 18,bottom: 13,left: 22,right: 16),
+            child: AspectRatio(
+              aspectRatio: 353 / 134,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  planName,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                if (validityText != null)
                   Text(
-                    subscriptionInfo.label,
+                    validityText,
                     style: const TextStyle(
                       color: Colors.black,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
-                      subscriptionInfo.plan.value != 0)
-                    Text(
-                      _formatDateRange(
-                          subscriptionInfo.planSubscription.endDate.toInt()),
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 10,
-                      ),
+                const SizedBox(height: 2),
+                if (subscriptionInfo.plan.value == 0 && validityText == null)
+                  Text(
+                    subscriptionInfo.info,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
                     ),
-                  const SizedBox(height: 2),
-                  if (subscriptionInfo.plan.value == 0)
-                    Text(
-                      subscriptionInfo.info,
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 10,
-                      ),
-                      maxLines: 2,
-                    ),
-                  const Spacer(),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Row(
-                          children: [
-                            Text(
-                              workspaceUsage != null
-                                  ? '${workspaceUsage!.totalBlobInGb}GB / ${((workspaceUsage!.storageBytesLimit.toInt() - workspaceUsage!.storageBytes.toInt()) / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB'
-                                  : '加载中...',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: null,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  border: Border.all(
-                                    color: const Color(0xFF44326B),
-                                    width: 1,
-                                  ),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  '剩余空间',
-                                  style: theme.textStyle.heading4
-                                      .standard(
-                                        color: const Color(0xFF44326B),
-                                      )
-                                      .copyWith(fontSize: 10),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      GestureDetector(
-                        onTap: onUpgrade,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFADECA),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            '会员升级',
-                            style: theme.textStyle.heading4
-                                .standard(
-                                  color: const Color(0xFF44326B),
-                                )
-                                .copyWith(fontSize: 12.0),
-                          ),
-                        ),
-                      ),
-                    ],
+                    maxLines: 2,
                   ),
-                ],
-              ),
+                Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          workspaceUsage != null
+                              ? '${workspaceUsage!.totalBlobInGb}GB / ${((workspaceUsage!.storageBytesLimit.toInt() - workspaceUsage!.storageBytes.toInt()) / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB'
+                              : '加载中...',
+                          style: TextStyle(
+                            color: const Color(0xFF4B1B03),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.transparent,
+                              border: Border.all(
+                                color: const Color(0xFFB57E5E),
+                                width: 1,
+                              ),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            child: Text(
+                              '剩余空间',
+                              style: theme.textStyle.heading4
+                                  .standard(
+                                color: const Color(0xFF4B1B03),
+                              )
+                                  .copyWith(fontSize: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: onUpgrade,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFADECA),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '会员升级',
+                          style: theme.textStyle.heading4
+                              .standard(
+                            color: const Color(0xFF4B1B03),
+                          ).copyWith(fontSize: 12.0,fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
             ),
           ),
-        );
-      },
+          if (workspaceUsage != null) ...[
+            Divider(
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+              height: 0.5,
+              indent: 16,
+              endIndent: 16,
+            ),
+            _buildAIUsageRow(theme),
+          ],
+        ],
+      )
+    );
+  }
+
+  Widget _buildAIUsageRow(AppFlowyThemeData theme) {
+    final aiUsage = AiUsageSummary.fromUsage(workspaceUsage!);
+
+    String usageText;
+    Color usageColor;
+
+    if (aiUsage.isUnlimited) {
+      usageText = '不限';
+      usageColor = const Color(0xFFE85D04);
+    } else if (aiUsage.isUnsubscribed) {
+      usageText = '未订阅';
+      usageColor = theme.textColorScheme.secondary;
+    } else if (!aiUsage.hasUsage) {
+      usageText = '--';
+      usageColor = theme.textColorScheme.secondary;
+    } else {
+      usageText = '${aiUsage.remaining}次';
+      usageColor = const Color(0xFFC46B3F);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 16, right: 16, bottom: 16),
+      child: Row(
+        children: [
+          Text(
+            '剩余',
+            style: theme.textStyle.heading4.standard(
+              color: const Color(0xFF141B28),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            usageText,
+            style: theme.textStyle.heading4
+                .standard(
+              color: usageColor,
+            )
+                .copyWith(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'AI对话次数',
+            style: theme.textStyle.heading4.standard(
+              color: const Color(0xFF141B28),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
