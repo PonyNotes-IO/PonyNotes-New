@@ -94,34 +94,47 @@ pub async fn get_user_profile_handler(
   let manager = upgrade_manager(manager)?;
   let session = manager.get_session()?;
 
-  // 【性能修复 2026-07-18】本函数原先「force=true 绕过 5s 防抖 + await 云端往返」才返回。
-  // 而客户端有多处轮询会调用它（工作区角色 3s、成员列表 3s、每个打开的协作页 10s 等），
-  // 实测 Windows 端稳定 102 次/分钟的阻塞式云端请求（28 分钟内 2975 次），持续占用
-  // 事件线程并触发全局重建，是白板绘制卡顿、笔迹不跟手的主因（见 runwen-logs/log.2026-07-18）。
+  // 【回归修复 2026-07-19】本函数必须**同步**完成一次强制云端刷新后再返回。
   //
-  // 改为「本地优先返回 + 后台防抖刷新」：
-  // - 立即返回本地磁盘资料，调用方不再等待网络；
-  // - 云端刷新放到后台且 force=false，复用已有的 5 秒防抖，避免请求风暴；
-  // - 刷新到新数据时仍会通过 DidUpdateUserProfile 通知前端（手机号/邮箱等同步能力保留，
-  //   只是由「同步阻塞到达」变为「异步到达」）。
+  // 原因：客户端有多处 Dart 侧逻辑（分享创建 share_tab_bloc、分享打开
+  // open_note_deeplink_handler、页面权限 page_access_level 等）是用原生 http 直连后端的，
+  // 它们从本函数返回的 profile 中取 `token` 手动拼 Authorization 头，
+  // **完全绕过 client-api 的自动刷新**。这些调用点的 token 新鲜度，实际依赖于此处
+  // 强制刷新链路的一个副作用：
+  //
+  //   refresh_user_profile_with_force(force=true)
+  //     → cloud_service.get_user_profile() → client.get_profile()
+  //     → http_client_with_auth() → refresh_if_expired()   ← token 在此刷新
+  //     → 新 token 随 user_profile_from_af_profile 回写本地库
+  //     → Dart 下次读到的就是**已刷新**的 token
+  //
+  // 2026-07-18 我曾把这里改成「本地优先返回 + 后台防抖刷新」，理由是 GET_PROFILE
+  // 高达 102 次/分、疑为白板卡顿主因。该判断**后被数据推翻**：同版本对照日志显示
+  // 流畅设备的 GET_PROFILE 达 128 次/分（比卡顿设备的 12 次/分更高）却完全不卡，
+  // 证明其频率与卡顿无关；真正的卡顿主因是订阅信息在 build 中无限重发（已由
+  // 1c3e5b60d 修复）。而那次改动移除了上述隐式刷新，使 Dart 直连调用拿到过期 token，
+  // 表现为分享创建/打开返回 401、分享记录写不进去、接收方打开转圈失败。
+  //
+  // 故恢复同步强制刷新。（仅去掉当时那批过于啰嗦的 Step 1/2/3 info 日志。）
+  // 根治方案见 devops-docs/2026-07-19-共享文档打不开根因分析.md：
+  // 应为 Dart 侧直连调用提供统一的「带刷新重试的鉴权 HTTP 客户端」，
+  // 不再依赖本函数的副作用。
   let mut user_profile = manager
     .get_user_profile_from_disk(session.user_id, &session.workspace_id)
     .await?;
 
-  // 后台刷新：不 await，不阻塞调用方；失败仅记 debug，不影响本次返回。
-  {
-    let manager = manager.clone();
-    let old_profile = user_profile.clone();
-    let workspace_id = session.workspace_id.clone();
-    tokio::spawn(async move {
-      if let Err(err) = manager
-        .refresh_user_profile(&old_profile, &workspace_id)
-        .await
-      {
-        tracing::debug!("[get_user_profile_handler] 后台刷新用户资料失败: {:?}", err);
-      }
-    });
+  // 强制刷新（force=true 绕过 5s 防抖），确保下面重新读盘时拿到的是最新 token。
+  let refresh_result = manager
+    .refresh_user_profile_with_force(&user_profile, &session.workspace_id, true)
+    .await;
+  if let Err(err) = &refresh_result {
+    tracing::debug!("[get_user_profile_handler] 云端刷新用户资料失败: {:?}", err);
   }
+
+  // 刷新后重新读盘，取回可能已更新的 token / 手机号 / 邮箱等。
+  user_profile = manager
+    .get_user_profile_from_disk(session.user_id, &session.workspace_id)
+    .await?;
 
   // When the user is logged in with a local account, the email field is a placeholder and should
   // not be exposed to the client. So we set the email field to an empty string.
