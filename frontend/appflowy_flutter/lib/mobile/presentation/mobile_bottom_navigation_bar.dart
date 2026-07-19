@@ -324,13 +324,11 @@ class _HomePageNavigationBar extends StatelessWidget {
       mobileCreateNewPageNotifier.value = ViewLayoutPB.Document;
       return;
     } else if (label == BottomNavigationBarItemType.askAI.label) {
-      // Navigate to AI welcome page via GoRouter (not the navigation shell)
-      GoRouter.of(context).go(BottomNavigationBarItemType.askAI.routeName!);
+      GoRouter.of(context).push(BottomNavigationBarItemType.askAI.routeName!);
       return;
     } else if (label == BottomNavigationBarItemType.notification.label) {
-      // Navigate to notification page via GoRouter (not the navigation shell), like Ask AI
       GoRouter.of(context)
-          .go(BottomNavigationBarItemType.notification.routeName!);
+          .push(BottomNavigationBarItemType.notification.routeName!);
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());
       return;
     }
