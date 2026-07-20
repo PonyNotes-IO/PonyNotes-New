@@ -90,6 +90,34 @@ impl FlowyError {
     self.code == ErrorCode::SingleUploadLimitExceeded
   }
 
+  /// 判断是否为「网络不可用」类错误（断网、连不上服务器、超时）。
+  ///
+  /// 【离线上传支持 2026-07-19】用于把"断网导致的失败"与"业务失败"区分开：
+  /// 前者不该消耗重试次数、也不该向用户报错，而应保持排队等联网后续传。
+  ///
+  /// 为何要按消息特征兜底：client-api 底层 reqwest 的发送失败
+  /// （典型消息 `error sending request for url (...)`）在转换链路中常被折叠为
+  /// `ErrorCode::Internal`，仅凭 code 无法可靠识别。此处与 `is_file_limit_exceeded`
+  /// 采用同样的"code + 消息特征"双重判定风格。
+  pub fn is_network_unavailable(&self) -> bool {
+    if matches!(
+      self.code,
+      ErrorCode::NetworkError | ErrorCode::RequestTimeout
+    ) {
+      return true;
+    }
+
+    let msg = self.msg.to_lowercase();
+    msg.contains("error sending request")
+      || msg.contains("connection refused")
+      || msg.contains("connection reset")
+      || msg.contains("dns error")
+      || msg.contains("timed out")
+      || msg.contains("network is unreachable")
+      || msg.contains("no route to host")
+      || msg.contains("failed to lookup address")
+  }
+
   pub fn should_retry_upload(&self) -> bool {
     // 存储限制错误不应该重试
     // 包括 FileStorageLimitExceeded (100) 和 PlanLimitExceeded (141)

@@ -5,13 +5,23 @@ import 'package:flutter/material.dart';
 
 const String kLocalImagesKey = 'local_images';
 
+/// 文档封面的内置可选背景图。
+///
+/// 【封面图替换 2026-07-20】原为 AppFlowy 自带的 m_cover_image_1~6，
+/// 现整体替换为小马笔记的 9 张自有封面图（3165x600，与封面横幅比例一致）。
+///
+/// 顺带修复一处既有缺陷：原代码引用的扩展名为 `.jpg`，而资源目录中实际文件
+/// 一直是 `.png`，路径对不上导致内置封面图始终加载失败。
 List<String> get builtInAssetImages => [
-      'assets/images/built_in_cover_images/m_cover_image_1.jpg',
-      'assets/images/built_in_cover_images/m_cover_image_2.jpg',
-      'assets/images/built_in_cover_images/m_cover_image_3.jpg',
-      'assets/images/built_in_cover_images/m_cover_image_4.jpg',
-      'assets/images/built_in_cover_images/m_cover_image_5.jpg',
-      'assets/images/built_in_cover_images/m_cover_image_6.jpg',
+      'assets/images/built_in_cover_images/appflowy-cover-01-aurora-glass.png',
+      'assets/images/built_in_cover_images/appflowy-cover-02-paper-collage.png',
+      'assets/images/built_in_cover_images/appflowy-cover-03-ink-mountains.png',
+      'assets/images/built_in_cover_images/appflowy-cover-04-retro-geometry.png',
+      'assets/images/built_in_cover_images/appflowy-cover-05-botanical-miniature.png',
+      'assets/images/built_in_cover_images/appflowy-cover-06-textile-waves.png',
+      'assets/images/built_in_cover_images/appflowy-cover-07-mineral-terrazzo.png',
+      'assets/images/built_in_cover_images/appflowy-cover-08-celestial-blueprint.png',
+      'assets/images/built_in_cover_images/appflowy-cover-09-clay-relief.png',
     ];
 
 class ColorOption {

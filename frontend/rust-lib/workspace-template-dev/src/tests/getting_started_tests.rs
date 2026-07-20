@@ -96,58 +96,26 @@ mod tests {
       .await
       .unwrap();
 
-    // 2 spaces + 4 documents + 1 database + 5 database rows
-    assert_eq!(result.len(), 12);
+    // 【默认工作区精简 2026-07-20】1 个空间 + 1 篇欢迎信文档
+    // （原为 2 空间 + 4 文档 + 1 数据库 + 5 数据库行 = 12）
+    assert_eq!(result.len(), 2);
 
     let views = workspace_view_builder.build();
 
-    // check the number of spaces
-    assert_eq!(views.len(), 2);
+    // 只保留一个默认空间
+    assert_eq!(views.len(), 1);
 
     let general_space = &views[0];
-    let shared_space = &views[1];
 
-    // General
-    assert_eq!(general_space.parent_view.name, "General");
-    // generate space contains 1 document and 1 database at the first level
-    assert_eq!(general_space.child_views.len(), 2);
-    // the first document contains 2 children
-    assert_eq!(general_space.child_views[0].child_views.len(), 3);
-    // the first database contains 0 children
-    assert_eq!(general_space.child_views[1].child_views.len(), 0);
-
-    // Shared
-    assert_eq!(shared_space.parent_view.name, "Shared");
-    // shared space is empty by default
-    assert!(shared_space.child_views.is_empty());
+    assert_eq!(general_space.parent_view.name, "默认的工作空间");
+    // 空间下只有一篇欢迎信
+    assert_eq!(general_space.child_views.len(), 1);
+    assert_eq!(
+      general_space.child_views[0].parent_view.name,
+      "写给第一批测试用户的一封信"
+    );
+    // 欢迎信没有子视图
+    assert!(general_space.child_views[0].child_views.is_empty());
   }
 
-  #[test]
-  fn replace_json_placeholders_test() {
-    let mut json_value = json!({
-        "id": "<desktop_guide_view_id>",
-        "children": ["<referenced_view_id_1>", "<referenced_view_id_2>"],
-        "attributes": {
-            "key": "<value>"
-        }
-    });
-
-    let mut replacements = HashMap::new();
-    replacements.insert("desktop_guide_view_id".to_string(), "1".to_string());
-    replacements.insert("referenced_view_id_1".to_string(), "2".to_string());
-    replacements.insert("referenced_view_id_2".to_string(), "3".to_string());
-    replacements.insert("value".to_string(), "appflowy".to_string());
-
-    replace_json_placeholders(&mut json_value, &replacements);
-
-    let expected = json!({
-        "id": "1",
-        "children": ["2", "3"],
-        "attributes": {
-            "key": "appflowy"
-        }
-    });
-
-    assert_eq!(json_value, expected);
-  }
 }

@@ -407,8 +407,34 @@ enum PageStyleCoverImageType {
         PageStyleCoverImageType.none;
   }
 
+  /// 内置封面图的可选名称（存入文档的 cover value 即为这些字符串）。
+  ///
+  /// 【封面图替换 2026-07-20】原为 '1'~'6'（对应 AppFlowy 自带的
+  /// m_cover_image_1~6.png），现替换为小马笔记自有的 9 张封面图。
+  static const List<String> builtInImageNames = [
+    '01-aurora-glass',
+    '02-paper-collage',
+    '03-ink-mountains',
+    '04-retro-geometry',
+    '05-botanical-miniature',
+    '06-textile-waves',
+    '07-mineral-terrazzo',
+    '08-celestial-blueprint',
+    '09-clay-relief',
+  ];
+
   static String builtInImagePath(String value) {
-    return 'assets/images/built_in_cover_images/m_cover_image_$value.png';
+    // 【兼容旧数据】历史文档保存的 cover value 是 '1'~'6'，对应已被删除的
+    // m_cover_image_N.png。这些资源不再存在，若仍按旧规则拼接会得到不存在的
+    // 路径、导致 Image.asset 抛异常。故将旧值按顺序映射到新图，保证老文档
+    // 打开时仍有封面可显示，而不是报错或空白。
+    final legacyIndex = int.tryParse(value);
+    if (legacyIndex != null) {
+      final mapped = builtInImageNames[
+          (legacyIndex - 1).clamp(0, builtInImageNames.length - 1)];
+      return 'assets/images/built_in_cover_images/appflowy-cover-$mapped.png';
+    }
+    return 'assets/images/built_in_cover_images/appflowy-cover-$value.png';
   }
 }
 

@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_animation_list_widget.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -1069,9 +1071,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (!isClosed) {
           Log.error("Failed to send message: ${err.msg}");
 
+          // 【AI 报错不显示根因修复 2026-07-20】原实现为
+          //   `if (err.code != ErrorCode.Internal) errorMessageTextKey: err.msg`
+          // ——即错误码为 Internal 时**丢弃错误文案**，只留一个空的错误气泡。
+          //
+          // 问题在于后端错误几乎都会落到 Internal：flowy-error 的
+          // impl_from/cloud.rs 明确注释「由于后端的 ErrorCode 反序列化时会默认变成
+          // Internal」。于是真实故障（如 AI 供应商返回 429 额度耗尽）传到 UI 后
+          // 变成一个**没有任何文字的空气泡**，用户既看不到原因、也不知道该怎么办。
+          // 实测：服务端日志明确记录 DeepSeek 429 SetLimitExceeded 并重试 3 次后失败，
+          // 而客户端只显示一个空气泡（见用户截图）。
+          //
+          // 改为：始终带上错误文案；仅在 msg 为空时回退到通用提示，
+          // 保证任何失败都有可读信息，不再出现空白气泡。
+          final errorText =
+              err.msg.trim().isNotEmpty ? err.msg : LocaleKeys.chat_requestFailedFallback.tr();
           final metadata = {
             onetimeShotType: OnetimeShotType.error,
-            if (err.code != ErrorCode.Internal) errorMessageTextKey: err.msg,
+            errorMessageTextKey: errorText,
           };
 
           final error = TextMessage(

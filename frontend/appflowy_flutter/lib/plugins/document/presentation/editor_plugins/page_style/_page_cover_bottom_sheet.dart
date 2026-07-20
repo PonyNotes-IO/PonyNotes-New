@@ -223,7 +223,9 @@ class PageCoverBottomSheet extends StatelessWidget {
     BuildContext context,
     DocumentPageStyleState state,
   ) {
-    final imageNames = ['1', '2', '3', '4', '5', '6'];
+    // 【封面图替换 2026-07-20】改为引用统一来源，避免此处与
+    // PageStyleCoverImageType.builtInImagePath 各写一份名称而失配。
+    final imageNames = PageStyleCoverImageType.builtInImageNames;
     return GridView.builder(
       shrinkWrap: true,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

@@ -338,7 +338,8 @@
       "nSelected": "{} selected",
       "allSelected": "All selected"
     },
-    "stopTooltip": "Stop generating"
+    "stopTooltip": "Stop generating",
+    "requestFailedFallback": "The AI service is temporarily unavailable. Please try again later."
   },
   "trash": {
     "text": "Trash",
@@ -2177,7 +2178,8 @@
           "unableToDisplay": "unable to display"
         },
         "emptyPage": "Empty page"
-      }
+      },
+      "pendingSync": "Pending sync"
     },
     "outlineBlock": {
       "placeholder": "Table of Contents"
@@ -3153,8 +3155,8 @@
     "importFailed": "Import failed, please check the file format",
     "dropNotionFile": "Drop your Notion zip file here to upload, or click to browse",
     "error": {
-        "pageNameIsEmpty": "The page name is empty, please try another one",
-        "pageNameCannotBeEmpty": "Page name cannot be empty"
+      "pageNameIsEmpty": "The page name is empty, please try another one",
+      "pageNameCannotBeEmpty": "Page name cannot be empty"
     }
   },
   "globalComment": {
