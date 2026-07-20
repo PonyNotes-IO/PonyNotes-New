@@ -12,6 +12,7 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.da
 import 'package:appflowy/plugins/whiteboard/presentation/offline_whiteboard_mirror_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
+import 'package:appflowy/workspace/presentation/home/page_stack_visibility.dart';
 
 /// 协作白板 room 服务（xm-arts）主机，用于离线可达性轻量探测。
 const String _kRoomHost = 'https://xm-arts.xiaomabiji.com/';
@@ -269,6 +270,21 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
 
   @override
   Widget build(BuildContext context) {
+    // 【D3D 资源累积根因修复 2026-07-20】本标签转入后台（IndexedStack 非激活项）时，
+    // 主动卸载整个白板子树，释放 WebView2 宿主与其独占的 D3D11 设备。
+    //
+    // 背景：HomeStack 对所有标签 wantKeepAlive，后台白板的 WebView 不销毁；
+    // 崩溃转储（PonyNotes.exe.28208.dmp，2026-07-20 闪退）实测十几个后台白板
+    // 累积出 108 条显卡驱动线程（全进程 244 线程），并扩大了引擎光栅线程
+    // ExternalTextureD3d::PopulateTexture 的销毁竞态窗口（0xC0000409/0x7 闪退）。
+    //
+    // 数据安全：TabsBloc 在 selectTab 等事件 emit 之前已 await
+    // WhiteboardExitFlush.flushAll()（见 tabs_bloc.dart），协作白板的最后编辑
+    // 在卸载前已推送；本地（B 套）白板由 collab 随编辑持续落盘，卸载即安全。
+    // 代价：切回该标签时白板重新加载（走既有 initData 链路，与重新打开文档一致）。
+    if (!PageStackVisibility.of(context)) {
+      return const SizedBox.shrink();
+    }
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {

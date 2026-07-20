@@ -29,7 +29,8 @@ pub fn user_profile_from_af_profile(
   profile: AFUserProfile,
   auth_type: AuthType,
 ) -> Result<UserProfile, Error> {
-  tracing::info!(
+  // 【日志降噪 2026-07-20】随 profile 刷新高频执行，降为 debug。
+  tracing::debug!(
     "user_profile_from_af_profile: email={:?}, phone={:?}, name={:?}",
     profile.email,
     profile.phone,
@@ -59,7 +60,7 @@ pub fn user_profile_from_af_profile(
     workspace_type,
   };
   
-  tracing::info!(
+  tracing::debug!(
     "user_profile_from_af_profile result: email={}, phone={:?}, name={}",
     user_profile.email,
     user_profile.phone,

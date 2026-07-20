@@ -1610,18 +1610,34 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     final controller = _controller;
     _controller = null;
     if (controller != null) {
-      for (final handlerName in _javaScriptHandlerNames) {
+      // 【纹理销毁竞态加固 2026-07-20】原实现在 dispose 内同步销毁原生 controller。
+      // Windows 上引擎光栅线程可能仍在把本 WebView 的 D3D 外部纹理绘制到最后一帧，
+      // 同帧销毁纹理会触发 ExternalTextureD3d::PopulateTexture 抛 C++ 异常 →
+      // noexcept 边界 → std::terminate → 0xC0000409 闪退（PonyNotes.exe.28208.dmp
+      // 崩溃栈实锤）。改为等本帧渲染完成后再延迟一小段销毁：widget 已从树上摘除、
+      // 后续帧不会再引用该纹理，延迟销毁即可避开竞态。controller.dispose 幂等
+      // （插件在 platform view teardown 时也会销毁），双重销毁已由 try/catch 兜底。
+      void teardownController() {
+        for (final handlerName in _javaScriptHandlerNames) {
+          try {
+            controller.removeJavaScriptHandler(handlerName: handlerName);
+          } catch (_) {
+            // Controller may already be disposed by the platform view.
+          }
+        }
         try {
-          controller.removeJavaScriptHandler(handlerName: handlerName);
+          controller.dispose();
         } catch (_) {
-          // Controller may already be disposed by the platform view.
+          // InAppWebView also disposes its controller during platform view teardown.
         }
       }
-      try {
-        controller.dispose();
-      } catch (_) {
-        // InAppWebView also disposes its controller during platform view teardown.
-      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Future<void>.delayed(
+          const Duration(milliseconds: 100),
+          teardownController,
+        );
+      });
     }
 
     final initializationCompleter = _initializationCompleter;

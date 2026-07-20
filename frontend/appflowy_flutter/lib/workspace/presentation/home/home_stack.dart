@@ -20,12 +20,14 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/navigation.dart';
+import 'package:appflowy/workspace/presentation/home/page_stack_visibility.dart';
 import 'package:appflowy/workspace/presentation/home/stable_visibility.dart';
 import 'package:appflowy/workspace/presentation/home/tabs/tabs_manager.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
@@ -156,15 +158,21 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                           IndexedStack(
                             index: state.currentIndex,
                             children: state.pageManagers
-                                .map(
-                                  (pm) => LayoutBuilder(
-                                    // ObjectKey(pm) 确保每个 LayoutBuilder 及其子树
+                                .mapIndexed(
+                                  // PageStackVisibility 向子树标注本标签是否为
+                                  // 激活项：重量级页面（白板 WebView）据此在转入
+                                  // 后台时释放原生资源（D3D 设备/驱动线程），
+                                  // 文档类页面不读取此标记，保活行为不变。
+                                  (index, pm) => PageStackVisibility(
+                                    // ObjectKey(pm) 确保每个子树
                                     // （包括 _PageStackState wantKeepAlive=true）始终与
                                     // 同一个 PageManager 对象绑定。
                                     // 若无此 key，关闭/pin/unpin 标签导致列表位置变化时，
                                     // Flutter 按位置复用状态，旧 pm 的 notifier 被保留
                                     // 在新位置，出现标签名与内容不匹配的错乱问题。
                                     key: ObjectKey(pm),
+                                    isActive: index == state.currentIndex,
+                                    child: LayoutBuilder(
                                     builder: (context, constraints) {
                                       return Row(
                                         children: [
@@ -193,6 +201,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                         ],
                                       );
                                     },
+                                    ),
                                   ),
                                 )
                                 .toList(),

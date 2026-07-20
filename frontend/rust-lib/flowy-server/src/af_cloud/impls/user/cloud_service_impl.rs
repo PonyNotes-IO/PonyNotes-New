@@ -189,9 +189,11 @@ where
       .upgrade()
       .ok_or_else(FlowyError::user_not_login)?;
 
-    tracing::info!("🌐 Fetching user profile from cloud for uid: {}", uid);
+    // 【日志降噪 2026-07-20】此路径每次云端 profile 刷新都会经过（实测可达
+    // 100+ 次/分），info 级会把日志刷到 GB 级并挤占 FFI/落盘带宽，降为 debug。
+    tracing::debug!("🌐 Fetching user profile from cloud for uid: {}", uid);
     let profile = client.get_profile().await?;
-    tracing::info!(
+    tracing::debug!(
       "🌐 Cloud returned profile: email={:?}, phone={:?}, name={:?}",
       profile.email,
       profile.phone,

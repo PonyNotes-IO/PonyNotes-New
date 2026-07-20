@@ -333,6 +333,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       closeOtherTabs: (_) => true,
       goBackToPreviousView: () => true,
       switchWorkspace: (_) => true,
+      // 【D3D 资源累积根因修复 2026-07-20】白板页现在会在转为后台标签时主动卸载
+      // WebView（见 whiteboard_router.dart 的 PageStackVisibility 闸门），因此
+      // selectTab 也会触发当前白板销毁，同样需要先冲刷保存。未挂载协作白板时
+      // hasActive 为 false，本判定不会执行；点击当前已激活标签（index 未变化，
+      // 不会真正切换）也无需冲刷。
+      selectTab: (index) => index != state.currentIndex,
       orElse: () => false,
     );
   }

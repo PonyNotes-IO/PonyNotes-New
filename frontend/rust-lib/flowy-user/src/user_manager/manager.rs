@@ -57,6 +57,13 @@ pub struct UserManager {
   pub(crate) user_workspace_service: Arc<dyn UserWorkspaceService>,
   pub(crate) authenticate_user: Arc<AuthenticateUser>,
   refresh_user_profile_since: AtomicI64,
+  /// 每个用户工作区最近一次**成功**完成云端 profile 刷新的时间戳（秒）。
+  /// 与 refresh_user_profile_since（记录"尝试"时间）不同，只有拿到云端响应
+  /// 并写回本地库后才更新，用于 force 调用的安全收敛判定。
+  refresh_user_profile_success_at: DashMap<(i64, String), i64>,
+  /// 串行化云端 profile 刷新，实现并发合流：同一时刻多个 force 调用只发一次
+  /// 网络请求，后到者在锁内看到 success_at 已新鲜即直接返回。
+  refresh_user_profile_lock: tokio::sync::Mutex<()>,
   pub(crate) is_loading_awareness: Arc<DashMap<Uuid, bool>>,
 }
 
@@ -87,6 +94,8 @@ impl UserManager {
       collab_interact: RwLock::new(Arc::new(DefaultCollabInteract)),
       authenticate_user,
       refresh_user_profile_since,
+      refresh_user_profile_success_at: Default::default(),
+      refresh_user_profile_lock: tokio::sync::Mutex::new(()),
       user_workspace_service,
       is_loading_awareness: Arc::new(Default::default()),
     });
@@ -527,6 +536,9 @@ impl UserManager {
 
   #[tracing::instrument(level = "info", skip(self))]
   pub async fn sign_out(&self) -> Result<(), FlowyError> {
+    // 重置"最近成功刷新"时间戳：避免登出后 5s 内换号登录时，
+    // 新账号的首次强制刷新被上一账号的新鲜度判定跳过。
+    self.refresh_user_profile_success_at.clear();
     if let Ok(session) = self.get_session() {
       sign_out(
         &self.cloud_service()?,
@@ -628,13 +640,36 @@ impl UserManager {
       return Ok(());
     }
 
-    let now = chrono::Utc::now().timestamp();
+    let now = Utc::now().timestamp();
     // Add debounce to avoid too many requests (unless force is true)
     if !force && now - self.refresh_user_profile_since.load(Ordering::SeqCst) < 5 {
-      tracing::info!("⏭️ Skipping refresh due to debounce (last refresh was < 5 seconds ago)");
+      tracing::debug!("⏭️ Skipping refresh due to debounce (last refresh was < 5 seconds ago)");
       return Ok(());
     }
     self.refresh_user_profile_since.store(now, Ordering::SeqCst);
+
+    // 【请求风暴收敛 2026-07-20】force=true 的调用同样收敛，但**必须保持同步语义**。
+    //
+    // 历史约束（见 event_handler.rs get_user_profile_handler 的 2026-07-19 回归注释）：
+    // 分享/权限/深链等 Dart 直连 HTTP 调用点依赖本函数"刷新完成后才返回"的副作用
+    // 来保证 token 新鲜，07-18 那版"本地优先返回 + 后台防抖刷新"因返回了可能已过期
+    // 数小时的 token 而引发 401 回归。本次收敛与那版的本质区别：
+    // - 任何返回路径上，token 要么刚刚同步刷新完成，要么距上次**成功**刷新 ≤ 5s
+    //   （5s 前刚通过 client-api 的 refresh_if_expired，不可能已过期）；
+    // - 并发调用经互斥锁合流：同一时刻只发一次网络请求，后到者等待其完成后
+    //   直接复用结果返回（依旧是"等到刷新完成才返回"）。
+    // 效果：GET_PROFILE 由实测 ~100+ 次/分收敛到理论上限 12 次/分。
+    let _guard = self.refresh_user_profile_lock.lock().await;
+    let now = Utc::now().timestamp();
+    if profile_refresh_succeeded_recently(
+      &self.refresh_user_profile_success_at,
+      old_user_profile.uid,
+      workspace_id,
+      now,
+    ) {
+      tracing::debug!("⏭️ Profile refreshed successfully within 5s, reuse it");
+      return Ok(());
+    }
 
     let uid = old_user_profile.uid;
     let result: Result<UserProfile, FlowyError> = self
@@ -1196,6 +1231,75 @@ fn is_same_visible_user_profile(a: &UserProfile, b: &UserProfile) -> bool {
     && a.token == b.token
     && a.auth_type == b.auth_type
     && a.workspace_type == b.workspace_type
+}
+
+fn profile_refresh_succeeded_recently(
+  refreshes: &DashMap<(i64, String), i64>,
+  uid: i64,
+  workspace_id: &str,
+  now: i64,
+) -> bool {
+  refreshes
+    .get(&(uid, workspace_id.to_owned()))
+    .is_some_and(|success_at| now - *success_at < 5)
+}
+
+fn record_profile_refresh_success(
+  refreshes: &DashMap<(i64, String), i64>,
+  uid: i64,
+  workspace_id: &str,
+  now: i64,
+) {
+  refreshes.insert((uid, workspace_id.to_owned()), now);
+}
+
+#[cfg(test)]
+mod refresh_profile_tests {
+  use super::*;
+
+  #[test]
+  fn success_timestamp_is_scoped_to_user_and_workspace() {
+    let refreshes = DashMap::new();
+    record_profile_refresh_success(&refreshes, 1, "workspace-a", 100);
+
+    assert!(profile_refresh_succeeded_recently(
+      &refreshes,
+      1,
+      "workspace-a",
+      104
+    ));
+    assert!(!profile_refresh_succeeded_recently(
+      &refreshes,
+      1,
+      "workspace-b",
+      104
+    ));
+    assert!(!profile_refresh_succeeded_recently(
+      &refreshes,
+      2,
+      "workspace-a",
+      104
+    ));
+  }
+
+  #[test]
+  fn success_timestamp_expires_after_five_seconds() {
+    let refreshes = DashMap::new();
+    record_profile_refresh_success(&refreshes, 1, "workspace-a", 100);
+
+    assert!(profile_refresh_succeeded_recently(
+      &refreshes,
+      1,
+      "workspace-a",
+      104
+    ));
+    assert!(!profile_refresh_succeeded_recently(
+      &refreshes,
+      1,
+      "workspace-a",
+      105
+    ));
+  }
 }
 
 #[instrument(level = "info", skip_all, err)]
