@@ -189,6 +189,9 @@ impl FileUploader {
       .current_uploads
       .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+    // 【离线上传支持 2026-07-19】标记本轮是否因断网失败，用于决定退避时长。
+    let mut offline_backoff = false;
+
     match task {
       UploadTask::Task {
         local_file_path,
@@ -202,12 +205,35 @@ impl FileUploader {
           }
 
           if err.should_retry_upload() {
-            info!(
-              "[File] Failed to upload file: {}, retry_count:{}",
-              err, retry_count
-            );
+            // 【离线上传支持 2026-07-19】断网导致的失败**不消耗重试次数**。
+            //
+            // 原实现对所有可重试错误一律 retry_count += 1，而上限为 5
+            // （见本函数开头的 `task.retry_count() > 5` 判断，超限即丢弃任务）。
+            // 用户断网期间这 5 次会被迅速耗尽，任务被移出内存队列，
+            // 于是**联网后也再不会续传**——文件虽仍在本地与 SQLite 中，却永远传不上云端。
+            // 这与"断网可正常插入、联网后自动同步"的需求直接冲突。
+            //
+            // 故：网络不可用属于外部条件而非任务本身的问题，保持原计数重新入队即可；
+            // 真正的业务性失败仍照常累加、受上限保护，避免死循环重试。
+            let is_offline = err.is_network_unavailable();
+            if is_offline {
+              info!(
+                "[File] Network unavailable, requeue without consuming retry budget: {}",
+                err
+              );
+              // 断网期间放慢重试节奏：默认每轮仅退避 2 秒，若不加长会变成
+              // 约 30 次/分钟的无谓网络尝试（断网可能持续数小时）。
+              // 这里改为 30 秒；联网恢复时 update_network_reachable → uploader.resume()
+              // 会立即发 Signal::Proceed 唤醒，不会因为退避而延迟续传。
+              offline_backoff = true;
+            } else {
+              info!(
+                "[File] Failed to upload file: {}, retry_count:{}",
+                err, retry_count
+              );
+              retry_count += 1;
+            }
             let record = record.unbox_or_error().unwrap();
-            retry_count += 1;
             self.queue.tasks.write().await.push(UploadTask::Task {
               local_file_path,
               record,
@@ -253,11 +279,13 @@ impl FileUploader {
     self
       .current_uploads
       .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-    trace!("[File] process_next after 2 seconds");
+    // 断网时用更长退避，避免无谓的高频网络尝试；联网恢复由 resume() 立即唤醒。
+    let backoff_secs = if offline_backoff { 30 } else { 2 };
+    trace!("[File] process_next after {} seconds", backoff_secs);
     self
       .queue
       .notifier
-      .send_replace(Signal::ProceedAfterSecs(2));
+      .send_replace(Signal::ProceedAfterSecs(backoff_secs));
     None
   }
 }
