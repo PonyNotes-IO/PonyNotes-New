@@ -338,7 +338,8 @@
       "nSelected": "{} selected",
       "allSelected": "All selected"
     },
-    "stopTooltip": "Stop generating"
+    "stopTooltip": "Stop generating",
+    "requestFailedFallback": "The AI service is temporarily unavailable. Please try again later."
   },
   "trash": {
     "text": "Trash",

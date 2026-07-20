@@ -338,7 +338,8 @@
     },
     "selectSources": "选择来源",
     "sourcesLimitReached": "您最多只能选择3个顶级文档及其子文档",
-    "stopTooltip": "停止生成"
+    "stopTooltip": "停止生成",
+    "requestFailedFallback": "AI 服务暂时不可用，请稍后重试"
   },
   "trash": {
     "text": "回收站",
