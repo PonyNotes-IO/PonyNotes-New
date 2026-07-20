@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flowy_infra/platform_extension.dart';
 
+import 'package:appflowy/plugins/document/presentation/editor_plugins/common/pending_sync_badge.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_option_tile.dart';
@@ -306,6 +307,18 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
                       : child!,
                   if (value)
                     widget.menuBuilder!(widget.node, this, imageStateNotifier),
+                  // 【离线上传支持 2026-07-19】未同步到云端时在左上角展示「待同步」。
+                  // 断网插入的图片已落本地缓存并在上传队列中，联网后自动续传；
+                  // 角标为 Positioned 叠加，不参与 Stack 尺寸计算，不影响图片布局，
+                  // 上传完成后组件自行返回 SizedBox.shrink 隐藏。
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: PendingSyncBadge(
+                      fileUrl: node.attributes[CustomImageBlockKeys.url] as String? ??
+                          '',
+                    ),
+                  ),
                 ],
               );
             },
