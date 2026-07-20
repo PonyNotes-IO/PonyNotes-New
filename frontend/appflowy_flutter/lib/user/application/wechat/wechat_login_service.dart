@@ -36,7 +36,8 @@ class WeChatLoginService {
   /// have the WeChat app installed. Callers (e.g. SignInBloc) match this exact
   /// string to display a friendly installation hint instead of the generic
   /// "please try again" error.
-  static const String notInstalledError = 'WeChat is not installed on this device';
+  static const String notInstalledError =
+      'WeChat is not installed on this device';
 
   Completer<String>? _codeWaiter;
   String? _expectedState;
@@ -75,7 +76,8 @@ class WeChatLoginService {
       if (UniversalPlatform.isIOS) {
         return await _getCodeFromIOSFluwx();
       }
-      return FlowyResult.failure('WeChat login is only supported on Android/iOS');
+      return FlowyResult.failure(
+          'WeChat login is only supported on Android/iOS');
     } on TimeoutException catch (e) {
       Log.error('🟢[WeChatLoginService] WeChat login timed out: $e');
       return FlowyResult.failure('WeChat login timed out');
@@ -96,15 +98,13 @@ class WeChatLoginService {
     final state = DateTime.now().microsecondsSinceEpoch.toString();
 
     try {
-      final result = await _channel
-          .invokeMethod<Map<dynamic, dynamic>>(
-            'auth',
-            <String, dynamic>{'state': state},
-          )
-          .timeout(
-            const Duration(minutes: 2),
-            onTimeout: () => throw TimeoutException('WeChat login timed out'),
-          );
+      final result = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'auth',
+        <String, dynamic>{'state': state},
+      ).timeout(
+        const Duration(minutes: 2),
+        onTimeout: () => throw TimeoutException('WeChat login timed out'),
+      );
 
       final errCode = (result?['errCode'] as int?) ?? -1;
       final code = result?['code'] as String?;
@@ -122,16 +122,19 @@ class WeChatLoginService {
       // WeChat SDK errCode=-2 / BaseResp.ErrCode.ERR_USER_CANCEL means the user
       // dismissed the auth dialog. Treat it as a benign cancel rather than an error.
       if (errCode == -2) {
-        Log.info('🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
+        Log.info(
+            '🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
         return FlowyResult.failure('${cancelledPrefix}WeChat auth cancelled');
       }
       return FlowyResult.failure('WeChat login failed: errCode=$errCode');
     } on PlatformException catch (e) {
-      Log.error('🟢[WeChatLoginService] WeChat PlatformException: ${e.code} ${e.message}');
+      Log.error(
+          '🟢[WeChatLoginService] WeChat PlatformException: ${e.code} ${e.message}');
       // The native WeChatBridge raises a PlatformException with code "CANCELLED"
       // when the user backs out of the WeChat auth flow without confirming.
       if (e.code == 'CANCELLED') {
-        Log.info('🟢[WeChatLoginService] WeChat auth cancelled by user (PlatformException CANCELLED)');
+        Log.info(
+            '🟢[WeChatLoginService] WeChat auth cancelled by user (PlatformException CANCELLED)');
         return FlowyResult.failure('${cancelledPrefix}WeChat auth cancelled');
       }
       return FlowyResult.failure('WeChat login failed: ${e.message ?? e.code}');
@@ -175,8 +178,10 @@ class WeChatLoginService {
           }
         } else if (errCode == -2) {
           // WeChat SDK ERR_USER_CANCEL: user dismissed the auth dialog.
-          Log.info('🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
-          codeCompleter.completeError('${cancelledPrefix}WeChat auth cancelled');
+          Log.info(
+              '🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
+          codeCompleter
+              .completeError('${cancelledPrefix}WeChat auth cancelled');
         } else {
           codeCompleter.completeError(
             'WeChat login failed: errCode=$errCode, errStr=$errStr',
@@ -249,7 +254,8 @@ class WeChatLoginService {
     };
 
     final query = Uri(queryParameters: params).query;
-    final url = 'https://open.weixin.qq.com/connect/qrconnect?$query#wechat_redirect';
+    final url =
+        'https://open.weixin.qq.com/connect/qrconnect?$query#wechat_redirect';
 
     try {
       await launchUrlString(url, mode: LaunchMode.externalApplication);
@@ -281,15 +287,18 @@ class WeChatLoginService {
     try {
       if (UniversalPlatform.isAndroid) {
         final isInstalled = await _channel.invokeMethod<bool>('isInstalled');
-        Log.info('🟢[WeChatLoginService] WeChat installed (android bridge): $isInstalled');
+        Log.info(
+            '🟢[WeChatLoginService] WeChat installed (android bridge): $isInstalled');
         return isInstalled ?? false;
       }
       // iOS: fluwx
       final isInstalled = await fluwx.Fluwx().isWeChatInstalled;
-      Log.info('🟢[WeChatLoginService] WeChat installed (ios fluwx): $isInstalled');
+      Log.info(
+          '🟢[WeChatLoginService] WeChat installed (ios fluwx): $isInstalled');
       return isInstalled;
     } catch (e) {
-      Log.error('🟢[WeChatLoginService] Error checking if WeChat is installed: $e');
+      Log.error(
+          '🟢[WeChatLoginService] Error checking if WeChat is installed: $e');
       return false;
     }
   }

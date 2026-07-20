@@ -218,6 +218,10 @@ dependency_overrides:
   http: ^1.0.0
   value_layout_builder: ^0.5.0
   device_info_plus: ^11.2.2
+  # 把 win32 从 5.10.1 顶到 5.13.0，避开 Dart 3.9 前端对 `external` 的严格校验
+  # （5.10.1 的 structs.g.dart / variant.dart 用 `external int xxx;` 做 ffi 占位，
+  #  在 frontend_server 新版本下会被拒，导致 Android / 桌面所有真机编译失败）
+  win32: 5.13.0
   flutter_math_fork: ^0.7.3
   
   # 使用官方兼容版本

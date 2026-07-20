@@ -102,13 +102,16 @@ class WeChatApi(private val context: Context) {
             putExtra("code", code)
             putExtra("state", state)
         }
+        android.util.Log.i("WeChatApi", "notifyAuthResult: errCode=$errCode, code=${code?.take(8)}, sending broadcast to $packageName")
         appCtx.sendBroadcast(intent)
+        android.util.Log.i("WeChatApi", "notifyAuthResult: broadcast sent")
     }
 
     /**
      * 由 [WXEntryActivity.onCreate] 调用，处理来自微信的回调。
      */
     fun handleWXEntryIntent(intent: Intent, callback: AuthCallback) {
+        android.util.Log.i("WeChatApi", "handleWXEntryIntent: intent action=${intent.action}")
         try {
             val result = wxApi.handleIntent(intent, object : com.tencent.mm.opensdk.openapi.IWXAPIEventHandler {
                 override fun onReq(req: com.tencent.mm.opensdk.modelbase.BaseReq?) {
@@ -116,6 +119,7 @@ class WeChatApi(private val context: Context) {
                 }
 
                 override fun onResp(resp: com.tencent.mm.opensdk.modelbase.BaseResp?) {
+                    android.util.Log.i("WeChatApi", "handleWXEntryIntent onResp: type=${resp?.javaClass?.simpleName}, errCode=${resp?.errCode}")
                     if (resp is com.tencent.mm.opensdk.modelmsg.SendAuth.Resp) {
                         callback.onAuthResponse(resp.errCode, resp.code, resp.state)
                     } else if (resp != null) {
@@ -125,6 +129,7 @@ class WeChatApi(private val context: Context) {
                     }
                 }
             })
+            android.util.Log.i("WeChatApi", "handleWXEntryIntent: handleIntent returned $result")
             if (!result) {
                 callback.onAuthResponse(-1, null, null)
             }

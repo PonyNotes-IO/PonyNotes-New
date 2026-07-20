@@ -20,11 +20,12 @@ import io.flutter.plugin.common.MethodChannel
  * - `isInstalled() -> bool`   检查微信是否已安装
  * - `auth(state: String) -> { errCode, code, state }`  发起授权，返回微信回调
  *
- * **回调机制**：
- * 1. Flutter 调用 `auth` 时，本类记下 pendingResult，向 WeChatApi 发送 PendingIntent
- * 2. 用户在微信里点同意 → 微信拉起 WXEntryActivity
- * 3. WXEntryActivity 通过 ACTION_HANDLE_RESP broadcast 把结果发回来
- * 4. WeChatBridge 收到 broadcast，调用 pendingResult.success(...)
+ * **回调机制（双保险）**：
+ * 1. **直接调用**：`WXEntryActivity` 解析完回调后直接调用
+ *    [deliverResult]（同进程，零依赖），这是首选路径。
+ * 2. **Broadcast**：`WeChatApi.notifyAuthResult` 也广播一条
+ *    `ACTION_HANDLE_RESP`，receiver 兜底（处理 WXEntryActivity 跑在独立进程
+ *    或被宿主进程强制重置的极端场景）。
  *
  * **安全机制**：
  * - 单实例守卫：同一时刻只有一个 auth 在 in-flight，否则返回 ALREADY_RUNNING
@@ -38,12 +39,14 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
         private const val AUTH_TIMEOUT_MS = 120_000L
 
         /**
-         * onResume 后等这么久：如果 broadcast 还没到，pending 视为陈旧，按取消处理。
+         * onResume 后等这么久：如果回调还没到，pending 视为陈旧，按取消处理。
          *
          * 选 1500ms 是因为：
-         * - 正常流程：用户在微信里点同意/拒绝 → 微信关掉 → 我们 onResume → broadcast 几乎同时到，
-         *   远小于 1.5s
-         * - 异常流程：微信 SDK 没回调、用户从别处回来 → 1.5s 后自动清理，避免 pending 卡住
+         * - 正常流程：用户在微信里点同意/拒绝 → 微信关掉 → 我们 onResume →
+         *   WXEntryActivity 已经 finish 或正在 finish，回调会通过 [deliverResult]
+         *   几乎同时到达，远小于 1.5s
+         * - 异常流程：微信 SDK 没回调、用户从别处回来 → 1.5s 后自动清理，
+         *   避免 pending 卡住
          */
         private const val STALE_RESUME_MS = 1500L
     }
@@ -53,20 +56,42 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
     private var pendingTimeout: Runnable? = null
     private val handler = Handler(Looper.getMainLooper())
 
+    /** 只读访问，给 log 用：返回当前 pending 是否存在。 */
+    fun pendingResultForLog(): String = if (pendingResult != null) "present" else "null"
+
+    /**
+     * 由 [WXEntryActivity] 直接调用的回调入口。
+     *
+     * 这是首选回调路径：WXEntryActivity 解析完微信回调后，直接调用本方法，
+     * 不依赖 Broadcast 系统。同进程内同步可达，没有 RECEIVER_NOT_EXPORTED、
+     * PendingIntent flag、Android 14 广播优化等坑点。
+     *
+     * 通过 [Handler] post 到主线程，保证与 [onMethodCall] 同线程，避免
+     * `pendingResult.success()` 在非主线程调用导致 MethodChannel 状态异常。
+     */
+    fun deliverResult(errCode: Int, code: String?, state: String?) {
+        android.util.Log.i(
+            "WeChatBridge",
+            "deliverResult from WXEntryActivity: errCode=$errCode, code=${code?.take(8)}, state=$state",
+        )
+        handler.post {
+            val result = pendingResult ?: run {
+                android.util.Log.w("WeChatBridge", "deliverResult: no pendingResult, ignoring")
+                return@post
+            }
+            clearPending()
+            result.success(
+                mapOf(
+                    "errCode" to errCode,
+                    "code" to code,
+                    "state" to state,
+                ),
+            )
+        }
+    }
+
     /**
      * pending 状态下的开始时间戳，用于 onResume 时判断 pending 是否已经"陈旧"。
-     *
-     * 调用时序：
-     *   用户点按钮 → Flutter 调 auth → pendingResult 设置 + 记录 pendingTimestamp
-     *   → 微信 APP 被拉起 → 我们 APP onPause
-     *   → 用户在微信里点同意/拒绝 → 微信关掉 → 我们 APP onResume
-     *   → 此时 broadcast 会在 onResume 之后很快到达（毫秒级）
-     *
-     * onResume 时不立即清 pending，而是 post 一个延迟任务：
-     *   - 如果 [STALE_RESUME_MS] 毫秒内 broadcast 到了，pending 已被 receiver 清掉，
-     *     这个 runnable 跑起来时看到 pendingResult==null 就直接 return。
-     *   - 如果超过 [STALE_RESUME_MS] broadcast 还没来，说明用户是真取消/微信没回调，
-     *     这时才当作 CANCELLED 处理。
      */
     private var pendingTimestamp: Long = 0L
     private val staleResumeCheckRunnable = Runnable {
@@ -81,22 +106,14 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            android.util.Log.i("WeChatBridge", "receiver got broadcast: action=${intent.action}")
             if (intent.action != WeChatApi.ACTION_HANDLE_RESP) return
-
-            val result = pendingResult ?: return
-            clearPending()
 
             val errCode = intent.getIntExtra("errCode", -1)
             val code = intent.getStringExtra("code")
             val state = intent.getStringExtra("state")
-
-            result.success(
-                mapOf(
-                    "errCode" to errCode,
-                    "code" to code,
-                    "state" to state,
-                ),
-            )
+            // 直接走 deliverResult 的同一路径，避免两条路径双发结果。
+            deliverResult(errCode, code, state)
         }
     }
 
@@ -114,12 +131,13 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
      * 由 MainActivity.onResume 调用。
      *
      * 修复前的问题：onResume 时**无条件**清掉 pending 并 error CANCELLED，导致正常流程
-     * （用户点同意/拒绝 → 微信关掉 → 我们 APP onResume → broadcast 紧跟着到达）也被
-     * 误杀成 CANCELLED。
+     * （用户点同意/拒绝 → 微信关掉 → 我们 APP onResume → WXEntryActivity 紧跟着回调）
+     * 也被误杀成 CANCELLED。
      *
-     * 修复后：post 一个延迟任务 [staleResumeCheckRunnable]。如果 broadcast 在
-     * [STALE_RESUME_MS] 毫秒内到达，receiver 会清掉 pending，runnable 跑起来时
-     * pendingResult 已为 null 直接 return；如果超过这个窗口 broadcast 还没来，
+     * 修复后：post 一个延迟任务 [staleResumeCheckRunnable]。如果回调在
+     * [STALE_RESUME_MS] 毫秒内到达（无论是 WXEntryActivity 直接 deliverResult
+     * 还是 receiver 收到 broadcast），pending 已被清掉，runnable 跑起来时
+     * pendingResult 已为 null 直接 return；如果超过这个窗口回调还没来，
      * 才当作"用户取消/微信没回调"处理。
      */
     fun resetOnResume() {
