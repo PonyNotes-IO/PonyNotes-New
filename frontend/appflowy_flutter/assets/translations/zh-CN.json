@@ -2229,7 +2229,8 @@
           "failedMovePage": "操作失败"
         },
         "handlingPasteHint": " - (h和ling paste)"
-      }
+      },
+      "pendingSync": "待同步"
     },
     "outlineBlock": {
       "placeholder": "目录"
