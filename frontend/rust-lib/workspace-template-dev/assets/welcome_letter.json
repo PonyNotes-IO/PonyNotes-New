@@ -1,0 +1,179 @@
+{
+  "type": "page",
+  "children": [
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "您好，欢迎来到"
+          },
+          {
+            "insert": "小马笔记",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "你现在使用的还不是一个正式版本，而是一匹刚刚学会奔跑的小马。它已经可以记录、整理和思考，但偶尔也可能迷路、摔跤，甚至闹一点小脾气。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "小马笔记目前由一个三人团队开发。我们正在完善稳定性、设备适配和数据安全，也因此特别需要真实用户的帮助。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "测试期间，请注意："
+          }
+        ]
+      }
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "不要存放唯一且无法恢复的重要资料。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "建议定期导出或备份笔记。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "遇到崩溃、卡顿或数据异常，请尽快告诉我们。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "普通笔记以本地保存为主；主动使用AI时，相关内容可能发送给你选择的模型服务。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "提交截图或日志前，请检查并删除个人隐私。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "你的每一次反馈，都可能直接影响下一个版本。无论是一个Bug、一项建议，还是一句“这里用起来不太顺手”，对我们都很重要。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "我们无法保证测试版永远不出问题，但会认真对待每一条反馈，也会尽力保护你交给小马笔记的内容。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "谢谢你愿意在它还不完美的时候来到这里。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "希望有一天，我们可以一起把这匹小马，养成真正可靠的工作伙伴。"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": []
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "马同学与小马笔记团队",
+            "attributes": {
+              "bold": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "版本：[1.0.19]　日期：[2026.07.20]"
+          }
+        ]
+      }
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": []
+      }
+    }
+  ]
+}
