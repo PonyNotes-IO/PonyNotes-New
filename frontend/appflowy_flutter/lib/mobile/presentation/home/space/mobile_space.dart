@@ -327,7 +327,7 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: widget.space,
-          onAction: (layout) {
+          onAction: (layout, {String? extra}) {
             Navigator.of(sheetContext).pop();
             context.read<SpaceBloc>().add(
                   SpaceEvent.createPage(
