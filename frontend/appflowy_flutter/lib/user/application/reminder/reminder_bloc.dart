@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -192,8 +190,12 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 final availableReminders =
                     await filterAvailableReminders(reminders);
                 // Separate archived reminders
-                final archived =
-                    reminders.where((r) => r.isArchived).toList();
+                final archived = reminders
+                    .where(
+                      (reminder) =>
+                          reminder.isArchived && !_isGlobalReminder(reminder),
+                    )
+                    .toList();
 
                 // only print the reminder ids are not the same as the previous ones
                 final previousReminderIds =
@@ -215,12 +217,16 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                       reminders: availableReminders,
                       serverReminders: reminders,
                       archivedReminders: archived,
+                      globalReminders: globalReminders,
                     ),
                   );
                 }
               },
               (error) {
                 Log.error('Failed to fetch reminders: $error');
+                if (globalReminders != null && !isClosed && !emit.isDone) {
+                  emit(state.copyWith(globalReminders: globalReminders));
+                }
               },
             );
           },
@@ -298,7 +304,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                   Log.info('After adding reminder: ${reminders.length}');
                   emit(state.copyWith(reminders: reminders));
                 }
-                
+
                 // Only schedule future unread reminders for system notifications.
                 if (!reminder.isRead) {
                   await NotificationService()
@@ -368,21 +374,27 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
 
               // Synchronously update archivedReminders when isArchived changes
               var archivedReminders = [...state.archivedReminders];
-              final wasArchived = archivedReminders.any((r) => r.id == newReminder.id);
+              final wasArchived =
+                  archivedReminders.any((r) => r.id == newReminder.id);
               // Use meta directly since ReminderPB has no isArchived protobuf field
-              final isNowArchived = newReminder.meta[ReminderMetaKeys.isArchived] == true.toString();
+              final isNowArchived =
+                  newReminder.meta[ReminderMetaKeys.isArchived] ==
+                      true.toString();
               if (isNowArchived && !wasArchived) {
                 archivedReminders = [...archivedReminders, newReminder];
               } else if (!isNowArchived && wasArchived) {
-                archivedReminders =
-                    archivedReminders.where((r) => r.id != newReminder.id).toList();
+                archivedReminders = archivedReminders
+                    .where((r) => r.id != newReminder.id)
+                    .toList();
               }
 
               // Also keep serverReminders in sync so allReminders reflects the change
               var serverReminders = [...state.serverReminders];
-              final serverIdx = serverReminders.indexWhere((r) => r.id == newReminder.id);
+              final serverIdx =
+                  serverReminders.indexWhere((r) => r.id == newReminder.id);
               if (serverIdx != -1) {
-                serverReminders.replaceRange(serverIdx, serverIdx + 1, [newReminder]);
+                serverReminders
+                    .replaceRange(serverIdx, serverIdx + 1, [newReminder]);
               } else {
                 serverReminders = [...serverReminders, newReminder];
               }
@@ -417,18 +429,22 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 state.allReminders.map((e) => e.id).toSet(),
               )) {
                 reminders.replaceRange(index, index + 1, [newReminder]);
-                emit(state.copyWith(
-                  reminders: reminders,
-                  archivedReminders: archivedReminders,
-                  serverReminders: serverReminders,
-                ));
+                emit(
+                  state.copyWith(
+                    reminders: reminders,
+                    archivedReminders: archivedReminders,
+                    serverReminders: serverReminders,
+                  ),
+                );
               } else {
                 reminders.removeAt(index);
-                emit(state.copyWith(
-                  reminders: reminders,
-                  archivedReminders: archivedReminders,
-                  serverReminders: serverReminders,
-                ));
+                emit(
+                  state.copyWith(
+                    reminders: reminders,
+                    archivedReminders: archivedReminders,
+                    serverReminders: serverReminders,
+                  ),
+                );
               }
             }, (error) {
               Log.error(
@@ -483,13 +499,14 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             }
           },
           markAsRead: (reminderIds) async {
-            final reminders = await _onMarkAsRead(reminderIds: reminderIds);
+            final result = await _onMarkAsRead(reminderIds: reminderIds);
 
             Log.info('Marked reminders as read: $reminderIds');
 
             emit(
               state.copyWith(
-                reminders: reminders,
+                reminders: result.workspaceReminders,
+                globalReminders: result.globalReminders,
               ),
             );
           },
@@ -504,20 +521,20 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
-                archivedReminders: state.serverReminders
-                    .where((r) => r.isArchived)
-                    .toList(),
+                archivedReminders:
+                    state.serverReminders.where((r) => r.isArchived).toList(),
               ),
             );
           },
           markAllRead: () async {
-            final reminders = await _onMarkAsRead();
+            final result = await _onMarkAsRead();
 
             Log.info('Marked all reminders as read');
 
             emit(
               state.copyWith(
-                reminders: reminders,
+                reminders: result.workspaceReminders,
+                globalReminders: result.globalReminders,
               ),
             );
           },
@@ -529,9 +546,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
-                archivedReminders: state.serverReminders
-                    .where((r) => r.isArchived)
-                    .toList(),
+                archivedReminders:
+                    state.serverReminders.where((r) => r.isArchived).toList(),
               ),
             );
           },
@@ -540,9 +556,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
-                archivedReminders: state.serverReminders
-                    .where((r) => r.isArchived)
-                    .toList(),
+                archivedReminders:
+                    state.serverReminders.where((r) => r.isArchived).toList(),
               ),
             );
           },
@@ -568,18 +583,43 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   ///
   /// If the [reminderIds] is null, all unread reminders will be marked as read
   /// Otherwise, only the reminders with the given IDs will be marked as read
-  Future<List<ReminderPB>> _onMarkAsRead({
+  Future<_MarkReadResult> _onMarkAsRead({
     List<String>? reminderIds,
   }) async {
+    final workspaceReminders = state.workspaceReminders;
+    final globalReminders = state.globalReminders;
+    final idsToMarkRead = reminderIds?.toSet();
+
+    final globalIdsToMarkRead = globalReminders
+        .where(
+          (reminder) =>
+              !reminder.isRead &&
+              (idsToMarkRead == null || idsToMarkRead.contains(reminder.id)),
+        )
+        .map((reminder) => reminder.id)
+        .toSet();
+
+    if (globalIdsToMarkRead.isNotEmpty) {
+      final didMarkAllRead = idsToMarkRead == null
+          ? await InboxService().markAllAsRead()
+          : await Future.wait(
+              globalIdsToMarkRead.map(InboxService().markAsRead),
+            ).then((results) => results.every((result) => result));
+      if (!didMarkAllRead) {
+        Log.error('Failed to mark global notifications as read');
+        globalIdsToMarkRead.clear();
+      }
+    }
+
     final Iterable<ReminderPB> remindersToUpdate;
 
     if (reminderIds != null) {
-      remindersToUpdate = state.reminders.where(
+      remindersToUpdate = workspaceReminders.where(
         (reminder) => reminderIds.contains(reminder.id) && !reminder.isRead,
       );
     } else {
       // Get all reminders that are not matching the isArchived flag
-      remindersToUpdate = state.reminders.where(
+      remindersToUpdate = workspaceReminders.where(
         (reminder) => !reminder.isRead,
       );
     }
@@ -607,7 +647,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       Log.info('Mark reminder ${reminder.id} as read');
     }
 
-    return state.reminders.map((e) {
+    final updatedWorkspaceReminders = workspaceReminders.map((e) {
       if (reminderIds != null && !reminderIds.contains(e.id)) {
         return e;
       }
@@ -621,6 +661,19 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
         update.isRead = true;
       });
     }).toList();
+
+    final updatedGlobalReminders = globalReminders.map((reminder) {
+      if (!globalIdsToMarkRead.contains(reminder.id)) return reminder;
+      reminder.freeze();
+      return reminder.rebuild((update) {
+        update.isRead = true;
+      });
+    }).toList();
+
+    return _MarkReadResult(
+      workspaceReminders: updatedWorkspaceReminders,
+      globalReminders: updatedGlobalReminders,
+    );
   }
 
   /// Archive or unarchive reminders
@@ -634,14 +687,14 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     final Iterable<ReminderPB> remindersToUpdate;
 
     if (reminderIds != null) {
-      remindersToUpdate = state.reminders.where(
+      remindersToUpdate = state.workspaceReminders.where(
         (reminder) =>
             reminderIds.contains(reminder.id) &&
             reminder.isArchived != isArchived,
       );
     } else {
       // Get all reminders that are not matching the isArchived flag
-      remindersToUpdate = state.reminders.where(
+      remindersToUpdate = state.workspaceReminders.where(
         (reminder) => reminder.isArchived != isArchived,
       );
     }
@@ -680,7 +733,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       Log.info('Reminder ${reminder.id} is archived: $isArchived');
     }
 
-    return state.reminders.map((e) {
+    return state.workspaceReminders.map((e) {
       if (reminderIds != null && !reminderIds.contains(e.id)) {
         return e;
       }
@@ -704,6 +757,11 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
         if (!isClosed) add(const ReminderEvent.refresh());
       },
     );
+  }
+
+  bool _isGlobalNotification(ReminderPB reminder) {
+    final cloudType = reminder.meta['cloud_notification_type'];
+    return cloudType != null && cloudType.isNotEmpty;
   }
 
   Future<bool> checkReminderAvailable(
@@ -781,7 +839,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       final textInserts = node.delta?.whereType<TextInsert>();
       if (textInserts == null) return false;
       for (final text in textInserts) {
-        final mention = text.attributes?[MentionBlockKeys.mention] as Map<String, dynamic>?;
+        final mention =
+            text.attributes?[MentionBlockKeys.mention] as Map<String, dynamic>?;
         final reminderId = mention?[MentionBlockKeys.reminderId] as String?;
         if (reminderIds.contains(reminderId)) {
           return true;
@@ -931,13 +990,27 @@ class ReminderUpdate {
   }
 }
 
+class _MarkReadResult {
+  const _MarkReadResult({
+    required this.workspaceReminders,
+    required this.globalReminders,
+  });
+
+  final List<ReminderPB> workspaceReminders;
+  final List<ReminderPB> globalReminders;
+}
+
 class ReminderState {
   ReminderState({
     List<ReminderPB>? reminders,
     this.serverReminders = const [],
     List<ReminderPB>? archivedReminders,
+    List<ReminderPB>? globalReminders,
   }) {
-    _archivedReminders = archivedReminders ?? [];
+    _archivedReminders = (archivedReminders ?? [])
+        .where((reminder) => !_isGlobalReminder(reminder))
+        .toList();
+    _globalReminders = globalReminders ?? [];
 
     if (reminders?.isEmpty ?? true) {
       return;
@@ -961,26 +1034,44 @@ class ReminderState {
         .addAll([...List.of(pastReminders), ...List.of(upcomingReminders)]);
   }
 
-  List<ReminderPB> _reminders = [];
-  List<ReminderPB> get reminders => _reminders.unique((e) => e.id);
-  List<ReminderPB> get allReminders =>
-      [...serverReminders, ..._reminders].unique((e) => e.id);
+  final List<ReminderPB> _reminders = [];
+  List<ReminderPB> get workspaceReminders => _reminders
+      .where((reminder) => !_isGlobalReminder(reminder))
+      .toList()
+      .unique((e) => e.id);
+  List<ReminderPB> _globalReminders = [];
+  List<ReminderPB> get globalReminders => _globalReminders.unique((e) => e.id);
+  List<ReminderPB> get reminders =>
+      [...workspaceReminders, ...globalReminders].unique((e) => e.id);
+  List<ReminderPB> get allReminders => [
+        ...serverReminders.where((reminder) => !_isGlobalReminder(reminder)),
+        ...workspaceReminders,
+        ...globalReminders,
+      ].unique((e) => e.id);
 
   List<ReminderPB> pastReminders = [];
   List<ReminderPB> upcomingReminders = [];
   final List<ReminderPB> serverReminders;
 
   List<ReminderPB> _archivedReminders = [];
-  List<ReminderPB> get archivedReminders => _archivedReminders.unique((e) => e.id);
+  List<ReminderPB> get archivedReminders =>
+      _archivedReminders.unique((e) => e.id);
 
   ReminderState copyWith({
     List<ReminderPB>? reminders,
     List<ReminderPB>? serverReminders,
     List<ReminderPB>? archivedReminders,
+    List<ReminderPB>? globalReminders,
   }) =>
       ReminderState(
         reminders: reminders ?? _reminders,
         serverReminders: serverReminders ?? this.serverReminders,
         archivedReminders: archivedReminders ?? _archivedReminders,
+        globalReminders: globalReminders ?? _globalReminders,
       );
+}
+
+bool _isGlobalReminder(ReminderPB reminder) {
+  final cloudType = reminder.meta['cloud_notification_type'];
+  return cloudType != null && cloudType.isNotEmpty;
 }

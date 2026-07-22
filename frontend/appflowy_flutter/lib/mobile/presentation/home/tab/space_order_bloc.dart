@@ -15,8 +15,7 @@ enum MobileSpaceTabType {
   // DO NOT CHANGE THE ORDER
   spaces,
   recent,
-  favorites,
-  shared;
+  favorites;
 
   String get tr {
     switch (this) {
@@ -26,8 +25,6 @@ enum MobileSpaceTabType {
         return LocaleKeys.sideBar_Spaces.tr();
       case MobileSpaceTabType.favorites:
         return LocaleKeys.sideBar_favoriteSpace.tr();
-      case MobileSpaceTabType.shared:
-        return 'Shared';
     }
   }
 }
@@ -67,14 +64,15 @@ class SpaceOrderBloc extends Bloc<SpaceOrderEvent, SpaceOrderState> {
 
   Future<MobileSpaceTabType> _getDefaultTab() async {
     try {
-      return await _storage.getWithFormat<MobileSpaceTabType>(
-              KVKeys.lastOpenedSpace, (value) {
-            return MobileSpaceTabType.values[int.parse(value)];
-          }) ??
-          MobileSpaceTabType.spaces;
-    } catch (e) {
-      return MobileSpaceTabType.spaces;
-    }
+      final stored = await _storage.getWithFormat<MobileSpaceTabType>(
+        KVKeys.lastOpenedSpace,
+        (value) => MobileSpaceTabType.values[int.parse(value)],
+      );
+      if (stored != null) {
+        return stored;
+      }
+    } catch (_) {}
+    return MobileSpaceTabType.spaces;
   }
 
   Future<void> _setDefaultTab(MobileSpaceTabType tab) async {
@@ -86,24 +84,31 @@ class SpaceOrderBloc extends Bloc<SpaceOrderEvent, SpaceOrderState> {
 
   Future<List<MobileSpaceTabType>> _getTabsOrder() async {
     try {
-      return await _storage.getWithFormat<List<MobileSpaceTabType>>(
-              KVKeys.spaceOrder, (value) {
-            final order = jsonDecode(value).cast<int>();
-            if (order.isEmpty) {
-              return MobileSpaceTabType.values;
-            }
-            if (!order.contains(MobileSpaceTabType.shared.index)) {
-              order.add(MobileSpaceTabType.shared.index);
-            }
-            return order
-                .map((e) => MobileSpaceTabType.values[e])
-                .cast<MobileSpaceTabType>()
-                .toList();
-          }) ??
-          MobileSpaceTabType.values;
-    } catch (e) {
-      return MobileSpaceTabType.values;
-    }
+      final stored = await _storage.getWithFormat<List<MobileSpaceTabType>>(
+        KVKeys.spaceOrder,
+        (value) {
+          final order = jsonDecode(value).cast<int>();
+          if (order.isEmpty) {
+            return MobileSpaceTabType.values.toList();
+          }
+          // Drop any index that's no longer a valid enum value (e.g. a
+          // stale `shared` index left behind from an older build). This
+          // prevents RangeError and keeps `tabsOrder` consistent.
+          final valid = order
+              .where((i) => i >= 0 && i < MobileSpaceTabType.values.length)
+              .map((e) => MobileSpaceTabType.values[e])
+              .toList();
+          if (valid.isEmpty) {
+            return MobileSpaceTabType.values.toList();
+          }
+          return valid;
+        },
+      );
+      if (stored != null) {
+        return stored;
+      }
+    } catch (_) {}
+    return MobileSpaceTabType.values.toList();
   }
 
   Future<void> _setTabsOrder(List<MobileSpaceTabType> tabsOrder) async {

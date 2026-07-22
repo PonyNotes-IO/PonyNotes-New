@@ -33,6 +33,7 @@ import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/auth/logout_relauncher.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/sign_in_screen.dart';
@@ -546,16 +547,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       description: '确定要切换账号吗？',
       confirmLabel: '确定',
       onConfirm: (_) async {
-        try {
-          final signInBloc = getIt<SignInBloc>();
-          if (!signInBloc.isClosed) {
-            signInBloc.add(const SignInEvent.reset());
-          }
-        } catch (_) {}
-        await getIt<AuthService>().signOut();
-        if (context.mounted) {
-          Navigator.popUntil(context, (route) => route.isFirst);
-        }
+        Navigator.of(context).pop();
+        await appLogoutRelauncher().logoutAndRelaunch();
       },
     );
   }
@@ -567,16 +560,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       description: LocaleKeys.settings_menu_logoutPrompt.tr(),
       confirmLabel: LocaleKeys.button_yes.tr(),
       onConfirm: (_) async {
-        try {
-          final signInBloc = getIt<SignInBloc>();
-          if (!signInBloc.isClosed) {
-            signInBloc.add(const SignInEvent.reset());
-          }
-        } catch (_) {}
-        await getIt<AuthService>().signOut();
-        if (context.mounted) {
-          Navigator.popUntil(context, (route) => route.isFirst);
-        }
+        Navigator.of(context).pop();
+        await appLogoutRelauncher().logoutAndRelaunch();
       },
     );
   }

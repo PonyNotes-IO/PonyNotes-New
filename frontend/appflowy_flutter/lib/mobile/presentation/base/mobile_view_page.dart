@@ -155,9 +155,25 @@ class _MobileViewPageState extends State<MobileViewPage> {
     // the top without producing a stacked dual AppBar. The body sits flush
     // against the status bar; the inner DocumentPage toolbar adds its own
     // status-bar padding.
+    //
+    // HandwritingSaberPocPage is layout=Document so it falls into the same
+    // branch as DocumentPlugin. Unlike the document editor, however, it does
+    // not pad the bottom for the system navigation bar, which produced a
+    // visible white gap above the gesture pill on mobile. Wrap only the
+    // handwriting plugin's body with `SafeArea(top: false, ...)` so its
+    // existing `VSpace(40)` continues to manage the status bar while the
+    // bottom inset is now respected. Pure DocumentPlugin keeps its current
+    // behaviour unchanged.
     final isDocument = view?.layout.isDocumentView ?? false;
+    final isHandwritingSaber =
+        view?.pluginType == PluginType.handwritingSaber;
     return Scaffold(
-      body: isDocument ? child : SafeArea(child: child),
+      body: (isDocument && !isHandwritingSaber)
+          ? child
+          : SafeArea(
+              top: false,
+              child: child,
+            ),
     );
   }
 

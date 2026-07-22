@@ -11,6 +11,7 @@ import 'package:flutter_chat_ui/src/scroll_to_bottom.dart';
 import 'package:flutter_chat_ui/src/utils/message_list_diff.dart';
 import 'package:provider/provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../application/chat_message_height_manager.dart';
 import 'widgets/message_height_calculator.dart';
@@ -181,57 +182,76 @@ class _ChatAnimatedListState extends State<ChatAnimatedList>
       initialAlignment = 0.0;
     }
 
-    final Widget child = Stack(
-      children: [
-        ScrollablePositionedList.builder(
-          scrollOffsetController: scrollOffsetController,
-          itemScrollController: itemScrollController,
-          initialScrollIndex: initialScrollIndex,
-          initialAlignment: initialAlignment,
-          scrollOffsetListener: scrollOffsetListener,
-          itemPositionsListener: itemPositionsListener,
-          physics: ClampingScrollPhysics(),
-          shrinkWrap: true,
-          // the extra item is a vertical padding.
-          itemCount: messages.length + 1,
-          itemBuilder: (context, index) {
-            if (index < 0 || index > messages.length) {
-              Log.error('[chat animation list] index out of range: $index');
-              return const SizedBox.shrink();
-            }
+    // Mobile-only behavior change: when the message list is short the
+    // Stack must fill its parent (instead of collapsing to the list's
+    // intrinsic content height) so that no empty band appears between
+    // the last message and the input bar rendered below. On
+    // desktop/tablet the list keeps its original shrinkWrap layout,
+    // and the ScrollToBottom button keeps its original centered
+    // Positioned placement.
+    final bool fillMode = PlatformInfo.isMobile;
 
-            if (index == messages.length) {
-              return const SizedBox.shrink();
-            }
+    final Widget list = ScrollablePositionedList.builder(
+      scrollOffsetController: scrollOffsetController,
+      itemScrollController: itemScrollController,
+      initialScrollIndex: initialScrollIndex,
+      initialAlignment: initialAlignment,
+      scrollOffsetListener: scrollOffsetListener,
+      itemPositionsListener: itemPositionsListener,
+      physics: ClampingScrollPhysics(),
+      shrinkWrap: !fillMode,
+      itemCount: messages.length + 1,
+      itemBuilder: (context, index) {
+        if (index < 0 || index > messages.length) {
+          Log.error('[chat animation list] index out of range: $index');
+          return const SizedBox.shrink();
+        }
 
-            final message = messages[index];
-            return MessageHeightCalculator(
-              messageId: message.id,
-              onHeightMeasured: _cacheMessageHeight,
-              child: widget.itemBuilder(
-                context,
-                Tween<double>(begin: 1, end: 1).animate(
-                  CurvedAnimation(
-                    parent: scrollToBottomController,
-                    curve: Curves.easeInOut,
-                  ),
-                ),
-                message,
+        if (index == messages.length) {
+          return const SizedBox.shrink();
+        }
+
+        final message = messages[index];
+        return MessageHeightCalculator(
+          messageId: message.id,
+          onHeightMeasured: _cacheMessageHeight,
+          child: widget.itemBuilder(
+            context,
+            Tween<double>(begin: 1, end: 1).animate(
+              CurvedAnimation(
+                parent: scrollToBottomController,
+                curve: Curves.easeInOut,
               ),
-            );
-          },
-        ),
-        builders.scrollToBottomBuilder?.call(
-              context,
-              scrollToBottomAnimation,
-              _handleScrollToBottom,
-            ) ??
-            ScrollToBottom(
-              animation: scrollToBottomAnimation,
-              onPressed: _handleScrollToBottom,
             ),
-      ],
+            message,
+          ),
+        );
+      },
     );
+
+    final Widget scrollToBottom = builders.scrollToBottomBuilder?.call(
+          context,
+          scrollToBottomAnimation,
+          _handleScrollToBottom,
+        ) ??
+        ScrollToBottom(
+          animation: scrollToBottomAnimation,
+          onPressed: _handleScrollToBottom,
+        );
+
+    final Widget child = fillMode
+        ? Stack(
+            children: [
+              Positioned.fill(child: list),
+              scrollToBottom,
+            ],
+          )
+        : Stack(
+            children: [
+              list,
+              scrollToBottom,
+            ],
+          );
 
     return child;
   }

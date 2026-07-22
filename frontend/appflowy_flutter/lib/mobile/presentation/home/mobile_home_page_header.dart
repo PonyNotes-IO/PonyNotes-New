@@ -53,9 +53,7 @@ class MobileHomePageHeader extends StatelessWidget {
                     context.push('/mobile_calendar');
                   },
                 ),
-                HomePageSettingsPopupMenu(
-                  userProfile: userProfile,
-                ),
+                HomePageSettingsPopupMenu(),
                 const HSpace(8.0),
               ],
             ),

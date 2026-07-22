@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
 import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -14,6 +16,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter/material.dart';
@@ -103,11 +106,30 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       // dependency (ChatBloc, ViewBloc, UserWorkspaceBloc, …) via the
       // shared AIChatPagePlugin → AIChatPage → ChatContentPage chain,
       // and parses initial_message from view.extra automatically.
-      return MobileViewPage(
-        key: ValueKey('mobile_chat_${widget.id}'),
-        id: widget.id!,
-        title: widget.title,
-        viewLayout: ViewLayoutPB.Chat,
+      // The AI chat plugin does not render its own mobile top bar, so
+      // wrap with a Scaffold + MobileAppBar to get the standard mobile
+      // back button + title chrome (matching Document/Database screens).
+      return Scaffold(
+        appBar: MobileAppBar(
+          title: widget.title ?? LocaleKeys.menuAppHeader_defaultNewChatName.tr(),
+          showBackButton: true,
+          onBackPressed: () {
+            // Prefer GoRouter pop (handles stack correctly when this
+            // route was pushed via context.push). Fall back to root
+            // when the route was reached via context.go (replace).
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
+        ),
+        body: MobileViewPage(
+          key: ValueKey('mobile_chat_${widget.id}'),
+          id: widget.id!,
+          title: widget.title,
+          viewLayout: ViewLayoutPB.Chat,
+        ),
       );
     }
 

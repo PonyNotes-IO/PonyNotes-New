@@ -29,7 +29,15 @@ extension MobileRouter on BuildContext {
     unawaited(getIt<CachedRecentService>().updateRecentViews([view.id], true));
     final queryParameters = view.queryParameters(arguments);
 
-    if (view.layout == ViewLayoutPB.Document) {
+    final isDocumentLikeView = switch (view.layout) {
+      ViewLayoutPB.Document ||
+      ViewLayoutPB.Notebook ||
+      ViewLayoutPB.Folder ||
+      ViewLayoutPB.Whiteboard =>
+        true,
+      _ => false,
+    };
+    if (isDocumentLikeView) {
       queryParameters[MobileDocumentScreen.viewShowMoreButton] =
           showMoreButton.toString();
       if (fixedTitle != null) {
@@ -55,6 +63,12 @@ extension on ViewPB {
   String get routeName {
     switch (layout) {
       case ViewLayoutPB.Document:
+      case ViewLayoutPB.Notebook:
+      case ViewLayoutPB.Folder:
+      case ViewLayoutPB.Whiteboard:
+        // Notebook / Folder 本质上是文档（复用 DocumentPlugin 渲染）；
+        // Whiteboard 有自己的 plugin，但 mobile 端目前通过 MobileViewPage 统一调度，
+        // 暂时复用 MobileDocumentScreen 路由，后续如需独立 screen 再拆。
         return MobileDocumentScreen.routeName;
       case ViewLayoutPB.Grid:
         return MobileGridScreen.routeName;
@@ -75,6 +89,9 @@ extension on ViewPB {
   Map<String, dynamic> queryParameters([Map<String, dynamic>? arguments]) {
     switch (layout) {
       case ViewLayoutPB.Document:
+      case ViewLayoutPB.Notebook:
+      case ViewLayoutPB.Folder:
+      case ViewLayoutPB.Whiteboard:
         return {
           MobileDocumentScreen.viewId: id,
           MobileDocumentScreen.viewTitle: name,

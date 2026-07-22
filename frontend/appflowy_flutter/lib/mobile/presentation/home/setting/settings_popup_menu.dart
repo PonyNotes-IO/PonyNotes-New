@@ -1,12 +1,8 @@
-import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
-import 'package:appflowy/mobile/presentation/setting/workspace/invite_members_screen.dart';
 import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart'
@@ -16,19 +12,11 @@ import 'package:go_router/go_router.dart';
 
 enum _MobileSettingsPopupMenuItem {
   settings,
-  members,
   trash,
-  help,
-  helpAndDocumentation,
 }
 
 class HomePageSettingsPopupMenu extends StatelessWidget {
-  const HomePageSettingsPopupMenu({
-    super.key,
-    required this.userProfile,
-  });
-
-  final UserProfilePB userProfile;
+  const HomePageSettingsPopupMenu({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -50,50 +38,20 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
           svg: FlowySvgs.m_notification_settings_s,
           text: LocaleKeys.settings_popupMenuItem_settings.tr(),
         ),
-        // only show the member items in cloud mode
-        if (userProfile.workspaceType == WorkspaceTypePB.ServerW) ...[
-          const PopupMenuDivider(height: 0.5),
-          _buildItem(
-            value: _MobileSettingsPopupMenuItem.members,
-            svg: FlowySvgs.m_settings_member_s,
-            text: LocaleKeys.settings_popupMenuItem_members.tr(),
-          ),
-        ],
         const PopupMenuDivider(height: 0.5),
         _buildItem(
           value: _MobileSettingsPopupMenuItem.trash,
           svg: FlowySvgs.trash_s,
           text: LocaleKeys.settings_popupMenuItem_trash.tr(),
         ),
-        const PopupMenuDivider(height: 0.5),
-        _buildItem(
-          value: _MobileSettingsPopupMenuItem.helpAndDocumentation,
-          svg: FlowySvgs.help_and_documentation_s,
-          text: LocaleKeys.settings_popupMenuItem_helpAndDocumentation.tr(),
-        ),
-        const PopupMenuDivider(height: 0.5),
-        _buildItem(
-          value: _MobileSettingsPopupMenuItem.help,
-          svg: FlowySvgs.message_support_s,
-          text: LocaleKeys.settings_popupMenuItem_getSupport.tr(),
-        ),
       ],
       onSelected: (_MobileSettingsPopupMenuItem value) {
         switch (value) {
-          case _MobileSettingsPopupMenuItem.members:
-            _openMembersPage(context);
-            break;
           case _MobileSettingsPopupMenuItem.trash:
             _openTrashPage(context);
             break;
           case _MobileSettingsPopupMenuItem.settings:
             _openSettingsPage(context);
-            break;
-          case _MobileSettingsPopupMenuItem.help:
-            _openHelpPage(context);
-            break;
-          case _MobileSettingsPopupMenuItem.helpAndDocumentation:
-            _openHelpAndDocumentationPage(context);
             break;
         }
       },
@@ -121,16 +79,8 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
     );
   }
 
-  void _openMembersPage(BuildContext context) {
-    context.push(InviteMembersScreen.routeName);
-  }
-
   void _openTrashPage(BuildContext context) {
     context.push(MobileHomeTrashPage.routeName);
-  }
-
-  void _openHelpPage(BuildContext context) {
-    afLaunchUrlString('https://discord.com/invite/9Q2xaN37tV');
   }
 
   void _openSettingsPage(BuildContext context) {
@@ -142,10 +92,6 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
       MobileHomeSettingPage.routeName,
       extra: workspaceState,
     );
-  }
-
-  void _openHelpAndDocumentationPage(BuildContext context) {
-    afLaunchUrlString('https://appflowy.com/guide');
   }
 }
 

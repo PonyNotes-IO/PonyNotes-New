@@ -25,12 +25,20 @@ class MobileViewItemBottomSheet extends StatefulWidget {
     required this.actions,
     this.defaultType = MobileBottomSheetType.view,
     this.favoriteBloc,
+    /// The [ViewBloc] that drives delete / duplicate / rename events.
+    /// When provided, the sheet uses this instance directly without
+    /// traversing the widget tree, which is required when the sheet is
+    /// shown via `useRootNavigator: true` (its context is detached from
+    /// the caller's BlocProvider tree). If null the sheet falls back to
+    /// `context.read<ViewBloc>()`.
+    this.viewBloc,
   });
 
   final ViewPB view;
   final MobileBottomSheetType defaultType;
   final List<MobileViewItemBottomSheetBodyAction> actions;
   final FavoriteBloc? favoriteBloc;
+  final ViewBloc? viewBloc;
 
   @override
   State<MobileViewItemBottomSheet> createState() =>
@@ -65,7 +73,7 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
                 break;
               case MobileViewItemBottomSheetBodyAction.duplicate:
                 Navigator.pop(context);
-                context.read<ViewBloc>().add(const ViewEvent.duplicate());
+                _getViewBloc(context).add(const ViewEvent.duplicate());
                 showToastNotification(
                   message: LocaleKeys.button_duplicateSuccessfully.tr(),
                 );
@@ -76,7 +84,7 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
                 break;
               case MobileViewItemBottomSheetBodyAction.delete:
                 Navigator.pop(context);
-                context.read<ViewBloc>().add(const ViewEvent.delete());
+                _getViewBloc(context).add(const ViewEvent.delete());
                 break;
               case MobileViewItemBottomSheetBodyAction.addToFavorites:
               case MobileViewItemBottomSheetBodyAction.removeFromFavorites:
@@ -102,7 +110,7 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
           name: widget.view.name,
           onRename: (name) {
             if (name != widget.view.name) {
-              context.read<ViewBloc>().add(ViewEvent.rename(name));
+              _getViewBloc(context).add(ViewEvent.rename(name));
             }
             Navigator.pop(context);
           },
@@ -114,8 +122,20 @@ class _MobileViewItemBottomSheetState extends State<MobileViewItemBottomSheet> {
     return widget.favoriteBloc ?? context.read<FavoriteBloc>();
   }
 
+  /// Returns the [ViewBloc] to use for dispatching events.
+  ///
+  /// If the caller passed `viewBloc` explicitly (via the constructor), that
+  /// instance is returned regardless of the given context — this is the preferred
+  /// path when the sheet is shown with `useRootNavigator: true` because the
+  /// sheet's context is detached from the caller's [BlocProvider] tree.
+  /// When `viewBloc` was not provided, we fall back to a tree lookup, which
+  /// works for callers that wrap the sheet in a [BlocProvider.value].
+  ViewBloc _getViewBloc(BuildContext context) {
+    return widget.viewBloc ?? context.read<ViewBloc>();
+  }
+
   Future<void> _removeFromRecent(BuildContext context) async {
-    final viewId = context.read<ViewBloc>().view.id;
+    final viewId = _getViewBloc(context).view.id;
     final recentViewsBloc = context.read<RecentViewsBloc>();
     Navigator.pop(context);
 

@@ -119,7 +119,8 @@ class ChatAIMessageWidget extends StatelessWidget {
                 ),
                 ready: () {
                   // 正文为空但有思考内容时（深度思考流式阶段），也显示消息气泡
-                  return (blocState.text.isEmpty && blocState.thinkingText.isEmpty)
+                  return (blocState.text.isEmpty &&
+                          blocState.thinkingText.isEmpty)
                       ? _LoadingMessage(
                           message: message,
                           loadingText: loadingText,
@@ -145,7 +146,9 @@ class ChatAIMessageWidget extends StatelessWidget {
                 },
                 onError: (error) {
                   return ChatErrorMessageWidget(
-                    errorMessage: LocaleKeys.chat_aiServerUnavailable.tr(),
+                    errorMessage: error.isEmpty
+                        ? LocaleKeys.chat_aiServerUnavailable.tr()
+                        : error,
                   );
                 },
                 onAIResponseLimit: () {
@@ -185,21 +188,14 @@ class ChatAIMessageWidget extends StatelessWidget {
   }
 
   void _handleMessageState(ChatAIMessageState state, BuildContext context) {
-    if (state.stream?.error?.isEmpty != false) {
-      state.messageState.maybeMap(
-        aiFollowUp: (messageState) {
-          context
-              .read<ChatBloc>()
-              .add(ChatEvent.onAIFollowUp(messageState.followUpData));
-        },
-        orElse: () {
-          // do nothing
-        },
-      );
-
-      return;
-    }
-    context.read<ChatBloc>().add(ChatEvent.deleteMessage(message));
+    state.messageState.maybeMap(
+      aiFollowUp: (messageState) {
+        context
+            .read<ChatBloc>()
+            .add(ChatEvent.onAIFollowUp(messageState.followUpData));
+      },
+      orElse: () {},
+    );
   }
 }
 
@@ -274,8 +270,9 @@ class _NonEmptyMessageState extends State<_NonEmptyMessage> {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatAIMessageBloc, ChatAIMessageState>(
       builder: (context, state) {
-        final showActions =
-            widget.stream == null && state.text.isNotEmpty && !widget.isStreaming;
+        final showActions = widget.stream == null &&
+            state.text.isNotEmpty &&
+            !widget.isStreaming;
         return ChatAIMessageBubble(
           message: widget.message,
           isLastMessage: widget.isLastMessage,
@@ -299,7 +296,8 @@ class _NonEmptyMessageState extends State<_NonEmptyMessage> {
                 padding: EdgeInsetsDirectional.only(start: 4.0),
                 child: AIMarkdownText(
                   markdown: state.text,
-                  withAnimation: widget.enableAnimation && widget.stream != null,
+                  withAnimation:
+                      widget.enableAnimation && widget.stream != null,
                 ),
               ),
               if (state.sources.isNotEmpty)

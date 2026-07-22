@@ -148,7 +148,8 @@ class _NotificationMoreActions extends StatelessWidget {
           showBottomBorder: false,
           onTap: () => _onMultipleChoice(context),
         ),
-        if (!reminder.isArchived)
+        if (!reminder.isArchived &&
+            (reminder.meta['cloud_notification_type']?.isEmpty ?? true))
           FlowyOptionTile.text(
             height: 52.0,
             text: LocaleKeys.settings_notifications_action_archive.tr(),

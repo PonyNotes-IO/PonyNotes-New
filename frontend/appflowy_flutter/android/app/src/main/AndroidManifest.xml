@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
   <application android:label="PonyNotes"
       android:icon="@mipmap/ic_launcher"
       android:roundIcon="@mipmap/ic_launcher_round"
@@ -7,7 +8,7 @@
     android:name="${applicationName}">
     <activity android:name=".MainActivity"
       android:exported="true"
-      android:launchMode="singleInstance"
+      android:launchMode="singleTop"
       android:theme="@style/LaunchTheme"
       android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
       android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
@@ -66,6 +67,35 @@
     <meta-data android:name="io.flutter.embedding.android.EnableImpeller"
       android:value="false" />
 
+    <!-- WeChat 微信登录回调 Activity：微信 SDK 完成授权后会回调这个 Activity
+         必须使用与 SDK 文档一致的 taskAffinity（填包名，不是 .wxapi 后缀），
+         否则 Android 12+ 上 SDK 找不到 WXEntryActivity 导致回调不到。
+
+         **关键坑**：微信 SDK 内部硬编码查找的是完整类名
+         `${applicationId}.wxapi.WXEntryActivity`，所以即使我们的 WXEntryActivity
+         实际在 `.wechat.` 包下，也必须用 <activity-alias> 给它起一个
+         `${applicationId}.wxapi.WXEntryActivity` 的别名，否则 SDK 找不到，
+         回调 Intent 永远不会进 WXEntryActivity。-->
+    <activity
+        android:name=".wechat.WXEntryActivity"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:taskAffinity="${applicationId}"
+        android:excludeFromRecents="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+    <!-- activity-alias：让 SDK 硬编码查找的 `${applicationId}.wxapi.WXEntryActivity`
+         路径指向我们真实的 WXEntryActivity。这是微信 SDK 在 Android 上的硬性要求。
+
+         注意：fluwx 插件自己也声明了同名 alias（target 是 FluwxWXEntryActivity），
+         必须用 tools:replace 强制覆盖，否则 manifest 合并会失败。-->
+    <activity-alias
+        android:name="${applicationId}.wxapi.WXEntryActivity"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:targetActivity=".wechat.WXEntryActivity"
+        tools:replace="android:launchMode,android:targetActivity" />
+
     <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
     <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
       <intent-filter>
@@ -80,13 +110,7 @@
         android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
         android:exported="false"
         android:stopWithTask="false"/>
-    
-    <!-- WeChat SDK Configuration -->
-    <activity
-        android:name=".wxapi.WXEntryActivity"
-        android:exported="true"
-        android:launchMode="singleTop"
-        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
   </application>
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />

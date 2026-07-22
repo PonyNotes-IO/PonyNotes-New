@@ -185,6 +185,8 @@ dependencies:
   in_app_purchase: ^3.2.3
   decimal: ^2.3.0
   # WeChat SDK
+  # 注意:fluwx 仅在 iOS 端使用 (Android 端因腾讯 SDK 6.8.34 的 PendingIntent bug,
+  # 改用 MainActivity.kt 内自写的 WeChatBridge 通过 MethodChannel 调用)
   fluwx: ^5.7.5
   douyin_login: ^1.0.6
   # Check if app is installed
@@ -216,6 +218,10 @@ dependency_overrides:
   http: ^1.0.0
   value_layout_builder: ^0.5.0
   device_info_plus: ^11.2.2
+  # 把 win32 从 5.10.1 顶到 5.13.0，避开 Dart 3.9 前端对 `external` 的严格校验
+  # （5.10.1 的 structs.g.dart / variant.dart 用 `external int xxx;` 做 ffi 占位，
+  #  在 frontend_server 新版本下会被拒，导致 Android / 桌面所有真机编译失败）
+  win32: 5.13.0
   flutter_math_fork: ^0.7.3
   
   # 使用官方兼容版本

@@ -89,7 +89,17 @@ class NotificationItemV2 extends StatelessWidget {
                   ),
                   onTap: () async {
                     final view = state.view;
+                    final isGlobalNotification =
+                        reminder.meta['cloud_notification_type']?.isNotEmpty ??
+                            false;
                     if (view == null) {
+                      if (isGlobalNotification && !reminder.isRead) {
+                        reminderBloc.add(
+                          ReminderEvent.update(
+                            ReminderUpdate(id: reminder.id, isRead: true),
+                          ),
+                        );
+                      }
                       return;
                     }
 
@@ -133,6 +143,8 @@ class NotificationItemV2 extends StatelessWidget {
       borderRadius: BorderRadius.all(Radius.circular(6)),
       color: theme.surfaceColorScheme.primary,
     );
+    final isGlobalNotification =
+        reminder.meta['cloud_notification_type']?.isNotEmpty ?? false;
 
     // 已归档的通知显示恢复按钮，未归档的显示归档按钮
     final child = Container(
@@ -157,7 +169,8 @@ class NotificationItemV2 extends StatelessWidget {
                     );
 
                 showToastNotification(
-                  message: LocaleKeys.notificationHub_unarchiveSucceedToast.tr(),
+                  message:
+                      LocaleKeys.notificationHub_unarchiveSucceedToast.tr(),
                 );
               },
             ),
@@ -186,30 +199,32 @@ class NotificationItemV2 extends StatelessWidget {
               ),
               HSpace(6),
             ],
-            FlowyIconButton(
-              tooltipText: LocaleKeys.notificationHub_archivedTooltip.tr(),
-              icon: FlowySvg(
-                FlowySvgs.notification_archive_s,
-              ),
-              width: 24,
-              height: 24,
-              onPressed: () {
-                context.read<ReminderBloc>().add(
-                      ReminderEvent.update(
-                        ReminderUpdate(
-                          id: reminder.id,
-                          isArchived: true,
-                          isRead: true,
+            if (!isGlobalNotification)
+              FlowyIconButton(
+                tooltipText: LocaleKeys.notificationHub_archivedTooltip.tr(),
+                icon: FlowySvg(
+                  FlowySvgs.notification_archive_s,
+                ),
+                width: 24,
+                height: 24,
+                onPressed: () {
+                  context.read<ReminderBloc>().add(
+                        ReminderEvent.update(
+                          ReminderUpdate(
+                            id: reminder.id,
+                            isArchived: true,
+                            isRead: true,
+                          ),
                         ),
-                      ),
-                    );
+                      );
 
-                showToastNotification(
-                  message: LocaleKeys.notificationHub_markAsArchivedSucceedToast
-                      .tr(),
-                );
-              },
-            ),
+                  showToastNotification(
+                    message: LocaleKeys
+                        .notificationHub_markAsArchivedSucceedToast
+                        .tr(),
+                  );
+                },
+              ),
           ],
         ],
       ),

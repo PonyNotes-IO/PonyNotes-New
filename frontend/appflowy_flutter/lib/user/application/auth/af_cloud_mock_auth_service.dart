@@ -59,10 +59,14 @@ class AppFlowyCloudMockAuthService implements AuthService {
       (urlPB) async {
         final payload = OauthSignInPB(
           authType: AuthTypePB.Server,
-          map: {
-            AuthServiceMapKeys.signInURL: urlPB.signInUrl,
-            AuthServiceMapKeys.deviceId: deviceId,
-          },
+          // OauthSignInPB.map 是 $pb.PbMap<String,String>,
+          // 工厂构造参数期望 Iterable<MapEntry<String,String>>,
+          // 直接传 Map<String,String> 在 Dart 3.8+ 会触发 ambiguous literal。
+          // 用 Map.fromEntries 显式转为 Map<String,String>,内部会被 addEntries 接受。
+          map: <MapEntry<String, String>>[
+            MapEntry<String, String>(AuthServiceMapKeys.signInURL, urlPB.signInUrl),
+            MapEntry<String, String>(AuthServiceMapKeys.deviceId, deviceId),
+          ],
         );
         Log.info("UserEventOauthSignIn with payload: $payload");
         return UserEventOauthSignIn(payload).send().then((value) {

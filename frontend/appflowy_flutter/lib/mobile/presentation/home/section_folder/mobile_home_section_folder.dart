@@ -1,12 +1,14 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
 import 'package:appflowy/mobile/presentation/home/section_folder/mobile_home_section_folder_header.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -65,16 +67,34 @@ class MobileSectionFolder extends StatelessWidget {
   }
 
   void _createNewPage(BuildContext context) {
-    context.read<SidebarSectionsBloc>().add(
-          SidebarSectionsEvent.createRootViewInSection(
-            name: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
-            index: 0,
-            viewSection: spaceType.toViewSectionPB,
-          ),
-        );
-    context.read<FolderBloc>().add(
-          const FolderEvent.expandOrUnExpand(isExpanded: true),
-        );
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      title: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
+      showDragHandle: true,
+      showCloseButton: true,
+      useRootNavigator: true,
+      showDivider: false,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetCtx) => AddNewPageWidgetBottomSheet(
+        view: context.read<ViewBloc>().state.view,
+        onAction: (layout, {String? extra}) {
+          Navigator.of(sheetCtx).pop();
+          context.read<SidebarSectionsBloc>().add(
+            SidebarSectionsEvent.createRootViewInSectionWithLayout(
+              name: layout.defaultName,
+              viewSection: spaceType.toViewSectionPB,
+              index: 0,
+              layout: layout,
+              extra: extra,
+            ),
+          );
+          context.read<FolderBloc>().add(
+            const FolderEvent.expandOrUnExpand(isExpanded: true),
+          );
+        },
+      ),
+    );
   }
 }
 

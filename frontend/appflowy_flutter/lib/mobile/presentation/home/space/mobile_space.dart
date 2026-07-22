@@ -108,7 +108,7 @@ class MobileSpace extends StatelessWidget {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: space,
-          onAction: (layout) {
+          onAction: (layout, {String? extra}) {
             Navigator.of(sheetContext).pop();
             context.read<SpaceBloc>().add(
                   SpaceEvent.createPage(
@@ -116,6 +116,7 @@ class MobileSpace extends StatelessWidget {
                     layout: layout,
                     index: 0,
                     openAfterCreate: true,
+                    extra: extra,
                   ),
                 );
             context.read<SpaceBloc>().add(

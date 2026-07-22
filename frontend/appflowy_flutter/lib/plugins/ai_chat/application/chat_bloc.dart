@@ -17,6 +17,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/widgets.dart';
@@ -58,7 +59,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
 
     _streamManager = ChatStreamManager(
-      chatId, 
+      chatId,
       enableDeepThinking: enableDeepThinking,
       enableWebSearch: enableWebSearch,
     );
@@ -68,9 +69,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _dispatch();
     _loadMessages();
     _loadSettings();
-    
+
     // workspaceId 将在异步获取后设置
-    
+
     // 如果有首选模型，设置为默认模型
     if (preferredModelId != null && preferredModelId!.isNotEmpty) {
       Log.info('🔄 ChatBloc: 检测到首选模型，准备设置: $preferredModelId');
@@ -82,7 +83,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _modelSettingCompleter.complete();
       }
     }
-    
+
     // 注意：初始消息的自动发送逻辑移到了 _handleLatestMessages 中
     // 这样可以确保只在首次创建（本地无消息）时才自动发送
     if (initialMessage != null && initialMessage!.isNotEmpty) {
@@ -119,10 +120,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool hasMorePreviousMessages = true;
   bool isFetchingRelatedQuestions = false;
   bool shouldFetchRelatedQuestions = false;
-  
+
   // 标志：初始消息是否已经发送过
   bool _initialMessageSent = false;
-  
+
   // 标志：模型设置是否完成
   bool _modelSettingCompleted = false;
   final Completer<void> _modelSettingCompleter = Completer<void>();
@@ -142,11 +143,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     _settingsManager.dispose();
     chatController.dispose();
-    
+
     // 重置全局欢迎页标志，以免影响下一个Chat
     skipAIChatWelcomePage = false;
     Log.info('🔄 ChatBloc: 已重置欢迎页标志');
-    
+
     return super.close();
   }
 
@@ -170,8 +171,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         receiveMessage: (message) async => _handleReceiveMessage(message),
 
         // Sending messages
-        sendMessage: (message, format, metadata, promptId, enableDeepThinking, enableWebSearch) async =>
-            _handleSendMessage(message, format, metadata, promptId, enableDeepThinking, enableWebSearch, emit),
+        sendMessage: (message, format, metadata, promptId, enableDeepThinking,
+                enableWebSearch) async =>
+            _handleSendMessage(message, format, metadata, promptId,
+                enableDeepThinking, enableWebSearch, emit),
         finishSending: () async => emit(
           state.copyWith(
             promptResponseState: PromptResponseState.streamingAnswer,
@@ -238,7 +241,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Log.info('   - 接收到消息数: ${messages.length}');
     Log.info('   - 当前controller中消息数: ${chatController.messages.length}');
     Log.info('   - initialMessage: $initialMessage');
-    
+
     // 【修复消息重复】去重：只插入不存在的消息
     int insertedCount = 0;
     for (final message in messages) {
@@ -271,12 +274,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       default:
         break;
     }
-    
+
     // 【关键修复】只在首次创建（本地无消息）时才自动发送初始消息
     // 这样可以防止每次切换回视图时重复发送
     // 添加 _initialMessageSent 标志防止重复发送
-    if (initialMessage != null && 
-        initialMessage!.isNotEmpty && 
+    if (initialMessage != null &&
+        initialMessage!.isNotEmpty &&
         chatController.messages.isEmpty &&
         !_initialMessageSent) {
       Log.info('🔄 ChatBloc: 本地无消息记录，这是首次创建，准备自动发送初始消息');
@@ -284,24 +287,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('   - 首选模型: $preferredModelId');
       Log.info('   - _initialMessageSent标志: $_initialMessageSent');
       Log.info('   - skipAIChatWelcomePage当前值: $skipAIChatWelcomePage');
-      
+
       // 设置标志，防止重复发送
       _initialMessageSent = true;
-      
+
       // 关键：跳过AI Chat欢迎页，直接进入聊天状态
       skipAIChatWelcomePage = true;
       Log.info('✅ ChatBloc: 已设置跳过欢迎页标志');
-      
+
       // 【关键修复】等待模型设置完成后再发送消息
       // 这确保了用户选择的多模态模型（如豆包）能正确生效
       Log.info('📤 ChatBloc: 等待模型设置完成...');
-      
+
       // 使用 Future.delayed 配合 async/await 确保模型设置完成
       _sendInitialMessageAfterModelSet();
-    } else if (initialMessage != null && 
-               initialMessage!.isNotEmpty && 
-               chatController.messages.isNotEmpty) {
-      Log.info('ℹ️ ChatBloc: 本地已有 ${chatController.messages.length} 条消息，跳过自动发送');
+    } else if (initialMessage != null &&
+        initialMessage!.isNotEmpty &&
+        chatController.messages.isNotEmpty) {
+      Log.info(
+          'ℹ️ ChatBloc: 本地已有 ${chatController.messages.length} 条消息，跳过自动发送');
       Log.info('   - 这是重新打开已存在的会话，不应该重复发送消息');
     } else if (_initialMessageSent) {
       Log.info('ℹ️ ChatBloc: 初始消息已发送过，跳过重复发送');
@@ -352,9 +356,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     _messageHandler.clearRelatedQuestions();
     // PonyNotes: 使用覆盖参数或默认设置
-    final actualEnableDeepThinking = enableDeepThinkingOverride ?? enableDeepThinking;
+    final actualEnableDeepThinking =
+        enableDeepThinkingOverride ?? enableDeepThinking;
     final actualEnableWebSearch = enableWebSearchOverride ?? enableWebSearch;
-    _startStreamingMessage(message, format, metadata, promptId, actualEnableDeepThinking, actualEnableWebSearch);
+    _startStreamingMessage(message, format, metadata, promptId,
+        actualEnableDeepThinking, actualEnableWebSearch);
     lastSentMessage = null;
 
     isFetchingRelatedQuestions = false;
@@ -464,13 +470,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
 
-        _messageHandler.processReceivedMessage(pb);
-        final message = _messageHandler.createTextMessage(pb);
-        add(ChatEvent.receiveMessage(message));
+        if (_messageHandler.processReceivedMessage(pb)) {
+          final message = _messageHandler.createTextMessage(pb);
+          add(ChatEvent.receiveMessage(message));
+        }
       },
       chatErrorMessageCallback: (err) {
         if (!isClosed) {
           Log.error("chat error: ${err.errorMessage}");
+          _showSendingError(err.errorMessage);
           add(const ChatEvent.didFinishAnswerStream());
         }
       },
@@ -485,7 +493,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               newMessages.add(pb);
             }
           }
-          Log.info('📋 ChatBloc: latestMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
+          Log.info(
+              '📋 ChatBloc: latestMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
           final messages =
               newMessages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadLatestMessages(messages));
@@ -502,7 +511,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               newMessages.add(pb);
             }
           }
-          Log.info('📋 ChatBloc: prevMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
+          Log.info(
+              '📋 ChatBloc: prevMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
           final messages =
               newMessages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadPreviousMessages(messages, list.hasMore));
@@ -529,7 +539,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     Log.info('[ChatBloc] 开始刷新使用情况，workspaceId: $_workspaceId, userId: $userId');
-    
+
     try {
       final service = WorkspaceService(
         workspaceId: _workspaceId!,
@@ -544,12 +554,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             Log.info(
               '[ChatBloc] ✅ 获取使用情况成功: 已使用=${usage.aiResponsesCount}, 限制=${usage.aiResponsesCountLimit}, 剩余=${usage.aiResponsesCountLimit - usage.aiResponsesCount}, 无限制=${usage.aiResponsesUnlimited}',
             );
-            
+
             // 验证数据有效性
-            if (usage.aiResponsesCountLimit == 0 && !usage.aiResponsesUnlimited) {
+            if (usage.aiResponsesCountLimit == 0 &&
+                !usage.aiResponsesUnlimited) {
               Log.warn('[ChatBloc] ⚠️ 警告：检测到限制为0且非无限制，可能是数据未正确加载');
             }
-            
+
             emit(state.copyWith(usageInfo: usage));
           } else {
             Log.warn('[ChatBloc] ⚠️ 获取使用情况返回null');
@@ -627,19 +638,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('🔄 ChatBloc: 开始设置首选模型...');
       Log.info('   - Chat ID: $chatId');
       Log.info('   - Model ID: $modelId');
-      
+
       // 获取当前 Chat 的模型选择信息
       final result = await AIEventGetSourceModelSelection(
         ModelSourcePB(source: chatId),
       ).send();
-      
+
       await result.fold(
         (modelSelection) async {
           var availableModels = modelSelection.models;
           Log.info(
             '🔍 ChatBloc: 当前会话返回 ${availableModels.length} 个可用模型',
           );
-          
+
           if (availableModels.isEmpty) {
             Log.warn('⚠️ ChatBloc: 当前会话未返回可用模型，尝试读取全局配置');
             final fallbackResult = await AIEventGetSettingModelSelection(
@@ -669,7 +680,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
             Log.info('   - 使用的modelId: $modelId');
             Log.info('   - 映射表内容: $_modelIdToNameMap');
-            
+
             final expectedName = _modelIdToNameMap[modelId];
             if (expectedName != null) {
               matchedModel = AIModelPB()
@@ -700,9 +711,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final expectedName = _modelIdToNameMap[modelId];
             if (expectedName != null) {
               matchedModel = availableModels.cast<AIModelPB?>().firstWhere(
-                (model) => model?.name == expectedName,
-                orElse: () => null,
-              );
+                    (model) => model?.name == expectedName,
+                    orElse: () => null,
+                  );
               if (matchedModel != null) {
                 Log.info(
                   '✅ ChatBloc: 通过映射表找到匹配的模型: ${matchedModel.name}',
@@ -768,12 +779,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           Log.warn(
             '⚠️ ChatBloc: 由于获取模型列表失败，直接根据modelId构造模型对象',
           );
-          
+
           // 【关键修复】即使获取模型列表失败，也根据modelId直接构造模型对象
           // 这是按照文档要求的兜底方案
           final expectedName = _modelIdToNameMap[modelId];
           AIModelPB? matchedModel;
-          
+
           if (expectedName != null) {
             matchedModel = AIModelPB()
               ..name = expectedName
@@ -791,14 +802,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               '⚠️ ChatBloc: 映射表中未找到模型ID "$modelId"，使用ID作为名称',
             );
           }
-          
+
           // matchedModel 在这里不可能是 null，因为上面已经构造了
           final modelToSet = matchedModel;
           final updatePayload = UpdateSelectedModelPB(
             source: chatId,
             selectedModel: modelToSet,
           );
-          
+
           await AIEventUpdateSelectedModel(updatePayload).send().fold(
             (_) {
               Log.info(
@@ -836,23 +847,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           Log.warn('⚠️ ChatBloc: 等待模型设置超时，继续发送消息');
         },
       );
-      
+
       Log.info('✅ ChatBloc: 模型设置完成，开始发送初始消息');
-      
+
       final metadata = <String, dynamic>{};
 
       if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
         Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
 
         // 1. 将图片拷贝到永久目录，防止源文件被删除
-        final permanentPaths = await _saveImagesToPermanentDir(initialImagePaths!);
+        final permanentPaths =
+            await _saveImagesToPermanentDir(initialImagePaths!);
 
         // 2. 转换图片为base64（用于发送到AI服务器）
-        final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
+        final imageBase64List =
+            await _convertImagesToBase64(initialImagePaths!);
         if (imageBase64List.isNotEmpty && !isClosed) {
           metadata['images'] = imageBase64List;
           metadata['has_images'] = true;
-          Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片(base64)到metadata');
+          Log.info(
+              '✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片(base64)到metadata');
         }
 
         // 3. 保存永久文件路径到metadata，用于跨会话持久化显示
@@ -863,7 +877,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           metadata['image_paths'] = initialImagePaths;
         }
       }
-      
+
       // 【竞态防护】等待模型设置期间，远端历史消息可能已异步加载进来。
       // 若此时已有历史消息，说明这是“重新打开的已有会话”（本地缓存冷导致首个空回调被误判为首次创建），
       // 必须取消自动发送，否则会重复执行会话请求与回复。
@@ -1012,13 +1026,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       modelError = '获取模型异常: $e';
       Log.error('❌ ChatBloc: $modelError');
     }
-    
+
     // 【关键修复】如果获取不到模型，直接报错并阻止发送消息
     // 按照用户要求：获取不到模型的时候就报获取模型失败，不要使用本地的模型
     if (selectedModel == null) {
       Log.error('❌ ChatBloc: 无法获取模型对象，停止发送消息');
       Log.error('   错误信息: ${modelError ?? "未知错误"}');
-      // 直接返回，不发送消息，不构造本地模型
+      _showSendingError(modelError ?? '未获取到可用模型，请稍后重试。');
+      add(const ChatEvent.failedSending());
       return;
     }
 
@@ -1026,6 +1041,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final questionStreamMessage = _messageHandler.createQuestionStreamMessage(
       _streamManager.questionStream!,
       metadata,
+      text: message,
     );
     add(ChatEvent.receiveMessage(questionStreamMessage));
 
@@ -1037,24 +1053,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (imagesData is List && imagesData.isNotEmpty) {
         images = imagesData.cast<String>();
         hasImages = true;
-        Log.info('📸 ChatBloc._startStreamingMessage: 提取到 ${images.length} 张图片，准备发送到Rust层');
+        Log.info(
+            '📸 ChatBloc._startStreamingMessage: 提取到 ${images.length} 张图片，准备发送到Rust层');
       }
       if (hasImagesData == true) {
         hasImages = true;
       }
     }
 
-    await _streamManager.sendStreamRequest(
-      message, 
-      format, 
+    await _streamManager
+        .sendStreamRequest(
+      message,
+      format,
       promptId,
       images: images,
       hasImages: hasImages,
       enableDeepThinkingOverride: actualEnableDeepThinking,
       enableWebSearchOverride: actualEnableWebSearch,
-    ).fold(
+    )
+        .fold(
       (question) {
         if (!isClosed) {
+          _messageHandler.registerTemporaryQuestion(
+            temporaryMessageId: questionStreamMessage.id,
+            questionMessageId: question.messageId,
+          );
           // Create and add answer stream message
           final streamAnswer = _messageHandler.createAnswerStreamMessage(
             stream: _streamManager.answerStream!,
@@ -1100,9 +1123,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
 
           add(const ChatEvent.failedSending());
-          add(ChatEvent.receiveMessage(error));
         }
       },
+    );
+  }
+
+  void _showSendingError(String error) {
+    final message = error.trim().isEmpty ? 'AI 服务暂时不可用，请稍后重试。' : error;
+    showToastNotification(message: message);
+    add(
+      ChatEvent.receiveMessage(
+        TextMessage(
+          text: '',
+          metadata: {
+            onetimeShotType: OnetimeShotType.error,
+            errorMessageTextKey: message,
+          },
+          author: const User(id: systemUserId),
+          id: '${systemUserId}_${DateTime.now().microsecondsSinceEpoch}',
+          createdAt: DateTime.now(),
+        ),
+      ),
     );
   }
 
@@ -1144,7 +1185,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   /// 将图片拷贝到永久目录，防止源文件（如临时文件）被清理
-  Future<List<String>> _saveImagesToPermanentDir(List<String> sourcePaths) async {
+  Future<List<String>> _saveImagesToPermanentDir(
+      List<String> sourcePaths) async {
     final permanentPaths = <String>[];
     try {
       final appDir = await getApplicationSupportDirectory();
@@ -1173,7 +1215,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   /// 将图片文件路径列表转换为base64列表
   Future<List<String>> _convertImagesToBase64(List<String> imagePaths) async {
     final base64List = <String>[];
-    
+
     for (final path in imagePaths) {
       try {
         final file = File(path);
@@ -1189,7 +1231,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         Log.error('❌ ChatBloc: 图片转换失败 - $path: $e');
       }
     }
-    
+
     return base64List;
   }
 }

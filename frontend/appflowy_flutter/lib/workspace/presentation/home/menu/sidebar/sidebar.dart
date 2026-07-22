@@ -620,25 +620,16 @@ class _SidebarState extends State<_Sidebar> {
     return ValueListenableBuilder(
       valueListenable: ApplicationInfo.latestVersionNotifier,
       builder: (context, latestVersion, _) {
-        // 妫€鏌ユ槸鍚︽湁鏂扮増鏈彲鐢?
-        final isUpdateAvailable = ApplicationInfo.isUpdateAvailable;
-
-        // 娣诲姞璋冭瘯鏃ュ織
-        // Log.info('[UpdateBanner] Current: ${ApplicationInfo.applicationVersion}, Latest: $latestVersion, Available: $isUpdateAvailable');
-
-        if (!isUpdateAvailable) {
+        if (!ApplicationInfo.isUpdateAvailable) {
           return const SizedBox.shrink();
         }
 
-        // 妫€鏌ョ敤鎴锋槸鍚﹀凡缁忓叧闂繃杩欎釜鐗堟湰鐨勬洿鏂版彁绀?
         return FutureBuilder<bool>(
           future: _shouldShowUpdateBanner(latestVersion),
           builder: (context, snapshot) {
             if (!snapshot.hasData || !snapshot.data!) {
               return const SizedBox.shrink();
             }
-
-            // Log.info('[UpdateBanner] Showing update banner for version $latestVersion');
 
             return Padding(
               padding: menuHorizontalInset +

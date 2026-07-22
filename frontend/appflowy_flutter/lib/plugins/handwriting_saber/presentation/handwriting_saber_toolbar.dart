@@ -10,6 +10,139 @@ import '../third_party/saber_core/data/editor/quill_struct.dart';
 import 'color_picker_dialog.dart';
 import 'widgets/tool_dropdown_button.dart';
 
+/// ✅ Toolbar 中段可横向滚动区域。
+///
+/// 在内容超出 viewport 宽度时:
+/// - 默认用 [SingleChildScrollView] 支持横向滚动
+/// - 当内容溢出时, 左右两侧叠一层 linear-gradient 阴影 (被 widget 背景色
+///   遮住的部分), 提示用户"有更多内容, 可向左/右滑动"
+///
+/// 这个 widget 只负责布局与滚动, 不负责 widget 交互。
+class _ScrolledToolbarArea extends StatefulWidget {
+  const _ScrolledToolbarArea({
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  State<_ScrolledToolbarArea> createState() => _ScrolledToolbarAreaState();
+}
+
+class _ScrolledToolbarAreaState extends State<_ScrolledToolbarArea> {
+  final ScrollController _controller = ScrollController();
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_updateOverflow);
+    // 第一次 layout 后, controller 还没 attach, 这里先注册一个 post-frame
+    // 回调, 在第一帧 layout 完成后再算一次 overflow。这样用户进入页面
+    // 立刻就能看到右侧的渐隐提示 (若内容溢出)。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateOverflow());
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_updateOverflow);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _updateOverflow() {
+    if (!mounted) return;
+    final position = _controller.position;
+    final canLeft = position.pixels > 0.5;
+    final canRight = position.pixels < position.maxScrollExtent - 0.5;
+    if (canLeft != _canScrollLeft || canRight != _canScrollRight) {
+      setState(() {
+        _canScrollLeft = canLeft;
+        _canScrollRight = canRight;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 渐隐阴影颜色取 toolbar 背景色, 从不透明到完全透明
+    final fadeColor = Theme.of(context).colorScheme.surface;
+    final scrollable = SingleChildScrollView(
+      controller: _controller,
+      scrollDirection: Axis.horizontal,
+      child: widget.child,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 当 viewport 宽度 ≥ 内容宽度 (即 _canScrollRight == false 且
+        // _canScrollLeft == false), 不需要任何渐隐阴影, 直接返回可滚
+        // 动容器即可 — 这样在 desktop / 平板宽屏上 toolbar 完全无
+        // 视觉副作用, 与改造前 1:1 等价。
+        //
+        // 注意: constraints.hasBoundedWidth 在一个 SingleChildScrollView
+        // 之外传递进来的父容器 (通常是 toolbar 整条横栏) 时为 true,
+        // 因为 toolbar 必须有有限的宽度。`SingleChildScrollView` 内部
+        // 用 scrollDirection: Axis.horizontal 时, 它的 viewport 会被限
+        // 制为父传入的 maxWidth, child 拿到的是 unbounded 高度。OK。
+        if (!_canScrollLeft && !_canScrollRight) {
+          return scrollable;
+        }
+
+        return Stack(
+          children: [
+            scrollable,
+            if (_canScrollLeft)
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 14,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          fadeColor,
+                          fadeColor.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (_canScrollRight)
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                width: 14,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerRight,
+                        end: Alignment.centerLeft,
+                        colors: [
+                          fadeColor,
+                          fadeColor.withValues(alpha: 0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+
 /// 手写笔记工具栏组件
 class HandwritingSaberToolbar extends StatelessWidget {
   const HandwritingSaberToolbar({
@@ -41,6 +174,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
     this.showPageManager = false, // ✅ 是否显示页面管理器
     this.onTogglePageManager, // ✅ 切换页面管理器显示回调
+    this.showBackButton = false,
+    this.onBackPressed,
   });
 
   final Tool currentTool;
@@ -70,6 +205,17 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
   final bool showPageManager; // ✅ 是否显示页面管理器
   final VoidCallback? onTogglePageManager; // ✅ 切换页面管理器显示回调
+
+  /// Whether to show a leading "back" button on the left edge of the
+  /// toolbar. Defaults to false so the desktop build (which uses the
+  /// same widget but is hosted inside the home stack / tab bar)
+  /// keeps its existing layout. The mobile entry point is expected
+  /// to opt in by passing `showBackButton: true`.
+  final bool showBackButton;
+
+  /// Called when the leading back button is tapped. If null the
+  /// toolbar will pop the current route via `Navigator.pop`.
+  final VoidCallback? onBackPressed;
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -103,6 +249,24 @@ class HandwritingSaberToolbar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // ✅ 主工具栏
+          //
+          // 整体策略:
+          // 1) Container 包住 surface / shadow / border 等外观;
+          // 2) 内部一个横向 SingleChildScrollView, 让所有内容都能横向
+          //    滚动 — 这在窄屏 mobile (屏幕宽度 < ~720 px) 是必须
+          //    的, 否则即使把"返回"按钮放在 leading 也会让内容溢出
+          //    220 px (我们曾经尝试过的 "三段布局" (Leading | Expanded
+          //    scroll | Trailing) 因为 Row 不能装超过约束宽度的 non-flex
+          //    children 而失败).
+          // 3) 在 mobile 上 [_ScrolledToolbarArea] 检测内容溢出, 在
+          //    右/左侧叠 14 px 的渐隐阴影, 让用户知道"还有更多, 可向
+          //    右滑动".
+          // 4) 返回按钮 (mobile only, showBackButton 控制) 放在 Row 最
+          //    前面, 但仍参与横向滚动, 这样不会让单 Row 子节点宽度过
+          //    大引起 RenderFlex overflow.
+          // 5) 当屏幕宽度 >= 720 px (desktop / 折叠屏展开等) 内容完全
+          //    放进一行, `_ScrolledToolbarArea` 因为 constraints ==
+          //    viewport 不会渲染任何阴影, 用户感觉不到任何差异.
           Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
@@ -123,18 +287,20 @@ class HandwritingSaberToolbar extends StatelessWidget {
                 ),
               ],
             ),
-            // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+            child: _ScrolledToolbarArea(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // ✅ 移动端显示返回按钮; 桌面端留空, 保证原有外观
+                  if (showBackButton)
+                    _buildLeadingBackButton(context)
+                  else
+                    const SizedBox.shrink(),
                   // ✅ 撤销/恢复按钮
                   _buildUndoRedoButtons(),
                   _buildDivider(),
                   // ✅ 工具选择（分组显示）
                   _buildToolSelectorGrouped(),
-                  // ✅ 分隔线
                   _buildDivider(),
                   // ✅ 颜色选择
                   _buildColorSelector(),
@@ -144,11 +310,9 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     const SizedBox(width: 8),
                     _buildFillColorSelector(),
                   ],
-                  // ✅ 分隔线
                   _buildDivider(),
                   // ✅ 粗细调整
                   _buildStrokeWidthSelector(),
-                  // ✅ 分隔线
                   _buildDivider(),
                   // ✅ 其他工具（PDF导入、背景模式、文本编辑）
                   _buildOtherToolsSection(),
@@ -171,6 +335,32 @@ class HandwritingSaberToolbar extends StatelessWidget {
         height: 28,
         margin: const EdgeInsets.symmetric(horizontal: 4),
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+      ),
+    );
+  }
+
+  /// ✅ 构建工具栏最左侧的返回按钮（仅移动端使用）
+  ///
+  /// 点击行为：
+  /// - 如果调用方传入了 [onBackPressed]，调用它；
+  /// - 否则调用 [Navigator.pop]，把当前路由出栈。
+  Widget _buildLeadingBackButton(BuildContext context) {
+    return Tooltip(
+      message: '返回',
+      child: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+        onPressed: () {
+          if (onBackPressed != null) {
+            onBackPressed!.call();
+          } else {
+            Navigator.maybePop(context);
+          }
+        },
+        padding: const EdgeInsets.all(4),
+        constraints: const BoxConstraints(
+          minWidth: 34,
+          minHeight: 34,
+        ),
       ),
     );
   }

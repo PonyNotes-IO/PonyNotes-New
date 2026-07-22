@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -86,6 +86,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 因 deactivate/didUpdateWidget(全屏切换、视图树重建等)触发保存，
   /// 用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
   bool _isDataLoaded = false;
+
+  /// Cached platform check. Only used to decide whether to surface the
+  /// toolbar's leading "back" button. Computed once at state creation
+  /// so we avoid hitting `dart:io` on every build().
+  final bool _isMobilePlatform =
+      Platform.isAndroid || Platform.isIOS;
 
   /// 当前正在绘制的一笔（使用 ValueNotifier 减少父级 setState 频繁重建）
   final ValueNotifier<Stroke?> _currentStrokeNotifier =
@@ -4123,9 +4129,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         _endStroke();
       },
-      child: Container(
-        width: screenWidth,
-        height: pageDisplayHeight,
+      child: SizedBox(
         child: SizedBox(
           width: math.max(screenWidth, pageDisplayWidth),
           height: pageDisplayHeight,
@@ -5271,6 +5275,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                               showPageManager, // ✅ 页面管理器显示状态
                                           onTogglePageManager:
                                               _togglePageManager, // ✅ 切换页面管理器回调
+                                          // ✅ 仅移动端显示工具栏返回按钮
+                                          showBackButton: _isMobilePlatform,
                                     );
                                   },
                                 );

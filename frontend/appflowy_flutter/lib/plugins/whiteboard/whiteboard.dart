@@ -174,23 +174,52 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     required Widget child,
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
-    return Stack(
-      children: [
-        child,
-        Positioned(
-          top: 0,
-          right: 0,
-          child: UnifiedViewTopRightActions(
-            view: view,
-            viewInfoBloc: viewInfoBloc,
-            pageAccessLevelBloc: pageAccessLevelBloc,
-            showCollaborators: false,
-            useFloatingSurface: true,
-            showShareButton: false,
-            iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
-          ),
-        ),
-      ],
+    return Builder(
+      builder: (context) {
+        // ✅ Mobile 上避免右上角操作栏被状态栏遮挡
+        //
+        // desktop 上 MediaQuery.padding 为 0, 因此 top/right 取 0, 与原来
+        // `Positioned(top: 0, right: 0, ...)` 完全等价, 桌面端零影响。
+        // mobile 上 padding.top 是 status bar 高度, padding.right 在有
+        // notch 的设备 (例如 iPhone 14 Pro) 上也会被算进去。
+        final padding = MediaQuery.paddingOf(context);
+        final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
+        return Stack(
+          children: [
+            child,
+            // ✅ Mobile 端在白板左上角添加返回按钮
+            //
+            // 桌面端不需要：白板在桌面端通过 home_stack / tab_bar 提供关闭 / 切
+            // 换 tab 的入口, 不会再加一个返回按钮。这里用 isMobile 守卫后, 桌面端
+            // 不会有任何变化。位置同样用 padding.left / padding.top 避开 status
+            // bar / notch, 桌面端 padding=0 因此等价于 left:0, top:0。
+            if (isMobile)
+              Positioned(
+                left: padding.left,
+                top: padding.top,
+                child: _WhiteboardBackButton(
+                  iconColor: isWhiteboard
+                      ? const Color(0xFF111111)
+                      : null,
+                ),
+              ),
+            Positioned(
+              top: padding.top,
+              right: padding.right,
+              child: UnifiedViewTopRightActions(
+                view: view,
+                viewInfoBloc: viewInfoBloc,
+                pageAccessLevelBloc: pageAccessLevelBloc,
+                showCollaborators: false,
+                useFloatingSurface: true,
+                showShareButton: false,
+                iconColorOverride:
+                    isWhiteboard ? const Color(0xFF111111) : null,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1434,5 +1463,42 @@ class _MeasureSizeRenderObject extends RenderProxyBox {
 
     _lastSize = nextSize;
     WidgetsBinding.instance.addPostFrameCallback((_) => onChange(nextSize));
+  }
+}
+
+/// ✅ Mobile-only：白板左上角浮层返回按钮
+///
+/// 仅在 mobile 上由 [_buildContentWithToolbar] 添加到 Stack 的左上角。
+/// 桌面端完全不会渲染该 widget。点击时直接 `Navigator.maybePop` 回退。
+class _WhiteboardBackButton extends StatelessWidget {
+  const _WhiteboardBackButton({
+    this.iconColor,
+  });
+
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveColor =
+        iconColor ?? theme.iconTheme.color ?? Colors.black;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => Navigator.maybePop(context),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Icon(
+              Icons.arrow_back_ios_new,
+              size: 18,
+              color: effectiveColor,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
