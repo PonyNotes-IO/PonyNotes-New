@@ -205,12 +205,7 @@ Win32Window::MessageHandler(HWND hwnd,
       return 0;
     }
     case WM_SIZE: {
-      RECT rect = GetClientArea();
-      if (child_content_ != nullptr) {
-        // Size and position the child window.
-        MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-                   rect.bottom - rect.top, TRUE);
-      }
+      SynchronizeChildContent();
       return 0;
     }
 
@@ -248,12 +243,36 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
-  RECT frame = GetClientArea();
-
-  MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
-             frame.bottom - frame.top, true);
+  SynchronizeChildContent();
 
   SetFocus(child_content_);
+}
+
+Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
+    bool force_redraw) {
+  const RECT client_area = GetClientArea();
+  const LONG client_width = client_area.right - client_area.left;
+  const LONG client_height = client_area.bottom - client_area.top;
+
+  LONG child_width = 0;
+  LONG child_height = 0;
+  if (child_content_ != nullptr) {
+    MoveWindow(child_content_, client_area.left, client_area.top, client_width,
+               client_height, TRUE);
+    if (force_redraw) {
+      InvalidateRect(child_content_, nullptr, TRUE);
+      RedrawWindow(child_content_, nullptr, nullptr,
+                   RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
+    }
+
+    RECT child_area{};
+    if (GetClientRect(child_content_, &child_area)) {
+      child_width = child_area.right - child_area.left;
+      child_height = child_area.bottom - child_area.top;
+    }
+  }
+
+  return {client_width, client_height, child_width, child_height};
 }
 
 RECT Win32Window::GetClientArea() {

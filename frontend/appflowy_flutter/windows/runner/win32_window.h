@@ -25,6 +25,14 @@ class Win32Window {
         : width(width), height(height) {}
   };
 
+  // The client and hosted-content dimensions after a synchronization.
+  struct SurfaceMetrics {
+    LONG client_width;
+    LONG client_height;
+    LONG child_width;
+    LONG child_height;
+  };
+
   Win32Window();
   virtual ~Win32Window();
 
@@ -60,6 +68,11 @@ class Win32Window {
   bool SendAppLinkToInstance(const std::wstring &title);
 
  protected:
+  // Sizes the hosted content to the current client area. The explicit surface
+  // synchronization path can additionally request a redraw without changing
+  // the top-level window's size.
+  SurfaceMetrics SynchronizeChildContent(bool force_redraw = false);
+
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
   // inheriting classes can handle.

@@ -8,9 +8,129 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scaled_app/scaled_app.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:universal_platform/universal_platform.dart';
+
+const windowsSurfaceChannelName = 'ponynotes/window_surface';
+var _windowsSurfaceGeneration = 0;
+
+int nextWindowsSurfaceGeneration() => ++_windowsSurfaceGeneration;
+
+class WindowsSurfaceDimensions {
+  const WindowsSurfaceDimensions({
+    required this.clientWidth,
+    required this.clientHeight,
+    required this.childWidth,
+    required this.childHeight,
+  });
+
+  factory WindowsSurfaceDimensions.fromMap(Map<dynamic, dynamic> values) {
+    int valueFor(String key) {
+      final value = values[key];
+      if (value is num) {
+        return value.toInt();
+      }
+      throw StateError('Missing Windows surface dimension: $key');
+    }
+
+    return WindowsSurfaceDimensions(
+      clientWidth: valueFor('clientWidth'),
+      clientHeight: valueFor('clientHeight'),
+      childWidth: valueFor('childWidth'),
+      childHeight: valueFor('childHeight'),
+    );
+  }
+
+  final int clientWidth;
+  final int clientHeight;
+  final int childWidth;
+  final int childHeight;
+
+  @override
+  bool operator ==(Object other) {
+    return other is WindowsSurfaceDimensions &&
+        clientWidth == other.clientWidth &&
+        clientHeight == other.clientHeight &&
+        childWidth == other.childWidth &&
+        childHeight == other.childHeight;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        clientWidth,
+        clientHeight,
+        childWidth,
+        childHeight,
+      );
+}
+
+class WindowsSurfaceSynchronizer {
+  WindowsSurfaceSynchronizer({
+    MethodChannel? channel,
+    bool Function()? isWindows,
+  })  : _channel = channel ?? const MethodChannel(windowsSurfaceChannelName),
+        _isWindows = isWindows ?? (() => Platform.isWindows);
+
+  final MethodChannel _channel;
+  final bool Function() _isWindows;
+
+  Future<WindowsSurfaceDimensions?> synchronize() async {
+    if (!_isWindows()) {
+      return null;
+    }
+
+    final result = await _channel.invokeMapMethod<String, dynamic>(
+      'synchronizeSurface',
+    );
+    if (result == null) {
+      return null;
+    }
+
+    return WindowsSurfaceDimensions.fromMap(result);
+  }
+}
+
+Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
+  required int generation,
+}) async {
+  if (!Platform.isWindows) {
+    return;
+  }
+
+  await WidgetsBinding.instance.endOfFrame;
+
+  try {
+    final dimensions = await WindowsSurfaceSynchronizer().synchronize();
+    final views = PlatformDispatcher.instance.views;
+    final dartView = views.isEmpty ? null : views.first;
+    final dartSize = dartView?.physicalSize;
+    final devicePixelRatio = dartView?.devicePixelRatio;
+
+    if (dimensions == null) {
+      Log.warn(
+        '[Windows] surface synchronization returned no dimensions '
+        'for generation=$generation',
+      );
+      return;
+    }
+
+    Log.info(
+      '[Windows] surface synchronized for generation=$generation: '
+      'dartPhysicalSize=$dartSize, devicePixelRatio=$devicePixelRatio, '
+      'clientSize=${dimensions.clientWidth}x${dimensions.clientHeight}, '
+      'childSize=${dimensions.childWidth}x${dimensions.childHeight}',
+    );
+  } catch (error, stackTrace) {
+    Log.warn(
+      '[Windows] surface synchronization failed for generation=$generation: '
+      '$error',
+      error,
+      stackTrace,
+    );
+  }
+}
 
 class InitAppWindowTask extends LaunchTask with WindowListener {
   InitAppWindowTask({this.title = 'PonyNotes'});
@@ -18,7 +138,8 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   final String title;
   final windowSizeManager = WindowSizeManager();
   static const Size _windowsSafeStartupSize = Size(1280, 720);
-  
+  static bool _hasInitializedWindowsWindow = false;
+
   bool _isDisposed = false;
 
   @override
@@ -30,7 +151,7 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     }
 
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     if (UniversalPlatform.isMobile) {
       final scale = await windowSizeManager.getScaleFactor();
       // 白板偏移修复后改用标准 WidgetsFlutterBinding，安全屏蔽缩放（缩放暂停用，不崩溃）。
@@ -44,6 +165,10 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
+
+    if (UniversalPlatform.isWindows && _hasInitializedWindowsWindow) {
+      return;
+    }
 
     final storedWindowSize = await windowSizeManager.getSize();
     final windowSize = UniversalPlatform.isWindows
@@ -71,16 +196,15 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
       await windowManager.setTitleBarStyle(
         useCustomWindowTitleBar ? TitleBarStyle.hidden : TitleBarStyle.normal,
       );
-      await windowManager.waitUntilReadyToShow(windowOptions, () async {
-        // Do not restore a saved maximized state before the first Windows
-        // show. Creating Flutter's surface directly in maximized bounds can
-        // leave the first frame with a stale client area until a manual resize.
-        await windowSizeManager.setWindowMaximized(false);
-        await windowManager.center();
-
-        await windowManager.show();
-        await windowManager.focus();
-      });
+      await windowManager.waitUntilReadyToShow(windowOptions);
+      // Do not restore a saved maximized state before the first Windows
+      // show. Creating Flutter's surface directly in maximized bounds can
+      // leave the first frame with a stale client area until a manual resize.
+      await windowSizeManager.setWindowMaximized(false);
+      await windowManager.center();
+      await windowManager.show();
+      await windowManager.focus();
+      _hasInitializedWindowsWindow = true;
     } else {
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
@@ -183,70 +307,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   }
 }
 
-Future<void> refreshWindowsSurfaceAfterNavigation({
-  String reason = 'navigation',
-}) async {
-  if (!Platform.isWindows) {
-    return;
-  }
-
-  try {
-    if (await windowManager.isMinimized()) {
-      await windowManager.restore();
-    }
-
-    if (await windowManager.isMaximized()) {
-      await windowManager.unmaximize();
-      await Future<void>.delayed(const Duration(milliseconds: 16));
-      await windowManager.maximize();
-    } else {
-      final currentSize = await windowManager.getSize();
-      final currentPosition = await windowManager.getPosition();
-      final nudgeSize = Size(
-        _surfaceRefreshNudgeDimension(
-          currentSize.width,
-          WindowSizeManager.minWindowWidth,
-          WindowSizeManager.maxWindowWidth,
-        ),
-        _surfaceRefreshNudgeDimension(
-          currentSize.height,
-          WindowSizeManager.minWindowHeight,
-          WindowSizeManager.maxWindowHeight,
-        ),
-      );
-      final didResizeNudge = nudgeSize != currentSize;
-
-      Log.info(
-        '[Windows] surface refresh requested after $reason: '
-        'currentSize=${currentSize.width}x${currentSize.height}, '
-        'nudgeSize=${nudgeSize.width}x${nudgeSize.height}, '
-        'didResizeNudge=$didResizeNudge',
-      );
-
-      if (didResizeNudge) {
-        await windowManager.setSize(nudgeSize);
-        await Future<void>.delayed(const Duration(milliseconds: 16));
-        await windowManager.setSize(currentSize);
-      }
-
-      await windowManager.setPosition(currentPosition);
-    }
-
-    await windowManager.show();
-    await windowManager.focus();
-    Log.info('[Windows] refreshed surface after $reason');
-  } catch (error, stackTrace) {
-    Log.warn(
-      '[Windows] failed to refresh surface after $reason: $error',
-      error,
-      stackTrace,
-    );
-  }
-}
-
 /// macOS 窗口恢复处理
 /// 当窗口最小化后长时间再打开时，确保窗口正确显示
-/// 
+///
 /// 该方法解决以下问题：
 /// 1. 窗口最小化后长时间再打开时，窗口可能无法正确显示在桌面
 /// 2. 切换笔记后程序崩溃的问题
@@ -258,14 +321,18 @@ Future<void> refreshMacOSWindowAfterMinimize() async {
 
   try {
     // 确保窗口管理器已初始化
-    final isInitialized = await windowManager.ensureInitialized().then((_) => true).catchError((_) => false);
+    final isInitialized = await windowManager
+        .ensureInitialized()
+        .then((_) => true)
+        .catchError((_) => false);
     if (!isInitialized) {
       Log.warn('[macOS] windowManager not initialized, skipping refresh');
       return;
     }
 
     // 检查窗口是否被最小化
-    final isMinimized = await windowManager.isMinimized().catchError((_) => false);
+    final isMinimized =
+        await windowManager.isMinimized().catchError((_) => false);
     if (isMinimized) {
       await windowManager.restore().catchError((error) {
         Log.warn('[macOS] failed to restore window: $error');
@@ -276,7 +343,7 @@ Future<void> refreshMacOSWindowAfterMinimize() async {
     await windowManager.show().catchError((error) {
       Log.warn('[macOS] failed to show window: $error');
     });
-    
+
     await windowManager.focus().catchError((error) {
       Log.warn('[macOS] failed to focus window: $error');
     });
@@ -299,21 +366,4 @@ Future<void> refreshMacOSWindowAfterMinimize() async {
       stackTrace,
     );
   }
-}
-
-double _surfaceRefreshNudgeDimension(
-  double value,
-  double minValue,
-  double maxValue,
-) {
-  const delta = 1.0;
-
-  if (value <= minValue + delta) {
-    return (value + delta).clamp(minValue, maxValue).toDouble();
-  }
-  if (value >= maxValue - delta) {
-    return (value - delta).clamp(minValue, maxValue).toDouble();
-  }
-
-  return (value - delta).clamp(minValue, maxValue).toDouble();
 }

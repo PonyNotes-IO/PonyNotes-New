@@ -1,8 +1,19 @@
 #include "flutter_window.h"
 
+#include <cstdint>
 #include <optional>
 
+#include <flutter/standard_method_codec.h>
+
 #include "flutter/generated_plugin_registrant.h"
+
+namespace {
+
+constexpr char kWindowSurfaceChannel[] = "ponynotes/window_surface";
+constexpr char kSynchronizeSurfaceMethod[] = "synchronizeSurface";
+
+}  // namespace
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -26,6 +37,15 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  window_surface_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), kWindowSurfaceChannel,
+          &flutter::StandardMethodCodec::GetInstance());
+  window_surface_channel_->SetMethodCallHandler(
+      [this](const auto& call, auto result) {
+        SynchronizeSurface(call, std::move(result));
+      });
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     // https://pub.dev/packages/window_manager#windows
     // this->Show();
@@ -40,6 +60,10 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (window_surface_channel_) {
+    window_surface_channel_->SetMethodCallHandler(nullptr);
+  }
+  window_surface_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -68,4 +92,30 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+}
+
+void FlutterWindow::SynchronizeSurface(
+    const flutter::MethodCall<flutter::EncodableValue>& call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  if (call.method_name() != kSynchronizeSurfaceMethod) {
+    result->NotImplemented();
+    return;
+  }
+
+  const SurfaceMetrics metrics = SynchronizeChildContent(true);
+  if (flutter_controller_) {
+    flutter_controller_->ForceRedraw();
+  }
+
+  flutter::EncodableMap dimensions = {
+      {flutter::EncodableValue("clientWidth"),
+       flutter::EncodableValue(static_cast<int32_t>(metrics.client_width))},
+      {flutter::EncodableValue("clientHeight"),
+       flutter::EncodableValue(static_cast<int32_t>(metrics.client_height))},
+      {flutter::EncodableValue("childWidth"),
+       flutter::EncodableValue(static_cast<int32_t>(metrics.child_width))},
+      {flutter::EncodableValue("childHeight"),
+       flutter::EncodableValue(static_cast<int32_t>(metrics.child_height))},
+  };
+  result->Success(flutter::EncodableValue(dimensions));
 }

@@ -72,12 +72,11 @@ class InitAppWidgetTask extends LaunchTask {
     await super.initialize(context);
 
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     _setPreferredOrientations();
 
     PaintingBinding.instance.imageCache.maximumSize = 500;
-    PaintingBinding.instance.imageCache.maximumSizeBytes =
-        100 * 1024 * 1024;
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
 
     await NotificationService.initialize();
 
@@ -154,6 +153,11 @@ class InitAppWidgetTask extends LaunchTask {
           },
         ),
       ),
+    );
+
+    final surfaceGeneration = nextWindowsSurfaceGeneration();
+    await synchronizeWindowsSurfaceAfterFirstFrame(
+      generation: surfaceGeneration,
     );
 
     return;
@@ -327,8 +331,7 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                           ),
                           child: overlayManagerBuilder(
                             context,
-                            !PlatformInfo.isMobile &&
-                                    FeatureFlag.search.isOn
+                            !PlatformInfo.isMobile && FeatureFlag.search.isOn
                                 ? CommandPalette(
                                     notifier: _commandPaletteNotifier,
                                     child: child,
@@ -358,8 +361,9 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
         SystemUiOverlayStyle(
           systemNavigationBarColor: Colors.transparent,
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness:
-              state.themeMode == ThemeMode.dark ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: state.themeMode == ThemeMode.dark
+              ? Brightness.light
+              : Brightness.dark,
         ),
       );
     }

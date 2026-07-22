@@ -10,7 +10,6 @@ import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/quick_start/quick_start_button.dart';
@@ -59,15 +58,6 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
 
     if (UniversalPlatform.isWindows) {
       windowManager.addListener(this);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-
-        unawaited(
-          refreshWindowsSurfaceAfterNavigation(reason: 'sign-in-first-frame'),
-        );
-      });
     }
   }
 
