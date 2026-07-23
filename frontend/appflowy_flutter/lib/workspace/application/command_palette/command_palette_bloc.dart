@@ -236,7 +236,9 @@ class CommandPaletteBloc
     _ResultsChanged event,
     Emitter<CommandPaletteState> emit,
   ) async {
-    if (state.searchId != event.searchId) return;
+    // Allow update when searchId is empty (signals end of search or error)
+    // or when searchId matches the current active search
+    if (event.searchId.isNotEmpty && state.searchId != event.searchId) return;
 
     final combinedItems = <String, SearchResultItem>{};
     for (final item in event.serverItems ?? state.serverResponseItems) {
