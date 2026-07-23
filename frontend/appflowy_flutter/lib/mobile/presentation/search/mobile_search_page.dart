@@ -1,4 +1,6 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/home/mobile_home_page.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
@@ -100,15 +102,22 @@ class _MobileSearchPageState extends State<MobileSearchPage> {
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                MobileSearchTextfield(
-                  focusNode: focusNode,
-                  hintText: enableShowAISearch
-                      ? LocaleKeys.search_searchOrAskAI.tr()
-                      : LocaleKeys.search_label.tr(),
-                  query: state.query ?? '',
-                  onChanged: (value) => context.read<CommandPaletteBloc>().add(
-                        CommandPaletteEvent.searchChanged(search: value),
+                ValueListenableBuilder<UserWorkspacePB?>(
+                  valueListenable: mCurrentWorkspace,
+                  builder: (context, workspace, _) {
+                    final workspaceName = workspace?.name ?? '';
+                    return MobileSearchTextfield(
+                      focusNode: focusNode,
+                      hintText: LocaleKeys.search_searchFieldHint.tr(
+                        args: [workspaceName],
                       ),
+                      query: state.query ?? '',
+                      onChanged: (value) =>
+                          context.read<CommandPaletteBloc>().add(
+                                CommandPaletteEvent.searchChanged(search: value),
+                              ),
+                    );
+                  },
                 ),
                 Flexible(
                   child: NotificationListener(
@@ -125,7 +134,11 @@ class _MobileSearchPageState extends State<MobileSearchPage> {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
                           children: [
-                            if (enableShowAISearch) MobileSearchAskAiEntrance(),
+                            if (enableShowAISearch &&
+                            state.query?.isNotEmpty == true &&
+                            state.combinedResponseItems.isEmpty &&
+                            !state.searching)
+                            MobileSearchAskAiEntrance(),
                             MobileSearchResult(),
                           ],
                         ),
