@@ -7,6 +7,9 @@ import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
@@ -17,9 +20,11 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class AIChatPluginBuilder extends PluginBuilder {
   @override
@@ -155,11 +160,21 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
         BlocProvider.value(value: viewInfoBloc),
         BlocProvider.value(value: pageAccessLevelBloc),
       ],
-      child: AIChatPage(
-        userProfile: context.userProfile!,
-        key: ValueKey(notifier.view.id),
-        view: notifier.view,
-        onDeleted: () {},
+      child: Stack(
+        children: [
+          AIChatPage(
+            userProfile: context.userProfile!,
+            key: ValueKey(notifier.view.id),
+            view: notifier.view,
+            onDeleted: () {},
+          ),
+          if (!PlatformInfo.isMobile)
+            Positioned(
+              top: 0,
+              left: UniversalPlatform.isMacOS ? 100 : 16,
+              child: const _AIChatSidebarExpandButton(),
+            ),
+        ],
       ),
     );
   }
@@ -262,4 +277,51 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
           },
         ),
       );
+}
+
+class _AIChatSidebarExpandButton extends StatelessWidget {
+  const _AIChatSidebarExpandButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        if (isFullWindow) {
+          return const SizedBox.shrink();
+        }
+
+        final isMenuHidden = context.select<HomeSettingBloc, bool>(
+          (bloc) => bloc.isMenuHidden,
+        );
+        if (!isMenuHidden) {
+          return const SizedBox.shrink();
+        }
+
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: HomeSizes.topActionBarHeight,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: FlowyTooltip(
+              message: LocaleKeys.sideBar_openSidebar.tr(),
+              child: SizedBox.square(
+                dimension: HomeSizes.topActionBarItemExtent,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: FlowySvg(
+                    FlowySvgs.sidebar_collapse_custom_m,
+                    size: const Size.square(20),
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
