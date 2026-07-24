@@ -306,7 +306,7 @@ class _MultiImageMenuState extends State<MultiImageMenu> {
       });
 
       await editorState.apply(transaction);
-      setState(() => images = newImages);
+      setState(() => images = [...images, ...newImages]);
     });
   }
 

@@ -64,8 +64,9 @@ Future<String?> saveImageToLocalStorage(String localImagePath) async {
 
 Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
   String localImagePath,
-  String documentId,
-) async {
+  String documentId, {
+  bool waitForUpload = true,
+}) async {
   final documentService = DocumentService();
   Log.debug("Uploading image local path: $localImagePath");
   final result = await documentService.uploadFile(
@@ -78,6 +79,9 @@ Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
         s.url,
         File(localImagePath).readAsBytesSync(),
       );
+      if (!waitForUpload) {
+        return (s.url, null);
+      }
       final uploadError = await _waitForImageUploadReady(s.url);
       if (uploadError != null) {
         // 【离线上传支持 2026-07-19】断网/等待超时时，不再判定为失败。
@@ -206,40 +210,72 @@ Future<List<ImageBlockData>> extractAndUploadImages(
   List<String?> urls,
   bool isLocalMode,
 ) async {
-  final List<ImageBlockData> images = [];
+  final validUrls = urls.whereType<String>().where((url) => url.isNotEmpty);
+  if (validUrls.isEmpty) {
+    return [];
+  }
 
+  // A queued cloud upload persists its source file before it waits for the
+  // network. Submit every selected image first and insert its cached URL as
+  // soon as it is durable locally, rather than serializing the collection on
+  // the per-image upload timeout.
+  final documentId = context.read<DocumentBloc>().documentId;
+  final results = await Future.wait(
+    validUrls.map(
+      (url) => _extractAndUploadImage(
+        url: url,
+        documentId: documentId,
+        isLocalMode: isLocalMode,
+      ),
+    ),
+  );
+
+  final images = <ImageBlockData>[];
   String? lastErrorMsg;
-  for (final url in urls) {
-    if (url == null || url.isEmpty) {
-      continue;
-    }
-
-    String? path;
-    String? errorMsg;
-    CustomImageType imageType = CustomImageType.local;
-
-    if (isLocalMode) {
-      path = await saveImageToLocalStorage(url);
-    } else {
-      (path, errorMsg) = await saveImageToCloudStorage(
-        url,
-        context.read<DocumentBloc>().documentId,
-      );
-      imageType = CustomImageType.internal;
-    }
-
-    if (path != null && errorMsg == null) {
-      images.add(ImageBlockData(url: path, type: imageType));
-    } else {
-      lastErrorMsg = errorMsg;
+  for (final result in results) {
+    if (result.image != null) {
+      images.add(result.image!);
+    } else if (result.errorMessage != null) {
+      lastErrorMsg = result.errorMessage;
     }
   }
 
   if (context.mounted && lastErrorMsg != null) {
-    showToastNotification(message: lastErrorMsg, type: ToastificationType.error);
+    showToastNotification(
+      message: lastErrorMsg,
+      type: ToastificationType.error,
+    );
   }
 
   return images;
+}
+
+Future<({ImageBlockData? image, String? errorMessage})> _extractAndUploadImage({
+  required String url,
+  required String documentId,
+  required bool isLocalMode,
+}) async {
+  if (isLocalMode) {
+    final path = await saveImageToLocalStorage(url);
+    return (
+      image: path == null
+          ? null
+          : ImageBlockData(url: path, type: CustomImageType.local),
+      errorMessage: null,
+    );
+  }
+
+  final (path, errorMessage) = await saveImageToCloudStorage(
+    url,
+    documentId,
+    waitForUpload: false,
+  );
+  return (
+    image: path == null
+        ? null
+        : ImageBlockData(url: path, type: CustomImageType.internal),
+    errorMessage: errorMessage,
+  );
 }
 
 @visibleForTesting

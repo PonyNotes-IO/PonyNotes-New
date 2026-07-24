@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{RwLock, watch};
 use tracing::{error, info, instrument, trace, warn};
 
 #[derive(Clone)]
@@ -259,11 +259,19 @@ impl FileUploader {
           }
 
           if err.should_retry_upload() {
-            info!(
-              "[File] failed to resume upload file: {}, retry_count:{}",
-              err, retry_count
-            );
-            retry_count += 1;
+            if err.is_network_unavailable() {
+              info!(
+                "[File] Network unavailable, requeue resumed upload without consuming retry budget: {}",
+                err
+              );
+              offline_backoff = true;
+            } else {
+              info!(
+                "[File] failed to resume upload file: {}, retry_count:{}",
+                err, retry_count
+              );
+              retry_count += 1;
+            }
             self.queue.tasks.write().await.push(BackgroundTask {
               workspace_id,
               parent_dir,
