@@ -2,6 +2,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -75,6 +76,21 @@ After
       expect(
         inserts[1].attributes?[InlineMathEquationKeys.formula],
         r'a_n=\frac{1}{n}',
+      );
+    });
+
+    test('convert ==text== to highlighted text', () {
+      final document = customMarkdownToDocument('Before ==marked== after');
+
+      final inserts =
+          document.nodeAtPath([0])!.delta!.whereType<TextInsert>().toList();
+      expect(
+        inserts.map((insert) => insert.text).join(),
+        'Before marked after',
+      );
+      expect(
+        inserts[1].attributes?[AppFlowyRichTextKeys.backgroundColor],
+        Colors.yellow.withValues(alpha: 0.3).toHex(),
       );
     });
   });

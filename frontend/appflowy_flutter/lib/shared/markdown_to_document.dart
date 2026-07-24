@@ -24,6 +24,7 @@ Document customMarkdownToDocument(
     ],
     inlineSyntaxes: [
       MarkdownInlineMathSyntax(),
+      MarkdownInlineMarkSyntax(),
     ],
   );
 }
@@ -59,6 +60,7 @@ Future<String> customDocumentToMarkdown(
   String path = '',
   AsyncValueSetter<Archive>? onArchive,
   String lineBreak = '',
+
   /// When true, image nodes emit raw URLs (local paths) instead of
   /// archive-relative paths.  Used by PDF export where the encoder
   /// reads images directly from disk, not from an archive.
