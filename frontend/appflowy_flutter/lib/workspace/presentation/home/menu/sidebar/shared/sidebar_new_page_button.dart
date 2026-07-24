@@ -5,9 +5,9 @@ import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
-import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -24,18 +24,6 @@ class SidebarNewPageButton extends StatefulWidget {
 }
 
 class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
-  @override
-  void initState() {
-    super.initState();
-    createNewPageNotifier.addListener(_createNewPage);
-  }
-
-  @override
-  void dispose() {
-    createNewPageNotifier.removeListener(_createNewPage);
-    super.dispose();
-  }
-
   /// 当前用户是否为受限成员（Guest）
   /// 由 build() 中 context.watch 驱动重建
   late bool _isRestrictedMember;
@@ -43,7 +31,9 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
   @override
   Widget build(BuildContext context) {
     try {
-      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+      _isRestrictedMember =
+          context.watch<UserWorkspaceBloc>().state.currentUserRole ==
+              AFRolePB.Guest;
     } catch (_) {
       _isRestrictedMember = false;
     }
