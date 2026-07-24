@@ -28,6 +28,7 @@ import 'package:appflowy/workspace/application/home/home_bloc.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
@@ -46,10 +47,11 @@ import 'package:appflowy/shared/version_checker/version_checker.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
-    show UserProfilePB;
+    show AFRolePB, UserProfilePB;
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -343,9 +345,11 @@ class HomeSideBar extends StatelessWidget {
                   },
                 ),
               ],
-              child: _Sidebar(
-                userProfile: userProfile,
-                isDrawerMenu: isDrawerMenu,
+              child: _SidebarHotKeyActions(
+                child: _Sidebar(
+                  userProfile: userProfile,
+                  isDrawerMenu: isDrawerMenu,
+                ),
               ),
             ),
           );
@@ -424,6 +428,71 @@ class HomeSideBar extends StatelessWidget {
       }
     });
   }
+}
+
+/// The sidebar owns the state required to create a page or switch spaces.
+/// Keeping these listeners here ensures global home shortcuts remain active
+/// even when the legacy sidebar button/widget is not mounted.
+class _SidebarHotKeyActions extends StatefulWidget {
+  const _SidebarHotKeyActions({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_SidebarHotKeyActions> createState() => _SidebarHotKeyActionsState();
+}
+
+class _SidebarHotKeyActionsState extends State<_SidebarHotKeyActions> {
+  @override
+  void initState() {
+    super.initState();
+    createNewPageNotifier.addListener(_createNewPage);
+    switchToTheNextSpace.addListener(_switchToNextSpace);
+  }
+
+  @override
+  void dispose() {
+    createNewPageNotifier.removeListener(_createNewPage);
+    switchToTheNextSpace.removeListener(_switchToNextSpace);
+    super.dispose();
+  }
+
+  void _createNewPage() {
+    final workspaceState = context.read<UserWorkspaceBloc>().state;
+    if (workspaceState.currentUserRole == AFRolePB.Guest) {
+      return;
+    }
+
+    final section = workspaceState.isCollabWorkspaceOn
+        ? ViewSectionPB.Private
+        : ViewSectionPB.Public;
+    final spaceBloc = context.read<SpaceBloc>();
+    if (spaceBloc.state.spaces.isNotEmpty) {
+      spaceBloc.add(
+        SpaceEvent.createPage(
+          name: ViewLayoutPB.Document.defaultName,
+          index: 0,
+          layout: ViewLayoutPB.Document,
+          openAfterCreate: true,
+        ),
+      );
+    } else {
+      context.read<SidebarSectionsBloc>().add(
+            SidebarSectionsEvent.createRootViewInSection(
+              name: ViewLayoutPB.Document.defaultName,
+              viewSection: section,
+              index: 0,
+            ),
+          );
+    }
+  }
+
+  void _switchToNextSpace() {
+    context.read<SpaceBloc>().add(const SpaceEvent.switchToNextSpace());
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _Sidebar extends StatefulWidget {
@@ -908,7 +977,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                             borderRadius: 8.0,
                             emojiSize: 16.0,
                             figmaLineHeight: 20.0,
-                            showBorder: true,
                           ),
                           const HSpace(6),
                           Expanded(

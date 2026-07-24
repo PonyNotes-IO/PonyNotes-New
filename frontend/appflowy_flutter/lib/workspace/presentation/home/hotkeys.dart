@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy/startup/startup.dart';
@@ -53,8 +54,10 @@ class HotKeyItem {
   final HotKey hotKey;
   final KeyDownHandler? keyDownHandler;
 
-  void register() =>
+  Future<void> register() =>
       hotKeyManager.register(hotKey, keyDownHandler: keyDownHandler);
+
+  Future<void> unregister() => hotKeyManager.unregister(hotKey);
 }
 
 class HomeHotKeys extends StatefulWidget {
@@ -73,6 +76,7 @@ class HomeHotKeys extends StatefulWidget {
 
 class _HomeHotKeysState extends State<HomeHotKeys> {
   final windowSizeManager = WindowSizeManager();
+  var _isRegistered = false;
 
   late final items = [
     // Collapse sidebar menu (using slash)
@@ -95,13 +99,15 @@ class _HomeHotKeysState extends State<HomeHotKeys> {
       keyDownHandler: (_) => colappsedMenus(context),
     ),
 
-    // Toggle theme mode light/dark
+    // Toggle theme mode light/dark. Ctrl/Cmd+Shift+L belongs to the document
+    // editor's left-align command, so use Alt to avoid both handlers firing.
     HotKeyItem(
       hotKey: HotKey(
         KeyCode.keyL,
         modifiers: [
           Platform.isMacOS ? KeyModifier.meta : KeyModifier.control,
           KeyModifier.shift,
+          KeyModifier.alt,
         ],
         scope: HotKeyScope.inapp,
       ),
@@ -219,22 +225,32 @@ class _HomeHotKeysState extends State<HomeHotKeys> {
   @override
   void initState() {
     super.initState();
-    _registerHotKeys(context);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _registerHotKeys(context);
+    unawaited(_registerHotKeys());
   }
 
   @override
   Widget build(BuildContext context) => widget.child;
 
-  void _registerHotKeys(BuildContext context) {
-    for (final element in items) {
-      element.register();
+  @override
+  void dispose() {
+    unawaited(_unregisterHotKeys());
+    super.dispose();
+  }
+
+  Future<void> _registerHotKeys() async {
+    if (_isRegistered) {
+      return;
     }
+    _isRegistered = true;
+    await Future.wait(items.map((item) => item.register()));
+  }
+
+  Future<void> _unregisterHotKeys() async {
+    if (!_isRegistered) {
+      return;
+    }
+    _isRegistered = false;
+    await Future.wait(items.map((item) => item.unregister()));
   }
 
   void _selectTab(BuildContext context, int change) {
