@@ -5,6 +5,7 @@ class KVKeys {
 
   /// The key for the path location of the local data for the whole app.
   static const String pathLocation = '$prefix.path_location';
+  static const String pendingDataMigration = '$prefix.pending_data_migration';
 
   /// The key for saving the window size
   ///
@@ -81,7 +82,8 @@ class KVKeys {
   // Notification per-type settings
   static const String notificationAtMe = 'notification.at_me';
   static const String notificationPending = 'notification.pending';
-  static const String notificationPermissionChange = 'notification.permission_change';
+  static const String notificationPermissionChange =
+      'notification.permission_change';
   static const String notificationJoinTeam = 'notification.join_team';
   static const String notificationClip = 'notification.clip';
 

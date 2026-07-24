@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:appflowy/env/backend_env.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/user/application/auth/device_id.dart';
+import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy_backend/appflowy_backend.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:path/path.dart' as path;
@@ -38,7 +39,16 @@ class InitRustSDKTask extends LaunchTask {
       }
     }
     final applicationPath = await appFlowyApplicationDataDirectory();
-    final dir = customApplicationPath ?? applicationPath;
+    final storage = getIt<ApplicationDataStorage>();
+    try {
+      await storage.applyPendingDataMigration();
+    } catch (error, stackTrace) {
+      Log.error(
+        'Failed to migrate the application data directory: $error\n$stackTrace',
+      );
+    }
+    final configuredPath = await storage.getPath();
+    final dir = customApplicationPath ?? Directory(configuredPath);
     final deviceId = await getDeviceId();
 
     // Pass the environment variables to the Rust SDK
@@ -87,11 +97,15 @@ Future<Directory> appFlowyApplicationDataDirectory() async {
               .then((directory) => directory.create());
           return Directory(path.join(documentsDir.path, 'data_dev'));
         } catch (e) {
-          Log.error('Failed to get application support directory for develop mode: $e');
+          Log.error(
+            'Failed to get application support directory for develop mode: $e',
+          );
           // 使用默认路径
           if (Platform.isAndroid) {
             // 在Android上使用缓存目录作为默认路径
-            return Directory('/data/data/com.xiaomabiji.app.note/cache/data_dev');
+            return Directory(
+              '/data/data/com.xiaomabiji.app.note/cache/data_dev',
+            );
           } else {
             return Directory('./data_dev');
           }
@@ -101,7 +115,9 @@ Future<Directory> appFlowyApplicationDataDirectory() async {
           final Directory documentsDir = await getApplicationSupportDirectory();
           return Directory(path.join(documentsDir.path, 'data'));
         } catch (e) {
-          Log.error('Failed to get application support directory for release mode: $e');
+          Log.error(
+            'Failed to get application support directory for release mode: $e',
+          );
           // 使用默认路径
           if (Platform.isAndroid) {
             // 在Android上使用缓存目录作为默认路径

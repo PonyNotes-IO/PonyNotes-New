@@ -22,7 +22,13 @@ class StorageSettingGroup extends StatelessWidget {
       create: (_) => DataLocationBloc(
         repository: const RustSettingsRepositoryImpl(),
       )..add(DataLocationEvent.initial()),
-      child: BlocBuilder<DataLocationBloc, DataLocationState>(
+      child: BlocConsumer<DataLocationBloc, DataLocationState>(
+        listenWhen: (previous, current) =>
+            previous.userDataLocation != null &&
+            previous.userDataLocation != current.userDataLocation,
+        listener: (context, state) {
+          runAppFlowy(isAnon: true);
+        },
         builder: (context, state) {
           final path = state.userDataLocation?.path;
           return MobileSettingGroup(
@@ -32,7 +38,6 @@ class StorageSettingGroup extends StatelessWidget {
                 name: '存储路径',
                 trailing: MobileSettingTrailing(
                   text: '',
-                  showArrow: true,
                 ),
                 onTap: () => _showStoragePathBottomSheet(context, state),
               ),
@@ -43,7 +48,10 @@ class StorageSettingGroup extends StatelessWidget {
     );
   }
 
-  void _showStoragePathBottomSheet(BuildContext context, DataLocationState state) {
+  void _showStoragePathBottomSheet(
+    BuildContext context,
+    DataLocationState state,
+  ) {
     final path = state.userDataLocation?.path;
     final theme = Theme.of(context);
 
@@ -114,7 +122,8 @@ class StorageSettingGroup extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: theme.colorScheme.primary,
@@ -137,9 +146,12 @@ class StorageSettingGroup extends StatelessWidget {
                     child: GestureDetector(
                       onTap: path != null
                           ? () async {
-                              final newPath =
-                                  await getIt<FilePickerService>().getDirectoryPath();
-                              if (newPath == null || newPath == path) {
+                              final newPath = await getIt<FilePickerService>()
+                                  .getDirectoryPath();
+                              if (!context.mounted ||
+                                  !ctx.mounted ||
+                                  newPath == null ||
+                                  newPath == path) {
                                 return;
                               }
                               Navigator.pop(ctx);
@@ -149,7 +161,8 @@ class StorageSettingGroup extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: theme.colorScheme.primary,
