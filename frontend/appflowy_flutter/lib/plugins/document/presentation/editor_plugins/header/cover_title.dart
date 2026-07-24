@@ -113,6 +113,7 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
                 ViewNameLengthLimitingFormatter(kMaxViewNameGraphemeLength),
               ],
               onLineCountChange: (count) => lineCount = count,
+              onDoubleTap: _selectAllTitle,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
@@ -233,6 +234,18 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
 
         updatingViewName = false;
       },
+    );
+  }
+
+  void _selectAllTitle() {
+    if (!editorState.editable) {
+      return;
+    }
+
+    titleFocusNode.requestFocus();
+    titleTextController.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: titleTextController.text.length,
     );
   }
 
