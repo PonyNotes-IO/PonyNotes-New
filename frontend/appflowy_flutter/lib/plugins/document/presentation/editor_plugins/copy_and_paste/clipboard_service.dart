@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:super_clipboard/super_clipboard.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 import 'clipboard_image_reader.dart';
@@ -40,6 +41,7 @@ class ClipboardServiceData {
     this.plainText,
     this.html,
     this.image,
+    this.imageSize,
     this.inAppJson,
     this.tableJson,
   });
@@ -47,6 +49,7 @@ class ClipboardServiceData {
   final String? plainText;
   final String? html;
   final (String, Uint8List?)? image;
+  final ({double? width, double? height})? imageSize;
   final String? inAppJson;
   final String? tableJson;
 }
@@ -63,6 +66,39 @@ class ClipboardService {
     if (_mockData != null) {
       return;
     }
+
+    final image = data.image;
+    if (!UniversalPlatform.isWeb &&
+        image != null &&
+        image.$2 != null &&
+        image.$2!.isNotEmpty) {
+      final clipboard = SystemClipboard.instance;
+      if (clipboard != null) {
+        final item = DataWriterItem();
+        if (_addImage(item, image.$1, image.$2!)) {
+          // Keep the original URL/text as an additional representation. This
+          // lets applications that do not accept image clipboard data still
+          // paste a useful value.
+          if (data.plainText?.isNotEmpty == true) {
+            item.add(Formats.plainText(data.plainText!));
+          }
+          final imageSize = data.imageSize;
+          if (imageSize != null) {
+            item.add(
+              imageSizeClipboardFormat(
+                jsonEncode({
+                  'width': imageSize.width,
+                  'height': imageSize.height,
+                }),
+              ),
+            );
+          }
+          await clipboard.write([item]);
+          return;
+        }
+      }
+    }
+
     if (data.plainText != null) {
       await Clipboard.setData(ClipboardData(text: data.plainText!));
     }
@@ -83,6 +119,7 @@ class ClipboardService {
     String? plainText;
     String? html;
     (String, Uint8List?)? image;
+    ({double? width, double? height})? imageSize;
 
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -99,6 +136,9 @@ class ClipboardService {
 
     try {
       image = await _getImageFromClipboard();
+      if (image != null) {
+        imageSize = await readImageSizeFromClipboard();
+      }
     } catch (e) {
       Log.error('Failed to get image from clipboard', e);
     }
@@ -107,6 +147,7 @@ class ClipboardService {
       plainText: plainText,
       html: html,
       image: image,
+      imageSize: imageSize,
     );
   }
 
@@ -128,6 +169,27 @@ class ClipboardService {
       return null;
     }
     return readImageFromClipboard();
+  }
+}
+
+bool _addImage(DataWriterItem item, String format, Uint8List bytes) {
+  switch (format.toLowerCase()) {
+    case 'png':
+      item.add(Formats.png(bytes));
+      return true;
+    case 'jpg':
+    case 'jpeg':
+      item.add(Formats.jpeg(bytes));
+      return true;
+    case 'gif':
+      item.add(Formats.gif(bytes));
+      return true;
+    case 'webp':
+      item.add(Formats.webp(bytes));
+      return true;
+    default:
+      Log.debug('Unsupported clipboard image format: $format');
+      return false;
   }
 }
 

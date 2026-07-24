@@ -6,6 +6,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/block_menu/block_menu_button.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_image_reader.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/resizeable_image.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
@@ -104,15 +105,22 @@ class _ImageMenuState extends State<ImageMenu> {
 
   Future<void> copyImageLink() async {
     if (url != null) {
-      // paste the image url and the image data
-      final imageData = await captureImage();
-
       try {
+        // Prefer the original source bytes so a copied image preserves its
+        // dimensions and encoding. A rendered PNG remains a safe fallback for
+        // sources that are not directly readable (for example protected URLs).
+        final originalImage = await readImageFromSource(url!);
+        final image = originalImage ?? ('png', await captureImage());
+        if (image.$2.isEmpty) {
+          throw StateError('Unable to read image data');
+        }
+
         // /image
         await getIt<ClipboardService>().setData(
           ClipboardServiceData(
             plainText: url!,
-            image: ('png', imageData),
+            image: image,
+            imageSize: _imageSize(),
           ),
         );
 
@@ -182,6 +190,19 @@ class _ImageMenuState extends State<ImageMenu> {
       return Uint8List(0);
     }
     return byteData.buffer.asUint8List();
+  }
+
+  double? _imageDimension(String key) {
+    final value = widget.node.attributes[key];
+    return value is num ? value.toDouble() : null;
+  }
+
+  ({double? width, double? height})? _imageSize() {
+    final width = _imageDimension(CustomImageBlockKeys.width);
+    final height = _imageDimension(CustomImageBlockKeys.height);
+    return width == null && height == null
+        ? null
+        : (width: width, height: height);
   }
 }
 

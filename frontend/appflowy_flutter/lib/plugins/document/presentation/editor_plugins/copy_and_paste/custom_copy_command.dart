@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_image_reader.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -36,6 +37,7 @@ KeyEventResult handleCopyCommand(
   String? text;
   String? html;
   String? inAppJson;
+  Node? selectedImage;
 
   if (selection.isCollapsed) {
     // if the selection is collapsed, we will copy the text of the current line.
@@ -54,6 +56,7 @@ KeyEventResult handleCopyCommand(
 
     // html
     html = documentToHTML(document);
+    selectedImage = node;
   } else {
     // plain text.
     text = editorState.getTextInSelection(selection).join('\n');
@@ -68,19 +71,48 @@ KeyEventResult handleCopyCommand(
 
     // html
     html = documentToHTML(document);
+
+    final selectedNodes = editorState.getSelectedNodes(selection: selection);
+    if (selectedNodes.length == 1) {
+      selectedImage = selectedNodes.single;
+    }
   }
 
   () async {
+    final imageSource = selectedImage?.type == CustomImageBlockKeys.type
+        ? selectedImage?.attributes[CustomImageBlockKeys.url] as String?
+        : null;
+    final image =
+        imageSource == null ? null : await readImageFromSource(imageSource);
+    final imageSize = _imageSizeFromNode(selectedImage);
+
     await getIt<ClipboardService>().setData(
       ClipboardServiceData(
-        plainText: text,
+        plainText: imageSource ?? text,
         html: html,
+        image: image,
+        imageSize: imageSize,
         inAppJson: inAppJson,
       ),
     );
   }();
 
   return KeyEventResult.handled;
+}
+
+({double? width, double? height})? _imageSizeFromNode(Node? node) {
+  if (node?.type != CustomImageBlockKeys.type) {
+    return null;
+  }
+  final width = node!.attributes[CustomImageBlockKeys.width];
+  final height = node.attributes[CustomImageBlockKeys.height];
+  if (width is! num && height is! num) {
+    return null;
+  }
+  return (
+    width: width is num ? width.toDouble() : null,
+    height: height is num ? height.toDouble() : null,
+  );
 }
 
 Document _buildCopiedDocument(

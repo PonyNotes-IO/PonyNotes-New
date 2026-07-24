@@ -67,6 +67,13 @@
     <meta-data android:name="io.flutter.embedding.android.EnableImpeller"
       android:value="false" />
 
+    <!-- Required by super_clipboard to share binary image data with other apps. -->
+    <provider
+        android:name="com.superlist.super_native_extensions.DataProvider"
+        android:authorities="${applicationId}.SuperClipboardDataProvider"
+        android:exported="true"
+        android:grantUriPermissions="true" />
+
     <!-- WeChat 微信登录回调 Activity：微信 SDK 完成授权后会回调这个 Activity
          必须使用与 SDK 文档一致的 taskAffinity（填包名，不是 .wxapi 后缀），
          否则 Android 12+ 上 SDK 找不到 WXEntryActivity 导致回调不到。

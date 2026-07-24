@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_image_reader.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
@@ -94,6 +95,8 @@ extension PasteFromImage on EditorState {
     Uint8List imageBytes,
     String documentId, {
     Selection? selection,
+    double? width,
+    double? height,
   }) async {
     final context = document.root.context;
 
@@ -101,7 +104,9 @@ extension PasteFromImage on EditorState {
       return false;
     }
 
-    if (!defaultImageExtensions.contains(format)) {
+    final detectedFormat = detectImageFormat(imageBytes);
+    if (detectedFormat == null ||
+        !defaultImageExtensions.contains(detectedFormat)) {
       Log.info('unsupported format: $format');
       if (PlatformInfo.isMobile) {
         showToastNotification(
@@ -110,6 +115,7 @@ extension PasteFromImage on EditorState {
       }
       return false;
     }
+    format = detectedFormat;
 
     final isLocalMode = context.read<DocumentBloc>().isLocalMode;
 
@@ -133,15 +139,17 @@ extension PasteFromImage on EditorState {
 
       double? targetWidth;
       double? targetHeight;
-      final dims = await getImageDimensions(copyToPath);
-      if (dims != null) {
-        final (origW, origH) = dims;
-        if (origW > 0 && origH > 0) {
-          final scale = (origW > _kImageEditorMaxWidth)
-              ? _kImageEditorMaxWidth / origW
-              : 1.0;
-          targetWidth = origW * scale;
-          targetHeight = origH * scale;
+      if (width != null || height != null) {
+        targetWidth = width;
+        targetHeight = height;
+      } else {
+        final dims = await getImageDimensions(copyToPath);
+        if (dims != null) {
+          final (origW, origH) = dims;
+          if (origW > 0 && origH > 0) {
+            targetWidth = origW;
+            targetHeight = origH;
+          }
         }
       }
 

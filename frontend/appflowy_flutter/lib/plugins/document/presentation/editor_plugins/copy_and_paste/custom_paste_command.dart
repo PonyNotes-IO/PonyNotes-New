@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_image_reader.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/paste_from_block_link.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/paste_from_html.dart';
@@ -126,15 +127,22 @@ Future<void> doPaste(EditorState editorState) async {
       return;
     }
 
-    await editorState.deleteSelectionIfNeeded();
-    final result = await editorState.pasteImage(
-      image.$1,
-      image.$2!,
-      documentId,
-      selection: selection,
-    );
-    if (result) {
-      return Log.info('Pasted image');
+    final format = detectImageFormat(image.$2!);
+    if (format == null) {
+      Log.info('Ignored clipboard data with an invalid image signature');
+    } else {
+      await editorState.deleteSelectionIfNeeded();
+      final result = await editorState.pasteImage(
+        format,
+        image.$2!,
+        documentId,
+        selection: selection,
+        width: data.imageSize?.width,
+        height: data.imageSize?.height,
+      );
+      if (result) {
+        return Log.info('Pasted image');
+      }
     }
   }
 
