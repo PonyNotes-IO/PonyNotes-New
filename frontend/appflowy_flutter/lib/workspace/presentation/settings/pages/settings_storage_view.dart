@@ -27,12 +27,11 @@ class SettingsStorageView extends StatelessWidget {
       )..add(DataLocationEvent.initial()),
       child: BlocConsumer<DataLocationBloc, DataLocationState>(
         listenWhen: (previous, current) =>
-            previous.didResetToDefault != current.didResetToDefault,
+            previous.userDataLocation != null &&
+            previous.userDataLocation != current.userDataLocation,
         listener: (context, state) {
-          if (state.didResetToDefault) {
-            Navigator.of(context).pop();
-            runAppFlowy(isAnon: true);
-          }
+          Navigator.of(context).pop();
+          runAppFlowy(isAnon: true);
         },
         builder: (context, state) {
           final path = state.userDataLocation?.path;
@@ -125,7 +124,7 @@ class _LocalStoragePath extends StatelessWidget {
                 onTap: () async {
                   final newPath =
                       await getIt<FilePickerService>().getDirectoryPath();
-                  if (newPath == null || newPath == path) {
+                  if (!context.mounted || newPath == null || newPath == path) {
                     return;
                   }
 
@@ -163,7 +162,3 @@ class _LocalStoragePath extends StatelessWidget {
     );
   }
 }
-
-
-
-

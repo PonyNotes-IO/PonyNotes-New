@@ -48,12 +48,11 @@ class SettingsManageDataView extends StatelessWidget {
       )..add(DataLocationEvent.initial()),
       child: BlocConsumer<DataLocationBloc, DataLocationState>(
         listenWhen: (previous, current) =>
-            previous.didResetToDefault != current.didResetToDefault,
+            previous.userDataLocation != null &&
+            previous.userDataLocation != current.userDataLocation,
         listener: (context, state) {
-          if (state.didResetToDefault) {
-            Navigator.of(context).pop();
-            runAppFlowy(isAnon: true);
-          }
+          Navigator.of(context).pop();
+          runAppFlowy(isAnon: true);
         },
         builder: (context, state) {
           // final _ = state.userDataLocation?.isCustom ?? false;
@@ -462,14 +461,14 @@ class _DataPathActions extends StatelessWidget {
     return AFFilledTextButton.primary(
       text: LocaleKeys.settings_manageDataPage_dataStorage_actions_change.tr(),
       onTap: () async {
-        final path = await getIt<FilePickerService>().getDirectoryPath();
-        if (!context.mounted || path == null || path == path) {
+        final newPath = await getIt<FilePickerService>().getDirectoryPath();
+        if (!context.mounted || newPath == null || newPath == path) {
           return;
         }
 
         context
             .read<DataLocationBloc>()
-            .add(DataLocationEvent.setCustomPath(path));
+            .add(DataLocationEvent.setCustomPath(newPath));
       },
     );
   }
