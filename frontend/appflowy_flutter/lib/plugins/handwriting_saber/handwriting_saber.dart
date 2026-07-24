@@ -1,23 +1,27 @@
-﻿library;
+library;
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
-import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
-import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
-import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
+import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'presentation/handwriting_saber_poc_page.dart';
 
@@ -103,12 +107,15 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
   ViewPB get view => notifier.view;
 
   @override
+  EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
   Widget buildWidget({
     required PluginContext context,
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    return MultiBlocProvider(
+    final content = MultiBlocProvider(
       providers: [
         BlocProvider<ViewInfoBloc>.value(
           value: bloc,
@@ -122,6 +129,35 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
         view: notifier.view,
         onViewChanged: (view) => notifier.view = view,
       ),
+    );
+
+    final preferHostTopRightActions =
+        data?['preferHostTopRightActions'] == true;
+    if (PlatformInfo.isMobile || preferHostTopRightActions) {
+      return content;
+    }
+
+    return Stack(
+      children: [
+        content,
+        Positioned(
+          top: 0,
+          left: UniversalPlatform.isMacOS ? 100 : 16,
+          child: const _HandwritingSidebarExpandButton(),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: UnifiedViewTopRightActions(
+            view: view,
+            viewInfoBloc: bloc,
+            pageAccessLevelBloc: pageAccessLevelBloc,
+            showCollaborators: FeatureFlag.syncDocument.isOn,
+            useFloatingSurface: true,
+            showShareButton: false,
+          ),
+        ),
+      ],
     );
   }
 
@@ -141,63 +177,56 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
       );
 
   @override
-  Widget? get rightBarItem {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<ViewInfoBloc>.value(
-          value: bloc,
-        ),
-        BlocProvider<PageAccessLevelBloc>.value(
-          value: pageAccessLevelBloc,
-        ),
-      ],
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ...FeatureFlag.syncDocument.isOn
-              ? [
-                  DocumentCollaborators(
-                    key: ValueKey('collaborators_${view.id}'),
-                    width: 120,
-                    height: 32,
-                    view: view,
-                  ),
-                  const HSpace(16),
-                ]
-              : [const HSpace(8)],
-          const SizedBox(width: 4),
-          ViewFavoriteButton(
-            key: ValueKey('favorite_button_${view.id}'),
-            view: view,
-          ),
-          const HSpace(4),
-          ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              return SizedBox.square(
-                dimension: 28,
-                child: FlowyButton(
-                  margin: EdgeInsets.zero,
-                  text: Icon(
-                    isFullWindow
-                        ? Icons.fullscreen_exit_rounded
-                        : Icons.fullscreen_rounded,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  onTap: FullWindowController.toggle,
-                ),
-              );
-            },
-          ),
-          const HSpace(4),
-          MoreViewActions(view: view),
-        ],
-      ),
-    );
-  }
+  Widget? get rightBarItem => null;
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+}
+
+class _HandwritingSidebarExpandButton extends StatelessWidget {
+  const _HandwritingSidebarExpandButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        if (isFullWindow) {
+          return const SizedBox.shrink();
+        }
+
+        final isMenuHidden = context.select<HomeSettingBloc, bool>(
+          (bloc) => bloc.isMenuHidden,
+        );
+        if (!isMenuHidden) {
+          return const SizedBox.shrink();
+        }
+
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: HomeSizes.topActionBarHeight,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: FlowyTooltip(
+              message: LocaleKeys.sideBar_openSidebar.tr(),
+              child: SizedBox.square(
+                dimension: HomeSizes.topActionBarItemExtent,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: FlowySvg(
+                    FlowySvgs.sidebar_collapse_custom_m,
+                    size: const Size.square(20),
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onTap: () => context.read<HomeSettingBloc>().collapseMenu(),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

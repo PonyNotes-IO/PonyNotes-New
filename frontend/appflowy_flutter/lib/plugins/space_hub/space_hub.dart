@@ -928,7 +928,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     'preferHostFullWindowMoreItem': true,
                     'preferHostTopRightActions': true,
                   }
-                : null,
+                : isHandwritingNote(view)
+                    ? const {'preferHostTopRightActions': true}
+                    : null,
           ),
         ),
         parentView: parentView,
