@@ -134,6 +134,56 @@ class HandwritingPdfCacheService {
     }
   }
 
+  /// Streams a PDF into the persistent cache without retaining the whole file
+  /// in memory. Partial files are removed when the stream fails.
+  Future<String?> putStream(
+    String pdfUrl,
+    Stream<List<int>> bytes, {
+    int? expectedLength,
+  }) async {
+    File? file;
+    IOSink? sink;
+    try {
+      final path = await resolvedPath(pdfUrl);
+      file = File(path);
+      sink = file.openWrite();
+
+      var written = 0;
+      await for (final chunk in bytes) {
+        sink.add(chunk);
+        written += chunk.length;
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+
+      if (written == 0 ||
+          (expectedLength != null &&
+              expectedLength >= 0 &&
+              written != expectedLength)) {
+        await file.delete();
+        Log.warn(
+          '[PdfCache] Streamed PDF length mismatch: '
+          'expected=$expectedLength, written=$written',
+        );
+        return null;
+      }
+
+      Log.info('[PdfCache] Streamed PDF to $path ($written bytes)');
+      unawaited(_enforceLimit());
+      return path;
+    } catch (e) {
+      await sink?.close();
+      if (file != null && file.existsSync()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+      Log.warn('[PdfCache] putStream failed: $e');
+      return null;
+    }
+  }
+
   /// 容量上限 LRU 淘汰：超过 [maxCacheBytes] 时按 mtime 升序删至 90% 以下
   Future<void> _enforceLimit() async {
     try {
