@@ -20,11 +20,9 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 class AIChatPluginBuilder extends PluginBuilder {
   @override
@@ -160,21 +158,11 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
         BlocProvider.value(value: viewInfoBloc),
         BlocProvider.value(value: pageAccessLevelBloc),
       ],
-      child: Stack(
-        children: [
-          AIChatPage(
-            userProfile: context.userProfile!,
-            key: ValueKey(notifier.view.id),
-            view: notifier.view,
-            onDeleted: () {},
-          ),
-          if (!PlatformInfo.isMobile)
-            Positioned(
-              top: 0,
-              left: UniversalPlatform.isMacOS ? 100 : 16,
-              child: const _AIChatSidebarExpandButton(),
-            ),
-        ],
+      child: AIChatPage(
+        userProfile: context.userProfile!,
+        key: ValueKey(notifier.view.id),
+        view: notifier.view,
+        onDeleted: () {},
       ),
     );
   }
@@ -184,6 +172,9 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
+  Widget get topActionBarLeadingItem => const _AIChatSidebarExpandButton();
 
   @override
   Widget? get rightBarItem => MultiBlocProvider(

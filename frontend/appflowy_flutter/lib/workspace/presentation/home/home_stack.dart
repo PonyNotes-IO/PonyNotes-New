@@ -258,6 +258,8 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
             height: HomeSizes.tabBarHeight,
             child: Row(
               children: [
+                notifier.plugin.widgetBuilder.topActionBarLeadingItem ??
+                    const SizedBox.shrink(),
                 const Spacer(),
                 Center(child: rightBarItem),
                 const SizedBox(
@@ -966,6 +968,7 @@ abstract mixin class NavigationItem {
   Widget get leftBarItem;
   Widget? get rightBarItem => null;
   Widget? get fullWindowMoreItem => null;
+  Widget? get topActionBarLeadingItem => null;
   double get topTabsLeadingWidth => 0;
   Widget? topTabsLeadingPane(BuildContext context) => null;
   bool get handlesFullWindowOverlayActionsInternally => false;
