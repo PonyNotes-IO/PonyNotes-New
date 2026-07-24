@@ -1109,19 +1109,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           // 保证任何失败都有可读信息，不再出现空白气泡。
           final errorText =
               err.msg.trim().isNotEmpty ? err.msg : LocaleKeys.chat_requestFailedFallback.tr();
-          final metadata = {
-            onetimeShotType: OnetimeShotType.error,
-            errorMessageTextKey: errorText,
-          };
-
-          final error = TextMessage(
-            text: '',
-            metadata: metadata,
-            author: const User(id: systemUserId),
-            id: systemUserId,
-            createdAt: DateTime.now(),
-          );
-
+          _showSendingError(errorText);
           add(const ChatEvent.failedSending());
         }
       },

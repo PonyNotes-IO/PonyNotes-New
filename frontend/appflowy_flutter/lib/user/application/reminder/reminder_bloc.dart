@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -217,15 +218,15 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                       reminders: availableReminders,
                       serverReminders: reminders,
                       archivedReminders: archived,
-                      globalReminders: globalReminders,
+                      globalReminders: state.globalReminders,
                     ),
                   );
                 }
               },
               (error) {
                 Log.error('Failed to fetch reminders: $error');
-                if (globalReminders != null && !isClosed && !emit.isDone) {
-                  emit(state.copyWith(globalReminders: globalReminders));
+                if (state.globalReminders.isNotEmpty && !isClosed && !emit.isDone) {
+                  emit(state.copyWith(globalReminders: state.globalReminders));
                 }
               },
             );
