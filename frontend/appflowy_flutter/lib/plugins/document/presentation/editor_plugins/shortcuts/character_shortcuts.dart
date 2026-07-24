@@ -1,6 +1,7 @@
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_configuration.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/format_arrow_character.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/base/format_mark_character.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/page_reference_commands.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/callout/callout_block_shortcuts.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
@@ -46,6 +47,7 @@ List<CharacterShortcutEvent> buildCharacterShortcutEvents(
     customFormatGreaterEqual,
     customFormatDashGreater,
     customFormatDoubleHyphenEmDash,
+    formatDoubleEqualsToMark,
 
     customFormatNumberToNumberedList,
     customFormatSignToHeading,
