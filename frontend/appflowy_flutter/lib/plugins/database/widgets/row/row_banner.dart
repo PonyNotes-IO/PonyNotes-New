@@ -493,7 +493,9 @@ class _RowHeaderToolbarState extends State<RowHeaderToolbar> {
                     ),
                     onTap: () => widget.onCoverChanged(
                       RowCoverPB(
-                        data: isDesktop ? '1' : '0xffe8e0ff',
+                        data: isDesktop
+                            ? PageStyleCoverImageType.randomBuiltInImageName()
+                            : '0xffe8e0ff',
                         uploadType: FileUploadTypePB.LocalFile,
                         coverType: isDesktop
                             ? CoverTypePB.AssetCover

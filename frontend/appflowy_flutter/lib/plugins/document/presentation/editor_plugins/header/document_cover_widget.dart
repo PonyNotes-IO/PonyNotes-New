@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -444,7 +445,10 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
           leftIconSize: const Size.square(18),
           onTap: () => widget.onIconOrCoverChanged(
             cover: PlatformInfo.isDesktopOrTabletOrWeb
-                ? (CoverType.asset, '1')
+                ? (
+                    CoverType.asset,
+                    PageStyleCoverImageType.randomBuiltInImageName(),
+                  )
                 : (CoverType.color, '0xffe8e0ff'),
           ),
           useIntrinsicWidth: true,
