@@ -524,10 +524,15 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
     final isGrid = view.layout == ViewLayoutPB.Grid;
+    // On mobile the database plugin renders its own top bar (MobileTabBarHeader)
+    // with back/favorite/share/more actions, so the desktop UnifiedViewTopRightActions
+    // overlay would create a duplicated toolbar.
+    final showDesktopTopRightActions =
+        showTopRightActions && PlatformInfo.isDesktopOrTablet;
     return Stack(
       children: [
         child,
-        if (showTopRightActions)
+        if (showDesktopTopRightActions)
           Positioned(
             top: 0,
             right: 0,
