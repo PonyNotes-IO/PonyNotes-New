@@ -62,6 +62,9 @@ class MobileSettingGroup extends StatelessWidget {
     );
 
     if (wrapInCard) {
+      // Align with the card style used on the mobile home page (e.g. MobileRecentView
+      // and UpgradePlanCard): use theme.surfaceColorScheme.layer01, which gives a
+      // visible contrast against the page background (#121212) in dark mode.
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -75,7 +78,7 @@ class MobileSettingGroup extends StatelessWidget {
           VSpace(theme.spacing.s),
           Container(
             decoration: BoxDecoration(
-              color: theme.surfaceContainerColorScheme.layer01,
+              color: theme.surfaceColorScheme.layer01,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: theme.borderColorScheme.primary

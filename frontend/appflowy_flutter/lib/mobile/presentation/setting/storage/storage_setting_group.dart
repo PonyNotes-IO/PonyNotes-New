@@ -54,6 +54,7 @@ class StorageSettingGroup extends StatelessWidget {
   ) {
     final path = state.userDataLocation?.path;
     final theme = Theme.of(context);
+    final afTheme = AppFlowyTheme.of(context);
 
     showModalBottomSheet(
       context: context,
@@ -98,7 +99,7 @@ class StorageSettingGroup extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
+                  color: afTheme.surfaceColorScheme.layer01,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -230,7 +231,7 @@ class StorageSettingGroup extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: theme.surfaceContainerColorScheme.layer02,
+                      color: theme.surfaceColorScheme.layer01,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(

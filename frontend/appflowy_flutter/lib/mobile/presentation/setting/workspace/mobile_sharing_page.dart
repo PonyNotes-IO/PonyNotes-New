@@ -125,6 +125,8 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   }
 
   Widget _buildTabSection() {
+    final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Row(
@@ -147,14 +149,19 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
                       ? null
-                      : Border.all(color: Colors.grey[300]!),
+                      : Border.all(
+                          color: theme.borderColorScheme.primary
+                              .withValues(alpha: isLightMode ? 0.3 : 0.5),
+                        ),
                 ),
                 alignment: Alignment.center,
                 child: FlowyText(
                   tab,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected
+                      ? Colors.white
+                      : theme.textColorScheme.primary,
                 ),
               ),
             ),
@@ -180,6 +187,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   }
 
   Widget _buildSharedContent() {
+    final theme = AppFlowyTheme.of(context);
     if (_isLoadingShared) {
       return SizedBox(
         height: 240,
@@ -192,7 +200,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         child: Center(
           child: FlowyText(
             '加载失败：$_sharedError',
-            color: Colors.red,
+            color: theme.textColorScheme.tertiary,
           ),
         ),
       );
@@ -207,12 +215,12 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
               FlowySvg(
                 FlowySvgs.share_s,
                 size: const Size(48, 48),
-                color: Colors.grey[400],
+                color: theme.iconColorScheme.tertiary,
               ),
               const VSpace(12),
               FlowyText(
                 '暂无共享内容',
-                color: Colors.grey[500],
+                color: theme.textColorScheme.secondary,
               ),
             ],
           ),
@@ -225,13 +233,17 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         for (int index = 0; index < _sharedNotes.length; index++) ...[
           _buildSharedListItem(_sharedNotes[index]),
           if (index != _sharedNotes.length - 1)
-            Divider(height: 1, color: Colors.grey[200]),
+            Divider(
+              height: 1,
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+            ),
         ],
       ],
     );
   }
 
   Widget _buildPublishedContent() {
+    final theme = AppFlowyTheme.of(context);
     // 非 Server 用户不支持发布站点
     if (_workspaceType == WorkspaceTypePB.LocalW) {
       return SizedBox(
@@ -239,7 +251,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         child: Center(
           child: FlowyText(
             '当前账户类型不支持发布功能',
-            color: Colors.grey[600],
+            color: theme.textColorScheme.secondary,
           ),
         ),
       );
@@ -257,7 +269,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         child: Center(
           child: FlowyText(
             '加载失败：$_loadError',
-            color: Colors.red,
+            color: theme.textColorScheme.tertiary,
           ),
         ),
       );
@@ -272,12 +284,12 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
               FlowySvg(
                 FlowySvgs.m_publish_s,
                 size: const Size(48, 48),
-                color: Colors.grey[400],
+                color: theme.iconColorScheme.tertiary,
               ),
               const VSpace(12),
               FlowyText(
                 '暂无发布内容',
-                color: Colors.grey[500],
+                color: theme.textColorScheme.secondary,
               ),
             ],
           ),
@@ -290,7 +302,10 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         for (int index = 0; index < _publishedViews.length; index++) ...[
           _buildPublishListItem(_publishedViews[index]),
           if (index != _publishedViews.length - 1)
-            Divider(height: 1, color: Colors.grey[200]),
+            Divider(
+              height: 1,
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+            ),
         ],
       ],
     );

@@ -35,7 +35,7 @@ class MobileMemberList extends StatelessWidget {
         vertical: theme.spacing.m,
       ),
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
+        color: theme.surfaceColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
       ),
       child: SingleChildScrollView(

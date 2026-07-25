@@ -18,11 +18,20 @@ class MobileSettingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    final splashColor = isLightMode
+        ? Colors.black.withValues(alpha: 0.04)
+        : Colors.white.withValues(alpha: 0.08);
+    final highlightColor = isLightMode
+        ? Colors.black.withValues(alpha: 0.02)
+        : Colors.white.withValues(alpha: 0.04);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        splashColor: splashColor,
+        highlightColor: highlightColor,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,

@@ -610,13 +610,14 @@ class _SettingsGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.surfaceColorScheme.layer01,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
+          color: theme.borderColorScheme.primary,
           width: 1,
         ),
       ),
@@ -662,11 +663,20 @@ class _SettingsItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    final splashColor = isLightMode
+        ? Colors.black.withValues(alpha: 0.04)
+        : Colors.white.withValues(alpha: 0.08);
+    final highlightColor = isLightMode
+        ? Colors.black.withValues(alpha: 0.02)
+        : Colors.white.withValues(alpha: 0.04);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        splashColor: splashColor,
+        highlightColor: highlightColor,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
@@ -1093,7 +1103,7 @@ class _GeneralSettingsCard extends StatelessWidget {
     final isLightMode = Theme.of(context).brightness == Brightness.light;
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
+        color: theme.surfaceColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: theme.borderColorScheme.primary
@@ -1134,7 +1144,7 @@ class _LanguageSettingsCard extends StatelessWidget {
     final isLightMode = Theme.of(context).brightness == Brightness.light;
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
+        color: theme.surfaceColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: theme.borderColorScheme.primary
@@ -1183,7 +1193,7 @@ class _AISettingsCard extends StatelessWidget {
       )..add(const SettingsAIEvent.started()),
       child: Container(
         decoration: BoxDecoration(
-          color: theme.surfaceContainerColorScheme.layer01,
+          color: theme.surfaceColorScheme.layer01,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: theme.borderColorScheme.primary
@@ -1407,7 +1417,7 @@ class _SupportCard extends StatelessWidget {
     final isLightMode = Theme.of(context).brightness == Brightness.light;
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
+        color: theme.surfaceColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: theme.borderColorScheme.primary

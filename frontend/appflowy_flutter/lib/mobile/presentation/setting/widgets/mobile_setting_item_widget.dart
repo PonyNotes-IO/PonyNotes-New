@@ -24,9 +24,13 @@ class MobileSettingItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Padding(
       padding: padding,
       child: ListTile(
+        tileColor: theme.surfaceColorScheme.layer01,
+        textColor: theme.textColorScheme.primary,
+        iconColor: theme.iconColorScheme.primary,
         title: title ?? _buildDefaultTitle(context, name),
         subtitle: subtitle,
         trailing: trailing,

@@ -267,7 +267,7 @@ class _MobileIdentityVerificationPageState extends State<MobileIdentityVerificat
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
-                  color: theme.surfaceColorScheme.layer02,
+                  color: theme.surfaceColorScheme.layer01,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
