@@ -89,6 +89,19 @@ android {
             signingConfig signingConfigs.release
         }
     }
+
+    // 体积优化：Android 端只发 arm64-v8a（覆盖 2020 年后所有国内真机）。
+    //   - armeabi-v7a：仅 2017 年前的老机器，份额 < 1%
+    //   - x86_64   ：模拟器/Chromebook，C 端用户基本无需求
+    // 桌面端不受影响：本配置只作用于 Android 构建。
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a'
+            universalApk true
+        }
+    }
 }
 
 flutter {
