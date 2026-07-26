@@ -49,8 +49,10 @@ class MobileTabBarHeader extends StatelessWidget {
         children: [
           _buildBackButton(context, afTheme),
           const HSpace(8),
-          const _DatabaseViewSelectorButton(),
-          const Spacer(),
+          const Flexible(
+            child: _DatabaseViewSelectorButton(),
+          ),
+          const HSpace(8),
           _buildTrailingActions(context),
         ],
       ),
@@ -178,7 +180,6 @@ class _DatabaseViewSelectorButton extends StatelessWidget {
             padding: const WidgetStatePropertyAll(
               EdgeInsets.fromLTRB(12, 8, 8, 8),
             ),
-            maximumSize: const WidgetStatePropertyAll(Size(200, 48)),
             minimumSize: const WidgetStatePropertyAll(Size(48, 0)),
             shape: const WidgetStatePropertyAll(
               RoundedRectangleBorder(
