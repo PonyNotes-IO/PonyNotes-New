@@ -14,7 +14,6 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
-import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -35,13 +34,51 @@ class InviteMembersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: MobileAppBar(
-        title: '空间成员',
-        actions: [_buildAddMemberButton(context)],
-      ),
-      body: const _InviteMemberPage(),
-      resizeToAvoidBottomInset: false,
+    return FutureBuilder<UserProfilePB?>(
+      future: _loadUserProfile(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: SizedBox.shrink(),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return Scaffold(
+            appBar: MobileAppBar(title: '空间成员'),
+            body: const _InviteMemberError(),
+          );
+        }
+
+        final userProfile = snapshot.data!;
+
+        // 把 WorkspaceMemberBloc 提升到 Scaffold 之上，
+        // 让 Bottom Sheet 也能 context.read<WorkspaceMemberBloc>()。
+        return BlocProvider<WorkspaceMemberBloc>(
+          create: (context) => WorkspaceMemberBloc(userProfile: userProfile)
+            ..add(const WorkspaceMemberEvent.initial())
+            ..add(const WorkspaceMemberEvent.getInviteCode()),
+          child: Builder(
+            builder: (context) {
+              return Scaffold(
+                appBar: MobileAppBar(
+                  title: '空间成员',
+                  actions: [_buildAddMemberButton(context)],
+                ),
+                body: const _InviteMemberPage(),
+                resizeToAvoidBottomInset: false,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<UserProfilePB?> _loadUserProfile() async {
+    final result = await UserBackendService.getCurrentUserProfile();
+    return result.fold(
+      (s) => s,
+      (_) => null,
     );
   }
 
@@ -56,6 +93,9 @@ class InviteMembersScreen extends StatelessWidget {
   }
 
   void _showInviteByEmailSheet(BuildContext context) {
+    // Bottom Sheet 在新 route 上打开，无法自动继承父 BlocProvider，
+    // 所以这里显式 .value 注入同一份 Bloc 实例。
+    final bloc = context.read<WorkspaceMemberBloc>();
     showMobileBottomSheet(
       context,
       showDragHandle: true,
@@ -63,13 +103,50 @@ class InviteMembersScreen extends StatelessWidget {
       title: '添加成员',
       backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppFlowyTheme.of(ctx).spacing.l,
+        return BlocProvider<WorkspaceMemberBloc>.value(
+          value: bloc,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppFlowyTheme.of(ctx).spacing.l,
+            ),
+            child: const MInviteMemberByEmail(),
           ),
-          child: const MInviteMemberByEmail(),
         );
       },
+    );
+  }
+}
+
+class _InviteMemberError extends StatelessWidget {
+  const _InviteMemberError();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FlowyText.medium(
+              LocaleKeys.settings_appearance_members_workspaceMembersError.tr(),
+              fontSize: 18.0,
+              textAlign: TextAlign.center,
+            ),
+            const VSpace(8.0),
+            FlowyText.regular(
+              LocaleKeys
+                  .settings_appearance_members_workspaceMembersErrorDescription
+                  .tr(),
+              fontSize: 17.0,
+              maxLines: 10,
+              textAlign: TextAlign.center,
+              lineHeight: 1.3,
+              color: Theme.of(context).hintColor,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -82,24 +159,12 @@ class _InviteMemberPage extends StatefulWidget {
 }
 
 class _InviteMemberPageState extends State<_InviteMemberPage> {
-  final emailController = TextEditingController();
   final searchController = TextEditingController();
   String _searchQuery = '';
-  late final Future<UserProfilePB?> userProfile;
   bool exceededLimit = false;
 
   @override
-  void initState() {
-    super.initState();
-    userProfile = UserBackendService.getCurrentUserProfile().fold(
-      (s) => s,
-      (f) => null,
-    );
-  }
-
-  @override
   void dispose() {
-    emailController.dispose();
     searchController.dispose();
     super.dispose();
   }
@@ -108,99 +173,84 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    return FutureBuilder(
-      future: userProfile,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
+    // WorkspaceMemberBloc 已经在外层 InviteMembersScreen 创建并注入，
+    // 这里直接消费；BlocConsumer 仍用于弹出邀请成功/失败的 toast。
+    return BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
+      listener: _onListener,
+      builder: (context, state) {
+        // 云同步未启用时显示提示
+        if (state.dataSyncRequired) {
+          return _buildCloudSyncRequiredView(context);
         }
-        if (snapshot.hasError || snapshot.data == null) {
-          return _buildError(context);
-        }
 
-        final userProfile = snapshot.data!;
+        // 过滤成员列表
+        final filteredMembers = _searchQuery.isEmpty
+            ? state.members
+            : state.members.where((m) {
+                final q = _searchQuery.toLowerCase();
+                return m.name.toLowerCase().contains(q) ||
+                    m.email.toLowerCase().contains(q);
+              }).toList();
 
-        return BlocProvider<WorkspaceMemberBloc>(
-          create: (context) => WorkspaceMemberBloc(userProfile: userProfile)
-            ..add(const WorkspaceMemberEvent.initial())
-            ..add(const WorkspaceMemberEvent.getInviteCode()),
-          child: BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
-            listener: _onListener,
-            builder: (context, state) {
-              // 云同步未启用时显示提示
-              if (state.dataSyncRequired) {
-                return _buildCloudSyncRequiredView(context);
-              }
+        final currentUserProfile = context.read<WorkspaceMemberBloc>().userProfile;
 
-              // 过滤成员列表
-              final filteredMembers = _searchQuery.isEmpty
-                  ? state.members
-                  : state.members.where((m) {
-                      final q = _searchQuery.toLowerCase();
-                      return m.name.toLowerCase().contains(q) ||
-                          m.email.toLowerCase().contains(q);
-                    }).toList();
-
-              return SingleChildScrollView(
-                child: Column(
-                  children: [
-                    VSpace(theme.spacing.xl),
-                    // 搜索框
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                      child: _MemberSearchBar(
-                        controller: searchController,
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value;
-                          });
-                        },
-                      ),
-                    ),
-                    VSpace(8),
-                    if (state.myRole.isOwner) ...[
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: theme.spacing.xl,
-                        ),
-                        child: MInviteMemberByLink(),
-                      ),
-                    ],
-                    if (filteredMembers.isNotEmpty) ...[
-                      VSpace(8),
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: theme.spacing.xl,
-                        ),
-                        child: MobileMemberList(
-                          members: filteredMembers,
-                          userProfile: userProfile,
-                          myRole: state.myRole,
-                        ),
-                      ),
-                    ] else if (_searchQuery.isNotEmpty) ...[
-                      // 搜索无结果
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: theme.spacing.xl * 2,
-                        ),
-                        child: Center(
-                          child: FlowyText(
-                            '未找到匹配的成员',
-                            color: theme.textColorScheme.secondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (state.myRole.isMember) ...[
-                      const SizedBox(height: 24),
-                      const _LeaveWorkspaceButton(),
-                    ],
-                    const VSpace(48),
-                  ],
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              VSpace(theme.spacing.xl),
+              // 搜索框
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: _MemberSearchBar(
+                  controller: searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
                 ),
-              );
-            },
+              ),
+              VSpace(8),
+              if (state.myRole.isOwner) ...[
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: theme.spacing.xl,
+                  ),
+                  child: MInviteMemberByLink(),
+                ),
+              ],
+              if (filteredMembers.isNotEmpty) ...[
+                VSpace(8),
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: theme.spacing.xl,
+                  ),
+                  child: MobileMemberList(
+                    members: filteredMembers,
+                    userProfile: currentUserProfile,
+                    myRole: state.myRole,
+                  ),
+                ),
+              ] else if (_searchQuery.isNotEmpty) ...[
+                // 搜索无结果
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: theme.spacing.xl * 2,
+                  ),
+                  child: Center(
+                    child: FlowyText(
+                      '未找到匹配的成员',
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
+                ),
+              ],
+              if (state.myRole.isMember) ...[
+                const SizedBox(height: 24),
+                const _LeaveWorkspaceButton(),
+              ],
+              const VSpace(48),
+            ],
           ),
         );
       },
@@ -260,35 +310,6 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
         message: '无法启用数据同步，请联系管理员',
       );
     }
-  }
-
-  Widget _buildError(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 48.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FlowyText.medium(
-              LocaleKeys.settings_appearance_members_workspaceMembersError.tr(),
-              fontSize: 18.0,
-              textAlign: TextAlign.center,
-            ),
-            const VSpace(8.0),
-            FlowyText.regular(
-              LocaleKeys
-                  .settings_appearance_members_workspaceMembersErrorDescription
-                  .tr(),
-              fontSize: 17.0,
-              maxLines: 10,
-              textAlign: TextAlign.center,
-              lineHeight: 1.3,
-              color: Theme.of(context).hintColor,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _onListener(BuildContext context, WorkspaceMemberState state) {
