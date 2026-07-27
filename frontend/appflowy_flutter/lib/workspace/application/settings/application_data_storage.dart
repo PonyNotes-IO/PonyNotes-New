@@ -16,6 +16,9 @@ const appFlowyDataFolder = "AppFlowyDataDoNotRename";
 
 class ApplicationDataStorage {
   ApplicationDataStorage();
+
+  static Object? lastMigrationError;
+
   String? _cachePath;
 
   /// Set the custom path to store the data.
@@ -63,6 +66,17 @@ class ApplicationDataStorage {
       );
     }
     final destinationRoot = _normalizeCustomPath(path);
+    return schedulePathMigration(
+      destinationRoot: destinationRoot,
+      activeDataPath: activeDataPath,
+    );
+  }
+
+  Future<String> schedulePathMigration({
+    required String destinationRoot,
+    required String activeDataPath,
+  }) async {
+    destinationRoot = p.normalize(p.absolute(destinationRoot));
     final currentRoot = await getPath();
     final defaultRoot = (await appFlowyApplicationDataDirectory()).path;
     final suffix = _storageSuffix(
@@ -74,9 +88,18 @@ class ApplicationDataStorage {
 
     final source = p.normalize(p.absolute(activeDataPath));
     final destination = p.normalize(p.absolute(destinationDataPath));
-    if (p.equals(source, destination) ||
-        p.isWithin(source, destination) ||
-        p.isWithin(destination, source)) {
+    if (!Directory(source).existsSync()) {
+      throw FileSystemException(
+        'The current data directory does not exist.',
+        source,
+      );
+    }
+    if (p.equals(source, destination)) {
+      await setPath(destinationRoot);
+      await getIt<KeyValueStorage>().remove(KVKeys.pendingDataMigration);
+      return destinationRoot;
+    }
+    if (p.isWithin(source, destination) || p.isWithin(destination, source)) {
       throw ArgumentError(
         'The new data directory must not be inside the current directory.',
       );
@@ -99,6 +122,24 @@ class ApplicationDataStorage {
       }),
     );
     return destinationRoot;
+  }
+
+  /// Returns the configured root that actually owns [activeDataPath].
+  ///
+  /// The preference can contain a destination from an interrupted migration,
+  /// so the running backend path remains the source of truth.
+  Future<String> resolveActiveRoot(String activeDataPath) async {
+    final configuredRoot = p.normalize(p.absolute(await getPath()));
+    final defaultRoot = p
+        .normalize(p.absolute((await appFlowyApplicationDataDirectory()).path));
+    final activePath = p.normalize(p.absolute(activeDataPath));
+
+    for (final root in [configuredRoot, defaultRoot]) {
+      if (_isRootOf(activePath: activePath, root: root)) {
+        return root;
+      }
+    }
+    return activePath;
   }
 
   /// Applies a scheduled migration while the backend is stopped.
@@ -162,7 +203,7 @@ class ApplicationDataStorage {
     if (p.basename(path) != appFlowyDataFolder) {
       path = p.join(path, appFlowyDataFolder);
     }
-    return p.normalize(path);
+    return p.normalize(p.absolute(path));
   }
 
   String _storageSuffix({
@@ -171,16 +212,33 @@ class ApplicationDataStorage {
     required String defaultRoot,
   }) {
     for (final root in [currentRoot, defaultRoot]) {
-      if (p.equals(activeDataPath, root)) {
+      final normalizedRoot = p.normalize(p.absolute(root));
+      final normalizedActivePath = p.normalize(p.absolute(activeDataPath));
+      if (p.equals(normalizedActivePath, normalizedRoot)) {
         return '';
       }
-      if (activeDataPath.startsWith(root)) {
-        return activeDataPath.substring(root.length);
+      // Cloud environments append "_<host>" to the configured root. This is
+      // intentionally a sibling path rather than a child directory.
+      if (_pathStartsWith(normalizedActivePath, '${normalizedRoot}_')) {
+        return normalizedActivePath.substring(normalizedRoot.length);
       }
     }
     throw StateError(
       'Unable to relate the active data directory to its configured root.',
     );
+  }
+
+  bool _isRootOf({
+    required String activePath,
+    required String root,
+  }) =>
+      p.equals(activePath, root) || _pathStartsWith(activePath, '${root}_');
+
+  bool _pathStartsWith(String path, String prefix) {
+    if (Platform.isWindows) {
+      return path.toLowerCase().startsWith(prefix.toLowerCase());
+    }
+    return path.startsWith(prefix);
   }
 
   Future<void> _copyDirectory(Directory source, Directory destination) async {
@@ -203,7 +261,15 @@ class ApplicationDataStorage {
       return;
     }
 
-    await getIt<KeyValueStorage>().set(KVKeys.pathLocation, path);
+    final storage = getIt<KeyValueStorage>();
+    await storage.set(KVKeys.pathLocation, path);
+    final persistedPath = await storage.get(KVKeys.pathLocation);
+    if (persistedPath == null || !p.equals(persistedPath, path)) {
+      throw FileSystemException(
+        'Unable to persist the new data directory.',
+        path,
+      );
+    }
     // clear the cache path, and not set the cache path to the new path because the set path may be invalid
     _cachePath = null;
   }

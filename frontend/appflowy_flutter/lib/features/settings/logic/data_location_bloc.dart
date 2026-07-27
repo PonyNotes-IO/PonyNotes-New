@@ -1,4 +1,3 @@
-import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../data/repositories/settings_repository.dart';
@@ -22,13 +21,22 @@ class DataLocationBloc extends Bloc<DataLocationEvent, DataLocationState> {
     DataLocationInitial event,
     Emitter<DataLocationState> emit,
   ) async {
-    final userDataLocation =
-        await _repository.getUserDataLocation().toNullable();
-
-    emit(
-      DataLocationState(
-        userDataLocation: userDataLocation,
-        didResetToDefault: false,
+    final result = await _repository.getUserDataLocation();
+    result.fold(
+      (userDataLocation) => emit(
+        DataLocationState(
+          userDataLocation: userDataLocation,
+          didResetToDefault: false,
+          migrationScheduled: false,
+        ),
+      ),
+      (error) => emit(
+        DataLocationState(
+          userDataLocation: state.userDataLocation,
+          didResetToDefault: false,
+          migrationScheduled: false,
+          errorMessage: error.msg,
+        ),
       ),
     );
   }
@@ -37,13 +45,22 @@ class DataLocationBloc extends Bloc<DataLocationEvent, DataLocationState> {
     DataLocationResetToDefault event,
     Emitter<DataLocationState> emit,
   ) async {
-    final defaultLocation =
-        await _repository.resetUserDataLocation().toNullable();
-
-    emit(
-      DataLocationState(
-        userDataLocation: defaultLocation,
-        didResetToDefault: true,
+    final result = await _repository.resetUserDataLocation();
+    result.fold(
+      (defaultLocation) => emit(
+        DataLocationState(
+          userDataLocation: defaultLocation,
+          didResetToDefault: true,
+          migrationScheduled: true,
+        ),
+      ),
+      (error) => emit(
+        DataLocationState(
+          userDataLocation: state.userDataLocation,
+          didResetToDefault: false,
+          migrationScheduled: false,
+          errorMessage: error.msg,
+        ),
       ),
     );
   }
@@ -55,6 +72,8 @@ class DataLocationBloc extends Bloc<DataLocationEvent, DataLocationState> {
     emit(
       state.copyWith(
         didResetToDefault: false,
+        migrationScheduled: false,
+        clearError: true,
       ),
     );
   }
@@ -63,13 +82,22 @@ class DataLocationBloc extends Bloc<DataLocationEvent, DataLocationState> {
     DataLocationSetCustomPath event,
     Emitter<DataLocationState> emit,
   ) async {
-    final userDataLocation =
-        await _repository.setCustomLocation(event.path).toNullable();
-
-    emit(
-      state.copyWith(
-        userDataLocation: userDataLocation,
-        didResetToDefault: false,
+    final result = await _repository.setCustomLocation(event.path);
+    result.fold(
+      (userDataLocation) => emit(
+        DataLocationState(
+          userDataLocation: userDataLocation,
+          didResetToDefault: false,
+          migrationScheduled: true,
+        ),
+      ),
+      (error) => emit(
+        DataLocationState(
+          userDataLocation: state.userDataLocation,
+          didResetToDefault: false,
+          migrationScheduled: false,
+          errorMessage: error.msg,
+        ),
       ),
     );
   }

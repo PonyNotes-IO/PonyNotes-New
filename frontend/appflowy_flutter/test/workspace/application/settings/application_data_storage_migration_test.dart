@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/rust_sdk.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -96,14 +97,16 @@ void main() {
 
   test('preserves the active cloud storage suffix at the new root', () async {
     final currentRoot = Directory(p.join(sandbox.path, 'current-root'));
+    final activeCloudStorage = Directory('${currentRoot.path}_cloud');
     final selectedDirectory = p.join(sandbox.path, 'selected');
     await currentRoot.create();
+    await activeCloudStorage.create();
     await keyValueStorage.set(KVKeys.pathLocation, currentRoot.path);
 
     final destinationRoot =
         await ApplicationDataStorage().scheduleCustomPathMigration(
       path: selectedDirectory,
-      activeDataPath: '${currentRoot.path}_cloud',
+      activeDataPath: activeCloudStorage.path,
     );
     final migration = jsonDecode(
       (await keyValueStorage.get(KVKeys.pendingDataMigration))!,
@@ -111,6 +114,21 @@ void main() {
 
     expect(p.basename(destinationRoot), appFlowyDataFolder);
     expect(migration['destination'], '${p.absolute(destinationRoot)}_cloud');
+  });
+
+  test('uses the running backend path when the configured root is stale',
+      () async {
+    final defaultRoot = await appFlowyApplicationDataDirectory();
+    final activeCloudStorage = Directory('${defaultRoot.path}_cloud');
+    final staleConfiguredRoot = p.join(sandbox.path, 'stale-root');
+    await Directory(staleConfiguredRoot).create(recursive: true);
+    await keyValueStorage.set(KVKeys.pathLocation, staleConfiguredRoot);
+
+    final resolvedRoot = await ApplicationDataStorage().resolveActiveRoot(
+      activeCloudStorage.path,
+    );
+
+    expect(p.equals(resolvedRoot, p.absolute(defaultRoot.path)), isTrue);
   });
 
   test('does not switch paths when the destination contains data', () async {

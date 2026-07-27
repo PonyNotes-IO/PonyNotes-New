@@ -18,12 +18,16 @@ class RustSettingsRepositoryImpl implements SettingsRepository {
   Future<FlowyResult<UserDataLocation, FlowyError>>
       getUserDataLocation() async {
     final defaultDirectory = (await appFlowyApplicationDataDirectory()).path;
-    final configuredDirectory = await getIt<ApplicationDataStorage>().getPath();
+    final storage = getIt<ApplicationDataStorage>();
+    final settings = await _userBackendService.getUserSetting().toNullable();
+    final configuredDirectory = settings == null
+        ? await storage.getPath()
+        : await storage.resolveActiveRoot(p.dirname(settings.userFolder));
 
     return FlowyResult.success(
       UserDataLocation(
         path: configuredDirectory,
-        isCustom: !configuredDirectory.contains(defaultDirectory),
+        isCustom: !p.equals(configuredDirectory, defaultDirectory),
       ),
     );
   }
@@ -32,14 +36,30 @@ class RustSettingsRepositoryImpl implements SettingsRepository {
   Future<FlowyResult<UserDataLocation, FlowyError>>
       resetUserDataLocation() async {
     final directory = await appFlowyApplicationDataDirectory();
-    await getIt<ApplicationDataStorage>().setPath(directory.path);
+    final storage = getIt<ApplicationDataStorage>();
+    final settings = await _userBackendService.getUserSetting().toNullable();
+    if (settings == null) {
+      return FlowyResult.failure(
+        FlowyError(msg: 'Unable to read the current data directory'),
+      );
+    }
 
-    return FlowyResult.success(
-      UserDataLocation(
-        path: directory.path,
-        isCustom: false,
-      ),
-    );
+    try {
+      final configuredDirectory = await storage.schedulePathMigration(
+        destinationRoot: directory.path,
+        activeDataPath: p.dirname(settings.userFolder),
+      );
+      return FlowyResult.success(
+        UserDataLocation(
+          path: configuredDirectory,
+          isCustom: false,
+        ),
+      );
+    } catch (error) {
+      return FlowyResult.failure(
+        FlowyError(msg: 'Unable to migrate the data directory: $error'),
+      );
+    }
   }
 
   @override
@@ -65,7 +85,7 @@ class RustSettingsRepositoryImpl implements SettingsRepository {
       return FlowyResult.success(
         UserDataLocation(
           path: configuredDirectory,
-          isCustom: !configuredDirectory.contains(defaultDirectory),
+          isCustom: !p.equals(configuredDirectory, defaultDirectory),
         ),
       );
     } catch (error) {

@@ -40,9 +40,11 @@ class InitRustSDKTask extends LaunchTask {
     }
     final applicationPath = await appFlowyApplicationDataDirectory();
     final storage = getIt<ApplicationDataStorage>();
+    ApplicationDataStorage.lastMigrationError = null;
     try {
       await storage.applyPendingDataMigration();
     } catch (error, stackTrace) {
+      ApplicationDataStorage.lastMigrationError = error;
       Log.error(
         'Failed to migrate the application data directory: $error\n$stackTrace',
       );

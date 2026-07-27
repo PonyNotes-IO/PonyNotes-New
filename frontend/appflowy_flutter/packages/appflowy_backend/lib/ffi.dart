@@ -50,8 +50,9 @@ void async_event(
   _invoke_async(port, input, len);
 }
 
-final _invoke_async_Dart _invoke_async = _dart_ffi_lib
-    .lookupFunction<_invoke_async_C, _invoke_async_Dart>(_symbolName('async_event'));
+final _invoke_async_Dart _invoke_async =
+    _dart_ffi_lib.lookupFunction<_invoke_async_C, _invoke_async_Dart>(
+        _symbolName('async_event'));
 typedef _invoke_async_C = Void Function(
   Int64 port,
   Pointer<Uint8> input,
@@ -71,8 +72,9 @@ Pointer<Uint8> sync_event(
   return _invoke_sync(input, len);
 }
 
-final _invoke_sync_Dart _invoke_sync = _dart_ffi_lib
-    .lookupFunction<_invoke_sync_C, _invoke_sync_Dart>(_symbolName('sync_event'));
+final _invoke_sync_Dart _invoke_sync =
+    _dart_ffi_lib.lookupFunction<_invoke_sync_C, _invoke_sync_Dart>(
+        _symbolName('sync_event'));
 typedef _invoke_sync_C = Pointer<Uint8> Function(
   Pointer<Uint8> input,
   Uint64 len,
@@ -90,8 +92,8 @@ int init_sdk(
   return _init_sdk(port, data);
 }
 
-final _init_sdk_Dart _init_sdk =
-    _dart_ffi_lib.lookupFunction<_init_sdk_C, _init_sdk_Dart>(_symbolName('init_sdk'));
+final _init_sdk_Dart _init_sdk = _dart_ffi_lib
+    .lookupFunction<_init_sdk_C, _init_sdk_Dart>(_symbolName('init_sdk'));
 typedef _init_sdk_C = Int64 Function(
   Int64 port,
   Pointer<ffi.Utf8> path,
@@ -100,6 +102,18 @@ typedef _init_sdk_Dart = int Function(
   int port,
   Pointer<ffi.Utf8> path,
 );
+
+/// Stops the Rust runtime and releases all local database handles.
+void dispose_sdk() {
+  _dispose_sdk();
+}
+
+final _dispose_sdk_Dart _dispose_sdk =
+    _dart_ffi_lib.lookupFunction<_dispose_sdk_C, _dispose_sdk_Dart>(
+  _symbolName('dispose_sdk'),
+);
+typedef _dispose_sdk_C = Void Function();
+typedef _dispose_sdk_Dart = void Function();
 
 /// C function `init_stream`.
 int set_stream_port(int port) {
@@ -138,8 +152,9 @@ void link_me_please() {
   _link_me_please();
 }
 
-final _link_me_please_Dart _link_me_please = _dart_ffi_lib
-    .lookupFunction<_link_me_please_C, _link_me_please_Dart>(_symbolName('link_me_please'));
+final _link_me_please_Dart _link_me_please =
+    _dart_ffi_lib.lookupFunction<_link_me_please_C, _link_me_please_Dart>(
+        _symbolName('link_me_please'));
 typedef _link_me_please_C = Void Function();
 typedef _link_me_please_Dart = void Function();
 
@@ -169,13 +184,10 @@ void rust_log(
     _invokeRustLog(level, data);
     return;
   }
-  
+
   // iOS 平台：延迟初始化和检测
   _invokeRustLog(level, data);
 }
-
-/// iOS 平台上 Rust 日志函数可用性（null 表示未检查）
-bool? _isIOSRustLogAvailable;
 
 /// 延迟初始化的 Rust 日志函数指针
 _invoke_rust_log_Dart? _cachedInvokeRustLog;
@@ -184,7 +196,7 @@ void _invokeRustLog(int level, Pointer<ffi.Utf8> data) {
   if (_cachedInvokeRustLog == null) {
     _cachedInvokeRustLog = _initRustLogFunction();
   }
-  
+
   final func = _cachedInvokeRustLog;
   if (func != null) {
     func(level, data);
@@ -195,14 +207,16 @@ void _invokeRustLog(int level, Pointer<ffi.Utf8> data) {
 _invoke_rust_log_Dart? _initRustLogFunction() {
   if (!Platform.isIOS) {
     // 非 iOS 平台直接查找
-    return _dart_ffi_lib.lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>(
+    return _dart_ffi_lib
+        .lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>(
       _symbolName('rust_log'),
     );
   }
-  
+
   // iOS 平台：尝试查找符号
   try {
-    return _dart_ffi_lib.lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>('rust_log');
+    return _dart_ffi_lib
+        .lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>('rust_log');
   } catch (e) {
     // iOS 上 Rust 日志不可用，记录警告
     return null;
@@ -226,8 +240,8 @@ void set_env(
   _set_env(data);
 }
 
-final _set_env_Dart _set_env =
-    _dart_ffi_lib.lookupFunction<_set_env_C, _set_env_Dart>(_symbolName('set_env'));
+final _set_env_Dart _set_env = _dart_ffi_lib
+    .lookupFunction<_set_env_C, _set_env_Dart>(_symbolName('set_env'));
 typedef _set_env_C = Void Function(
   Pointer<ffi.Utf8> data,
 );

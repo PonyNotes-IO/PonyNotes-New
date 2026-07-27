@@ -108,6 +108,22 @@ impl DartAppFlowyCore {
       warn!("Failed to acquire read lock for sender");
     }
   }
+
+  fn dispose(&self) {
+    // Stop accepting work and wait for the Rust runtime thread to exit before
+    // releasing databases. Local data migration runs immediately afterwards,
+    // so leaving the runtime alive can produce locked or inconsistent copies.
+    self.sender.write().unwrap().take();
+    if let Some(handle) = self.handle.write().unwrap().take() {
+      if let Err(err) = handle.join() {
+        error!("Failed to join the AppFlowy runtime thread: {:?}", err);
+      }
+    }
+    if let Some(core) = self.core.write().unwrap().take() {
+      core.close_db();
+    }
+    unregister_all_notification_sender();
+  }
 }
 
 #[no_mangle]
@@ -145,9 +161,7 @@ pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
     DEFAULT_NAME.to_string(),
   );
 
-  if let Some(core) = &*DART_APPFLOWY_CORE.core.write().unwrap() {
-    core.close_db();
-  }
+  DART_APPFLOWY_CORE.dispose();
 
   let log_stream = LOG_STREAM_ISOLATE
     .write()
@@ -170,6 +184,11 @@ pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
   *DART_APPFLOWY_CORE.core.write().unwrap() = runtime
     .block_on(async move { Some(AppFlowyCore::new(config, cloned_runtime, log_stream).await) });
   0
+}
+
+#[no_mangle]
+pub extern "C" fn dispose_sdk() {
+  DART_APPFLOWY_CORE.dispose();
 }
 
 #[no_mangle]

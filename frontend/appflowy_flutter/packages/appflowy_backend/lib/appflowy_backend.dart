@@ -32,7 +32,9 @@ class FlowySDK {
 
   FlowySDK();
 
-  Future<void> dispose() async {}
+  Future<void> dispose() async {
+    ffi.dispose_sdk();
+  }
 
   Future<void> init(String configuration) async {
     ffi.set_stream_port(RustStreamReceiver.shared.port);

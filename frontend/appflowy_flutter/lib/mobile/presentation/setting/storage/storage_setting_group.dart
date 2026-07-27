@@ -3,6 +3,7 @@ import 'package:appflowy/features/settings/data/repositories/rust_settings_repos
 import 'package:appflowy/features/settings/logic/data_location_bloc.dart';
 import 'package:appflowy/features/settings/logic/data_location_event.dart';
 import 'package:appflowy/features/settings/logic/data_location_state.dart';
+import 'package:appflowy/features/settings/presentation/data_migration_progress_dialog.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_group_widget.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_item_widget.dart';
@@ -24,10 +25,19 @@ class StorageSettingGroup extends StatelessWidget {
       )..add(DataLocationEvent.initial()),
       child: BlocConsumer<DataLocationBloc, DataLocationState>(
         listenWhen: (previous, current) =>
-            previous.userDataLocation != null &&
-            previous.userDataLocation != current.userDataLocation,
-        listener: (context, state) {
-          runAppFlowy(isAnon: true);
+            (!previous.migrationScheduled && current.migrationScheduled) ||
+            previous.errorMessage != current.errorMessage,
+        listener: (context, state) async {
+          final errorMessage = state.errorMessage;
+          if (errorMessage != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('存储路径修改失败：$errorMessage')),
+            );
+            return;
+          }
+          if (state.migrationScheduled) {
+            await migrateDataAndRestart(context);
+          }
         },
         builder: (context, state) {
           final path = state.userDataLocation?.path;

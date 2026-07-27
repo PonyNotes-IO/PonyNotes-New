@@ -44,6 +44,7 @@ void main() {
       DataLocationState(
         userDataLocation: UserDataLocation(path: defaultPath, isCustom: false),
         didResetToDefault: true,
+        migrationScheduled: true,
       ),
     ],
   );
@@ -64,6 +65,7 @@ void main() {
       DataLocationState(
         userDataLocation: UserDataLocation(path: customPath, isCustom: true),
         didResetToDefault: false,
+        migrationScheduled: true,
       ),
     ],
   );
@@ -74,6 +76,7 @@ void main() {
     seed: () => DataLocationState(
       userDataLocation: UserDataLocation(path: defaultPath, isCustom: false),
       didResetToDefault: true,
+      migrationScheduled: false,
     ),
     act: (bloc) => bloc.add(DataLocationEvent.clearState()),
     wait: const Duration(milliseconds: 100),
@@ -84,6 +87,7 @@ void main() {
           isCustom: false,
         ),
         didResetToDefault: false,
+        migrationScheduled: false,
       ),
     ],
   );
