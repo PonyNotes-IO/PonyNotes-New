@@ -26,24 +26,24 @@ class EditorPage {
   EditorPage({
     required this.size,
     List<Stroke>? strokes,
-    this.backgroundImage, // ✅ PDF 背景图片
+    this.backgroundImage,  // ✅ PDF 背景图片
     List<EditorImage>? images, // ✅ 普通图片列表（PNG、JPG、SVG等）
     List<WebViewEditorElement>? webViews, // ✅ WebView列表
     List<saber_text.TextBox>? textBoxes, // ✅ 文本框列表
     List<saber_list.ListBox>? listBoxes, // ✅ 列表框列表
     List<saber_list.TaskListBox>? taskListBoxes, // ✅ 任务列表框列表
     QuillStruct? quill, // ✅ Quill 富文本编辑器结构
-  })  : strokes = strokes ?? <Stroke>[],
-        images = images ?? <EditorImage>[], // ✅ 初始化图片列表
-        webViews = webViews ?? <WebViewEditorElement>[], // ✅ 初始化WebView列表
-        textBoxes = textBoxes ?? <saber_text.TextBox>[],
-        listBoxes = listBoxes ?? <saber_list.ListBox>[],
-        taskListBoxes = taskListBoxes ?? <saber_list.TaskListBox>[],
-        quill = quill ?? QuillStruct.createDefault();
+  }) : strokes = strokes ?? <Stroke>[],
+       images = images ?? <EditorImage>[], // ✅ 初始化图片列表
+       webViews = webViews ?? <WebViewEditorElement>[], // ✅ 初始化WebView列表
+       textBoxes = textBoxes ?? <saber_text.TextBox>[],
+       listBoxes = listBoxes ?? <saber_list.ListBox>[],
+       taskListBoxes = taskListBoxes ?? <saber_list.TaskListBox>[],
+       quill = quill ?? QuillStruct.createDefault();
 
   final Size size;
   final List<Stroke> strokes;
-  final PdfEditorImage? backgroundImage; // ✅ PDF 背景图片
+  final PdfEditorImage? backgroundImage;  // ✅ PDF 背景图片
   final List<EditorImage> images; // ✅ 普通图片列表
   final List<WebViewEditorElement> webViews; // ✅ WebView列表
   final List<saber_text.TextBox> textBoxes; // ✅ 文本框列表
@@ -56,16 +56,12 @@ class EditorPage {
       'width': size.width,
       'height': size.height,
       'strokes': strokes.map((Stroke s) => s.toJson()).toList(),
-      'images': images
-          .map((EditorImage img) => img.toJson(forCollab: forCollab))
-          .toList(),
+      'images': images.map((EditorImage img) => img.toJson(forCollab: forCollab)).toList(),
       if (webViews.isNotEmpty)
-        'webViews':
-            webViews.map((WebViewEditorElement wv) => wv.toJson()).toList(),
+        'webViews': webViews.map((WebViewEditorElement wv) => wv.toJson()).toList(),
       'textBoxes': textBoxes.map((saber_text.TextBox t) => t.toJson()).toList(),
       'listBoxes': listBoxes.map((saber_list.ListBox l) => l.toJson()).toList(),
-      'taskListBoxes':
-          taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(),
+      'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(),
       'quill': quill.toJson(),
       'backgroundImage': backgroundImage != null
           ? <String, dynamic>{
@@ -94,29 +90,21 @@ class EditorPage {
   }
 
   factory EditorPage.fromJson(Map<String, dynamic> json, {String? sbnPath}) {
-    final double width =
-        (json['width'] as num?)?.toDouble() ?? defaultWidth; // ✅ 使用默认宽度而不是0
-    final double height =
-        (json['height'] as num?)?.toDouble() ?? defaultHeight; // ✅ 使用默认高度而不是0
-    final List<dynamic> strokeList =
-        json['strokes'] as List<dynamic>? ?? <dynamic>[];
-    final List<dynamic> imageList =
-        json['images'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取图片列表
-    final List<dynamic> webViewList =
-        json['webViews'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取WebView列表
-    final List<dynamic> textBoxList =
-        json['textBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取文本框列表
-    final List<dynamic> listBoxList =
-        json['listBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取列表框列表
-    final List<dynamic> taskListBoxList =
-        json['taskListBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取任务列表框列表
-
+    final double width = (json['width'] as num?)?.toDouble() ?? defaultWidth;  // ✅ 使用默认宽度而不是0
+    final double height = (json['height'] as num?)?.toDouble() ?? defaultHeight;  // ✅ 使用默认高度而不是0
+    final List<dynamic> strokeList = json['strokes'] as List<dynamic>? ?? <dynamic>[];
+    final List<dynamic> imageList = json['images'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取图片列表
+    final List<dynamic> webViewList = json['webViews'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取WebView列表
+    final List<dynamic> textBoxList = json['textBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取文本框列表
+    final List<dynamic> listBoxList = json['listBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取列表框列表
+    final List<dynamic> taskListBoxList = json['taskListBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取任务列表框列表
+    
     // ✅ 读取 Quill 富文本内容
     final quillJson = json['quill'] as Map<String, dynamic>?;
-    final quill = quillJson != null
-        ? QuillStruct.fromJson(quillJson)
+    final quill = quillJson != null 
+        ? QuillStruct.fromJson(quillJson) 
         : QuillStruct.createDefault();
-
+    
     // ✅ 读取 PDF 背景图片信息
     PdfEditorImage? backgroundImage;
     final bgImageJson = json['backgroundImage'] as Map<String, dynamic>?;
@@ -125,20 +113,18 @@ class EditorPage {
       // 优先使用 pdfUrl（云存储 URL），没有时回退到 pdfFilePath（本地路径）
       final pdfUrl = bgImageJson['pdfUrl'] as String?;
       final pdfPageIndex = bgImageJson['pdfPageIndex'] as int? ?? 0;
-      final naturalSizeJson =
-          bgImageJson['naturalSize'] as Map<String, dynamic>?;
+      final naturalSizeJson = bgImageJson['naturalSize'] as Map<String, dynamic>?;
       final dstRectJson = bgImageJson['dstRect'] as Map<String, dynamic>?;
-
+      
       // 有云 URL 时使用云 URL，否则使用本地路径
-      final effectivePath =
-          (pdfUrl != null && pdfUrl.isNotEmpty) ? pdfUrl : pdfFilePath;
-
+      final effectivePath = (pdfUrl != null && pdfUrl.isNotEmpty) ? pdfUrl : pdfFilePath;
+      
       if (effectivePath != null && naturalSizeJson != null) {
         final naturalSize = Size(
           (naturalSizeJson['width'] as num?)?.toDouble() ?? 0,
           (naturalSizeJson['height'] as num?)?.toDouble() ?? 0,
         );
-
+        
         Rect? dstRect;
         if (dstRectJson != null) {
           dstRect = Rect.fromLTWH(
@@ -148,7 +134,7 @@ class EditorPage {
             (dstRectJson['height'] as num?)?.toDouble() ?? 0,
           );
         }
-
+        
         backgroundImage = PdfEditorImage(
           pdfFilePath: effectivePath,
           pdfUrl: pdfUrl,
@@ -158,40 +144,42 @@ class EditorPage {
         );
       }
     }
-
+    
     return EditorPage(
       size: Size(width, height),
-      strokes: strokeList.whereType<Map<String, dynamic>>().map((json) {
-        // ✅ 根据 shape 字段创建对应的形状笔迹
-        final shape = json['shape'] as String?;
-        switch (shape) {
-          case 'line':
-            return LineStroke.fromJson(json) as Stroke;
-          case 'arrowLine':
-            return ArrowLineStroke.fromJson(json) as Stroke;
-          case 'rectangle':
-            return RectangleStroke.fromJson(json) as Stroke;
-          case 'circle':
-            return CircleStroke.fromJson(json) as Stroke;
-          case 'triangle':
-            return TriangleStroke.fromJson(json) as Stroke;
-          case 'diamond':
-            return DiamondStroke.fromJson(json) as Stroke;
-          case 'freePolygon':
-            return FreePolygonStroke.fromJson(json) as Stroke;
-          default:
-            return Stroke.fromJson(json);
-        }
-      }).toList(),
-      backgroundImage: backgroundImage, // ✅ 设置 PDF 背景图片
+      strokes: strokeList
+          .whereType<Map<String, dynamic>>()
+          .map((json) {
+            // ✅ 根据 shape 字段创建对应的形状笔迹
+            final shape = json['shape'] as String?;
+            switch (shape) {
+              case 'line':
+                return LineStroke.fromJson(json) as Stroke;
+              case 'arrowLine':
+                return ArrowLineStroke.fromJson(json) as Stroke;
+              case 'rectangle':
+                return RectangleStroke.fromJson(json) as Stroke;
+              case 'circle':
+                return CircleStroke.fromJson(json) as Stroke;
+              case 'triangle':
+                return TriangleStroke.fromJson(json) as Stroke;
+              case 'diamond':
+                return DiamondStroke.fromJson(json) as Stroke;
+              case 'freePolygon':
+                return FreePolygonStroke.fromJson(json) as Stroke;
+              default:
+                return Stroke.fromJson(json);
+            }
+          })
+          .toList(),
+      backgroundImage: backgroundImage,  // ✅ 设置 PDF 背景图片
       images: imageList
           .whereType<Map<String, dynamic>>()
           .map((json) => EditorImage.fromJson(json))
           .toList(), // ✅ 设置图片列表
       webViews: webViewList
           .whereType<Map<String, dynamic>>()
-          .map((json) =>
-              WebViewEditorElement.fromJson(json, sbnPath: sbnPath ?? ''))
+          .map((json) => WebViewEditorElement.fromJson(json, sbnPath: sbnPath ?? ''))
           .toList(), // ✅ 设置WebView列表
       textBoxes: textBoxList
           .whereType<Map<String, dynamic>>()
@@ -217,14 +205,14 @@ class Stroke {
     this.color = Colors.black,
     this.strokeWidth = 3,
     this.toolId,
-    this.pressureEnabled = false, // ✅ 是否支持压感（钢笔支持，圆珠笔不支持）
+    this.pressureEnabled = false,  // ✅ 是否支持压感（钢笔支持，圆珠笔不支持）
   });
 
   final List<Offset> points;
   final Color color;
   final double strokeWidth;
   final ToolId? toolId;
-  final bool pressureEnabled; // ✅ 压感支持标志
+  final bool pressureEnabled;  // ✅ 压感支持标志
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -239,7 +227,7 @@ class Stroke {
       'color': color.value,
       'strokeWidth': strokeWidth,
       'toolId': toolId?.name,
-      'pressureEnabled': pressureEnabled, // ✅ 保存压感支持标志
+      'pressureEnabled': pressureEnabled,  // ✅ 保存压感支持标志
     };
   }
 
@@ -258,8 +246,7 @@ class Stroke {
     final int? colorValue = json['color'] as int?;
     final double? strokeWidth = (json['strokeWidth'] as num?)?.toDouble();
     final String? toolIdName = json['toolId'] as String?;
-    final bool? pressureEnabled =
-        json['pressureEnabled'] as bool?; // ✅ 读取压感支持标志
+    final bool? pressureEnabled = json['pressureEnabled'] as bool?;  // ✅ 读取压感支持标志
     ToolId? toolId;
     if (toolIdName != null) {
       toolId = ToolId.values.firstWhere(
@@ -268,8 +255,8 @@ class Stroke {
       );
     }
     // ✅ 根据工具类型自动设置压感支持（如果未保存）
-    final bool finalPressureEnabled =
-        pressureEnabled ?? (toolId == ToolId.fountainPen); // 钢笔默认支持压感，其他工具不支持
+    final bool finalPressureEnabled = pressureEnabled ?? 
+        (toolId == ToolId.fountainPen);  // 钢笔默认支持压感，其他工具不支持
     return Stroke(
       points: pts,
       color: colorValue != null
@@ -282,10 +269,10 @@ class Stroke {
           : Colors.black,
       strokeWidth: strokeWidth ?? 3,
       toolId: toolId,
-      pressureEnabled: finalPressureEnabled, // ✅ 设置压感支持标志
+      pressureEnabled: finalPressureEnabled,  // ✅ 设置压感支持标志
     );
   }
-
+  
   /// ✅ 删除第一个点（用于激光笔淡出）
   void popFirstPoint() {
     if (points.isNotEmpty) {
@@ -334,17 +321,4 @@ class EditorPageNotifier extends ChangeNotifier {
   }
 }
 
-/// Replaces page notifiers after the backing page list is replaced wholesale.
-/// Importing a multi-page PDF swaps all [EditorPage] instances at once; stale
-/// notifiers otherwise keep the old document visible until the view is reopened.
-void replaceEditorPageNotifiers({
-  required List<EditorPageNotifier> notifiers,
-  required List<EditorPage> pages,
-}) {
-  for (final notifier in notifiers) {
-    notifier.dispose();
-  }
-  notifiers
-    ..clear()
-    ..addAll(pages.map(EditorPageNotifier.new));
-}
+
