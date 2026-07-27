@@ -691,7 +691,11 @@ impl CollabCloudPluginProvider for ServerProvider {
                   &collab_object.device_id,
                 );
                 let (sink, stream) = (channel.sink(), channel.stream());
-                let sink_config = SinkConfig::new().send_timeout(8);
+                // Batch adjacent local CRDT transactions before handing them to the
+                // workspace-level WebSocket aggregator. Init/reconnect sync is still immediate.
+                let sink_config = SinkConfig::new()
+                  .send_delay(Duration::from_millis(750))
+                  .send_timeout(8);
                 let sync_plugin = SyncPlugin::new(
                   origin,
                   sync_object,
