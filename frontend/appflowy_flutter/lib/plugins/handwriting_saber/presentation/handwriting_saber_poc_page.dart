@@ -315,20 +315,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
 
     try {
-      final String json = _coreInfo.toJsonString();
-      final List<int> bytes = utf8.encode(json);
+      // Collab must only receive cloud URLs. Keep the full JSON exclusively
+      // in the machine-local backup, where local PDF paths are valid.
+      final List<int> collabBytes = _coreInfo.toCollabBytes();
+      final List<int> localBackupBytes = utf8.encode(_coreInfo.toJsonString());
 
-      if (bytes.length <= 10) {
+      if (collabBytes.length <= 10) {
         debugPrint(
-            '🦋[HandwritingSaber] _flushSaveForView: data too small (${bytes.length} bytes), skipping');
+            '🦋[HandwritingSaber] _flushSaveForView: data too small (${collabBytes.length} bytes), skipping');
         return;
       }
 
       debugPrint(
-          '🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
+          '🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${collabBytes.length} bytes)');
 
       // 同时保存到 Collab 和本地文件（双保险）
-      _dataService.saveHandwritingSaberData(viewId, bytes).then((ok) {
+      _dataService.saveHandwritingSaberData(viewId, collabBytes).then((ok) {
         debugPrint(
             '🦋[HandwritingSaber] _flushSaveForView Collab: ${ok ? "✅" : "❌"} ($viewId)');
       }).catchError((e) {
@@ -336,7 +338,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       });
 
       // ✅ 同时写入本地文件作为备份（防止 Collab 同步失败导致数据丢失）
-      _saveToLocalFile(viewId, bytes);
+      _saveToLocalFile(viewId, localBackupBytes);
     } catch (e) {
       debugPrint(
           '❌[HandwritingSaber] _flushSaveForView serialization error: $e');
