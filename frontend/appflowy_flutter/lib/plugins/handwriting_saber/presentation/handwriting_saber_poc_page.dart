@@ -15,6 +15,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../application/handwriting_saber_data_service.dart';
+import '../application/handwriting_pdf_upload_coordinator.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
@@ -671,7 +672,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 上传后 toJson(forCollab: true) 会使用轻量 URL 格式，
   /// 大幅减少 Collab 同步数据量，避免 WebSocket 同步失败。
   Future<void> _uploadAssetsToCloud() async {
-    final uploadedPdfs = <String, String>{};
+    await _uploadPdfBackgroundsToCloud();
     for (final page in _coreInfo.pages) {
       // 上传普通图片（PngEditorImage），失败时重试一次
       for (final img in page.images) {
@@ -692,39 +693,49 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       }
 
-      // 上传 PDF 底图，失败时重试一次
-      final bgImage = page.backgroundImage;
-      if (bgImage != null) {
-        final existingUrl = uploadedPdfs[bgImage.pdfFilePath];
-        if (existingUrl != null) {
-          bgImage.pdfUrl = existingUrl;
-          continue;
-        }
-        if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
-          if (bgImage.pdfFilePath.isNotEmpty &&
-              !bgImage.pdfFilePath.startsWith('http') &&
-              File(bgImage.pdfFilePath).existsSync()) {
-            debugPrint(
-                '🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
-            await bgImage.uploadToCloud(parentDir: widget.view.id);
-            if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
-              debugPrint('🦋[HandwritingSaber] Retrying PDF upload...');
-              await Future.delayed(const Duration(milliseconds: 500));
-              await bgImage.uploadToCloud(parentDir: widget.view.id);
-            }
-          }
-        }
-        final url = bgImage.pdfUrl;
-        if (url != null && url.startsWith('http')) {
-          uploadedPdfs[bgImage.pdfFilePath] = url;
-        }
-      }
     }
   }
 
   /// 打开笔记时，用本地完整备份（含 base64）按图片 id 回填缺失的字节，
   /// 避免对本地已有的图片重复联网下载（图片加载慢 / 先红色"!"的核心修复）。
   ///
+  /// 收集所有页面的 PDF 底图，按本地路径分组后单次上传。
+  Future<void> _uploadPdfBackgroundsToCloud() async {
+    final uploadedPdfs = <String, String>{};
+    final pdfGroups = <String, List<PdfEditorImage>>{};
+    for (final page in _coreInfo.pages) {
+      final bgImage = page.backgroundImage;
+      if (bgImage == null || bgImage.pdfFilePath.isEmpty) continue;
+
+      final existingUrl = bgImage.pdfUrl;
+      if (existingUrl != null && existingUrl.startsWith('http')) {
+        uploadedPdfs[bgImage.pdfFilePath] = existingUrl;
+      }
+      if (!bgImage.pdfFilePath.startsWith('http') &&
+          File(bgImage.pdfFilePath).existsSync()) {
+        pdfGroups.putIfAbsent(bgImage.pdfFilePath, () => []).add(bgImage);
+      }
+    }
+
+    for (final entry in pdfGroups.entries) {
+      final localPdfPath = entry.key;
+      final existingUrl = uploadedPdfs[localPdfPath];
+      final url = existingUrl ??
+          await HandwritingPdfUploadCoordinator.shared.upload(
+            workspaceId: widget.view.workspaceId,
+            parentDir: widget.view.id,
+            localPdfPath: localPdfPath,
+          );
+
+      if (url != null && url.startsWith('http')) {
+        uploadedPdfs[localPdfPath] = url;
+        for (final image in entry.value) {
+          image.pdfUrl = url;
+        }
+      }
+    }
+  }
+
   /// Collab 数据是精简版（仅云 URL、无字节），直接渲染会触发错误占位并等待
   /// 云端下载。本方法在下载前先从本地备份文件命中字节，命中则完全无需联网。
   /// 图片上传后内容不可变，按 id 命中的字节与云端一致，回填永远正确。
