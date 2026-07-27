@@ -401,16 +401,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 初始化页面状态notifier（用于精确更新，避免全量重建）
   void _initPageNotifiers() {
-    // 清理旧的notifier
-    for (final notifier in _pageNotifiers) {
-      notifier.dispose();
-    }
-    _pageNotifiers.clear();
-
-    // 为每个页面创建notifier
-    for (final page in _coreInfo.pages) {
-      _pageNotifiers.add(EditorPageNotifier(page));
-    }
+    replaceEditorPageNotifiers(
+      notifiers: _pageNotifiers,
+      pages: _coreInfo.pages,
+    );
   }
 
   /// ✅ 预加载所有页面的PDF背景图（视图切换时调用，确保PDF图片能正确显示）
@@ -692,7 +686,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
       }
-
     }
   }
 
@@ -703,6 +696,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   Future<void> _uploadPdfBackgroundsToCloud() async {
     final uploadedPdfs = <String, String>{};
     final pdfGroups = <String, List<PdfEditorImage>>{};
+    var canvasNeedsRefresh = false;
     for (final page in _coreInfo.pages) {
       final bgImage = page.backgroundImage;
       if (bgImage == null || bgImage.pdfFilePath.isEmpty) continue;
@@ -730,9 +724,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       if (url != null && url.startsWith('http')) {
         uploadedPdfs[localPdfPath] = url;
         for (final image in entry.value) {
+          final urlChanged = image.pdfUrl != url;
           image.pdfUrl = url;
+          if (urlChanged) {
+            // pdfUrl is mutable; reset the page load state so the current
+            // document immediately switches to the completed cloud resource.
+            image.resetLoadStateAndPreload();
+            canvasNeedsRefresh = true;
+          }
         }
       }
+    }
+
+    // The debounced save path suppresses its normal status setState. Explicitly
+    // rebuild after mutating the PDF objects so the current document reflects
+    // the uploaded URL without requiring a document switch.
+    if (canvasNeedsRefresh && mounted) {
+      setState(() {});
     }
   }
 
@@ -4739,6 +4747,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _coreInfo.pages
         ..clear()
         ..addAll(importedPages);
+
+      // The import replaces every page object. Recreate the page notifiers at
+      // the same time so the current view renders all imported pages instead
+      // of retaining stale notifiers from the previous document.
+      _initPageNotifiers();
 
       final pageCreationTime = DateTime.now().difference(pageCreationStartTime);
       debugPrint(

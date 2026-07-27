@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_cache_service.dart';
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_download_coordinator.dart';
 import '../../../../../../../util/log_utils.dart';
 
 /// PDF加载状态枚举
@@ -418,6 +419,10 @@ class PdfEditorImage {
   /// PDF 原始字节（用于从云端下载后内存缓存，避免重复下载）
   Uint8List? pdfBytes;
 
+  static final _downloadCoordinator = HandwritingPdfDownloadCoordinator(
+    backend: const _PdfCloudDownloadBackend(),
+  );
+
   /// 是否已被 dispose，用于保护异步回调中对 _loadState 的访问
   bool _isDisposed = false;
 
@@ -484,37 +489,10 @@ class PdfEditorImage {
       return;
     }
 
-    try {
-      Log.info('[PdfEditorImage] Downloading PDF from cloud: $pdfUrl');
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final rawToken = userResult.fold((u) => u.token, (_) => '');
-      final token = _normalizeToken(rawToken);
-
-      final request = http.Request('GET', Uri.parse(pdfUrl!));
-      if (token.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-      final response = await request.send();
-
-      if (response.statusCode == 200) {
-        pdfBytes = null;
-
-        // ⚡ 写入工作区持久缓存（跨重启、切换视图复用，避免重复下载）
-        final localPath = await HandwritingPdfCacheService().putStream(
-          pdfUrl!,
-          response.stream,
-          expectedLength: response.contentLength,
-        );
-        if (localPath != null) {
-          pdfFilePath = localPath;
-          Log.info('[PdfEditorImage] PDF cached at: $localPath');
-        }
-      } else {
-        Log.error(
-            '[PdfEditorImage] ❌ PDF download failed: ${response.statusCode}');
-      }
-    } catch (e) {
-      Log.error('[PdfEditorImage] ❌ PDF download error: $e');
+    final localPath = await _downloadCoordinator.download(pdfUrl: pdfUrl!);
+    if (localPath != null) {
+      pdfFilePath = localPath;
+      Log.info('[PdfEditorImage] PDF cached at: $localPath');
     }
   }
 
@@ -704,15 +682,8 @@ class PdfEditorImage {
   Widget buildPdfPageWidget({
     required BoxFit boxFit,
   }) {
-    // 先检查页面Widget缓存，避免重复创建
-    final cachedWidget =
-        _cacheManager.getCachedPageWidget(pdfFilePath, pdfPageIndex);
-    if (cachedWidget != null) {
-      debugPrint(
-          '🎨[PdfEditorImage] 使用缓存的Widget: $pdfFilePath (页面 $pdfPageIndex)');
-      return cachedWidget;
-    }
-
+    // Do not cache Widget instances. The ValueListenableBuilder must remain
+    // in the tree so pdfUrl/loadState changes rebuild the current page.
     debugPrint(
         '🎨[PdfEditorImage] 构建新的Widget: $pdfFilePath (页面 $pdfPageIndex), loadState=${_loadState.value}');
 
@@ -803,10 +774,6 @@ class PdfEditorImage {
                   decoration: const BoxDecoration(), // 无装饰，确保纯净显示
                 );
 
-                // 缓存页面Widget，避免重复创建
-                _cacheManager.cachePageWidget(
-                    pdfFilePath, pdfPageIndex, pageWidget);
-
                 return pageWidget;
               },
             );
@@ -833,5 +800,40 @@ class PdfEditorImage {
   void dispose() {
     _isDisposed = true;
     _loadState.dispose();
+  }
+}
+
+class _PdfCloudDownloadBackend implements HandwritingPdfDownloadBackend {
+  const _PdfCloudDownloadBackend();
+
+  @override
+  Future<String?> downloadAndCache({required String pdfUrl}) async {
+    try {
+      Log.info('[PdfEditorImage] Downloading PDF from cloud: $pdfUrl');
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold((u) => u.token, (_) => '');
+      final token = PdfEditorImage._normalizeToken(rawToken);
+
+      final request = http.Request('GET', Uri.parse(pdfUrl));
+      if (token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      final response = await request.send();
+      if (response.statusCode != 200) {
+        Log.error(
+          '[PdfEditorImage] ❌ PDF download failed: ${response.statusCode}',
+        );
+        return null;
+      }
+
+      return HandwritingPdfCacheService().putStream(
+        pdfUrl,
+        response.stream,
+        expectedLength: response.contentLength,
+      );
+    } catch (error) {
+      Log.error('[PdfEditorImage] ❌ PDF download error: $error');
+      return null;
+    }
   }
 }
