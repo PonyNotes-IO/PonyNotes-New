@@ -356,8 +356,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
   AIModel? _selectedModel;
   List<AIModel> _availableModels = [];
   bool _isModelLoading = true;
-  bool _isDropdownOpen = false;
-  OverlayEntry? _overlayEntry;
   final _selectorKey = GlobalKey();
 
   // Feature toggles
@@ -424,7 +422,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   @override
   void dispose() {
-    _overlayEntry?.remove();
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -444,108 +441,106 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     );
   }
 
-  void _toggleDropdown() {
-    if (_isDropdownOpen) {
-      _closeDropdown();
-    } else {
-      _openDropdown();
-    }
-  }
-
-  void _openDropdown() {
+  void _openModelPicker() {
     if (_availableModels.isEmpty) return;
-    setState(() => _isDropdownOpen = true);
-
-    final box = _selectorKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final offset = box.localToGlobal(Offset.zero);
-    final size = box.size;
-
-    _overlayEntry = OverlayEntry(
-      builder: (ctx) => Positioned(
-        left: offset.dx,
-        top: offset.dy + size.height + 4,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 180,
-            constraints: const BoxConstraints(maxHeight: 200),
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(ctx).dividerColor),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: _availableModels.asMap().entries.map((entry) {
-                  final model = entry.value;
-                  final isSelected = _selectedModel?.id == model.id;
-                  return InkWell(
-                    onTap: () => _selectModel(model),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      color: isSelected
-                          ? Theme.of(ctx).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                          : null,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              model.name,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight:
-                                    isSelected ? FontWeight.w600 : FontWeight.normal,
-                                color: isSelected
-                                    ? Theme.of(ctx).colorScheme.primary
-                                    : Theme.of(ctx).colorScheme.onSurface,
-                              ),
-                            ),
-                          ),
-                          if (model.supportsImages)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                '多模态',
-                                style: TextStyle(fontSize: 9, color: Colors.green),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Text(
+                  '选择模型',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(ctx).colorScheme.onSurface,
+                  ),
+                ),
               ),
-            ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _availableModels.map((model) {
+                    final isSelected = _selectedModel?.id == model.id;
+                    return InkWell(
+                      onTap: () {
+                        setState(() => _selectedModel = model);
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        color: isSelected
+                            ? Theme.of(ctx)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.3)
+                            : null,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                model.name,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? Theme.of(ctx).colorScheme.primary
+                                      : Theme.of(ctx).colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            if (model.supportsImages)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  '多模态',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _closeDropdown() {
-    setState(() => _isDropdownOpen = false);
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _selectModel(AIModel model) {
-    setState(() => _selectedModel = model);
-    _closeDropdown();
   }
 
   // --- Feature buttons ---
@@ -558,7 +553,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
     return GestureDetector(
       key: _selectorKey,
-      onTap: _toggleDropdown,
+      onTap: _openModelPicker,
       child: Container(
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -583,7 +578,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
               ),
             const SizedBox(width: 3),
             Icon(
-              _isDropdownOpen ? Icons.expand_less : Icons.expand_more,
+              Icons.expand_more,
               size: 14,
               color: textColor,
             ),
@@ -746,7 +741,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
     return GestureDetector(
       onTap: () {
-        if (_isDropdownOpen) _closeDropdown();
+        // 关闭输入法等行为（如有需要）
       },
       child: Padding(
         padding: EdgeInsets.only(
@@ -807,35 +802,32 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _modelButton(context),
-                            const SizedBox(width: 6),
-                            _featureButton(
-                              context: context,
-                              label: '深度思考',
-                              icon: Icons.psychology,
-                              isEnabled: _isDeepThinkingEnabled,
-                              onTap: () => setState(
-                                () => _isDeepThinkingEnabled =
-                                    !_isDeepThinkingEnabled,
-                              ),
+                      child: Row(
+                        children: [
+                          _modelButton(context),
+                          const SizedBox(width: 3),
+                          _featureButton(
+                            context: context,
+                            label: '深度思考',
+                            icon: Icons.psychology,
+                            isEnabled: _isDeepThinkingEnabled,
+                            onTap: () => setState(
+                              () => _isDeepThinkingEnabled =
+                                  !_isDeepThinkingEnabled,
                             ),
-                            const SizedBox(width: 6),
-                            _featureButton(
-                              context: context,
-                              label: '联网搜索',
-                              icon: Icons.language,
-                              isEnabled: _isWebSearchEnabled,
-                              onTap: () => setState(
-                                () => _isWebSearchEnabled =
-                                    !_isWebSearchEnabled,
-                              ),
+                          ),
+                          const SizedBox(width: 3),
+                          _featureButton(
+                            context: context,
+                            label: '联网搜索',
+                            icon: Icons.language,
+                            isEnabled: _isWebSearchEnabled,
+                            onTap: () => setState(
+                              () => _isWebSearchEnabled =
+                                  !_isWebSearchEnabled,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                     _buildAttachmentButton(context),
