@@ -695,29 +695,33 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
   /// 附件上传按钮（对标桌面端 _buildAttachmentButton）
   Widget _buildAttachmentButton(BuildContext context) {
     final isDisabled = _isDeepThinkingEnabled || _isWebSearchEnabled;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
     final iconColor = isDisabled
-        ? (isDark ? const Color(0xFF666666) : const Color(0xFFB0B0B0))
-        : (isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363));
+        ? colorScheme.onSurface.withValues(alpha: 0.3)
+        : colorScheme.onSurfaceVariant;
 
     return GestureDetector(
       onTap: isDisabled || _isAttachmentLoading ? null : _pickAttachment,
-      child: SizedBox(
+      child: Container(
         width: 30,
         height: 30,
-        child: Center(
-          child: _isAttachmentLoading
-              ? SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
-                )
-              : Icon(
-                  Icons.add_circle_outline,
-                  size: 18,
-                  color: iconColor,
-                ),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          shape: BoxShape.circle,
         ),
+        child: _isAttachmentLoading
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
+              )
+            : FlowySvg(
+                FlowySvgs.m_ai_attachment_m,
+                size: const Size.square(18),
+                color: iconColor,
+                blendMode: null,
+              ),
       ),
     );
   }
@@ -744,163 +748,157 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final inputFill = isDark
+        ? const Color(0xFF1F1F1F)
+        : const Color(0xFFF3F3F3);
 
     return GestureDetector(
       onTap: () {
         if (_isDropdownOpen) _closeDropdown();
       },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(
-            top: BorderSide(color: Theme.of(context).dividerColor),
-          ),
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 12,
+          right: 12,
+          top: 8,
+          bottom: bottomPadding + 8,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Toolbar row — 窄屏用 ScrollView 防止溢出
-            Padding(
-              padding: const EdgeInsets.only(left: 12, right: 12, top: 8),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: MediaQuery.of(context).size.width - 24,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Input row — 自填浅色、自圆角，不带外边框
+              TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                maxLines: 4,
+                minLines: 1,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _submit(),
+                // 小图：亮色模式输入区与卡片同底，不填充；暗色模式保留深灰输入壳
+                decoration: InputDecoration(
+                  hintText: '在小马笔记可以问或找到每一件事...',
+                  hintStyle: TextStyle(
+                    color: Theme.of(context).hintColor,
+                    fontSize: 15,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _modelButton(context),
-                      const SizedBox(width: 6),
-                      _featureButton(
-                        context: context,
-                        label: '深度思考',
-                        icon: Icons.psychology,
-                        isEnabled: _isDeepThinkingEnabled,
-                        onTap: () =>
-                            setState(() => _isDeepThinkingEnabled = !_isDeepThinkingEnabled),
-                      ),
-                      const SizedBox(width: 6),
-                      _featureButton(
-                        context: context,
-                        label: '联网搜索',
-                        icon: Icons.language,
-                        isEnabled: _isWebSearchEnabled,
-                        onTap: () =>
-                            setState(() => _isWebSearchEnabled = !_isWebSearchEnabled),
-                      ),
-                      const SizedBox(width: 6),
-                      _buildAttachmentButton(context),
-                      const SizedBox(width: 6),
-                      _buildUsageIndicator(context),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$_charCount/$_maxLength',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _charCount >= _maxLength
-                              ? Colors.red
-                              : Theme.of(context).hintColor,
-                        ),
-                      ),
-                    ],
+                  filled: isDark,
+                  fillColor: isDark ? inputFill : null,
+                  hoverColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
                   ),
                 ),
+                style: const TextStyle(fontSize: 15),
               ),
-            ),
-            // Input + send row
-            Padding(
-              padding: EdgeInsets.only(
-                left: 12,
-                right: 12,
-                top: 6,
-                bottom: bottomPadding + 8,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              const SizedBox(height: 10),
+              // Toolbar row: 模型 / 深度思考 / 联网搜索 / 附件 / 发送
+              Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      maxLines: 4,
-                      minLines: 1,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _submit(),
-                      decoration: InputDecoration(
-                        hintText: '问小马AI...',
-                        hintStyle: TextStyle(
-                          color: Theme.of(context).hintColor,
-                          fontSize: 15,
-                        ),
-                        filled: true,
-                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 1.5,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _modelButton(context),
+                          const SizedBox(width: 6),
+                          _featureButton(
+                            context: context,
+                            label: '深度思考',
+                            icon: Icons.psychology,
+                            isEnabled: _isDeepThinkingEnabled,
+                            onTap: () => setState(
+                              () => _isDeepThinkingEnabled =
+                                  !_isDeepThinkingEnabled,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          _featureButton(
+                            context: context,
+                            label: '联网搜索',
+                            icon: Icons.language,
+                            isEnabled: _isWebSearchEnabled,
+                            onTap: () => setState(
+                              () => _isWebSearchEnabled = !_isWebSearchEnabled,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _buildAttachmentButton(context),
+                        ],
                       ),
-                      style: const TextStyle(fontSize: 15),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: widget.isSending || _charCount == 0 ? null : _submit,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: widget.isSending
-                            ? Theme.of(context).disabledColor
-                            : (_charCount > 0
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.surfaceContainerHighest),
-                        shape: BoxShape.circle,
-                        border: _charCount == 0
-                            ? Border.all(
-                                color: Theme.of(context).dividerColor,
-                                width: 1,
-                              )
-                            : null,
-                      ),
-                      child: widget.isSending
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator.adaptive(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation(Colors.white),
-                              ),
-                            )
-                          : Icon(
-                              Icons.send_rounded,
-                              color: _charCount > 0
-                                  ? Theme.of(context).colorScheme.onPrimary
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                              size: 20,
-                            ),
-                    ),
-                  ),
+                  _buildSendButton(context),
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  /// 发送按钮：橙色圆形 + 白色纸飞机 SVG
+  Widget _buildSendButton(BuildContext context) {
+    final canSend = !widget.isSending && _charCount > 0;
+    return GestureDetector(
+      onTap: canSend ? _submit : null,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: canSend
+              ? const Color(0xFFE94618)
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: widget.isSending
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator.adaptive(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                ),
+              )
+            : FlowySvg(
+                FlowySvgs.m_ai_send_m,
+                size: const Size.square(18),
+                color: canSend
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                blendMode: null,
+              ),
       ),
     );
   }
