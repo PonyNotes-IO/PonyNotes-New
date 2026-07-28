@@ -703,8 +703,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     return GestureDetector(
       onTap: isDisabled || _isAttachmentLoading ? null : _pickAttachment,
       child: SizedBox(
-        width: 30,
-        height: 30,
+        width: 28,
+        height: 28,
         child: Center(
           child: _isAttachmentLoading
               ? SizedBox(
@@ -714,7 +714,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                 )
               : FlowySvg(
                   FlowySvgs.m_ai_attachment_m,
-                  size: const Size.square(18),
+                  size: const Size.square(24),
                   color: iconColor,
                 ),
         ),
@@ -842,7 +842,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                       ),
                     ),
                     _buildAttachmentButton(context),
-                    const SizedBox(width: 6),
                     _buildSendButton(context),
                   ],
                 ),
@@ -860,8 +859,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     return GestureDetector(
       onTap: isSending ? null : _submit,
       child: SizedBox(
-        width: 36,
-        height: 36,
+        width: 28,
+        height: 28,
         child: Center(
           child: isSending
               ? const SizedBox(
