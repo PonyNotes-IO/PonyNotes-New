@@ -577,12 +577,11 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                 child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
               )
             else
-              Icon(Icons.auto_awesome, size: 11, color: textColor),
+              Text(
+                _selectedModel?.name ?? '选择模型',
+                style: TextStyle(fontSize: 11, color: textColor),
+              ),
             const SizedBox(width: 3),
-            Text(
-              _selectedModel?.name ?? '选择模型',
-              style: TextStyle(fontSize: 11, color: textColor),
-            ),
             Icon(
               _isDropdownOpen ? Icons.expand_less : Icons.expand_more,
               size: 14,
@@ -624,8 +623,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 11, color: textColor),
-            const SizedBox(width: 3),
             Text(label, style: TextStyle(fontSize: 11, color: textColor)),
           ],
         ),
