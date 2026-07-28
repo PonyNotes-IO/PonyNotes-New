@@ -327,7 +327,8 @@ class _MobileChatInputState extends State<MobileChatInput> {
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
               disabledBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               hintText: state.modelState.hintText,
               hintStyle: inputHintTextStyle(context),
               isCollapsed: true,
@@ -338,8 +339,10 @@ class _MobileChatInputState extends State<MobileChatInput> {
             textCapitalization: TextCapitalization.sentences,
             minLines: 1,
             maxLines: 6,
-            style:
-                Theme.of(context).textTheme.bodyMedium?.copyWith(height: 20 / 14),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(height: 20 / 14),
             specialTextSpanBuilder: PromptInputTextSpanBuilder(
               inputControlCubit: inputControlCubit,
               mentionedPageTextStyle:
@@ -584,9 +587,8 @@ class _MobileSelectModelButtonContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final hintColor = isDarkMode
-        ? const Color(0xFFB0B0B0)
-        : const Color(0xFF858585);
+    final hintColor =
+        isDarkMode ? const Color(0xFFB0B0B0) : const Color(0xFF858585);
 
     return BlocBuilder<SelectModelBloc, SelectModelState>(
       builder: (context, state) {
@@ -600,9 +602,7 @@ class _MobileSelectModelButtonContent extends StatelessWidget {
             height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(
-              color: isDarkMode
-                  ? const Color(0xFF2A2A2A)
-                  : Colors.white,
+              color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: isDarkMode
@@ -750,7 +750,8 @@ class _MobileModelSelectorSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildModelItem(BuildContext context, AIModelPB model, bool isSelected) {
+  Widget _buildModelItem(
+      BuildContext context, AIModelPB model, bool isSelected) {
     return ListTile(
       dense: true,
       title: Text(model.i18n),
