@@ -750,9 +750,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
-    final inputFill = isDark
-        ? const Color(0xFF1F1F1F)
-        : const Color(0xFFF3F3F3);
 
     return GestureDetector(
       onTap: () {
@@ -796,8 +793,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                     color: Theme.of(context).hintColor,
                     fontSize: 15,
                   ),
-                  filled: isDark,
-                  fillColor: isDark ? inputFill : null,
+                  filled: false,
+                  fillColor: null,
                   hoverColor: Colors.transparent,
                   focusColor: Colors.transparent,
                   contentPadding: EdgeInsets.zero,
