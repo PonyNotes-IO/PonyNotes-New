@@ -785,8 +785,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
               TextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                maxLines: 4,
-                minLines: 1,
+                maxLines: 5,
+                minLines: 2,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _submit(),
                 // 小图：亮色模式输入区与卡片同底，不填充；暗色模式保留深灰输入壳
@@ -800,10 +800,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   fillColor: isDark ? inputFill : null,
                   hoverColor: Colors.transparent,
                   focusColor: Colors.transparent,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  contentPadding: EdgeInsets.zero,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
