@@ -2,6 +2,7 @@ import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/ai/service/ai_model_state_notifier.dart';
 import 'package:appflowy/ai/service/select_model_bloc.dart';
 import 'package:appflowy/ai/widgets/prompt_input/mentioned_page_text_span.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
@@ -43,8 +44,6 @@ class _MobileChatInputState extends State<MobileChatInput> {
   final focusNode = FocusNode();
   final textController = TextEditingController();
 
-  late SendButtonState sendButtonState;
-
   @override
   void initState() {
     super.initState();
@@ -56,14 +55,6 @@ class _MobileChatInputState extends State<MobileChatInput> {
       focusNode.requestFocus();
       checkForAskingAI();
     });
-
-    updateSendButtonState();
-  }
-
-  @override
-  void didUpdateWidget(covariant oldWidget) {
-    updateSendButtonState();
-    super.didUpdateWidget(oldWidget);
   }
 
   @override
@@ -76,58 +67,55 @@ class _MobileChatInputState extends State<MobileChatInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Hero(
-      tag: "ai_chat_prompt",
-      child: BlocProvider.value(
-        value: inputControlCubit,
-        child: BlocListener<ChatInputControlCubit, ChatInputControlState>(
-          listener: (context, state) {
-            state.maybeWhen(
-              updateSelectedViews: (selectedViews) {
-                context.read<AIPromptInputBloc>().add(
-                      AIPromptInputEvent.updateMentionedViews(selectedViews),
-                    );
-              },
-              orElse: () {},
-            );
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).colorScheme.outline,
-                width: 1,
-              ),
+    return BlocProvider.value(
+      value: inputControlCubit,
+      child: BlocListener<ChatInputControlCubit, ChatInputControlState>(
+        listener: (context, state) {
+          state.maybeWhen(
+            updateSelectedViews: (selectedViews) {
+              context.read<AIPromptInputBloc>().add(
+                    AIPromptInputEvent.updateMentionedViews(selectedViews),
+                  );
+            },
+            orElse: () {},
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline,
+              width: 1,
             ),
-            child: BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
-              builder: (context, state) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 附件文件列表
-                    if (state.attachedFiles.isNotEmpty)
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: MobileAIPromptSizes
-                                  .attachedFilesBarPadding.vertical +
-                              MobileAIPromptSizes.attachedFilesPreviewHeight,
-                        ),
-                        child: PromptInputFile(
-                          onDeleted: (file) => context
-                              .read<AIPromptInputBloc>()
-                              .add(AIPromptInputEvent.removeFile(file)),
-                        ),
+          ),
+          child: BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
+            builder: (context, state) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 附件文件列表
+                  if (state.attachedFiles.isNotEmpty)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MobileAIPromptSizes
+                                .attachedFilesBarPadding.vertical +
+                            MobileAIPromptSizes.attachedFilesPreviewHeight,
                       ),
-                    // 输入框主体
-                    inputTextField(context),
-                    // 底部工具栏
-                    _buildBottomToolbar(context, state),
-                  ],
-                );
-              },
-            ),
+                      child: PromptInputFile(
+                        onDeleted: (file) => context
+                            .read<AIPromptInputBloc>()
+                            .add(AIPromptInputEvent.removeFile(file)),
+                      ),
+                    ),
+                  // 输入框主体
+                  inputTextField(context),
+                  // 底部工具栏
+                  _buildBottomToolbar(context, state),
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -185,14 +173,31 @@ class _MobileChatInputState extends State<MobileChatInput> {
     );
   }
 
-  void updateSendButtonState() {
-    if (widget.isStreaming) {
-      sendButtonState = SendButtonState.streaming;
-    } else if (textController.text.trim().isEmpty) {
-      sendButtonState = SendButtonState.disabled;
-    } else {
-      sendButtonState = SendButtonState.enabled;
-    }
+  Widget sendButton() {
+    final isStreaming = widget.isStreaming;
+    final isEnabled = !isStreaming;
+    return GestureDetector(
+      onTap: isEnabled ? handleSendPressed : widget.onStopStreaming,
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: isStreaming
+            ? const Center(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator.adaptive(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                  ),
+                ),
+              )
+            : FlowySvg(
+                FlowySvgs.m_ai_send_m,
+                size: const Size.square(24),
+              ),
+      ),
+    );
   }
 
   Future<void> handleSendPressed() async {
@@ -205,14 +210,11 @@ class _MobileChatInputState extends State<MobileChatInput> {
     if (widget.isStreaming) {
       return;
     }
-    final trimmedText = inputControlCubit.formatIntputText(
-      textController.text.trim(),
-    );
-    textController.clear();
+    final trimmedText = textController.text.trim();
     if (trimmedText.isEmpty) {
       return;
     }
-
+    textController.clear();
     onSubmitText(trimmedText);
   }
 
@@ -257,7 +259,6 @@ class _MobileChatInputState extends State<MobileChatInput> {
       return;
     }
     // inputControlCubit.updateInputText(textController.text);
-    setState(() => updateSendButtonState());
   }
 
   // KeyEventResult handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -360,14 +361,6 @@ class _MobileChatInputState extends State<MobileChatInput> {
               ? const Color(0xFFBDC2C8)
               : const Color(0xFF3C3E51),
         );
-  }
-
-  Widget sendButton() {
-    return PromptInputSendButton(
-      state: sendButtonState,
-      onSendPressed: handleSendPressed,
-      onStopStreaming: widget.onStopStreaming,
-    );
   }
 }
 

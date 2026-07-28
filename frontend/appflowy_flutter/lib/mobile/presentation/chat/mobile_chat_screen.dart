@@ -702,26 +702,22 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
     return GestureDetector(
       onTap: isDisabled || _isAttachmentLoading ? null : _pickAttachment,
-      child: Container(
+      child: SizedBox(
         width: 30,
         height: 30,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          shape: BoxShape.circle,
+        child: Center(
+          child: _isAttachmentLoading
+              ? SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
+                )
+              : FlowySvg(
+                  FlowySvgs.m_ai_attachment_m,
+                  size: const Size.square(18),
+                  color: iconColor,
+                ),
         ),
-        child: _isAttachmentLoading
-            ? SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
-              )
-            : FlowySvg(
-                FlowySvgs.m_ai_attachment_m,
-                size: const Size.square(18),
-                color: iconColor,
-                blendMode: null,
-              ),
       ),
     );
   }
@@ -766,13 +762,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(
@@ -815,44 +804,49 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
               ),
               const SizedBox(height: 10),
               // Toolbar row: 模型 / 深度思考 / 联网搜索 / 附件 / 发送
-              Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _modelButton(context),
-                          const SizedBox(width: 6),
-                          _featureButton(
-                            context: context,
-                            label: '深度思考',
-                            icon: Icons.psychology,
-                            isEnabled: _isDeepThinkingEnabled,
-                            onTap: () => setState(
-                              () => _isDeepThinkingEnabled =
-                                  !_isDeepThinkingEnabled,
+              SizedBox(
+                height: 36,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _modelButton(context),
+                            const SizedBox(width: 6),
+                            _featureButton(
+                              context: context,
+                              label: '深度思考',
+                              icon: Icons.psychology,
+                              isEnabled: _isDeepThinkingEnabled,
+                              onTap: () => setState(
+                                () => _isDeepThinkingEnabled =
+                                    !_isDeepThinkingEnabled,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          _featureButton(
-                            context: context,
-                            label: '联网搜索',
-                            icon: Icons.language,
-                            isEnabled: _isWebSearchEnabled,
-                            onTap: () => setState(
-                              () => _isWebSearchEnabled = !_isWebSearchEnabled,
+                            const SizedBox(width: 6),
+                            _featureButton(
+                              context: context,
+                              label: '联网搜索',
+                              icon: Icons.language,
+                              isEnabled: _isWebSearchEnabled,
+                              onTap: () => setState(
+                                () => _isWebSearchEnabled =
+                                    !_isWebSearchEnabled,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          _buildAttachmentButton(context),
-                        ],
+                            const SizedBox(width: 6),
+                            _buildAttachmentButton(context),
+                            const SizedBox(width: 6),
+                            _buildSendButton(context),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSendButton(context),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -861,38 +855,29 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     );
   }
 
-  /// 发送按钮：橙色圆形 + 白色纸飞机 SVG
+  /// 发送按钮
   Widget _buildSendButton(BuildContext context) {
-    final canSend = !widget.isSending && _charCount > 0;
+    final isSending = widget.isSending;
     return GestureDetector(
-      onTap: canSend ? _submit : null,
-      child: Container(
+      onTap: isSending ? null : _submit,
+      child: SizedBox(
         width: 36,
         height: 36,
-        decoration: BoxDecoration(
-          color: canSend
-              ? const Color(0xFFE94618)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: widget.isSending
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator.adaptive(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation(Colors.white),
+        child: Center(
+          child: isSending
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator.adaptive(
+                    strokeWidth: 2,
+                  ),
+                )
+              : const FlowySvg(
+                  FlowySvgs.m_ai_send_m,
+                  size: Size.square(24),
+                  blendMode: null,
                 ),
-              )
-            : FlowySvg(
-                FlowySvgs.m_ai_send_m,
-                size: const Size.square(18),
-                color: canSend
-                    ? Colors.white
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                blendMode: null,
-              ),
+        ),
       ),
     );
   }
