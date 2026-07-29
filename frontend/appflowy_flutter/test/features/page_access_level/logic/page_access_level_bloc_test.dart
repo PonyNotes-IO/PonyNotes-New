@@ -35,6 +35,22 @@ void main() {
   });
 
   group('PageAccessLevelBloc - refreshAccessLevel optimization', () {
+    test('permission lookup failure remains read-only', () async {
+      when(() => mockRepository.getAccessLevel(any())).thenAnswer(
+        (_) async => FlowyResult.failure(
+          FlowyError()..msg = 'permission pending verification',
+        ),
+      );
+      final bloc = PageAccessLevelBloc(
+        view: testView,
+        repository: mockRepository,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(bloc.state.accessLevel, ShareAccessLevel.readOnly);
+      await bloc.close();
+    });
+
     blocTest<PageAccessLevelBloc, PageAccessLevelState>(
       'should NOT emit new state when access level has NOT changed',
       build: () {

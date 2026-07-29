@@ -78,7 +78,6 @@ class _ShareButtonState extends State<ShareButton> {
   @override
   Widget build(BuildContext context) {
     final workspaceBloc = context.read<UserWorkspaceBloc>();
-    final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
     final workspaceType = workspaceBloc.state.currentWorkspace?.workspaceType;
     PageAccessLevelBloc? pageAccessLevelBloc;
     try {
@@ -95,9 +94,8 @@ class _ShareButtonState extends State<ShareButton> {
     return MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (context) =>
-              getIt<ShareBloc>(param1: widget.view)
-                ..add(const ShareEvent.initial()),
+          create: (context) => getIt<ShareBloc>(param1: widget.view)
+            ..add(const ShareEvent.initial()),
         ),
         if (widget.view.layout.isDatabaseView)
           BlocProvider(
@@ -112,7 +110,6 @@ class _ShareButtonState extends State<ShareButton> {
             final bloc = ShareTabBloc(
               repository: RustShareWithUserRepositoryImpl(),
               pageId: widget.view.id,
-              workspaceId: workspaceId,
             );
 
             if (workspaceType != WorkspaceTypePB.LocalW) {

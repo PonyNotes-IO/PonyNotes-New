@@ -90,9 +90,7 @@ class SharedUserWidget extends StatelessWidget {
     BuildContext context,
   ) {
     final theme = AppFlowyTheme.of(context);
-    final subtitle = user.email.trim().isNotEmpty
-        ? user.email
-        : user.uid ?? '';
+    final subtitle = user.email.trim().isNotEmpty ? user.email : user.uid ?? '';
 
     if (subtitle.isEmpty) {
       return const SizedBox.shrink();
@@ -177,7 +175,6 @@ class SharedUserWidget extends StatelessWidget {
       final supportedAccessLevels = [
         ShareAccessLevel.readOnly,
         ShareAccessLevel.readAndWrite,
-        ShareAccessLevel.fullAccess,
       ];
       return editAccessWidget(supportedAccessLevels);
     }

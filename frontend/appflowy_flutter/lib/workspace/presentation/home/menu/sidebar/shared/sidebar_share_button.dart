@@ -575,14 +575,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   Future<void> _openSharePanelForView(ViewPB view) async {
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
     final workspace = userWorkspaceBloc.state.currentWorkspace;
-    final workspaceId = workspace?.workspaceId ?? '';
     final workspaceType = workspace?.workspaceType;
     final shareBloc = getIt<ShareBloc>(param1: view)
       ..add(const ShareEvent.initial());
     final shareTabBloc = ShareTabBloc(
       repository: RustShareWithUserRepositoryImpl(),
       pageId: view.id,
-      workspaceId: workspaceId,
     );
     DatabaseTabBarBloc? databaseBloc;
 
@@ -802,7 +800,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
           shouldRenderChildren: false,
           shouldLoadChildViews: false,
           isTablet: PlatformInfo.isTablet,
-          rightIconsBuilder: (context, view) => [],  // 返回空列表，不显示任何右侧按钮
+          rightIconsBuilder: (context, view) => [], // 返回空列表，不显示任何右侧按钮
           onSelected: (viewContext, selectedView) {
             CalendarUnsavedGuard.instance.maybeConfirmLeave(
               viewContext,

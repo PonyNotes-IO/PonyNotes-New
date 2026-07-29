@@ -9,7 +9,6 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_stat
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
-import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
@@ -115,7 +114,7 @@ class PageAccessLevelBloc
     final sectionTypeResult = await repository.getSectionType(view.id);
     final sectionType = sectionTypeResult.fold(
       (sectionType) => sectionType,
-      (_) => SharedSectionType.public,
+      (_) => SharedSectionType.unknown,
     );
 
     if (ignorePageAccessLevel) {
@@ -132,10 +131,7 @@ class PageAccessLevelBloc
     }
 
     final result = await repository.getView(view.id);
-    final accessLevel = await repository.getAccessLevel(
-      view.id,
-      workspaceId: view.hasWorkspaceId() ? view.workspaceId : null,
-    );
+    final accessLevel = await repository.getAccessLevel(view.id);
     final latestView = result.fold(
       (view) => view,
       (_) => view,
@@ -153,39 +149,17 @@ class PageAccessLevelBloc
       ),
     );
 
-    // #4 非共享文档(无协作者)无需兜底轮询：权限不会变化，轮询纯浪费。
-    // 若之后被分享，DidUpdateSharedUsers 通知与 ShareSectionRefreshNotifier
-    // 仍会触发刷新，因此跳过轮询是安全的。查询失败时保守起见仍启用轮询。
-    var hasSharedUsers = true;
-    try {
-      final sharedResult = await FolderEventGetSharedUsers(
-        GetSharedUsersPayloadPB(viewId: view.id),
-      ).send();
-      hasSharedUsers = sharedResult.fold(
-        (success) => success.items.isNotEmpty,
-        (_) => true,
-      );
-    } catch (_) {
-      hasSharedUsers = true;
-    }
-
-    // 启动兜底轮询（每 10 秒刷新一次权限状态）
-    // 确保权限变更能及时生效，即使后端通知丢失也能通过轮询更新。
-    // 这是 DidUpdateSharedUsers 通知丢失时的唯一兜底：间隔越短，被降级为只读的
-    // 用户能继续误编辑的窗口越小，从而减少重新授权时回放到他人页面的内容。
-    // 10s 是“及时性”与“每个打开的协作文档的权限查询请求量”的折中。
+    // Poll the authoritative document endpoint. FFI's current-workspace cache
+    // is not consulted to decide whether polling is necessary: it can be empty
+    // for a valid cross-workspace share and must never become a permission fact.
     _permissionPollingTimer?.cancel();
-    if (hasSharedUsers) {
-      _permissionPollingTimer = Timer.periodic(
-        const Duration(seconds: 10),
-        (_) {
-          if (isClosed) return;
-          add(const PageAccessLevelEvent.refreshAccessLevel());
-        },
-      );
-    } else {
-      Log.debug('[PageAccessLevel] 非共享文档，跳过权限轮询. page: ${view.id}');
-    }
+    _permissionPollingTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) {
+        if (isClosed) return;
+        add(const PageAccessLevelEvent.refreshAccessLevel());
+      },
+    );
 
     // 监听 ShareSectionRefreshNotifier 信号
     // 当 ShareTabBloc 修改权限或移除协作者后会调用 notify()，
@@ -275,10 +249,7 @@ class PageAccessLevelBloc
     try {
       do {
         _refreshAccessLevelAgain = false;
-        final accessLevel = await repository.getAccessLevel(
-      view.id,
-      workspaceId: view.hasWorkspaceId() ? view.workspaceId : null,
-    );
+        final accessLevel = await repository.getAccessLevel(view.id);
         if (isClosed) {
           return;
         }

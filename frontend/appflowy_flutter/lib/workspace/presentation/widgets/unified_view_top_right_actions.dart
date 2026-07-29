@@ -169,12 +169,12 @@ class _UnifiedViewTopRightActionsContentState
               return ancestor.spacePermission;
             }
           }
-          return SpacePermission.publicToAll;
+          return SpacePermission.private;
         },
-        (_) => SpacePermission.publicToAll,
+        (_) => SpacePermission.private,
       );
     } catch (_) {
-      return SpacePermission.publicToAll;
+      return SpacePermission.private;
     }
   }
 

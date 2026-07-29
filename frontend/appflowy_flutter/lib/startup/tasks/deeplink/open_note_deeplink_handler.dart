@@ -58,13 +58,17 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     final hasViewId = uri.queryParameters.containsKey('viewId');
     final linkType = uri.queryParameters['type'];
     final isPublishOrShareType = linkType == 'publish' || linkType == 'share';
+    final isDocumentShareToken =
+        (uri.queryParameters['token']?.isNotEmpty ?? false) &&
+            (linkType == 'share' || linkType == 'document_share');
 
     // 支持三种格式：
     // 1. ponynotes://note?viewId=xxx 或 ponynotes://open?viewId=xxx
     // 2. https://domain/share?viewId=xxx&type=publish
     // 3. https://domain/share?viewId=xxx&type=share
-    return (isNotePath && hasViewId) ||
-        (isSharePath && hasViewId && isPublishOrShareType);
+    return (isNotePath && (hasViewId || isDocumentShareToken)) ||
+        (isSharePath &&
+            ((hasViewId && isPublishOrShareType) || isDocumentShareToken));
   }
 
   @override
@@ -78,16 +82,42 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
     try {
       // 从URI中获取参数
-      final viewId = uri.queryParameters['viewId'];
-      final targetWorkspaceId = uri.queryParameters['workspaceId'];
-      final linkType = uri.queryParameters['type'];
+      var viewId = uri.queryParameters['viewId'];
+      var targetWorkspaceId = uri.queryParameters['workspaceId'];
+      var linkType = uri.queryParameters['type'];
       final permissionParam = uri.queryParameters['permission'];
       final layoutParam = uri.queryParameters['layout'];
-      final permissionId =
+      var permissionId =
           permissionParam != null ? int.tryParse(permissionParam) ?? 1 : 1;
       // 解析视图布局类型：0=Document, 1=Grid, 2=Board, 3=Calendar
-      final viewLayoutValue =
+      var viewLayoutValue =
           layoutParam != null ? int.tryParse(layoutParam) ?? 0 : 0;
+      String? documentShareName;
+      final documentShareToken = uri.queryParameters['token'];
+      final isDocumentShareLink = documentShareToken != null &&
+          documentShareToken.isNotEmpty &&
+          (linkType == 'share' || linkType == 'document_share');
+
+      // New document links use an opaque server token. Treat all other URL
+      // fields as display/deep-link compatibility hints and replace them with
+      // the server snapshot before opening anything.
+      if (isDocumentShareLink) {
+        final snapshot = await _acceptDocumentShareLink(documentShareToken);
+        if (snapshot == null) {
+          onStateChange(this, DeepLinkState.error);
+          return FlowyResult.failure(
+            FlowyError()
+              ..msg = '分享链接无效、已撤销或当前账号无权访问'
+              ..code = ErrorCode.NotEnoughPermissions,
+          );
+        }
+        viewId = snapshot['view_id']?.toString();
+        targetWorkspaceId = snapshot['owner_workspace_id']?.toString();
+        permissionId = _jsonInt(snapshot['permission_id'], permissionId);
+        viewLayoutValue = _jsonInt(snapshot['view_layout'], viewLayoutValue);
+        documentShareName = snapshot['view_name']?.toString();
+        linkType = 'share';
+      }
 
       if (viewId == null || viewId.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
@@ -106,6 +136,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 如果是分享链接（type=share），尝试将当前用户添加到协作中，
       // 具体权限与视图可见性仍由后端控制。
       if (linkType == 'share' &&
+          !isDocumentShareLink &&
           workspaceId != null &&
           workspaceId.isNotEmpty) {
         await _addUserToCollaboration(
@@ -117,7 +148,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       // 如果是发布链接（type=publish），调用 receive API 接收文档
       String effectiveViewId = viewId;
-      bool isReadonly = false;
+      bool isReadonly = isDocumentShareLink && permissionId <= 2;
 
       if (linkType == 'publish' &&
           workspaceId != null &&
@@ -164,7 +195,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         final serverLayout = await _getViewLayoutFromInviteApi(viewId);
         if (serverLayout != null && serverLayout > 0) {
           effectiveLayout = serverLayout;
-          Log.info('[OpenNoteDeepLinkHandler] 从 received 记录获取到 layout=$effectiveLayout');
+          Log.info(
+              '[OpenNoteDeepLinkHandler] 从 received 记录获取到 layout=$effectiveLayout');
         } else {
           // 再尝试通过邀请模板接口获取（不需要先接受邀请）
           final shareInfo = await _getShareInfoFromTemplate(viewId);
@@ -172,14 +204,16 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
             final templateLayout = shareInfo['view_layout'];
             if (templateLayout is int && templateLayout > 0) {
               effectiveLayout = templateLayout;
-              Log.info('[OpenNoteDeepLinkHandler] 从邀请模板获取到 layout=$effectiveLayout');
+              Log.info(
+                  '[OpenNoteDeepLinkHandler] 从邀请模板获取到 layout=$effectiveLayout');
             }
             // 如果 URL 没有 workspaceId，从模板中获取 owner_workspace_id
             if (resolvedWorkspaceId == null || resolvedWorkspaceId.isEmpty) {
               final ownerWsId = shareInfo['owner_workspace_id'];
               if (ownerWsId is String && ownerWsId.isNotEmpty) {
                 resolvedWorkspaceId = ownerWsId;
-                Log.info('[OpenNoteDeepLinkHandler] 从邀请模板获取到 workspaceId=$resolvedWorkspaceId');
+                Log.info(
+                    '[OpenNoteDeepLinkHandler] 从邀请模板获取到 workspaceId=$resolvedWorkspaceId');
               }
             }
           }
@@ -187,10 +221,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         // 如果通过模板获取到了 workspaceId，补充调用 _addUserToCollaboration
         if (resolvedWorkspaceId != null &&
             resolvedWorkspaceId.isNotEmpty &&
+            !isDocumentShareLink &&
             (linkType == null || linkType == 'share') &&
             workspaceId == null) {
           // 之前没有调用过 _addUserToCollaboration（因为 workspaceId 或 linkType 缺失），现在补充调用
-          Log.info('[OpenNoteDeepLinkHandler] 补充调用 _addUserToCollaboration，workspaceId=$resolvedWorkspaceId');
+          Log.info(
+              '[OpenNoteDeepLinkHandler] 补充调用 _addUserToCollaboration，workspaceId=$resolvedWorkspaceId');
           await _addUserToCollaboration(
             workspaceId: resolvedWorkspaceId,
             viewId: viewId,
@@ -200,7 +236,9 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       final isDatabaseView = effectiveLayout >= 1 && effectiveLayout <= 3;
-      final viewName = await _getViewName(viewId, resolvedWorkspaceId);
+      final viewName = documentShareName?.isNotEmpty == true
+          ? documentShareName!
+          : await _getViewName(viewId, resolvedWorkspaceId);
 
       // For share links, save shared view metadata to local DB BEFORE opening
       // This ensures get_view_pb() and database handler can find the view
@@ -882,6 +920,55 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     }
   }
 
+  /// 接受服务端随机 token，并返回服务端确认后的文档共享快照。
+  /// URL 内的工作区、权限和布局仅用于兼容旧客户端，不能参与权限判断。
+  Future<Map<String, dynamic>?> _acceptDocumentShareLink(String token) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      final rawToken = await _getAuthTokenFromUserService();
+      final accessToken = _extractAccessToken(rawToken);
+      if (baseUrl.isEmpty || accessToken == null || accessToken.isEmpty) {
+        Log.warn('[OpenNoteDeepLinkHandler] 未登录，无法接受文档分享链接');
+        return null;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/document-shares/links/$token/accept',
+      );
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        Log.warn(
+          '[OpenNoteDeepLinkHandler] 接受文档分享链接失败: HTTP ${response.statusCode}',
+        );
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map<String, dynamic> ? decoded['data'] : null;
+      return data is Map<String, dynamic> ? data : null;
+    } catch (error, stackTrace) {
+      Log.error(
+        '[OpenNoteDeepLinkHandler] 接受文档分享链接异常: $error',
+        stackTrace,
+      );
+      return null;
+    }
+  }
+
+  int _jsonInt(dynamic value, int fallback) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
   /// 从服务端邀请记录获取视图的布局类型
   /// 返回 null 表示获取失败，0=Document, 1=Grid, 2=Board, 3=Calendar
   Future<int?> _getViewLayoutFromInviteApi(String viewId) async {
@@ -953,7 +1040,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode != 200) {
-        Log.info('[OpenNoteDeepLinkHandler] 邀请模板接口返回 ${response.statusCode}，可能无邀请模板');
+        Log.info(
+            '[OpenNoteDeepLinkHandler] 邀请模板接口返回 ${response.statusCode}，可能无邀请模板');
         return null;
       }
 

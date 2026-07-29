@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
-import 'package:appflowy/features/share_tab/presentation/widgets/people_with_access_section.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/access_level_list_widget.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/shared_user_widget.dart';
 import 'package:appflowy/features/util/extensions.dart';
@@ -25,7 +24,6 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc
 
 import '../../../util/log_utils.dart';
 import '../../../workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
-import 'build_users_list_with_owner.dart';
 
 String? _extractCurrentUserUuid(UserProfilePB? user) {
   if (user == null) return null;
@@ -130,7 +128,7 @@ class _ShareTabState extends State<ShareTab> {
         if (state.isLoading) {
           return const SizedBox.shrink();
         }
-        final isReadOnly = _isShareManagementReadOnly(context, state);
+        final isReadOnly = _isShareManagementReadOnly(state);
 
         // final currentUser = state.currentUser;
         // final accessLevel = state.users
@@ -220,22 +218,11 @@ class _ShareTabState extends State<ShareTab> {
     );
   }
 
-  bool _isShareManagementReadOnly(
-    BuildContext context,
-    ShareTabState state,
-  ) {
+  bool _isShareManagementReadOnly(ShareTabState state) {
     final currentShareAccessLevel = _currentShareAccessLevel(state);
-    if (currentShareAccessLevel != null) {
-      return currentShareAccessLevel == ShareAccessLevel.readOnly;
-    }
-
-    try {
-      final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
-      return !pageAccessLevelBloc.state.isLoadingLockStatus &&
-          pageAccessLevelBloc.state.isReadOnly;
-    } catch (_) {
-      return false;
-    }
+    // Managing members/links is owner-only. A document editing permission is
+    // not a management capability, and an unknown snapshot is read-only.
+    return currentShareAccessLevel != ShareAccessLevel.fullAccess;
   }
 
   ShareAccessLevel? _currentShareAccessLevel(ShareTabState state) {
@@ -248,11 +235,7 @@ class _ShareTabState extends State<ShareTab> {
     final currentEmail = currentUser.email.trim().toLowerCase();
     final currentNumericId = currentUser.id.toString();
 
-    final usersWithOwner = buildUsersListWithOwner(
-      users: state.users,
-      currentUser: currentUser,
-    );
-    final currentSharedUser = usersWithOwner.firstWhereOrNull((user) {
+    final currentSharedUser = state.users.firstWhereOrNull((user) {
       final idMatch = currentUid != null &&
           currentUid.isNotEmpty &&
           user.userId == currentUid;
@@ -263,70 +246,12 @@ class _ShareTabState extends State<ShareTab> {
       return idMatch || uidMatch || emailMatch;
     });
     if (currentSharedUser != null) {
-      return currentSharedUser.accessLevel;
-    }
-
-    if (usersWithOwner.isNotEmpty &&
-        usersWithOwner.first.accessLevel == ShareAccessLevel.fullAccess) {
-      LogUtils.debug(
-        '[ShareTab] Current user not matched in share list; '
-        'using owner fallback for share management. currentUid=$currentUid, '
-        'currentEmail=$currentEmail',
-      );
-      return ShareAccessLevel.fullAccess;
+      return currentSharedUser.role == ShareRole.owner
+          ? currentSharedUser.accessLevel
+          : ShareAccessLevel.readOnly;
     }
 
     return null;
-  }
-
-  PeopleWithAccessSectionCallbacks _buildPeopleWithAccessSectionCallbacks(
-    BuildContext context,
-  ) {
-    return PeopleWithAccessSectionCallbacks(
-      onSelectAccessLevel: (user, accessLevel) {
-        context.read<ShareTabBloc>().add(
-              ShareTabEvent.updateMemberPermission(
-                user: user,
-                accessLevel: accessLevel,
-              ),
-            );
-      },
-      onTurnIntoMember: (user) {
-        context.read<ShareTabBloc>().add(
-              ShareTabEvent.convertToMember(email: user.phone ?? user.email),
-            );
-      },
-      onRemoveAccess: (user) {
-        final theme = AppFlowyTheme.of(context);
-        final shareTabBloc = context.read<ShareTabBloc>();
-        final currentUser = shareTabBloc.state.currentUser;
-        final currentUid = currentUser?.id.toString();
-        final removingSelf = currentUid != null &&
-            currentUid.isNotEmpty &&
-            user.userId == currentUid;
-        if (removingSelf) {
-          showConfirmDialog(
-            context: context,
-            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
-            titleStyle: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-            description: '',
-            style: ConfirmPopupStyle.cancelAndOk,
-            confirmLabel: LocaleKeys.button_delete.tr(),
-            onConfirm: (_) {
-              shareTabBloc.add(
-                ShareTabEvent.removeCollabMember(user: user),
-              );
-            },
-          );
-        } else {
-          shareTabBloc.add(
-            ShareTabEvent.removeCollabMember(user: user),
-          );
-        }
-      },
-    );
   }
 
   void _handleShareWithUser({required List<String> emails}) {
@@ -337,13 +262,6 @@ class _ShareTabState extends State<ShareTab> {
       ),
     );
   }
-
-  /// 构建包含拥有者的完整用户列表，拥有者始终在最前面
-  List<SharedUser> _buildUsersListWithOwner({
-    required SharedUsers users,
-    required UserProfilePB? currentUser,
-  }) =>
-      buildUsersListWithOwner(users: users, currentUser: currentUser);
 
   void _onListenShareWithUserState(
     BuildContext context,
@@ -473,7 +391,6 @@ class _ShareTabState extends State<ShareTab> {
         return BlocProvider.value(
           value: _bloc,
           child: CollaboratorsDialog(
-            workspaceId: _bloc.workspaceId,
             pageId: _bloc.pageId,
           ),
         );
@@ -488,7 +405,11 @@ class _ShareTabState extends State<ShareTab> {
   Widget _buildPermissionSelector(BuildContext context, ShareTabState state) {
     final theme = AppFlowyTheme.of(context);
     final permissions = ShareAccessLevel.values
-        .where((level) => level != ShareAccessLevel.readAndComment)
+        .where(
+          (level) =>
+              level != ShareAccessLevel.readAndComment &&
+              level != ShareAccessLevel.fullAccess,
+        )
         .toList();
     final permissionItems = permissions
         .map((level) => MapEntry(_permissionIdFromAccessLevel(level), level))
@@ -702,11 +623,9 @@ class _ShareTabState extends State<ShareTab> {
 class CollaboratorsDialog extends StatefulWidget {
   const CollaboratorsDialog({
     super.key,
-    required this.workspaceId,
     required this.pageId,
   });
 
-  final String workspaceId;
   final String pageId;
 
   @override
@@ -807,15 +726,9 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
         final currentUser = state.currentUser;
         final users = state.users;
 
-        // 构建完整的用户列表：
-        // 接口/FFI 返回的是显式协作者；文档拥有者可能不在 af_collab_member 中。
-        // 只有存在真实成员数据时才补 owner，避免取数失败时误展示成“只有自己”。
-        final allUsers = users.isEmpty
-            ? users
-            : buildUsersListWithOwner(
-                users: users,
-                currentUser: currentUser,
-              );
+        // The server snapshot explicitly includes the document owner. Never
+        // synthesize an owner from the current user or workspace context.
+        final allUsers = users;
 
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
         final currentUid =
@@ -843,31 +756,16 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
                   return idMatch || uidMatch || emailMatch;
                 },
               );
-        // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
-        // 智能判断权限：如果第一条拥有 fullAccess（约定第一条为拥有者），
-        // 则当前用户大概率是拥有者，赋予 fullAccess；否则使用 readOnly。
-        ShareAccessLevel fallbackAccessLevel = ShareAccessLevel.readOnly;
+        // Identity mismatches and transport failures are never evidence of
+        // ownership. The server snapshot includes the owner explicitly; when
+        // it cannot be matched, keep this dialog non-mutating.
+        const fallbackAccessLevel = ShareAccessLevel.readOnly;
         if (currentSharedUser == null && currentUser != null) {
-          if (allUsers.isNotEmpty &&
-              allUsers.first.accessLevel == ShareAccessLevel.fullAccess) {
-            // 接口约定第一条为拥有者；匹配失败说明 userId/email 格式不一致，
-            // 但当前用户大概率就是拥有者，赋予 fullAccess 避免权限按钮变灰。
-            fallbackAccessLevel = ShareAccessLevel.fullAccess;
-            LogUtils.debug(
-              '[ShareTab] Current user not matched in collab list, '
-              'but first member has fullAccess — assuming owner, '
-              'fallback to fullAccess. currentUid=$currentUid, '
-              'currentEmail=$currentEmail, '
-              'firstMemberEmail=${allUsers.first.email}',
-            );
-          } else {
-            LogUtils.warning(
-              '[ShareTab] Current user not matched in collab list and '
-              'first member is NOT owner. Falling back to readOnly. '
-              'currentUid=$currentUid, currentEmail=$currentEmail, '
-              'usersCount=${allUsers.length}',
-            );
-          }
+          LogUtils.warning(
+            '[ShareTab] Current user is absent from the document snapshot; '
+            'using read-only pending server verification. currentUid=$currentUid, '
+            'currentEmail=$currentEmail, usersCount=${allUsers.length}',
+          );
         }
         final effectiveCurrentSharedUser = currentSharedUser ??
             SharedUser(
@@ -879,6 +777,10 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
               accessLevel: fallbackAccessLevel,
               userId: currentUid,
             );
+        final canManageDocumentShare =
+            effectiveCurrentSharedUser.role == ShareRole.owner &&
+                effectiveCurrentSharedUser.accessLevel ==
+                    ShareAccessLevel.fullAccess;
 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
@@ -914,13 +816,21 @@ class _CollaboratorsDialogState extends State<CollaboratorsDialog> {
                   const Divider(height: 1),
                   VSpace(theme.spacing.m),
 
-                  // 权限选择和搜索框
-                  _AccessLevelSelector(
-                    inviteController: _inviteController,
-                    bloc: _bloc,
-                    availableUsers: state.availableUsers,
-                    existingUsers: allUsers,
-                  ),
+                  // Only the server-identified document owner can mutate the
+                  // member list or links. Other collaborators may inspect the
+                  // snapshot but never receive a speculative Full control.
+                  if (canManageDocumentShare)
+                    _AccessLevelSelector(
+                      inviteController: _inviteController,
+                      bloc: _bloc,
+                      availableUsers: state.availableUsers,
+                      existingUsers: allUsers,
+                    )
+                  else
+                    FlowyText.regular(
+                      '当前仅可查看文档共享权限；管理权限待服务端验证。',
+                      color: theme.textColorScheme.secondary,
+                    ),
                   VSpace(theme.spacing.m),
 
                   // Users list
@@ -1614,7 +1524,11 @@ class _AccessLevelSelectorState extends State<_AccessLevelSelector> {
               dropdownColor: theme.surfaceContainerColorScheme.layer01,
               borderRadius: BorderRadius.circular(8),
               items: ShareAccessLevel.values
-                  .where((level) => level != ShareAccessLevel.readAndComment)
+                  .where(
+                (level) =>
+                    level != ShareAccessLevel.readAndComment &&
+                    level != ShareAccessLevel.fullAccess,
+              )
                   .map((level) {
                 return DropdownMenuItem(
                   value: level,

@@ -815,8 +815,6 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       return;
     }
 
-    final workspaceId = workspace.workspaceId;
-
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -825,10 +823,8 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
           create: (_) => ShareTabBloc(
             repository: RustShareWithUserRepositoryImpl(),
             pageId: view.id,
-            workspaceId: workspaceId,
           )..add(ShareTabEvent.initialize()),
           child: CollaboratorsDialog(
-            workspaceId: workspaceId,
             pageId: view.id,
           ),
         );
