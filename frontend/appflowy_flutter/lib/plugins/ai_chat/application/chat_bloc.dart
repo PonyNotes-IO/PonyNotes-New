@@ -263,16 +263,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    switch (state.loadingState) {
-      case LoadChatMessageStatus.loading when chatController.messages.isEmpty:
-        emit(state.copyWith(loadingState: LoadChatMessageStatus.loadingRemote));
-        break;
-      case LoadChatMessageStatus.loading:
-      case LoadChatMessageStatus.loadingRemote:
-        emit(state.copyWith(loadingState: LoadChatMessageStatus.ready));
-        break;
-      default:
-        break;
+    // AIEventLoadNextMessage already returns the authoritative message list,
+    // including an empty list for a new chat. Waiting for a second remote
+    // notification leaves empty chats in loadingRemote forever, while the UI
+    // only renders the conversation when the state is ready.
+    if (state.loadingState != LoadChatMessageStatus.ready) {
+      emit(state.copyWith(loadingState: LoadChatMessageStatus.ready));
     }
 
     // 【关键修复】只在首次创建（本地无消息）时才自动发送初始消息
