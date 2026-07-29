@@ -36,6 +36,7 @@ class MobileChatScreen extends StatefulWidget {
   /// view id, null when entering from bottom nav (will create chat on first message)
   final String? id;
   final String? title;
+
   /// view.extra, for passing initial message, model, etc.
   final String? extra;
 
@@ -111,7 +112,8 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       // back button + title chrome (matching Document/Database screens).
       return Scaffold(
         appBar: MobileAppBar(
-          title: widget.title ?? LocaleKeys.menuAppHeader_defaultNewChatName.tr(),
+          title:
+              widget.title ?? LocaleKeys.menuAppHeader_defaultNewChatName.tr(),
           showBackButton: true,
           onBackPressed: () {
             // Prefer GoRouter pop (handles stack correctly when this
@@ -194,21 +196,28 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                         const SizedBox(height: 16),
                         // Greeting
                         Text(
-                          '有什么可以帮到你的吗，${_userProfile?.name ?? ""}？',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontSize: 17,
-                              ),
+                          '我是小马笔记AI，很高兴见到你！',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontSize: 17,
+                                  ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         // Subtitle
-                        Text(
-                          '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).hintColor.withValues(alpha: 0.7),
-                                fontSize: 12,
-                              ),
-                          textAlign: TextAlign.center,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Text(
+                            '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context)
+                                          .hintColor
+                                          .withValues(alpha: 0.7),
+                                      fontSize: 12,
+                                    ),
+                            textAlign: TextAlign.center,
+                          ),
                         ),
                       ],
                     ),
@@ -230,10 +239,14 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     );
   }
 
-  void _handleWelcomeInputSubmit(String text, String? modelId, bool deepThinking, bool webSearch) {
+  void _handleWelcomeInputSubmit(
+      String text, String? modelId, bool deepThinking, bool webSearch) {
     if (_isSending) return;
     if (text.trim().isEmpty) return;
-    _sendMessage(text, modelId: modelId, enableDeepThinking: deepThinking, enableWebSearch: webSearch);
+    _sendMessage(text,
+        modelId: modelId,
+        enableDeepThinking: deepThinking,
+        enableWebSearch: webSearch);
   }
 
   Future<void> _sendMessage(
@@ -524,8 +537,10 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   Widget _modelButton(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
-    final borderColor = isDark ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
+    final textColor =
+        isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
+    final borderColor =
+        isDark ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
     final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
 
     return GestureDetector(
@@ -620,9 +635,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
               return _usagePill(context, '未订阅', Colors.red);
             }
             final remaining = total - used;
-            final color = remaining <= 0
-                ? Colors.red
-                : Theme.of(context).hintColor;
+            final color =
+                remaining <= 0 ? Colors.red : Theme.of(context).hintColor;
             return _usagePill(context, '$remaining 次可用', color);
           },
           (_) => const SizedBox.shrink(),
@@ -641,7 +655,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
+        style:
+            TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
       ),
     );
   }
@@ -803,8 +818,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                             icon: Icons.language,
                             isEnabled: _isWebSearchEnabled,
                             onTap: () => setState(
-                              () => _isWebSearchEnabled =
-                                  !_isWebSearchEnabled,
+                              () => _isWebSearchEnabled = !_isWebSearchEnabled,
                             ),
                           ),
                         ],
