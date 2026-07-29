@@ -1610,6 +1610,26 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     final controller = _controller;
     _controller = null;
     if (controller != null) {
+      // 【macOS 切换文档崩溃修复 2026-07-29】
+      // 根因：flutter_inappwebview_macos 的 WebViewChannelDelegate.handle() 在
+      // 原生 webView weak 引用变 nil 时仍被 MethodChannel 调用，导致空指针解引用。
+      // 原实现将 JS handler 移除放在延迟 100ms 的 teardownController 中，导致在这
+      // 100ms 窗口内 JS 端仍可通过 callHandler 触发 MethodChannel 消息，而此时原生
+      // webView 可能已被系统回收 → 崩溃。
+      //
+      // 修复：将 JS handler 移除提到 dispose 中立即（同步）执行，切断 JS → Flutter
+      // 的 MethodChannel 调用路径。配合 _isDisposed=true（阻断 _safeEvalJs 新发起
+      // evaluateJavascript）和 _controller=null（阻断外部 pushData 等调用），延迟
+      // 窗口内唯一残留的 MethodChannel 消息来源是正在 await 中的 evaluateJavascript，
+      // 该路径概率极低且无法从 Dart 侧取消，但移除 handler 后整体崩溃概率大幅下降。
+      for (final handlerName in _javaScriptHandlerNames) {
+        try {
+          controller.removeJavaScriptHandler(handlerName: handlerName);
+        } catch (_) {
+          // Controller may already be disposed by the platform view.
+        }
+      }
+
       // 【纹理销毁竞态加固 2026-07-20】原实现在 dispose 内同步销毁原生 controller。
       // Windows 上引擎光栅线程可能仍在把本 WebView 的 D3D 外部纹理绘制到最后一帧，
       // 同帧销毁纹理会触发 ExternalTextureD3d::PopulateTexture 抛 C++ 异常 →
@@ -1617,14 +1637,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 崩溃栈实锤）。改为等本帧渲染完成后再延迟一小段销毁：widget 已从树上摘除、
       // 后续帧不会再引用该纹理，延迟销毁即可避开竞态。controller.dispose 幂等
       // （插件在 platform view teardown 时也会销毁），双重销毁已由 try/catch 兜底。
+      //
+      // 注意：handler 已在上面同步移除，此处 teardownController 仅负责 dispose。
       void teardownController() {
-        for (final handlerName in _javaScriptHandlerNames) {
-          try {
-            controller.removeJavaScriptHandler(handlerName: handlerName);
-          } catch (_) {
-            // Controller may already be disposed by the platform view.
-          }
-        }
         try {
           controller.dispose();
         } catch (_) {
@@ -1982,6 +1997,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       webViewEnvironment: sharedWebViewEnvironment,
 
                       onWebViewCreated: (controller) {
+                        // 修复：dispose 后不应再持有 controller 引用，避免
+                        // 延迟销毁窗口内被外部方法误用。
+                        if (_isDisposed) return;
                         _controller = controller;
                         _webViewCreated = true;
                         _setupJavaScriptHandlers(controller);

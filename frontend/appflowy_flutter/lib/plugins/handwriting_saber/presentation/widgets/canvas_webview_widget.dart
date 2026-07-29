@@ -57,6 +57,7 @@ class CanvasWebViewWidget extends StatefulWidget {
 class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isDisposed = false;
   String? _loadingError;
   bool _hasCachedContent = false;
   late final int _webViewInstanceId; // 每个InAppWebView的全局唯一ID
@@ -103,12 +104,15 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
   }
 
   Future<void> _onWebViewCreated(InAppWebViewController controller) async {
+    if (_isDisposed) return;
     _controller = controller;
 
     try {
       if (_hasCachedContent) {
         // 加载缓存内容
         final cachedHtml = await widget.webView.getCachedContent(widget.filePath);
+        // 异步等待期间可能已被 dispose，需再次校验
+        if (_isDisposed || !mounted) return;
         if (cachedHtml != null && mounted) {
           await controller.loadData(
             data: cachedHtml,
@@ -125,7 +129,7 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
       }
     } catch (e) {
       Log.error('WebView创建失败: $e');
-      if (mounted) {
+      if (mounted && !_isDisposed) {
         setState(() {
           _loadingError = '加载失败: $e';
           _isLoading = false;
@@ -508,7 +512,23 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
 
   @override
   void dispose() {
+    // 修复：原实现仅将 _controller 置 null，未调用 controller.dispose()，
+    // 导致原生 WebView 实例不被显式销毁。在 macOS 上若 MethodChannel 仍有
+    // 挂起消息而原生 webView 已被系统回收（weak 引用变 nil），会触发
+    // WebViewChannelDelegate.handle() 空指针崩溃。改为先解除引用，再延迟
+    // 一帧销毁原生实例，避免与渲染线程竞态（与 ExcalidrawWebView 同策略）。
+    _isDisposed = true;
+    final controller = _controller;
     _controller = null;
+    if (controller != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          Log.warn('[CanvasWebViewWidget] controller.dispose() failed: $e');
+        }
+      });
+    }
     super.dispose();
   }
 }

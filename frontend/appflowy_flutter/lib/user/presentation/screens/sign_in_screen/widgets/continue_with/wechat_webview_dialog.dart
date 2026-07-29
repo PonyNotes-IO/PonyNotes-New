@@ -53,7 +53,28 @@ class _WeChatWebViewDialog extends StatefulWidget {
 class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isDisposed = false;
   String? _error;
+
+  @override
+  void dispose() {
+    // 修复：原实现无 dispose 方法，Dialog 关闭后原生 WebView 实例不被释放，
+    // 在 macOS 上可能因 MethodChannel 残留消息 + webView weak 引用变 nil
+    // 触发空指针崩溃。先解除引用，再延迟一帧销毁原生实例。
+    _isDisposed = true;
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          Log.warn('[WeChatWebViewDialog] controller.dispose() failed: $e');
+        }
+      });
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,22 +111,32 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                           supportZoom: false,
                         ),
                         webViewEnvironment: sharedWebViewEnvironment,
-                        onWebViewCreated: (c) => _controller = c,
+                        onWebViewCreated: (c) {
+                          if (!_isDisposed) {
+                            _controller = c;
+                          }
+                        },
                         onLoadStop: (_, __) {
-                          setState(() => _isLoading = false);
+                          if (mounted && !_isDisposed) {
+                            setState(() => _isLoading = false);
+                          }
                         },
                         onLoadStart: (_, __) {
-                          setState(() {
-                            _isLoading = true;
-                            _error = null;
-                          });
+                          if (mounted && !_isDisposed) {
+                            setState(() {
+                              _isLoading = true;
+                              _error = null;
+                            });
+                          }
                         },
                         onLoadError: (controller, url, code, message) {
                           Log.error('WeChat WebView load error: $code $message');
-                          setState(() {
-                            _isLoading = false;
-                            _error = '加载页面失败 ($code)';
-                          });
+                          if (mounted && !_isDisposed) {
+                            setState(() {
+                              _isLoading = false;
+                              _error = '加载页面失败 ($code)';
+                            });
+                          }
                         },
                         shouldOverrideUrlLoading: (controller, action) async {
                           try {

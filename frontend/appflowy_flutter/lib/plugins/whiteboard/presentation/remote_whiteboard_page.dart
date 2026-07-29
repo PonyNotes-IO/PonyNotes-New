@@ -33,6 +33,7 @@ class RemoteWhiteboardPage extends StatefulWidget {
 class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isDisposed = false;
   String? _loadingError;
   String? _userNickname;
   // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
@@ -52,18 +53,33 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     // 注销冲刷回调（本页已销毁，不再参与上游冲刷）
     WhiteboardExitFlush.instance.unregister(this);
     // 【白板丢内容修复】销毁 WebView 前再尽力触发一次退出保存作为兜底：
     // 正常切换/关闭标签已由上游 TabsBloc await _flushSave 完成冲刷；此处覆盖
     // 少数不经 TabsBloc 的销毁路径（如应用关闭、路由异常）。dispose 为同步方法、
     // 无法 await，配合守护脚本的 500ms 防抖保存，丢失窗口已压缩到 <1 秒。
-    _controller?.evaluateJavascript(
+    // 修复：先捕获 controller 引用并解除 _controller，避免兜底 JS 调用期间
+    // 其他路径继续访问已失效的 controller。
+    final controller = _controller;
+    _controller = null;
+    controller?.evaluateJavascript(
       source: 'window.__xmForceSave && window.__xmForceSave("dispose");',
     ).catchError((e) {
       Log.warn('[RemoteWhiteboard] 退出保存触发失败: $e');
       return null;
     });
+    // 延迟一帧销毁原生实例，避免与渲染线程竞态。
+    if (controller != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          Log.warn('[RemoteWhiteboard] controller.dispose() failed: $e');
+        }
+      });
+    }
     super.dispose();
   }
 
@@ -73,6 +89,9 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   /// （该 Promise 在 saveCollabRoomToFirebase 真正落盘后才 resolve），从而在
   /// WebView 被销毁前把最后一小段编辑推到协作服务器。超时兜底确保绝不卡住 UI。
   Future<void> _flushSave() async {
+    // 修复：dispose 后 _controller 会被置 null 且 _isDisposed 为 true，
+    // 此处提前返回避免向已销毁的原生 WebView 发送 MethodChannel 消息。
+    if (_isDisposed) return;
     final controller = _controller;
     if (controller == null) return;
     try {
@@ -180,6 +199,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                     ),
                   ]),
                   onWebViewCreated: (controller) {
+                    if (_isDisposed) return;
                     _controller = controller;
                     _setupDownloadHandler(controller);
                     _setupMirrorHandler(controller);
@@ -221,6 +241,9 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
                   // 自动重载页面，避免停留在"白屏假活"状态（网络进程仍存活、
                   // 页面 JS 已死，绘制与保存全部静默失效）
                   onWebContentProcessDidTerminate: (controller) async {
+                    // 修复：页面已 dispose 时不应再 reload，避免向已销毁的
+                    // 原生 WebView 发送 MethodChannel 消息触发空指针崩溃。
+                    if (!mounted || _isDisposed) return;
                     Log.error('[RemoteWhiteboard] ⚠️ WebView 内容进程已终止，自动重新加载白板页面');
                     await controller.reload();
                   },

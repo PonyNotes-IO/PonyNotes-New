@@ -59,7 +59,28 @@ class _DouYinWebViewDialog extends StatefulWidget {
 class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isDisposed = false;
   String? _error;
+
+  @override
+  void dispose() {
+    // 修复：原实现无 dispose 方法，Dialog 关闭后原生 WebView 实例不被释放，
+    // 在 macOS 上可能因 MethodChannel 残留消息 + webView weak 引用变 nil
+    // 触发空指针崩溃。先解除引用，再延迟一帧销毁原生实例。
+    _isDisposed = true;
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          controller.dispose();
+        } catch (e) {
+          Log.warn('[DouYinWebViewDialog] controller.dispose() failed: $e');
+        }
+      });
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +134,11 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                               ),
                               webViewEnvironment: sharedWebViewEnvironment,
-                              onWebViewCreated: (c) => _controller = c,
+                              onWebViewCreated: (c) {
+                                if (!_isDisposed) {
+                                  _controller = c;
+                                }
+                              },
                               onLoadStop: (_, __) {
                                 if (mounted) {
                                   setState(() => _isLoading = false);
