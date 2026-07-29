@@ -338,14 +338,76 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   /// ✅ 将数据写入本地文件作为备份
+  ///
+  /// 【退化写保护 2026-07-20】本地备份是 Collab 之外唯一的完整副本（含 base64 图片
+  /// 与本地 PDF 路径）。此前是无条件全量覆盖，一旦某次加载异常拿到空/残缺内容，
+  /// 这里会立刻把唯一的好副本抹掉，损坏变成不可逆。
+  /// 现在：新内容显著小于既有备份时拒绝覆盖，只告警。
   Future<void> _saveToLocalFile(String viewId, List<int> bytes) async {
     try {
       final filePath = await _dataService.getHandwritingSaberFilePathForDebug(viewId);
       final file = File(filePath);
+
+      if (await _wouldDegradeLocalBackup(file, bytes)) {
+        debugPrint(
+          '⚠️[HandwritingSaber] _saveToLocalFile: 新内容无任何实质内容，'
+          '拒绝覆盖仍有内容的既有备份，已跳过：$filePath',
+        );
+        return;
+      }
+
       await file.writeAsBytes(bytes);
       debugPrint('🦋[HandwritingSaber] _saveToLocalFile: ✅ saved to $filePath (${bytes.length} bytes)');
     } catch (e) {
       debugPrint('❌[HandwritingSaber] _saveToLocalFile error: $e');
+    }
+  }
+
+  /// 判断这次写入是否会让本地备份「退化」。
+  ///
+  /// **按语义判断，不按体积。** 体积判断在这里是错的：PDF/图片上传成功后
+  /// base64 会被替换成云 URL，实测出现过 1669661 → 20865 字节（-98.7%）的
+  /// 合法收缩，用体积阈值会把正常保存也拦掉、让备份永远停在旧内容。
+  ///
+  /// 只拦一种情况：新内容**完全没有实质内容**（无笔迹/图片/文本框/PDF 底图），
+  /// 而既有备份**有**。这正对应「加载异常拿到空文档 → 回写抹掉好副本」的场景。
+  /// 用户真的清空一篇笔记时，走的是删除笔迹/页面的正常流程，
+  /// 会被这道守卫拦住，但代价仅是本地备份滞后一轮，不会丢数据。
+  Future<bool> _wouldDegradeLocalBackup(File file, List<int> bytes) async {
+    try {
+      if (!file.existsSync()) return false;
+      final oldBytes = await file.readAsBytes();
+      if (oldBytes.isEmpty) return false;
+      final newCount = _countSubstance(bytes);
+      if (newCount != 0) return false; // 新内容有东西(>0)，或解析失败(-1) → 放行
+      return _countSubstance(oldBytes) > 0; // 旧的有、新的没有 → 拦截
+    } catch (e) {
+      // 判断失败时不阻塞正常保存
+      debugPrint('⚠️[HandwritingSaber] _wouldDegradeLocalBackup 检查失败，放行：$e');
+      return false;
+    }
+  }
+
+  /// 统计一份 .sbn2 内容里的「实质内容」条目数（笔迹/图片/文本框/PDF 底图）。
+  /// 解析失败返回 -1，调用方据此放行，避免因格式变动误伤正常保存。
+  int _countSubstance(List<int> bytes) {
+    try {
+      final data = json.decode(utf8.decode(bytes));
+      if (data is! Map) return -1;
+      final pages = data['pages'];
+      if (pages is! List) return -1;
+      int n = 0;
+      for (final p in pages) {
+        if (p is! Map) continue;
+        for (final k in const ['strokes', 'images', 'textBoxes', 'listBoxes', 'taskListBoxes']) {
+          final v = p[k];
+          if (v is List) n += v.length;
+        }
+        if (p['backgroundImage'] != null) n++;
+      }
+      return n;
+    } catch (_) {
+      return -1;
     }
   }
 
@@ -555,6 +617,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 先用本地完整备份按 id 回填图片字节，命中则无需联网（修复本地图片加载慢/先红色"!"）
       await _hydrateImagesFromLocalBackup();
 
+      // ✅ 同理回填 PDF 底图的本地路径，修复历史数据（见方法注释）
+      await _hydratePdfPathsFromLocalBackup();
+
       // ✅ 从云端下载图片资源（仅本地确实缺失时，如跨设备首次打开）
       // 异步执行，不阻塞页面加载，下载完成后触发局部刷新
       unawaited(_downloadAssetsFromCloud());
@@ -590,6 +655,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     bool suppressStatusUpdate = false,
     bool skipCloudUpload = false,
   }) async {
+    // 【防空覆盖 2026-07-20】数据尚未加载完成时禁止保存。
+    // 此前只有 _flushSaveForView 有这道守卫，而 _saveToStorage 有 30+ 个调用点
+    // 却完全没有，是空内容覆盖真实数据的主要入口。
+    if (!_isDataLoaded) {
+      debugPrint(
+        '🦋[HandwritingSaber] _saveToStorage: data NOT loaded yet, skip to avoid overwriting real content',
+      );
+      return;
+    }
+
     // 如果正在进行激光淡出，延迟保存以避免 I/O 干扰渲染
     if (_isLaserFadeInProgress) {
       _pendingSave = true;
@@ -751,6 +826,62 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     } catch (e) {
       debugPrint('⚠️[HandwritingSaber] 本地图片回填失败（将回退云端下载）：$e');
+    }
+  }
+
+  /// 用本地完整备份修复 PDF 底图丢失的本地路径（**修复历史损坏数据**）。
+  ///
+  /// 背景：2026-07-20 之前，page.dart 的 forCollab 分支在 pdfUrl 为 null 时
+  /// 会把 pdfFilePath 写成空字符串（离线导入 PDF、上传尚未成功即会触发），
+  /// 于是 Collab 里那份数据再也无法定位 PDF，断网重新加载后整篇笔记的底图
+  /// 全部消失、看上去像内容丢失，联网才恢复。
+  ///
+  /// 源头已在 page.dart 修复，但**已经写坏的存量数据修不回来**——除非从本地
+  /// 完整备份里把路径捞回来。本方法即做这件事：按「页序 + pdfPageIndex」匹配，
+  /// 仅在当前底图确实无法定位（路径与 URL 都为空）时才回填，不覆盖有效值。
+  Future<void> _hydratePdfPathsFromLocalBackup() async {
+    // 1. 找出无法定位的底图
+    final List<int> brokenPageIndexes = [];
+    for (int i = 0; i < _coreInfo.pages.length; i++) {
+      final bg = _coreInfo.pages[i].backgroundImage;
+      if (bg == null) continue;
+      final hasUrl = (bg.pdfUrl ?? '').isNotEmpty;
+      if (!hasUrl && bg.pdfFilePath.isEmpty) {
+        brokenPageIndexes.add(i);
+      }
+    }
+    if (brokenPageIndexes.isEmpty) return;
+
+    try {
+      final List<int> localBytes =
+          await _dataService.loadLocalBackupData(widget.view.id);
+      if (localBytes.isEmpty) return;
+
+      final EditorCoreInfo localInfo =
+          EditorCoreInfo.fromJsonString(utf8.decode(localBytes));
+
+      int repaired = 0;
+      for (final i in brokenPageIndexes) {
+        if (i >= localInfo.pages.length) continue;
+        final localBg = localInfo.pages[i].backgroundImage;
+        final bg = _coreInfo.pages[i].backgroundImage;
+        if (localBg == null || bg == null) continue;
+        // 页序之外再校验页码，避免页数变动时张冠李戴
+        if (localBg.pdfPageIndex != bg.pdfPageIndex) continue;
+        if (localBg.pdfFilePath.isEmpty) continue;
+
+        bg.pdfFilePath = localBg.pdfFilePath;
+        bg.pdfUrl ??= localBg.pdfUrl;
+        repaired++;
+      }
+
+      if (repaired > 0) {
+        debugPrint(
+          '🦋[HandwritingSaber] ✅ 从本地备份修复 $repaired/${brokenPageIndexes.length} 页 PDF 底图路径',
+        );
+      }
+    } catch (e) {
+      debugPrint('⚠️[HandwritingSaber] PDF 底图路径回填失败：$e');
     }
   }
 

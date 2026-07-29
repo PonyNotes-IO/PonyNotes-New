@@ -65,10 +65,18 @@ class EditorPage {
       'quill': quill.toJson(),
       'backgroundImage': backgroundImage != null
           ? <String, dynamic>{
-              // forCollab 模式：只存 pdfUrl（云URL），不存本地路径
-              // 本地路径在其他设备上不可用，且避免无意义的数据同步
+              // forCollab 模式：优先只存 pdfUrl（云URL），不存本地路径
+              // 本地路径在其他设备上不可用，且避免无意义的数据同步。
+              //
+              // 【修复断网丢底图 2026-07-20】但 pdfUrl 为 null 时（离线导入、上传
+              // 尚未成功）必须**回退保留本地路径**，不能写空字符串。
+              // 原实现写 '' 会把唯一能定位 PDF 的信息也丢掉，导致断网重新加载后
+              // 整篇笔记的 PDF 底图全部解析不出来、看上去像内容丢失；
+              // 而联网后能显示，是因为那时才有了 pdfUrl。
+              // 本地路径在本机始终有效，跨设备时对方拿到无效路径也只是回退到
+              // 「无底图」，不会比空字符串更糟。
               'pdfFilePath': forCollab
-                  ? (backgroundImage!.pdfUrl ?? '')
+                  ? (backgroundImage!.pdfUrl ?? backgroundImage!.pdfFilePath)
                   : backgroundImage!.pdfFilePath,
               'pdfUrl': backgroundImage!.pdfUrl,
               'pdfPageIndex': backgroundImage!.pdfPageIndex,

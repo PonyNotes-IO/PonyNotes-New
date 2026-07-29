@@ -175,3 +175,8 @@ docs/
 AGENTS.md
 frontend/appflowy_flutter/.codegraph/daemon.pid
 frontend/scripts/windows_installer/AppFlowy/
+
+# WinSparkle 更新签名私钥：绝不可入库。
+# 泄露 = 任何人都能给用户推送伪造的更新包；丢失 = 所有已安装客户端再也无法自动更新。
+# 正确位置在发版机的 ~/.ponynotes-release/dsa_priv.pem（见 scripts/sign_windows_update.sh）
+dsa_priv.pem
