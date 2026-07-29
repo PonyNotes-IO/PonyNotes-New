@@ -76,7 +76,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
       body: widget.url != null && widget.url!.isNotEmpty
           ? InAppWebView(
               initialUrlRequest: URLRequest(url: WebUri(widget.url ?? '')),
-              initialSettings: const InAppWebViewSettings(
+              initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 supportZoom: true,
               ),
