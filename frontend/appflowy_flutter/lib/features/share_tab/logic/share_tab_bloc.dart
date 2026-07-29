@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
@@ -9,10 +10,13 @@ import 'package:appflowy/features/share_tab/logic/share_tab_event.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_state.dart';
 import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
+import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
 import 'package:collection/collection.dart';
@@ -26,6 +30,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   ShareTabBloc({
     required this.repository,
     required this.pageId,
+    required this.workspaceId,
   }) : super(ShareTabState.initial()) {
     on<ShareTabEventInitialize>(_onInitial);
     on<ShareTabEventLoadSharedUsers>(_onGetSharedUsers);
@@ -45,7 +50,11 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   }
 
   final ShareWithUserRepository repository;
+  final String workspaceId;
   final String pageId;
+
+  // Used to listen for shared view updates.
+  FolderNotificationListener? _folderNotificationListener;
 
   /// 从 token 字段中提取 access_token
   /// 如果 token 是 JSON 格式，则解析并提取 access_token
@@ -81,6 +90,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
   @override
   Future<void> close() async {
+    await _folderNotificationListener?.stop();
     await super.close();
   }
 
@@ -88,6 +98,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventInitialize event,
     Emitter<ShareTabState> emit,
   ) async {
+    _initFolderNotificationListener();
+
     final result = await repository.getCurrentUserProfile();
     final currentUser = result.fold(
       (user) => user,
@@ -102,20 +114,34 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       (error) => SharedSectionType.unknown,
     );
 
+    // 获取视图布局类型，用于生成分享链接
+    int? viewLayout;
+    try {
+      final viewResult = await ViewBackendService.getView(pageId);
+      viewResult.fold(
+        (view) => viewLayout = view.layout.value,
+        (error) => viewLayout = null,
+      );
+    } catch (_) {}
+
+    final shareLink = ShareConstants.buildShareUrl(
+      workspaceId: workspaceId,
+      viewId: pageId,
+      permissionId: state.selectedPermissionId,
+      layout: viewLayout,
+    );
+
     final users = await _getSharedUsers();
 
     final hasClickedUpgradeToPro =
         await repository.getUpgradeToProButtonClicked(
-      // This preference is local UI state only. It must not participate in
-      // document authorization, so scope it by the view rather than a current
-      // workspace that may be unrelated to the shared document.
-      workspaceId: pageId,
+      workspaceId: workspaceId,
     );
 
     emit(
       state.copyWith(
         currentUser: currentUser,
-        shareLink: '',
+        shareLink: shareLink,
         users: users,
         sectionType: sectionType,
         hasClickedUpgradeToPro: hasClickedUpgradeToPro,
@@ -164,34 +190,51 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    // Resolve user ids from the search result/snapshot and upsert them through
-    // the document API. Do not delegate to the workspace-scoped FFI path.
-    FlowyError? inviteError;
-    for (final email in event.emails) {
-      final user = state.availableUsers.firstWhereOrNull(
-            (candidate) =>
-                candidate.email.trim().toLowerCase() ==
-                email.trim().toLowerCase(),
-          ) ??
-          state.users.firstWhereOrNull(
-            (candidate) =>
-                candidate.email.trim().toLowerCase() ==
-                email.trim().toLowerCase(),
-          );
-      final memberUserId = user?.userId;
-      if (memberUserId == null || memberUserId.isEmpty) {
-        inviteError = FlowyError()..msg = '请从搜索结果选择要共享的用户';
-        break;
-      }
-      final success = await _addCollaborator(
-        objectId: pageId,
-        memberUserId: memberUserId,
-        permissionId: event.accessLevel.permissionId,
+    // 检查哪些用户已经是成员，避免覆盖已有权限
+    final existingEmails =
+        state.users.map((u) => u.email.toLowerCase()).toSet();
+    final newEmails = event.emails
+        .where((e) => !existingEmails.contains(e.toLowerCase()))
+        .toList();
+    final existingMemberEmails = event.emails
+        .where((e) => existingEmails.contains(e.toLowerCase()))
+        .toList();
+
+    // 对已是成员的用户，更新其权限（如果新权限更高）
+    for (final email in existingMemberEmails) {
+      final existingUser = state.users.firstWhere(
+        (u) => u.email.toLowerCase() == email.toLowerCase(),
+        orElse: () => state.users.first,
       );
-      if (!success) {
-        inviteError = FlowyError()..msg = '添加协作用户失败';
-        break;
+      // 只有当新权限与当前权限不同时才更新
+      if (existingUser.accessLevel != event.accessLevel) {
+        final (success, errorMsg) = await _updateMemberPermission(
+          workspaceId: workspaceId,
+          objectId: pageId,
+          memberUserId: existingUser.userId ?? '',
+          permissionId: event.accessLevel.permissionId,
+        );
+        if (!success) {
+          Log.warn('[ShareTabBloc] 更新已有成员权限失败: $email, $errorMsg');
+        }
       }
+    }
+
+    // 对新用户，调用正常的邀请流程
+    FlowyError? inviteError;
+    if (newEmails.isNotEmpty) {
+      final result = await repository.sharePageWithUser(
+        pageId: pageId,
+        accessLevel: event.accessLevel,
+        emails: newEmails,
+      );
+
+      result.fold(
+        (_) {},
+        (error) {
+          inviteError = error;
+        },
+      );
     }
 
     // 无论邀请是否成功，都刷新共享用户列表（已有成员的权限可能已更新）
@@ -199,7 +242,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     emit(
       state.copyWith(
         shareResult: inviteError != null
-            ? FlowyFailure(inviteError)
+            ? FlowyFailure(inviteError!)
             : FlowySuccess(null),
         errorMessage: inviteError?.msg ?? '',
         users: users,
@@ -219,39 +262,32 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    FlowyError? removeError;
-    for (final email in event.emails) {
-      final user = state.users.firstWhereOrNull(
-        (candidate) =>
-            candidate.email.trim().toLowerCase() == email.trim().toLowerCase(),
-      );
-      final memberUserId = user?.userId;
-      if (memberUserId == null || memberUserId.isEmpty) {
-        removeError = FlowyError()..msg = '无法解析文档成员';
-        break;
-      }
-      final (success, message) = await _removeCollabMember(
-        objectId: pageId,
-        memberUserId: memberUserId,
-      );
-      if (!success) {
-        removeError = FlowyError()..msg = message;
-        break;
-      }
-    }
-    final users = await _getSharedUsers();
-    emit(
-      state.copyWith(
-        isLoading: false,
-        removeResult: removeError == null
-            ? FlowySuccess(null)
-            : FlowyFailure(removeError),
-        users: users,
-      ),
+    final result = await repository.removeSharedUserFromPage(
+      pageId: pageId,
+      emails: event.emails,
     );
-    if (removeError == null) {
-      ShareSectionRefreshNotifier.notify();
-    }
+
+    await result.fold(
+      (_) async {
+        final users = await _getSharedUsers();
+        emit(
+          state.copyWith(
+            removeResult: FlowySuccess(null),
+            users: users,
+          ),
+        );
+        // 通知侧边栏和 PageAccessLevelBloc 刷新
+        ShareSectionRefreshNotifier.notify();
+      },
+      (error) async {
+        emit(
+          state.copyWith(
+            isLoading: false,
+            removeResult: FlowyFailure(error),
+          ),
+        );
+      },
+    );
   }
 
   void _onUpdateGeneralAccess(
@@ -281,9 +317,9 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     // 详见 devops-docs/2026-07-19-全线登录失败故障复盘-gotrue端口未发布.md
     //
     // 改为：创建失败时**不复制链接**并回传错误，由 UI 明确提示用户重试。
-    final shareLink = await _createShareLinkInvite();
+    final created = await _createShareLinkInvite();
 
-    if (shareLink == null) {
+    if (!created) {
       emit(
         state.copyWith(
           linkCopied: false,
@@ -295,14 +331,13 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
     getIt<ClipboardService>().setData(
       ClipboardServiceData(
-        plainText: shareLink,
+        plainText: event.link,
       ),
     );
 
     emit(
       state.copyWith(
         linkCopied: true,
-        shareLink: shareLink,
         errorMessage: '',
       ),
     );
@@ -310,9 +345,9 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
   /// 调用后端API创建邀请链接记录。
   ///
-  /// Returns the opaque, server-generated link only after it has been stored.
-  /// A client must not synthesize a permission-bearing link locally.
-  Future<String?> _createShareLinkInvite() async {
+  /// 返回 true 表示服务端已成功写入邀请记录（链接可被接收方正常打开）；
+  /// 返回 false 表示未写入——此时**不应把链接交给用户**，否则就是一个死链。
+  Future<bool> _createShareLinkInvite() async {
     try {
       // 获取当前用户信息
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -323,14 +358,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (userProfile == null) {
         Log.warn('[ShareTabBloc] 获取用户信息失败');
-        return null;
+        return false;
       }
 
       // 获取 auth token
       final authToken = userProfile.token;
       if (authToken.isEmpty) {
         Log.warn('[ShareTabBloc] Auth token 为空');
-        return null;
+        return false;
       }
 
       // 提取 access token
@@ -346,7 +381,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (accessToken == null) {
         Log.warn('[ShareTabBloc] access_token 为空');
-        return null;
+        return false;
       }
 
       // 获取 base URL
@@ -355,13 +390,12 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (baseUrl.isEmpty) {
         Log.warn('[ShareTabBloc] Base URL 为空');
-        return null;
+        return false;
       }
 
-      // The link is owned by the document. Never place the caller's current
-      // workspace in the request or in the token-bearing URL.
+      // 构建 API URL
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/document-shares/$pageId/link',
+        path: '/api/workspace/$workspaceId/collab/$pageId/invite-link',
       );
 
       // 发送 POST 请求
@@ -384,44 +418,18 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final body = jsonDecode(response.body) as Map<String, dynamic>;
-        final data = body['data'] as Map<String, dynamic>?;
-        final shareRoute = data?['url'] as String?;
-        if (shareRoute == null || shareRoute.isEmpty) {
-          Log.error('[ShareTabBloc] 文档分享服务未返回链接');
-          return null;
-        }
-
-        // The API deliberately returns only a route. Always join it to the
-        // public Web domain configured by this client, never the API origin or
-        // APPFLOWY_WEB_URL from a server that may be running on localhost.
-        final routeUri = Uri.tryParse(shareRoute);
-        final configuredWebDomain =
-            cloudEnv.appflowyCloudConfig.base_web_domain;
-        final webBase = Uri.tryParse(
-          configuredWebDomain.contains('://')
-              ? configuredWebDomain
-              : 'https://$configuredWebDomain',
-        );
-        if (routeUri == null || routeUri.path != '/share' || webBase == null) {
-          Log.error('[ShareTabBloc] 文档分享服务返回了无效链接');
-          return null;
-        }
-        final link = webBase
-            .replace(path: routeUri.path, query: routeUri.query)
-            .toString();
-        Log.info('[ShareTabBloc] 创建文档分享链接成功');
+        Log.info('[ShareTabBloc] 创建邀请链接成功');
 
         _refreshSharedUsers();
         ShareSectionRefreshNotifier.notify();
-        return link;
+        return true;
       } else {
         Log.warn('[ShareTabBloc] 创建邀请链接失败: HTTP ${response.statusCode}');
-        return null;
+        return false;
       }
     } catch (e, stackTrace) {
       Log.error('[ShareTabBloc] 创建邀请链接时出错: $e', stackTrace);
-      return null;
+      return false;
     }
   }
 
@@ -490,16 +498,30 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    // A document share must never promote someone into the current workspace.
-    // The server owns document membership; callers should invite the user via
-    // the document endpoint instead.
-    emit(
-      state.copyWith(
-        errorMessage: '文档共享不会修改工作区成员资格',
-        turnIntoMemberResult: FlowyFailure(
-          FlowyError()..msg = '文档共享不会修改工作区成员资格',
-        ),
-      ),
+    final result = await repository.changeRole(
+      workspaceId: workspaceId,
+      email: event.email,
+      role: ShareRole.member,
+    );
+
+    await result.fold(
+      (_) async {
+        final users = await _getSharedUsers();
+        emit(
+          state.copyWith(
+            turnIntoMemberResult: FlowySuccess(null),
+            users: users,
+          ),
+        );
+      },
+      (error) async {
+        emit(
+          state.copyWith(
+            errorMessage: error.msg,
+            turnIntoMemberResult: FlowyFailure(error),
+          ),
+        );
+      },
     );
   }
 
@@ -510,7 +532,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (baseUrl.isEmpty) {
         Log.error('Base URL is empty');
-        return <SharedUser>[];
+        return _getSharedUsersFromFfiFallback('base URL is empty');
       }
 
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -524,25 +546,25 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       if (userProfile == null) {
         Log.error('User profile is null');
-        return <SharedUser>[];
+        return _getSharedUsersFromFfiFallback('user profile is null');
       }
 
       final rawToken = userProfile.token;
       if (rawToken.isEmpty) {
         Log.error('Auth token is empty');
-        return <SharedUser>[];
+        return _getSharedUsersFromFfiFallback('auth token is empty');
       }
 
       // 提取 access_token（可能是 JSON 格式）
       final accessToken = _extractAccessToken(rawToken);
       if (accessToken == null || accessToken.isEmpty) {
         Log.error('Failed to extract access_token from token');
-        return <SharedUser>[];
+        return _getSharedUsersFromFfiFallback('access token is empty');
       }
 
-      // The snapshot is keyed only by view id; the server resolves ownership.
+      // 构建 API URL: GET /api/workspace/{workspace_id}/collab/{object_id}/members
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/document-shares/$pageId',
+        path: '/api/workspace/$workspaceId/collab/$pageId/members',
       );
 
       Log.info('Fetching collab members: $uri');
@@ -572,16 +594,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           final code = responseBody['code'] as int?;
           if (code != null && code != 0) {
             Log.error('API returned error code: $code');
-            return <SharedUser>[];
+            return _getSharedUsersFromFfiFallback('HTTP API code=$code');
           }
 
-          // The document endpoint returns one authoritative snapshot. Its
-          // member list is intentionally not sourced from FFI/SQLite.
-          final snapshot = responseBody['data'] as Map<String, dynamic>?;
-          final data = snapshot?['members'] as List<dynamic>?;
+          // 解析 data 数组
+          final data = responseBody['data'] as List<dynamic>?;
           if (data == null) {
-            Log.error('Document sharing snapshot has no members list');
-            return <SharedUser>[];
+            Log.error('Response data is null');
+            return _getSharedUsersFromFfiFallback('HTTP data is null');
           }
 
           // 将 API 返回的成员列表转换为 SharedUsers
@@ -634,11 +654,9 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
                 accessLevel = ShareAccessLevel.readOnly;
             }
 
-            // Ownership comes from the server snapshot. Never infer it from
-            // the current user, a workspace role, or a failed identity match.
-            final role = memberMap['is_owner'] == true
-                ? ShareRole.owner
-                : ShareRole.member;
+            // permission_id 只表示权限级别，不代表拥有者角色
+            // 拥有者由 buildUsersListWithOwner 根据当前登录用户来判定
+            const role = ShareRole.member;
 
             return SharedUser(
               email: email,
@@ -654,19 +672,49 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
           Log.info('Successfully fetched ${users.length} collab members');
 
+          if (users.isEmpty) {
+            return _getSharedUsersFromFfiFallback(
+              'HTTP returned empty collab members',
+            );
+          }
+
           return users;
         } catch (e, stackTrace) {
           Log.error('Failed to parse response: $e', e, stackTrace);
-          return <SharedUser>[];
+          return _getSharedUsersFromFfiFallback('parse HTTP response failed');
         }
       } else {
         Log.error('Failed to get collab members: HTTP ${response.statusCode}');
-        return <SharedUser>[];
+        return _getSharedUsersFromFfiFallback(
+          'HTTP status ${response.statusCode}',
+        );
       }
     } catch (e, stackTrace) {
       Log.error('Exception in _getSharedUsers: $e', e, stackTrace);
-      return <SharedUser>[];
+      return _getSharedUsersFromFfiFallback('HTTP request exception');
     }
+  }
+
+  Future<SharedUsers> _getSharedUsersFromFfiFallback(String reason) async {
+    Log.warn(
+      '[ShareTabBloc] Falling back to FFI shared users. reason=$reason, '
+      'pageId=$pageId',
+    );
+
+    final result = await repository.getSharedUsersInPage(pageId: pageId);
+    return result.fold(
+      (users) {
+        Log.info(
+          '[ShareTabBloc] FFI shared users fallback returned '
+          '${users.length} users',
+        );
+        return users.isNotEmpty ? users : state.users;
+      },
+      (error) {
+        Log.error('[ShareTabBloc] FFI shared users fallback failed: $error');
+        return state.users;
+      },
+    );
   }
 
   void _onClearState(
@@ -684,11 +732,36 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventUpdateSharedUsers event,
     Emitter<ShareTabState> emit,
   ) {
+    // FFI 通知下发的 SharedUserPB 不含 user_id / uid / phone 字段，
+    // 直接覆盖会导致后续权限变更因缺少这些标识而失败（尤其手机号注册用户 email 为空）。
+    // 这里将 FFI 数据与现有数据（通常来自 HTTP，带完整 uid/phone/userId）合并：
+    // 按 userId → uid → phone → email 多键匹配，并回填 userId / uid / phone。
+    final existingUsers = state.users;
+    final mergedUsers = event.users.map((ffiUser) {
+      final existing = existingUsers.firstWhereOrNull(
+        (u) =>
+            (ffiUser.userId?.isNotEmpty == true && u.userId == ffiUser.userId) ||
+            (ffiUser.uid?.isNotEmpty == true && u.uid == ffiUser.uid) ||
+            (ffiUser.phone?.isNotEmpty == true && u.phone == ffiUser.phone) ||
+            (ffiUser.email.trim().isNotEmpty &&
+                u.email.trim().toLowerCase() ==
+                    ffiUser.email.trim().toLowerCase()),
+      );
+      if (existing == null) {
+        return ffiUser;
+      }
+      // FFI 自身字段优先，缺失时用现有列表回填
+      return ffiUser.copyWith(
+        userId:
+            ffiUser.userId?.isNotEmpty == true ? ffiUser.userId : existing.userId,
+        uid: ffiUser.uid?.isNotEmpty == true ? ffiUser.uid : existing.uid,
+        phone: ffiUser.phone?.isNotEmpty == true ? ffiUser.phone : existing.phone,
+      );
+    }).toList();
+
     emit(
       state.copyWith(
-        // This event is dispatched only from a fresh document snapshot. Local
-        // FFI caches are intentionally not merged into authorization data.
-        users: event.users,
+        users: mergedUsers,
       ),
     );
   }
@@ -698,7 +771,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     Emitter<ShareTabState> emit,
   ) async {
     await repository.setUpgradeToProButtonClicked(
-      workspaceId: pageId,
+      workspaceId: workspaceId,
     );
     emit(
       state.copyWith(
@@ -789,6 +862,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
     // 调用权限更新接口
     final (success, errorMessage) = await _updateMemberPermission(
+      workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
       permissionId: event.accessLevel.permissionId,
@@ -844,6 +918,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     }
 
     final (success, errorMessage) = await _removeCollabMember(
+      workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
     );
@@ -899,14 +974,30 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
     // 1. 调用协作接口添加成员 (后端默认 ReadOnly)
     final success = await _addCollaborator(
+      workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
       permissionId: event.accessLevel.permissionId,
     );
 
     if (success) {
-      // Upsert is atomic on the document endpoint: never create a read-only
-      // member first and then PATCH it, which used to leave half-written grants.
+      // 2. 如果指定的权限不是 ReadOnly，则更新权限
+      if (event.accessLevel != ShareAccessLevel.readOnly) {
+        final (updateSuccess, updateError) = await _updateMemberPermission(
+          workspaceId: workspaceId,
+          objectId: pageId,
+          memberUserId: memberUserId,
+          permissionId: event.accessLevel.permissionId,
+        );
+
+        if (!updateSuccess) {
+          Log.error(
+              'Failed to update permission after adding collaborator: $updateError');
+          // 这里即使更新权限失败，用户其实已经添加成功了（虽然是 ReadOnly），
+          // 所以我们还是算成功，但记录日志或提示。
+        }
+      }
+
       // 刷新共享用户列表
       final users = await _getSharedUsers();
       emit(
@@ -931,7 +1022,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
   /// 调用协作接口添加成员
   Future<bool> _addCollaborator(
-      {required String objectId,
+      {required String workspaceId,
+      required String objectId,
       required String memberUserId,
       required int permissionId}) async {
     try {
@@ -970,9 +1062,10 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return false;
       }
 
-      // Document membership is keyed by object/view id only.
+      // 构建 API URL: /api/{workspace_id}/collab/{object_id}/members/{member_user_id}
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/document-shares/$objectId/members/$memberUserId',
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Adding collaborator: $uri');
@@ -1012,6 +1105,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   /// 调用权限变更接口更新成员权限
   /// 返回 (success, errorMessage)
   Future<(bool, String)> _updateMemberPermission({
+    required String workspaceId,
     required String objectId,
     required String memberUserId,
     required int permissionId,
@@ -1052,9 +1146,10 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return (false, 'Token 提取失败');
       }
 
-      // PATCH the document aggregate, never a caller-selected workspace.
+      // 构建 API URL: PATCH /api/workspace/{workspace_id}/collab/{object_id}/members/{member_user_id}
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/document-shares/$objectId/members/$memberUserId',
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Updating member permission: $uri');
@@ -1130,22 +1225,66 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     }
   }
 
+  void _initFolderNotificationListener() {
+    _folderNotificationListener = FolderNotificationListener(
+      objectId: pageId,
+      handler: (notification, result) {
+        if (notification == FolderNotification.DidUpdateSharedUsers) {
+          final response = result.fold(
+            (payload) {
+              if (payload.isEmpty) {
+                return null;
+              }
+              final repeatedSharedUsers =
+                  RepeatedSharedUserPB.fromBuffer(payload);
+              return repeatedSharedUsers;
+            },
+            (error) => null,
+          );
+          Log.debug('update shared users: $response');
+          if (response != null) {
+            add(
+              ShareTabEvent.updateSharedUsers(
+                users: response.sharedUsers.reversed.toList(),
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
   Future<void> _onUpdateShareLinkPermission(
     ShareTabEventUpdateShareLinkPermission event,
     Emitter<ShareTabState> emit,
   ) async {
-    // The next copy action rotates/updates the server-side opaque link. Do not
-    // locally rewrite a URL with forgeable workspace or permission fields.
+    int? viewLayout;
+    try {
+      final viewResult = await ViewBackendService.getView(pageId);
+      viewResult.fold(
+        (view) => viewLayout = view.layout.value,
+        (error) => viewLayout = null,
+      );
+    } catch (_) {}
+
+    final newShareLink = ShareConstants.buildShareUrl(
+      workspaceId: workspaceId,
+      viewId: pageId,
+      permissionId: event.permissionId,
+      layout: viewLayout,
+    );
+
     emit(
       state.copyWith(
         selectedPermissionId: event.permissionId,
-        shareLink: '',
+        shareLink: newShareLink,
       ),
     );
   }
 
   /// 通过 HTTP DELETE API 移除协作成员
   Future<(bool, String)> _removeCollabMember({
+    required String workspaceId,
     required String objectId,
     required String memberUserId,
   }) async {
@@ -1178,7 +1317,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       }
 
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/document-shares/$objectId/members/$memberUserId',
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Removing collab member: $uri');

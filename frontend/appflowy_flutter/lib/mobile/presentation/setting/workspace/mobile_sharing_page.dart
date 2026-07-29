@@ -145,8 +145,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color:
-                      isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
+                  color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
                       ? null
@@ -160,8 +159,9 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
                   tab,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color:
-                      isSelected ? Colors.white : theme.textColorScheme.primary,
+                  color: isSelected
+                      ? Colors.white
+                      : theme.textColorScheme.primary,
                 ),
               ),
             ),
@@ -502,8 +502,10 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
           create: (_) => ShareTabBloc(
             repository: RustShareWithUserRepositoryImpl(),
             pageId: view.id,
+            workspaceId: _workspaceId,
           )..add(ShareTabEvent.initialize()),
           child: CollaboratorsDialog(
+            workspaceId: _workspaceId,
             pageId: view.id,
           ),
         );
@@ -678,8 +680,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
           .toString();
       if (oid.isEmpty) continue;
 
-      final timestampRaw =
-          entry['created_at'] ?? entry['createdAt'] ?? entry['create_time'];
+      final timestampRaw = entry['created_at'] ?? entry['createdAt'] ?? entry['create_time'];
       final createdSeconds = _parseTimestampSeconds(timestampRaw);
       final name = (entry['name'] ?? '').toString();
       final displayName = name.isNotEmpty ? name : '加载中...';
