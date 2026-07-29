@@ -234,6 +234,14 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
               enableDeepThinking: _enableDeepThinking,
               enableWebSearch: _enableWebSearch,
             ),
+            // AI 剩余次数提示（输入框卡片下方，水平居中，底部额外安全距离）
+            Padding(
+              padding: EdgeInsets.only(
+                top: 4,
+                bottom: MediaQuery.of(context).padding.bottom + 10,
+              ),
+              child: _buildRemainingUsageHint(context),
+            ),
           ],
         ),
       ),
@@ -312,6 +320,64 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
+    }
+  }
+
+  /// AI 剩余次数提示（输入框卡片下方，水平垂直居中，浅色小字）
+  Widget _buildRemainingUsageHint(BuildContext context) {
+    return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
+      future: _loadWorkspaceUsage(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        return snapshot.data!.fold(
+          (usage) {
+            if (usage == null) return const SizedBox.shrink();
+            if (usage.aiResponsesUnlimited) return const SizedBox.shrink();
+
+            final used = usage.aiResponsesCount.toInt();
+            final total = usage.aiResponsesCountLimit.toInt();
+            if (total == -1) {
+              return Center(
+                child: Text(
+                  '未订阅',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.red.withValues(alpha: 0.7),
+                  ),
+                ),
+              );
+            }
+            final remaining = total - used;
+            final color = remaining <= 0
+                ? Colors.red.withValues(alpha: 0.7)
+                : Theme.of(context).hintColor;
+            return Center(
+              child: Text(
+                '$remaining 次可用',
+                style: TextStyle(fontSize: 11, color: color),
+              ),
+            );
+          },
+          (_) => const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  Future<FlowyResult<WorkspaceUsagePB?, FlowyError>>
+      _loadWorkspaceUsage() async {
+    try {
+      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
+      if (workspaceId == null) return FlowyResult.success(null);
+
+      final service = WorkspaceService(
+        workspaceId: workspaceId,
+        userId: fixnum.Int64.ZERO,
+      );
+      return service.getWorkspaceUsage();
+    } catch (_) {
+      return FlowyResult.failure(FlowyError(msg: ''));
     }
   }
 }
