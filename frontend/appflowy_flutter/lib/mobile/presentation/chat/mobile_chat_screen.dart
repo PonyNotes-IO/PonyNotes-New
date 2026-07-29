@@ -174,27 +174,45 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
             _buildHeader(context),
             const SizedBox(height: 8),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 24),
-                    // Logo — blendMode=null 保留 SVG 原始颜色（白马+橙色底）
-                    const FlowySvg(
-                      FlowySvgs.pony_notes_logo_xl,
-                      size: Size.square(48),
-                      blendMode: null,
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                    const SizedBox(height: 16),
-                    // Greeting
-                    Text(
-                      '有什么可以帮到你的吗，${_userProfile?.name ?? ""}？',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontSize: 17,
-                          ),
-                      textAlign: TextAlign.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Logo — blendMode=null 保留 SVG 原始颜色（白马+橙色底）
+                        const FlowySvg(
+                          FlowySvgs.pony_notes_logo_xl,
+                          size: Size.square(48),
+                          blendMode: null,
+                        ),
+                        const SizedBox(height: 16),
+                        // Greeting
+                        Text(
+                          '有什么可以帮到你的吗，${_userProfile?.name ?? ""}？',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontSize: 17,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        // Subtitle
+                        Text(
+                          '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).hintColor.withValues(alpha: 0.7),
+                                fontSize: 12,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
