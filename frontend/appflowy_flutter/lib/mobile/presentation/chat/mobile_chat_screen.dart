@@ -187,11 +187,12 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Logo — blendMode=null 保留 SVG 原始颜色（白马+橙色底）
-                        const FlowySvg(
-                          FlowySvgs.pony_notes_logo_xl,
-                          size: Size.square(48),
-                          blendMode: null,
+                        // Logo — PNG 图片
+                        Image.asset(
+                          'assets/images/ai_avatar.png',
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
                         ),
                         const SizedBox(height: 16),
                         // Greeting
