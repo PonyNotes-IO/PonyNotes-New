@@ -194,9 +194,6 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                           ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 32),
-                    // Sample questions
-                    _buildSampleQuestions(context),
                   ],
                 ),
               ),
@@ -212,44 +209,6 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSampleQuestions(BuildContext context) {
-    final questions = [
-      '帮我整理一下今天的待办事项',
-      '用一句话概括这篇文章的主要内容',
-      '解释一下什么是知识图谱',
-      '给我推荐几个效率工具',
-      '如何提高写作能力？',
-      '帮我写一封商务邮件',
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: questions.map((q) {
-        return GestureDetector(
-          onTap: () => _sendMessage(q),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Theme.of(context).dividerColor,
-              ),
-            ),
-            child: Text(
-              q,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                    fontSize: 13,
-                  ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -763,8 +722,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
               TextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                maxLines: 5,
-                minLines: 2,
+                maxLines: 8,
+                minLines: 3,
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _submit(),
                 // 小图：亮色模式输入区与卡片同底，不填充；暗色模式保留深灰输入壳
@@ -772,13 +731,16 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   hintText: '在小马笔记可以问或找到每一件事...',
                   hintStyle: TextStyle(
                     color: Theme.of(context).hintColor,
-                    fontSize: 15,
+                    fontSize: 13,
                   ),
                   filled: false,
                   fillColor: null,
                   hoverColor: Colors.transparent,
                   focusColor: Colors.transparent,
-                  contentPadding: EdgeInsets.zero,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -792,7 +754,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-                style: const TextStyle(fontSize: 15),
+                style: const TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 10),
               // Toolbar row: 模型 / 深度思考 / 联网搜索 / 附件 / 发送
