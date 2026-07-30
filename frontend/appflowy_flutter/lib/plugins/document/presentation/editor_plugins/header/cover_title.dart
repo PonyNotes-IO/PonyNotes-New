@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/shared_context/shared_context.dart';
+import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/text_field/text_filed_with_metric_lines.dart';
 import 'package:appflowy/workspace/application/appearance_defaults.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -215,6 +216,15 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
   void _onViewNameChanged() {
     updatingViewName = true;
 
+    final newName = titleTextController.text;
+
+    // 乐观更新：立即通知 ViewPluginNotifier，让 tab 标签和面包屑标题实时显示
+    try {
+      context.read<ViewPluginNotifier>().updateViewName(newName);
+    } catch (_) {
+      // ViewPluginNotifier 未在 context 中提供时忽略（兼容非 document 场景）
+    }
+
     Debounce.debounce(
       'update view name',
       const Duration(milliseconds: 250),
@@ -222,15 +232,14 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
         if (!mounted) {
           return;
         }
-        if (context.read<ViewBloc>().state.view.name !=
-            titleTextController.text) {
+        if (context.read<ViewBloc>().state.view.name != newName) {
           context
               .read<ViewBloc>()
-              .add(ViewEvent.rename(titleTextController.text));
+              .add(ViewEvent.rename(newName));
         }
         context
             .read<ViewInfoBloc?>()
-            ?.add(ViewInfoEvent.titleChanged(titleTextController.text));
+            ?.add(ViewInfoEvent.titleChanged(newName));
 
         updatingViewName = false;
       },

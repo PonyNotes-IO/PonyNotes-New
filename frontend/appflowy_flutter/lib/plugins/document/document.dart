@@ -36,6 +36,7 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class DocumentPluginBuilder extends PluginBuilder {
@@ -159,29 +160,32 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           PickerTabType.custom,
         ];
 
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<ViewInfoBloc>.value(
-          value: bloc,
-        ),
-        BlocProvider<PageAccessLevelBloc>.value(
-          value: pageAccessLevelBloc,
-        ),
-      ],
-      child: BlocBuilder<DocumentAppearanceCubit, DocumentAppearance>(
-        builder: (_, state) => _buildContentWithToolbar(
-          view: view,
-          viewInfoBloc: bloc,
-          pageAccessLevelBloc: pageAccessLevelBloc,
-          child: DocumentPage(
-            key: ValueKey(view.id),
+    return Provider<ViewPluginNotifier>.value(
+      value: notifier,
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<ViewInfoBloc>.value(
+            value: bloc,
+          ),
+          BlocProvider<PageAccessLevelBloc>.value(
+            value: pageAccessLevelBloc,
+          ),
+        ],
+        child: BlocBuilder<DocumentAppearanceCubit, DocumentAppearance>(
+          builder: (_, state) => _buildContentWithToolbar(
             view: view,
-            onDeleted: () => context.onDeleted?.call(view, deletedViewIndex),
-            initialSelection: initialSelection,
-            initialBlockId: blockId,
-            fixedTitle: fixedTitle,
-            tabs: tabs,
-            viewInfoBloc: bloc, // 传入 ViewInfoBloc
+            viewInfoBloc: bloc,
+            pageAccessLevelBloc: pageAccessLevelBloc,
+            child: DocumentPage(
+              key: ValueKey(view.id),
+              view: view,
+              onDeleted: () => context.onDeleted?.call(view, deletedViewIndex),
+              initialSelection: initialSelection,
+              initialBlockId: blockId,
+              fixedTitle: fixedTitle,
+              tabs: tabs,
+              viewInfoBloc: bloc, // 传入 ViewInfoBloc
+            ),
           ),
         ),
       ),
@@ -307,7 +311,11 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
-      ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+      ViewTabBarItem(
+        view: notifier.view,
+        shortForm: shortForm,
+        viewNotifier: notifier.viewNotifier,
+      );
 
   @override
   Widget? get rightBarItem => null;

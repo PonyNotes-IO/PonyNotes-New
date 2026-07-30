@@ -32,6 +32,13 @@ class ViewPluginNotifier extends PluginNotifier<DeletedViewPB?> {
   final ValueNotifier<ViewPB> viewNotifier;
   final ViewListener? _viewListener;
 
+  /// 乐观更新视图名称，立即通知 [viewNotifier] 监听者，
+  /// 无需等待后端 DidUpdateView 通知回传。
+  void updateViewName(String newName) {
+    _view = _view.rebuild((b) => b.name = newName);
+    viewNotifier.value = _view;
+  }
+
   @override
   final ValueNotifier<DeletedViewPB?> isDeleted = ValueNotifier(null);
 
