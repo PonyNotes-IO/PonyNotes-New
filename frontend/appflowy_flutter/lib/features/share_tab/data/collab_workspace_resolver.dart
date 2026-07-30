@@ -112,6 +112,16 @@ class HttpCollabWorkspaceResolver implements CollabWorkspaceResolver {
       if (decoded is! Map<String, dynamic>) {
         return _unavailable();
       }
+      if (decoded['code'] == -2) {
+        final currentWorkspaceId = (await _currentWorkspaceIdProvider()).trim();
+        if (currentWorkspaceId.isEmpty) {
+          return _unavailable();
+        }
+        return CollabWorkspaceResolution(
+          status: CollabWorkspaceResolutionStatus.notShared,
+          workspaceId: currentWorkspaceId,
+        );
+      }
       final data = decoded['data'];
       if (data is! Map<String, dynamic>) {
         return _unavailable();
