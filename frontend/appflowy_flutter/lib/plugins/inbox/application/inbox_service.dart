@@ -64,12 +64,6 @@ class InboxService {
     return notifications?.map(_toInboxItem).toList() ?? [];
   }
 
-  /// 拉取账号级系统通知，转换为通知页使用的提醒模型。
-  /// 返回 null 表示请求失败，调用方应保留已显示的全局通知。
-  Future<List<ReminderPB>?> loadGlobalReminders() async {
-    final notifications = await _loadNotifications();
-    return notifications?.map(_toGlobalReminder).toList();
-  }
 
   Future<List<Map<String, dynamic>>?> _loadNotifications() async {
     try {
@@ -123,30 +117,6 @@ class InboxService {
     }
   }
 
-  ReminderPB _toGlobalReminder(Map<String, dynamic> notification) {
-    final id = (notification['id'] as String?) ?? '';
-    final notificationType =
-        (notification['notification_type'] as String?) ?? 'system';
-    final payload = notification['payload'] as Map<String, dynamic>? ?? {};
-    final createdAt = _parseCreatedAt(notification['created_at'] as String?);
-
-    return ReminderPB(
-      id: id,
-      objectId: (notification['workspace_id'] as String?) ?? '',
-      scheduledAt: Int64(createdAt.millisecondsSinceEpoch),
-      isAck: true,
-      isRead: (notification['is_read'] as bool?) ?? false,
-      title: (payload['title'] as String?) ?? _defaultTitle(notificationType),
-      message: (payload['message'] as String?) ?? '',
-      meta: {
-        'notification_type':
-            notificationType == 'mention' ? 'mention' : 'system',
-        'cloud_notification_type': notificationType,
-        'payload': jsonEncode(payload),
-        'created_at': createdAt.millisecondsSinceEpoch.toString(),
-      },
-    );
-  }
 
   InboxItem _toInboxItem(Map<String, dynamic> n) {
     final id = (n['id'] as String?) ?? '';
