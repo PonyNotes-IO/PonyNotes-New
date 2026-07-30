@@ -39,6 +39,15 @@ class RustStreamReceiver {
   void _streamCallback(Uint8List bytes) {
     try {
       final observable = SubscribeObject.fromBuffer(bytes);
+      // 【可观测性 2026-07-30】这是 Rust→Dart 通知的唯一入口。
+      // 只记 Chat 源，避免刷屏；用于判定通知究竟是"没送到 Dart"
+      // 还是"送到了但下游没处理"（排查 AI 发送按钮卡死时缺的正是这一环）。
+      if (observable.source == 'Chat') {
+        Log.info(
+          '[RustStream] 收到通知 source=${observable.source}, '
+          'ty=${observable.ty}, id=${observable.id}',
+        );
+      }
       _observableController.add(observable);
     } catch (e, s) {
       Log.error(

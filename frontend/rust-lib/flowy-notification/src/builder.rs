@@ -82,11 +82,28 @@ impl NotificationBuilder {
 #[inline]
 pub fn send_subject(subject: SubscribeObject) {
   match NOTIFICATION_SENDER.read() {
-    Ok(read_guard) => read_guard.iter().for_each(|sender| {
-      if let Err(e) = sender.send_subject(subject.clone()) {
-        tracing::error!("Post notification failed: {}", e);
+    Ok(read_guard) => {
+      // 【可观测性 2026-07-30】原实现在 sender 列表为空时**静默丢弃**通知：
+      // 不进循环、不报错、无日志，前端表现为"通知永远收不到"却无从查起
+      // （排查 AI 发送按钮卡死时即卡在此处）。此处补一条计数日志，
+      // 用于区分"根本没有 sender"与"有 sender 但前端没处理"。
+      if read_guard.is_empty() {
+        tracing::warn!(
+          "No notification sender registered, dropping notification: source={}, ty={}, id={}",
+          subject.source, subject.ty, subject.id
+        );
+        return;
       }
-    }),
+      tracing::trace!(
+        "send_subject: senders={}, source={}, ty={}, id={}",
+        read_guard.len(), subject.source, subject.ty, subject.id
+      );
+      read_guard.iter().for_each(|sender| {
+        if let Err(e) = sender.send_subject(subject.clone()) {
+          tracing::error!("Post notification failed: {}", e);
+        }
+      })
+    },
     Err(err) => {
       tracing::error!("Read notification sender failed: {}", err);
     },

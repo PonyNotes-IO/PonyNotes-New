@@ -58,7 +58,10 @@ pub fn create_log_filter(
   filters.push(format!("flowy_document={}", "warn"));
   filters.push(format!("flowy_database2={}", "warn"));
   filters.push(format!("flowy_server={}", "info"));  // 改为 info 以显示云同步日志
-  filters.push(format!("flowy_notification={}", "warn"));
+  // 【放开通知日志 2026-07-30】原为 warn，导致 send_subject 的投递日志不可见。
+  // 通知是 Rust→Dart 的唯一事件通道，它一旦静默失效（例如 sender 未注册），
+  // 前端表现为各种"状态不更新"，却无任何线索可查。跟随 level 便于定位。
+  filters.push(format!("flowy_notification={}", level));
   filters.push(format!("lib_infra={}", "warn"));
   filters.push(format!("flowy_search={}", "warn"));
   filters.push(format!("flowy_chat={}", "warn"));
