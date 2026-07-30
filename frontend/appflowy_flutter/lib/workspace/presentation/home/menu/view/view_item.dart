@@ -15,6 +15,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
@@ -633,8 +634,26 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   /// 由 build() 中 context.watch 驱动重建，确保 role 变化时 UI 实时更新
   late bool _isRestrictedMember;
 
+  late final ViewListener _viewListener;
+  late ViewPB _view;
+
+  @override
+  void initState() {
+    super.initState();
+    _view = widget.view;
+    _viewListener = ViewListener(viewId: widget.view.id);
+    _viewListener.start(
+      onViewUpdated: (updatedView) {
+        if (mounted) {
+          setState(() => _view = updatedView);
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _viewListener.stop();
     _renameController.dispose();
     _renameFocusNode.dispose();
     super.dispose();
@@ -689,7 +708,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         isRenaming ? _buildInlineRenameField() : _buildNameText();
 
     final children = [
-      widget.leftIconBuilder?.call(context, widget.view) ?? _buildLeftIcon(),
+      widget.leftIconBuilder?.call(context, _view) ?? _buildLeftIcon(),
       _buildViewIconButton(),
       const HSpace(4),
       Expanded(
@@ -697,7 +716,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             ? Row(
                 children: [
                   Flexible(child: nameWidget),
-                  ...widget.extendBuilder!(widget.view),
+                  ...widget.extendBuilder!(_view),
                 ],
               )
             : nameWidget,
@@ -706,7 +725,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
     if (widget.showActions || onHover || widget.isTablet) {
       if (widget.rightIconsBuilder != null) {
-        children.addAll(widget.rightIconsBuilder!(context, widget.view));
+        children.addAll(widget.rightIconsBuilder!(context, _view));
       } else {
         if (!_isRestrictedMember) {
           children.add(
@@ -724,9 +743,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             ),
           );
         }
-        if (widget.view.layout == ViewLayoutPB.Document ||
-            widget.view.layout == ViewLayoutPB.Folder ||
-            widget.view.layout == ViewLayoutPB.Notebook) {
+        if (_view.layout == ViewLayoutPB.Document ||
+            _view.layout == ViewLayoutPB.Folder ||
+            _view.layout == ViewLayoutPB.Notebook) {
           children.add(const HSpace(8.0));
           children.add(_buildViewAddButton(context));
         }
@@ -762,9 +781,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
     Widget child = GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: () => widget.onSelected(context, widget.view),
+      onTap: () => widget.onSelected(context, _view),
       onTertiaryTapDown: (_) =>
-          widget.onTertiarySelected?.call(context, widget.view),
+          widget.onTertiarySelected?.call(context, _view),
       child: rowChild,
     );
 
@@ -776,9 +795,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         offset: const Offset(0, 5),
         direction: PopoverDirection.bottomWithLeftAligned,
         popupBuilder: (_) => RenameViewPopover(
-          view: widget.view,
-          name: widget.view.name,
-          emoji: widget.view.icon.toEmojiIconData(),
+          view: _view,
+          name: _view.name,
+          emoji: _view.icon.toEmojiIconData(),
           popoverController: popoverController,
           showIconChanger: false,
         ),
@@ -790,14 +809,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Widget _buildViewIconButton() {
-    final iconData = widget.view.icon.toEmojiIconData();
+    final iconData = _view.icon.toEmojiIconData();
     final icon = iconData.isNotEmpty
         ? RawEmojiIconWidget(
             emoji: iconData,
             emojiSize: 16.0,
             lineHeight: 18.0 / 16.0,
           )
-        : Opacity(opacity: 0.6, child: widget.view.defaultIcon());
+        : Opacity(opacity: 0.6, child: _view.defaultIcon());
 
     final Widget child = AppFlowyPopover(
       offset: const Offset(20, 0),
@@ -823,10 +842,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             PickerTabType.icon,
             PickerTabType.custom,
           ],
-          documentId: widget.view.id,
+          documentId: _view.id,
           onSelectedEmoji: (r) {
             ViewBackendService.updateViewIcon(
-              view: widget.view,
+              view: _view,
               viewIcon: r.data,
             );
             if (!r.keepOpen) controller.close();
@@ -835,7 +854,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       },
     );
 
-    if (widget.view.isLocked) {
+    if (_view.isLocked) {
       return LockPageButtonWrapper(
         child: child,
       );
@@ -862,7 +881,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minWidth: 28),
         child: Text(
-          widget.view.nameOrDefault,
+          _view.nameOrDefault,
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
           style: textStyle,
@@ -922,10 +941,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   void _startRenaming() {
     setState(() {
       isRenaming = true;
-      _renameController.text = widget.view.nameOrDefault;
+      _renameController.text = _view.nameOrDefault;
       _renameController.selection = TextSelection(
         baseOffset: 0,
-        extentOffset: widget.view.nameOrDefault.length,
+        extentOffset: _view.nameOrDefault.length,
       );
     });
     // 延迟聚焦以确保TextField已经构建
@@ -950,9 +969,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       showToastNotification(
         message: LocaleKeys.web_error_pageNameCannotBeEmpty.tr(),
       );
-    } else if (trimmed != widget.view.nameOrDefault) {
+    } else if (trimmed != _view.nameOrDefault) {
       await ViewBackendService.updateView(
-        viewId: widget.view.id,
+        viewId: _view.id,
         name: trimmed,
       );
       if (mounted) {
@@ -977,7 +996,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   // show · if the view can't contain child views.
   Widget _buildLeftIcon() {
     return ViewItemDefaultLeftIcon(
-      view: widget.view,
+      view: _view,
       parentView: widget.parentView,
       isExpanded: widget.isExpanded,
       leftPadding: widget.leftPadding,
@@ -994,7 +1013,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           ? '无权限'
           : LocaleKeys.menuAppHeader_addPageTooltip.tr(),
       child: ViewAddButton(
-        parentViewId: widget.view.id,
+        parentViewId: _view.id,
         onEditing: (value) =>
             context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
         onSelected: _onSelected,
@@ -1026,7 +1045,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     if (isHandwritingSaber) {
       // Saber 手写视图：直接调用 ViewBackendService.createView 创建文档，
       // 然后通过 updateView 把 view_type 写入 extra，供 ViewExtension.plugin() 识别
-      final parentViewId = widget.view.id;
+      final parentViewId = _view.id;
       Log.info(
         '🔵 [VIEW_ITEM] Creating handwriting_saber view via ViewBackendService.createView, parentViewId: $parentViewId',
       );
@@ -1233,7 +1252,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         );
       },
       child: ViewMoreActionPopover(
-        view: widget.view,
+        view: _view,
         controller: controller,
         isExpanded: widget.isExpanded,
         spaceType: widget.spaceType,
@@ -1246,21 +1265,21 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             case ViewMoreActionType.unFavorite:
               context
                   .read<FavoriteBloc>()
-                  .add(FavoriteEvent.toggle(widget.view));
+                  .add(FavoriteEvent.toggle(_view));
               break;
             case ViewMoreActionType.rename:
               // 如果是 Space 类型，显示弹框重命名
-              if (widget.view.isSpace) {
+              if (_view.isSpace) {
                 await showAFTextFieldDialog(
                   context: context,
                   title: LocaleKeys.space_rename.tr(),
-                  initialValue: widget.view.name,
+                  initialValue: _view.name,
                   hintText: LocaleKeys.space_spaceName.tr(),
                   onConfirm: (name) {
                     if (context.mounted) {
                       context.read<SpaceBloc>().add(
                             SpaceEvent.rename(
-                              space: widget.view,
+                              space: _view,
                               name: name,
                             ),
                           );
@@ -1293,24 +1312,24 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               break;
             case ViewMoreActionType.delete:
               // 如果是 Space 类型，使用 SpaceBloc 删除
-              if (widget.view.isSpace) {
+              if (_view.isSpace) {
                 if (context.mounted) {
                   context.read<SpaceBloc>().add(
-                        SpaceEvent.delete(widget.view),
+                        SpaceEvent.delete(_view),
                       );
                   // 删除空间后刷新列表
                   _refreshSpaceBlocIfNeeded(context);
                 }
               } else {
                 // 保存父视图ID，用于删除后刷新
-                final parentViewId = widget.view.parentViewId;
+                final parentViewId = _view.parentViewId;
                 // get if current page contains published child views
                 final (containPublishedPage, _) =
-                    await ViewBackendService.containPublishedPage(widget.view);
+                    await ViewBackendService.containPublishedPage(_view);
                 if (containPublishedPage && context.mounted) {
                   await showConfirmDeletionDialog(
                     context: context,
-                    name: widget.view.name,
+                    name: _view.name,
                     description: LocaleKeys.publish_containsPublishedPage.tr(),
                     onConfirm: () {
                       context.read<ViewBloc>().add(const ViewEvent.delete());
@@ -1325,7 +1344,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 } else if (context.mounted) {
                   await showDeleteViewToTrashConfirmDialog(
                     context: context,
-                    name: widget.view.nameOrDefault,
+                    name: _view.nameOrDefault,
                     onConfirm: () {
                       context.read<ViewBloc>().add(const ViewEvent.delete());
                       Future.delayed(const Duration(milliseconds: 500), () {
@@ -1340,10 +1359,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               break;
             case ViewMoreActionType.duplicate:
               // 如果是 Space 类型，使用 SpaceBloc 复制空间
-              if (widget.view.isSpace) {
+              if (_view.isSpace) {
                 if (context.mounted) {
                   context.read<SpaceBloc>().add(
-                        SpaceEvent.duplicate(space: widget.view),
+                        SpaceEvent.duplicate(space: _view),
                       );
                   // 复制后刷新列表
                   _refreshSpaceBlocIfNeeded(context);
@@ -1377,7 +1396,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               // 使用addPostFrameCallback延迟执行，避免在渲染周期中触发UI状态变化
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (context.mounted) {
-                  context.read<TabsBloc>().openTab(widget.view);
+                  context.read<TabsBloc>().openTab(_view);
                 }
               });
               break;
@@ -1390,7 +1409,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               // Emojis / Upload 分支为空，导致菜单里选表情「无反应」。
               if (context.mounted) {
                 await ViewBackendService.updateViewIcon(
-                  view: widget.view,
+                  view: _view,
                   viewIcon: data.data,
                 );
                 _refreshSpaceBlocIfNeeded(context);
@@ -1407,7 +1426,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                     ),
                     child: BlocProvider.value(
                       value: context.read<SpaceBloc>(),
-                      child: ManageSpacePopup(space: widget.view),
+                      child: ManageSpacePopup(space: _view),
                     ),
                   ),
                 );
@@ -1423,10 +1442,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               moveViewCrossSpace(
                 context,
                 space,
-                widget.view,
+                _view,
                 widget.parentView,
                 widget.spaceType,
-                widget.view,
+                _view,
                 target.id,
               );
               // 移动后刷新列表
