@@ -26,7 +26,21 @@ class ChatUserMessageWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stream = message.metadata?["$QuestionStream"];
-    final messageText = stream is QuestionStream ? stream.text : message.text;
+
+    // 【修复提问气泡空白 2026-07-30】此处原为
+    //   stream is QuestionStream ? stream.text : message.text
+    // 即只要 metadata 带 QuestionStream 就一律读 stream.text。
+    //
+    // 但 Rust 侧 question_sink 只发 StreamMessage::MessageId、**从不发文本**
+    // （flowy-ai/src/chat.rs 中 `question_sink.send(MessageId(...))`），
+    // QuestionStream._text 初始化为 "" 后再无填充来源，因此恒为空串。
+    // 发送侧已把真实提问写入 message.text（createQuestionStreamMessage 的 text 入参），
+    // 渲染侧却没同步改过来，导致用户的提问气泡渲染成一个空白框。
+    //
+    // 改为优先取 message.text，仅当它为空时才回退到 stream.text，
+    // 这样即便日后 Rust 真的开始推送提问文本，也不会丢失。
+    final streamText = stream is QuestionStream ? stream.text : '';
+    final messageText = message.text.isNotEmpty ? message.text : streamText;
 
     return BlocProvider(
       create: (context) => ChatUserMessageBloc(

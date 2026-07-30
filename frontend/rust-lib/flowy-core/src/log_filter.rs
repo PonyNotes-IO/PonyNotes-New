@@ -64,8 +64,12 @@ pub fn create_log_filter(
   filters.push(format!("flowy_chat={}", "warn"));
   filters.push(format!("af_local_ai={}", "warn"));
   filters.push(format!("af_plugin={}", "warn"));
-  filters.push(format!("flowy_ai={}", "warn"));
-  filters.push(format!("flowy_ai_pub={}", "warn"));
+  // 【放开 AI 日志 2026-07-30】此前硬编码为 warn，导致 flowy_ai 的 info!/trace!
+  // 全被丢弃——无论 RUST_LOG 设成什么都看不到 [AISession]/[Chat] 的关键节点
+  // （收到 [DONE]、流结束、finish streaming 等），排查 AI 流式问题时只能靠读代码猜。
+  // 改为跟随 level，与 dart_ffi 一致。
+  filters.push(format!("flowy_ai={}", level));
+  filters.push(format!("flowy_ai_pub={}", level));
   filters.push(format!("flowy_storage={}", "warn"));
   filters.push(format!("flowy_sqlite_vec={}", "warn"));
   filters.push(format!("flowy_whiteboard={}", level));
