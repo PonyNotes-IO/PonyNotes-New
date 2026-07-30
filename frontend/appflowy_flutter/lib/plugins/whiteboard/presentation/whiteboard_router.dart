@@ -305,12 +305,18 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
-        // 空间归属判定完成前，先渲染中性占位，避免在（协作空间）判定窗口内
-        // 误挂载 B 套本地 collab 页而触发多余的云端 collab 初始化。
-        if (_isPrivateSpace == null) {
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        // 空间归属判定完成前，先渲染 B 套 WhiteboardPage 作为渐进占位。
+        // 避免用户看到空白转圈（私有空间和白板本地缓存是最常见场景，
+        // 且 B 套可在全部场景下正常渲染，不依赖任何网络结果）。
+        // 判定完成后由 AnimatedSwitcher 无缝切换（必要时）。
+        if (_isPrivateSpace == null || _roomReachable == null) {
+          Log.debug(
+            '⏳ [WhiteboardRouter] 渐进渲染 B 套占位: _isPrivateSpace=$_isPrivateSpace _roomReachable=$_roomReachable, view=${view.id}',
+          );
+          return WhiteboardPage(
+            key: ValueKey('whiteboard_page_placeholder_${view.id}'),
+            view: view,
+            onViewChanged: widget.onViewChanged,
           );
         }
         // 私有空间白板：始终渲染 B 套 WhiteboardPage（本地 collab + 静默云备份），忽略 room。
@@ -320,13 +326,6 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
             key: ValueKey('whiteboard_page_${view.id}'),
             view: view,
             onViewChanged: widget.onViewChanged,
-          );
-        }
-        // 协作空间白板：room 可达性探测完成前先渲染占位，避免误挂载 A 套。
-        if (_roomReachable == null) {
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
         // 断网且本地有镜像：切「离线只读镜像」页（禁止编辑，仅浏览）。
