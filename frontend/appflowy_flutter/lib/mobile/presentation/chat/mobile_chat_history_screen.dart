@@ -1,5 +1,4 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
@@ -80,12 +79,8 @@ class _MobileChatHistoryScreenState extends State<MobileChatHistoryScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             _ChatHistoryAppBar(
               onBack: () => Navigator.of(context).maybePop(),
-              onMorePressed: _chatViews.isEmpty
-                  ? null
-                  : () => _showMoreOptions(context),
             ),
             const Divider(height: 1),
             // Content
@@ -106,49 +101,14 @@ class _MobileChatHistoryScreenState extends State<MobileChatHistoryScreen> {
       ),
     );
   }
-
-  void _showMoreOptions(BuildContext context) {
-    showMobileBottomSheet(
-      context,
-      showDragHandle: true,
-      showDivider: false,
-      useRootNavigator: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      title: '操作',
-      builder: (bottomSheetContext) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            BottomSheetActionWidget(
-              svg: FlowySvgs.m_delete_m,
-              text: '清空历史记录',
-              onTap: () {
-                Navigator.pop(bottomSheetContext);
-                _confirmDeleteAll(context);
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _confirmDeleteAll(BuildContext context) {
-    // TODO: 实现清空逻辑（调用后端 delete view 接口）
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('清空功能开发中')),
-    );
-  }
 }
 
 class _ChatHistoryAppBar extends StatelessWidget {
   const _ChatHistoryAppBar({
     required this.onBack,
-    this.onMorePressed,
   });
 
   final VoidCallback onBack;
-  final VoidCallback? onMorePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -168,23 +128,13 @@ class _ChatHistoryAppBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              'AI 对话历史',
-              style: theme.textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          if (onMorePressed != null)
-            IconButton(
-              onPressed: onMorePressed,
-              icon: FlowySvg(
-                FlowySvgs.three_dots_s,
-                size: const Size.square(24),
-                color: theme.colorScheme.onSurface,
+            Expanded(
+              child: Text(
+                '历史对话',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center,
               ),
-            )
-          else
+            ),
             const SizedBox(width: 48),
         ],
       ),
