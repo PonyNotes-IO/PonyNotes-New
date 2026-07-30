@@ -331,6 +331,9 @@ pub async fn stream_ai_session_with_attachments(
     buffer: String,
     pending_jsons: Vec<Value>,
     enable_thinking: bool,
+    /// SSE 流内错误事件（HTTP 200 + 错误体）。检测到后先把本轮已解析的正常分片
+    /// 发完，再把它作为 Err 抛出，交由 chat.rs 的错误分支统一处理。
+    pending_error: Option<String>,
   }
 
   let initial_state = StreamState {
@@ -338,12 +341,21 @@ pub async fn stream_ai_session_with_attachments(
     buffer: String::new(),
     pending_jsons: Vec::new(),
     enable_thinking,
+    pending_error: None,
   };
   
   let stream = futures_util::stream::unfold(initial_state, |mut state| async move {
     // 如果有待处理的JSON，先返回它们
     if let Some(json) = state.pending_jsons.pop() {
       return Some((Ok(json), state));
+    }
+
+    // 【修复按钮卡死 2026-07-30】待发分片已清空，此时抛出 SSE 流内错误。
+    // 用 Internal 码是有意的：chat.rs 对 Internal/RequestTimeout 走 `break`，
+    // 会同时发出 StreamChatMessageError **与** FinishStreaming 两个通知，
+    // Dart 侧任一到达都能把 promptResponseState 复位、发送按钮恢复可用。
+    if let Some(msg) = state.pending_error.take() {
+      return Some((Err(FlowyError::new(ErrorCode::Internal, msg)), state));
     }
     
     loop {
@@ -412,12 +424,19 @@ pub async fn stream_ai_session_with_attachments(
                     let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap_or("Unknown");
                     let message = error_obj.get("message").and_then(|m| m.as_str()).unwrap_or("AI服务返回未知错误");
                     error!("[AISession] SSE流中收到错误事件: code={}, message={}", code, message);
-                    // 将错误作为 Answer 事件推送给用户，让界面显示错误信息而非永久等待
-                    let user_message = format!("AI服务错误（{}）：{}", code, message);
-                    let mut err_obj = serde_json::Map::new();
-                    err_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(user_message));
-                    results.push(Value::Object(err_obj));
-                    continue;
+
+                    // 【修复按钮卡死 2026-07-30】此处原先把错误包装成 STREAM_ANSWER_KEY，
+                    // 即**当作正常回答**推给界面。后果是：错误文字能显示，但
+                    // StreamChatMessageError 通知从不发出，Dart 侧
+                    // chatErrorMessageCallback → didFinishAnswerStream 这条复位链路
+                    // 因而不触发，promptResponseState 永远停在 streamingAnswer，
+                    // 发送按钮卡在「停止」形态，用户再也发不出下一条。
+                    //
+                    // 改为记为待抛错误：本轮已解析的正常分片先发完，随后作为 Err 抛出，
+                    // 交由 chat.rs 的错误分支统一处理（它会调用 sanitize_ai_error_message，
+                    // 把 429/超时等原始英文报文换成中文提示，顺带解决"甩英文原文"的问题）。
+                    state.pending_error = Some(format!("{code}: {message}"));
+                    break;
                   }
                 }
 
@@ -595,10 +614,23 @@ pub async fn stream_ai_session_with_attachments(
             return Some((Ok(first), state));
           }
           
+          // 本轮没有正常分片时，若已记录 SSE 错误需就地抛出：
+          // 闭包顶部那次检查要等本次返回后才会执行，而下面的 `continue` 会直接
+          // 回到读取下一个 chunk，错误将被拖延甚至（流随后结束时）永久丢失。
+          if let Some(msg) = state.pending_error.take() {
+            return Some((Err(FlowyError::new(ErrorCode::Internal, msg)), state));
+          }
+
           // 没有成功解析的JSON，继续读取下一个chunk
           continue;
         },
         Ok(None) => {
+          // 流结束前若仍有未抛出的 SSE 错误，必须在此抛出，
+          // 否则下面会直接 return None，错误被吞掉、界面又会卡在「停止」态。
+          if let Some(msg) = state.pending_error.take() {
+            return Some((Err(FlowyError::new(ErrorCode::Internal, msg)), state));
+          }
+
           // 流结束，检查缓冲区是否还有数据
           if !state.buffer.is_empty() {
             let line = state.buffer.trim();
