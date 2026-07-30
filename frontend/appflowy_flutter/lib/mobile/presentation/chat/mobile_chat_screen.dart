@@ -6,7 +6,10 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
+import 'package:appflowy/mobile/presentation/chat/mobile_chat_history_screen.dart';
 import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
+import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
+import 'package:flutter/material.dart' hide PopupMenuButton, PopupMenuEntry, PopupMenuItem;
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
@@ -19,7 +22,6 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
@@ -161,7 +163,40 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
               textAlign: TextAlign.center,
             ),
           ),
-          const SizedBox(width: 48),
+            PopupMenuButton<_ChatHeaderMenuItem>(
+              offset: const Offset(0, 36),
+              padding: EdgeInsets.zero,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12.0)),
+              ),
+              shadowColor: const Color(0x68000000),
+              elevation: 10,
+              color: context.popupMenuBackgroundColor,
+              itemBuilder: (context) => <PopupMenuEntry<_ChatHeaderMenuItem>>[
+                PopupMenuItem<_ChatHeaderMenuItem>(
+                  value: _ChatHeaderMenuItem.history,
+                  padding: EdgeInsets.zero,
+                  child: _ChatHeaderMenuButton(
+                    icon: Icons.history,
+                    text: 'AI 对话历史',
+                  ),
+                ),
+              ],
+              onSelected: (_ChatHeaderMenuItem value) {
+                switch (value) {
+                  case _ChatHeaderMenuItem.history:
+                    context.push(MobileChatHistoryScreen.routeName);
+                    break;
+                }
+              },
+              child: const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: FlowySvg(
+                  FlowySvgs.m_settings_more_s,
+                ),
+              ),
+            ),
+            const HSpace(8.0),
         ],
       ),
     );
@@ -379,6 +414,38 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     } catch (_) {
       return FlowyResult.failure(FlowyError(msg: ''));
     }
+  }
+}
+
+enum _ChatHeaderMenuItem {
+  history,
+}
+
+class _ChatHeaderMenuButton extends StatelessWidget {
+  const _ChatHeaderMenuButton({
+    required this.icon,
+    required this.text,
+  });
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
   }
 }
 
