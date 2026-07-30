@@ -1144,15 +1144,25 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         },
       );
 
-      Log.info('Add collaborator response: ${response.statusCode}');
+      Log.info(
+        'Add collaborator response: ${response.statusCode} ${response.body}',
+      );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
-      } else {
+      if (response.statusCode != 200 && response.statusCode != 201) {
         final errorMessage = '添加协作用户失败: HTTP ${response.statusCode}';
         Log.error(errorMessage);
         return false;
       }
+
+      // 同 _removeCollabMember：本接口业务失败时同样返回 HTTP 200，
+      // 真正结果在 body 的 code 字段，必须一并判断，否则会误报成功。
+      final code = _businessCode(response.body);
+      if (code != null && code != 0) {
+        Log.error('添加协作用户失败: code=$code, body=${response.body}');
+        return false;
+      }
+
+      return true;
     } catch (e, stackTrace) {
       Log.error('Exception in _addCollaborator: $e', e, stackTrace);
       return false;
@@ -1221,6 +1231,13 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       Log.info('Response body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 204) {
+        // 同 _removeCollabMember：HTTP 200 不代表业务成功，需检查 body 的 code。
+        final code = _businessCode(response.body);
+        if (code != null && code != 0) {
+          final msg = _businessMessage(response.body) ?? '错误码 $code';
+          Log.error('更新权限失败: $msg (body=${response.body})');
+          return (false, '更新权限失败: $msg');
+        }
         return (true, '');
       } else {
         String errorMessage = '更新权限失败: HTTP ${response.statusCode}';
@@ -1382,19 +1399,59 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         },
       );
 
-      Log.info('Remove collab member response: ${response.statusCode}');
+      Log.info(
+        'Remove collab member response: ${response.statusCode} ${response.body}',
+      );
 
-      if (response.statusCode == 200 || response.statusCode == 204) {
-        return (true, '');
-      } else {
+      if (response.statusCode != 200 && response.statusCode != 204) {
         final errorMessage =
             '移除成员失败: HTTP ${response.statusCode} ${response.body}';
         Log.error(errorMessage);
         return (false, errorMessage);
       }
+
+      // 【修复"移除成功但对方还在" 2026-07-30】
+      // 本接口在业务失败时仍返回 HTTP 200，错误体现在响应体的 code 字段，例如
+      //   HTTP 200 {"code":1012,"message":"只有文档拥有者可以删除成员"}
+      // 此前只判断 statusCode，于是界面提示"成功移除访客"、实际服务端已拒绝，
+      // 被移除者纹丝不动（实测数据库中该成员仍在，用户重试 6 次均"成功"）。
+      // 同类问题此前已在"首次生成分享链接"处修过一次（提交 982696181）。
+      final code = _businessCode(response.body);
+      if (code != null && code != 0) {
+        final errorMessage = '移除成员失败: ${_businessMessage(response.body) ?? "错误码 $code"}';
+        Log.error('$errorMessage (code=$code, body=${response.body})');
+        return (false, errorMessage);
+      }
+
+      return (true, '');
     } catch (e, stackTrace) {
       Log.error('Exception in _removeCollabMember: $e', e, stackTrace);
       return (false, '移除成员失败: ${e.toString()}');
     }
+  }
+
+  /// 取响应体中的业务码。本项目多个接口在业务失败时仍返回 HTTP 200，
+  /// 真正的结果在 body 的 `code` 字段（0 表示成功）。
+  /// 解析失败返回 null，调用方应据此放行，避免因响应格式变动误伤正常流程。
+  static int? _businessCode(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['code'] is int) {
+        return decoded['code'] as int;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// 取响应体中的业务错误描述，用于向用户呈现可读原因。
+  static String? _businessMessage(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final msg = decoded['message'];
+        if (msg is String && msg.isNotEmpty) return msg;
+      }
+    } catch (_) {}
+    return null;
   }
 }
