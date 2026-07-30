@@ -122,7 +122,20 @@ impl DartAppFlowyCore {
     if let Some(core) = self.core.write().unwrap().take() {
       core.close_db();
     }
-    unregister_all_notification_sender();
+
+    // 【修复通知全局失效 2026-07-30】此处原有 unregister_all_notification_sender()，
+    // 会把 Dart 刚注册的通知发送器注销掉，导致**整个应用的 Rust→Dart 通知全部失效**。
+    //
+    // 时序：Dart 的 FlowySDK.init() 依次调用
+    //   1) set_stream_port  → register_notification_sender(...)   注册
+    //   2) init_sdk         → DART_APPFLOWY_CORE.dispose()        ← 走到这里
+    //                       → unregister_all_notification_sender() 注销刚注册的
+    // 之后无人再注册，NOTIFICATION_SENDER 永久为空。而 send_subject 对空列表是
+    // **静默丢弃**（不报错、无日志），因此表现为各种"状态不更新"却查不出原因：
+    // AI 回答完发送按钮不复位、分享/权限变更收不到通知等，实测该告警刷了 265 次。
+    //
+    // 发送器的生命周期由 set_stream_port 独占管理（它自身已先 unregister 再 register，
+    // 重复调用是幂等的），dispose 只负责释放运行时与数据库，不应越权注销。
   }
 }
 
