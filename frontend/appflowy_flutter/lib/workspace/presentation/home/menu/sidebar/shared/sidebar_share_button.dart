@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/share_tab/data/collab_view_mapper.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
@@ -31,7 +32,6 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -54,7 +54,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     with WidgetsBindingObserver {
   bool _isExpanded = false;
   bool _isDragHovering = false;
-  List<ViewPB> _userSharedNotes = [];
+  List<SharedCollabView> _userSharedNotes = [];
   bool _isLoading = false;
   bool _isRefreshing = false;
   late SharedSectionBloc _sharedSectionBloc;
@@ -121,7 +121,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     if (mounted) {
       setState(() {
         _userSharedNotes =
-            _userSharedNotes.where((view) => view.id != viewId).toList();
+            _userSharedNotes.where((entry) => entry.view.id != viewId).toList();
       });
     }
 
@@ -236,7 +236,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         return;
       }
 
-      List<ViewPB> sentNotes = [];
+      List<SharedCollabView> sentNotes = [];
       try {
         sentNotes = await _fetchCollaborations(
           baseUrl: baseUrl,
@@ -247,7 +247,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         Log.warn('fetch sent collaborations failed (non-fatal): $e');
       }
 
-      List<ViewPB> receivedNotes = [];
+      List<SharedCollabView> receivedNotes = [];
       try {
         receivedNotes = await _fetchCollaborations(
           baseUrl: baseUrl,
@@ -258,16 +258,19 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         Log.warn('fetch received collaborations failed (non-fatal): $e');
       }
 
-      final combinedMap = <String, ViewPB>{};
-      for (final view in [...sentNotes, ...receivedNotes]) {
+      final combinedMap = <String, SharedCollabView>{};
+      for (final entry in [...sentNotes, ...receivedNotes]) {
+        final view = entry.view;
         if (view.id.isEmpty) {
           continue;
         }
-        combinedMap.putIfAbsent(view.id, () => view);
+        combinedMap.putIfAbsent(view.id, () => entry);
       }
 
       final combined = combinedMap.values.toList()
-        ..sort((a, b) => b.createTime.toInt() - a.createTime.toInt());
+        ..sort(
+          (a, b) => b.view.createTime.toInt() - a.view.createTime.toInt(),
+        );
 
       if (!mounted) {
         return;
@@ -329,7 +332,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     return trimmedToken;
   }
 
-  Future<List<ViewPB>> _fetchCollaborations({
+  Future<List<SharedCollabView>> _fetchCollaborations({
     required String baseUrl,
     required String token,
     required String path,
@@ -378,7 +381,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     }
   }
 
-  List<ViewPB> _parseCollabViews(dynamic decoded) {
+  List<SharedCollabView> _parseCollabViews(dynamic decoded) {
     List<dynamic> items = const [];
     if (decoded is Map<String, dynamic>) {
       final code = decoded['code'];
@@ -401,56 +404,33 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       throw Exception('接口返回数据格式不正确');
     }
 
-    final views = <ViewPB>[];
+    final views = <SharedCollabView>[];
     for (final entry in items) {
       if (entry is! Map<String, dynamic>) {
         continue;
       }
 
-      final oid =
-          (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
-              .toString();
-      if (oid.isEmpty) {
-        continue;
+      final sharedView = sharedCollabViewFromJson(entry);
+      if (sharedView != null) {
+        views.add(sharedView);
       }
-
-      final timestampRaw = entry['created_at'] ?? entry['createdAt'];
-      final createdSeconds = _parseTimestampSeconds(timestampRaw);
-      final name = (entry['name'] ?? '').toString();
-      final displayName = name.isNotEmpty ? name : '加载中...';
-
-      final viewLayoutRaw = entry['view_layout'] ?? entry['viewLayout'] ?? 0;
-      final viewLayoutInt = viewLayoutRaw is int
-          ? viewLayoutRaw
-          : (int.tryParse(viewLayoutRaw.toString()) ?? 0);
-
-      final viewLayout = switch (viewLayoutInt) {
-        1 => ViewLayoutPB.Grid,
-        2 => ViewLayoutPB.Board,
-        3 => ViewLayoutPB.Calendar,
-        _ => ViewLayoutPB.Document,
-      };
-
-      final view = ViewPB()
-        ..id = oid
-        ..name = displayName
-        ..layout = viewLayout
-        ..createTime = fixnum.Int64(createdSeconds);
-      views.add(view);
     }
 
     return views;
   }
 
-  Future<List<ViewPB>> _loadViewDetails(List<ViewPB> views) async {
-    if (views.isEmpty) {
-      return views;
+  Future<List<SharedCollabView>> _loadViewDetails(
+    List<SharedCollabView> entries,
+  ) async {
+    if (entries.isEmpty) {
+      return entries;
     }
 
-    final updatedViews = <ViewPB>[];
-    for (final view in views) {
+    final updatedViews = <SharedCollabView>[];
+    for (final entry in entries) {
+      final view = entry.view;
       if (view.id.isEmpty) {
-        updatedViews.add(view);
+        updatedViews.add(entry);
         continue;
       }
 
@@ -464,33 +444,34 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                 ..name = detailedView.name
                 ..layout = view.layout
                 ..createTime = view.createTime;
-              updatedViews.add(enriched);
+              updatedViews.add(entry.copyWith(view: enriched));
             } else {
-              updatedViews.add(view);
+              updatedViews.add(entry);
             }
           },
           (_) {
-            updatedViews.add(view);
+            updatedViews.add(entry);
           },
         );
       } catch (e) {
         Log.error('Failed to load view details for ${view.id}: $e');
-        updatedViews.add(view);
+        updatedViews.add(entry);
       }
     }
 
     return updatedViews;
   }
 
-  Future<List<ViewPB>> _enrichViewLayouts(
-    List<ViewPB> views,
+  Future<List<SharedCollabView>> _enrichViewLayouts(
+    List<SharedCollabView> entries,
     String baseUrl,
     String accessToken,
   ) async {
-    final result = <ViewPB>[];
-    for (final view in views) {
+    final result = <SharedCollabView>[];
+    for (final entry in entries) {
+      final view = entry.view;
       if (view.layout != ViewLayoutPB.Document) {
-        result.add(view);
+        result.add(entry);
         continue;
       }
 
@@ -528,7 +509,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                   ..name = view.name
                   ..layout = correctedLayout
                   ..createTime = view.createTime;
-                result.add(corrected);
+                result.add(entry.copyWith(view: corrected));
                 continue;
               }
             }
@@ -538,34 +519,10 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         Log.warn('Failed to enrich layout for ${view.id}: $e');
       }
 
-      result.add(view);
+      result.add(entry);
     }
 
     return result;
-  }
-
-  int _parseTimestampSeconds(dynamic raw) {
-    if (raw == null) {
-      return DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    }
-    if (raw is int) {
-      return raw > 1000000000000 ? raw ~/ 1000 : raw;
-    }
-    if (raw is double) {
-      final value = raw.toInt();
-      return value > 1000000000000 ? value ~/ 1000 : value;
-    }
-    if (raw is String && raw.isNotEmpty) {
-      final parsedDate = DateTime.tryParse(raw);
-      if (parsedDate != null) {
-        return parsedDate.millisecondsSinceEpoch ~/ 1000;
-      }
-      final parsedInt = int.tryParse(raw);
-      if (parsedInt != null) {
-        return parsedInt > 1000000000000 ? parsedInt ~/ 1000 : parsedInt;
-      }
-    }
-    return DateTime.now().millisecondsSinceEpoch ~/ 1000;
   }
 
   bool _canAcceptDraggedView(ViewPB view) {
@@ -575,18 +532,19 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   Future<void> _openSharePanelForView(ViewPB view) async {
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
     final workspace = userWorkspaceBloc.state.currentWorkspace;
-    final workspaceId = workspace?.workspaceId ?? '';
     final workspaceType = workspace?.workspaceType;
+    final documentWorkspaceId = view.workspaceId.trim();
     final shareBloc = getIt<ShareBloc>(param1: view)
       ..add(const ShareEvent.initial());
     final shareTabBloc = ShareTabBloc(
       repository: RustShareWithUserRepositoryImpl(),
       pageId: view.id,
-      workspaceId: workspaceId,
+      workspaceId: documentWorkspaceId,
     );
     DatabaseTabBarBloc? databaseBloc;
 
-    if (workspaceType != WorkspaceTypePB.LocalW) {
+    if (documentWorkspaceId.isNotEmpty ||
+        workspaceType != WorkspaceTypePB.LocalW) {
       shareTabBloc.add(ShareTabEvent.initialize());
     }
 
@@ -785,12 +743,13 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     }
 
     return Column(
-      children: _userSharedNotes.map((view) {
+      children: _userSharedNotes.map((entry) {
+        final view = entry.view;
         return ViewItem(
           key: ValueKey('shared_${view.id}'),
           spaceType: FolderSpaceType.favorite,
           engagedInExpanding: false,
-          isFirstChild: view.id == _userSharedNotes.first.id,
+          isFirstChild: view.id == _userSharedNotes.first.view.id,
           view: view,
           level: 0,
           leftPadding: HomeSpaceViewSizes.leftPadding,
@@ -802,7 +761,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
           shouldRenderChildren: false,
           shouldLoadChildViews: false,
           isTablet: PlatformInfo.isTablet,
-          rightIconsBuilder: (context, view) => [],  // 返回空列表，不显示任何右侧按钮
+          rightIconsBuilder: (context, view) => [], // 返回空列表，不显示任何右侧按钮
           onSelected: (viewContext, selectedView) {
             CalendarUnsavedGuard.instance.maybeConfirmLeave(
               viewContext,
