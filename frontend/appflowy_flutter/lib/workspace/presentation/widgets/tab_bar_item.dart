@@ -11,10 +11,12 @@ class ViewTabBarItem extends StatefulWidget {
     super.key,
     required this.view,
     this.shortForm = false,
+    this.viewNotifier,
   });
 
   final ViewPB view;
   final bool shortForm;
+  final ValueNotifier<ViewPB>? viewNotifier;
 
   @override
   State<ViewTabBarItem> createState() => _ViewTabBarItemState();
@@ -36,10 +38,20 @@ class _ViewTabBarItemState extends State<ViewTabBarItem> {
         }
       },
     );
+
+    // 监听乐观更新：CoverTitle 编辑标题时通过 ViewPluginNotifier 立即通知
+    widget.viewNotifier?.addListener(_onViewNotifierChanged);
+  }
+
+  void _onViewNotifierChanged() {
+    if (mounted && widget.viewNotifier != null) {
+      setState(() => view = widget.viewNotifier!.value);
+    }
   }
 
   @override
   void dispose() {
+    widget.viewNotifier?.removeListener(_onViewNotifierChanged);
     _viewListener.stop();
     super.dispose();
   }

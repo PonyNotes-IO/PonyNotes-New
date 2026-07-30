@@ -33,6 +33,7 @@ import 'package:appflowy_editor/appflowy_editor.dart'
     show AppFlowyEditorLogLevel, EditorState, TransactionTime;
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -273,10 +274,34 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
       );
     }
 
-    const int maxAttempts = 12;
+    // 连通性预检：离线状态下避免无效重试，直接提示用户
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOnline = connectivity != ConnectivityResult.none;
+
+    // 离线 + 文档本地不存在 → 快速失败（无需逐次重试 Rust cloud 调用）
+    if (!isOnline && initialError?.code == ErrorCode.RecordNotFound) {
+      Log.info(
+        '[DocumentBloc] Offline mode, document not cached locally — fast fail for $documentId',
+      );
+      if (!isClosed) {
+        emit(state.copyWith(
+          error: initialError,
+          editorState: null,
+          isLoading: false,
+        ));
+      }
+      return;
+    }
+
+    // 在线时降低重试次数（12→5），离线时更少（2 次）
+    const int onlineMaxAttempts = 5;
+    const int offlineMaxAttempts = 2;
+    final int maxAttempts = isOnline ? onlineMaxAttempts : offlineMaxAttempts;
+
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-      // exponential-ish backoff: first quick, then longer
-      final waitMs = attempt == 1 ? 300 : 300 + (attempt - 1) * 250;
+      final waitMs = isOnline
+          ? 300 + (attempt - 1) * 250
+          : 500; // 离线重试间隔固定 500ms
       await Future.delayed(Duration(milliseconds: waitMs));
       final result = await _fetchDocumentState();
       if (result.isSuccess) {
@@ -299,7 +324,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
         return;
       } else {
         Log.debug(
-            '[DocumentBloc] retry attempt $attempt failed for documentId: $documentId, will retry');
+            '[DocumentBloc] retry attempt $attempt/$maxAttempts failed for documentId: $documentId, will retry');
       }
     }
 

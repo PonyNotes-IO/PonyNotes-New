@@ -191,12 +191,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 final availableReminders =
                     await filterAvailableReminders(reminders);
                 // Separate archived reminders
-                final archived = reminders
-                    .where(
-                      (reminder) =>
-                          reminder.isArchived && !_isGlobalReminder(reminder),
-                    )
-                    .toList();
+                // 云通知同样可归档，此处不得按来源过滤
+                final archived =
+                    reminders.where((reminder) => reminder.isArchived).toList();
 
                 // only print the reminder ids are not the same as the previous ones
                 final previousReminderIds =
@@ -218,16 +215,13 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                       reminders: availableReminders,
                       serverReminders: reminders,
                       archivedReminders: archived,
-                      globalReminders: state.globalReminders,
                     ),
                   );
                 }
               },
               (error) {
                 Log.error('Failed to fetch reminders: $error');
-                if (state.globalReminders.isNotEmpty && !isClosed && !emit.isDone) {
-                  emit(state.copyWith(globalReminders: state.globalReminders));
-                }
+                // 拉取失败时保留当前列表，_cloudReminders 缓存已在上方沿用
               },
             );
           },
@@ -500,16 +494,11 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             }
           },
           markAsRead: (reminderIds) async {
-            final result = await _onMarkAsRead(reminderIds: reminderIds);
+            final updated = await _onMarkAsRead(reminderIds: reminderIds);
 
             Log.info('Marked reminders as read: $reminderIds');
 
-            emit(
-              state.copyWith(
-                reminders: result.workspaceReminders,
-                globalReminders: result.globalReminders,
-              ),
-            );
+            emit(state.copyWith(reminders: updated));
           },
           archive: (reminderIds) async {
             final reminders = await _onArchived(
@@ -528,16 +517,11 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             );
           },
           markAllRead: () async {
-            final result = await _onMarkAsRead();
+            final updated = await _onMarkAsRead();
 
             Log.info('Marked all reminders as read');
 
-            emit(
-              state.copyWith(
-                reminders: result.workspaceReminders,
-                globalReminders: result.globalReminders,
-              ),
-            );
+            emit(state.copyWith(reminders: updated));
           },
           archiveAll: () async {
             final reminders = await _onArchived(isArchived: true);
@@ -584,43 +568,23 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   ///
   /// If the [reminderIds] is null, all unread reminders will be marked as read
   /// Otherwise, only the reminders with the given IDs will be marked as read
-  Future<_MarkReadResult> _onMarkAsRead({
+  Future<List<ReminderPB>> _onMarkAsRead({
     List<String>? reminderIds,
   }) async {
-    final workspaceReminders = state.workspaceReminders;
-    final globalReminders = state.globalReminders;
-    final idsToMarkRead = reminderIds?.toSet();
-
-    final globalIdsToMarkRead = globalReminders
-        .where(
-          (reminder) =>
-              !reminder.isRead &&
-              (idsToMarkRead == null || idsToMarkRead.contains(reminder.id)),
-        )
-        .map((reminder) => reminder.id)
-        .toSet();
-
-    if (globalIdsToMarkRead.isNotEmpty) {
-      final didMarkAllRead = idsToMarkRead == null
-          ? await InboxService().markAllAsRead()
-          : await Future.wait(
-              globalIdsToMarkRead.map(InboxService().markAsRead),
-            ).then((results) => results.every((result) => result));
-      if (!didMarkAllRead) {
-        Log.error('Failed to mark global notifications as read');
-        globalIdsToMarkRead.clear();
-      }
-    }
+    // 【修复通知全丢 2026-07-30】此处原先另有一条 globalReminders 分支，
+    // 因该列表从未被填充而始终空转；云通知的已读实际由下方
+    // _isCloudNotification 分支处理（写服务端），故一并删除，避免二义。
+    final allReminders = state.reminders;
 
     final Iterable<ReminderPB> remindersToUpdate;
 
     if (reminderIds != null) {
-      remindersToUpdate = workspaceReminders.where(
+      remindersToUpdate = allReminders.where(
         (reminder) => reminderIds.contains(reminder.id) && !reminder.isRead,
       );
     } else {
       // Get all reminders that are not matching the isArchived flag
-      remindersToUpdate = workspaceReminders.where(
+      remindersToUpdate = allReminders.where(
         (reminder) => !reminder.isRead,
       );
     }
@@ -648,7 +612,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       Log.info('Mark reminder ${reminder.id} as read');
     }
 
-    final updatedWorkspaceReminders = workspaceReminders.map((e) {
+    return allReminders.map((e) {
       if (reminderIds != null && !reminderIds.contains(e.id)) {
         return e;
       }
@@ -662,19 +626,6 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
         update.isRead = true;
       });
     }).toList();
-
-    final updatedGlobalReminders = globalReminders.map((reminder) {
-      if (!globalIdsToMarkRead.contains(reminder.id)) return reminder;
-      reminder.freeze();
-      return reminder.rebuild((update) {
-        update.isRead = true;
-      });
-    }).toList();
-
-    return _MarkReadResult(
-      workspaceReminders: updatedWorkspaceReminders,
-      globalReminders: updatedGlobalReminders,
-    );
   }
 
   /// Archive or unarchive reminders
@@ -685,17 +636,21 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     required bool isArchived,
     List<String>? reminderIds,
   }) async {
+    // 云通知与日程提醒同在一个列表，归档对两者一视同仁；
+    // 差别只在"归档状态写到哪里"（见下方 _isCloudNotification 分支）。
+    final allReminders = state.reminders;
+
     final Iterable<ReminderPB> remindersToUpdate;
 
     if (reminderIds != null) {
-      remindersToUpdate = state.workspaceReminders.where(
+      remindersToUpdate = allReminders.where(
         (reminder) =>
             reminderIds.contains(reminder.id) &&
             reminder.isArchived != isArchived,
       );
     } else {
       // Get all reminders that are not matching the isArchived flag
-      remindersToUpdate = state.workspaceReminders.where(
+      remindersToUpdate = allReminders.where(
         (reminder) => reminder.isArchived != isArchived,
       );
     }
@@ -734,7 +689,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       Log.info('Reminder ${reminder.id} is archived: $isArchived');
     }
 
-    return state.workspaceReminders.map((e) {
+    return allReminders.map((e) {
       if (reminderIds != null && !reminderIds.contains(e.id)) {
         return e;
       }
@@ -991,27 +946,15 @@ class ReminderUpdate {
   }
 }
 
-class _MarkReadResult {
-  const _MarkReadResult({
-    required this.workspaceReminders,
-    required this.globalReminders,
-  });
-
-  final List<ReminderPB> workspaceReminders;
-  final List<ReminderPB> globalReminders;
-}
-
 class ReminderState {
   ReminderState({
     List<ReminderPB>? reminders,
     this.serverReminders = const [],
     List<ReminderPB>? archivedReminders,
-    List<ReminderPB>? globalReminders,
   }) {
-    _archivedReminders = (archivedReminders ?? [])
-        .where((reminder) => !_isGlobalReminder(reminder))
-        .toList();
-    _globalReminders = globalReminders ?? [];
+    // 【修复通知全丢 2026-07-30】此处原有 `!_isGlobalReminder(...)` 过滤。
+    // 云通知同样可以被归档，归档页必须能看到它们。详见 reminders getter 的注释。
+    _archivedReminders = archivedReminders ?? [];
 
     if (reminders?.isEmpty ?? true) {
       return;
@@ -1036,19 +979,25 @@ class ReminderState {
   }
 
   final List<ReminderPB> _reminders = [];
-  List<ReminderPB> get workspaceReminders => _reminders
-      .where((reminder) => !_isGlobalReminder(reminder))
-      .toList()
-      .unique((e) => e.id);
-  List<ReminderPB> _globalReminders = [];
-  List<ReminderPB> get globalReminders => _globalReminders.unique((e) => e.id);
-  List<ReminderPB> get reminders =>
-      [...workspaceReminders, ...globalReminders].unique((e) => e.id);
-  List<ReminderPB> get allReminders => [
-        ...serverReminders.where((reminder) => !_isGlobalReminder(reminder)),
-        ...workspaceReminders,
-        ...globalReminders,
-      ].unique((e) => e.id);
+
+  /// 面板展示用的全部提醒：**既包含**服务端账号级云通知（分享/邀请/权限变更），
+  /// **也包含**本地日程提醒。二者由 ReminderBloc 的 refresh 处理器合并后传入
+  /// （`[..._cloudReminders, ...scheduleReminders]`），此处不得再做来源过滤。
+  ///
+  /// 【修复通知全丢 2026-07-30】此前这里是一套 workspaceReminders/globalReminders
+  /// 双列表：workspaceReminders 用 `!_isGlobalReminder(...)` 把云通知全部滤掉，
+  /// 本应接住它们的 globalReminders 却从未被填充（其唯一数据源
+  /// InboxService.loadGlobalReminders 全仓零调用），导致分享/邀请通知一条都不显示。
+  ///
+  /// 成因：07-13 引入双列表时是自洽的；07-14 把生产端改为 _cloudReminders 统一合并，
+  /// 却没有同步删除这里的旧过滤器，于是它变成了一台静默丢弃机。
+  /// 单元测试因构造的是已废弃的 globalReminders 入参而全绿，未能拦截。
+  ///
+  /// **不要再按"来源"拆分列表**——是否为云通知只应影响"已读写到哪里"
+  /// （见 _onMarkAsRead 中的 _isCloudNotification 分支），不应影响"是否展示"。
+  List<ReminderPB> get reminders => _reminders.unique((e) => e.id);
+  List<ReminderPB> get allReminders =>
+      [...serverReminders, ..._reminders].unique((e) => e.id);
 
   List<ReminderPB> pastReminders = [];
   List<ReminderPB> upcomingReminders = [];
@@ -1062,17 +1011,10 @@ class ReminderState {
     List<ReminderPB>? reminders,
     List<ReminderPB>? serverReminders,
     List<ReminderPB>? archivedReminders,
-    List<ReminderPB>? globalReminders,
   }) =>
       ReminderState(
         reminders: reminders ?? _reminders,
         serverReminders: serverReminders ?? this.serverReminders,
         archivedReminders: archivedReminders ?? _archivedReminders,
-        globalReminders: globalReminders ?? _globalReminders,
       );
-}
-
-bool _isGlobalReminder(ReminderPB reminder) {
-  final cloudType = reminder.meta['cloud_notification_type'];
-  return cloudType != null && cloudType.isNotEmpty;
 }

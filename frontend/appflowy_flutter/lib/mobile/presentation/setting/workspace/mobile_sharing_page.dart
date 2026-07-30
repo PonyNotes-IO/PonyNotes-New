@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/share_tab/data/collab_view_mapper.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/share_tab.dart';
@@ -17,7 +18,6 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -25,7 +25,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:http/http.dart' as http;
-import 'package:fixnum/fixnum.dart' as fixnum;
 
 class MobileSharingPage extends StatefulWidget {
   const MobileSharingPage({super.key, this.workspaceState});
@@ -43,7 +42,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
   int _currentTab = 0;
 
   // 共享内容状态
-  List<ViewPB> _sharedNotes = const [];
+  List<SharedCollabView> _sharedNotes = const [];
   bool _isLoadingShared = true;
   String? _sharedError;
 
@@ -145,7 +144,8 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
+                  color:
+                      isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                   border: isSelected
                       ? null
@@ -159,9 +159,8 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
                   tab,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white
-                      : theme.textColorScheme.primary,
+                  color:
+                      isSelected ? Colors.white : theme.textColorScheme.primary,
                 ),
               ),
             ),
@@ -311,7 +310,8 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     );
   }
 
-  Widget _buildSharedListItem(ViewPB view) {
+  Widget _buildSharedListItem(SharedCollabView entry) {
+    final view = entry.view;
     final title = view.name.isNotEmpty ? view.name : '无标题';
     final shareTime = _formatTimestamp(view.createTime.toInt());
     final theme = AppFlowyTheme.of(context);
@@ -357,7 +357,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
             ),
           ),
           TextButton(
-            onPressed: () => _showInviteMembersDialog(view),
+            onPressed: () => _showInviteMembersDialog(entry),
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFFF6B35),
               padding: EdgeInsets.zero,
@@ -483,13 +483,11 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     await afLaunchUrlString(url);
   }
 
-  Future<void> _showInviteMembersDialog(ViewPB view) async {
-    if (_workspaceId.isEmpty) {
-      showToastNotification(message: '未找到工作区');
-      return;
-    }
+  Future<void> _showInviteMembersDialog(SharedCollabView entry) async {
+    final view = entry.view;
+    final ownerWorkspaceId = entry.ownerWorkspaceId;
 
-    if (_workspaceType == WorkspaceTypePB.LocalW) {
+    if (ownerWorkspaceId.isEmpty && _workspaceType == WorkspaceTypePB.LocalW) {
       showToastNotification(message: '当前工作区暂不支持共享权限管理');
       return;
     }
@@ -502,10 +500,10 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
           create: (_) => ShareTabBloc(
             repository: RustShareWithUserRepositoryImpl(),
             pageId: view.id,
-            workspaceId: _workspaceId,
+            workspaceId: ownerWorkspaceId,
           )..add(ShareTabEvent.initialize()),
           child: CollaboratorsDialog(
-            workspaceId: _workspaceId,
+            workspaceId: ownerWorkspaceId,
             pageId: view.id,
           ),
         );
@@ -647,7 +645,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     return trimmedToken;
   }
 
-  List<ViewPB> _parseSharedNotesResponse(dynamic decoded) {
+  List<SharedCollabView> _parseSharedNotesResponse(dynamic decoded) {
     List<dynamic> items = const [];
     if (decoded is Map<String, dynamic>) {
       final code = decoded['code'];
@@ -667,68 +665,32 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
       items = decoded;
     }
 
-    final views = <ViewPB>[];
+    final views = <SharedCollabView>[];
     for (final entry in items) {
       if (entry is! Map<String, dynamic>) continue;
 
-      // 根据 API 响应结构，支持多种字段名
-      final oid = (entry['oid'] ??
-              entry['object_id'] ??
-              entry['objectId'] ??
-              entry['view_id'] ??
-              '')
-          .toString();
-      if (oid.isEmpty) continue;
-
-      final timestampRaw = entry['created_at'] ?? entry['createdAt'] ?? entry['create_time'];
-      final createdSeconds = _parseTimestampSeconds(timestampRaw);
-      final name = (entry['name'] ?? '').toString();
-      final displayName = name.isNotEmpty ? name : '加载中...';
-
-      final view = ViewPB()
-        ..id = oid
-        ..name = displayName
-        ..createTime = fixnum.Int64(createdSeconds);
-      views.add(view);
+      final sharedView = sharedCollabViewFromJson(entry);
+      if (sharedView != null) {
+        views.add(sharedView);
+      }
     }
 
-    views.sort((a, b) => b.createTime.toInt() - a.createTime.toInt());
+    views.sort(
+      (a, b) => b.view.createTime.toInt() - a.view.createTime.toInt(),
+    );
     return views;
   }
 
-  int _parseTimestampSeconds(dynamic raw) {
-    if (raw == null) {
-      return DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    }
-    if (raw is int) {
-      return raw > 1000000000000 ? raw ~/ 1000 : raw;
-    }
-    if (raw is double) {
-      final value = raw.toInt();
-      return value > 1000000000000 ? value ~/ 1000 : value;
-    }
-    if (raw is String && raw.isNotEmpty) {
-      final parsedDate = DateTime.tryParse(raw);
-      if (parsedDate != null) {
-        return parsedDate.millisecondsSinceEpoch ~/ 1000;
-      }
-      final parsedInt = int.tryParse(raw);
-      if (parsedInt != null) {
-        return parsedInt > 1000000000000 ? parsedInt ~/ 1000 : parsedInt;
-      }
-    }
-    return DateTime.now().millisecondsSinceEpoch ~/ 1000;
-  }
+  Future<void> _loadViewDetails(List<SharedCollabView> entries) async {
+    if (entries.isEmpty || !mounted) return;
 
-  Future<void> _loadViewDetails(List<ViewPB> views) async {
-    if (views.isEmpty || !mounted) return;
-
-    final updatedViews = <ViewPB>[];
+    final updatedViews = <SharedCollabView>[];
     bool hasUpdate = false;
 
-    for (final view in views) {
+    for (final entry in entries) {
+      final view = entry.view;
       if (view.id.isEmpty) {
-        updatedViews.add(view);
+        updatedViews.add(entry);
         continue;
       }
 
@@ -737,17 +699,17 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         viewResult.fold(
           (detailedView) {
             if (detailedView.name.isNotEmpty) {
-              updatedViews.add(detailedView);
+              updatedViews.add(entry.copyWith(view: detailedView));
               hasUpdate = true;
             } else {
-              updatedViews.add(view);
+              updatedViews.add(entry);
             }
           },
-          (_) => updatedViews.add(view),
+          (_) => updatedViews.add(entry),
         );
       } catch (e) {
         Log.error('Failed to load view details for ${view.id}: $e');
-        updatedViews.add(view);
+        updatedViews.add(entry);
       }
     }
 

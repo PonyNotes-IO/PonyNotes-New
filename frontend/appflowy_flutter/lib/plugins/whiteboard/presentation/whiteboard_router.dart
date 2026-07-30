@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -38,16 +39,24 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   // 是否属于私有空间：
   // - true  私有空间白板 -> 始终走 B 套本地 collab（本地权威 + 静默云备份），忽略 room；
   // - false 协作空间白板 -> 维持现状（有 room 走 RemoteWhiteboardPage）；
-  // - null  尚未判定完成（判定完成前不拉取/生成 room，默认渲染 B 套本地页）。
+  // - null  尚未判定完成（判定完成前先渲染 B 套占位，避免空白转圈）。
   bool? _isPrivateSpace;
 
   // room 服务（xm-arts）是否可达：
-  // - null  尚未探测完成（协作空间下探测完成前渲染占位，避免误挂载 A 套）；
+  // - null  尚未探测完成（协作空间下探测完成前先渲染 B 套占位）；
   // - true  可达 -> 走现状 A 套 room（可编辑），在线协作零改动；
   // - false 不可达 -> 若有本地镜像则走离线只读镜像页，否则仍尝试在线（不误判）。
   bool? _roomReachable;
   // 断网时本地是否存在可用镜像（决定是否切「离线只读」）。
   bool _hasMirror = false;
+
+  // 空间归属本地缓存，避免每次打开白板重新查询
+  static final Map<String, bool> _spaceTypeCache = {};
+
+  // room 可达性探测结果缓存（30s TTL）
+  static bool? _cachedRoomReachable;
+  static DateTime? _cachedRoomReachableTime;
+  static const Duration _roomReachableCacheTtl = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -89,6 +98,23 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   /// 不建 room、不连 xm-arts，因此完全跳过 room 拉取与自动生成逻辑。
   /// 协作空间白板：维持现状，正常拉取/生成 room。
   Future<void> _resolveSpaceThenFetch(ViewPB view) async {
+    // 优先查本地缓存，避免每次打开白板重新执行空间归属查询
+    final cachedPrivate = _spaceTypeCache[view.id];
+    if (cachedPrivate != null) {
+      if (!mounted) return;
+      setState(() => _isPrivateSpace = cachedPrivate);
+
+      if (cachedPrivate) {
+        Log.info('🔒 [WhiteboardRouter] 私有空间白板（缓存命中），立即渲染 B 套: ${view.id}');
+        return;
+      }
+      // 协作空间：跳过空间判定直接拉 room
+      Log.info('🤝 [WhiteboardRouter] 协作空间白板（缓存命中），直接拉取 room: ${view.id}');
+      await _tryFetchRoomInfo(view);
+      await _resolveRoomReachability(view);
+      return;
+    }
+
     bool isPrivate = false;
     try {
       isPrivate = await isViewInPrivateSpace(view);
@@ -96,6 +122,9 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       Log.warn('⚠️ [WhiteboardRouter] 判定空间失败，按协作空间处理: $e');
       isPrivate = false;
     }
+
+    // 写入缓存
+    _spaceTypeCache[view.id] = isPrivate;
 
     if (!mounted) return;
     setState(() => _isPrivateSpace = isPrivate);
@@ -111,7 +140,6 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       '🤝 [WhiteboardRouter] 协作空间白板，维持 room 流程: ${view.id}',
     );
     await _tryFetchRoomInfo(view);
-    // room 信息就绪后，探测 room 服务可达性以决定「在线 A 套」还是「离线只读镜像」。
     await _resolveRoomReachability(view);
   }
 
@@ -121,7 +149,20 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   /// 不可达且有镜像 -> 离线只读镜像页；
   /// 不可达且无镜像 -> 仍尝试在线（不误判）。
   Future<void> _resolveRoomReachability(ViewPB view) async {
+    // 优先使用缓存结果，避免频繁切换白板时重复 3s 探测
+    final cachedResult = _validCachedReachability();
+    if (cachedResult != null) {
+      if (!mounted) return;
+      setState(() => _roomReachable = cachedResult);
+      Log.info('📶 [WhiteboardRouter] room 可达性（缓存命中）=$cachedResult, view=${view.id}');
+      return;
+    }
+
     final reachable = await _probeRoomReachable();
+    // 缓存探测结果
+    _cachedRoomReachable = reachable;
+    _cachedRoomReachableTime = DateTime.now();
+
     // 仅在不可达时才检查本地镜像，节省 IO。
     final hasMirror =
         reachable ? false : await WhiteboardMirrorService().hasMirror(view.id);
@@ -134,6 +175,20 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     Log.info(
       '📶 [WhiteboardRouter] room 可达性=$reachable, 本地镜像=$hasMirror, view=${view.id}',
     );
+  }
+
+  /// 返回 TTL 内有效的缓存可达性结果；过期返回 null。
+  static bool? _validCachedReachability() {
+    if (_cachedRoomReachable == null || _cachedRoomReachableTime == null) {
+      return null;
+    }
+    if (DateTime.now().difference(_cachedRoomReachableTime!) >
+        _roomReachableCacheTtl) {
+      _cachedRoomReachable = null;
+      _cachedRoomReachableTime = null;
+      return null;
+    }
+    return _cachedRoomReachable;
   }
 
   /// 轻量探测 room 服务（xm-arts）是否可达。
@@ -179,84 +234,46 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
 
     try {
       final room = await WhiteboardRoomService.getRoom(view.id);
-      
+
       if (room != null) {
         Log.debug('🟢 [WhiteboardRouter] Found room in local storage: roomId=${room.roomId}');
         setState(() {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
         });
-      }
-
-      final whiteboardData = await WhiteboardDataService().loadWhiteboardData(view.id);
-      Log.debug('🔍 [WhiteboardRouter] Loaded whiteboard data keys: ${whiteboardData.keys}');
-      Log.debug('🔍 [WhiteboardRouter] Full whiteboard data: $whiteboardData');
-      
-      final serverRoomId = whiteboardData['roomId'];
-      final serverRoomKey = whiteboardData['roomKey'];
-      Log.debug('🔍 [WhiteboardRouter] serverRoomId type: ${serverRoomId.runtimeType}, value: $serverRoomId');
-      Log.debug('🔍 [WhiteboardRouter] serverRoomKey type: ${serverRoomKey.runtimeType}, value: $serverRoomKey');
-
-      if (serverRoomId != null && serverRoomId.toString().isNotEmpty && serverRoomKey != null && serverRoomKey.toString().isNotEmpty) {
-        final roomIdStr = serverRoomId is String ? serverRoomId : serverRoomId.toString();
-        final roomKeyStr = serverRoomKey is String ? serverRoomKey : serverRoomKey.toString();
-        
-        Log.debug('🟢 [WhiteboardRouter] Found room in server data: roomId=$roomIdStr');
-        
-        if (roomIdStr != _roomId || roomKeyStr != _roomKey) {
-          await WhiteboardRoomService.saveRoom(view.id, roomIdStr, roomKeyStr);
-          Log.debug('✅ [WhiteboardRouter] Synced server room to local storage: roomId=$roomIdStr');
-        }
-        
-        setState(() {
-          _roomId = roomIdStr;
-          _roomKey = roomKeyStr;
-        });
         return;
       }
 
-      if (_roomId != null && _roomKey != null) {
-        Log.debug('🟢 [WhiteboardRouter] Using existing room from local storage: roomId=$_roomId');
-        return;
-      }
-
+      // 无本地 room 信息时生成新 room 并持久化
       Log.debug('🟡 [WhiteboardRouter] No room found for view ${view.id}, generating new one');
       final newRoomId = WhiteboardRoomService.generateRoomId();
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
-      
+
       Log.info('🆕 [WhiteboardRouter] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${view.id}');
-      
+
       await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
       Log.info('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
-      
-      Log.info('📤 [WhiteboardRouter] Saving room info to server...');
-      final saveResult = await WhiteboardDataService().saveWhiteboardData(
-        view.id,
-        {
-          'roomId': newRoomId,
-          'roomKey': newRoomKey,
-        },
-        source: 'room-init',
+
+      // 后台异步将 room 信息写入服务器（不阻塞渲染）
+      unawaited(
+        WhiteboardDataService().saveWhiteboardData(
+          view.id,
+          {
+            'roomId': newRoomId,
+            'roomKey': newRoomKey,
+          },
+          source: 'room-init',
+        ).then((saved) {
+          if (saved) {
+            Log.info('✅ [WhiteboardRouter] Room info synced to server: roomId=$newRoomId');
+          } else {
+            Log.warn('⚠️ [WhiteboardRouter] Failed to sync room info to server (will retry on next open)');
+          }
+        }).catchError((e) {
+          Log.warn('⚠️ [WhiteboardRouter] Room sync error (non-blocking): $e');
+        }),
       );
-      
-      if (saveResult) {
-        Log.info('✅ [WhiteboardRouter] SUCCESSFULLY saved room info to server: roomId=$newRoomId, roomKey=$newRoomKey');
-        // 立即验证：尝试从服务端读取回来
-        Log.info('🔍 [WhiteboardRouter] Verifying save by loading from server...');
-        final verifyData = await WhiteboardDataService().loadWhiteboardData(view.id, source: 'room-verify');
-        final verifyRoomId = verifyData['roomId'];
-        final verifyRoomKey = verifyData['roomKey'];
-        Log.info('🔍 [WhiteboardRouter] Verification result: roomId=$verifyRoomId, roomKey=$verifyRoomKey');
-        if (verifyRoomId == newRoomId && verifyRoomKey == newRoomKey) {
-          Log.info('✅✅ [WhiteboardRouter] VERIFICATION PASSED: saved and loaded roomId/roomKey match!');
-        } else {
-          Log.error('❌❌ [WhiteboardRouter] VERIFICATION FAILED: saved roomId=$newRoomId, loaded roomId=$verifyRoomId');
-          Log.error('❌❌ [WhiteboardRouter] VERIFICATION FAILED: saved roomKey=$newRoomKey, loaded roomKey=$verifyRoomKey');
-        }
-      } else {
-        Log.error('❌ [WhiteboardRouter] FAILED to save room info to server');
-      }
-      
+
       setState(() {
         _roomId = newRoomId;
         _roomKey = newRoomKey;
@@ -288,12 +305,18 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
-        // 空间归属判定完成前，先渲染中性占位，避免在（协作空间）判定窗口内
-        // 误挂载 B 套本地 collab 页而触发多余的云端 collab 初始化。
-        if (_isPrivateSpace == null) {
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        // 空间归属判定完成前，先渲染 B 套 WhiteboardPage 作为渐进占位。
+        // 避免用户看到空白转圈（私有空间和白板本地缓存是最常见场景，
+        // 且 B 套可在全部场景下正常渲染，不依赖任何网络结果）。
+        // 判定完成后由 AnimatedSwitcher 无缝切换（必要时）。
+        if (_isPrivateSpace == null || _roomReachable == null) {
+          Log.debug(
+            '⏳ [WhiteboardRouter] 渐进渲染 B 套占位: _isPrivateSpace=$_isPrivateSpace _roomReachable=$_roomReachable, view=${view.id}',
+          );
+          return WhiteboardPage(
+            key: ValueKey('whiteboard_page_placeholder_${view.id}'),
+            view: view,
+            onViewChanged: widget.onViewChanged,
           );
         }
         // 私有空间白板：始终渲染 B 套 WhiteboardPage（本地 collab + 静默云备份），忽略 room。
@@ -303,13 +326,6 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
             key: ValueKey('whiteboard_page_${view.id}'),
             view: view,
             onViewChanged: widget.onViewChanged,
-          );
-        }
-        // 协作空间白板：room 可达性探测完成前先渲染占位，避免误挂载 A 套。
-        if (_roomReachable == null) {
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
         // 断网且本地有镜像：切「离线只读镜像」页（禁止编辑，仅浏览）。
