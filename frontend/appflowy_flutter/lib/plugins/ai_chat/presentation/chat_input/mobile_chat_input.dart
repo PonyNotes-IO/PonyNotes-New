@@ -81,14 +81,19 @@ class _MobileChatInputState extends State<MobileChatInput> {
           );
         },
         child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline,
-              width: 1,
-            ),
+          margin: EdgeInsets.only(
+            left: 12,
+            right: 12,
+            top: 8,
+            bottom: MediaQuery.of(context).padding.bottom + 8,
           ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF2C2C2C)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
             builder: (context, state) {
               return Column(
@@ -125,50 +130,53 @@ class _MobileChatInputState extends State<MobileChatInput> {
   /// PonyNotes: 构建底部工具栏 - 参考桌面端设计，所有按钮在同一行
   Widget _buildBottomToolbar(BuildContext context, AIPromptInputState state) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 来源选择按钮
-          PromptInputMobileSelectSourcesButton(
-            selectedSourcesNotifier: widget.selectedSourcesNotifier,
-            onUpdateSelectedSources: widget.onUpdateSelectedSources,
-          ),
-          const SizedBox(width: 2),
-          // 格式切换按钮
-          PromptInputMobileToggleFormatButton(
-            showFormatBar: state.showPredefinedFormats,
-            onTap: () {
-              context
-                  .read<AIPromptInputBloc>()
-                  .add(AIPromptInputEvent.toggleShowPredefinedFormat());
-            },
-          ),
-          const SizedBox(width: 2),
-          // 模型选择按钮
-          _MobileSelectModelButton(
-            aiModelStateNotifier:
-                context.read<AIPromptInputBloc>().aiModelStateNotifier,
-          ),
-          const SizedBox(width: 2),
-          // 深度思考按钮
-          _MobileDeepThinkingButton(
-            isEnabled: state.enableDeepThinking,
-            isDisabled: state.attachedFiles.isNotEmpty,
-          ),
-          const SizedBox(width: 2),
-          // 联网搜索按钮
-          _MobileWebSearchButton(
-            isEnabled: state.enableWebSearch,
-            isDisabled: state.attachedFiles.isNotEmpty,
-          ),
-          const SizedBox(width: 4),
-          // 使用次数显示
-          const _MobileAIUsageIndicator(),
-          const SizedBox(width: 4),
-          // 发送按钮
-          sendButton(),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+      child: SizedBox(
+        height: 30,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 来源选择按钮
+            PromptInputMobileSelectSourcesButton(
+              selectedSourcesNotifier: widget.selectedSourcesNotifier,
+              onUpdateSelectedSources: widget.onUpdateSelectedSources,
+            ),
+            const SizedBox(width: 4),
+            // 格式切换按钮
+            PromptInputMobileToggleFormatButton(
+              showFormatBar: state.showPredefinedFormats,
+              onTap: () {
+                context
+                    .read<AIPromptInputBloc>()
+                    .add(AIPromptInputEvent.toggleShowPredefinedFormat());
+              },
+            ),
+            const SizedBox(width: 4),
+            // 模型选择按钮
+            _MobileSelectModelButton(
+              aiModelStateNotifier:
+                  context.read<AIPromptInputBloc>().aiModelStateNotifier,
+            ),
+            const SizedBox(width: 4),
+            // 深度思考按钮
+            _MobileDeepThinkingButton(
+              isEnabled: state.enableDeepThinking,
+              isDisabled: state.attachedFiles.isNotEmpty,
+            ),
+            const SizedBox(width: 4),
+            // 联网搜索按钮
+            _MobileWebSearchButton(
+              isEnabled: state.enableWebSearch,
+              isDisabled: state.attachedFiles.isNotEmpty,
+            ),
+            const SizedBox(width: 4),
+            // 使用次数显示
+            const _MobileAIUsageIndicator(),
+            const SizedBox(width: 4),
+            // 发送按钮
+            sendButton(),
+          ],
+        ),
       ),
     );
   }
@@ -179,8 +187,8 @@ class _MobileChatInputState extends State<MobileChatInput> {
     return GestureDetector(
       onTap: isEnabled ? handleSendPressed : widget.onStopStreaming,
       child: SizedBox(
-        width: 36,
-        height: 36,
+        width: 28,
+        height: 28,
         child: isStreaming
             ? const Center(
                 child: SizedBox(
@@ -194,7 +202,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
               )
             : FlowySvg(
                 FlowySvgs.m_ai_send_m,
-                size: const Size.square(24),
+                size: const Size.square(20),
               ),
       ),
     );
@@ -314,35 +322,40 @@ class _MobileChatInputState extends State<MobileChatInput> {
   Widget inputTextField(BuildContext context) {
     return BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
       builder: (context, state) {
-        return Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.transparent, width: 0),
-          ),
-          child: ExtendedTextField(
+        return ExtendedTextField(
             controller: textController,
             focusNode: focusNode,
             textAlignVertical: TextAlignVertical.top,
             decoration: InputDecoration(
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               hintText: state.modelState.hintText,
-              hintStyle: inputHintTextStyle(context),
-              isCollapsed: true,
-              isDense: true,
+              hintStyle: TextStyle(
+                color: Theme.of(context).hintColor,
+                fontSize: 13,
+              ),
               filled: false,
+              fillColor: null,
             ),
             keyboardType: TextInputType.multiline,
             textCapitalization: TextCapitalization.sentences,
-            minLines: 1,
-            maxLines: 6,
-            style: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(height: 20 / 14),
+            minLines: 3,
+            maxLines: 8,
+            style: const TextStyle(fontSize: 13),
             specialTextSpanBuilder: PromptInputTextSpanBuilder(
               inputControlCubit: inputControlCubit,
               mentionedPageTextStyle:
@@ -352,8 +365,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
                       ),
             ),
             onTapOutside: (_) => focusNode.unfocus(),
-          ),
-        );
+          );
       },
     );
   }
@@ -454,11 +466,11 @@ class _MobileDeepThinkingButton extends StatelessWidget {
                     .add(const AIPromptInputEvent.toggleDeepThinking());
               },
         child: Container(
-          height: 26,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: borderColor,
               width: 1,
@@ -468,7 +480,7 @@ class _MobileDeepThinkingButton extends StatelessWidget {
             child: Text(
               '深度思考',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -530,11 +542,11 @@ class _MobileWebSearchButton extends StatelessWidget {
                     .add(const AIPromptInputEvent.toggleWebSearch());
               },
         child: Container(
-          height: 26,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: borderColor,
               width: 1,
@@ -544,7 +556,7 @@ class _MobileWebSearchButton extends StatelessWidget {
             child: Text(
               '联网搜索',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -599,11 +611,11 @@ class _MobileSelectModelButtonContent extends StatelessWidget {
         return GestureDetector(
           onTap: () => _showModelSelector(context),
           child: Container(
-            height: 26,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: isDarkMode
                     ? const Color(0xFF4A4A4A)
@@ -619,18 +631,18 @@ class _MobileSelectModelButtonContent extends StatelessWidget {
                   size: 12,
                   color: hintColor,
                 ),
-                const SizedBox(width: 2),
+                const SizedBox(width: 3),
                 if (modelName.isNotEmpty && !isDefault)
                   Text(
                     modelName,
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       color: hintColor,
                     ),
                   ),
                 Icon(
                   Icons.keyboard_arrow_down,
-                  size: 12,
+                  size: 13,
                   color: hintColor,
                 ),
               ],
