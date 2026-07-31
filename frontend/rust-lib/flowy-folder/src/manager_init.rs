@@ -114,6 +114,10 @@ impl FolderManager {
     self.mutex_folder.store(Some(folder.clone()));
     let _ = self.folder_ready_notifier.send_replace(true);
 
+    // folder 就绪即发布私有视图集合：同步插件是在 collab 打开时创建的，
+    // 必须先于此拿到归属信息，否则私有内容会按协作内容配置去实时推送。
+    self.publish_private_views().await;
+
     let weak_mutex_folder = Arc::downgrade(&folder);
     subscribe_folder_sync_state_changed(*workspace_id, folder_state_rx, weak_mutex_folder.clone(), Arc::downgrade(&self.user));
     subscribe_folder_trash_changed(

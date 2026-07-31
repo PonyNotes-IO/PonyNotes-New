@@ -34,6 +34,7 @@ use collab_folder::{
   ViewLayout, ViewUpdate, Workspace,
 };
 use collab_integrate::CollabKVDB;
+use collab_integrate::private_views::PrivateViewRegistry;
 use collab_integrate::collab_builder::{
   AppFlowyCollabBuilder, CollabBuilderConfig, CollabPersistenceImpl,
 };
@@ -84,6 +85,9 @@ pub struct FolderManager {
   pub cloud_service: Weak<dyn FolderCloudService>,
   pub(crate) store_preferences: Arc<KVStorePreferences>,
   pub(crate) folder_ready_notifier: tokio::sync::watch::Sender<bool>,
+  /// 私有空间视图登记表（与 ServerProvider 共享）。folder 是这份信息的唯一来源，
+  /// 这里在装载与私有区增删后写入；同步插件据此为私有内容选用静默推送配置。
+  pub(crate) private_views: PrivateViewRegistry,
 }
 
 impl Drop for FolderManager {
@@ -122,11 +126,13 @@ impl FolderManager {
     collab_builder: Arc<AppFlowyCollabBuilder>,
     cloud_service: Weak<dyn FolderCloudService>,
     store_preferences: Arc<KVStorePreferences>,
+    private_views: PrivateViewRegistry,
   ) -> FlowyResult<Self> {
     let (folder_ready_notifier, _) = tokio::sync::watch::channel(false);
     let manager = Self {
       user,
       mutex_folder: Default::default(),
+      private_views,
       collab_builder,
       operation_handlers: Default::default(),
       extra_handlers: Arc::new(parking_lot::RwLock::new(Vec::new())),
@@ -1055,6 +1061,9 @@ impl FolderManager {
       }
       notify_parent_view_did_change(workspace_id, &folder, vec![new_parent_id, old_parent_id]);
     }
+    // 跨私有↔协作移动会改变归属，登记表必须跟着更新，
+    // 否则该视图下次打开仍会沿用旧归属对应的同步配置。
+    self.publish_private_views().await;
     Ok(())
   }
 
@@ -2568,6 +2577,27 @@ impl FolderManager {
       } else {
         folder.add_private_view_ids(view_ids);
       }
+    }
+  }
+
+  /// 把当前私有空间的视图集合发布到共享登记表。
+  ///
+  /// folder 是这份信息的唯一来源，而创建同步插件的 ServerProvider 拿不到 folder
+  /// （反向注入会与 folder manager 对 server provider 的依赖成环），故用登记表转交。
+  ///
+  /// 需要在 folder 装载完成、以及任何改动私有区的操作之后调用；漏调的后果是该视图
+  /// 暂时按非私有处理 —— 只是失去静默推送优化，不会误伤协作内容，也不会丢数据。
+  pub(crate) async fn publish_private_views(&self) {
+    if let Some(lock) = self.mutex_folder.load_full() {
+      let folder = lock.read().await;
+      let ids: std::collections::HashSet<String> = folder
+        .get_my_private_sections()
+        .into_iter()
+        .map(|section| section.id)
+        .collect();
+      let count = ids.len();
+      self.private_views.replace(ids);
+      tracing::debug!("[私有登记表] 已发布 {} 个私有视图", count);
     }
   }
 

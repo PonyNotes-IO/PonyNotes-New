@@ -3,6 +3,7 @@ use arc_swap::{ArcSwap, ArcSwapOption};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use collab_integrate::instant_indexed_data_provider::InstantIndexedDataWriter;
+use collab_integrate::private_views::PrivateViewRegistry;
 use dashmap::try_result::TryResult;
 use dashmap::DashMap;
 use flowy_ai::local_ai::controller::LocalAIController;
@@ -33,6 +34,9 @@ pub struct ServerProvider {
   pub user_enable_sync: Arc<AtomicBool>,
   pub encryption: Arc<dyn AppFlowyEncryption>,
   pub indexed_data_writer: Option<Weak<InstantIndexedDataWriter>>,
+  /// 私有空间视图登记表。由 folder 侧写入，这里只读 —— 用于给私有内容选用
+  /// 「编辑静默后才推送」的同步配置（见 get_plugins）。
+  pub private_views: PrivateViewRegistry,
 }
 
 // Our little guard wrapper:
@@ -70,6 +74,7 @@ impl ServerProvider {
       uid: Default::default(),
       local_ai,
       indexed_data_writer,
+      private_views: PrivateViewRegistry::new(),
     }
   }
 

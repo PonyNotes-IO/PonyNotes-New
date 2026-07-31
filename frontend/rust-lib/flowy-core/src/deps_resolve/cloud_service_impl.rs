@@ -693,9 +693,25 @@ impl CollabCloudPluginProvider for ServerProvider {
                 let (sink, stream) = (channel.sink(), channel.stream());
                 // Batch adjacent local CRDT transactions before handing them to the
                 // workspace-level WebSocket aggregator. Init/reconnect sync is still immediate.
-                let sink_config = SinkConfig::new()
+                let mut sink_config = SinkConfig::new()
                   .send_delay(Duration::from_millis(750))
                   .send_timeout(8);
+
+                // 私有空间内容：编辑期间完全不推，停笔 3 秒后一次推走；连续编辑
+                // 满 60 秒则强制上推（避免长时间不落云，也避免攒出过大的合并更新
+                // 撞上实时消息体积上限）。
+                //
+                // 协作内容**必须**维持原有的实时节奏 —— 一旦对其启用静默推送，
+                // 协作方在对端停手前什么都看不到。因此只在确认属于私有空间时启用；
+                // 登记表查不到一律按非私有处理（宁可多推，不误伤协作）。
+                if self.private_views.is_private(&collab_object.object_id) {
+                  sink_config = sink_config
+                    .idle_flush(Duration::from_secs(3), Duration::from_secs(60));
+                  tracing::info!(
+                    "[云同步] 私有空间内容，启用静默推送(3s/60s): {}",
+                    collab_object.object_id
+                  );
+                }
                 let sync_plugin = SyncPlugin::new(
                   origin,
                   sync_object,

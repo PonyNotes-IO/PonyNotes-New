@@ -48,12 +48,21 @@ impl FolderDepsResolver {
       authenticate_user: authenticate_user.clone(),
     });
 
+    // 与 ServerProvider 共用同一份私有视图登记表：folder 写、同步插件读。
+    // upgrade 失败时退化为一份独立的空表 —— 查不到即按非私有处理，
+    // 只是失去静默推送优化，不会误伤协作内容。
+    let private_views = server_provider
+      .upgrade()
+      .map(|provider| provider.private_views.clone())
+      .unwrap_or_default();
+
     Arc::new(
       FolderManager::new(
         user.clone(),
         collab_builder,
         server_provider.clone(),
         store_preferences,
+        private_views,
       )
       .unwrap(),
     )
