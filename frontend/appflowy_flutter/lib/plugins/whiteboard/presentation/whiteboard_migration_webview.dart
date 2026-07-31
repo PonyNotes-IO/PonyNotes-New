@@ -42,7 +42,7 @@ Future<WhiteboardMigrationWebResult> runWhiteboardMigrationWebView({
   required String roomKey,
   required bool isPush,
   Map<String, dynamic>? pushPayload,
-  Duration timeout = const Duration(seconds: 40),
+  Duration timeout = const Duration(seconds: 90),
 }) async {
   if (!context.mounted) {
     return const WhiteboardMigrationWebResult(
@@ -167,32 +167,49 @@ class _WhiteboardMigrationWebViewState
   ///
   /// 30s 对冷启动的慢机器偏紧（webview 要完整跑起 excalidraw 再拉场景），
   /// 放宽到 60s；正常情况下几秒内就绪，不会因此变慢。
+  ///
+  /// 必须**小于**外层的 widget.timeout（90s），否则外层先触发、流程被判为
+  /// 笼统的 'timeout'，既看不到是卡在哪个就绪条件，也来不及采集诊断
+  /// —— 线上曾因两者是 60s vs 40s 而恰好踩中（waited=40000ms、诊断为空）。
   Future<void> _waitReady(String readyExpr, {int maxMs = 60000}) async {
     final controller = _controller;
     if (controller == null) throw StateError('no-controller');
     var waited = 0;
     const step = 400;
+    // 诊断必须在**等待期间**采集：外层还有一道总超时（widget.timeout），它一旦
+    // 先触发就会 _finish 并开始拆除 webview，那时再去 evaluateJavascript 只会
+    // 拿到 null（线上已实测到「诊断=<null>」）。所以改为每 5 秒打一次快照。
+    const diagEveryMs = 5000;
+    var nextDiagAt = diagEveryMs;
+
     while (waited < maxMs && !_finished) {
       final r = await controller.evaluateJavascript(
         source: 'window.__xmMig && window.__xmMig.$readyExpr ? true : false',
       );
       if (r == true || r == 'true' || r == 1) return;
+
+      if (waited >= nextDiagAt) {
+        nextDiagAt += diagEveryMs;
+        try {
+          final d = await controller.evaluateJavascript(
+            source:
+                'window.__xmMig ? JSON.stringify(window.__xmMig.diag()) : "no-__xmMig"',
+          );
+          Log.warn(
+            '[WBMigrationWebView] [就绪诊断] expr=$readyExpr waited=${waited}ms $d',
+          );
+        } catch (e) {
+          Log.warn('[WBMigrationWebView] [就绪诊断] 采集失败 waited=${waited}ms: $e');
+        }
+      }
+
       await Future<void>.delayed(const Duration(milliseconds: step));
       waited += step;
     }
 
-    String diag = '<unavailable>';
-    try {
-      final d = await controller.evaluateJavascript(
-        source:
-            'window.__xmMig ? JSON.stringify(window.__xmMig.diag()) : "no-__xmMig"',
-      );
-      diag = d?.toString() ?? '<null>';
-    } catch (e) {
-      diag = '<diag-failed:$e>';
-    }
     Log.error(
-      '[WBMigrationWebView] 就绪等待超时 expr=$readyExpr waited=${waited}ms 诊断=$diag',
+      '[WBMigrationWebView] 就绪等待超时 expr=$readyExpr waited=${waited}ms'
+      '（诊断见等待期间定期打印的 [就绪诊断] 行）',
     );
 
     throw TimeoutException('ready-timeout:$readyExpr');
