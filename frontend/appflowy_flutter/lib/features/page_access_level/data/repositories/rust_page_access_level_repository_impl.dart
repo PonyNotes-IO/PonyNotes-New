@@ -99,6 +99,50 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
+    // 私有空间文档：完全本地判定，一个网络请求都不发。
+    //
+    // 下面三步（接收的发布文档只读检查 / 云端权限 / 协作成员）都是直连 HTTP，
+    // 断网时会依次挂到各自超时才返回 —— 其中云端权限那步是 3 次重试 × 5 秒，
+    // 单它一项就要 15 秒。结果是断网打开私有文档要卡二十多秒，
+    // 直到全部失败才落到本地兜底。
+    //
+    // 但私有空间文档按定义就不可能是「被分享的」或「接收的发布文档」：它没有
+    // 协作成员记录，也没有发布记录，这三个请求的答案恒为空。既然本地的
+    // sectionType 就能确定这一点，就没有任何理由先去问网络。
+    //
+    // 判定不出 section（异常/未就绪）时不短路，维持原有流程 ——
+    // 宁可慢，也不放松共享文档的权限判定。
+    final earlySectionType = await getSectionType(pageId).then(
+      (r) => r.fold((s) => s, (_) => null),
+    );
+    if (earlySectionType == SharedSectionType.private) {
+      // 用该文档自己所属工作区的角色，而不是当前激活工作区的 —— 理由同下方
+      // 主流程里的注释：多标签页下会把角色「污染」到别的工作区的文档上。
+      // getView / getWorkspaceById 都是本地 FFI，不走网络。
+      final earlyView = await getView(pageId).then(
+        (r) => r.fold((s) => s, (_) => null),
+      );
+      final earlyDocWorkspaceId = earlyView?.workspaceId;
+      final earlyWorkspace = await (earlyDocWorkspaceId != null &&
+                  earlyDocWorkspaceId.isNotEmpty
+              ? UserBackendService.getWorkspaceById(earlyDocWorkspaceId)
+              : getCurrentWorkspace())
+          .then((r) => r.fold((s) => s, (_) => null));
+
+      if (earlyWorkspace != null) {
+        final role = earlyWorkspace.role;
+        final canWrite = role == AFRolePB.Owner || role == AFRolePB.Member;
+        Log.debug(
+          '[PageAccessLevel] 私有空间文档，纯本地判定（不发任何网络请求）: '
+          'page=$pageId role=$role canWrite=$canWrite',
+        );
+        return FlowyResult.success(
+          canWrite ? ShareAccessLevel.readAndWrite : ShareAccessLevel.readOnly,
+        );
+      }
+      // 取不到工作区时不短路，落回主流程。
+    }
+
     // 关键修复：接收的发布文档检查必须在 creator 检查之前
     // 因为 receive_published_collab 复制文档时 created_by 设为了接收者的 uid，
     // 如果先检查 creator，接收者会被误判为"创建者"而获得 fullAccess

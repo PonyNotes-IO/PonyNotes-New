@@ -67,7 +67,35 @@ class FileStorageService {
   late StreamSubscription<String> _subscription;
   DateTime? _lastErrorToastTime;
 
+  /// 断网 / 连接失败属于**稍后续传**，不是上传失败。
+  ///
+  /// 文件此时已落本地缓存与上传队列，联网后会自动续传，UI 只需呈现「待同步」
+  /// 角标。弹一个红色「上传失败」既不准确，也会让用户以为内容丢了。
+  ///
+  /// 判定口径与 `image_util.dart` 的 `_isPendingUploadError` 保持一致 ——
+  /// client-api 底层 reqwest 的发送失败常被折叠为 Internal，只能按消息特征识别。
+  /// 两处必须同步修改，否则会出现「图片显示待同步、同时又弹上传失败」的矛盾提示
+  /// （这正是本次要修的现象）。
+  static bool _isPendingUploadError(String error) {
+    final e = error.toLowerCase();
+    return e.contains('error sending request') ||
+        e.contains('connection refused') ||
+        e.contains('connection reset') ||
+        e.contains('dns error') ||
+        e.contains('timed out') ||
+        e.contains('network is unreachable') ||
+        e.contains('no route to host') ||
+        e.contains('failed to lookup address');
+  }
+
   void _showUploadErrorToast(String errorMsg) {
+    if (_isPendingUploadError(errorMsg)) {
+      Log.info(
+        '[FileUpload] 网络不可用，已转入待同步队列，不提示失败: $errorMsg',
+      );
+      return;
+    }
+
     final now = DateTime.now();
     if (_lastErrorToastTime != null &&
         now.difference(_lastErrorToastTime!).inSeconds < 5) {
