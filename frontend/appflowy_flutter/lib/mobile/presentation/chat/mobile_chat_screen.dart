@@ -691,65 +691,6 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     );
   }
 
-  /// AI 使用次数提示（对标桌面端 _buildCountAndRemainingIndicator）
-  Widget _buildUsageIndicator(BuildContext context) {
-    return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
-      future: _loadUsage(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox.shrink();
-
-        return snapshot.data!.fold(
-          (usage) {
-            if (usage == null) return const SizedBox.shrink();
-            if (usage.aiResponsesUnlimited) return const SizedBox.shrink();
-
-            final used = usage.aiResponsesCount.toInt();
-            final total = usage.aiResponsesCountLimit.toInt();
-            if (total == -1) {
-              return _usagePill(context, '未订阅', Colors.red);
-            }
-            final remaining = total - used;
-            final color =
-                remaining <= 0 ? Colors.red : Theme.of(context).hintColor;
-            return _usagePill(context, '$remaining 次可用', color);
-          },
-          (_) => const SizedBox.shrink(),
-        );
-      },
-    );
-  }
-
-  Widget _usagePill(BuildContext context, String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        text,
-        style:
-            TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: color),
-      ),
-    );
-  }
-
-  Future<FlowyResult<WorkspaceUsagePB?, FlowyError>> _loadUsage() async {
-    try {
-      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
-      if (workspaceId == null) return FlowyResult.success(null);
-
-      final service = WorkspaceService(
-        workspaceId: workspaceId,
-        userId: fixnum.Int64.ZERO,
-      );
-      return service.getWorkspaceUsage();
-    } catch (_) {
-      return FlowyResult.failure(FlowyError(msg: ''));
-    }
-  }
-
   /// 附件上传按钮（对标桌面端 _buildAttachmentButton）
   Widget _buildAttachmentButton(BuildContext context) {
     final isDisabled = _isDeepThinkingEnabled || _isWebSearchEnabled;

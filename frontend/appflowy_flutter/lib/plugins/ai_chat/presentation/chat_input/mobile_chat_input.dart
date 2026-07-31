@@ -6,7 +6,6 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
-import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -47,9 +46,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
   @override
   void initState() {
     super.initState();
-
     textController.addListener(handleTextControllerChanged);
-    // focusNode.onKeyEvent = handleKeyEvent;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       focusNode.requestFocus();
@@ -116,7 +113,8 @@ class _MobileChatInputState extends State<MobileChatInput> {
                     ),
                   // 输入框主体
                   inputTextField(context),
-                  // 底部工具栏
+                  const SizedBox(height: 10),
+                  // 底部工具栏：对标欢迎页
                   _buildBottomToolbar(context, state),
                 ],
               );
@@ -127,58 +125,122 @@ class _MobileChatInputState extends State<MobileChatInput> {
     );
   }
 
-  /// PonyNotes: 构建底部工具栏 - 参考桌面端设计，所有按钮在同一行
+  /// 对标欢迎页底部工具栏：模型 / 深度思考 / 联网搜索 / 附件 / 发送
   Widget _buildBottomToolbar(BuildContext context, AIPromptInputState state) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
-      child: SizedBox(
+    return SizedBox(
+      height: 36,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildModelButton(context),
+                const SizedBox(width: 3),
+                _buildFeatureButton(
+                  context: context,
+                  label: '深度思考',
+                  icon: Icons.psychology,
+                  isEnabled: state.enableDeepThinking,
+                  onTap: () => context
+                      .read<AIPromptInputBloc>()
+                      .add(const AIPromptInputEvent.toggleDeepThinking()),
+                ),
+                const SizedBox(width: 3),
+                _buildFeatureButton(
+                  context: context,
+                  label: '联网搜索',
+                  icon: Icons.language,
+                  isEnabled: state.enableWebSearch,
+                  onTap: () => context
+                      .read<AIPromptInputBloc>()
+                      .add(const AIPromptInputEvent.toggleWebSearch()),
+                ),
+                const SizedBox(width: 3),
+              ],
+            ),
+          ),
+          _buildAttachmentButton(context),
+          sendButton(),
+        ],
+      ),
+    );
+  }
+
+  /// 对标欢迎页：模型选择按钮
+  Widget _buildModelButton(BuildContext context) {
+    final notifier = context.read<AIPromptInputBloc>().aiModelStateNotifier;
+    return BlocProvider(
+      create: (_) => SelectModelBloc(aiModelStateNotifier: notifier),
+      child: _ModelButtonContent(aiModelStateNotifier: notifier),
+    );
+  }
+
+  /// 对标欢迎页：功能按钮（深度思考 / 联网搜索）
+  Widget _buildFeatureButton({
+    required BuildContext context,
+    required String label,
+    required IconData icon,
+    required bool isEnabled,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeColor = const Color(0xFFE94618);
+    final textColor = isEnabled
+        ? activeColor
+        : (isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363));
+    final borderColor = isEnabled
+        ? activeColor
+        : (isDark ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD));
+    final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
         height: 30,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 来源选择按钮
-            PromptInputMobileSelectSourcesButton(
-              selectedSourcesNotifier: widget.selectedSourcesNotifier,
-              onUpdateSelectedSources: widget.onUpdateSelectedSources,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: borderColor),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: textColor,
             ),
-            const SizedBox(width: 4),
-            // 格式切换按钮
-            PromptInputMobileToggleFormatButton(
-              showFormatBar: state.showPredefinedFormats,
-              onTap: () {
-                context
-                    .read<AIPromptInputBloc>()
-                    .add(AIPromptInputEvent.toggleShowPredefinedFormat());
-              },
-            ),
-            const SizedBox(width: 4),
-            // 模型选择按钮
-            _MobileSelectModelButton(
-              aiModelStateNotifier:
-                  context.read<AIPromptInputBloc>().aiModelStateNotifier,
-            ),
-            const SizedBox(width: 4),
-            // 深度思考按钮
-            _MobileDeepThinkingButton(
-              isEnabled: state.enableDeepThinking,
-              isDisabled: state.attachedFiles.isNotEmpty,
-            ),
-            const SizedBox(width: 4),
-            // 联网搜索按钮
-            _MobileWebSearchButton(
-              isEnabled: state.enableWebSearch,
-              isDisabled: state.attachedFiles.isNotEmpty,
-            ),
-            const SizedBox(width: 4),
-            // 使用次数显示
-            const _MobileAIUsageIndicator(),
-            const SizedBox(width: 4),
-            // 发送按钮
-            sendButton(),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  /// 对标欢迎页：附件上传按钮
+  Widget _buildAttachmentButton(BuildContext context) {
+    final iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    return GestureDetector(
+      onTap: _pickAttachment,
+      child: SizedBox(
+        width: 28,
+        height: 28,
+        child: Center(
+          child: FlowySvg(
+            FlowySvgs.m_ai_attachment_m,
+            size: const Size.square(24),
+            color: iconColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAttachment() async {
+    // TODO: 对接附件上传逻辑，与桌面端保持一致
   }
 
   Widget sendButton() {
@@ -190,45 +252,36 @@ class _MobileChatInputState extends State<MobileChatInput> {
         width: 28,
         height: 28,
         child: isStreaming
-            ? const Center(
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator.adaptive(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(Colors.white),
-                  ),
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator.adaptive(
+                  strokeWidth: 2,
                 ),
               )
-            : FlowySvg(
+            : const FlowySvg(
                 FlowySvgs.m_ai_send_m,
-                size: const Size.square(20),
+                size: Size.square(24),
+                blendMode: null,
               ),
       ),
     );
   }
 
   Future<void> handleSendPressed() async {
-    // 检查AI对话限制
     final canUseAI = await context.checkAndHandleAIChatLimit();
-    if (!canUseAI) {
-      return;
-    }
+    if (!canUseAI) return;
 
-    if (widget.isStreaming) {
-      return;
-    }
+    if (widget.isStreaming) return;
     final trimmedText = textController.text.trim();
-    if (trimmedText.isEmpty) {
-      return;
-    }
+    if (trimmedText.isEmpty) return;
     textController.clear();
     onSubmitText(trimmedText);
   }
 
   Future<void> onSubmitText(String text) async {
-    // get the attached files and mentioned pages (异步处理图片)
-    final metadata = await context.read<AIPromptInputBloc>().consumeMetadata();
+    final metadata =
+        await context.read<AIPromptInputBloc>().consumeMetadata();
 
     final bloc = context.read<AIPromptInputBloc>();
     final showPredefinedFormats = bloc.state.showPredefinedFormats;
@@ -251,7 +304,8 @@ class _MobileChatInputState extends State<MobileChatInput> {
     paletteBloc.add(CommandPaletteEvent.askedAI());
     final query = paletteState.query ?? '';
     if (query.isEmpty) return;
-    final sources = (paletteState.askAISources ?? []).map((e) => e.id).toList();
+    final sources =
+        (paletteState.askAISources ?? []).map((e) => e.id).toList();
     final metadata =
         await context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
     final promptState = context.read<AIPromptInputBloc?>()?.state;
@@ -266,21 +320,9 @@ class _MobileChatInputState extends State<MobileChatInput> {
     if (textController.value.isComposingRangeValid) {
       return;
     }
-    // inputControlCubit.updateInputText(textController.text);
   }
 
-  // KeyEventResult handleKeyEvent(FocusNode node, KeyEvent event) {
-  //   if (event.character == '@') {
-  //     WidgetsBinding.instance.addPostFrameCallback((_) {
-  //       mentionPage(context);
-  //     });
-  //   }
-  //   return KeyEventResult.ignored;
-  // }
-
   Future<void> mentionPage(BuildContext context) async {
-    // if the focus node is on focus, unfocus it for better animation
-    // otherwise, the page sheet animation will be blocked by the keyboard
     inputControlCubit.refreshViews();
     inputControlCubit.startSearching(textController.value);
     if (focusNode.hasFocus) {
@@ -306,8 +348,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
         textController.value = TextEditingValue(
           text: newText,
           selection: TextSelection.collapsed(
-            offset:
-                textController.selection.baseOffset + selectedView.id.length,
+            offset: textController.selection.baseOffset + selectedView.id.length,
             affinity: TextAffinity.upstream,
           ),
         );
@@ -323,328 +364,93 @@ class _MobileChatInputState extends State<MobileChatInput> {
     return BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
       builder: (context, state) {
         return ExtendedTextField(
-            controller: textController,
-            focusNode: focusNode,
-            textAlignVertical: TextAlignVertical.top,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              hoverColor: Colors.transparent,
-              focusColor: Colors.transparent,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              hintText: state.modelState.hintText,
-              hintStyle: TextStyle(
-                color: Theme.of(context).hintColor,
-                fontSize: 13,
-              ),
-              filled: false,
-              fillColor: null,
+          controller: textController,
+          focusNode: focusNode,
+          textAlignVertical: TextAlignVertical.top,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
             ),
-            keyboardType: TextInputType.multiline,
-            textCapitalization: TextCapitalization.sentences,
-            minLines: 3,
-            maxLines: 8,
-            style: const TextStyle(fontSize: 13),
-            specialTextSpanBuilder: PromptInputTextSpanBuilder(
-              inputControlCubit: inputControlCubit,
-              mentionedPageTextStyle:
-                  Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
             ),
-            onTapOutside: (_) => focusNode.unfocus(),
-          );
-      },
-    );
-  }
-
-  TextStyle? inputHintTextStyle(BuildContext context) {
-    return Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: Theme.of(context).isLightMode
-              ? const Color(0xFFBDC2C8)
-              : const Color(0xFF3C3E51),
-        );
-  }
-}
-
-/// PonyNotes: 移动端AI使用次数显示组件
-class _MobileAIUsageIndicator extends StatelessWidget {
-  const _MobileAIUsageIndicator();
-
-  @override
-  Widget build(BuildContext context) {
-    final chatBloc = context.read<ChatBloc?>();
-    if (chatBloc == null) {
-      return const SizedBox.shrink();
-    }
-    return BlocBuilder<ChatBloc, ChatState>(
-      bloc: chatBloc,
-      builder: (context, state) {
-        final used = state.usageInfo?.aiResponsesCount.toInt() ?? 0;
-        final total = state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0;
-        final remaining = total - used;
-        final textColor = remaining <= 0
-            ? Colors.red
-            : remaining <= 5
-                ? Colors.orange.shade700
-                : Theme.of(context).hintColor;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            hoverColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            hintText: state.modelState.hintText,
+            hintStyle: TextStyle(
+              color: Theme.of(context).hintColor,
+              fontSize: 13,
+            ),
+            filled: false,
+            fillColor: null,
           ),
-          child: Text(
-            remaining <= 0 ? '0次' : '$remaining次',
-            style: TextStyle(fontSize: 10, color: textColor),
+          keyboardType: TextInputType.multiline,
+          textCapitalization: TextCapitalization.sentences,
+          minLines: 3,
+          maxLines: 8,
+          style: const TextStyle(fontSize: 13),
+          specialTextSpanBuilder: PromptInputTextSpanBuilder(
+            inputControlCubit: inputControlCubit,
+            mentionedPageTextStyle:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
           ),
+          onTapOutside: (_) => focusNode.unfocus(),
         );
       },
     );
   }
 }
 
-/// PonyNotes: 移动端深度思考按钮
-class _MobileDeepThinkingButton extends StatelessWidget {
-  const _MobileDeepThinkingButton({
-    required this.isEnabled,
-    required this.isDisabled,
-  });
-
-  final bool isEnabled;
-  final bool isDisabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF333333)
-            : const Color(0xFFE0E0E0)
-        : isEnabled
-            ? const Color(0xFFE94618)
-            : isDarkMode
-                ? const Color(0xFF4A4A4A)
-                : const Color(0xFFCDCDCD);
-    final textColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF666666)
-            : const Color(0xFFB0B0B0)
-        : isEnabled
-            ? const Color(0xFFE94618)
-            : isDarkMode
-                ? const Color(0xFFB0B0B0)
-                : const Color(0xFF636363);
-    final backgroundColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF1A1A1A)
-            : const Color(0xFFF5F5F5)
-        : isDarkMode
-            ? const Color(0xFF2A2A2A)
-            : Colors.white;
-
-    return Tooltip(
-      message: isDisabled ? '附件模式下不支持深度思考' : (isEnabled ? '关闭深度思考' : '开启深度思考'),
-      child: GestureDetector(
-        onTap: isDisabled
-            ? null
-            : () {
-                context
-                    .read<AIPromptInputBloc>()
-                    .add(const AIPromptInputEvent.toggleDeepThinking());
-              },
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: borderColor,
-              width: 1,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              '深度思考',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// PonyNotes: 移动端联网搜索按钮
-class _MobileWebSearchButton extends StatelessWidget {
-  const _MobileWebSearchButton({
-    required this.isEnabled,
-    required this.isDisabled,
-  });
-
-  final bool isEnabled;
-  final bool isDisabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF333333)
-            : const Color(0xFFE0E0E0)
-        : isEnabled
-            ? const Color(0xFFE94618)
-            : isDarkMode
-                ? const Color(0xFF4A4A4A)
-                : const Color(0xFFCDCDCD);
-    final textColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF666666)
-            : const Color(0xFFB0B0B0)
-        : isEnabled
-            ? const Color(0xFFE94618)
-            : isDarkMode
-                ? const Color(0xFFB0B0B0)
-                : const Color(0xFF636363);
-    final backgroundColor = isDisabled
-        ? isDarkMode
-            ? const Color(0xFF1A1A1A)
-            : const Color(0xFFF5F5F5)
-        : isDarkMode
-            ? const Color(0xFF2A2A2A)
-            : Colors.white;
-
-    return Tooltip(
-      message: isDisabled ? '附件模式下不支持联网搜索' : (isEnabled ? '关闭联网搜索' : '开启联网搜索'),
-      child: GestureDetector(
-        onTap: isDisabled
-            ? null
-            : () {
-                context
-                    .read<AIPromptInputBloc>()
-                    .add(const AIPromptInputEvent.toggleWebSearch());
-              },
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: borderColor,
-              width: 1,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              '联网搜索',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// PonyNotes: 移动端模型选择按钮
-class _MobileSelectModelButton extends StatelessWidget {
-  const _MobileSelectModelButton({
-    required this.aiModelStateNotifier,
-  });
+/// 模型按钮内容：通过 SelectModelBloc 监听模型列表变化
+class _ModelButtonContent extends StatelessWidget {
+  const _ModelButtonContent({required this.aiModelStateNotifier});
 
   final AIModelStateNotifier aiModelStateNotifier;
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => SelectModelBloc(
-        aiModelStateNotifier: aiModelStateNotifier,
-      ),
-      child: _MobileSelectModelButtonContent(
-        aiModelStateNotifier: aiModelStateNotifier,
-      ),
-    );
-  }
-}
-
-class _MobileSelectModelButtonContent extends StatelessWidget {
-  const _MobileSelectModelButtonContent({
-    required this.aiModelStateNotifier,
-  });
-
-  final AIModelStateNotifier aiModelStateNotifier;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final hintColor =
-        isDarkMode ? const Color(0xFFB0B0B0) : const Color(0xFF858585);
-
     return BlocBuilder<SelectModelBloc, SelectModelState>(
       builder: (context, state) {
         final model = state.selectedModel;
         final modelName = model?.i18n ?? '';
-        final isDefault = model?.isDefault ?? true;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final textColor =
+            isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
+        final borderColor =
+            isDark ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
+        final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
 
         return GestureDetector(
-          onTap: () => _showModelSelector(context),
+          onTap: () => _showModelSelector(context, state),
           child: Container(
             height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             decoration: BoxDecoration(
-              color: isDarkMode ? const Color(0xFF2A2A2A) : Colors.white,
+              color: bgColor,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: isDarkMode
-                    ? const Color(0xFF4A4A4A)
-                    : const Color(0xFFCDCDCD),
-                width: 1,
-              ),
+              border: Border.all(color: borderColor),
             ),
-            child: Row(
+            child:             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.auto_awesome,
-                  size: 12,
-                  color: hintColor,
-                ),
-                const SizedBox(width: 3),
-                if (modelName.isNotEmpty && !isDefault)
+                if (modelName.isNotEmpty)
                   Text(
                     modelName,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: hintColor,
-                    ),
+                    style: TextStyle(fontSize: 11, color: textColor),
                   ),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 13,
-                  color: hintColor,
-                ),
+                const SizedBox(width: 3),
+                Icon(Icons.expand_more, size: 14, color: textColor),
               ],
             ),
           ),
@@ -653,141 +459,82 @@ class _MobileSelectModelButtonContent extends StatelessWidget {
     );
   }
 
-  void _showModelSelector(BuildContext context) {
-    showModalBottomSheet(
+  void _showModelSelector(BuildContext context, SelectModelState state) {
+    final models = state.models;
+    final selectedModel = state.selectedModel;
+    if (models.isEmpty) return;
+
+    showModalBottomSheet<void>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (bottomSheetContext) => BlocProvider.value(
-        value: context.read<SelectModelBloc>(),
-        child: const _MobileModelSelectorSheet(),
-      ),
-    );
-  }
-}
-
-/// PonyNotes: 移动端模型选择底部弹窗
-class _MobileModelSelectorSheet extends StatelessWidget {
-  const _MobileModelSelectorSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<SelectModelBloc, SelectModelState>(
-      builder: (context, state) {
-        final models = state.models;
-        final selectedModel = state.selectedModel;
-
-        if (models.isEmpty) {
-          return const SizedBox(
-            height: 200,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final localModels = models.where((m) => m.isLocal).toList();
-        final cloudModels = models.where((m) => !m.isLocal).toList();
-
-        return Container(
-          constraints: const BoxConstraints(maxHeight: 400),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Text(
-                      '选择模型',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Text(
+                  '选择模型',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(ctx).colorScheme.onSurface,
+                  ),
                 ),
               ),
               const Divider(height: 1),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,
-                  children: [
-                    if (localModels.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  children: models.map((model) {
+                    final isSelected = selectedModel?.name == model.name;
+                    return InkWell(
+                      onTap: () {
+                        context
+                            .read<SelectModelBloc>()
+                            .add(SelectModelEvent.selectModel(model));
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        color: isSelected
+                            ? Theme.of(ctx)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.3)
+                            : null,
                         child: Text(
-                          '本地模型',
+                          model.i18n,
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).hintColor,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? Theme.of(ctx).colorScheme.primary
+                                : Theme.of(ctx).colorScheme.onSurface,
                           ),
                         ),
                       ),
-                      ...localModels.map((model) => _buildModelItem(
-                            context,
-                            model,
-                            model == selectedModel,
-                          )),
-                    ],
-                    if (cloudModels.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                        child: Text(
-                          '云端模型',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).hintColor,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      ...cloudModels.map((model) => _buildModelItem(
-                            context,
-                            model,
-                            model == selectedModel,
-                          )),
-                    ],
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
-              SizedBox(height: MediaQuery.of(context).padding.bottom),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildModelItem(
-      BuildContext context, AIModelPB model, bool isSelected) {
-    return ListTile(
-      dense: true,
-      title: Text(model.i18n),
-      subtitle: model.desc.isNotEmpty
-          ? Text(
-              model.desc,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).hintColor,
-              ),
-            )
-          : null,
-      trailing: isSelected
-          ? Icon(
-              Icons.check,
-              color: Theme.of(context).colorScheme.primary,
-            )
-          : null,
-      onTap: () {
-        context
-            .read<SelectModelBloc>()
-            .add(SelectModelEvent.selectModel(model));
-        Navigator.pop(context);
-      },
+        ),
+      ),
     );
   }
 }
