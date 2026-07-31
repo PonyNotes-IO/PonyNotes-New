@@ -1538,6 +1538,24 @@ void moveViewCrossSpace(
   final isCrossSectionMove = fromSection != null &&
       toSection != null &&
       fromSection != toSection;
+
+  // 跨私有↔协作移动的权限门禁。移入协作区等同于在协作区新增一篇文档，需要
+  // 「创建」权限；移出协作区等同于把文档从协作区拿走，需要「移除」权限。
+  // 受限成员（Guest）两者皆无 —— 直接阻断，不做任何搬运。
+  //
+  // 刻意放在白板迁移分支之前：无权限时连迁移都不该启动，否则会先把内容搬到
+  // 目标存储、再卡在切 section，留下两份内容。
+  if (isCrossSectionMove) {
+    final denyReason = crossSpaceMoveDenyReason(context, toSection);
+    if (denyReason != null) {
+      showToastNotification(
+        message: denyReason,
+        type: ToastificationType.error,
+      );
+      return;
+    }
+  }
+
   if (view.layout == ViewLayoutPB.Whiteboard && isCrossSectionMove) {
     _migrateWhiteboardThenMove(
       context,
@@ -1642,13 +1660,32 @@ void moveViewToSectionPlaceholder(
     fromSection = null;
   }
 
+  final toSection = spaceType.toViewSectionPB;
+
+  // 与 moveViewCrossSpace 同一道门禁：拖到空分区占位符同样会跨私有↔协作，
+  // 是第二条能改变文档归属的路径，必须一并拦截，否则受限成员绕开菜单直接
+  // 拖拽就能把文档搬进/搬出协作区。
+  //
+  // fromSection 取不到时不拦：无法判定是否真的跨区，宁可漏拦也不误伤
+  // 同区内的正常拖动（与本文件其它降级策略一致）。
+  if (fromSection != null && fromSection != toSection) {
+    final denyReason = crossSpaceMoveDenyReason(context, toSection);
+    if (denyReason != null) {
+      showToastNotification(
+        message: denyReason,
+        type: ToastificationType.error,
+      );
+      return;
+    }
+  }
+
   context.read<ViewBloc>().add(
         ViewEvent.move(
           from,
           newParentId,
           null,
           fromSection,
-          spaceType.toViewSectionPB,
+          toSection,
         ),
       );
   refreshSidebarMoveState(context);

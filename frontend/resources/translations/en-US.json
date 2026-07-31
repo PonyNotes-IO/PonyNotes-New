@@ -3009,6 +3009,8 @@
     "whiteboardMigrating": "Migrating whiteboard content…",
     "whiteboardMigrationFailed": "Whiteboard migration failed. The move was canceled (content preserved).",
     "whiteboardMigrationSuccess": "Whiteboard moved",
+    "noPermissionToMoveIntoSharedSpace": "No permission: restricted members cannot add pages to a shared space",
+    "noPermissionToMoveOutOfSharedSpace": "No permission: restricted members cannot move pages out of a shared space",
     "switchSpace": "Switch space",
     "spaceNameCannotBeEmpty": "Space name cannot be empty",
     "success": {
