@@ -71,8 +71,12 @@ Widget _buildBody(BuildContext context) {
             child: Chat(
               chatController: chatController,
               user: User(id: userProfile.id.toString()),
-              darkTheme: ChatTheme.fromThemeData(Theme.of(context)),
-              theme: ChatTheme.fromThemeData(Theme.of(context)),
+              darkTheme: ChatTheme.fromThemeData(Theme.of(context)).copyWith(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              ),
+              theme: ChatTheme.fromThemeData(Theme.of(context)).copyWith(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              ),
               builders: Builders(
                 // we have a custom input builder, so we don't need the default one
                 inputBuilder: (_) => const SizedBox.shrink(),
