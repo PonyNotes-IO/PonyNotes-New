@@ -53,26 +53,6 @@ class _MobileChatHistoryScreenState extends State<MobileChatHistoryScreen> {
     );
   }
 
-  String _formatTime(int timestamp) {
-    if (timestamp == 0) return '';
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-    final now = DateTime.now();
-    final diff = now.difference(date);
-
-    if (diff.inDays == 0) {
-      if (diff.inHours == 0) {
-        return '${diff.inMinutes}分钟前';
-      }
-      return '${diff.inHours}小时前';
-    } else if (diff.inDays == 1) {
-      return '昨天';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays}天前';
-    } else {
-      return '${date.month}/${date.day}';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,7 +73,6 @@ class _MobileChatHistoryScreenState extends State<MobileChatHistoryScreen> {
                           ? const _EmptyChatHistory()
                           : _ChatHistoryList(
                               chatViews: _chatViews,
-                              formatTime: _formatTime,
                             ),
             ),
           ],
@@ -145,91 +124,62 @@ class _ChatHistoryAppBar extends StatelessWidget {
 class _ChatHistoryList extends StatelessWidget {
   const _ChatHistoryList({
     required this.chatViews,
-    required this.formatTime,
   });
 
   final List<ViewPB> chatViews;
-  final String Function(int) formatTime;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       itemCount: chatViews.length,
-      separatorBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Divider(
-          height: 1,
-          color: theme.dividerColor,
-        ),
-      ),
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final view = chatViews[index];
-        final timeStr = formatTime(view.lastEdited.toInt());
 
-        return InkWell(
-          onTap: () {
-            context.push(
-              '/chat?id=${Uri.encodeComponent(view.id)}&title=${Uri.encodeComponent(view.name)}',
-            );
-          },
-          child: Container(
-            color: theme.colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                // Chat icon
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: FlowySvg(
-                      FlowySvgs.m_home_ai_chat_icon_m,
-                      size: const Size.square(22),
-                      color: theme.colorScheme.primary,
+        return Material(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () {
+              context.push(
+                '/chat?id=${Uri.encodeComponent(view.id)}&title=${Uri.encodeComponent(view.name)}',
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  const FlowySvg(FlowySvgs.m_ai_history_m),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      view.name.isEmpty ? '无标题对话' : view.name,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurface,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        view.name.isEmpty ? '无标题对话' : view.name,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (timeStr.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          timeStr,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.hintColor,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
+                  const SizedBox(width: 4),
+                  FlowySvg(
+                    FlowySvgs.toolbar_arrow_right_m,
+                    size: const Size.square(14),
+                    color: theme.hintColor,
                   ),
-                ),
-                const SizedBox(width: 8),
-                FlowySvg(
-                  FlowySvgs.toolbar_arrow_right_m,
-                  size: const Size.square(16),
-                  color: theme.hintColor,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
