@@ -1,9 +1,12 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/widgets.dart';
@@ -60,6 +63,56 @@ String? crossSpaceMoveDenyReason(
   return role == AFRolePB.Owner
       ? null
       : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
+}
+
+/// 白板跨私有↔协作移动前的内容迁移守卫。
+///
+/// 返回 `true` 表示可以继续切 section；`false` 表示已中止（并已提示用户）。
+/// 非白板一律直接放行。
+///
+/// 为什么必须有这道守卫：普通文档的内容存在以 view_id 为键的 collab 里，跨区
+/// 移动只改 folder 归属、内容原地不动。**白板不是** —— 协作区白板的权威数据在
+/// 外部 room（xm-arts），私有空间白板在本地 collab，两套存储互不相通。只切
+/// section 而不搬内容，白板到了新空间就是空的。
+///
+/// 此前迁移只接在 `moveViewCrossSpace`（右键菜单「移动到」）一条路径上，而拖到
+/// 分区占位符、拖到另一篇文档同样会改 section —— 走这两条路的白板会直接变空。
+/// 这里收口，三条路径共用同一道守卫。
+///
+/// 数据安全红线：迁移失败绝不切 section。两个方向的源内容在迁移期间均保留，
+/// 因此即便迁移或切区失败，白板也不会变空。
+Future<bool> ensureWhiteboardContentMigrated(
+  BuildContext context, {
+  required ViewPB view,
+  required ViewSectionPB toSection,
+}) async {
+  if (view.layout != ViewLayoutPB.Whiteboard) {
+    return true;
+  }
+
+  final toPrivate = toSection == ViewSectionPB.Private;
+  final ok = toPrivate
+      ? await WhiteboardMigrationService.migratePublicToPrivate(
+          context: context,
+          view: view,
+        )
+      : await WhiteboardMigrationService.migratePrivateToPublic(
+          context: context,
+          view: view,
+        );
+
+  if (!ok) {
+    Log.error(
+      '[CrossSpaceMove] 白板内容迁移失败，已阻止切区（内容保留在原处）：'
+      'view=${view.id} toPrivate=$toPrivate',
+    );
+    showToastNotification(
+      message: LocaleKeys.space_whiteboardMigrationFailed.tr(),
+      type: ToastificationType.error,
+    );
+    return false;
+  }
+  return true;
 }
 
 void refreshSidebarMoveState(BuildContext context) {

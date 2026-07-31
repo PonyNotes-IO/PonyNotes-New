@@ -1602,24 +1602,14 @@ Future<void> _migrateWhiteboardThenMove(
   // 在任何 await 前捕获 bloc，避免 await 后再用 context.read。
   final viewBloc = context.read<ViewBloc>();
   final spaceBloc = context.read<SpaceBloc>();
-  final toPrivate = toSection == ViewSectionPB.Private;
 
   if (!context.mounted) return;
-  final ok = toPrivate
-      ? await WhiteboardMigrationService.migratePublicToPrivate(
-          context: context,
-          view: view,
-        )
-      : await WhiteboardMigrationService.migratePrivateToPublic(
-          context: context,
-          view: view,
-        );
-
-  if (!ok) {
-    showToastNotification(
-      message: LocaleKeys.space_whiteboardMigrationFailed.tr(),
-      type: ToastificationType.error,
-    );
+  // 与另外两条跨区路径共用同一道守卫，避免各自演化出不一致的行为。
+  if (!await ensureWhiteboardContentMigrated(
+    context,
+    view: view,
+    toSection: toSection,
+  )) {
     return;
   }
 
@@ -1641,12 +1631,12 @@ Future<void> _migrateWhiteboardThenMove(
   );
 }
 
-void moveViewToSectionPlaceholder(
+Future<void> moveViewToSectionPlaceholder(
   BuildContext context,
   FolderSpaceType spaceType,
   ViewPB from,
   String newParentId,
-) {
+) async {
   if (from.id == newParentId ||
       (spaceType != FolderSpaceType.private &&
           spaceType != FolderSpaceType.public)) {
@@ -1668,7 +1658,9 @@ void moveViewToSectionPlaceholder(
   //
   // fromSection 取不到时不拦：无法判定是否真的跨区，宁可漏拦也不误伤
   // 同区内的正常拖动（与本文件其它降级策略一致）。
-  if (fromSection != null && fromSection != toSection) {
+  final isCrossSectionMove = fromSection != null && fromSection != toSection;
+
+  if (isCrossSectionMove) {
     final denyReason = crossSpaceMoveDenyReason(context, toSection);
     if (denyReason != null) {
       showToastNotification(
@@ -1679,15 +1671,29 @@ void moveViewToSectionPlaceholder(
     }
   }
 
-  context.read<ViewBloc>().add(
-        ViewEvent.move(
-          from,
-          newParentId,
-          null,
-          fromSection,
-          toSection,
-        ),
-      );
+  // await 前先捕获 bloc，避免 await 之后再用 context.read。
+  final viewBloc = context.read<ViewBloc>();
+
+  // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
+  if (isCrossSectionMove &&
+      !await ensureWhiteboardContentMigrated(
+        context,
+        view: from,
+        toSection: toSection,
+      )) {
+    return;
+  }
+
+  viewBloc.add(
+    ViewEvent.move(
+      from,
+      newParentId,
+      null,
+      fromSection,
+      toSection,
+    ),
+  );
+  if (!context.mounted) return;
   refreshSidebarMoveState(context);
 }
 

@@ -160,7 +160,14 @@ class _WhiteboardMigrationWebViewState
   }
 
   /// 轮询等待 JS 侧就绪条件为 true，超时抛出。
-  Future<void> _waitReady(String readyExpr, {int maxMs = 30000}) async {
+  ///
+  /// 超时前会把 JS 侧的诊断快照打进日志：就绪失败可能是「fiber 树里找不到
+  /// Collab 实例」（xm-arts 改版会打中）或「/api/scenes 的 GET 从未发生」，
+  /// 两者成因与修法完全不同，只看 ready-timeout 无从分辨。
+  ///
+  /// 30s 对冷启动的慢机器偏紧（webview 要完整跑起 excalidraw 再拉场景），
+  /// 放宽到 60s；正常情况下几秒内就绪，不会因此变慢。
+  Future<void> _waitReady(String readyExpr, {int maxMs = 60000}) async {
     final controller = _controller;
     if (controller == null) throw StateError('no-controller');
     var waited = 0;
@@ -173,6 +180,21 @@ class _WhiteboardMigrationWebViewState
       await Future<void>.delayed(const Duration(milliseconds: step));
       waited += step;
     }
+
+    String diag = '<unavailable>';
+    try {
+      final d = await controller.evaluateJavascript(
+        source:
+            'window.__xmMig ? JSON.stringify(window.__xmMig.diag()) : "no-__xmMig"',
+      );
+      diag = d?.toString() ?? '<null>';
+    } catch (e) {
+      diag = '<diag-failed:$e>';
+    }
+    Log.error(
+      '[WBMigrationWebView] 就绪等待超时 expr=$readyExpr waited=${waited}ms 诊断=$diag',
+    );
+
     throw TimeoutException('ready-timeout:$readyExpr');
   }
 

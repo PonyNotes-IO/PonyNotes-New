@@ -124,6 +124,27 @@ const String whiteboardMigrationScript = r'''
       if (!c || !c.excalidrawAPI) return false;
       return state.lastGetStatus !== null;
     },
+    // 就绪判定失败时的诊断快照：区分「没找到 collab 实例」与「GET 从未发生」。
+    //
+    // 两者都表现为 pullReady/pushReady 恒 false、最终 30s 超时，但成因和修法
+    // 完全不同：前者是页面结构变化导致 fiber 树里找不到 Collab（xm-arts 改版
+    // 会打中这里），后者是 /api/scenes 的 GET 没被发出或没被拦到。
+    // 超时时把这份快照打进日志，避免只能靠猜。
+    diag: function () {
+      var c = findCollab();
+      var el = document.querySelector('.excalidraw');
+      return {
+        hasCollab: !!c,
+        hasExcalidrawApi: !!(c && c.excalidrawAPI),
+        hasPortal: !!(c && c.portal),
+        socketConnected: !!(c && c.portal && c.portal.socket && c.portal.socket.connected),
+        lastGetStatus: state.lastGetStatus,
+        lastPostStatus: state.lastPostStatus,
+        excalidrawElPresent: !!el,
+        readyState: document.readyState,
+        href: location.href,
+      };
+    },
     // PUSH 就绪：collab + 画布 + 协作 socket 均就绪（saveCollabRoomToFirebase 需要 socket）。
     pushReady: function () {
       var c = findCollab();

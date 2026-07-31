@@ -195,7 +195,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     setState(() => this.position = position);
   }
 
-  void _move(ViewPB from, ViewPB to) {
+  Future<void> _move(ViewPB from, ViewPB to) async {
     if (position == DraggableHoverPosition.center && to.layout.isDatabaseView) {
       // not support moving into a database view (Grid/Board/Calendar)
       return;
@@ -214,9 +214,10 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     //
     // 两端 section 有一个取不到时不拦：无法判定是否真的跨区，宁可漏拦也不
     // 误伤同区内的正常拖动。
-    if (fromSection != null &&
-        toSection != null &&
-        fromSection != toSection) {
+    final isCrossSectionMove =
+        fromSection != null && toSection != null && fromSection != toSection;
+
+    if (isCrossSectionMove) {
       final denyReason = crossSpaceMoveDenyReason(context, toSection);
       if (denyReason != null) {
         showToastNotification(
@@ -227,22 +228,35 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
       }
     }
 
+    // await 前先捕获 bloc，避免 await 之后再用 context.read。
+    final viewBloc = context.read<ViewBloc>();
+
+    // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
+    if (isCrossSectionMove &&
+        !await ensureWhiteboardContentMigrated(
+          context,
+          view: from,
+          toSection: toSection,
+        )) {
+      return;
+    }
+
     switch (position) {
       case DraggableHoverPosition.top:
       case DraggableHoverPosition.bottom:
       case DraggableHoverPosition.center:
         // 执行移动操作
-        context.read<ViewBloc>().add(
-              ViewEvent.move(
-                from,
-                position == DraggableHoverPosition.center
-                    ? to.id
-                    : to.parentViewId,
-                position == DraggableHoverPosition.bottom ? to.id : null,
-                fromSection,
-                toSection,
-              ),
-            );
+        viewBloc.add(
+          ViewEvent.move(
+            from,
+            position == DraggableHoverPosition.center
+                ? to.id
+                : to.parentViewId,
+            position == DraggableHoverPosition.bottom ? to.id : null,
+            fromSection,
+            toSection,
+          ),
+        );
 
         // 延迟执行刷新操作，确保后端操作完成
         Future.delayed(const Duration(milliseconds: 300), () {
