@@ -127,11 +127,23 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
             }
           },
         ),
-        body: MobileViewPage(
-          key: ValueKey('mobile_chat_${widget.id}'),
-          id: widget.id!,
-          title: widget.title,
-          viewLayout: ViewLayoutPB.Chat,
+        body: Column(
+          children: [
+            Expanded(
+              child: MobileViewPage(
+                key: ValueKey('mobile_chat_${widget.id}'),
+                id: widget.id!,
+                title: widget.title,
+                viewLayout: ViewLayoutPB.Chat,
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).padding.bottom + 10,
+              ),
+              child: _buildRemainingUsageHint(context),
+            ),
+          ],
         ),
       );
     }
