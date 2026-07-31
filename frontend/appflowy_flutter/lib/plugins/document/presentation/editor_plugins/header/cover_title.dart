@@ -5,11 +5,13 @@ import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/text_field/text_filed_with_metric_lines.dart';
 import 'package:appflowy/workspace/application/appearance_defaults.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view/view_name_constants.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,6 +72,43 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
     editorState.selectionNotifier.addListener(_onSelectionChanged);
 
     _requestInitialFocus();
+    _syncTitleFromBackend();
+  }
+
+  /// 从后端取一次权威标题兜底，纠正过期的种子值。
+  ///
+  /// [CoverTitle] 会自建 ViewBloc 并以传入的 view 播种，而 `ViewBloc.initial`
+  /// 是直接 emit 构造参数、**不重新拉取**的；`listenWhen` 又要求 name 发生
+  /// 「变化」才会刷新输入框。新建的 bloc 没有「previous」，于是种子是什么就
+  /// 一直是什么 —— 一旦传入的是过期快照，标题会卡在旧值上且永不自我纠正。
+  ///
+  /// 典型来源：新建页面时系统先用 `ViewLayoutPB.Document.defaultName`
+  /// （「未命名文档」）建出 ViewPB，用户随后才在标题框里打出真名。那份初始
+  /// 快照若被重新用来播种，标题就会退回「未命名文档」，而侧栏因为用的是另一个
+  /// 正常更新的 ViewBloc，显示依然正确 —— 表现为两处标题不一致。
+  Future<void> _syncTitleFromBackend() async {
+    final latest =
+        await ViewBackendService.getView(widget.view.id).toNullable();
+    if (!mounted || latest == null) {
+      return;
+    }
+    // 用户正在编辑标题时不要覆盖，避免打断输入。
+    if (titleFocusNode.hasFocus || latest.name == titleTextController.text) {
+      return;
+    }
+    // 摘掉监听再赋值：否则这次纠正会被当成用户输入，触发一次多余的重命名。
+    titleTextController
+      ..removeListener(_onViewNameChanged)
+      ..text = latest.name
+      ..addListener(_onViewNameChanged);
+
+    // tab 标签与面包屑读的是 ViewPluginNotifier，若它同样持有过期快照，
+    // 只修标题会把不一致从「标题 vs 侧栏」挪成「标题 vs 标签页」。一并纠正。
+    try {
+      context.read<ViewPluginNotifier>().updateViewName(latest.name);
+    } catch (_) {
+      // 非 document 场景没有 ViewPluginNotifier，忽略即可。
+    }
   }
 
   @override
