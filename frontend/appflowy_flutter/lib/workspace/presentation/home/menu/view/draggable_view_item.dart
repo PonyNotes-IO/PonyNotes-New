@@ -2,6 +2,7 @@ import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/draggable_item/draggable_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
@@ -207,6 +208,24 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
 
     final fromSection = getViewSection(from);
     final toSection = getViewSection(to);
+
+    // 与 moveViewCrossSpace 同一道门禁：把文档拖到协作区里的另一篇文档上
+    // （或反向拖回私有空间）同样会改变文档归属，是最常用的一条跨区路径。
+    //
+    // 两端 section 有一个取不到时不拦：无法判定是否真的跨区，宁可漏拦也不
+    // 误伤同区内的正常拖动。
+    if (fromSection != null &&
+        toSection != null &&
+        fromSection != toSection) {
+      final denyReason = crossSpaceMoveDenyReason(context, toSection);
+      if (denyReason != null) {
+        showToastNotification(
+          message: denyReason,
+          type: ToastificationType.error,
+        );
+        return;
+      }
+    }
 
     switch (position) {
       case DraggableHoverPosition.top:
