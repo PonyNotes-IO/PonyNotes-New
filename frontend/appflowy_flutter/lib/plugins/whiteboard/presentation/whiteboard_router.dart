@@ -226,6 +226,37 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     }
   }
 
+  /// 后台对账：确认服务端也存有本地这份 room，缺失则补写。
+  ///
+  /// 创建白板时那次写入可能因断网/超时失败。失败后本地仍有 room，之后每次打开
+  /// 都走本地命中直接返回，服务端便永远是空的 —— 其他协作者取不到 room，只能
+  /// 各自新建房间，表现为「各看各的」。这里在快路径之外补上一次修复机会。
+  ///
+  /// 只在服务端确实缺失时才写，不会覆盖别人已经写好的 room。
+  Future<void> _reconcileRoomToServer(
+    String viewId,
+    String roomId,
+    String roomKey,
+  ) async {
+    try {
+      final data = await WhiteboardDataService().loadWhiteboardData(viewId);
+      final existingId = data['roomId']?.toString() ?? '';
+      if (existingId.isNotEmpty) {
+        return;
+      }
+      final saved = await WhiteboardDataService().saveWhiteboardData(
+        viewId,
+        {'roomId': roomId, 'roomKey': roomKey},
+        source: 'room-reconcile',
+      );
+      Log.info(
+        '🔧 [WhiteboardRouter] 服务端缺 room，已补写 roomId=$roomId, view=$viewId, saved=$saved',
+      );
+    } catch (e) {
+      Log.warn('⚠️ [WhiteboardRouter] room 对账失败（不影响本次渲染）: $e');
+    }
+  }
+
   Future<void> _tryFetchRoomInfo(ViewPB view) async {
     Log.debug('🔍 [WhiteboardRouter] Initial view: id=${view.id}');
 
@@ -241,10 +272,43 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
         });
+        // 本地命中即刻渲染（快路径不变），同时在后台确认服务端也有这份 room。
+        // 创建时那次写入若失败过，这里补写 —— 否则其他协作者永远取不到，
+        // 会各自开出新房间。不阻塞渲染。
+        unawaited(_reconcileRoomToServer(view.id, room.roomId, room.roomKey));
         return;
       }
 
-      // 无本地 room 信息时生成新 room 并持久化
+      // 本地没有 room 时，**必须先问服务端**，不能直接生成新的。
+      //
+      // roomId/roomKey 是协作双方唯一的共同凭据（xm-arts 的
+      // #room=<roomId>,<roomKey>）。它只在创建者本机有一份，其他协作者本地
+      // 一定是空的 —— 只能从服务端取。若跳过这一步直接生成新 room，
+      // 每个协作者都会开出各自的房间，表现为「只看得到自己的内容」。
+      final whiteboardData =
+          await WhiteboardDataService().loadWhiteboardData(view.id);
+      final serverRoomId = whiteboardData['roomId']?.toString() ?? '';
+      final serverRoomKey = whiteboardData['roomKey']?.toString() ?? '';
+
+      if (serverRoomId.isNotEmpty && serverRoomKey.isNotEmpty) {
+        Log.info(
+          '🟢 [WhiteboardRouter] 从服务端取到 room: roomId=$serverRoomId, view=${view.id}',
+        );
+        // 落到本地，下次直接命中，省去一次网络往返。
+        await WhiteboardRoomService.saveRoom(
+          view.id,
+          serverRoomId,
+          serverRoomKey,
+        );
+        if (!mounted) return;
+        setState(() {
+          _roomId = serverRoomId;
+          _roomKey = serverRoomKey;
+        });
+        return;
+      }
+
+      // 本地和服务端都没有 —— 这才是真正的新白板，由本端创建 room。
       Log.debug('🟡 [WhiteboardRouter] No room found for view ${view.id}, generating new one');
       final newRoomId = WhiteboardRoomService.generateRoomId();
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
@@ -254,26 +318,27 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
       Log.info('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
 
-      // 后台异步将 room 信息写入服务器（不阻塞渲染）
-      unawaited(
-        WhiteboardDataService().saveWhiteboardData(
-          view.id,
-          {
-            'roomId': newRoomId,
-            'roomKey': newRoomKey,
-          },
-          source: 'room-init',
-        ).then((saved) {
-          if (saved) {
-            Log.info('✅ [WhiteboardRouter] Room info synced to server: roomId=$newRoomId');
-          } else {
-            Log.warn('⚠️ [WhiteboardRouter] Failed to sync room info to server (will retry on next open)');
-          }
-        }).catchError((e) {
-          Log.warn('⚠️ [WhiteboardRouter] Room sync error (non-blocking): $e');
-        }),
+      // room 必须落到服务端 —— 这是其他协作者唯一能拿到它的地方。
+      // 这里**等待写入完成**：它每个白板只发生一次（创建时），不影响后续打开
+      // 的速度；而写丢一次的代价是这个白板从此无法协作。
+      final saved = await WhiteboardDataService().saveWhiteboardData(
+        view.id,
+        {
+          'roomId': newRoomId,
+          'roomKey': newRoomKey,
+        },
+        source: 'room-init',
       );
+      if (saved) {
+        Log.info('✅ [WhiteboardRouter] Room info synced to server: roomId=$newRoomId');
+      } else {
+        Log.error(
+          '❌ [WhiteboardRouter] room 未能写入服务端，其他协作者将取不到该白板的 room：view=${view.id}。'
+          '下次打开会由 _reconcileRoomToServer 补写。',
+        );
+      }
 
+      if (!mounted) return;
       setState(() {
         _roomId = newRoomId;
         _roomKey = newRoomKey;
@@ -305,18 +370,28 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
-        // 空间归属判定完成前，先渲染 B 套 WhiteboardPage 作为渐进占位。
-        // 避免用户看到空白转圈（私有空间和白板本地缓存是最常见场景，
-        // 且 B 套可在全部场景下正常渲染，不依赖任何网络结果）。
-        // 判定完成后由 AnimatedSwitcher 无缝切换（必要时）。
-        if (_isPrivateSpace == null || _roomReachable == null) {
-          Log.debug(
-            '⏳ [WhiteboardRouter] 渐进渲染 B 套占位: _isPrivateSpace=$_isPrivateSpace _roomReachable=$_roomReachable, view=${view.id}',
+        // 空间归属未判定完 —— 此时**还不知道**该挂哪一套，只能渲染中性占位。
+        //
+        // 曾经这里对 `_isPrivateSpace == null` 也直接渲染 B 套本地页以避免
+        // 空白转圈，但 B 套是本地 collab、不是协作 room：协作空间白板一旦在
+        // 判定窗口内被挂上 B 套，用户这段时间的笔迹就落进本地，进不了 room，
+        // 别人自然看不到。渐进渲染不能以「可能挂错套」为代价。
+        //
+        // 空间归属有 _spaceTypeCache，重复打开时是同步命中的，占位窗口极短。
+        if (_isPrivateSpace == null) {
+          return const ColoredBox(
+            color: Color(0xFFFFFFFF),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
-          return WhiteboardPage(
-            key: ValueKey('whiteboard_page_placeholder_${view.id}'),
-            view: view,
-            onViewChanged: widget.onViewChanged,
+        }
+        // 协作空间白板：room 可达性探测完成前同样只渲染占位，绝不先挂 B 套。
+        if (_isPrivateSpace == false && _roomReachable == null) {
+          Log.debug(
+            '⏳ [WhiteboardRouter] 协作空间等待 room 可达性探测: view=${view.id}',
+          );
+          return const ColoredBox(
+            color: Color(0xFFFFFFFF),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
         // 私有空间白板：始终渲染 B 套 WhiteboardPage（本地 collab + 静默云备份），忽略 room。
