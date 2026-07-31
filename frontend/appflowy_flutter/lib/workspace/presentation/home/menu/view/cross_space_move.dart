@@ -16,10 +16,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// 只挪树节点 + 增删 private_view_ids）。所以这里要管的不是数据安全，而是
 /// 「谁有资格改变文档的归属」：
 ///
-/// - 移入协作区 == 在协作区新增一篇文档，需要**创建**权限；
-/// - 移出协作区 == 把文档从协作区拿走，需要**移除**权限。
+/// - **移入协作区** == 在协作区新增一篇文档 → 需要 Member 及以上；
+/// - **移出协作区** == 把文档从协作区拿走 → 需要 Owner。
 ///
-/// 受限成员（Guest）两者皆无。
+/// 移出之所以要求更高：folder 的 section 是**按 uid 隔离**的
+/// （collab-folder `section.rs` 的 `section_id_by_uid`），某个成员把共享文档
+/// 移进自己的私有区，等同于把它从其他所有人眼前拿走。这条划分正好对上服务端
+/// Casbin 既有的动作模型 —— Member 有 Write，只有 Owner 有 Delete。
+///
+/// 与服务端 `move-cross-space` 接口（PonyNotes-Cloud-New `cea05695`）
+/// **必须保持同一套规则**，两边不一致会表现为「界面放行、服务端拒绝」。
 ///
 /// 返回 `null` 表示放行；返回非空字符串表示阻断，内容即提示文案。
 ///
@@ -39,12 +45,20 @@ String? crossSpaceMoveDenyReason(
     return null;
   }
 
-  if (role != AFRolePB.Guest) {
+  if (role == null) {
     return null;
   }
 
-  return toSection == ViewSectionPB.Public
-      ? LocaleKeys.space_noPermissionToMoveIntoSharedSpace.tr()
+  // 移入协作区：Member 及以上即可，只拦受限成员。
+  if (toSection == ViewSectionPB.Public) {
+    return role == AFRolePB.Guest
+        ? LocaleKeys.space_noPermissionToMoveIntoSharedSpace.tr()
+        : null;
+  }
+
+  // 移出协作区：仅 Owner。
+  return role == AFRolePB.Owner
+      ? null
       : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
 }
 
