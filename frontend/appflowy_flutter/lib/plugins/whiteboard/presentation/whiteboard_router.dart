@@ -28,6 +28,11 @@ class WhiteboardRouter extends StatefulWidget {
   final ViewPluginNotifier notifier;
   final Function(ViewPB) onViewChanged;
 
+  /// 使某个白板的空间归属缓存失效。**跨私有↔协作移动后必须调用**，
+  /// 说明见 [_WhiteboardRouterState.invalidateSpaceTypeCache]。
+  static void invalidateSpaceTypeCache(String viewId) =>
+      _WhiteboardRouterState.invalidateSpaceTypeCache(viewId);
+
   @override
   State<WhiteboardRouter> createState() => _WhiteboardRouterState();
 }
@@ -52,6 +57,21 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
 
   // 空间归属本地缓存，避免每次打开白板重新查询
   static final Map<String, bool> _spaceTypeCache = {};
+
+  /// 使某个白板的空间归属缓存失效。**跨私有↔协作移动后必须调用。**
+  ///
+  /// 这份缓存只写不删会造成一个很隐蔽的故障：把白板从私有区移到协作区后，
+  /// 操作者本机的缓存仍是「私有」，路由于是继续渲染 B 套本地页 —— 他之后的
+  /// 笔迹写进本地 collab，而不是 room；另一端没有这份缓存，解析出「协作」并
+  /// 走 RemoteWhiteboardPage，只看得到迁移时推进 room 的那批初始内容。
+  ///
+  /// 表现就是「双方都能看到初始内容，但后续新增彼此都看不见」——两边各写各的
+  /// 存储，看起来像实时协作坏了，实际是操作者压根没挂上 room。
+  static void invalidateSpaceTypeCache(String viewId) {
+    if (_spaceTypeCache.remove(viewId) != null) {
+      Log.info('🧹 [WhiteboardRouter] 已清除空间归属缓存: $viewId');
+    }
+  }
 
   // room 可达性探测结果缓存（30s TTL）
   static bool? _cachedRoomReachable;

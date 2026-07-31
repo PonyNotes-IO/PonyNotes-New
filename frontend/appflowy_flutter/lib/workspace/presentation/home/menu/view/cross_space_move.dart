@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
@@ -112,6 +113,11 @@ Future<bool> ensureWhiteboardContentMigrated(
     );
     return false;
   }
+
+  // 内容已到达目标存储，归属随即改变 —— 必须让路由的空间归属缓存失效。
+  // 不清的话，操作者本机会继续按旧归属渲染（私有→协作后仍挂 B 套本地页），
+  // 之后的笔迹进不了 room，表现为「双方都看得到初始内容、后续新增互相看不见」。
+  WhiteboardRouter.invalidateSpaceTypeCache(view.id);
   return true;
 }
 
