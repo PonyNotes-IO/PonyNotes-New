@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -383,46 +384,85 @@ class AiWriterCubit extends Cubit<AiWriterState> {
   /// 收集文档中可用于图片分析的图片，返回 base64 列表。
   ///
   /// 文档内 AI 与「问 AI」最终落到同一个 /api/ai/chat/session 接口，服务端早已
-  /// 支持多模态（qwen3-vl-plus）；此前不支持图片分析，仅仅是文档侧从未把图片
-  /// 传下去。这里把文档里的图片块取出来补上这一环。
+  /// 支持多模态（qwen3-vl-plus）；此前不支持图片分析，是因为文档侧从未把图片
+  /// 传下去。
   ///
-  /// 只取**本地可读**的图片：文档图片在本地有缓存（离线上传支持），直接读盘即可，
-  /// 不引入额外网络请求；纯远程 URL 一律跳过，避免提问被下载拖慢甚至卡住。
+  /// **取字节的关键**：文档图片块里存的是**云端 URL**（saveImageToCloudStorage
+  /// 返回的就是它），不是本地路径。字节则以该 URL 为键缓存在
+  /// CustomImageCacheManager 里。上一版按「本地路径」读盘、遇到 http 一律跳过，
+  /// 结果收集数恒为 0 —— AI 自然回答「没有收到任何图片文件」。
+  /// 这里改为：本地路径直接读盘；云端 URL 先查缓存（命中即零网络），
+  /// 未命中才按需下载，且有超时上限，不会把提问拖住。
   ///
-  /// 上限 [_maxImagesForAsk] 张：多模态请求体是 base64，过多会显著拖慢甚至超限。
+  /// 遍历必须**递归**：图片可能嵌在其它块内，只看顶层子节点会漏。
   Future<List<String>> _collectDocumentImagesAsBase64() async {
-    const maxImages = _maxImagesForAsk;
-    final result = <String>[];
+    final urls = <String>[];
 
-    try {
-      for (final node in editorState.document.root.children) {
-        if (result.length >= maxImages) break;
-        if (node.type != CustomImageBlockKeys.type) continue;
-
+    void collect(Node node) {
+      if (urls.length >= _maxImagesForAsk) return;
+      if (node.type == CustomImageBlockKeys.type) {
         final url = node.attributes[CustomImageBlockKeys.url] as String?;
-        if (url == null || url.isEmpty) continue;
-        // 远程 URL 跳过：读盘是同步可控的，下载不是。
-        if (url.startsWith('http://') || url.startsWith('https://')) continue;
-
-        final file = File(url);
-        if (!file.existsSync()) continue;
-        try {
-          final bytes = await file.readAsBytes();
-          if (bytes.isEmpty) continue;
-          result.add(base64Encode(bytes));
-        } catch (e) {
-          Log.warn('[AIWriter] 读取图片失败，已跳过: $url, $e');
+        if (url != null && url.isNotEmpty && !urls.contains(url)) {
+          urls.add(url);
         }
       }
+      for (final child in node.children) {
+        collect(child);
+      }
+    }
+
+    try {
+      collect(editorState.document.root);
     } catch (e) {
-      Log.warn('[AIWriter] 收集文档图片异常，按无图片处理: $e');
+      Log.warn('[AIWriter] 遍历文档节点异常，按无图片处理: $e');
       return const [];
     }
 
-    if (result.isNotEmpty) {
-      Log.info('[AIWriter] 文档内提问附带 ${result.length} 张图片');
+    if (urls.isEmpty) {
+      Log.info('[AIWriter] 文档内未找到图片块');
+      return const [];
     }
+
+    final result = <String>[];
+    for (final url in urls) {
+      try {
+        final bytes = await _readImageBytes(url);
+        if (bytes == null || bytes.isEmpty) {
+          Log.warn('[AIWriter] 图片取字节为空，已跳过: $url');
+          continue;
+        }
+        result.add(base64Encode(bytes));
+      } catch (e) {
+        Log.warn('[AIWriter] 读取图片失败，已跳过: $url, $e');
+      }
+    }
+
+    Log.info(
+      '[AIWriter] 文档图片块 ${urls.length} 个，成功取到 ${result.length} 张随提问上送',
+    );
     return result;
+  }
+
+  /// 取单张图片的字节。本地路径直接读盘；云端 URL 优先走缓存，未命中再下载。
+  Future<Uint8List?> _readImageBytes(String url) async {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      final file = File(url);
+      if (!file.existsSync()) return null;
+      return file.readAsBytes();
+    }
+
+    // 缓存命中：零网络开销，这是绝大多数情况（图片是在本机插入的）。
+    final cached = await CustomImageCacheManager().getFileFromCache(url);
+    if (cached != null && await cached.file.exists()) {
+      return cached.file.readAsBytes();
+    }
+
+    // 未命中（如在别的设备插入的图片）：按需下载，但设超时，
+    // 绝不让取图把提问卡住 —— 拿不到就少传这一张。
+    final file = await CustomImageCacheManager()
+        .getSingleFile(url)
+        .timeout(const Duration(seconds: 8));
+    return file.readAsBytes();
   }
 
   void _startAskingQuestion(
