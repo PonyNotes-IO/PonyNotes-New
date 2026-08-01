@@ -1605,11 +1605,15 @@ Future<void> _migrateWhiteboardThenMove(
 
   if (!context.mounted) return;
   // 与另外两条跨区路径共用同一道守卫，避免各自演化出不一致的行为。
-  if (!await ensureWhiteboardContentMigrated(
+  final outcome = await ensureWhiteboardContentMigrated(
     context,
     view: view,
     toSection: toSection,
-  )) {
+    targetParentId: toId,
+  );
+  // alreadyMoved：迁移已在目标区新建白板并删除了源白板，再走下面的 move
+  // 会去动一个已不存在的 view。
+  if (outcome != CrossSpaceMoveOutcome.proceed) {
     return;
   }
 
@@ -1675,13 +1679,19 @@ Future<void> moveViewToSectionPlaceholder(
   final viewBloc = context.read<ViewBloc>();
 
   // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
-  if (isCrossSectionMove &&
-      !await ensureWhiteboardContentMigrated(
-        context,
-        view: from,
-        toSection: toSection,
-      )) {
-    return;
+  if (isCrossSectionMove) {
+    final outcome = await ensureWhiteboardContentMigrated(
+      context,
+      view: from,
+      toSection: toSection,
+      targetParentId: newParentId,
+    );
+    if (outcome != CrossSpaceMoveOutcome.proceed) {
+      if (outcome == CrossSpaceMoveOutcome.alreadyMoved && context.mounted) {
+        refreshSidebarMoveState(context);
+      }
+      return;
+    }
   }
 
   viewBloc.add(

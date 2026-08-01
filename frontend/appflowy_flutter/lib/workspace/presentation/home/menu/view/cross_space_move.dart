@@ -66,59 +66,80 @@ String? crossSpaceMoveDenyReason(
       : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
 }
 
-/// 白板跨私有↔协作移动前的内容迁移守卫。
-///
-/// 返回 `true` 表示可以继续切 section；`false` 表示已中止（并已提示用户）。
-/// 非白板一律直接放行。
-///
-/// 为什么必须有这道守卫：普通文档的内容存在以 view_id 为键的 collab 里，跨区
-/// 移动只改 folder 归属、内容原地不动。**白板不是** —— 协作区白板的权威数据在
-/// 外部 room（xm-arts），私有空间白板在本地 collab，两套存储互不相通。只切
-/// section 而不搬内容，白板到了新空间就是空的。
-///
-/// 此前迁移只接在 `moveViewCrossSpace`（右键菜单「移动到」）一条路径上，而拖到
-/// 分区占位符、拖到另一篇文档同样会改 section —— 走这两条路的白板会直接变空。
-/// 这里收口，三条路径共用同一道守卫。
-///
-/// 数据安全红线：迁移失败绝不切 section。两个方向的源内容在迁移期间均保留，
-/// 因此即便迁移或切区失败，白板也不会变空。
-Future<bool> ensureWhiteboardContentMigrated(
+/// 跨区移动中白板的处理结果。
+enum CrossSpaceMoveOutcome {
+  /// 调用方按原有方式继续移动（切 section）。非白板、以及协作→私有走这条。
+  proceed,
+
+  /// 迁移已自行完成移动（在目标区新建白板并删除了源白板），
+  /// 调用方**不要**再执行任何移动，否则会去动一个已被删除的 view。
+  alreadyMoved,
+
+  /// 已中止并提示过用户，调用方不要移动。
+  aborted,
+}
+
+Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
   BuildContext context, {
   required ViewPB view,
   required ViewSectionPB toSection,
+  required String targetParentId,
 }) async {
   if (view.layout != ViewLayoutPB.Whiteboard) {
-    return true;
+    return CrossSpaceMoveOutcome.proceed;
   }
 
   final toPrivate = toSection == ViewSectionPB.Private;
-  final ok = toPrivate
-      ? await WhiteboardMigrationService.migratePublicToPrivate(
-          context: context,
-          view: view,
-        )
-      : await WhiteboardMigrationService.migratePrivateToPublic(
-          context: context,
-          view: view,
-        );
 
+  // 私有 → 协作：改用「在目标区新建白板 + 复制内容 + 删除源白板」。
+  //
+  // 老做法保留 view_id 只切 section，会让同一个 view 同时挂着两套存储 ——
+  // 原有的本地 collab（B 套，仍在同步）与新建的 room（A 套）。哪一套生效取决于
+  // 路由判定，而判定依赖空间归属、room 可达性等多个异步结果；判定走偏一次，
+  // 这次编辑就落进了另一套存储，表现为「有时正常、有时丢内容、有时协作者
+  // 互相看不到」，且难以复现。新建的 view 只有 room 一套，二义性从根上消失。
+  if (!toPrivate) {
+    final created =
+        await WhiteboardMigrationService.migratePrivateToPublicAsNewView(
+      context: context,
+      view: view,
+      targetSpaceId: targetParentId,
+    );
+    if (created == null) {
+      Log.error(
+        '[CrossSpaceMove] 白板迁移失败，源白板保持原样：view=${view.id}',
+      );
+      showToastNotification(
+        message: LocaleKeys.space_whiteboardMigrationFailed.tr(),
+        type: ToastificationType.error,
+      );
+      return CrossSpaceMoveOutcome.aborted;
+    }
+    // 源 view 已删除，其空间归属缓存必须一并清掉，避免残留影响同 id 的复用。
+    WhiteboardRouter.invalidateSpaceTypeCache(view.id);
+    return CrossSpaceMoveOutcome.alreadyMoved;
+  }
+
+  // 协作 → 私有：维持原有方式（拉取 room 内容写回本地 collab，再由调用方切区）。
+  final ok = await WhiteboardMigrationService.migratePublicToPrivate(
+    context: context,
+    view: view,
+  );
   if (!ok) {
     Log.error(
       '[CrossSpaceMove] 白板内容迁移失败，已阻止切区（内容保留在原处）：'
-      'view=${view.id} toPrivate=$toPrivate',
+      'view=${view.id}',
     );
     showToastNotification(
       message: LocaleKeys.space_whiteboardMigrationFailed.tr(),
       type: ToastificationType.error,
     );
-    return false;
+    return CrossSpaceMoveOutcome.aborted;
   }
 
   // 内容已到达目标存储，归属随即改变 —— 必须让路由的空间归属缓存失效。
-  // 不清的话，操作者本机会继续按旧归属渲染（私有→协作后仍挂 B 套本地页），
-  // 之后的笔迹进不了 room，表现为「双方都看得到初始内容、后续新增互相看不见」。
   WhiteboardRouter.invalidateSpaceTypeCache(view.id);
-  return true;
+  return CrossSpaceMoveOutcome.proceed;
 }
 
 void refreshSidebarMoveState(BuildContext context) {

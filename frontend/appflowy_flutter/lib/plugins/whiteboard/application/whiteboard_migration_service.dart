@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_migration_webview.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/widgets.dart';
@@ -22,6 +23,134 @@ class WhiteboardMigrationService {
   WhiteboardMigrationService._();
 
   static const String _roomHost = 'https://xm-arts.xiaomabiji.com';
+
+  /// 私有空间白板 → 协作区：**在协作区新建一块白板，复制内容，再删除源白板**。
+  ///
+  /// 返回新建的协作白板；失败返回 null（源白板原封不动）。
+  ///
+  /// 为什么不沿用「保留 view_id 只切 section」的老做法：那样同一个 view 会同时
+  /// 挂着两套存储 —— 原有的本地 collab（B 套，仍在同步）与新建的 room（A 套）。
+  /// 哪一套生效取决于路由判定，而判定依赖空间归属、room 可达性等多个异步结果；
+  /// 判定走偏一次，这次编辑就落进了另一套存储。表现即「有时正常、有时丢内容、
+  /// 有时协作者互相看不到」，且难以复现。
+  ///
+  /// 新建 view 只有 room 一套存储，源 view 连同其本地 collab 一并删除，
+  /// 二义性从根上消失。
+  ///
+  /// **事务性**：跨「建 view / 传内容 / 删源」三步无法做到真正的原子提交，
+  /// 但保证了真正要紧的那条 —— **任何一步失败都不会丢内容**：
+  ///   - 内容成功进入新 room 之前，绝不删除源白板；
+  ///   - 中途失败则回滚（删掉刚建的空白板），源白板保持原样；
+  ///   - 最坏情况是留下一块与源同名的空白板，绝不会两边都没有。
+  static Future<ViewPB?> migratePrivateToPublicAsNewView({
+    required BuildContext context,
+    required ViewPB view,
+    required String targetSpaceId,
+  }) async {
+    final viewId = view.id;
+    ViewPB? created;
+    try {
+      // 1. 先读源内容。读不到就没必要建新 view。
+      final dataService = WhiteboardDataService();
+      final data = await dataService.loadWhiteboardData(
+        viewId,
+        source: 'migration-private-to-public',
+      );
+      final elements = _asList(data['elements']);
+      final liveElements = elements
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
+
+      // 2. 在协作区建一块新白板，名称与源一致。
+      if (!context.mounted) return null;
+      final createResult = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Whiteboard,
+        parentViewId: targetSpaceId,
+        name: view.name,
+        openAfterCreate: false,
+      );
+      created = createResult.fold((v) => v, (e) {
+        Log.error('[WBMigration] 私有→协作：新建协作白板失败，已中止: ${e.msg}');
+        return null;
+      });
+      if (created == null) return null;
+
+      // 3. 为新白板建 room 并落到服务端 —— 服务端那份是其他协作者唯一的来源，
+      //    必须确认写入成功，否则别人取不到 room，会各自开出新房间。
+      final roomId = WhiteboardRoomService.generateRoomId();
+      final roomKey = WhiteboardRoomService.generateRoomKey();
+      await WhiteboardRoomService.saveRoom(created.id, roomId, roomKey);
+      final roomSaved = await dataService.saveWhiteboardData(
+        created.id,
+        {'roomId': roomId, 'roomKey': roomKey},
+        source: 'migration-room-init',
+      );
+      if (!roomSaved) {
+        Log.error(
+          '[WBMigration] 私有→协作：room 未能写入服务端，已回滚（源白板保留）: ${created.id}',
+        );
+        await _rollbackCreated(created.id);
+        return null;
+      }
+
+      // 4. 灌内容。空白板无内容可传，直接算成功。
+      if (liveElements.isNotEmpty) {
+        if (!context.mounted) {
+          await _rollbackCreated(created.id);
+          return null;
+        }
+        final files = _prepareFilesForPush(data['files']);
+        final result = await runWhiteboardMigrationWebView(
+          context: context,
+          roomId: roomId,
+          roomKey: roomKey,
+          isPush: true,
+          pushPayload: {'elements': liveElements, 'files': files},
+        );
+        if (!result.ok) {
+          Log.error(
+            '[WBMigration] 私有→协作：内容上传失败，已回滚（源白板保留）: ${result.error}',
+          );
+          await _rollbackCreated(created.id);
+          return null;
+        }
+      } else {
+        Log.info('[WBMigration] 私有→协作：源白板为空，跳过内容上传 view=$viewId');
+      }
+
+      // 5. 内容已确认到达新 room，此时才删源白板。
+      final deleted = await ViewBackendService.deleteView(viewId: viewId);
+      deleted.fold(
+        (_) => Log.info('[WBMigration] 私有→协作：源白板已删除 $viewId'),
+        // 删除失败不回滚：内容已经安全落在新白板里，回滚反而会把它删掉。
+        // 留下一份重复的私有白板，比丢内容好得多，用户可自行删除。
+        (e) => Log.error(
+          '[WBMigration] 私有→协作：源白板删除失败，请手动删除 $viewId: ${e.msg}',
+        ),
+      );
+
+      Log.info(
+        '[WBMigration] 私有→协作 完成 源=$viewId 新=${created.id} roomId=$roomId',
+      );
+      return created;
+    } catch (e, s) {
+      Log.error('[WBMigration] 私有→协作 异常，已中止: $e\n$s');
+      if (created != null) {
+        await _rollbackCreated(created.id);
+      }
+      return null;
+    }
+  }
+
+  /// 回滚：删掉刚建出来、内容尚未落定的新白板。源白板始终不动。
+  static Future<void> _rollbackCreated(String createdViewId) async {
+    try {
+      await ViewBackendService.deleteView(viewId: createdViewId);
+      Log.info('[WBMigration] 已回滚新建的空白板 $createdViewId');
+    } catch (e) {
+      Log.warn('[WBMigration] 回滚新建白板失败（残留一块空白板）: $createdViewId, $e');
+    }
+  }
 
   /// 私有空间白板 → 协作空间：把本地明文内容上传到新建 room（页面自身加密）。
   ///

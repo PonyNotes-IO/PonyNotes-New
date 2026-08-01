@@ -232,13 +232,21 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     final viewBloc = context.read<ViewBloc>();
 
     // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
-    if (isCrossSectionMove &&
-        !await ensureWhiteboardContentMigrated(
-          context,
-          view: from,
-          toSection: toSection,
-        )) {
-      return;
+    if (isCrossSectionMove) {
+      final outcome = await ensureWhiteboardContentMigrated(
+        context,
+        view: from,
+        toSection: toSection,
+        targetParentId: position == DraggableHoverPosition.center
+            ? to.id
+            : to.parentViewId,
+      );
+      if (outcome != CrossSpaceMoveOutcome.proceed) {
+        if (outcome == CrossSpaceMoveOutcome.alreadyMoved && context.mounted) {
+          refreshSidebarMoveState(context);
+        }
+        return;
+      }
     }
 
     switch (position) {
