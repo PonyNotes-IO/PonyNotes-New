@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/ai/widgets/prompt_input/paste_image_helper.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_user_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
@@ -409,7 +411,30 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     }
   }
 
+  /// 粘贴图片：Cmd/Ctrl+V 时若剪贴板里有图片，就以附件形式挂上去。
+  ///
+  /// 这里**不拦截**按键（返回 ignored），让文本粘贴照常发生 —— 剪贴板同时含
+  /// 图文时两者都会生效，符合直觉；也避免因异步读取剪贴板而误吞正常的文字粘贴。
+  Future<void> _tryAttachClipboardImage() async {
+    final image = await readClipboardImageToTempFile();
+    if (image == null || !mounted) {
+      return;
+    }
+    context
+        .read<AIPromptInputBloc>()
+        .add(AIPromptInputEvent.attachFile(image.path, image.name));
+  }
+
   KeyEventResult handleKeyEvent(FocusNode node, KeyEvent event) {
+    // 粘贴快捷键：macOS 为 Cmd+V，其余平台为 Ctrl+V。
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.keyV &&
+        (HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed)) {
+      unawaited(_tryAttachClipboardImage());
+      // 故意返回 ignored：文本粘贴仍走系统默认路径。
+    }
+
     // if (event.character == '@') {
     //   WidgetsBinding.instance.addPostFrameCallback((_) {
     //     inputControlCubit.startSearching(widget.textController.value);
