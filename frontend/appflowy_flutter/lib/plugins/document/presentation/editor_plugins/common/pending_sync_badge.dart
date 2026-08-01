@@ -110,7 +110,18 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
     // 因此：正在正常上传（无错误、进度推进中）时交给进度条，本角标不展示；
     // 一旦出现错误（断网/失败待重试），才展示「待同步」。
     final hasError = progress.error != null && progress.error!.isNotEmpty;
-    _setPending(hasError);
+    if (hasError) {
+      _setPending(true);
+      return;
+    }
+    // 进度为 0 且无错误：离线插入的图片就是这个状态 —— 队列里排着但一次
+    // 进度事件都没有过。此时进度条也不会显示（没有进展可展示），若这里也不展示，
+    // 用户就完全看不出它还没同步。
+    if (progress.progress <= 0.0) {
+      _setPending(true);
+      return;
+    }
+    _setPending(false);
   }
 
   void _setPending(bool value) {

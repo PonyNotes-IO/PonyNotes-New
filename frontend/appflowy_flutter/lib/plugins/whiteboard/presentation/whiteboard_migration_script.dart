@@ -27,14 +27,35 @@ const String whiteboardMigrationScript = r'''
     lastPostStatus: null,     // 最近一次 POST /api/scenes 的 HTTP 状态
     lastPostOk: false,        // 最近一次 POST 是否 2xx
     lastPostSceneVersion: null,
+    // 是否允许本页向 room 写入（POST /api/scenes）。
+    //
+    // 默认 false 是**数据安全红线**：协作→私有（PULL）方向本页只该读，
+    // 但 excalidraw 自身带自动保存 —— 迁移页开着一块空画布，它会把
+    // 空场景 POST 进 room，直接抹掉原内容。线上诊断已实证到这一点
+    // （lastGetStatus=null 却 lastPostStatus=200，用户侧表现为「原有内容丢失」）。
+    // 只有 PUSH 方向在调用 loadAndSave 时才临时放开。
+    allowPost: false,
+    blockedPostCount: 0,
   };
 
   var origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '';
     var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    var isSceneGet = method === 'GET' && /\/api\/scenes\/[A-Za-z0-9_-]+$/.test(url);
+    var isSceneGet = method === 'GET' && /\/api\/scenes\/[A-Za-z0-9_-]+\/?($|[?#])/.test(url);
     var isScenePost = method === 'POST' && /\/api\/scenes\/?($|\?)/.test(url);
+
+    // 数据安全红线：未放行时，直接掐掉对 room 的写入，不让请求出去。
+    // PULL 方向本页画布是空的，excalidraw 的自动保存一旦 POST 出去，
+    // room 里的原内容就被空场景覆盖了（线上已实测到）。
+    if (isScenePost && !state.allowPost) {
+      state.blockedPostCount++;
+      log('已拦截未授权的 room 写入（第 ' + state.blockedPostCount + ' 次）');
+      return Promise.resolve(new Response('{"blocked":true}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    }
 
     var p = origFetch(input, init);
     if (isSceneGet) {
@@ -122,7 +143,16 @@ const String whiteboardMigrationScript = r'''
     pullReady: function () {
       var c = findCollab();
       if (!c || !c.excalidrawAPI) return false;
-      return state.lastGetStatus !== null;
+      // 首选信号：确实观察到了场景 GET（200 有内容 / 404 空房）。
+      if (state.lastGetStatus !== null) return true;
+      // 兜底：GET 可能因 URL 形态变化而没被钩子记到（线上出现过 lastGetStatus
+      // 恒为 null 导致 60s 超时）。此时只要画布上已经渲染出元素，就说明内容
+      // 已解密就绪，可以读取 —— 不再把「钩子有没有抓到」当作唯一依据。
+      try {
+        var all = c.excalidrawAPI.getSceneElementsIncludingDeleted();
+        if (liveElements(all).length > 0) return true;
+      } catch (e) {}
+      return false;
     },
     // 就绪判定失败时的诊断快照：区分「没找到 collab 实例」与「GET 从未发生」。
     //
@@ -140,6 +170,8 @@ const String whiteboardMigrationScript = r'''
         socketConnected: !!(c && c.portal && c.portal.socket && c.portal.socket.connected),
         lastGetStatus: state.lastGetStatus,
         lastPostStatus: state.lastPostStatus,
+        blockedPostCount: state.blockedPostCount,
+        allowPost: state.allowPost,
         excalidrawElPresent: !!el,
         readyState: document.readyState,
         href: location.href,
@@ -181,6 +213,16 @@ const String whiteboardMigrationScript = r'''
     // PUSH：把本地明文元素灌入画布，并调用页面自身 collab 加密上传。
     // 入参 payloadJson = { elements:[...], files:{...} }。返回 {ok, error, sceneVersion, postStatus}。
     loadAndSave: async function (payloadJson) {
+      // PUSH 是唯一被授权写 room 的路径：在这里放行，函数结束后立即收回，
+      // 使「自动保存把空场景写进 room」在其余任何时刻都不可能发生。
+      state.allowPost = true;
+      try {
+        return await this._loadAndSaveInner(payloadJson);
+      } finally {
+        state.allowPost = false;
+      }
+    },
+    _loadAndSaveInner: async function (payloadJson) {
       var c = findCollab();
       if (!c || !c.excalidrawAPI || typeof c.saveCollabRoomToFirebase !== 'function') {
         return { ok: false, error: 'collab-not-ready' };

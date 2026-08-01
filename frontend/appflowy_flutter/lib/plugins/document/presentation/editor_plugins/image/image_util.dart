@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:ui';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -82,6 +84,20 @@ Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
       if (!waitForUpload) {
         return (s.url, null);
       }
+
+      // 断网时**一秒都不等**：图片已落本地缓存（上方 putFile）并进入 Rust 侧上传
+      // 队列，联网后自动续传。此处原本会一直等到 _kImageUploadReadyTimeout（90 秒）
+      // 才放弃，用户表现为「插图卡很久」—— 而这段等待在离线时注定是白等的。
+      //
+      // 本地优先是硬要求：私有空间的图片存取不应依赖网络，插入必须是瞬时的，
+      // 同步留给空闲时的上传队列。
+      if (await _isOffline()) {
+        Log.info(
+          '[ImageUpload] 当前离线，跳过等待直接插入本地缓存并留在上传队列: ${s.url}',
+        );
+        return (s.url, null);
+      }
+
       final uploadError = await _waitForImageUploadReady(s.url);
       if (uploadError != null) {
         // 【离线上传支持 2026-07-19】断网/等待超时时，不再判定为失败。
@@ -144,6 +160,19 @@ bool _isPendingUploadError(String error) {
       e.contains('failed to lookup address') ||
       // 等待超时：`_waitForImageUploadReady` 超时会返回该文案。
       error == LocaleKeys.button_uploadFailed.tr();
+}
+
+/// 当前是否离线。探测失败一律按「在线」处理 —— 宁可多等，也不误判成离线而
+/// 跳过必要的等待。
+Future<bool> _isOffline() async {
+  try {
+    final result = await Connectivity()
+        .checkConnectivity()
+        .timeout(const Duration(seconds: 2));
+    return result == ConnectivityResult.none;
+  } catch (_) {
+    return false;
+  }
 }
 
 Future<String?> _waitForImageUploadReady(String url) async {
