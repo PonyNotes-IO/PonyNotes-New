@@ -697,21 +697,26 @@ impl CollabCloudPluginProvider for ServerProvider {
                   .send_delay(Duration::from_millis(750))
                   .send_timeout(8);
 
-                // 私有空间内容：编辑期间完全不推，停笔 3 秒后一次推走；连续编辑
-                // 满 60 秒则强制上推（避免长时间不落云，也避免攒出过大的合并更新
-                // 撞上实时消息体积上限）。
+                // 【已停用】私有空间内容的「编辑静默后才推送」。
                 //
-                // 协作内容**必须**维持原有的实时节奏 —— 一旦对其启用静默推送，
-                // 协作方在对端停手前什么都看不到。因此只在确认属于私有空间时启用；
-                // 登记表查不到一律按非私有处理（宁可多推，不误伤协作）。
-                if self.private_views.is_private(&collab_object.object_id) {
-                  sink_config = sink_config
-                    .idle_flush(Duration::from_secs(3), Duration::from_secs(60));
-                  tracing::info!(
-                    "[云同步] 私有空间内容，启用静默推送(3s/60s): {}",
-                    collab_object.object_id
-                  );
-                }
+                // 该策略曾在此处启用（3 秒静默 / 60 秒强制上推），但 1.1.10 实测
+                // 造成内容丢失，原因是它只做了「延迟推送」，缺了三块配套：
+                //
+                //   A. 跨空间移动时不会强制 flush —— 私有期写的内容仍被扣在
+                //      发送队列里，文档一移进协作区，其他人从服务端读不到它，
+                //      表现为「移回协作区后新写的内容丢失」（有概率，取决于
+                //      移动动作离最后一次编辑有多近）。
+                //   B. 配置在插件创建时就固定了，移动后不会刷新 —— 文档已经进了
+                //      协作区，推送却仍带着 3s/60s 的延迟，表现为「看不到协作者
+                //      的实时写入」「连接像是有延迟」。
+                //   C. 关闭文档 / 退出时不会 flush，静默窗口内的编辑当次出不去。
+                //
+                // 三者都要补齐，这个策略才是安全的；在那之前一律走原有的即时推送
+                // 节奏 —— 那是被长期验证过的行为，不会丢数据。
+                //
+                // SinkConfig::idle_flush 与 PrivateViewRegistry 的基础设施予以保留，
+                // 补齐 A/B/C 后只需在此重新启用。
+                let _ = &self.private_views;
                 let sync_plugin = SyncPlugin::new(
                   origin,
                   sync_object,
