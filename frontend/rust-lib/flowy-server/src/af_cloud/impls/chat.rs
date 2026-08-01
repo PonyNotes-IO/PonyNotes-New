@@ -217,7 +217,7 @@ where
     params: CompleteTextParams,
     ai_model: AIModel,
   ) -> Result<StreamComplete, FlowyError> {
-    use flowy_ai::ai_session_client::stream_ai_session;
+    use flowy_ai::ai_session_client::stream_ai_session_with_attachments;
     use flowy_ai_pub::cloud::CompletionStreamValue;
     use futures_util::StreamExt;
     
@@ -239,22 +239,34 @@ where
       .as_ref()
       .map(|m| m.enable_web_search)
       .unwrap_or(false);
+    // 文档内 AI 的图片分析：把图片从 metadata 带下去。
+    // 该接口（/api/ai/chat/session）与「问 AI」同源，服务端早已支持多模态，
+    // 此前这里只是没把图片传过去 —— 与上面 enable_thinking/enable_web_search
+    // 曾被硬编码为 false 是同一类遗漏。
+    let images = params
+      .metadata
+      .as_ref()
+      .and_then(|m| m.images.clone())
+      .filter(|v| !v.is_empty());
     let message = params.text;
     let preferred_model = Some(ai_model.name);
 
     info!(
-      "[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}, enable_thinking: {}, enable_web_search: {}",
-      message.len(), enable_thinking, enable_web_search
+      "[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}, enable_thinking: {}, enable_web_search: {}, images: {}",
+      message.len(), enable_thinking, enable_web_search,
+      images.as_ref().map(|v| v.len()).unwrap_or(0)
     );
 
     // 调用 /api/ai/chat/session 接口（传递workspace_id用于协作区场景）
-    let session_stream = stream_ai_session(
+    let session_stream = stream_ai_session_with_attachments(
       base_url,
       &message,
       preferred_model,
       token,
       enable_thinking,
       enable_web_search,
+      images,
+      None, // 文件附件：文档内 AI 暂不支持
       Some(workspace_id.to_string()), // workspace_id用于协作区资源归属
     ).await?;
     

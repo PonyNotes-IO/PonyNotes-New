@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -38,6 +41,9 @@ class AiWriterCubit extends Cubit<AiWriterState> {
 
   final String documentId;
   final EditorState editorState;
+
+  /// 单次提问最多附带的图片数：多模态请求体是 base64，过多会显著拖慢甚至超限。
+  static const _maxImagesForAsk = 4;
   final AIRepository _aiService;
   final MarkdownTextRobot _textRobot;
   final void Function()? onCreateNode;
@@ -374,6 +380,51 @@ class AiWriterCubit extends Cubit<AiWriterState> {
     return "$viewName\n$documentText".trim();
   }
 
+  /// 收集文档中可用于图片分析的图片，返回 base64 列表。
+  ///
+  /// 文档内 AI 与「问 AI」最终落到同一个 /api/ai/chat/session 接口，服务端早已
+  /// 支持多模态（qwen3-vl-plus）；此前不支持图片分析，仅仅是文档侧从未把图片
+  /// 传下去。这里把文档里的图片块取出来补上这一环。
+  ///
+  /// 只取**本地可读**的图片：文档图片在本地有缓存（离线上传支持），直接读盘即可，
+  /// 不引入额外网络请求；纯远程 URL 一律跳过，避免提问被下载拖慢甚至卡住。
+  ///
+  /// 上限 [_maxImagesForAsk] 张：多模态请求体是 base64，过多会显著拖慢甚至超限。
+  Future<List<String>> _collectDocumentImagesAsBase64() async {
+    const maxImages = _maxImagesForAsk;
+    final result = <String>[];
+
+    try {
+      for (final node in editorState.document.root.children) {
+        if (result.length >= maxImages) break;
+        if (node.type != CustomImageBlockKeys.type) continue;
+
+        final url = node.attributes[CustomImageBlockKeys.url] as String?;
+        if (url == null || url.isEmpty) continue;
+        // 远程 URL 跳过：读盘是同步可控的，下载不是。
+        if (url.startsWith('http://') || url.startsWith('https://')) continue;
+
+        final file = File(url);
+        if (!file.existsSync()) continue;
+        try {
+          final bytes = await file.readAsBytes();
+          if (bytes.isEmpty) continue;
+          result.add(base64Encode(bytes));
+        } catch (e) {
+          Log.warn('[AIWriter] 读取图片失败，已跳过: $url, $e');
+        }
+      }
+    } catch (e) {
+      Log.warn('[AIWriter] 收集文档图片异常，按无图片处理: $e');
+      return const [];
+    }
+
+    if (result.isNotEmpty) {
+      Log.info('[AIWriter] 文档内提问附带 ${result.length} 张图片');
+    }
+    return result;
+  }
+
   void _startAskingQuestion(
     String prompt,
     PredefinedFormat? format,
@@ -383,6 +434,9 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       return;
     }
     final command = AiWriterCommand.userQuestion;
+
+    // 图片分析：把文档里的图片一并带上（服务端多模态早已就绪，此前只是没传）。
+    final images = await _collectDocumentImagesAsBase64();
 
     // 【修复】文档内向AI提问时，不传objectId，避免后端查找view失败的问题
     // 提问和回答会直接插入到当前文档中，而不是创建新的AI会话视图
@@ -396,6 +450,7 @@ class AiWriterCubit extends Cubit<AiWriterState> {
       completionType: command.toCompletionType(),
       enableDeepThinking: enableDeepThinkingNotifier.value,
       enableWebSearch: enableWebSearchNotifier.value,
+      images: images,
       onStart: () async {
         final position = await ensurePreviousNodeIsEmptyParagraph(
           editorState,

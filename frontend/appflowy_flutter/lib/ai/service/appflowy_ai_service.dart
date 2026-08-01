@@ -35,6 +35,9 @@ abstract class AIRepository {
     required CompletionTypePB completionType,
     bool enableDeepThinking = false,
     bool enableWebSearch = false,
+    /// base64 编码的图片，用于文档内 AI 的图片分析。
+    /// 服务端与「问 AI」同源（/api/ai/chat/session），已支持多模态。
+    List<String> images = const [],
     required Future<void> Function() onStart,
     required Future<void> Function(String text) processMessage,
     required Future<void> Function(String text) processAssistMessage,
@@ -65,6 +68,9 @@ class AppFlowyAIService implements AIRepository {
     required CompletionTypePB completionType,
     bool enableDeepThinking = false,
     bool enableWebSearch = false,
+    /// base64 编码的图片，用于文档内 AI 的图片分析。
+    /// 服务端与「问 AI」同源（/api/ai/chat/session），已支持多模态。
+    List<String> images = const [],
     required Future<void> Function() onStart,
     required Future<void> Function(String text) processMessage,
     required Future<void> Function(String text) processAssistMessage,
@@ -98,6 +104,8 @@ class AppFlowyAIService implements AIRepository {
       history: records,
       enableThinking: enableDeepThinking,
       enableWebSearch: enableWebSearch,
+      images: images,
+      hasImages: images.isNotEmpty,
     );
 
     return AIEventCompleteText(payload).send().fold(

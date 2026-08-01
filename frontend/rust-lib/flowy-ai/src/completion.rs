@@ -154,6 +154,14 @@ impl CompletionTask {
           prompt_id: self.context.prompt_id.clone(),
           enable_thinking: self.context.enable_thinking,
           enable_web_search: self.context.enable_web_search,
+          // 图片随 metadata 下传，最终由 flowy-server 的 stream_complete
+          // 交给 /api/ai/chat/session 的多模态入参。
+          has_images: self.context.has_images && !self.context.images.is_empty(),
+          images: if self.context.images.is_empty() {
+            None
+          } else {
+            Some(self.context.images.clone())
+          },
         });
         
         let params = CompleteTextParams {

@@ -478,6 +478,16 @@ pub struct CompleteTextPB {
 
   #[pb(index = 11)]
   pub enable_web_search: bool,
+
+  /// 图片列表（base64 编码），用于文档内 AI 的图片分析。
+  /// 与聊天侧 StreamChatPayloadPB 的 images 同格式；最终都落到
+  /// /api/ai/chat/session 的多模态入参上。
+  #[pb(index = 12)]
+  pub images: Vec<String>,
+
+  /// 是否随本次提问附带图片。
+  #[pb(index = 13)]
+  pub has_images: bool,
 }
 
 #[derive(Default, ProtoBuf, Clone, Debug)]
