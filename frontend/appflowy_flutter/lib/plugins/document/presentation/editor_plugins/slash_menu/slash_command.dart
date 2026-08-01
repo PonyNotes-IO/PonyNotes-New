@@ -98,7 +98,15 @@ Future<bool> _showSlashMenu(
   if (context != null && context.mounted) {
     final isLight = Theme.of(context).brightness == Brightness.light;
     _selectionMenuService?.dismiss();
-    _selectionMenuService = PlatformInfo.isMobile
+    // Pad 端使用 MobileSelectionMenu：
+    // 1. 桌面 SelectionMenu 依赖 KeyEvent.character 过滤菜单项，
+    //    但 iOS/Android 软键盘通过 TextInputClient 协议发送字符，不触发 KeyEvent，
+    //    导致菜单即使显示也无法过滤，且在某些场景下 selectionRects 为空直接不显示。
+    // 2. MobileSelectionMenu 通过监听 editorState.selectionNotifier 过滤菜单项，
+    //    并注册 SlashKeyboardServiceInterceptor 处理软键盘的删除/回车键，
+    //    与 Pad 端触摸+软键盘的交互模式一致。
+    final useMobileMenu = PlatformInfo.isMobile || PlatformInfo.isTablet;
+    _selectionMenuService = useMobileMenu
         ? MobileSelectionMenu(
             context: context,
             editorState: editorState,

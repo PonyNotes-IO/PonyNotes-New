@@ -66,16 +66,18 @@ class MobileSelectionMenu extends SelectionMenuService {
     final position = _getCurrentPosition();
     if (position == null) return;
 
-    final editorHeight = editorState.renderBox!.size.height;
-    final editorWidth = editorState.renderBox!.size.width;
+    // 使用屏幕尺寸而非编辑器尺寸：
+    // 在 Pad 上编辑器可能居中（不在屏幕左上角），若 SizedBox 只覆盖编辑器区域，
+    // 光标的全局坐标可能超出 SizedBox 边界，导致菜单被 Stack 裁剪或位置偏移。
+    final screenSize = MediaQuery.of(context).size;
 
     _positionNotifier = ValueNotifier(position);
     final showAtTop = position.top != null;
     _selectionMenuEntry = OverlayEntry(
       builder: (context) {
         return SizedBox(
-          width: editorWidth,
-          height: editorHeight,
+          width: screenSize.width,
+          height: screenSize.height,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: dismiss,
@@ -208,61 +210,57 @@ class MobileSelectionMenu extends SelectionMenuService {
   }
 
   void calculateSelectionMenuOffset(Rect rect, Size screenSize) {
-    // Workaround: We can customize the padding through the [EditorStyle],
-    // but the coordinates of overlay are not properly converted currently.
-    // Just subtract the padding here as a result.
+    // 使用屏幕尺寸计算菜单位置：
+    // rect 是光标的全局坐标，Overlay 中的 SizedBox 也覆盖整个屏幕，
+    // 因此 left/right/top/bottom 都基于屏幕坐标系，与光标坐标一致。
     const menuHeight = 192.0, menuWidth = 240.0;
-    final editorOffset =
-        editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
-    final editorHeight = editorState.renderBox!.size.height;
     final screenHeight = screenSize.height;
-    final editorWidth = editorState.renderBox!.size.width;
+    final screenWidth = screenSize.width;
     final rectHeight = rect.height;
 
-    // show below default
+    // 光标的全局坐标
+    final cursorX = rect.left;
+    final cursorY = rect.top;
+
+    // 默认：菜单在光标下方，左边对齐光标
+    // Alignment.bottomRight + right = screenWidth - cursorX - menuWidth
+    // → 菜单右边 = screenWidth - right = cursorX + menuWidth
+    // → 菜单左边 = cursorX（对齐光标）
     _alignment = Alignment.bottomRight;
-    final bottomRight = rect.topLeft;
-    final offset = bottomRight;
-    final limitX = editorWidth + editorOffset.dx - menuWidth,
-        limitY = screenHeight -
-            editorHeight +
-            editorOffset.dy -
-            menuHeight -
-            rectHeight;
     _offset = Offset(
-      editorWidth - offset.dx - menuWidth,
-      screenHeight - offset.dy - menuHeight - rectHeight,
+      screenWidth - cursorX - menuWidth,
+      screenHeight - cursorY - menuHeight - rectHeight,
     );
 
-    if (offset.dy + menuHeight >= editorOffset.dy + editorHeight) {
-      /// show above
-      if (offset.dy > menuHeight) {
+    // 如果下方空间不够，菜单在光标上方
+    if (cursorY + menuHeight >= screenHeight) {
+      if (cursorY > menuHeight) {
         _offset = Offset(
           _offset.dx,
-          offset.dy - menuHeight,
+          cursorY - menuHeight,
         );
         _alignment = Alignment.topRight;
       } else {
         _offset = Offset(
           _offset.dx,
-          limitY,
+          screenHeight - menuHeight - rectHeight,
         );
       }
     }
 
-    if (offset.dx + menuWidth >= editorOffset.dx + editorWidth) {
-      /// show left
-      if (offset.dx > menuWidth) {
+    // 如果右边空间不够，菜单改为右边对齐光标
+    if (cursorX + menuWidth >= screenWidth) {
+      if (cursorX > menuWidth) {
         _alignment = _alignment == Alignment.bottomRight
             ? Alignment.bottomLeft
             : Alignment.topLeft;
         _offset = Offset(
-          offset.dx - menuWidth,
+          cursorX - menuWidth,
           _offset.dy,
         );
       } else {
         _offset = Offset(
-          limitX,
+          screenWidth - menuWidth,
           _offset.dy,
         );
       }

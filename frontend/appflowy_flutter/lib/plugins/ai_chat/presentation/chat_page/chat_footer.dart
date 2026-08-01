@@ -132,11 +132,17 @@ class _ChatFooterState extends State<ChatFooter> {
         chatBloc.add(const ChatEvent.stopStream());
       },
       onSubmitted: (text, format, metadata) {
+        final promptInputBloc = context.read<AIPromptInputBloc?>();
+        final enableDeepThinking = promptInputBloc?.state.enableDeepThinking;
+        final enableWebSearch = promptInputBloc?.state.enableWebSearch;
+        
         chatBloc.add(
           ChatEvent.sendMessage(
             message: text,
             format: format,
             metadata: metadata,
+            enableDeepThinking: enableDeepThinking,
+            enableWebSearch: enableWebSearch,
           ),
         );
       },
