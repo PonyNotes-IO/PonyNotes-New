@@ -268,6 +268,22 @@ class _AIInputAreaState extends State<AIInputArea> {
             // 异步检查剪贴板是否有图片
             _pasteImageFromClipboard();
           }
+
+          // 回车发送、Shift+回车换行。
+          //
+          // 这个输入框是 maxLines: null 的多行框，回车会被 TextField 当成换行，
+          // 因此下面那个 onSubmitted 回调**永远不会触发** —— 用户只能点发送按钮。
+          // 在这里拦下回车并返回 handled，事件就不会再传给 TextField 插入换行。
+          final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.numpadEnter;
+          if (isEnter && !HardwareKeyboard.instance.isShiftPressed) {
+            // 输入法组字期间（如中文候选未上屏）不能抢回车，否则会打断选词。
+            if (_textController.value.composing.isValid) {
+              return KeyEventResult.ignored;
+            }
+            _sendMessage();
+            return KeyEventResult.handled;
+          }
         }
         // 返回 KeyEventResult.ignored 让事件继续传递给TextField
         return KeyEventResult.ignored;
