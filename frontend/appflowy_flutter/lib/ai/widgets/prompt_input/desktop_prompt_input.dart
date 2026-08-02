@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:appflowy/ai/widgets/prompt_input/paste_image_helper.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_user_cubit.dart';
@@ -16,6 +18,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -795,21 +798,37 @@ class _PromptBottomActions extends StatelessWidget {
   Widget _attachmentButton(BuildContext context) {
     return PromptInputAttachmentButton(
       onTap: () async {
-        final path = await getIt<FilePickerService>().pickFiles(
-          dialogTitle: '',
-          type: FileType.custom,
-          allowedExtensions: ['jpg', 'jpeg', 'png'],
-        );
+        if (PlatformInfo.isDesktop) {
+          // 桌面端：从文件选择
+          final path = await getIt<FilePickerService>().pickFiles(
+            dialogTitle: '',
+            type: FileType.custom,
+            allowedExtensions: ['jpg', 'jpeg', 'png'],
+          );
 
-        if (path == null) {
-          return;
-        }
+          if (path == null) {
+            return;
+          }
 
-        for (final file in path.files) {
-          if (file.path != null && context.mounted) {
-            context
-                .read<AIPromptInputBloc>()
-                .add(AIPromptInputEvent.attachFile(file.path!, file.name));
+          for (final file in path.files) {
+            if (file.path != null && context.mounted) {
+              context
+                  .read<AIPromptInputBloc>()
+                  .add(AIPromptInputEvent.attachFile(file.path!, file.name));
+            }
+          }
+        } else {
+          // Pad 端和手机端：从相册选择
+          final hasPermission =
+              await PermissionChecker.checkPhotoPermission(context);
+          if (!hasPermission) return;
+          final xFiles = await ImagePicker().pickMultiImage();
+          for (final xFile in xFiles) {
+            if (context.mounted) {
+              context
+                  .read<AIPromptInputBloc>()
+                  .add(AIPromptInputEvent.attachFile(xFile.path, xFile.name));
+            }
           }
         }
       },
@@ -840,22 +859,36 @@ class _PromptBottomActions extends StatelessWidget {
         onTap: isDisabled
             ? null
             : () async {
-                // 打开文件选择器，支持所有文件类型
-                final result = await getIt<FilePickerService>().pickFiles(
-                  dialogTitle: '选择附件',
-                  type: FileType.custom,
-                  allowedExtensions: ['jpg', 'jpeg', 'png'],
-                  allowMultiple: true,
-                );
+                if (PlatformInfo.isDesktop) {
+                  // 桌面端：打开文件选择器
+                  final result = await getIt<FilePickerService>().pickFiles(
+                    dialogTitle: '选择附件',
+                    type: FileType.custom,
+                    allowedExtensions: ['jpg', 'jpeg', 'png'],
+                    allowMultiple: true,
+                  );
 
-                if (result == null || result.files.isEmpty) {
-                  return;
-                }
+                  if (result == null || result.files.isEmpty) {
+                    return;
+                  }
 
-                for (final file in result.files) {
-                  if (file.path != null && context.mounted) {
-                    context.read<AIPromptInputBloc>().add(
-                        AIPromptInputEvent.attachFile(file.path!, file.name));
+                  for (final file in result.files) {
+                    if (file.path != null && context.mounted) {
+                      context.read<AIPromptInputBloc>().add(
+                          AIPromptInputEvent.attachFile(file.path!, file.name));
+                    }
+                  }
+                } else {
+                  // Pad 端和手机端：从相册选择
+                  final hasPermission =
+                      await PermissionChecker.checkPhotoPermission(context);
+                  if (!hasPermission) return;
+                  final xFiles = await ImagePicker().pickMultiImage();
+                  for (final xFile in xFiles) {
+                    if (context.mounted) {
+                      context.read<AIPromptInputBloc>().add(
+                          AIPromptInputEvent.attachFile(xFile.path, xFile.name));
+                    }
                   }
                 }
               },

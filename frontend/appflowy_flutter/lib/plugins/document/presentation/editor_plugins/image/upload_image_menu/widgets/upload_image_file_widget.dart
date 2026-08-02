@@ -52,8 +52,9 @@ class UploadImageFileWidget extends StatelessWidget {
   }
 
   Future<void> _uploadImage(BuildContext context) async {
-    if (PlatformInfo.isDesktopOrTabletOrWeb) {
-      // on desktop, the users can pick a image file from folder
+    // Pad 端和手机端：从相册选择
+    // 桌面端：从文件选择
+    if (PlatformInfo.isDesktop) {
       final result = await getIt<FilePickerService>().pickFiles(
         dialogTitle: '',
         type: FileType.custom,
@@ -68,9 +69,14 @@ class UploadImageFileWidget extends StatelessWidget {
         Log.error('Has no permission to access the photo library');
         return;
       }
-      // on mobile, the users can pick a image file from camera or image library
-      final result = await ImagePicker().pickMultiImage();
-      onPickFiles(result);
+      if (allowMultipleImages) {
+        final result = await ImagePicker().pickMultiImage();
+        onPickFiles(result);
+      } else {
+        final result =
+            await ImagePicker().pickImage(source: ImageSource.gallery);
+        onPickFiles(result == null ? const [] : [result]);
+      }
     }
   }
 }

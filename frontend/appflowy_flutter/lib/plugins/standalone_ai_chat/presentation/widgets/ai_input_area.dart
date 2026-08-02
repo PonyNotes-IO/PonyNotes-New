@@ -15,6 +15,9 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flowy_infra/platform_extension.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../generated/flowy_svgs.g.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
@@ -726,17 +729,26 @@ class _AIInputAreaState extends State<AIInputArea> {
     _closeDropdown();
   }
 
-  /// 选择图片 - 直接打开文件选择器
+  /// 选择图片 - Pad 端和手机端从相册选择，桌面端从文件选择
   Future<void> _selectImage() async {
     if (_isDropdownOpen) {
       _closeDropdown();
     }
 
-    // 直接从文件系统选择图片，不显示选择对话框
-    final image = await _imageService.pickImageFromFile();
+    ChatImage? image;
+
+    if (PlatformInfo.isDesktop) {
+      // 桌面端：直接从文件系统选择图片
+      image = await _imageService.pickImageFromFile();
+    } else {
+      // Pad 端和手机端：从相册选择
+      image = await _imageService.pickImageFromGallery(context);
+    }
+
     if (image != null) {
+      final pickedImage = image;
       setState(() {
-        _selectedImages.add(image);
+        _selectedImages.add(pickedImage);
       });
 
       // 【关键修复】选择图片后，确保当前模型支持图片
@@ -878,25 +890,13 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 处理附件按钮点击事件（支持图片和文件上传）
-  /// 直接打开系统文件浏览器，不显示类型选择对话框
+  /// Pad 端和手机端从相册选择，桌面端从文件选择
   Future<void> _handleAttachmentTap() async {
     if (_isDropdownOpen) {
       _closeDropdown();
     }
 
     try {
-      // 直接打开系统文件浏览器，仅支持图片类型（PNG、JPG）
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png'],
-        withData: false, // 大文件不直接加载到内存
-      );
-
-      if (result == null || result.files.isEmpty) {
-        return;
-      }
-
       // 支持的图片扩展名
       const imageExtensions = ['jpg', 'jpeg', 'png'];
 
@@ -904,33 +904,54 @@ class _AIInputAreaState extends State<AIInputArea> {
       final List<_AttachmentItem> newAttachments = [];
       final List<ChatImage> newImages = [];
 
-      for (final pickedFile in result.files) {
-        final filePath = pickedFile.path;
-        if (filePath == null || filePath.isEmpty) continue;
+      if (PlatformInfo.isDesktop) {
+        // 桌面端：从文件系统选择
+        final result = await FilePicker.platform.pickFiles(
+          allowMultiple: true,
+          type: FileType.custom,
+          allowedExtensions: imageExtensions,
+          withData: false,
+        );
 
-        final file = File(filePath);
-        if (!file.existsSync()) continue;
+        if (result == null || result.files.isEmpty) {
+          return;
+        }
 
-        final extension = pickedFile.extension?.toLowerCase() ?? '';
-        final isImage = imageExtensions.contains(extension);
-        final fileSize = file.lengthSync();
+        for (final pickedFile in result.files) {
+          final filePath = pickedFile.path;
+          if (filePath == null || filePath.isEmpty) continue;
 
-        if (isImage) {
-          // 如果是图片，创建ChatImage对象并添加到图片列表
-          try {
-            final image = await ChatImage.fromFile(file);
-            newImages.add(image);
-            newAttachments.add(_AttachmentItem(
-              type: _AttachmentType.image,
-              name: pickedFile.name,
-              size: fileSize,
-              image: image,
-              file: file,
-              uploadStatus: _UploadStatus.success,
-            ));
-          } catch (e) {
-            debugPrint('创建图片对象失败: $e');
-            // 如果创建图片对象失败，作为普通文件处理
+          final file = File(filePath);
+          if (!file.existsSync()) continue;
+
+          final extension = pickedFile.extension?.toLowerCase() ?? '';
+          final isImage = imageExtensions.contains(extension);
+          final fileSize = file.lengthSync();
+
+          if (isImage) {
+            try {
+              final image = await ChatImage.fromFile(file);
+              newImages.add(image);
+              newAttachments.add(_AttachmentItem(
+                type: _AttachmentType.image,
+                name: pickedFile.name,
+                size: fileSize,
+                image: image,
+                file: file,
+                uploadStatus: _UploadStatus.success,
+              ));
+            } catch (e) {
+              debugPrint('创建图片对象失败: $e');
+              newAttachments.add(_AttachmentItem(
+                type: _AttachmentType.file,
+                name: pickedFile.name,
+                size: fileSize,
+                image: null,
+                file: file,
+                uploadStatus: _UploadStatus.success,
+              ));
+            }
+          } else {
             newAttachments.add(_AttachmentItem(
               type: _AttachmentType.file,
               name: pickedFile.name,
@@ -940,16 +961,39 @@ class _AIInputAreaState extends State<AIInputArea> {
               uploadStatus: _UploadStatus.success,
             ));
           }
-        } else {
-          // 普通文件
-          newAttachments.add(_AttachmentItem(
-            type: _AttachmentType.file,
-            name: pickedFile.name,
-            size: fileSize,
-            image: null,
-            file: file,
-            uploadStatus: _UploadStatus.success,
-          ));
+        }
+      } else {
+        // Pad 端和手机端：从相册选择
+        final hasPermission =
+            await PermissionChecker.checkPhotoPermission(context);
+        if (!hasPermission) {
+          if (mounted) {
+            showToastNotification(message: '没有相册访问权限');
+          }
+          return;
+        }
+        final xFiles = await ImagePicker().pickMultiImage();
+        if (xFiles.isEmpty) return;
+
+        for (final xFile in xFiles) {
+          final file = File(xFile.path);
+          if (!file.existsSync()) continue;
+
+          final fileSize = file.lengthSync();
+          try {
+            final image = await ChatImage.fromFile(file);
+            newImages.add(image);
+            newAttachments.add(_AttachmentItem(
+              type: _AttachmentType.image,
+              name: xFile.name,
+              size: fileSize,
+              image: image,
+              file: file,
+              uploadStatus: _UploadStatus.success,
+            ));
+          } catch (e) {
+            debugPrint('创建图片对象失败: $e');
+          }
         }
       }
 

@@ -8,9 +8,11 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -124,6 +126,12 @@ class CoverImagePickerBloc
   }
 
   Future<String?> _pickImages() async {
+    // Pad 端：从相册选择
+    if (PlatformInfo.isTablet) {
+      final image =
+          await ImagePicker().pickImage(source: ImageSource.gallery);
+      return image?.path;
+    }
     final result = await getIt<FilePickerService>().pickFiles(
       dialogTitle: LocaleKeys.document_plugins_cover_addLocalImage.tr(),
       type: FileType.image,

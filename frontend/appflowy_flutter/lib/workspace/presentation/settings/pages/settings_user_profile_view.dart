@@ -12,10 +12,13 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:flowy_infra/platform_extension.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 class SettingsUserProfileView extends StatefulWidget {
   const SettingsUserProfileView({
@@ -250,20 +253,33 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   Future<void> _selectAvatar() async {
     if (_isUploading) return;
 
-    final result = await getIt<FilePickerService>().pickFiles(
-      dialogTitle: '',
-      type: FileType.image,
-    );
+    String? localImagePath;
 
-    if (result == null || result.files.isEmpty) return;
+    if (PlatformInfo.isDesktop) {
+      // 桌面端：从文件选择
+      final result = await getIt<FilePickerService>().pickFiles(
+        dialogTitle: '',
+        type: FileType.image,
+      );
+      if (result == null || result.files.isEmpty) return;
+      localImagePath = result.files.first.path;
+    } else {
+      // Pad 端和手机端：从相册选择
+      final hasPermission =
+          await PermissionChecker.checkPhotoPermission(context);
+      if (!hasPermission) return;
+      final image =
+          await ImagePicker().pickImage(source: ImageSource.gallery);
+      localImagePath = image?.path;
+    }
 
-    final localImagePath = result.files.first.path;
     if (localImagePath == null) return;
 
+    final pickedPath = localImagePath;
     setState(() {
-      _pendingAvatarPath = localImagePath;
+      _pendingAvatarPath = pickedPath;
       // 临时显示选中的图片
-      _avatarUrl = localImagePath;
+      _avatarUrl = pickedPath;
     });
   }
 
