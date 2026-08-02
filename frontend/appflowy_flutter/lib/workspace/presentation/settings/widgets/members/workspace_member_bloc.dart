@@ -179,6 +179,15 @@ class WorkspaceMemberBloc
       unawaited(_fetchWorkspaceSubscriptionInfo());
     }
 
+    // 【排查用】人员管理里出现过「头像首字是『操』、几秒后才变成真实姓名首字」。
+    // 头像与姓名列同取 member.name，而缓存索引证实该成员没有任何头像图片可渲染，
+    // 因此那个字必然来自某一次返回的 name。把每次拿到的名字打出来，
+    // 一次复现即可定位是哪一批数据带了异常名字（例如把错误文案当成了姓名）。
+    Log.info(
+      '[WorkspaceMemberBloc] 收到成员 ${members.length} 人: '
+      '${members.map((m) => '${m.name}|${m.email}').join(', ')}',
+    );
+
     emit(
       state.copyWith(
         members: members,
