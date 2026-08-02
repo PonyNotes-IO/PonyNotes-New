@@ -1558,6 +1558,10 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                 child: ViewItem(
                   key: ValueKey('space_hub_${childView.id}'),
                   view: childView,
+                  // 拖拽排序必须知道谁是首项：DraggableViewItem 的 top 落点
+                  // （插到该项之前）仅对 isFirstChild 生效，不传就永远只能
+                  // 往下插，无法把条目拖到列表最前面。
+                  isFirstChild: childView.id == childViews.first.id,
                   // 注意：spaceType 必须取自所在「空间」(spaceView) 的权限，
                   // 不能取自 childView。childView 是普通文档，其 extra 为空，
                   // spacePermission getter 会抛异常并回退为 private，导致在
@@ -1648,6 +1652,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
             return ViewItem(
               key: ValueKey('space_hub_${childView.id}'),
               view: childView,
+              // 同上：不传 isFirstChild 就无法把条目拖到列表最前面。
+              isFirstChild: childView.id == childViews.first.id,
               // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
               // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
               spaceType: widget.spaceView.spacePermission == SpacePermission.private
