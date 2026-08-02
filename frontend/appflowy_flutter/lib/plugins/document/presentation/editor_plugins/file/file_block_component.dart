@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flowy_infra/platform_extension.dart';
 
-import 'package:appflowy/plugins/document/presentation/editor_plugins/common/pending_sync_badge.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -512,13 +511,6 @@ class FileBlockComponentState extends State<FileBlockComponent>
             name,
             overflow: TextOverflow.ellipsis,
           ),
-        ),
-        // 【离线上传支持 2026-07-19】未同步到云端时展示「待同步」角标。
-        // 断网插入的文件已落本地并在上传队列中，联网后自动续传；
-        // 此处仅作状态提示，上传完成后组件自行隐藏、不占位。
-        PendingSyncBadge(
-          fileUrl: node.attributes[FileBlockKeys.url] as String? ?? '',
-          compact: true,
         ),
         const HSpace(8),
         if (PlatformInfo.isDesktopOrTabletOrWeb) ...[
