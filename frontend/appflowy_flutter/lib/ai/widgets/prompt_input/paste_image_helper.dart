@@ -21,6 +21,11 @@ Future<({String path, String name})?> readClipboardImageToTempFile() async {
   try {
     final data = await getIt<ClipboardService>().getData();
     final image = data.image;
+    Log.info(
+      '[AIPaste] 读取剪贴板：image=${image != null}, '
+      'plainText=${data.plainText?.isNotEmpty ?? false}, '
+      'html=${data.html?.isNotEmpty ?? false}',
+    );
     if (image == null) {
       return null;
     }

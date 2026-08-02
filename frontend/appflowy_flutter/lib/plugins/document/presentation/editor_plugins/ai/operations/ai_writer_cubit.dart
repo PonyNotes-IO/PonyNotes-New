@@ -135,8 +135,15 @@ class AiWriterCubit extends Cubit<AiWriterState> {
     AiWriterCommand command,
     String prompt,
     PredefinedFormat? predefinedFormat,
-    String? promptId,
-  ) async {
+    String? promptId, {
+    /// 输入框（AIPromptInputBloc.consumeMetadata）组装好的元数据，
+    /// 其中 `images` 是用户通过附件按钮/粘贴挂上的图片（base64）。
+    ///
+    /// 此前这里没有这个参数，ai_writer_block_component 的 onSubmitted 直接把
+    /// metadata 丢弃（写成 `_`），导致用户在输入框里挂的图片**从未被送出**，
+    /// AI 自然回答「看不到图片」。
+    Map<String, dynamic>? metadata,
+  }) async {
     if (aiWriterNode == null) {
       return;
     }
@@ -171,6 +178,7 @@ class AiWriterCubit extends Cubit<AiWriterState> {
           prompt,
           predefinedFormat,
           promptId,
+          metadata: metadata,
         );
         break;
       case AiWriterCommand.userQuestion:
@@ -381,6 +389,17 @@ class AiWriterCubit extends Cubit<AiWriterState> {
     return "$viewName\n$documentText".trim();
   }
 
+  /// 从输入框元数据里取出用户挂的图片（base64）。
+  ///
+  /// 键名与 AIPromptInputBloc.consumeMetadata 保持一致（images / has_images），
+  /// 后者会把附件中扩展名为 jpg/jpeg/png 的项读成 base64 放进来。
+  List<String> _extractImagesFromMetadata(Map<String, dynamic>? metadata) {
+    if (metadata == null) return const [];
+    final raw = metadata['images'];
+    if (raw is! List) return const [];
+    return raw.whereType<String>().where((e) => e.isNotEmpty).toList();
+  }
+
   /// 收集文档中可用于图片分析的图片，返回 base64 列表。
   ///
   /// 文档内 AI 与「问 AI」最终落到同一个 /api/ai/chat/session 接口，服务端早已
@@ -468,15 +487,26 @@ class AiWriterCubit extends Cubit<AiWriterState> {
   void _startAskingQuestion(
     String prompt,
     PredefinedFormat? format,
-    String? promptId,
-  ) async {
+    String? promptId, {
+    Map<String, dynamic>? metadata,
+  }) async {
     if (aiWriterNode == null) {
       return;
     }
     final command = AiWriterCommand.userQuestion;
 
-    // 图片分析：把文档里的图片一并带上（服务端多模态早已就绪，此前只是没传）。
-    final images = await _collectDocumentImagesAsBase64();
+    // 图片来源有两处，优先级：**输入框挂的附件 > 文档里的图片块**。
+    //
+    // 用户在输入框里明确挂了图片，意图就是让 AI 看这几张；此时不应再把文档里
+    // 无关的图片混进去。只有用户没挂附件时，才退而把文档中的图片带上，
+    // 用于「分析这篇文档里的图」这类提问。
+    final attached = _extractImagesFromMetadata(metadata);
+    final images =
+        attached.isNotEmpty ? attached : await _collectDocumentImagesAsBase64();
+    Log.info(
+      '[AIWriter] 提问附带图片：附件 ${attached.length} 张，'
+      '最终上送 ${images.length} 张',
+    );
 
     // 【修复】文档内向AI提问时，不传objectId，避免后端查找view失败的问题
     // 提问和回答会直接插入到当前文档中，而不是创建新的AI会话视图

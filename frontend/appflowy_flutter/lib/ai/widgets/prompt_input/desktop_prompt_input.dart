@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/ai/widgets/prompt_input/paste_image_helper.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
@@ -431,6 +433,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
         event.logicalKey == LogicalKeyboardKey.keyV &&
         (HardwareKeyboard.instance.isMetaPressed ||
             HardwareKeyboard.instance.isControlPressed)) {
+      Log.info('[AIPaste] 捕获到粘贴快捷键，尝试读取剪贴板图片');
       unawaited(_tryAttachClipboardImage());
       // 故意返回 ignored：文本粘贴仍走系统默认路径。
     }

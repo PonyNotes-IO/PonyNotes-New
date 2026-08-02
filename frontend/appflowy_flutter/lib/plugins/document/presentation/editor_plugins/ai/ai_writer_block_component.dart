@@ -500,15 +500,22 @@ class MainContentArea extends StatelessWidget {
             return DesktopPromptInput(
             isStreaming: false,
             hideDecoration: true,
-            hideFormats: [
-              AiWriterCommand.fixSpellingAndGrammar,
-              AiWriterCommand.improveWriting,
-              AiWriterCommand.makeLonger,
-              AiWriterCommand.makeShorter,
-            ].contains(state.command),
+            // 一律隐藏「格式化响应」按钮，与问 AI 会话窗口的输入框保持一致
+            // （chat_footer.dart 那边就是 hideFormats: true）。
+            // 原先只对改写类命令隐藏，导致「向 AI 提问」时左下角多出一个
+            // 会话窗口没有的按钮，两处输入框观感不统一。
+            hideFormats: true,
             textController: textController,
-            onSubmitted: (message, format, _, promptId) {
-              cubit.runCommand(state.command, message, format, promptId);
+            onSubmitted: (message, format, metadata, promptId) {
+              // metadata 里带着用户在输入框挂的图片（images/base64）。
+              // 此前这里写成 `_` 直接丢弃，导致附件图片从未送达 AI。
+              cubit.runCommand(
+                state.command,
+                message,
+                format,
+                promptId,
+                metadata: metadata,
+              );
             },
             onStopStreaming: () => cubit.stopStream(),
             selectedSourcesNotifier: cubit.selectedSourcesNotifier,
