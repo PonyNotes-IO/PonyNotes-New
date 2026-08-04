@@ -8,6 +8,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_mirror_service.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/webview_async_eval.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -85,9 +86,13 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
 
   /// 切走白板前的"冲刷保存"：触发退出保存并等待其真正完成，最多等待 2 秒。
   ///
-  /// 使用 callAsyncJavaScript 直接 await 页面内 __xmForceSave 返回的 Promise
-  /// （该 Promise 在 saveCollabRoomToFirebase 真正落盘后才 resolve），从而在
-  /// WebView 被销毁前把最后一小段编辑推到协作服务器。超时兜底确保绝不卡住 UI。
+  /// 等待页面内 __xmForceSave 返回的 Promise（该 Promise 在
+  /// saveCollabRoomToFirebase 真正落盘后才 resolve），从而在 WebView 被销毁前
+  /// 把最后一小段编辑推到协作服务器。超时兜底确保绝不卡住 UI。
+  ///
+  /// 这里**不能**用 controller.callAsyncJavaScript：它在 macOS 上会调到弱导入的
+  /// WebKit Swift overlay 符号，在部分系统上该符号解析为 0，调用即整进程崩溃
+  /// （详见 webview_async_eval.dart）。改用等价的「JS 侧 await + 信箱轮询」。
   Future<void> _flushSave() async {
     // 修复：dispose 后 _controller 会被置 null 且 _isDisposed 为 true，
     // 此处提前返回避免向已销毁的原生 WebView 发送 MethodChannel 消息。
@@ -95,13 +100,23 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     final controller = _controller;
     if (controller == null) return;
     try {
-      await controller.callAsyncJavaScript(
-        functionBody:
+      // 超时/失败由 evaluateAsyncJavascript 内部消化并返回 null，不再抛
+      // TimeoutException；它自身也会记录超时日志。
+      final value = await evaluateAsyncJavascript(
+        controller,
+        asyncBody:
             'return await (window.__xmForceSave ? window.__xmForceSave("flush") : false);',
-      ).timeout(const Duration(seconds: 2));
-      Log.info('[RemoteWhiteboard] 切走前冲刷保存完成 view=${widget.view.id}');
-    } on TimeoutException {
-      Log.warn('[RemoteWhiteboard] 切走前冲刷保存超时(2s)，继续销毁 view=${widget.view.id}');
+        timeout: const Duration(seconds: 2),
+        isCancelled: () => _isDisposed,
+        debugLabel: ' flushSave view=${widget.view.id}',
+      );
+      if (value != null) {
+        Log.info('[RemoteWhiteboard] 切走前冲刷保存完成 view=${widget.view.id}');
+      } else {
+        Log.warn(
+          '[RemoteWhiteboard] 切走前冲刷保存未确认完成，继续销毁 view=${widget.view.id}',
+        );
+      }
     } catch (e) {
       Log.warn('[RemoteWhiteboard] 切走前冲刷保存失败: $e');
     }

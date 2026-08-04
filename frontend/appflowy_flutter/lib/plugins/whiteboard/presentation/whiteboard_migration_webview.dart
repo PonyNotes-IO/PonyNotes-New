@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/webview_async_eval.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_migration_script.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -224,10 +225,12 @@ class _WhiteboardMigrationWebViewState
     Map<String, dynamic>? scene;
     // 连读几次取稳定/非空结果。
     for (var i = 0; i < 5 && !_finished; i++) {
-      final raw = await controller.callAsyncJavaScript(
-        functionBody: 'return JSON.stringify(window.__xmMig.getScene());',
+      // 这里是纯同步表达式，不需要 await Promise，直接用 evaluateJavascript。
+      // 不可改回 callAsyncJavaScript：它在 macOS 上会调到弱导入的 WebKit Swift
+      // overlay 符号，解析不到时符号地址为 0，调用即崩（详见 webview_async_eval.dart）。
+      final value = await controller.evaluateJavascript(
+        source: 'JSON.stringify(window.__xmMig.getScene())',
       );
-      final value = raw?.value;
       if (value is String && value.isNotEmpty && value != 'null') {
         try {
           scene = jsonDecode(value) as Map<String, dynamic>;
@@ -268,11 +271,18 @@ class _WhiteboardMigrationWebViewState
     final controller = _controller!;
     await _waitReady('pushReady()');
     final payloadJson = jsonEncode(widget.pushPayload ?? const {});
-    final raw = await controller.callAsyncJavaScript(
-      functionBody:
+    // loadAndSave 返回 Promise，必须等它真正落盘完成。原先用
+    // controller.callAsyncJavaScript 等待，但那条路径在 macOS 上会崩（弱导入
+    // 符号，详见 webview_async_eval.dart），改用等价的「JS 侧 await + 信箱轮询」。
+    final value = await evaluateAsyncJavascript(
+      controller,
+      asyncBody:
           'return JSON.stringify(await window.__xmMig.loadAndSave(${jsonEncode(payloadJson)}));',
+      // 上传要过网络，给足时间；超时会返回 null，走下面的 push-result-null 分支。
+      timeout: const Duration(seconds: 30),
+      isCancelled: () => _finished,
+      debugLabel: ' push',
     );
-    final value = raw?.value;
     Map<String, dynamic>? res;
     if (value is String && value.isNotEmpty && value != 'null') {
       try {
