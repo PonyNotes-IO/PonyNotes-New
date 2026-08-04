@@ -1562,6 +1562,10 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                   // （插到该项之前）仅对 isFirstChild 生效，不传就永远只能
                   // 往下插，无法把条目拖到列表最前面。
                   isFirstChild: childView.id == childViews.first.id,
+                  // 前一项 id 让「插到本项之前」可以表达为「插到前一项之后」，
+                  // 从而支持插入到列表任意位置，而不只是首尾两端。
+                  previousViewId:
+                      index > 0 ? childViews[index - 1].id : null,
                   // 注意：spaceType 必须取自所在「空间」(spaceView) 的权限，
                   // 不能取自 childView。childView 是普通文档，其 extra 为空，
                   // spacePermission getter 会抛异常并回退为 private，导致在
@@ -1654,6 +1658,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
               view: childView,
               // 同上：不传 isFirstChild 就无法把条目拖到列表最前面。
               isFirstChild: childView.id == childViews.first.id,
+              // 同上：有前一项 id 才能插入到列表任意位置。
+              previousViewId: index > 0 ? childViews[index - 1].id : null,
               // 同上：spaceType 取自空间 spaceView，而非普通文档 childView，
               // 否则共享空间中的子页面会被错误标记为私有、其他成员不可见。
               spaceType: widget.spaceView.spacePermission == SpacePermission.private
