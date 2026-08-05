@@ -13,18 +13,29 @@ class BackToLoginButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AFGhostTextButton(
-      text: LocaleKeys.signIn_backToLogin.tr(),
-      size: AFButtonSize.s,
+    return GestureDetector(
       onTap: onTap,
-      padding: EdgeInsets.zero,
-      textColor: (context, isHovering, disabled) {
-        final theme = AppFlowyTheme.of(context);
-        if (isHovering) {
-          return theme.textColorScheme.actionHover;
-        }
-        return theme.textColorScheme.action;
-      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Color(0xFFF2F2F2),
+          border: Border.all(
+            color: const Color(0xFFF2F2F2),
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text(
+          LocaleKeys.signIn_backToLogin.tr(),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }

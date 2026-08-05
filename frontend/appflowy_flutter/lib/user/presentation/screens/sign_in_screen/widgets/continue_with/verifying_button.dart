@@ -5,7 +5,9 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 
 class VerifyingButton extends StatelessWidget {
-  const VerifyingButton({super.key});
+  const VerifyingButton({super.key, this.borderRadius});
+
+  final double? borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -14,6 +16,7 @@ class VerifyingButton extends StatelessWidget {
       opacity: 0.7,
       child: AFFilledButton.disabled(
         size: AFButtonSize.l,
+        borderRadius: borderRadius,
         backgroundColor: theme.fillColorScheme.themeThick,
         builder: (context, isHovering, disabled) {
           return Row(

@@ -200,6 +200,7 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
         hintText: LocaleKeys.signIn_enterPassword.tr(),
         autoFocus: true,
         obscureText: true,
+        borderRadius: PlatformInfo.isMobile ? 18.0 : null,
         suffixIconConstraints: BoxConstraints.tightFor(
           width: iconSize + theme.spacing.m,
           height: iconSize,
@@ -220,7 +221,7 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
         alignment: Alignment.centerRight,
         child: AFGhostTextButton(
           text: LocaleKeys.signIn_forgotPassword.tr(),
-          size: AFButtonSize.s,
+          size: AFButtonSize.m,
           padding: EdgeInsets.zero,
           onTap: () => _pushForgotPasswordPage(),
           textStyle: theme.textStyle.body.standard(
@@ -228,10 +229,10 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
           ),
           textColor: (context, isHovering, disabled) {
             final theme = AppFlowyTheme.of(context);
-            if (isHovering) {
-              return theme.textColorScheme.actionHover;
-            }
-            return theme.textColorScheme.action;
+            // if (isHovering) {
+            //   return theme.textColorScheme.actionHover;
+            // }
+            return theme.textColorScheme.primary;
           },
         ),
       ),
@@ -239,10 +240,13 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
 
       // Continue button
       isSubmitting
-          ? const VerifyingButton()
+          ? VerifyingButton(
+              borderRadius: PlatformInfo.isMobile ? 18.0 : null,
+            )
           : ContinueWithButton(
               text: LocaleKeys.web_continue.tr(),
               onTap: () => widget.onEnterPassword(passwordController.text),
+              borderRadius: PlatformInfo.isMobile ? 18.0 : null,
             ),
       VSpace(20),
     ];
@@ -276,6 +280,7 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
       controller: accountController,
       hintText: LocaleKeys.signIn_enterYourEmailOrPhone.tr(),
       autoFocus: true,
+      borderRadius: PlatformInfo.isMobile ? 18.0 : null,
     );
   }
 }

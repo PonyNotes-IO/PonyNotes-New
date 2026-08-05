@@ -34,6 +34,7 @@ class AFTextField extends StatefulWidget {
     this.focusNode,
     this.readOnly = false,
     this.maxLength,
+    this.borderRadius,
   });
 
   /// The hint text to display when the text field is empty.
@@ -87,6 +88,9 @@ class AFTextField extends StatefulWidget {
   /// The maximum length of the text field.
   final int? maxLength;
 
+  /// 自定义圆角，为 null 时使用 [size] 对应的默认圆角
+  final double? borderRadius;
+
   @override
   State<AFTextField> createState() => _AFTextFieldState();
 }
@@ -128,7 +132,9 @@ class _AFTextFieldState extends AFTextFieldState {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final borderRadius = widget.size.borderRadius(theme);
+    final borderRadius = widget.borderRadius != null
+        ? BorderRadius.circular(widget.borderRadius!)
+        : widget.size.borderRadius(theme);
     final contentPadding = widget.size.contentPadding(theme);
 
     final errorBorderColor = theme.borderColorScheme.errorThick;
