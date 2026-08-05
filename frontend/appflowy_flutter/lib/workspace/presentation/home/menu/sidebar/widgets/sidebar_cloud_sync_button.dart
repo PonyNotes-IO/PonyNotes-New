@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -313,14 +315,20 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     bool isCloudSyncEnabled,
     UserWorkspaceBloc? workspaceBloc,
   ) {
+    final screenWidth = MediaQuery.sizeOf(dialogContext).width;
+    final panelWidth = math.min(320.0, math.max(0.0, screenWidth - 32.0));
+    final maxLeft = math.max(16.0, screenWidth - panelWidth - 16.0);
+    final panelLeft = buttonPosition.dx.clamp(16.0, maxLeft).toDouble();
+
     return Stack(
       children: [
         Positioned(
-          left: buttonPosition.dx,
+          left: panelLeft,
           top: buttonPosition.dy + buttonSize.height,
           child: Material(
             color: Colors.transparent,
             child: CloudSyncSettingsPanel(
+              width: panelWidth,
               isEnabled: isCloudSyncEnabled,
               membershipStatus: membershipStatus,
               subscriptionInfo: subscriptionInfo,
