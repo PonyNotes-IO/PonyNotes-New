@@ -773,6 +773,9 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Column(

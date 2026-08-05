@@ -61,6 +61,29 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
   final bool engagedInExpanding;
   late ViewExpander expander;
 
+  Future<void> reloadChildViews() async {
+    final result = await ViewBackendService.getChildViews(viewId: view.id);
+    result.fold(
+      (childViews) {
+        if (isClosed) {
+          return;
+        }
+        final currentView = state.view;
+        currentView.freeze();
+        add(
+          ViewEvent.viewUpdateChildView(
+            currentView.rebuild((builder) {
+              builder.childViews
+                ..clear()
+                ..addAll(childViews);
+            }),
+          ),
+        );
+      },
+      (_) {},
+    );
+  }
+
   @override
   Future<void> close() async {
     await listener.stop();
@@ -627,22 +650,11 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     }
 
     if (update.updateChildViews.isNotEmpty && update.parentViewId.isNotEmpty) {
+      // Child metadata updates (for example, a renamed title) are not
+      // included in the notification. Reload the parent so its list gets the
+      // latest child view data.
       final fetchedView = await ViewBackendService.getView(update.parentViewId);
-      final childViews = fetchedView.fold((l) => l.childViews, (r) => []);
-      bool isSameOrder = true;
-      if (childViews.length == update.updateChildViews.length) {
-        for (var i = 0; i < childViews.length; i++) {
-          if (childViews[i].id != update.updateChildViews[i].id) {
-            isSameOrder = false;
-            break;
-          }
-        }
-      } else {
-        isSameOrder = false;
-      }
-      if (!isSameOrder) {
-        return fetchedView.fold((l) => l, (r) => null);
-      }
+      return fetchedView.fold((l) => l, (r) => null);
     }
 
     return null;
