@@ -71,7 +71,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             color: Theme.of(context).brightness == Brightness.light
                 ? const Color(0xFFF5F5F5)
                 : const Color(0xFF2C2C2C),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(18),
           ),
           child: TextField(
             controller: controller,
@@ -81,7 +81,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 color: Theme.of(context).brightness == Brightness.light
                     ? const Color(0xFF999999)
                     : const Color(0xFF888888),
-                fontSize: 14,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
@@ -90,7 +90,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
               color: Theme.of(context).brightness == Brightness.light
                   ? Colors.black
@@ -114,9 +114,9 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
               width: double.infinity,
               decoration: BoxDecoration(
                 color: primaryColor,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(18),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
                 _isLoading
                     ? "登录中..."
@@ -124,7 +124,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -488,7 +488,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                   color: Colors.black,
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               RichText(
                 textAlign: TextAlign.center,
                 text: TextSpan(
@@ -526,7 +526,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 softWrap: true,
                 overflow: TextOverflow.visible,
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 14),
               // 同意并继续按钮
               GestureDetector(
                 onTap: () {
@@ -548,7 +548,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 16,
+                      fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -564,9 +564,9 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Color(0xFFF2F2F2),
                     border: Border.all(
-                      color: const Color(0xFFD0D0D0),
+                      color: const Color(0xFFF2F2F2),
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -576,7 +576,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.black,
-                      fontSize: 16,
+                      fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

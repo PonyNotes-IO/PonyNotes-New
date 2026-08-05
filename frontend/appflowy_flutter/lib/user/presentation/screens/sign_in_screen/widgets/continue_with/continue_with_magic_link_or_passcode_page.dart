@@ -377,7 +377,11 @@ class _ContinueWithMagicLinkOrPasscodePageState
               _buildBackButton(),
               // 主要内容
               Expanded(
-                child: Center(
+                child: Align(
+                  // 手机端内容紧贴返回按钮下方，桌面端保持垂直居中
+                  alignment: PlatformInfo.isMobile
+                      ? Alignment.topCenter
+                      : Alignment.center,
                   child: Container(
                     width: PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -673,14 +677,14 @@ class _ContinueWithMagicLinkOrPasscodePageState
     final primaryColor = Theme.of(context).colorScheme.primary;
     return SizedBox(
       width: 418,
-      height: 52,
+      height: PlatformInfo.isMobile ? 46 : 52,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _validateAndSubmit,
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(PlatformInfo.isMobile ? 18 : 10),
           ),
           elevation: 0,
         ),
@@ -693,10 +697,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
-            : const Text(
+            : Text(
                 '下一步',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: PlatformInfo.isMobile ? 16 : 20,
                   fontWeight: FontWeight.w500,
                 ),
               ),

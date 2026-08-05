@@ -34,15 +34,15 @@ class QuickStartButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.surfaceColorScheme.layer01,
           border: Border.all(color: theme.borderColorScheme.primary),
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(18),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Text(
           "快速开始",
           textAlign: TextAlign.center,
           style: TextStyle(
             color: theme.textColorScheme.primary,
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
         ),

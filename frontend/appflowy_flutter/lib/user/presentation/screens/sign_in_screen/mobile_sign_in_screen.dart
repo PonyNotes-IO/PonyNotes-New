@@ -47,69 +47,95 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
           final theme = AppFlowyTheme.of(context);
           return Scaffold(
             resizeToAvoidBottomInset: false,
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
-                child: Column(
-                  children: [
-                    VSpace(40),
-                    // Logo and welcome text
-                    FlowyLogoTitle(
-                      title: LocaleKeys.welcomeToPonyNotes.tr(),
-                      logoSize: Size.square(60),
+            body: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: const [
+                            Color(0xFFFFFAF8), // start - 近透明浅青，露出底色
+                            Color(0xFFFFFAF8), // center - 半透明白
+                            Color(0xFFFFFFFF), // end - 不透明白
+                          ],
+                          stops: const [0.0, 0.5, 1.0],
+                        ),
+                      ),
                     ),
-                    VSpace(40),
-
-                    // Phone input and login button
-                    MobilePhoneLoginForm(
-                      onAgreeChanged: (value) {
-                        setState(() {
-                          _agreedToTerms = value;
-                        });
-                      },
-                      initialAgreed: _agreedToTerms,
-                    ),
-                    const SizedBox(height: 12),
-
-                    QuickStartButton(
-                      onTap: () {
-                        context
-                            .read<SignInBloc>()
-                            .add(const SignInEvent.signInAsGuest());
-                      },
-                      checkTermsAgreement: () {
-                        if (!_agreedToTerms) {
-                          showToastNotification(
-                            message: "请先同意用户协议和隐私政策",
-                            type: ToastificationType.error,
-                          );
-                          return false;
-                        }
-                        return true;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    const Spacer(),
-
-                    // 第三方登录按钮
-                    _buildThirdPartyButtons(context),
-
-                    const SizedBox(height: 24),
-
-                    // Agreement checkbox
-                    TermsAndConditionsSection(
-                      agreedToTerms: _agreedToTerms,
-                      onAgreedToTermsChanged: (value) {
-                        setState(() {
-                          _agreedToTerms = value;
-                        });
-                      },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
+                    child: Column(
+                      children: [
+                        VSpace(110),
+                        // Logo and welcome text
+                        FlowyLogoTitle(
+                          title: LocaleKeys.welcomeToPonyNotes.tr(),
+                          logoSize: Size.square(60),
+                        ),
+                        VSpace(40),
+
+                        // Phone input and login button
+                        MobilePhoneLoginForm(
+                          onAgreeChanged: (value) {
+                            setState(() {
+                              _agreedToTerms = value;
+                            });
+                          },
+                          initialAgreed: _agreedToTerms,
+                        ),
+                        const SizedBox(height: 12),
+
+                        QuickStartButton(
+                          onTap: () {
+                            context
+                                .read<SignInBloc>()
+                                .add(const SignInEvent.signInAsGuest());
+                          },
+                          checkTermsAgreement: () {
+                            if (!_agreedToTerms) {
+                              showToastNotification(
+                                message: "请先同意用户协议和隐私政策",
+                                type: ToastificationType.error,
+                              );
+                              return false;
+                            }
+                            return true;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        const Spacer(),
+
+                        // 第三方登录按钮
+                        _buildThirdPartyButtons(context),
+
+                        const SizedBox(height: 24),
+
+                        // Agreement checkbox
+                        TermsAndConditionsSection(
+                          agreedToTerms: _agreedToTerms,
+                          onAgreedToTermsChanged: (value) {
+                            setState(() {
+                              _agreedToTerms = value;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
           );
         },
       ),
@@ -120,32 +146,53 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
     final theme = AppFlowyTheme.of(context);
     return Column(
       children: [
-        // 分割线带文字
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 1,
-                color: theme.borderColorScheme.primary,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                '其他登录方式',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.textColorScheme.secondary,
+        // 分割线带文字（左右线条渐变过渡）
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.borderColorScheme.primary.withValues(alpha: 0),
+                        theme.borderColorScheme.primary,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            Expanded(
-              child: Container(
-                height: 1,
-                color: theme.borderColorScheme.primary,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  '其他登录方式',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.textColorScheme.secondary,
+                  ),
+                ),
               ),
-            ),
-          ],
+              Expanded(
+                child: Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        theme.borderColorScheme.primary,
+                        theme.borderColorScheme.primary.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         // 第三方登录按钮
@@ -161,7 +208,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 _signInWithWeChat(context);
               },
             ),
-            const SizedBox(width: 24),
+            const SizedBox(width: 30),
             IconButton(
               icon: FlowySvg(
                 FlowySvgs.icon_login_dy_xl,

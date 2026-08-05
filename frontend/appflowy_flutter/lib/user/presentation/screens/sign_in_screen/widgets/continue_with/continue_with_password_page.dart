@@ -9,6 +9,7 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/password_suffix_icon.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
@@ -60,7 +61,9 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return Scaffold(
-      body: Center(
+      body: Align(
+        // 手机端内容紧贴返回按钮下方，桌面端保持垂直居中
+        alignment: PlatformInfo.isMobile ? Alignment.topCenter : Alignment.center,
         child: SizedBox(
           width: 320,
           child: BlocListener<SignInBloc, SignInState>(

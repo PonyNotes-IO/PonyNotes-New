@@ -547,7 +547,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       description: '确定要切换账号吗？',
       confirmLabel: '确定',
       onConfirm: (_) async {
-        Navigator.of(context).pop();
+        // 不在这里 pop 对话框，ConfirmPopup 的 closeOnAction 默认为 true
+        // 会自动关闭对话框。若此处再 pop 一次会导致设置页被一起 pop 掉。
         await appLogoutRelauncher().logoutAndRelaunch();
       },
     );
@@ -560,7 +561,9 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       description: LocaleKeys.settings_menu_logoutPrompt.tr(),
       confirmLabel: LocaleKeys.button_yes.tr(),
       onConfirm: (_) async {
-        Navigator.of(context).pop();
+        // 不在这里 pop 对话框，ConfirmPopup 的 closeOnAction 默认为 true
+        // 会自动关闭对话框。若此处再 pop 一次会导致设置页被一起 pop 掉，
+        // 用户会看到首页而不是登录页。
         await appLogoutRelauncher().logoutAndRelaunch();
       },
     );
