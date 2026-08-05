@@ -175,11 +175,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 enableWebSearch) async =>
             _handleSendMessage(message, format, metadata, promptId,
                 enableDeepThinking, enableWebSearch, emit),
-        finishSending: () async => emit(
-          state.copyWith(
-            promptResponseState: PromptResponseState.streamingAnswer,
-          ),
-        ),
+        finishSending: () async {
+          if (state.promptResponseState.isReady) {
+            return;
+          }
+          emit(
+            state.copyWith(
+              promptResponseState: PromptResponseState.streamingAnswer,
+            ),
+          );
+        },
 
         // Stream control
         stopStream: () async => _handleStopStream(emit),
@@ -469,6 +474,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         if (_messageHandler.processReceivedMessage(pb)) {
           final message = _messageHandler.createTextMessage(pb);
           add(ChatEvent.receiveMessage(message));
+          if (pb.authorType == 3) {
+            add(const ChatEvent.didFinishAnswerStream());
+          }
         }
       },
       chatErrorMessageCallback: (err) {
@@ -995,6 +1003,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     // Prepare streams
     await _streamManager.prepareStreams();
+    _listenForAnswerStreamEnd();
 
     // 获取当前选择的模型
     AIModelPB? selectedModel;
@@ -1144,6 +1153,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     await _streamManager.prepareStreams();
+    _listenForAnswerStreamEnd();
     await _streamManager
         .sendRegenerateRequest(
       answerMessageId,
@@ -1165,6 +1175,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       },
       (err) => Log.error("Failed to regenerate answer: ${err.msg}"),
+    );
+  }
+
+  void _listenForAnswerStreamEnd() {
+    _streamManager.answerStream?.listen(
+      onEnd: () {
+        if (!isClosed) {
+          add(const ChatEvent.didFinishAnswerStream());
+        }
+      },
     );
   }
 

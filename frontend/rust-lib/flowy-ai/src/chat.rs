@@ -392,6 +392,7 @@ impl Chat {
         },
       }
 
+      let _ = answer_sink.send(format!("finish:{}", question_id)).await;
       chat_notification_builder(chat_id, ChatNotification::FinishStreaming).send();
       trace!("[Chat] finish streaming");
 

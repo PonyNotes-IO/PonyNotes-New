@@ -28,6 +28,7 @@ class AnswerStream {
 
   bool _isDisposed = false;
   bool _hasStarted = false;
+  bool _hasEnded = false;
   bool _aiLimitReached = false;
   bool _aiImageLimitReached = false;
   String? _error;
@@ -103,6 +104,8 @@ class AnswerStream {
     } else if (event.startsWith(AIStreamEventPrefix.error)) {
       _error = event.substring(AIStreamEventPrefix.error.length);
       _onError?.call(_error!);
+    } else if (event.startsWith(AIStreamEventPrefix.finish)) {
+      _notifyEnd();
     } else if (event.startsWith(AIStreamEventPrefix.metadata)) {
       final s = event.substring(AIStreamEventPrefix.metadata.length);
       _onMetadata?.call(parseMetadata(s));
@@ -138,6 +141,14 @@ class AnswerStream {
   }
 
   void _onDoneCallback() {
+    _notifyEnd();
+  }
+
+  void _notifyEnd() {
+    if (_hasEnded) {
+      return;
+    }
+    _hasEnded = true;
     _onEnd?.call();
   }
 
@@ -166,7 +177,9 @@ class AnswerStream {
     _onData = onData;
     _onThinking = onThinking;
     _onStart = onStart;
-    _onEnd = onEnd;
+    if (onEnd != null) {
+      _onEnd = onEnd;
+    }
     _onError = onError;
     _onAIResponseLimit = onAIResponseLimit;
     _onAIImageResponseLimit = onAIImageResponseLimit;
