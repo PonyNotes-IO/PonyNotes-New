@@ -217,7 +217,9 @@ class _SectionFolderState extends State<SectionFolder> {
 
     final itemLevel = 0;
 
-    return widget.views.map((view) {
+    return widget.views.asMap().entries.map((entry) {
+      final index = entry.key;
+      final view = entry.value;
       final isSpace = view.isSpace;
       final shouldEnableTreeDrag =
           _supportsTreeDrag(widget.spaceType) && !isSpace;
@@ -225,7 +227,9 @@ class _SectionFolderState extends State<SectionFolder> {
         key: ValueKey('${widget.spaceType.name} ${view.id}'),
         spaceType: widget.spaceType,
         engagedInExpanding: !isSpace,
-        isFirstChild: view.id == widget.views.first.id,
+        isFirstChild: index == 0,
+        // 有前一项 id 才能把条目拖到列表任意位置，而不只是首尾两端。
+        previousViewId: index > 0 ? widget.views[index - 1].id : null,
         view: view,
         level: itemLevel,
         leftPadding: HomeSpaceViewSizes.leftPadding,

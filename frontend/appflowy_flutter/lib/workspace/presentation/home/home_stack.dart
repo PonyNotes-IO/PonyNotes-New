@@ -258,6 +258,23 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
             height: HomeSizes.tabBarHeight,
             child: Row(
               children: [
+                // 避开 macOS 左上角的红绿灯按钮。
+                //
+                // 这一行贴着窗口左边缘起排。Tab 栏隐藏时（AI 会话页即如此）它就是
+                // 最顶的一行，收起左侧边栏后 leading 落到 x=0，与红绿灯完全重叠 ——
+                // 红绿灯是原生窗口按钮、绘制在 Flutter 之上，结果就是「展开侧边栏」
+                // 的按钮被盖住、点不到。
+                //
+                // menuSpacing 由 HomeLayout 统一给出：macOS 且侧栏收起时为 80，
+                // 其余情况（侧栏展开、Windows/Linux）为 0，与顶部 Tab 栏用的是
+                // 同一个值，避让宽度保持一致。
+                //
+                // Tab 栏可见时不能再让：那时本行位于 Tab 栏下方，够不着红绿灯，
+                // 而 Tab 栏自身已经让过一次（见上方 menuSpacing 的 Padding），
+                // 这里再让会把按钮平白往右推 80。
+                HSpace(
+                  _shouldShowTabBar(state) ? 0.0 : widget.layout.menuSpacing,
+                ),
                 notifier.plugin.widgetBuilder.topActionBarLeadingItem ??
                     const SizedBox.shrink(),
                 const Spacer(),

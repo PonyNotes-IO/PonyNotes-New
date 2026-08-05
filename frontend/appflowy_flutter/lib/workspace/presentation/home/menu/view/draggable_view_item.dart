@@ -31,6 +31,7 @@ class DraggableViewItem extends StatefulWidget {
     this.feedback,
     required this.child,
     this.isFirstChild = false,
+    this.previousViewId,
     this.centerHighlightColor,
     this.topHighlightColor,
     this.bottomHighlightColor,
@@ -42,6 +43,14 @@ class DraggableViewItem extends StatefulWidget {
   final WidgetBuilder? feedback;
   final ViewPB view;
   final bool isFirstChild;
+
+  /// 同级列表中排在本项**前面**那一项的 id；本项为首项时为 null。
+  ///
+  /// 有了它，「插到本项之前」才能表达为「插到前一项之后」（prevViewId=前一项）。
+  /// 缺少它时 top 落点只能把 prevViewId 置 null（插到最前），所以此前
+  /// 只有首项的 top 有意义 —— 中间位置全靠 bottom，可用落点少且易误入 center，
+  /// 表现为「只能拖到列表最顶端或最下面」。
+  final String? previousViewId;
   final Color? centerHighlightColor;
   final Color? topHighlightColor;
   final Color? bottomHighlightColor;
@@ -104,28 +113,47 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   Widget _buildDesktopDraggableItem() {
+    final topIndicatorColor = position == DraggableHoverPosition.top
+        ? widget.topHighlightColor ?? Theme.of(context).colorScheme.primary
+        : Colors.transparent;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // only show the top border when the draggable item is the first child
+        // 首项的顶部线占布局高度，保持原有间距不变。
         if (widget.isFirstChild)
           Divider(
             height: kDraggableViewItemDividerHeight,
             thickness: kDraggableViewItemDividerHeight,
-            color: position == DraggableHoverPosition.top
-                ? widget.topHighlightColor ??
-                    Theme.of(context).colorScheme.primary
-                : Colors.transparent,
+            color: topIndicatorColor,
           ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6.0),
-            color: position == DraggableHoverPosition.center
-                ? widget.centerHighlightColor ??
-                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
-                : Colors.transparent,
-          ),
-          child: widget.child,
+        Stack(
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6.0),
+                color: position == DraggableHoverPosition.center
+                    ? widget.centerHighlightColor ??
+                        Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.5)
+                    : Colors.transparent,
+              ),
+              child: widget.child,
+            ),
+            // 非首项的顶部落点同样需要提示，否则用户看不出会插到哪里。
+            // 这里用叠加层而不是再插一条 Divider：Divider 会占 1px 布局高度，
+            // 给每个条目都加会整体撑高列表并与上一项的底部线叠成 2px。
+            if (!widget.isFirstChild)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: kDraggableViewItemDividerHeight,
+                child: ColoredBox(color: topIndicatorColor),
+              ),
+          ],
         ),
         Divider(
           height: kDraggableViewItemDividerHeight,
@@ -260,7 +288,14 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
             position == DraggableHoverPosition.center
                 ? to.id
                 : to.parentViewId,
-            position == DraggableHoverPosition.bottom ? to.id : null,
+            // 插入位置（prevViewId）：
+            //   bottom → 排在 to 之后
+            //   top    → 排在 to 之前，即「前一项之后」；首项则为 null（置顶）
+            position == DraggableHoverPosition.bottom
+                ? to.id
+                : position == DraggableHoverPosition.top
+                    ? widget.previousViewId
+                    : null,
             fromSection,
             toSection,
           ),
@@ -329,14 +364,17 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   DraggableHoverPosition _computeHoverPosition(Offset offset, Size size) {
     final y = offset.dy;
     final height = size.height;
-    // top 位置仅对列表第一项有效（prevViewId=null 表示插入到父级首位）
-    if (widget.isFirstChild && y <= height * 0.25) {
+    // 上 30%：插到本项**之前**。首项靠 prevViewId=null 实现，其余项靠
+    // previousViewId（插到前一项之后）实现 —— 两者合起来才覆盖到所有位置。
+    if ((widget.isFirstChild || widget.previousViewId != null) &&
+        y <= height * 0.30) {
       return DraggableHoverPosition.top;
     }
-    // 悬停在下方 45% 区域时，作为该项的下一个兄弟插入
-    if (y >= height * 0.55) {
+    // 下 30%：插到本项之后。
+    if (y >= height * 0.70) {
       return DraggableHoverPosition.bottom;
     }
+    // 中间 40%：放入本项成为子级。
     return DraggableHoverPosition.center;
   }
 

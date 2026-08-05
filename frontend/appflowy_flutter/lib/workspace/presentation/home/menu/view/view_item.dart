@@ -112,6 +112,7 @@ class ViewItem extends StatelessWidget {
     required this.onSelected,
     this.onTertiarySelected,
     this.isFirstChild = false,
+    this.previousViewId,
     this.isDraggable = true,
     required this.isFeedback,
     this.height,
@@ -157,6 +158,13 @@ class ViewItem extends StatelessWidget {
   // used for indicating the first child of the parent view, so that we can
   // add top border to the first child
   final bool isFirstChild;
+
+  /// 同级列表中前一项的 id（首项为 null）。
+  ///
+  /// 拖拽排序时，「插到本项之前」在 folder 接口里表达为「插到前一项之后」
+  /// （`prevViewId` 语义）。没有这个值就只能给出 `prevViewId = null`，
+  /// 即永远插到列表最前面 —— 这正是此前只能拖到两端、无法插入任意位置的原因。
+  final String? previousViewId;
 
   // it should be false when it's rendered as feedback widget inside DraggableItem
   final bool isDraggable;
@@ -265,6 +273,7 @@ class ViewItem extends StatelessWidget {
             onSelected: onSelected,
             onTertiarySelected: onTertiarySelected,
             isFirstChild: isFirstChild,
+            previousViewId: previousViewId,
             isDraggable: isDraggable,
             isFeedback: isFeedback,
             height: itemHeight,
@@ -323,6 +332,7 @@ class InnerViewItem extends StatefulWidget {
     required this.onSelected,
     this.onTertiarySelected,
     this.isFirstChild = false,
+    this.previousViewId,
     required this.isFeedback,
     required this.height,
     this.isHoverEnabled = true,
@@ -350,6 +360,7 @@ class InnerViewItem extends StatefulWidget {
   final bool isDraggable;
   final bool isExpanded;
   final bool isFirstChild;
+  final String? previousViewId;
 
   // identify if the view item is rendered as feedback widget inside DraggableItem
   final bool isFeedback;
@@ -463,12 +474,16 @@ class _InnerViewItemState extends State<InnerViewItem> {
     if (widget.isExpanded &&
         widget.shouldRenderChildren &&
         widget.childViews.isNotEmpty) {
-      final children = widget.childViews.map((childView) {
+      final children = widget.childViews.asMap().entries.map((entry) {
+        final index = entry.key;
+        final childView = entry.value;
         return ViewItem(
           key: ValueKey('${widget.spaceType.name} ${childView.id}'),
           parentView: widget.view,
           spaceType: widget.spaceType,
-          isFirstChild: childView.id == widget.childViews.first.id,
+          isFirstChild: index == 0,
+          previousViewId:
+              index > 0 ? widget.childViews[index - 1].id : null,
           view: childView,
           level: widget.level + 1,
           enableRightClickContext: widget.enableRightClickContext,
@@ -502,6 +517,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
         !isReferencedDatabaseView(widget.view, widget.parentView)) {
       child = DraggableViewItem(
         isFirstChild: widget.isFirstChild,
+        previousViewId: widget.previousViewId,
         view: widget.view,
         onDragging: (isDragging) => _isDragging = isDragging,
         onMove: widget.isPlaceholder
@@ -779,12 +795,46 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       ),
     );
 
+    // 鼠标悬停时在行的左外侧显示拖拽手柄，提示该条目可以拖动排序。
+    //
+    // 用 Positioned + Clip.none 叠在布局之外，而不是塞进 Row 的第一位：
+    // 手柄只在 hover 时出现，若参与布局会让整行在鼠标移入/移出时横向跳动。
+    // 手柄本身不接收命中测试，拖拽仍由外层 DraggableViewItem 对整行负责 ——
+    // 它只是可拖动的视觉提示，不改变任何交互范围。
+    final rowWithDragHandle =
+        !widget.isDraggable || widget.isFeedback || widget.isPlaceholder
+            ? rowChild
+            : Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  rowChild,
+                  if (onHover)
+                    Positioned(
+                      left: -13,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: FlowyTooltip(
+                          message: LocaleKeys.blockActions_dragTooltip.tr(),
+                          child: Opacity(
+                            opacity: 0.55,
+                            child: const FlowySvg(
+                              FlowySvgs.drag_element_s,
+                              size: Size.square(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+
     Widget child = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => widget.onSelected(context, _view),
       onTertiaryTapDown: (_) =>
           widget.onTertiarySelected?.call(context, _view),
-      child: rowChild,
+      child: rowWithDragHandle,
     );
 
     if (isSelected) {

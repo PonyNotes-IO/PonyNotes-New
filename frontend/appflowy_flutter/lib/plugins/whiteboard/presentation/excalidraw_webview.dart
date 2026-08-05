@@ -880,6 +880,39 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
+  /// 主动清除 Excalidraw 工具栏的 hover 状态。
+  ///
+  /// 触发场景：鼠标在外层 Flutter 视图快速移动时，由于 macOS WKWebView 的
+  /// NSScrollView 弹性偏移和 PlatformView 事件转发延迟，工具栏按钮的 CSS
+  /// :hover 状态可能粘滞未清除。此方法在鼠标离开 WebView 区域时由
+  /// MouseRegion.onExit 触发，通过 JS 临时禁用工具栏 pointer-events
+  /// 强制浏览器清除 :hover 状态，下一帧恢复以确保鼠标重新进入时能正常 hover。
+  Future<void> _clearToolbarHover() async {
+    if (_isDisposed || !mounted || _controller == null) return;
+    await _safeEvalJs(
+      '''
+        (function() {
+          var toolbar = document.querySelector('.App-toolbar');
+          if (!toolbar) return;
+          // 临时禁用 pointer-events，让浏览器立即清除 :hover 状态
+          // （pointer-events: none 的元素不会被 hit-test 命中，:hover 自动失效）
+          toolbar.style.setProperty('pointer-events', 'none', 'important');
+          // 强制 reflow，确保样式同步生效
+          void toolbar.offsetHeight;
+          // 下一帧恢复，确保鼠标重新进入工具栏时能正常触发 hover
+          requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+              toolbar.style.setProperty('pointer-events', '');
+            });
+          });
+        })();
+      ''',
+      tag: 'clearToolbarHover',
+      maxAttempts: 1,
+      logFailures: false,
+    );
+  }
+
   /// 隐藏Excalidraw主菜单
   /// 重要：使用精确选择器，避免影响工具栏按钮
   Future<void> _hideMainMenu() async {
@@ -2128,6 +2161,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 ),
               ),
             ), // InAppWebView
+
+            // 鼠标离开监听层：透明，不拦截事件，仅监听鼠标离开 WebView 区域
+            // 用于在鼠标离开 WebView 时清除 Excalidraw 工具栏的 hover 状态
+            // （opaque: false 确保不消费鼠标事件，不影响 InAppWebView 的正常交互）
+            Positioned.fill(
+              child: MouseRegion(
+                opaque: false,
+                onExit: (_) => _clearToolbarHover(),
+                child: const SizedBox.expand(),
+              ),
+            ),
 
             // 加载覆盖层 - 使用完全不透明背景遮挡 Excalidraw 的加载界面
             if (_isLoading || _isInitializing)
