@@ -90,13 +90,18 @@ pub fn send_subject(subject: SubscribeObject) {
       if read_guard.is_empty() {
         tracing::warn!(
           "No notification sender registered, dropping notification: source={}, ty={}, id={}",
-          subject.source, subject.ty, subject.id
+          subject.source,
+          subject.ty,
+          subject.id
         );
         return;
       }
       tracing::trace!(
         "send_subject: senders={}, source={}, ty={}, id={}",
-        read_guard.len(), subject.source, subject.ty, subject.id
+        read_guard.len(),
+        subject.source,
+        subject.ty,
+        subject.id
       );
       read_guard.iter().for_each(|sender| {
         if let Err(e) = sender.send_subject(subject.clone()) {

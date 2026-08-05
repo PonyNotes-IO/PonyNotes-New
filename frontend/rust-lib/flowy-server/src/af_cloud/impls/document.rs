@@ -113,8 +113,9 @@ where
       vec![],
       false,
     )?;
-    let document = Document::open(collab)
-      .map_err(|e| FlowyError::internal().with_context(format!("Failed to open document: {:?}", e)))?;
+    let document = Document::open(collab).map_err(|e| {
+      FlowyError::internal().with_context(format!("Failed to open document: {:?}", e))
+    })?;
     Ok(document.get_document_data().ok())
   }
 

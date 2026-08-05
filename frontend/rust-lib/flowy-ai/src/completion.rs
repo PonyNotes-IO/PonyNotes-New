@@ -12,7 +12,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use futures::{SinkExt, StreamExt};
 use lib_infra::isolate_stream::IsolateSink;
 
-use crate::stream_message::{sanitize_ai_error_message, StreamMessage};
+use crate::stream_message::{StreamMessage, sanitize_ai_error_message};
 use flowy_ai_pub::user_service::AIUserService;
 use std::sync::{Arc, Weak};
 use tokio::select;
@@ -124,7 +124,7 @@ impl CompletionTask {
         let _ = sink.send("start:".to_string()).await;
         let completion_history = Some(self.context.history.iter().map(Into::into).collect());
         let format = self.context.format.map(Into::into).unwrap_or_default();
-        
+
         // 【修复】object_id 为空时（文档内向AI提问不传 objectId），仍需构造 metadata，
         // 否则 enable_thinking / enable_web_search 开关会随 metadata 一起丢失；
         // 此时 object_id 使用 nil UUID 占位（云端会话接口不会读取该 metadata 的 object_id）
@@ -136,7 +136,10 @@ impl CompletionTask {
             Err(e) => {
               error!("Invalid uuid: {}, error: {}", self.context.object_id, e);
               let _ = sink
-                .send(StreamMessage::OnError(format!("Invalid object_id: {}", self.context.object_id)).to_string())
+                .send(
+                  StreamMessage::OnError(format!("Invalid object_id: {}", self.context.object_id))
+                    .to_string(),
+                )
                 .await;
               return;
             },
@@ -163,7 +166,7 @@ impl CompletionTask {
             Some(self.context.images.clone())
           },
         });
-        
+
         let params = CompleteTextParams {
           text: self.context.text,
           completion_type: Some(complete_type),
@@ -224,13 +227,9 @@ async fn handle_error(sink: &mut IsolateSink, err: FlowyError) {
   } else if err.is_local_ai_not_ready() {
     let _ = sink.send(format!("local_ai_not_ready:{}", err.msg)).await;
   } else if err.is_local_ai_disabled() {
-    let _ = sink
-      .send(format!("local_ai_disabled:{}", err.msg))
-      .await;
+    let _ = sink.send(format!("local_ai_disabled:{}", err.msg)).await;
   } else {
     let message = sanitize_ai_error_message(&err.msg);
-    let _ = sink
-      .send(StreamMessage::OnError(message).to_string())
-      .await;
+    let _ = sink.send(StreamMessage::OnError(message).to_string()).await;
   }
 }

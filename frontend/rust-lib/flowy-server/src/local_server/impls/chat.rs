@@ -9,8 +9,8 @@ use flowy_ai_pub::cloud::{
   ResponseFormat, StreamAnswer, StreamComplete, UpdateChatParams,
 };
 use flowy_ai_pub::persistence::{
-  delete_chat as delete_chat_row, delete_chat_messages, ChatMessageTable, ChatTable,
-  ChatTableChangeset, deserialize_chat_metadata, deserialize_rag_ids,
+  ChatMessageTable, ChatTable, ChatTableChangeset, delete_chat as delete_chat_row,
+  delete_chat_messages, deserialize_chat_metadata, deserialize_rag_ids,
   select_answer_where_match_reply_message_id, select_chat, select_chat_messages,
   select_message_content, serialize_chat_metadata, serialize_rag_ids, update_chat, upsert_chat,
   upsert_chat_messages,
@@ -118,7 +118,17 @@ impl ChatCloudService for LocalChatServiceImpl {
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
     // 本地AI不支持深度思考模式和全网搜索，直接调用默认方法
-    self.stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, false, false).await
+    self
+      .stream_answer_with_thinking(
+        workspace_id,
+        chat_id,
+        question_id,
+        format,
+        ai_model,
+        false,
+        false,
+      )
+      .await
   }
 
   async fn stream_answer_with_thinking(

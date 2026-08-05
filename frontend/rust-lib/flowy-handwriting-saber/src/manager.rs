@@ -95,9 +95,16 @@ impl HandwritingSaberManager {
     view_id: &Uuid,
     initial_data: Option<Vec<u8>>,
   ) -> FlowyResult<EncodedCollab> {
-    info!("[HandwritingSaber] 🔵 create_handwriting_saber: {}", view_id);
+    info!(
+      "[HandwritingSaber] 🔵 create_handwriting_saber: {}",
+      view_id
+    );
 
-    if self.is_handwriting_saber_exist(view_id).await.unwrap_or(false) {
+    if self
+      .is_handwriting_saber_exist(view_id)
+      .await
+      .unwrap_or(false)
+    {
       info!("[HandwritingSaber] ⚠️ Already exists: {}", view_id);
       return Err(FlowyError::new(
         ErrorCode::RecordAlreadyExists,
@@ -160,7 +167,10 @@ impl HandwritingSaberManager {
 
   /// 获取手写笔记数据（.sbn2 字节）
   pub async fn get_handwriting_saber_data(&self, view_id: &Uuid) -> FlowyResult<Vec<u8>> {
-    info!("[HandwritingSaber] 🔵 get_handwriting_saber_data: {}", view_id);
+    info!(
+      "[HandwritingSaber] 🔵 get_handwriting_saber_data: {}",
+      view_id
+    );
     let saber = self.open_handwriting_saber(view_id).await?;
     let saber_read = saber.read().await;
     saber_read
@@ -192,10 +202,7 @@ impl HandwritingSaberManager {
         .map_err(|e| internal_error(format!("Failed to update sbn2 data: {}", e)))?;
     }
 
-    info!(
-      "[HandwritingSaber] ✅ Saved, new version: {}",
-      new_version
-    );
+    info!("[HandwritingSaber] ✅ Saved, new version: {}", new_version);
     Ok(new_version)
   }
 
@@ -208,7 +215,10 @@ impl HandwritingSaberManager {
 
   /// 删除手写笔记
   pub async fn delete_handwriting_saber(&self, view_id: &Uuid) -> FlowyResult<()> {
-    info!("[HandwritingSaber] 🔵 delete_handwriting_saber: {}", view_id);
+    info!(
+      "[HandwritingSaber] 🔵 delete_handwriting_saber: {}",
+      view_id
+    );
     self.handwriting_sabers.remove(view_id);
 
     let uid = self.user_service.user_id()?;
@@ -242,7 +252,10 @@ impl HandwritingSaberManager {
       .collab_object(&workspace_id, uid, view_id, CollabType::Document)
       .map_err(internal_error)?;
 
-    let exists = self.is_handwriting_saber_exist(view_id).await.unwrap_or(false);
+    let exists = self
+      .is_handwriting_saber_exist(view_id)
+      .await
+      .unwrap_or(false);
     info!(
       "[HandwritingSaber] Exists on disk: {} for view: {}",
       exists, view_id

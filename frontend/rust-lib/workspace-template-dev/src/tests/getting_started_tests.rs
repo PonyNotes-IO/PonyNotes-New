@@ -117,5 +117,4 @@ mod tests {
     // 欢迎信没有子视图
     assert!(general_space.child_views[0].child_views.is_empty());
   }
-
 }

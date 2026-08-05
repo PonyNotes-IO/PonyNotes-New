@@ -14,11 +14,9 @@ use uuid::Uuid;
 fn upgrade_manager(
   manager: AFPluginState<Weak<HandwritingSaberManager>>,
 ) -> FlowyResult<Arc<HandwritingSaberManager>> {
-  manager
-    .upgrade()
-    .ok_or_else(|| {
-      FlowyError::internal().with_context("The handwriting saber manager is already dropped")
-    })
+  manager.upgrade().ok_or_else(|| {
+    FlowyError::internal().with_context("The handwriting saber manager is already dropped")
+  })
 }
 
 fn current_timestamp() -> i64 {

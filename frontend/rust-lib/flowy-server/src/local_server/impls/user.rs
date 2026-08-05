@@ -367,7 +367,10 @@ impl UserCloudService for LocalServerUserServiceImpl {
     _user_identifier: String,
     _workspace_id: Uuid,
   ) -> Result<(), FlowyError> {
-    Err(FlowyError::local_version_not_support().with_context("Not support remove workspace member in local mode"))
+    Err(
+      FlowyError::local_version_not_support()
+        .with_context("Not support remove workspace member in local mode"),
+    )
   }
 
   async fn update_workspace_member(
@@ -376,7 +379,10 @@ impl UserCloudService for LocalServerUserServiceImpl {
     _workspace_id: Uuid,
     _role: Role,
   ) -> Result<(), FlowyError> {
-    Err(FlowyError::local_version_not_support().with_context("Not support update workspace member in local mode"))
+    Err(
+      FlowyError::local_version_not_support()
+        .with_context("Not support update workspace member in local mode"),
+    )
   }
 }
 
@@ -388,17 +394,19 @@ fn insert_collabs(
 ) -> FlowyResult<()> {
   let write = db.write_txn();
   for params in params_list {
-    write.flush_doc(
-      uid,
-      workspace_id,
-      &params.object_id.to_string(),
-      params.encoded_collab.state_vector.to_vec(),
-      params.encoded_collab.doc_state.to_vec(),
-    )
-    .map_err(|e| FlowyError::internal().with_context(format!("Failed to flush doc: {:?}", e)))?
+    write
+      .flush_doc(
+        uid,
+        workspace_id,
+        &params.object_id.to_string(),
+        params.encoded_collab.state_vector.to_vec(),
+        params.encoded_collab.doc_state.to_vec(),
+      )
+      .map_err(|e| FlowyError::internal().with_context(format!("Failed to flush doc: {:?}", e)))?
   }
 
-  write.commit_transaction()
-    .map_err(|e| FlowyError::internal().with_context(format!("Failed to commit transaction: {:?}", e)))?;
+  write.commit_transaction().map_err(|e| {
+    FlowyError::internal().with_context(format!("Failed to commit transaction: {:?}", e))
+  })?;
   Ok(())
 }

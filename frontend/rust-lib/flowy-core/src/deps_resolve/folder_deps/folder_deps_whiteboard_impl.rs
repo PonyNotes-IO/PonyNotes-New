@@ -43,19 +43,28 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
   }
 
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[WhiteboardFolderOperation] Opening whiteboard view: {}", view_id);
+    info!(
+      "[WhiteboardFolderOperation] Opening whiteboard view: {}",
+      view_id
+    );
     self.whiteboard_manager()?.open_whiteboard(view_id).await?;
     Ok(())
   }
 
   async fn close_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[WhiteboardFolderOperation] Closing whiteboard view: {}", view_id);
+    info!(
+      "[WhiteboardFolderOperation] Closing whiteboard view: {}",
+      view_id
+    );
     self.whiteboard_manager()?.close_whiteboard(view_id).await?;
     Ok(())
   }
 
   async fn delete_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[WhiteboardFolderOperation] Deleting whiteboard view: {}", view_id);
+    info!(
+      "[WhiteboardFolderOperation] Deleting whiteboard view: {}",
+      view_id
+    );
     // 白板暂不支持删除操作，但需要实现接口
     trace!("Delete whiteboard: {}", view_id);
     Ok(())
@@ -84,7 +93,7 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
       "[WhiteboardFolderOperation] Creating whiteboard with view data: {}",
       params.view_id
     );
-    
+
     // 检查是否是白板类型
     if params.layout != ViewLayoutPB::Whiteboard {
       error!(
@@ -99,11 +108,9 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
         // 解析 JSON 数据
         let json_str = String::from_utf8(data.to_vec())
           .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid UTF-8: {}", e)))?;
-        Some(
-          serde_json::from_str(&json_str).map_err(|e| {
-            FlowyError::invalid_data().with_context(format!("Failed to parse whiteboard data: {}", e))
-          })?,
-        )
+        Some(serde_json::from_str(&json_str).map_err(|e| {
+          FlowyError::invalid_data().with_context(format!("Failed to parse whiteboard data: {}", e))
+        })?)
       },
       ViewData::DuplicateData(_) => {
         return Err(
@@ -117,7 +124,7 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
       .whiteboard_manager()?
       .create_whiteboard(&params.view_id, whiteboard_data)
       .await?;
-    
+
     info!(
       "[WhiteboardFolderOperation] Created whiteboard with view data: {}",
       params.view_id
@@ -137,27 +144,42 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
       "[WhiteboardFolderOperation] 🔵 Creating default whiteboard view: {}, layout: {:?}",
       view_id, layout
     );
-    
+
     // 验证 layout 类型（因为路由可能有问题）
     // 由于 ViewLayout 没有 Whiteboard 枚举值，这里需要检查
     // 暂时跳过验证，直接创建
-    
-    info!("[WhiteboardFolderOperation] 🔵 Getting whiteboard manager for view: {}", view_id);
+
+    info!(
+      "[WhiteboardFolderOperation] 🔵 Getting whiteboard manager for view: {}",
+      view_id
+    );
     let manager = match self.whiteboard_manager() {
       Ok(m) => {
-        info!("[WhiteboardFolderOperation] ✅ Got whiteboard manager for view: {}", view_id);
+        info!(
+          "[WhiteboardFolderOperation] ✅ Got whiteboard manager for view: {}",
+          view_id
+        );
         m
       },
       Err(e) => {
-        error!("[WhiteboardFolderOperation] ❌ Failed to get whiteboard manager for view: {}, error: {}", view_id, e);
+        error!(
+          "[WhiteboardFolderOperation] ❌ Failed to get whiteboard manager for view: {}, error: {}",
+          view_id, e
+        );
         return Err(e);
-      }
+      },
     };
-    
-    info!("[WhiteboardFolderOperation] 🔵 Calling create_whiteboard for view: {}", view_id);
+
+    info!(
+      "[WhiteboardFolderOperation] 🔵 Calling create_whiteboard for view: {}",
+      view_id
+    );
     match manager.create_whiteboard(view_id, None).await {
       Ok(_) => {
-        info!("[WhiteboardFolderOperation] ✅ Created default whiteboard: {}", view_id);
+        info!(
+          "[WhiteboardFolderOperation] ✅ Created default whiteboard: {}",
+          view_id
+        );
         Ok(())
       },
       Err(err) => {
@@ -200,7 +222,3 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
     Err(FlowyError::not_support().with_context("Whiteboard file import is not supported yet"))
   }
 }
-
-
-
-

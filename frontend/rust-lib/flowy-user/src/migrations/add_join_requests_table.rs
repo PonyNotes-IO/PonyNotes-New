@@ -16,7 +16,11 @@ impl UserDataMigration for AddJoinRequestsTableMigration {
     "add_join_requests_table"
   }
 
-  fn run_when(&self, _first_installed_version: &Option<semver::Version>, _current_version: &semver::Version) -> bool {
+  fn run_when(
+    &self,
+    _first_installed_version: &Option<semver::Version>,
+    _current_version: &semver::Version,
+  ) -> bool {
     true
   }
 
@@ -57,5 +61,3 @@ impl UserDataMigration for AddJoinRequestsTableMigration {
     Ok(())
   }
 }
-
-

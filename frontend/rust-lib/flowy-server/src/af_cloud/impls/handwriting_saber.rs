@@ -2,8 +2,8 @@
 use client_api::entity::{CreateCollabParams, QueryCollab, QueryCollabParams};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
-use flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService;
 use flowy_error::FlowyError;
+use flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService;
 use lib_infra::async_trait::async_trait;
 use std::sync::Weak;
 use tracing::instrument;

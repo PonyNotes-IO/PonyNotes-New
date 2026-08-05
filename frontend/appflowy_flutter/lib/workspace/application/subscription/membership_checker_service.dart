@@ -48,6 +48,11 @@ class MembershipCheckerService {
 
   MembershipCheckerService._internal();
 
+  /// 弹窗节流：同一功能在 [_dialogThrottleDuration] 内最多提示一次。
+  /// 防止生命周期检查、同步事件等多条路径并发触发时弹窗连续叠加/循环弹出。
+  static final Map<String, DateTime> _lastDialogShownAt = {};
+  static const Duration _dialogThrottleDuration = Duration(seconds: 30);
+
   bool _isQuickEntryUser(UserProfilePB userProfile) {
     return userProfile.userAuthType != AuthTypePB.Server;
   }
@@ -62,6 +67,16 @@ class MembershipCheckerService {
     final targetFeature = (featureName == null || featureName.isEmpty)
         ? '该功能'
         : featureName;
+
+    // 节流：短时间内同一功能不重复弹窗，避免循环重复弹出
+    final now = DateTime.now();
+    final lastShown = _lastDialogShownAt[targetFeature];
+    if (lastShown != null &&
+        now.difference(lastShown) < _dialogThrottleDuration) {
+      return;
+    }
+    _lastDialogShownAt[targetFeature] = now;
+
     await showSimpleAFDialog(
       context: context,
       title: '功能受限',
@@ -111,6 +126,13 @@ class MembershipCheckerService {
     required UserProfilePB userProfile,
     required int requiredStorageMB,
   }) async {
+    // 未登录（快速体验）用户没有会员/存储配额概念，直接放行：
+    // 否则 getCurrentSubscription 返回 null 时，下方 (0 + required) < 0
+    // 恒为 false，会被误判为"空间已满"，触发"功能受限"弹窗并循环弹出。
+    if (_isQuickEntryUser(userProfile)) {
+      return true;
+    }
+
     try {
       final subscriptionService = SubscriptionService();
       final currentSubscription = await subscriptionService.getCurrentSubscription(
@@ -118,8 +140,15 @@ class MembershipCheckerService {
         caller: 'MembershipCheckerService.checkStorageLimit',
       );
 
-      final storageUsedGb = currentSubscription?.usage?.storageUsedGb ?? 0;
-      final storageTotalGb = currentSubscription?.usage?.storageTotalGb ?? 0;
+      // 无法获取订阅/配额信息时不视为空间不足，避免误弹窗
+      if (currentSubscription == null ||
+          currentSubscription.usage == null ||
+          (currentSubscription.usage?.storageTotalGb ?? 0) <= 0) {
+        return true;
+      }
+
+      final storageUsedGb = currentSubscription.usage!.storageUsedGb ?? 0;
+      final storageTotalGb = currentSubscription.usage!.storageTotalGb ?? 0;
       final requiredStorageGb = requiredStorageMB / 1024;
       
       return (storageUsedGb + requiredStorageGb) < storageTotalGb;
@@ -341,6 +370,13 @@ class MembershipCheckerService {
     bool showToast = true,
     String? featureName = '存储空间',
   }) async {
+    // 未登录（快速体验）用户没有会员/存储配额，直接放行，不做任何提示：
+    // 避免生命周期检查等自动路径反复触发"功能受限"弹窗。
+    // 未登录的引导提示应只在用户主动操作（如点击云同步按钮）时展示。
+    if (_isQuickEntryUser(userProfile)) {
+      return true;
+    }
+
     try {
       // 检查是否有足够空间
       final hasEnoughSpace = await checkStorageLimit(

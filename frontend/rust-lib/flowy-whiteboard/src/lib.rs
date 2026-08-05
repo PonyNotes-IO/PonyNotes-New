@@ -2,8 +2,8 @@ mod entities;
 mod event_handler;
 pub mod event_map;
 pub mod manager;
-mod whiteboard;
 mod notification;
+mod whiteboard;
 
 pub use entities::*;
 pub use manager::*;
@@ -13,5 +13,3 @@ pub use notification::*;
 #[allow(clippy::all)]
 #[rustfmt::skip]
 pub mod protobuf;
-
-

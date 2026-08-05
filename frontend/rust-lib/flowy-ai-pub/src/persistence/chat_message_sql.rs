@@ -112,12 +112,11 @@ pub fn upsert_chat_messages_preserve_images(
 
       let should_preserve_metadata = match &existing_metadata {
         Some(Some(existing_meta)) => {
-          let existing_has_images = existing_meta.contains("\"images\"")
-            || existing_meta.contains("\"image_paths\"");
-          let new_has_images = message
-            .metadata
-            .as_ref()
-            .map_or(false, |m| m.contains("\"images\"") || m.contains("\"image_paths\""));
+          let existing_has_images =
+            existing_meta.contains("\"images\"") || existing_meta.contains("\"image_paths\"");
+          let new_has_images = message.metadata.as_ref().map_or(false, |m| {
+            m.contains("\"images\"") || m.contains("\"image_paths\"")
+          });
           existing_has_images && !new_has_images
         },
         _ => false,
@@ -133,8 +132,7 @@ pub fn upsert_chat_messages_preserve_images(
             chat_message_table::created_at.eq(excluded(chat_message_table::created_at)),
             chat_message_table::author_type.eq(excluded(chat_message_table::author_type)),
             chat_message_table::author_id.eq(excluded(chat_message_table::author_id)),
-            chat_message_table::reply_message_id
-              .eq(excluded(chat_message_table::reply_message_id)),
+            chat_message_table::reply_message_id.eq(excluded(chat_message_table::reply_message_id)),
           ))
           .execute(conn)?;
       } else {
@@ -148,8 +146,7 @@ pub fn upsert_chat_messages_preserve_images(
             chat_message_table::created_at.eq(excluded(chat_message_table::created_at)),
             chat_message_table::author_type.eq(excluded(chat_message_table::author_type)),
             chat_message_table::author_id.eq(excluded(chat_message_table::author_id)),
-            chat_message_table::reply_message_id
-              .eq(excluded(chat_message_table::reply_message_id)),
+            chat_message_table::reply_message_id.eq(excluded(chat_message_table::reply_message_id)),
           ))
           .execute(conn)?;
       }

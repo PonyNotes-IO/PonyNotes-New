@@ -254,10 +254,7 @@ impl DatabaseManager {
             source_ws_id = Some(ws_id);
           },
           Ok(None) => {
-            info!(
-              "[Database] No invite record found for view: {}",
-              view_id
-            );
+            info!("[Database] No invite record found for view: {}", view_id);
           },
           Err(e) => {
             error!(

@@ -55,7 +55,8 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
     if is_exist {
       // load doc
       let collab = Collab::new_with_origin(CollabOrigin::Empty, &object_id, vec![], false);
-      read_txn.load_doc(uid, &workspace_id, &object_id, collab.doc())
+      read_txn
+        .load_doc(uid, &workspace_id, &object_id, collab.doc())
         .map_err(|e| FlowyError::internal().with_context(format!("Failed to load doc: {:?}", e)))?;
       let data = collab.encode_collab_v1(|c| {
         collab_type
@@ -146,9 +147,7 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
     Err(FlowyError::local_version_not_support())
   }
 
-  async fn list_all_published_views(
-    &self,
-  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
+  async fn list_all_published_views(&self) -> Result<ListAllPublishedCollabResponse, FlowyError> {
     Err(FlowyError::local_version_not_support())
   }
 

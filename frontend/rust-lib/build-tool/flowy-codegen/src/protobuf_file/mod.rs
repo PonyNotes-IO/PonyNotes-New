@@ -319,7 +319,9 @@ fn generate_dart_protobuf_files(
     std::fs::create_dir_all(&output).unwrap();
   }
   if !check_pb_dart_plugin() {
-    log::warn!("Skip Dart pb generation: protoc-gen-dart not in PATH. Install with: dart pub global activate protoc_plugin");
+    log::warn!(
+      "Skip Dart pb generation: protoc-gen-dart not in PATH. Install with: dart pub global activate protoc_plugin"
+    );
     return;
   }
   let protoc_bin_path = protoc_bin_path.to_str().unwrap().to_owned();

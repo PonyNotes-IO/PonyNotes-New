@@ -108,7 +108,17 @@ where
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
     // 默认不启用深度思考和全网搜索
-    self.stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, false, false).await
+    self
+      .stream_answer_with_thinking(
+        workspace_id,
+        chat_id,
+        question_id,
+        format,
+        ai_model,
+        false,
+        false,
+      )
+      .await
   }
 
   async fn stream_answer_with_thinking(
@@ -126,7 +136,7 @@ where
       workspace_id, chat_id, question_id, format, ai_model, enable_thinking,
     );
     let try_get_client = self.inner.try_get_client();
-    
+
     // TODO: 后续需要修改 stream_answer_v3 方法支持 enable_thinking 参数
     // 目前先忽略 enable_thinking 参数，直接调用现有API
     let result = try_get_client?
@@ -220,12 +230,12 @@ where
     use flowy_ai::ai_session_client::stream_ai_session_with_attachments;
     use flowy_ai_pub::cloud::CompletionStreamValue;
     use futures_util::StreamExt;
-    
+
     let client = self.inner.try_get_client()?;
     let base_url = client.base_url();
     // 使用 access_token（JWT），避免将 JSON token 直接传给 AI 会话接口
     let token = client.get_access_token().ok();
-    
+
     // 将 CompleteTextParams 转换为 ChatRequestParams 格式
     // 【修复】从 metadata 中读取深度思考/联网搜索开关，透传给 AI 会话接口
     // （此前被硬编码为 false，导致文档内问AI的联网搜索不生效）
@@ -253,7 +263,9 @@ where
 
     info!(
       "[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}, enable_thinking: {}, enable_web_search: {}, images: {}",
-      message.len(), enable_thinking, enable_web_search,
+      message.len(),
+      enable_thinking,
+      enable_web_search,
       images.as_ref().map(|v| v.len()).unwrap_or(0)
     );
 
@@ -266,10 +278,11 @@ where
       enable_thinking,
       enable_web_search,
       images,
-      None, // 文件附件：文档内 AI 暂不支持
+      None,                           // 文件附件：文档内 AI 暂不支持
       Some(workspace_id.to_string()), // workspace_id用于协作区资源归属
-    ).await?;
-    
+    )
+    .await?;
+
     // 将 AISessionStreamValue 转换为 CompletionStreamValue
     let converted_stream = session_stream.map(|result| {
       result.map(|value| match value {
@@ -278,15 +291,19 @@ where
         },
         flowy_ai::ai_session_client::AISessionStreamValue::Metadata { value: _ } => {
           // 忽略metadata，只返回答案
-          CompletionStreamValue::Answer { value: String::new() }
+          CompletionStreamValue::Answer {
+            value: String::new(),
+          }
         },
         flowy_ai::ai_session_client::AISessionStreamValue::Thinking { value: _ } => {
           // 忽略思考过程，文档内问AI不展示深度思考
-          CompletionStreamValue::Answer { value: String::new() }
+          CompletionStreamValue::Answer {
+            value: String::new(),
+          }
         },
       })
     });
-    
+
     Ok(converted_stream.boxed())
   }
 
@@ -343,21 +360,26 @@ where
     // 方案：由于 client-api 的 ModelInfo/ModelList 定义与我们后端不兼容，
     // 而且 client-api 是官方仓库的版本，我们无法修改，
     // 因此这里直接返回一个硬编码的模型列表，避免调用需要认证的API
-    
+
     tracing::info!("📋 使用本地硬编码的AI模型列表");
-    
+
     // 直接使用原有的 get_model_list 方法（会调用官方API）
     // 如果失败，则降级到本地硬编码列表
-    match self.inner.try_get_client()?.get_model_list(workspace_id).await {
+    match self
+      .inner
+      .try_get_client()?
+      .get_model_list(workspace_id)
+      .await
+    {
       Ok(list) => {
         tracing::info!("✅ 从服务器获取到 {} 个模型", list.models.len());
         Ok(list)
-      }
+      },
       Err(e) => {
         tracing::warn!("⚠️  从服务器获取模型列表失败: {:?}, 返回错误", e);
         // 直接返回错误，不进行降级处理
         Err(FlowyError::from(e))
-      }
+      },
     }
   }
 

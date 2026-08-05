@@ -1,11 +1,11 @@
+use flowy_ai_pub::cloud::{CompleteTextParams, ResponseFormat, StreamAnswer, StreamComplete};
 use flowy_error::{FlowyError, FlowyResult};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
-use serde_json::Value;
-use flowy_ai_pub::cloud::{ResponseFormat, CompleteTextParams, StreamAnswer, StreamComplete};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalAISetting {
@@ -134,4 +134,3 @@ impl Default for LocalAIController {
     Self {}
   }
 }
-

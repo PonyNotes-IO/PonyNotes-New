@@ -5,15 +5,15 @@ use crate::services::calculations::Calculation;
 use crate::services::cell::{CellCache, apply_cell_changeset, get_cell_protobuf, stringify_cell};
 use crate::services::database::database_observe::*;
 use crate::services::database::util::database_view_setting_pb_from_view;
-use collab::util::AnyMapExt;
 use crate::services::database_view::{
   DatabaseViewChanged, DatabaseViewEditor, DatabaseViewOperation, DatabaseViews, EditorByViewId,
 };
 use crate::services::field::checklist_filter::ChecklistCellChangeset;
 use crate::services::field::type_option_transform::transform_type_option;
 use crate::services::field::{
-  CELL_DATA, SelectOptionCellChangeset, StringCellData, TypeOptionCellDataHandler, TypeOptionCellExt,
-  default_type_option_data_from_type, select_type_option_from_field, type_option_data_from_pb,
+  CELL_DATA, SelectOptionCellChangeset, StringCellData, TypeOptionCellDataHandler,
+  TypeOptionCellExt, default_type_option_data_from_type, select_type_option_from_field,
+  type_option_data_from_pb,
 };
 use crate::services::field_settings::{FieldSettings, default_field_settings_by_layout_map};
 use crate::services::filter::{Filter, FilterChangeset};
@@ -25,6 +25,7 @@ use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use collab::core::collab_plugin::CollabPluginType;
 use collab::lock::RwLock;
+use collab::util::AnyMapExt;
 use collab_database::database::Database;
 use collab_database::entity::DatabaseView;
 use collab_database::fields::media_type_option::MediaCellData;
@@ -571,7 +572,12 @@ impl DatabaseEditor {
       for cell in cells {
         if let Some(new_cell) = cell.cell.clone() {
           // 确保 row 已经被初始化和 finalized，以便数据能正确保存到 collab_database
-          if self.finalized_rows.get(cell.row_id.as_str()).await.is_none() {
+          if self
+            .finalized_rows
+            .get(cell.row_id.as_str())
+            .await
+            .is_none()
+          {
             self.init_database_row(&cell.row_id).await?;
           }
           self
@@ -1006,7 +1012,7 @@ impl DatabaseEditor {
   ) -> FlowyResult<()> {
     // Get the old row before updating the cell. It would be better to get the old cell
     let old_row = self.get_row(view_id, row_id).await;
-    
+
     // 添加调试日志，检查保存的 Cell 数据格式
     if let Some(bytes_vec) = new_cell.get_as::<Vec<u8>>(CELL_DATA) {
       tracing::info!(
@@ -1023,7 +1029,7 @@ impl DatabaseEditor {
         row_id
       );
     }
-    
+
     trace!("[Database Row]: update cell: {:?}", new_cell);
     self
       .update_row(row_id.clone(), |row_update| {
@@ -1040,7 +1046,7 @@ impl DatabaseEditor {
       let database = self.database.read().await;
       database.get_cell(field_id, row_id).await.cell
     };
-    
+
     if let Some(saved_cell) = saved_cell {
       if let Some(bytes_vec) = saved_cell.get_as::<Vec<u8>>(CELL_DATA) {
         tracing::info!(

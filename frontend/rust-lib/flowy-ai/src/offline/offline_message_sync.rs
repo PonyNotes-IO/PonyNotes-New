@@ -101,7 +101,14 @@ impl ChatCloudService for AutoSyncChatService {
   ) -> Result<ChatMessage, FlowyError> {
     let message = self
       .cloud_service
-      .create_question(workspace_id, chat_id, message, message_type, prompt_id, metadata)
+      .create_question(
+        workspace_id,
+        chat_id,
+        message,
+        message_type,
+        prompt_id,
+        metadata,
+      )
       .await?;
     self.upsert_message(chat_id, message.clone(), true).await?;
     // TODO: implement background sync
@@ -155,7 +162,15 @@ impl ChatCloudService for AutoSyncChatService {
   ) -> Result<StreamAnswer, FlowyError> {
     self
       .cloud_service
-      .stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, enable_thinking, enable_web_search)
+      .stream_answer_with_thinking(
+        workspace_id,
+        chat_id,
+        question_id,
+        format,
+        ai_model,
+        enable_thinking,
+        enable_web_search,
+      )
       .await
   }
 

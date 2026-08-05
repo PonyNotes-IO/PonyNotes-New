@@ -33,7 +33,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
-    show UserProfilePB, UserWorkspacePB;
+    show AuthTypePB, UserProfilePB, UserWorkspacePB;
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
@@ -743,11 +743,21 @@ class _WorkspaceLifecycleRefresherState
 
   Future<void> _checkMembershipStatus() async {
     try {
-      final workspaceId = context
-          .read<UserWorkspaceBloc?>()
-          ?.state
-          .currentWorkspace
-          ?.workspaceId;
+      final workspaceBloc = context.read<UserWorkspaceBloc?>();
+      if (workspaceBloc == null) {
+        return;
+      }
+
+      // 未登录（快速体验）用户没有会员/订阅数据，无需也不应做会员与存储检查：
+      // 此时 getCurrentSubscription 返回 null，存储检查会把"无配额数据"误判为
+      // "空间已满"，导致每次挂载/依赖变化都弹出"功能受限"提示并循环重复。
+      // 未登录的引导提示由侧边栏云同步按钮在用户主动点击时展示一次即可。
+      if (workspaceBloc.state.userProfile.userAuthType != AuthTypePB.Server) {
+        return;
+      }
+
+      final workspaceId =
+          workspaceBloc.state.currentWorkspace?.workspaceId;
 
       await context.checkMembershipStatus(workspaceId: workspaceId);
       if (!mounted) {

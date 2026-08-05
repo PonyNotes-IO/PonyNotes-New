@@ -69,21 +69,17 @@ impl Stream for AISessionStream {
 
           // 无效的流值
           error!("[AISession] 收到无效的流值: {:?}", value);
-          Poll::Ready(Some(Err(
-            FlowyError::new(
-              ErrorCode::InvalidParams,
-              format!("无效的流值: {:?}", value),
-            )
-          )))
+          Poll::Ready(Some(Err(FlowyError::new(
+            ErrorCode::InvalidParams,
+            format!("无效的流值: {:?}", value),
+          ))))
         },
         _ => {
           error!("[AISession] 收到意外的JSON类型: {:?}", value);
-          Poll::Ready(Some(Err(
-            FlowyError::new(
-              ErrorCode::InvalidParams,
-              format!("意外的JSON类型: {:?}", value),
-            )
-          )))
+          Poll::Ready(Some(Err(FlowyError::new(
+            ErrorCode::InvalidParams,
+            format!("意外的JSON类型: {:?}", value),
+          ))))
         },
       },
       Some(Err(err)) => {
@@ -118,7 +114,8 @@ pub async fn stream_ai_session(
     None,
     None,
     workspace_id,
-  ).await
+  )
+  .await
 }
 
 /// 调用新的 AI 会话接口（完整版本，支持图片和文件）
@@ -130,17 +127,23 @@ pub async fn stream_ai_session_with_attachments(
   token: Option<String>,
   enable_thinking: bool,
   enable_web_search: bool,
-  images: Option<Vec<String>>,  // base64编码的图片
-  files: Option<Vec<serde_json::Value>>,  // 文件数据
-  workspace_id: Option<String>,  // 当前工作空间ID（协作区资源归属）
+  images: Option<Vec<String>>,           // base64编码的图片
+  files: Option<Vec<serde_json::Value>>, // 文件数据
+  workspace_id: Option<String>,          // 当前工作空间ID（协作区资源归属）
 ) -> Result<AISessionStream, FlowyError> {
   use reqwest::Client;
   use std::time::Duration;
 
   let url = format!("{}/api/ai/chat/session", base_url);
   info!("[AISession] 准备调用AI会话接口: {}", url);
-  info!("[AISession] 参数 - model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
-    preferred_model, enable_thinking, enable_web_search, images.is_some(), files.is_some());
+  info!(
+    "[AISession] 参数 - model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}",
+    preferred_model,
+    enable_thinking,
+    enable_web_search,
+    images.is_some(),
+    files.is_some()
+  );
 
   let client = Client::builder()
     .danger_accept_invalid_certs(true)  // 接受自签名证书
@@ -160,25 +163,24 @@ pub async fn stream_ai_session_with_attachments(
   if let Some(model) = preferred_model {
     body["preferred_model"] = serde_json::Value::String(model);
   }
-  
+
   if enable_thinking {
     body["enable_thinking"] = serde_json::Value::Bool(true);
   }
-  
+
   if enable_web_search {
     body["enable_web_search"] = serde_json::Value::Bool(true);
   }
-  
+
   // 添加图片数据
   if let Some(imgs) = images {
     if !imgs.is_empty() {
       body["has_images"] = serde_json::Value::Bool(true);
-      body["images"] = serde_json::Value::Array(
-        imgs.into_iter().map(serde_json::Value::String).collect()
-      );
+      body["images"] =
+        serde_json::Value::Array(imgs.into_iter().map(serde_json::Value::String).collect());
     }
   }
-  
+
   // 添加文件数据
   if let Some(fs) = files {
     if !fs.is_empty() {
@@ -193,10 +195,8 @@ pub async fn stream_ai_session_with_attachments(
     info!("[AISession] 已添加 workspace_id 到请求体");
   }
 
-  let mut request = client
-    .post(&url)
-    .json(&body);
-  
+  let mut request = client.post(&url).json(&body);
+
   // 添加 Authorization header（如果提供了 token）
   if let Some(token) = token {
     let token_preview = if token.len() > 20 {
@@ -205,34 +205,34 @@ pub async fn stream_ai_session_with_attachments(
       token.clone()
     };
     request = request.header("Authorization", format!("Bearer {}", token));
-    info!("[AISession] 已添加 Authorization header，token长度: {}", token.len());
+    info!(
+      "[AISession] 已添加 Authorization header，token长度: {}",
+      token.len()
+    );
     trace!("[AISession] Token 预览: {}", token_preview);
   } else {
     error!("[AISession] 未提供 token，请求将失败");
   }
 
   info!("[AISession] 开始发送POST请求到: {}", url);
-  let resp = request
-    .send()
-    .await
-    .map_err(|e| {
-      error!("[AISession] 请求失败: {}", e);
-      error!("[AISession] 错误详情: {:?}", e);
-      
-      // 根据错误类型返回更友好的错误消息
-      let error_message = if e.is_connect() {
-        error!("[AISession] 连接错误 - 网络问题或服务器不可达");
-        "AI 服务连接失败，请检查网络连接后重试。".to_string()
-      } else if e.is_timeout() {
-        error!("[AISession] 请求超时");
-        "AI 服务响应超时，请稍后重试。".to_string()
-      } else {
-        // 其他错误，使用 sanitize_ai_error_message 清洗
-        format!("HTTP请求失败: {}", e)
-      };
-      
-      FlowyError::new(ErrorCode::Internal, error_message)
-    })?;
+  let resp = request.send().await.map_err(|e| {
+    error!("[AISession] 请求失败: {}", e);
+    error!("[AISession] 错误详情: {:?}", e);
+
+    // 根据错误类型返回更友好的错误消息
+    let error_message = if e.is_connect() {
+      error!("[AISession] 连接错误 - 网络问题或服务器不可达");
+      "AI 服务连接失败，请检查网络连接后重试。".to_string()
+    } else if e.is_timeout() {
+      error!("[AISession] 请求超时");
+      "AI 服务响应超时，请稍后重试。".to_string()
+    } else {
+      // 其他错误，使用 sanitize_ai_error_message 清洗
+      format!("HTTP请求失败: {}", e)
+    };
+
+    FlowyError::new(ErrorCode::Internal, error_message)
+  })?;
 
   let status = resp.status();
   let response_url = resp.url().clone();
@@ -240,11 +240,13 @@ pub async fn stream_ai_session_with_attachments(
   info!("[AISession]   - 状态码: {}", status);
   info!("[AISession]   - 实际请求URL: {}", response_url);
   info!("[AISession]   - 响应头: {:?}", resp.headers());
-  
+
   if !resp.status().is_success() {
     let status = resp.status();
-    let error_text =
-      resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
+    let error_text = resp
+      .text()
+      .await
+      .unwrap_or_else(|_| "无法读取错误信息".to_string());
     error!("[AISession] 服务器返回错误: {} - {}", status, error_text);
     error!("[AISession] 请求URL: {}", url);
     error!("[AISession] 实际响应URL: {}", response_url);
@@ -266,10 +268,7 @@ pub async fn stream_ai_session_with_attachments(
         .unwrap_or("AI调用次数已用完，请升级订阅或购买补充包")
         .to_string();
       info!("[AISession] AI使用次数用尽: {}", message);
-      return Err(FlowyError::new(
-        ErrorCode::AIResponseLimitExceeded,
-        message,
-      ));
+      return Err(FlowyError::new(ErrorCode::AIResponseLimitExceeded, message));
     }
 
     // 处理 404 Not Found 错误（未找到订阅计划）
@@ -280,10 +279,7 @@ pub async fn stream_ai_session_with_attachments(
         .to_string();
       info!("[AISession] 订阅计划不存在: {}", message);
       // 使用非 Internal 的错误码，确保前端能够显示这条消息
-      return Err(FlowyError::new(
-        ErrorCode::LimitedByWorkspacePlan,
-        message,
-      ));
+      return Err(FlowyError::new(ErrorCode::LimitedByWorkspacePlan, message));
     }
 
     // 处理 502/503/504 网关错误（服务器暂时不可用）
@@ -297,10 +293,7 @@ pub async fn stream_ai_session_with_attachments(
       };
       error!("[AISession] 网关错误 {}: {}", status, message);
       // 使用 Internal 错误码，但消息会被 sanitize_ai_error_message 清洗
-      return Err(FlowyError::new(
-        ErrorCode::Internal,
-        message,
-      ));
+      return Err(FlowyError::new(ErrorCode::Internal, message));
     }
 
     // 处理 500 内部服务器错误
@@ -309,23 +302,17 @@ pub async fn stream_ai_session_with_attachments(
         .unwrap_or("AI 服务内部错误，请稍后重试。")
         .to_string();
       error!("[AISession] 服务器内部错误: {}", message);
-      return Err(FlowyError::new(
-        ErrorCode::Internal,
-        message,
-      ));
+      return Err(FlowyError::new(ErrorCode::Internal, message));
     }
 
     // 其他错误，使用 sanitize_ai_error_message 清洗错误消息
     let error_message = format!("服务器返回错误: {} - {}", status, error_text);
-    return Err(FlowyError::new(
-      ErrorCode::Internal,
-      error_message,
-    ));
+    return Err(FlowyError::new(ErrorCode::Internal, error_message));
   }
 
   // 解析 SSE 流 - 使用缓冲区处理跨chunk的JSON行
   use futures_util::stream::StreamExt as _;
-  
+
   struct StreamState {
     resp: reqwest::Response,
     buffer: String,
@@ -343,7 +330,7 @@ pub async fn stream_ai_session_with_attachments(
     enable_thinking,
     pending_error: None,
   };
-  
+
   let stream = futures_util::stream::unfold(initial_state, |mut state| async move {
     // 如果有待处理的JSON，先返回它们
     if let Some(json) = state.pending_jsons.pop() {
@@ -357,21 +344,21 @@ pub async fn stream_ai_session_with_attachments(
     if let Some(msg) = state.pending_error.take() {
       return Some((Err(FlowyError::new(ErrorCode::Internal, msg)), state));
     }
-    
+
     loop {
       match state.resp.chunk().await {
         Ok(Some(bytes)) => {
           let text = String::from_utf8_lossy(&bytes);
           trace!("[AISession] 收到原始数据: {}", text);
-          
+
           // 将新数据追加到缓冲区
           state.buffer.push_str(&text);
-          
+
           // 尝试从缓冲区提取完整的JSON行
           let mut results = Vec::new();
           let mut lines: Vec<&str> = state.buffer.lines().collect();
           let mut last_incomplete_line = String::new();
-          
+
           // 检查最后一行是否完整（有换行符结尾）
           if !state.buffer.ends_with('\n') && !lines.is_empty() {
             // 最后一行可能不完整，保留到下次
@@ -379,16 +366,16 @@ pub async fn stream_ai_session_with_attachments(
               last_incomplete_line = last_line.to_string();
             }
           }
-          
+
           // 解析所有完整的行
           for line in lines {
             let line = line.trim();
             if line.is_empty() {
               continue;
             }
-            
+
             trace!("[AISession] 处理行: [{}] (长度: {})", line, line.len());
-            
+
             // 处理SSE格式：检查是否是 "data: " 开头
             // 使用 strip_prefix 更安全，避免索引越界
             let json_str = if let Some(rest) = line.strip_prefix("data: ") {
@@ -396,21 +383,25 @@ pub async fn stream_ai_session_with_attachments(
             } else {
               line.trim()
             };
-            
-            trace!("[AISession] 提取的JSON字符串: [{}] (长度: {})", json_str, json_str.len());
-            
+
+            trace!(
+              "[AISession] 提取的JSON字符串: [{}] (长度: {})",
+              json_str,
+              json_str.len()
+            );
+
             // 处理 [DONE] 标记（流结束标记）
             if json_str == "[DONE]" {
               trace!("[AISession] 收到流结束标记 [DONE]");
               continue; // 跳过，流会在后续自然结束
             }
-            
+
             // 如果去掉前缀后为空，跳过
             if json_str.is_empty() {
               trace!("[AISession] 跳过空行");
               continue;
             }
-            
+
             // 解析 JSON
             match serde_json::from_str::<Value>(json_str) {
               Ok(mut json) => {
@@ -421,9 +412,18 @@ pub async fn stream_ai_session_with_attachments(
                 // 格式: {"error":{"code":"...","message":"..."}}
                 if let Value::Object(ref obj) = json {
                   if let Some(error_obj) = obj.get("error").and_then(|e| e.as_object()) {
-                    let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap_or("Unknown");
-                    let message = error_obj.get("message").and_then(|m| m.as_str()).unwrap_or("AI服务返回未知错误");
-                    error!("[AISession] SSE流中收到错误事件: code={}, message={}", code, message);
+                    let code = error_obj
+                      .get("code")
+                      .and_then(|c| c.as_str())
+                      .unwrap_or("Unknown");
+                    let message = error_obj
+                      .get("message")
+                      .and_then(|m| m.as_str())
+                      .unwrap_or("AI服务返回未知错误");
+                    error!(
+                      "[AISession] SSE流中收到错误事件: code={}, message={}",
+                      code, message
+                    );
 
                     // 【修复按钮卡死 2026-07-30】此处原先把错误包装成 STREAM_ANSWER_KEY，
                     // 即**当作正常回答**推给界面。后果是：错误文字能显示，但
@@ -448,20 +448,24 @@ pub async fn stream_ai_session_with_attachments(
                   if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
                     if let Some(first_choice) = choices.first() {
                       // 检查是否是流结束标记（finish_reason为stop）
-                      if let Some(finish_reason) = first_choice.get("finish_reason").and_then(|f| f.as_str()) {
+                      if let Some(finish_reason) =
+                        first_choice.get("finish_reason").and_then(|f| f.as_str())
+                      {
                         if finish_reason == "stop" {
                           trace!("[AISession] 收到流结束标记 (finish_reason=stop)，跳过");
                           continue; // 跳过这个chunk，不添加到results
                         }
                       }
-                      
+
                       if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
                         // 独立提取 content 和 reasoning_content，分别处理
-                        let content = delta.get("content")
+                        let content = delta
+                          .get("content")
                           .and_then(|c| c.as_str())
                           .filter(|s| !s.is_empty());
 
-                        let reasoning_content = delta.get("reasoning_content")
+                        let reasoning_content = delta
+                          .get("reasoning_content")
                           .and_then(|c| c.as_str())
                           .filter(|s| !s.is_empty());
 
@@ -475,18 +479,26 @@ pub async fn stream_ai_session_with_attachments(
                           if let Some(thinking_text) = reasoning_content {
                             if state.enable_thinking {
                               let mut thinking_obj = serde_json::Map::new();
-                              thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
+                              thinking_obj.insert(
+                                STREAM_THINKING_KEY.to_string(),
+                                Value::String(thinking_text.to_string()),
+                              );
                               trace!("[AISession] 转换思考内容: {:?}", thinking_text);
                               results.push(Value::Object(thinking_obj));
                             } else {
-                              trace!("[AISession] 收到 reasoning_content 但 enable_thinking=false，跳过");
+                              trace!(
+                                "[AISession] 收到 reasoning_content 但 enable_thinking=false，跳过"
+                              );
                             }
                           }
 
                           // 如果有正常回答内容，作为 STREAM_ANSWER_KEY (key="1") 输出
                           if let Some(content_text) = content {
                             let mut internal_obj = serde_json::Map::new();
-                            internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content_text.to_string()));
+                            internal_obj.insert(
+                              STREAM_ANSWER_KEY.to_string(),
+                              Value::String(content_text.to_string()),
+                            );
                             trace!("[AISession] 转换为内部格式: {:?}", content_text);
                             results.push(Value::Object(internal_obj));
                           }
@@ -504,20 +516,31 @@ pub async fn stream_ai_session_with_attachments(
                         let refs_to_process = references_opt.or(search_results_opt);
                         if let Some(refs) = refs_to_process {
                           if !refs.is_empty() {
-                            let converted: Vec<Value> = refs.iter().filter_map(|r| {
-                              let url = r.get("url").and_then(|u| u.as_str())?;
-                              let title = r.get("title").and_then(|t| t.as_str())
-                                .unwrap_or_else(|| r.get("site_name").and_then(|s| s.as_str()).unwrap_or("未知来源"));
-                              Some(serde_json::json!({
-                                "id": url,
-                                "name": title,
-                                "source": url,
-                              }))
-                            }).collect();
+                            let converted: Vec<Value> = refs
+                              .iter()
+                              .filter_map(|r| {
+                                let url = r.get("url").and_then(|u| u.as_str())?;
+                                let title =
+                                  r.get("title").and_then(|t| t.as_str()).unwrap_or_else(|| {
+                                    r.get("site_name")
+                                      .and_then(|s| s.as_str())
+                                      .unwrap_or("未知来源")
+                                  });
+                                Some(serde_json::json!({
+                                  "id": url,
+                                  "name": title,
+                                  "source": url,
+                                }))
+                              })
+                              .collect();
                             if !converted.is_empty() {
                               let mut meta_obj = serde_json::Map::new();
-                              meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
-                              trace!("[AISession] 从choices同层提取联网搜索来源: {} 条", meta_obj.len());
+                              meta_obj
+                                .insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
+                              trace!(
+                                "[AISession] 从choices同层提取联网搜索来源: {} 条",
+                                meta_obj.len()
+                              );
                               results.push(Value::Object(meta_obj));
                             }
                           }
@@ -535,15 +558,21 @@ pub async fn stream_ai_session_with_attachments(
                   // 但为了兼容性仍然保留此处理逻辑，并在处理后 continue 避免双重推送。
                   if let Some(references) = obj.get("references").and_then(|r| r.as_array()) {
                     if !references.is_empty() {
-                      let converted: Vec<Value> = references.iter().filter_map(|r| {
-                        let url = r.get("url").and_then(|u| u.as_str())?;
-                        let title = r.get("title").and_then(|t| t.as_str()).unwrap_or("未知来源");
-                        Some(serde_json::json!({
-                          "id": url,
-                          "name": title,
-                          "source": url,
-                        }))
-                      }).collect();
+                      let converted: Vec<Value> = references
+                        .iter()
+                        .filter_map(|r| {
+                          let url = r.get("url").and_then(|u| u.as_str())?;
+                          let title = r
+                            .get("title")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("未知来源");
+                          Some(serde_json::json!({
+                            "id": url,
+                            "name": title,
+                            "source": url,
+                          }))
+                        })
+                        .collect();
                       if !converted.is_empty() {
                         let mut meta_obj = serde_json::Map::new();
                         meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
@@ -563,16 +592,23 @@ pub async fn stream_ai_session_with_attachments(
                     .and_then(|sr| sr.as_array())
                   {
                     if !search_results.is_empty() {
-                      let converted: Vec<Value> = search_results.iter().filter_map(|r| {
-                        let url = r.get("url").and_then(|u| u.as_str())?;
-                        let title = r.get("title").and_then(|t| t.as_str())
-                          .unwrap_or_else(|| r.get("site_name").and_then(|s| s.as_str()).unwrap_or("未知来源"));
-                        Some(serde_json::json!({
-                          "id": url,
-                          "name": title,
-                          "source": url,
-                        }))
-                      }).collect();
+                      let converted: Vec<Value> = search_results
+                        .iter()
+                        .filter_map(|r| {
+                          let url = r.get("url").and_then(|u| u.as_str())?;
+                          let title =
+                            r.get("title").and_then(|t| t.as_str()).unwrap_or_else(|| {
+                              r.get("site_name")
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("未知来源")
+                            });
+                          Some(serde_json::json!({
+                            "id": url,
+                            "name": title,
+                            "source": url,
+                          }))
+                        })
+                        .collect();
                       if !converted.is_empty() {
                         let mut meta_obj = serde_json::Map::new();
                         meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
@@ -586,25 +622,32 @@ pub async fn stream_ai_session_with_attachments(
 
                 // 其他未知 JSON 格式，静默忽略（不推送到 results，避免触发"无效的流值"错误）
                 trace!("[AISession] 收到未知格式 JSON，忽略: {:?}", json);
-              }
+              },
               Err(e) => {
-                error!("[AISession] JSON解析失败: {} - 原始行: [{}] - 提取的JSON字符串: [{}]", e, line, json_str);
+                error!(
+                  "[AISession] JSON解析失败: {} - 原始行: [{}] - 提取的JSON字符串: [{}]",
+                  e, line, json_str
+                );
                 // 尝试调试：打印前几个字符的ASCII码
-                let first_chars: String = json_str.chars().take(20).map(|c| {
-                  if c.is_control() {
-                    format!("\\x{:02x}", c as u8)
-                  } else {
-                    c.to_string()
-                  }
-                }).collect();
+                let first_chars: String = json_str
+                  .chars()
+                  .take(20)
+                  .map(|c| {
+                    if c.is_control() {
+                      format!("\\x{:02x}", c as u8)
+                    } else {
+                      c.to_string()
+                    }
+                  })
+                  .collect();
                 error!("[AISession] JSON字符串前20个字符: {}", first_chars);
-              }
+              },
             }
           }
-          
+
           // 更新缓冲区为未完成的行
           state.buffer = last_incomplete_line;
-          
+
           // 如果有成功解析的JSON，保存到pending并返回第一个
           if !results.is_empty() {
             // 反转顺序，因为pop是从后面取
@@ -613,7 +656,7 @@ pub async fn stream_ai_session_with_attachments(
             state.pending_jsons = results;
             return Some((Ok(first), state));
           }
-          
+
           // 本轮没有正常分片时，若已记录 SSE 错误需就地抛出：
           // 闭包顶部那次检查要等本次返回后才会执行，而下面的 `continue` 会直接
           // 回到读取下一个 chunk，错误将被拖延甚至（流随后结束时）永久丢失。
@@ -636,14 +679,14 @@ pub async fn stream_ai_session_with_attachments(
             let line = state.buffer.trim();
             if !line.is_empty() {
               trace!("[AISession] 流结束，尝试解析剩余数据: {}", line);
-              
+
               // 处理SSE格式
               let json_str = if line.starts_with("data: ") {
                 &line[6..]
               } else {
                 line
               };
-              
+
               // 跳过 [DONE] 标记
               if json_str.trim() != "[DONE]" {
                 match serde_json::from_str::<Value>(json_str) {
@@ -653,20 +696,31 @@ pub async fn stream_ai_session_with_attachments(
                       if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
                         if let Some(first_choice) = choices.first() {
                           // 检查是否是流结束标记（finish_reason为stop）
-                          if let Some(finish_reason) = first_choice.get("finish_reason").and_then(|f| f.as_str()) {
+                          if let Some(finish_reason) =
+                            first_choice.get("finish_reason").and_then(|f| f.as_str())
+                          {
                             if finish_reason == "stop" {
                               trace!("[AISession] 流结束时收到finish_reason=stop标记，正常结束");
                               state.buffer.clear();
                               return None; // 正常结束流
                             }
                           }
-                          
-                          if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()).filter(|s| !s.is_empty()) {
+
+                          if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object())
+                          {
+                            if let Some(content) = delta
+                              .get("content")
+                              .and_then(|c| c.as_str())
+                              .filter(|s| !s.is_empty())
+                            {
                               let mut internal_obj = serde_json::Map::new();
-                              internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content.to_string()));
+                              internal_obj.insert(
+                                STREAM_ANSWER_KEY.to_string(),
+                                Value::String(content.to_string()),
+                              );
                               if let Some(metadata) = obj.get("metadata") {
-                                internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
+                                internal_obj
+                                  .insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
                               }
                               json = Value::Object(internal_obj);
                               state.buffer.clear();
@@ -680,10 +734,13 @@ pub async fn stream_ai_session_with_attachments(
                     trace!("[AISession] 流结束时没有找到有效内容，正常结束");
                     state.buffer.clear();
                     return None;
-                  }
+                  },
                   Err(e) => {
-                    error!("[AISession] 流结束时JSON解析失败: {} - 原始数据: {}", e, json_str);
-                  }
+                    error!(
+                      "[AISession] 流结束时JSON解析失败: {} - 原始数据: {}",
+                      e, json_str
+                    );
+                  },
                 }
               }
             }
@@ -695,12 +752,10 @@ pub async fn stream_ai_session_with_attachments(
           error!("[AISession] 读取流失败: {}", e);
           let err = FlowyError::new(ErrorCode::Internal, format!("读取流失败: {}", e));
           return Some((Err(err), state));
-        }
+        },
       }
     }
   });
 
   Ok(AISessionStream::new(stream))
 }
-
-

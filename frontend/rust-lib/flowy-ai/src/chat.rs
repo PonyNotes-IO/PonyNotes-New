@@ -4,21 +4,22 @@ use crate::entities::{
 };
 use crate::middleware::chat_service_mw::ChatServiceMiddleware;
 use crate::notification::{ChatNotification, chat_notification_builder};
-use crate::stream_message::{sanitize_ai_error_message, AIFollowUpData, StreamMessage};
+use crate::stream_message::{AIFollowUpData, StreamMessage, sanitize_ai_error_message};
 use allo_isolate::Isolate;
 use flowy_ai_pub::cloud::{
-  AIModel, ChatCloudService, ChatMessage, ChatMessageType, MessageCursor, QuestionStreamValue, ResponseFormat,
+  AIModel, ChatCloudService, ChatMessage, ChatMessageType, MessageCursor, QuestionStreamValue,
+  ResponseFormat,
 };
 use flowy_ai_pub::persistence::{
   ChatMessageTable, select_answer_where_match_reply_message_id, select_chat_messages,
   upsert_chat_messages, upsert_chat_messages_preserve_images,
 };
-use lib_infra::util::timestamp;
 use flowy_ai_pub::user_service::AIUserService;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::DBConnection;
 use futures::{SinkExt, StreamExt};
 use lib_infra::isolate_stream::IsolateSink;
+use lib_infra::util::timestamp;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
@@ -124,27 +125,30 @@ impl Chat {
             "[Chat] Data sync disabled, creating question locally: chat_id={}, message={}",
             self.chat_id, params.message
           );
-          
+
           // 生成本地message_id（使用时间戳）
           let message_id = timestamp();
-          
+
           // 创建本地问题记录
           let question = match params.message_type {
             ChatMessageType::System => ChatMessage::new_system(message_id, params.message.clone()),
-            ChatMessageType::User => ChatMessage::new_human(message_id, params.message.clone(), None),
+            ChatMessageType::User => {
+              ChatMessage::new_human(message_id, params.message.clone(), None)
+            },
           };
-          
+
           // 保存到本地数据库
           let conn = self.user_service.sqlite_connection(uid)?;
-          let record = ChatMessageTable::from_message(self.chat_id.to_string(), question.clone(), false);
+          let record =
+            ChatMessageTable::from_message(self.chat_id.to_string(), question.clone(), false);
           upsert_chat_messages(conn, &[record])?;
-          
+
           question
         } else {
           error!("Failed to send question: {}", err);
           return Err(err);
         }
-      }
+      },
     };
 
     let _ = question_sink
@@ -158,7 +162,7 @@ impl Chat {
         params.images.len(),
         question_with_images.message_id
       );
-      
+
       let mut metadata = question_with_images.metadata.clone();
       if let Some(obj) = metadata.as_object_mut() {
         obj.insert("images".to_string(), serde_json::json!(params.images));
@@ -170,11 +174,15 @@ impl Chat {
         });
       }
       question_with_images.metadata = metadata;
-      
+
       // 【重要】将带图片的消息保存到本地数据库
       // 中间件会从数据库读取消息的 metadata 来获取图片数据
       let conn = self.user_service.sqlite_connection(uid)?;
-      let record = ChatMessageTable::from_message(self.chat_id.to_string(), question_with_images.clone(), false);
+      let record = ChatMessageTable::from_message(
+        self.chat_id.to_string(),
+        question_with_images.clone(),
+        false,
+      );
       tracing::info!(
         "[Chat] 保存带图片的消息到本地数据库，message_id={}, metadata_len={}",
         record.message_id,
@@ -260,7 +268,15 @@ impl Chat {
     tokio::spawn(async move {
       let mut answer_sink = IsolateSink::new(Isolate::new(answer_stream_port));
       match cloud_service
-        .stream_answer_with_thinking(&workspace_id, &chat_id, question_id, format, ai_model, enable_thinking, enable_web_search)
+        .stream_answer_with_thinking(
+          &workspace_id,
+          &chat_id,
+          question_id,
+          format,
+          ai_model,
+          enable_thinking,
+          enable_web_search,
+        )
         .await
       {
         Ok(mut stream) => {
@@ -405,7 +421,10 @@ impl Chat {
       if !thinking_text.is_empty() {
         let meta = metadata.get_or_insert_with(|| serde_json::json!({}));
         if let Some(obj) = meta.as_object_mut() {
-          obj.insert("thinking_text".to_string(), serde_json::Value::String(thinking_text));
+          obj.insert(
+            "thinking_text".to_string(),
+            serde_json::Value::String(thinking_text),
+          );
         }
       }
       let answer = cloud_service

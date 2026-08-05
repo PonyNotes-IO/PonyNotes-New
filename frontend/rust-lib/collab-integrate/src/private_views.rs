@@ -30,7 +30,11 @@ impl PrivateViewRegistry {
 
   /// 该视图是否在私有空间。查不到一律返回 `false`（按非私有处理）。
   pub fn is_private(&self, view_id: &str) -> bool {
-    self.inner.read().map(|s| s.contains(view_id)).unwrap_or(false)
+    self
+      .inner
+      .read()
+      .map(|s| s.contains(view_id))
+      .unwrap_or(false)
   }
 
   /// 当前登记的私有视图数量，用于日志与排查。
@@ -44,7 +48,11 @@ impl PrivateViewRegistry {
 
   /// 切换用户 / 退出登录时清空，避免上一个账号的私有集合影响下一个账号。
   pub fn clear(&self) {
-    self.inner.write().unwrap_or_else(|e| e.into_inner()).clear();
+    self
+      .inner
+      .write()
+      .unwrap_or_else(|e| e.into_inner())
+      .clear();
   }
 }
 

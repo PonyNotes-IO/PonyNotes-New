@@ -317,7 +317,9 @@ struct NotificationPreferencesRequest<'a> {
   _phantom: std::marker::PhantomData<&'a ()>,
 }
 
-fn build_notification_preferences_request(setting: &NotificationSettingsPB) -> NotificationPreferencesRequest<'_> {
+fn build_notification_preferences_request(
+  setting: &NotificationSettingsPB,
+) -> NotificationPreferencesRequest<'_> {
   NotificationPreferencesRequest {
     notifications_enabled_camel: setting.notifications_enabled,
     notify_at_me_camel: setting.notify_at_me,
@@ -350,7 +352,9 @@ async fn sync_notification_settings_to_cloud(
     return Ok(());
   }
 
-  let token = manager.token_from_auth_type(&auth_type)?.unwrap_or_default();
+  let token = manager
+    .token_from_auth_type(&auth_type)?
+    .unwrap_or_default();
   if token.is_empty() {
     return Err(FlowyError::unauthorized().with_context("missing auth token"));
   }
@@ -361,7 +365,12 @@ async fn sync_notification_settings_to_cloud(
   let client = reqwest::Client::builder()
     .timeout(std::time::Duration::from_secs(20))
     .build()
-    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("create http client failed: {}", e)))?;
+    .map_err(|e| {
+      FlowyError::new(
+        ErrorCode::Internal,
+        format!("create http client failed: {}", e),
+      )
+    })?;
 
   let body = build_notification_preferences_request(setting);
   let resp = client
@@ -370,27 +379,39 @@ async fn sync_notification_settings_to_cloud(
     .json(&body)
     .send()
     .await
-    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("sync notification settings failed: {}", e)))?;
+    .map_err(|e| {
+      FlowyError::new(
+        ErrorCode::Internal,
+        format!("sync notification settings failed: {}", e),
+      )
+    })?;
 
   if !resp.status().is_success() {
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     return Err(FlowyError::new(
       ErrorCode::Internal,
-      format!("sync notification settings failed: status={}, body={}", status, text),
+      format!(
+        "sync notification settings failed: status={}, body={}",
+        status, text
+      ),
     ));
   }
   Ok(())
 }
 
-async fn fetch_notification_settings_from_cloud(manager: &UserManager) -> Result<NotificationSettingsPB, FlowyError> {
+async fn fetch_notification_settings_from_cloud(
+  manager: &UserManager,
+) -> Result<NotificationSettingsPB, FlowyError> {
   let cloud_service = manager.cloud_service()?;
   let auth_type = cloud_service.get_server_auth_type();
   if !auth_type.is_appflowy_cloud() {
     return Ok(NotificationSettingsPB::default());
   }
 
-  let token = manager.token_from_auth_type(&auth_type)?.unwrap_or_default();
+  let token = manager
+    .token_from_auth_type(&auth_type)?
+    .unwrap_or_default();
   if token.is_empty() {
     return Ok(NotificationSettingsPB::default());
   }
@@ -401,14 +422,24 @@ async fn fetch_notification_settings_from_cloud(manager: &UserManager) -> Result
   let client = reqwest::Client::builder()
     .timeout(std::time::Duration::from_secs(20))
     .build()
-    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("create http client failed: {}", e)))?;
+    .map_err(|e| {
+      FlowyError::new(
+        ErrorCode::Internal,
+        format!("create http client failed: {}", e),
+      )
+    })?;
 
   let resp = client
     .get(url)
     .bearer_auth(token)
     .send()
     .await
-    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("fetch notification settings failed: {}", e)))?;
+    .map_err(|e| {
+      FlowyError::new(
+        ErrorCode::Internal,
+        format!("fetch notification settings failed: {}", e),
+      )
+    })?;
 
   if !resp.status().is_success() {
     // 拉取失败不阻塞前端，fallback 默认值
@@ -462,10 +493,15 @@ fn parse_notification_settings_json(json: serde_json::Value) -> NotificationSett
     pb.notifications_enabled = pick_bool(&obj, &["notificationsEnabled", "notifications_enabled"])
       .unwrap_or(pb.notifications_enabled);
     pb.notify_at_me = pick_bool(&obj, &["notifyAtMe", "notify_at_me"]).unwrap_or(pb.notify_at_me);
-    pb.notify_pending = pick_bool(&obj, &["notifyPending", "notify_pending"]).unwrap_or(pb.notify_pending);
-    pb.notify_permission_change =
-      pick_bool(&obj, &["notifyPermissionChange", "notify_permission_change"]).unwrap_or(pb.notify_permission_change);
-    pb.notify_join_team = pick_bool(&obj, &["notifyJoinTeam", "notify_join_team"]).unwrap_or(pb.notify_join_team);
+    pb.notify_pending =
+      pick_bool(&obj, &["notifyPending", "notify_pending"]).unwrap_or(pb.notify_pending);
+    pb.notify_permission_change = pick_bool(
+      &obj,
+      &["notifyPermissionChange", "notify_permission_change"],
+    )
+    .unwrap_or(pb.notify_permission_change);
+    pb.notify_join_team =
+      pick_bool(&obj, &["notifyJoinTeam", "notify_join_team"]).unwrap_or(pb.notify_join_team);
     pb.notify_clip = pick_bool(&obj, &["notifyClip", "notify_clip"]).unwrap_or(pb.notify_clip);
   }
   pb
@@ -889,7 +925,10 @@ pub async fn get_team_acl_handler(
     pub email: Option<String>,
   }
 
-  let query = format!("SELECT user_id, email FROM team_acls WHERE team_id = '{}'", team_id.replace('\'', "''"));
+  let query = format!(
+    "SELECT user_id, email FROM team_acls WHERE team_id = '{}'",
+    team_id.replace('\'', "''")
+  );
   let rows: Vec<TeamAclRow> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
   let mut allow_user_ids = Vec::new();
   let mut allow_emails = Vec::new();
@@ -926,12 +965,18 @@ pub async fn update_team_acl_handler(
   diesel::sql_query(delete_sql).execute(&mut conn)?;
 
   for user_id in payload.acl.allow_user_ids {
-    let insert_sql = format!("INSERT INTO team_acls(team_id, user_id) VALUES ('{}', {})", team_id, user_id);
+    let insert_sql = format!(
+      "INSERT INTO team_acls(team_id, user_id) VALUES ('{}', {})",
+      team_id, user_id
+    );
     diesel::sql_query(insert_sql).execute(&mut conn)?;
   }
   for email in payload.acl.allow_emails {
     let esc = email.replace('\'', "''");
-    let insert_sql = format!("INSERT INTO team_acls(team_id, email) VALUES ('{}', '{}')", team_id, esc);
+    let insert_sql = format!(
+      "INSERT INTO team_acls(team_id, email) VALUES ('{}', '{}')",
+      team_id, esc
+    );
     diesel::sql_query(insert_sql).execute(&mut conn)?;
   }
 
@@ -1034,7 +1079,7 @@ pub async fn invite_workspace_member_handler(
           "仅工作空间所有者可以邀请成员",
         ));
       }
-    }
+    },
     Err(e) => {
       // If cannot determine membership, log and deny to be safe
       tracing::error!(
@@ -1045,7 +1090,7 @@ pub async fn invite_workspace_member_handler(
         ErrorCode::NotEnoughPermissions,
         "无权限邀请成员",
       ));
-    }
+    },
   }
 
   manager
@@ -1108,7 +1153,10 @@ pub async fn create_join_request_handler(
     };
     data_result_ok(pb)
   } else {
-    Err(FlowyError::new(ErrorCode::Internal, "Failed to create join request"))
+    Err(FlowyError::new(
+      ErrorCode::Internal,
+      "Failed to create join request",
+    ))
   }
 }
 
@@ -1144,16 +1192,19 @@ pub async fn list_join_requests_handler(
     updated_at: i64,
   }
   let rows: Vec<JR2> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
-  let items = rows.into_iter().map(|r| JoinRequestPB {
-    id: r.id,
-    workspace_id: r.workspace_id,
-    space_id: r.space_id,
-    requester_id: r.requester_id,
-    reason: r.reason,
-    status: r.status,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  }).collect();
+  let items = rows
+    .into_iter()
+    .map(|r| JoinRequestPB {
+      id: r.id,
+      workspace_id: r.workspace_id,
+      space_id: r.space_id,
+      requester_id: r.requester_id,
+      reason: r.reason,
+      status: r.status,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    })
+    .collect();
   data_result_ok(RepeatedJoinRequestPB { items })
 }
 
@@ -1166,15 +1217,27 @@ pub async fn handle_join_request_handler(
   let mgr = upgrade_manager(manager)?;
   let uid = mgr.user_id()?;
   // only workspace owner can approve/reject
-  let member = mgr.get_workspace_member_info(uid, &Uuid::from_str(&params.workspace_id)?).await?;
+  let member = mgr
+    .get_workspace_member_info(uid, &Uuid::from_str(&params.workspace_id)?)
+    .await?;
   if member.role != Role::Owner {
-    return Err(FlowyError::new(ErrorCode::NotEnoughPermissions, "仅工作空间所有者可以审批加入请求"));
+    return Err(FlowyError::new(
+      ErrorCode::NotEnoughPermissions,
+      "仅工作空间所有者可以审批加入请求",
+    ));
   }
 
   let mut conn = mgr.db_connection(uid)?;
-  let status = if params.approve { "approved" } else { "rejected" };
+  let status = if params.approve {
+    "approved"
+  } else {
+    "rejected"
+  };
   let now = chrono::Utc::now().timestamp();
-  let update_sql = format!("UPDATE join_requests SET status = '{}', updated_at = {} WHERE id = {}", status, now, params.request_id);
+  let update_sql = format!(
+    "UPDATE join_requests SET status = '{}', updated_at = {} WHERE id = {}",
+    status, now, params.request_id
+  );
   diesel::sql_query(update_sql).execute(&mut conn)?;
 
   if params.approve {
@@ -1186,13 +1249,23 @@ pub async fn handle_join_request_handler(
       requester_id: i64,
     }
 
-    let query = format!("SELECT requester_id FROM join_requests WHERE id = {}", params.request_id);
+    let query = format!(
+      "SELECT requester_id FROM join_requests WHERE id = {}",
+      params.request_id
+    );
     let rows: Vec<RequesterRow> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
     if let Some(r) = rows.into_iter().next() {
       let rid = r.requester_id;
-      if let Ok(profile) = mgr.get_user_profile_from_disk(rid, &params.workspace_id).await {
+      if let Ok(profile) = mgr
+        .get_user_profile_from_disk(rid, &params.workspace_id)
+        .await
+      {
         let _ = mgr
-          .invite_member_to_workspace(Uuid::from_str(&params.workspace_id)?, profile.email, Role::Member)
+          .invite_member_to_workspace(
+            Uuid::from_str(&params.workspace_id)?,
+            profile.email,
+            Role::Member,
+          )
           .await;
       }
     }
@@ -1216,11 +1289,17 @@ pub async fn cancel_join_request_handler(
     #[sql_type = "diesel::sql_types::BigInt"]
     requester_id: i64,
   }
-  let query = format!("SELECT requester_id FROM join_requests WHERE id = {}", params.request_id);
+  let query = format!(
+    "SELECT requester_id FROM join_requests WHERE id = {}",
+    params.request_id
+  );
   let rows: Vec<RequesterRow2> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
   let row = rows.into_iter().next().map(|r| r.requester_id);
   if row != Some(uid) {
-    return Err(FlowyError::new(ErrorCode::NotEnoughPermissions, "只有请求者可以撤销加入请求"));
+    return Err(FlowyError::new(
+      ErrorCode::NotEnoughPermissions,
+      "只有请求者可以撤销加入请求",
+    ));
   }
   let delete_sql = format!("DELETE FROM join_requests WHERE id = {}", params.request_id);
   diesel::sql_query(delete_sql).execute(&mut conn)?;

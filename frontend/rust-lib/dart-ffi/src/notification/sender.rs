@@ -1,7 +1,7 @@
 use allo_isolate::Isolate;
 use bytes::Bytes;
-use flowy_notification::entities::SubscribeObject;
 use flowy_notification::NotificationSender;
+use flowy_notification::entities::SubscribeObject;
 use std::convert::TryInto;
 
 pub struct DartNotificationSender {

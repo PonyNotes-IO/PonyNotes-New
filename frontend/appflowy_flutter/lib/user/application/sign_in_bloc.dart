@@ -939,7 +939,9 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       loginResult.fold(
         (tokenMap) {
           // 检测是否为 pending_token 响应（OAuth 新用户需要绑定手机号）
-          final pendingToken = tokenMap['pending_token'] as String?;
+          final pendingTokenValue = tokenMap['pending_token'];
+          final pendingToken =
+              pendingTokenValue is String ? pendingTokenValue : null;
           if (pendingToken != null && pendingToken.isNotEmpty) {
             // OAuth identity not found, user needs phone binding
             Log.info('[SignInBloc] WeChat OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
@@ -1066,7 +1068,9 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       loginResult.fold(
         (tokenMap) {
           // 检测是否为 pending_token 响应（OAuth 新用户需要绑定手机号）
-          final pendingToken = tokenMap['pending_token'] as String?;
+          final pendingTokenValue = tokenMap['pending_token'];
+          final pendingToken =
+              pendingTokenValue is String ? pendingTokenValue : null;
           if (pendingToken != null && pendingToken.isNotEmpty) {
             Log.info('[SignInBloc] DouYin OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
             return state.copyWith(

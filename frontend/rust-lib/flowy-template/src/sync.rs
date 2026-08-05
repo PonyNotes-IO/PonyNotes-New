@@ -33,7 +33,7 @@ impl TemplateSyncManager {
   pub async fn sync_to_cloud(&self) -> FlowyResult<()> {
     let local_templates = self.local_service.get_my_templates().await?;
     let cloud_templates = self.convert_to_cloud_data(local_templates);
-    
+
     let response = self
       .cloud_service
       .sync_templates(self.user_id, &self.workspace_id, cloud_templates)
@@ -41,7 +41,7 @@ impl TemplateSyncManager {
 
     // 更新本地同步时间戳
     self.update_sync_timestamp(response.sync_timestamp).await?;
-    
+
     Ok(())
   }
 
@@ -66,12 +66,15 @@ impl TemplateSyncManager {
     // 将云端模板转换为本地格式并保存
     for cloud_template in response.templates {
       let local_template = self.convert_from_cloud_data(cloud_template);
-      self.local_service.add_to_my_templates(local_template).await?;
+      self
+        .local_service
+        .add_to_my_templates(local_template)
+        .await?;
     }
 
     // 更新本地同步时间戳
     self.update_sync_timestamp(response.sync_timestamp).await?;
-    
+
     Ok(())
   }
 
@@ -98,10 +101,10 @@ impl TemplateSyncManager {
   pub async fn bidirectional_sync(&self) -> FlowyResult<()> {
     // 1. 先同步本地到云端
     self.sync_to_cloud().await?;
-    
+
     // 2. 再从云端同步到本地
     self.sync_from_cloud().await?;
-    
+
     Ok(())
   }
 
@@ -127,12 +130,15 @@ impl TemplateSyncManager {
     // 批量添加云端模板到本地
     for cloud_template in response.templates {
       let local_template = self.convert_from_cloud_data(cloud_template);
-      self.local_service.add_to_my_templates(local_template).await?;
+      self
+        .local_service
+        .add_to_my_templates(local_template)
+        .await?;
     }
 
     // 更新同步时间戳
     self.update_sync_timestamp(response.sync_timestamp).await?;
-    
+
     Ok(())
   }
 

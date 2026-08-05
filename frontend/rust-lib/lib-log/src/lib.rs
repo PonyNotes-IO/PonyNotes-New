@@ -54,7 +54,10 @@ impl Builder {
       .max_log_files(6)
       .build(directory)
       .unwrap_or_else(|e| {
-        eprintln!("[lib-log] RollingFileAppender 构建失败 '{}': {}", directory, e);
+        eprintln!(
+          "[lib-log] RollingFileAppender 构建失败 '{}': {}",
+          directory, e
+        );
         tracing_appender::rolling::daily(directory, name)
       });
 
@@ -65,7 +68,10 @@ impl Builder {
       .max_log_files(24)
       .build(directory)
       .unwrap_or_else(|e| {
-        eprintln!("[lib-log] sync RollingFileAppender 构建失败 '{}': {}", directory, e);
+        eprintln!(
+          "[lib-log] sync RollingFileAppender 构建失败 '{}': {}",
+          directory, e
+        );
         tracing_appender::rolling::hourly(directory, sync_log_name)
       });
 

@@ -19,7 +19,8 @@ pub async fn default_encode_collab_for_collab_type(
         .map_err(|e| FlowyError::internal().with_context(format!("Document error: {:?}", e)))?;
       Ok(encode_collab)
     },
-    CollabType::Database => default_database_data(object_id).await
+    CollabType::Database => default_database_data(object_id)
+      .await
       .map_err(|e| FlowyError::internal().with_context(format!("Database error: {:?}", e))),
     CollabType::WorkspaceDatabase => Ok(default_workspace_database_data(object_id)),
     CollabType::Folder => {

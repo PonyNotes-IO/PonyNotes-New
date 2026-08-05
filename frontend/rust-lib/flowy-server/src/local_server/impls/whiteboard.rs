@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 use collab::entity::EncodedCollab;
-use flowy_whiteboard_pub::cloud::*;
 use flowy_error::FlowyError;
+use flowy_whiteboard_pub::cloud::*;
 use lib_infra::async_trait::async_trait;
 use uuid::Uuid;
 

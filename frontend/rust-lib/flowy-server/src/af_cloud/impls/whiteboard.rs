@@ -2,8 +2,8 @@
 use client_api::entity::{CreateCollabParams, QueryCollab, QueryCollabParams};
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
-use flowy_whiteboard_pub::cloud::*;
 use flowy_error::FlowyError;
+use flowy_whiteboard_pub::cloud::*;
 use lib_infra::async_trait::async_trait;
 use std::sync::Weak;
 use tracing::instrument;
@@ -58,7 +58,10 @@ where
       );
     }
 
-    tracing::info!("[WBCollab] ✅ get_whiteboard_doc_state success, bytes={}", doc_state.len());
+    tracing::info!(
+      "[WBCollab] ✅ get_whiteboard_doc_state success, bytes={}",
+      doc_state.len()
+    );
     Ok(doc_state)
   }
 
@@ -100,8 +103,10 @@ where
       collab_type: CollabType::Document,
     };
     self.inner.try_get_client()?.create_collab(params).await?;
-    tracing::info!("[WBCollab] ✅ create_whiteboard_collab success for whiteboard_id={}", whiteboard_id);
+    tracing::info!(
+      "[WBCollab] ✅ create_whiteboard_collab success for whiteboard_id={}",
+      whiteboard_id
+    );
     Ok(())
   }
 }
-

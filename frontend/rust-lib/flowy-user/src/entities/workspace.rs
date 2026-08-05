@@ -1,8 +1,7 @@
-use client_api::entity::billing_dto::{
-  Currency, RecurringInterval, SubscriptionPlanDetail,
-  WorkspaceUsageAndLimit,
-};
 use client_api::entity::billing_dto::WorkspaceSubscriptionStatus as CloudWorkspaceSubscriptionStatus;
+use client_api::entity::billing_dto::{
+  Currency, RecurringInterval, SubscriptionPlanDetail, WorkspaceUsageAndLimit,
+};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fmt;
@@ -794,7 +793,7 @@ pub struct WorkspaceSettingsPB {
 
   #[pb(index = 3)]
   pub workspace_type: WorkspaceTypePB,
- 
+
   /// 新增：仅工作空间所有者可创建团队协作区
   #[pb(index = 4)]
   pub only_owner_can_create_team_workspace: bool,

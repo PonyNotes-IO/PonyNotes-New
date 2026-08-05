@@ -1,7 +1,7 @@
+use crate::cloud_impl::AppFlowyTemplateCloudService;
 use crate::entities::*;
 use crate::services::TemplateService;
 use crate::sync::TemplateSyncManager;
-use crate::cloud_impl::AppFlowyTemplateCloudService;
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_sqlite::ConnectionPool;
 use std::sync::Arc;
@@ -20,19 +20,11 @@ impl TemplateManager {
     }
   }
 
-  pub fn with_cloud_sync(
-    pool: Arc<ConnectionPool>,
-    user_id: i64,
-    workspace_id: Uuid,
-  ) -> Self {
+  pub fn with_cloud_sync(pool: Arc<ConnectionPool>, user_id: i64, workspace_id: Uuid) -> Self {
     let service = Arc::new(TemplateService::new(pool));
     let cloud_service = Arc::new(AppFlowyTemplateCloudService::new());
-    let sync_manager = TemplateSyncManager::new(
-      service.clone(),
-      cloud_service,
-      user_id,
-      workspace_id,
-    );
+    let sync_manager =
+      TemplateSyncManager::new(service.clone(), cloud_service, user_id, workspace_id);
 
     Self {
       service,
@@ -82,7 +74,10 @@ impl TemplateManager {
     self.service.get_all_templates().await
   }
 
-  pub async fn get_templates_by_category(&self, category: &str) -> FlowyResult<Vec<TemplateItemPB>> {
+  pub async fn get_templates_by_category(
+    &self,
+    category: &str,
+  ) -> FlowyResult<Vec<TemplateItemPB>> {
     self.service.get_templates_by_category(category).await
   }
 
@@ -122,7 +117,9 @@ impl TemplateManager {
   }
 
   /// 检查同步状态
-  pub async fn get_sync_status(&self) -> FlowyResult<Option<flowy_template_pub::entities::TemplateSyncStatus>> {
+  pub async fn get_sync_status(
+    &self,
+  ) -> FlowyResult<Option<flowy_template_pub::entities::TemplateSyncStatus>> {
     if let Some(sync_manager) = &self.sync_manager {
       Ok(Some(sync_manager.get_sync_status().await?))
     } else {

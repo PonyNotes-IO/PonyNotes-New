@@ -38,7 +38,9 @@ pub async fn get_or_init_document_tantivy_state(
   let arc_state = Arc::new(RwLock::new(state));
 
   // Insert into cache (may race with another insert, but both are valid)
-  SEARCH_INDEX.entry(workspace_id).or_insert(arc_state.clone());
+  SEARCH_INDEX
+    .entry(workspace_id)
+    .or_insert(arc_state.clone());
 
   Ok(arc_state)
 }

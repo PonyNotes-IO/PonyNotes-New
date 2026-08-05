@@ -5,8 +5,8 @@ pub use collab_plugins::local_storage::CollabPersistenceConfig;
 pub mod collab_builder;
 pub mod config;
 pub mod instant_indexed_data_provider;
-pub mod private_views;
 mod plugin_provider;
+pub mod private_views;
 
 pub use collab_plugins::local_storage::kv::doc::CollabKVAction;
 pub use collab_plugins::local_storage::kv::error::PersistenceError;

@@ -20,4 +20,3 @@ pub struct FileStatePB {
   #[pb(index = 2)]
   pub is_finish: bool,
 }
-

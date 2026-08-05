@@ -21,4 +21,3 @@ impl std::convert::From<StorageNotification> for i32 {
 pub(crate) fn make_notification(ty: StorageNotification) -> NotificationBuilder {
   NotificationBuilder::new("appflowy_file_storage_notification", ty, OBSERVABLE_SOURCE)
 }
-

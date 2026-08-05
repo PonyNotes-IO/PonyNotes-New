@@ -5,12 +5,12 @@ use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::kv::KVStorePreferences;
 use lib_infra::async_trait::async_trait;
 use lib_infra::util::timestamp;
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, trace, warn};
 use uuid::Uuid;
-use serde::Deserialize;
 
 type Model = AIModel;
 pub const GLOBAL_ACTIVE_MODEL_KEY: &str = "global_active_model";
@@ -235,18 +235,21 @@ impl ModelSelectionControl {
     self.unset_sources.write().await.remove(&source_key.key);
 
     let available = self.get_models(workspace_id).await;
-    
+
     // 【关键修复】使用名称和 is_local 来匹配模型，而不是使用 contains（因为 desc 字段可能不同）
     // 这样可以避免因为 desc 字段不匹配而拒绝用户选择的模型
-    let model_matched = available.iter().any(|m| {
-      m.name == model.name && m.is_local == model.is_local
-    });
-    
+    let model_matched = available
+      .iter()
+      .any(|m| m.name == model.name && m.is_local == model.is_local);
+
     // 【关键修复】当可用模型列表为空或只包含默认模型时，允许设置任何模型
     // 这样可以处理新工作区/新 Chat 的情况，避免因为模型列表未加载而拒绝用户选择的模型
-    let is_empty_or_only_default = available.is_empty() 
-      || (available.len() == 1 && available.iter().any(|m| m.name == self.default_model.name && m.is_local == self.default_model.is_local));
-    
+    let is_empty_or_only_default = available.is_empty()
+      || (available.len() == 1
+        && available
+          .iter()
+          .any(|m| m.name == self.default_model.name && m.is_local == self.default_model.is_local));
+
     if model_matched || is_empty_or_only_default {
       // 如果可用列表为空或只包含默认模型，记录警告但不拒绝
       if is_empty_or_only_default && !model_matched {
@@ -255,7 +258,7 @@ impl ModelSelectionControl {
           model.name
         );
       }
-      
+
       // Update local storage
       if let Some(storage) = self.local_storage.load_full() {
         storage
@@ -373,22 +376,23 @@ impl ModelSource for ServerAiSource {
     let now = timestamp();
     let (should_fetch, cached_count) = {
       let cached = self.cached_models.read().await;
-      let should_fetch = cached.models.is_empty() || cached.timestamp.is_none_or(|ts| now - ts >= 300);
+      let should_fetch =
+        cached.models.is_empty() || cached.timestamp.is_none_or(|ts| now - ts >= 300);
       (should_fetch, cached.models.len())
     };
-    
+
     info!(
       "[ServerAiSource] list_chat_models: should_fetch={}, cached_count={}",
       should_fetch, cached_count
     );
-    
+
     if !should_fetch {
       info!("[ServerAiSource] 使用缓存的 {} 个模型", cached_count);
       return self.cached_models.read().await.models.clone();
     }
-    
+
     info!("[ServerAiSource] 开始从自定义API获取模型列表...");
-    
+
     // 使用自定义的AI模型接口而不是AppFlowy Cloud的接口
     match Self::fetch_models_from_custom_api().await {
       Ok(models) => {
@@ -402,7 +406,10 @@ impl ModelSource for ServerAiSource {
         error!("[ServerAiSource] API调用失败: {}", err);
         let cached = self.cached_models.read().await;
         if !cached.models.is_empty() {
-          info!("[ServerAiSource] 使用过期缓存: {} 个模型", cached.models.len());
+          info!(
+            "[ServerAiSource] 使用过期缓存: {} 个模型",
+            cached.models.len()
+          );
           return cached.models.clone();
         }
         info!("[ServerAiSource] 无缓存且API失败，返回空列表");
@@ -418,17 +425,17 @@ impl ServerAiSource {
   async fn fetch_models_from_custom_api() -> FlowyResult<Vec<AIModel>> {
     use reqwest::Client;
     use serde::Deserialize;
-    
+
     #[derive(Deserialize)]
     struct ModelsResponse {
       data: ModelsData,
     }
-    
+
     #[derive(Deserialize)]
     struct ModelsData {
       models: Vec<ModelInfo>,
     }
-    
+
     #[derive(Deserialize)]
     struct ModelInfo {
       id: String,
@@ -436,10 +443,10 @@ impl ServerAiSource {
       description: String,
       is_default: bool,
     }
-    
+
     let url = "https://api.xiaomabiji.com/api/ai/chat/models";
     info!("[ModelSelect] 准备从自定义API获取模型列表: {}", url);
-    
+
     let client = Client::builder()
       .danger_accept_invalid_certs(true)  // 接受自签名证书
       .user_agent("AppFlowyClient/0.9.9")  // 添加User-Agent
@@ -449,44 +456,46 @@ impl ServerAiSource {
         error!("[ModelSelect] 创建HTTP客户端失败: {}", e);
         FlowyError::new(ErrorCode::Internal, format!("创建HTTP客户端失败: {}", e))
       })?;
-    
+
     info!("[ModelSelect] 开始发送GET请求到: {}", url);
-    
-    let request = client
-      .get(url)
-      .header("Content-Type", "application/json");
-      
+
+    let request = client.get(url).header("Content-Type", "application/json");
+
     info!("[ModelSelect] 请求headers构建完成");
-    
-    let resp = request
-      .send()
-      .await
-      .map_err(|e| {
-        error!("[ModelSelect] 请求失败: {}", e);
-        error!("[ModelSelect] 错误详情: {:?}", e);
-        // 检查是否是连接问题
-        if e.is_connect() {
-          error!("[ModelSelect] 连接错误 - 可能是网络问题或服务器不可达");
-        } else if e.is_timeout() {
-          error!("[ModelSelect] 请求超时");
-        } else if e.is_request() {
-          error!("[ModelSelect] 请求构建错误");
-        }
-        FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
-      })?;
-    
+
+    let resp = request.send().await.map_err(|e| {
+      error!("[ModelSelect] 请求失败: {}", e);
+      error!("[ModelSelect] 错误详情: {:?}", e);
+      // 检查是否是连接问题
+      if e.is_connect() {
+        error!("[ModelSelect] 连接错误 - 可能是网络问题或服务器不可达");
+      } else if e.is_timeout() {
+        error!("[ModelSelect] 请求超时");
+      } else if e.is_request() {
+        error!("[ModelSelect] 请求构建错误");
+      }
+      FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
+    })?;
+
     let status = resp.status();
     let response_url = resp.url().clone();
     info!("[ModelSelect] 收到响应");
     info!("[ModelSelect]   - 状态码: {}", status);
     info!("[ModelSelect]   - 实际请求URL: {}", response_url);
-    
+
     if !resp.status().is_success() {
-      let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
+      let error_text = resp
+        .text()
+        .await
+        .unwrap_or_else(|_| "无法读取错误信息".to_string());
       error!("[ModelSelect] 服务器返回错误: {} - {}", status, error_text);
       error!("[ModelSelect] 请求的URL: {}", response_url);
-      error!("[ModelSelect] 请求URL长度: {}, 响应URL长度: {}", url.len(), response_url.as_str().len());
-      
+      error!(
+        "[ModelSelect] 请求URL长度: {}, 响应URL长度: {}",
+        url.len(),
+        response_url.as_str().len()
+      );
+
       // 如果是404错误，提供更详细的诊断信息
       if status == 404 {
         error!("[ModelSelect] 404错误 - 可能的原因:");
@@ -495,22 +504,27 @@ impl ServerAiSource {
         error!("[ModelSelect]   3. 路由注册顺序问题");
         error!("[ModelSelect]   4. URL路径不正确");
       }
-      
+
       return Err(FlowyError::new(
         ErrorCode::Internal,
         format!("服务器返回错误: {} - {}", status, error_text),
       ));
     }
-    
+
     let response: ModelsResponse = resp.json().await.map_err(|e| {
       error!("[ModelSelect] JSON解析失败: {}", e);
       FlowyError::new(ErrorCode::Internal, format!("JSON解析失败: {}", e))
     })?;
-    
-    let models: Vec<AIModel> = response.data.models
+
+    let models: Vec<AIModel> = response
+      .data
+      .models
       .into_iter()
       .map(|m| {
-        info!("[ModelSelect] 模型: {} ({}), 默认: {}", m.name, m.id, m.is_default);
+        info!(
+          "[ModelSelect] 模型: {} ({}), 默认: {}",
+          m.name, m.id, m.is_default
+        );
         AIModel {
           name: m.name,
           is_local: false,
@@ -518,7 +532,7 @@ impl ServerAiSource {
         }
       })
       .collect();
-    
+
     info!("[ModelSelect] 成功获取 {} 个模型", models.len());
     Ok(models)
   }

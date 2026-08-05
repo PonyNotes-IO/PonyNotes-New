@@ -31,7 +31,10 @@ pub struct DocumentFolderOperation {
 
 impl DocumentFolderOperation {
   fn document_manager(&self) -> Result<Arc<DocumentManager>, FlowyError> {
-    self.document_manager.upgrade().ok_or_else(FlowyError::ref_drop)
+    self
+      .document_manager
+      .upgrade()
+      .ok_or_else(FlowyError::ref_drop)
   }
 }
 #[async_trait]
@@ -71,7 +74,10 @@ impl FolderOperationHandler for DocumentFolderOperation {
   }
 
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    self.document_manager()?.open_document(view_id, None).await?;
+    self
+      .document_manager()?
+      .open_document(view_id, None)
+      .await?;
     Ok(())
   }
 

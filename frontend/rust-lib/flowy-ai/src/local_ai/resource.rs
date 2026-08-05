@@ -5,4 +5,3 @@ pub enum PendingResource {
   OllamaServerNotReady,
   MissingModel(String),
 }
-

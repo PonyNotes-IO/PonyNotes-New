@@ -192,9 +192,8 @@ where
       body_text
     );
 
-    let body: serde_json::Value = serde_json::from_str(&body_text).map_err(|e| {
-      FlowyError::internal().with_context(format!("parse response failed: {}", e))
-    })?;
+    let body: serde_json::Value = serde_json::from_str(&body_text)
+      .map_err(|e| FlowyError::internal().with_context(format!("parse response failed: {}", e)))?;
 
     let database_id = body
       .get("data")
@@ -225,8 +224,7 @@ where
       .send()
       .await
       .map_err(|e| {
-        FlowyError::internal()
-          .with_context(format!("get received invites failed: {}", e))
+        FlowyError::internal().with_context(format!("get received invites failed: {}", e))
       })?;
 
     if !resp.status().is_success() {

@@ -3,7 +3,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use lib_dispatch::prelude::{AFPluginData, AFPluginState, DataResult, data_result_ok};
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
-use tracing::{instrument, info};
+use tracing::{info, instrument};
 use uuid::Uuid;
 
 use crate::entities::*;
@@ -280,7 +280,7 @@ pub(crate) async fn read_recent_views_handler(
   folder: AFPluginState<Weak<FolderManager>>,
 ) -> DataResult<RepeatedRecentViewPB, FlowyError> {
   let folder = upgrade_folder(folder)?;
-  
+
   // Get recent sections with filtering (excludes trash and other private views)
   let recent_items = folder.get_my_recent_sections().await;
 

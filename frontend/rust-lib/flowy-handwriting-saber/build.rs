@@ -5,4 +5,3 @@ fn main() {
     flowy_codegen::dart_event::r#gen(env!("CARGO_PKG_NAME"));
   }
 }
-

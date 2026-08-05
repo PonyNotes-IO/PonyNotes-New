@@ -23,7 +23,7 @@ use collab_integrate::collab_builder::{
 use collab_plugins::CollabKVDB;
 use dashmap::DashMap;
 use flowy_document_pub::cloud::DocumentCloudService;
-use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
+use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
 use flowy_storage_pub::storage::{CreatedUpload, StorageService};
 use lib_infra::util::timestamp;
 use tracing::{event, instrument};
@@ -256,12 +256,9 @@ impl DocumentManager {
     // 但 collab_object 的一致性硬检查会拒绝不等于当前 workspace 的值,导致共享文档一律
     // "workspace_id not match" 打不开(Internal)。普通文档仍走带硬检查的原路径。
     let collab_object = if workspace_id != current_workspace_id {
-      self.collab_builder()?.collab_object_with_explicit_workspace(
-        &workspace_id,
-        uid,
-        doc_id,
-        CollabType::Document,
-      )?
+      self
+        .collab_builder()?
+        .collab_object_with_explicit_workspace(&workspace_id, uid, doc_id, CollabType::Document)?
     } else {
       self
         .collab_builder()?

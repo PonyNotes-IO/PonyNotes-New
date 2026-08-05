@@ -115,9 +115,7 @@ pub trait FolderCloudService: Send + Sync + 'static {
 
   /// 获取所有发布的笔记列表（不限制 workspace_id）
   /// 用于侧边栏发布菜单显示所有发布的笔记
-  async fn list_all_published_views(
-    &self,
-  ) -> Result<ListAllPublishedCollabResponse, FlowyError>;
+  async fn list_all_published_views(&self) -> Result<ListAllPublishedCollabResponse, FlowyError>;
 
   /// 接收发布的文档（复制到自己的工作区）
   /// 发布的文档对接收者默认是只读的，不能协作同步

@@ -71,7 +71,10 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<SignInBloc, dynamic>(
+    return BlocListener<SignInBloc, SignInState>(
+      listenWhen: (previous, current) =>
+          previous.requiresPhoneBinding != current.requiresPhoneBinding ||
+          (previous.successOrFail == null && current.successOrFail != null),
       listener: (context, state) async {
         // 如果用户取消了绑定，阻止所有后续操作（包括进入主界面）
         if (_phoneBindingCancelled) {
@@ -79,9 +82,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         }
 
         // 微信登录成功但未绑定手机号时，跳转到绑定手机号页面（全屏）
-        final dynamic dynState = state;
-        final needBind = (dynState.requiresPhoneBinding == true) ||
-            state.toString().contains('requiresPhoneBinding: true');
+        final needBind = state.requiresPhoneBinding;
         if (needBind && !_phoneDialogOpen) {
           _phoneDialogOpen = true;
           _phoneBindingCancelled = false;
@@ -185,9 +186,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               }
               // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
               // 手机号登录/注册的用户不应该触发绑定页面
-              final dynamic dynState = state;
-              final needBind = (dynState.requiresPhoneBinding == true) ||
-                  state.toString().contains('requiresPhoneBinding: true');
+              final needBind = state.requiresPhoneBinding;
               if (needBind &&
                   _needBindPhone(userProfile.phone) &&
                   !_phoneDialogOpen) {
@@ -206,16 +205,16 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 _phoneDialogOpen = false;
                 if (profile != null) {
                   // 检查 context 是否仍然有效
-                  if (!context.mounted) {
+                  if (!context.mounted || _isNavigatingToHome) {
                     return;
                   }
-                  final rootNavigator =
-                      Navigator.of(context, rootNavigator: true);
-                  if (rootNavigator != null) {
-                    final rootContext = rootNavigator.context;
-                    if (rootContext.mounted) {
-                      getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-                    }
+                  _isNavigatingToHome = true;
+                  final rootContext =
+                      Navigator.of(context, rootNavigator: true).context;
+                  if (rootContext.mounted) {
+                    unawaited(
+                      getIt<AuthRouter>().goHomeScreen(rootContext, profile),
+                    );
                   }
                 } else {
                   // 用户取消了绑定，设置标志并清理状态
@@ -260,16 +259,16 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   _phoneDialogOpen = false;
                   if (profile != null) {
                     // 绑定成功，进入主界面
-                    if (!context.mounted) {
+                    if (!context.mounted || _isNavigatingToHome) {
                       return;
                     }
-                    final rootNavigator =
-                        Navigator.of(context, rootNavigator: true);
-                    if (rootNavigator != null) {
-                      final rootContext = rootNavigator.context;
-                      if (rootContext.mounted) {
-                        getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-                      }
+                    _isNavigatingToHome = true;
+                    final rootContext =
+                        Navigator.of(context, rootNavigator: true).context;
+                    if (rootContext.mounted) {
+                      unawaited(
+                        getIt<AuthRouter>().goHomeScreen(rootContext, profile),
+                      );
                     }
                   } else {
                     // 用户取消了绑定，设置标志并清理状态
@@ -301,18 +300,18 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
 
               // 使用根导航器确保导航不会因为 context 失效而失败
               // 检查 context 是否仍然有效
-              if (!context.mounted) {
+              if (!context.mounted || _isNavigatingToHome) {
                 return;
               }
-              final rootNavigator = Navigator.of(context, rootNavigator: true);
-              final rootContext = rootNavigator?.context;
-              if (rootContext == null || !rootContext.mounted) {
+              _isNavigatingToHome = true;
+              final rootContext =
+                  Navigator.of(context, rootNavigator: true).context;
+              if (!rootContext.mounted) {
                 return;
               }
-              if (rootContext.mounted) {
-                // 登录成功且已绑定手机号，导航到主页
-                getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
-              }
+              unawaited(
+                getIt<AuthRouter>().goHomeScreen(rootContext, userProfile),
+              );
             });
           } else {
             // 显示错误Toast

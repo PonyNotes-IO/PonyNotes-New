@@ -8,7 +8,7 @@ use collab_folder::{Folder, FolderNotify};
 use collab_integrate::CollabKVDB;
 use flowy_error::{FlowyError, FlowyResult};
 use std::sync::{Arc, Weak};
-use tracing::{Level, event, info, error, warn};
+use tracing::{Level, error, event, info, warn};
 use uuid::Uuid;
 
 impl FolderManager {
@@ -80,9 +80,15 @@ impl FolderManager {
             Err(err) => {
               error!("Failed to fetch folder from cloud: {}", err);
               self
-                .make_folder(uid, workspace_id, collab_db.clone(), None, folder_notifier.clone())
+                .make_folder(
+                  uid,
+                  workspace_id,
+                  collab_db.clone(),
+                  None,
+                  folder_notifier.clone(),
+                )
                 .await?
-            }
+            },
           }
         }
       },
@@ -119,7 +125,12 @@ impl FolderManager {
     self.publish_private_views().await;
 
     let weak_mutex_folder = Arc::downgrade(&folder);
-    subscribe_folder_sync_state_changed(*workspace_id, folder_state_rx, weak_mutex_folder.clone(), Arc::downgrade(&self.user));
+    subscribe_folder_sync_state_changed(
+      *workspace_id,
+      folder_state_rx,
+      weak_mutex_folder.clone(),
+      Arc::downgrade(&self.user),
+    );
     subscribe_folder_trash_changed(
       *workspace_id,
       section_change_rx,

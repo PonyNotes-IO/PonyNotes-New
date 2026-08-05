@@ -3,6 +3,7 @@ use client_api::collab_sync::{SinkConfig, SyncObject, SyncPlugin};
 use client_api::entity::ai_dto::RepeatedRelatedQuestion;
 use client_api::entity::workspace_dto::PublishInfoView;
 use client_api::entity::PublishInfo;
+use client_api::entity::UserMessage;
 use collab::core::origin::{CollabClient, CollabOrigin};
 use collab::entity::EncodedCollab;
 use collab::preclude::CollabPlugin;
@@ -30,9 +31,8 @@ use flowy_folder_pub::cloud::{
   ListAllPublishedCollabResponse, ReceivePublishedCollabRequest, ReceivePublishedCollabResponse,
 };
 use flowy_folder_pub::entities::PublishPayload;
-use flowy_search_pub::cloud::SearchCloudService;
-use flowy_whiteboard_pub::cloud::{WhiteboardCloudService, WhiteboardSnapshot};
 use flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService;
+use flowy_search_pub::cloud::SearchCloudService;
 use flowy_server_pub::af_cloud_config::AFCloudConfiguration;
 use flowy_server_pub::guest_dto::{
   ListSharedViewResponse, RevokeSharedViewAccessRequest, ShareViewWithGuestRequest,
@@ -40,10 +40,9 @@ use flowy_server_pub::guest_dto::{
 };
 use flowy_storage_pub::cloud::{ObjectIdentity, ObjectValue, StorageCloudService};
 use flowy_storage_pub::storage::{CompletedPartRequest, CreateUploadResponse, UploadPartResponse};
-use client_api::entity::UserMessage;
 use flowy_user_pub::cloud::{UserCloudService, UserCloudServiceProvider};
 use flowy_user_pub::entities::{AuthType, UserTokenState};
-use tokio::sync::broadcast;
+use flowy_whiteboard_pub::cloud::{WhiteboardCloudService, WhiteboardSnapshot};
 use lib_infra::async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -52,6 +51,7 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::broadcast;
 use tokio_stream::wrappers::WatchStream;
 use tracing::log::error;
 use tracing::{debug, info};
@@ -373,14 +373,9 @@ impl FolderCloudService for ServerProvider {
   }
 
   /// List all published views globally (not limited to current workspace).
-  async fn list_all_published_views(
-    &self,
-  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
+  async fn list_all_published_views(&self) -> Result<ListAllPublishedCollabResponse, FlowyError> {
     let server = self.get_server()?;
-    server
-      .folder_service()
-      .list_all_published_views()
-      .await
+    server.folder_service().list_all_published_views().await
   }
 
   /// Receive a published collab (copy to own workspace)
@@ -793,7 +788,14 @@ impl ChatCloudService for ServerProvider {
     self
       .get_server()?
       .chat_service()
-      .create_question(workspace_id, chat_id, &message, message_type, prompt_id, metadata)
+      .create_question(
+        workspace_id,
+        chat_id,
+        &message,
+        message_type,
+        prompt_id,
+        metadata,
+      )
       .await
   }
 
@@ -840,7 +842,15 @@ impl ChatCloudService for ServerProvider {
     let server = self.get_server()?;
     server
       .chat_service()
-      .stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, enable_thinking, enable_web_search)
+      .stream_answer_with_thinking(
+        workspace_id,
+        chat_id,
+        question_id,
+        format,
+        ai_model,
+        enable_thinking,
+        enable_web_search,
+      )
       .await
   }
 

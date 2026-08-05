@@ -146,12 +146,8 @@ impl WorkspaceTemplateBuilder {
         private: Default::default(),
       };
 
-      let collab = Collab::new_with_origin(
-        CollabOrigin::Empty,
-        workspace_id.clone(),
-        Vec::new(),
-        false,
-      );
+      let collab =
+        Collab::new_with_origin(CollabOrigin::Empty, workspace_id.clone(), Vec::new(), false);
       let folder = Folder::create(uid, collab, None, folder_data);
       let data = folder.encode_collab()?;
       Ok::<_, anyhow::Error>(TemplateData {

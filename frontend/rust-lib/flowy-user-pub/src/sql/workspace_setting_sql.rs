@@ -58,7 +58,8 @@ pub fn upsert_workspace_setting(
     .set((
       workspace_setting_table::disable_search_indexing.eq(settings.disable_search_indexing),
       workspace_setting_table::ai_model.eq(settings.ai_model),
-      workspace_setting_table::only_owner_can_create_team_workspace.eq(settings.only_owner_can_create_team_workspace),
+      workspace_setting_table::only_owner_can_create_team_workspace
+        .eq(settings.only_owner_can_create_team_workspace),
     ))
     .execute(conn)?;
   Ok(())

@@ -114,7 +114,7 @@ fn decode_date_cell_internal(cell: &Cell) -> Option<DateCellData> {
       return Some(DateCellData::from(&pb));
     }
   }
-  
+
   // 回退到字符串解析方式（向后兼容）
   let s = cell.get_as::<String>(CELL_DATA)?;
   let timestamp = cast_string_to_timestamp(&s)?;
@@ -124,9 +124,7 @@ fn decode_date_cell_internal(cell: &Cell) -> Option<DateCellData> {
 impl CellDataDecoder for DateTypeOption {
   fn decode_cell(&self, cell: &Cell) -> FlowyResult<<Self as TypeOption>::CellData> {
     decode_date_cell_internal(cell)
-      .ok_or_else(|| {
-        flowy_error::FlowyError::internal().with_context("无法从 Cell 读取数据")
-      })
+      .ok_or_else(|| flowy_error::FlowyError::internal().with_context("无法从 Cell 读取数据"))
   }
 
   fn stringify_cell_data(&self, cell_data: <Self as TypeOption>::CellData) -> String {
@@ -178,7 +176,10 @@ impl CellDataChangeset for DateTypeOption {
       // 使用 protobuf 序列化，确保格式一致
       let pb = self.protobuf_encode(cell_data.clone());
       let pb_bytes: Bytes = pb.try_into().map_err(|e| {
-        tracing::error!("❌ [DateTypeOption::apply_changeset] protobuf 序列化失败: {:?}", e);
+        tracing::error!(
+          "❌ [DateTypeOption::apply_changeset] protobuf 序列化失败: {:?}",
+          e
+        );
         flowy_error::FlowyError::internal().with_context(format!("protobuf 序列化失败: {:?}", e))
       })?;
       // 将 Bytes 转换为 Vec<u8>，因为 Cell 的 insert 方法需要可以转换为 Any 的类型
@@ -192,7 +193,9 @@ impl CellDataChangeset for DateTypeOption {
     // 使用 decode_cell 来读取完整数据（包括 repeat_type 和 repeat_rule_json）
     let is_new_cell = cell.is_none();
     let cell_data = match cell {
-      Some(cell) => self.decode_cell_with_transform(&cell, FieldType::DateTime, &Field::default()).unwrap_or_default(),
+      Some(cell) => self
+        .decode_cell_with_transform(&cell, FieldType::DateTime, &Field::default())
+        .unwrap_or_default(),
       None => DateCellData::default(),
     };
 
@@ -218,13 +221,19 @@ impl CellDataChangeset for DateTypeOption {
       // 更新现有：如果 changeset 中有值就用，否则保持旧值
       changeset.repeat_type.unwrap_or(cell_data.repeat_type)
     };
-    
+
     let repeat_rule_json = if is_new_cell {
       // 首次创建：如果 changeset 中有值就用，否则用默认值空字符串
-      changeset.repeat_rule_json.clone().unwrap_or_else(|| String::new())
+      changeset
+        .repeat_rule_json
+        .clone()
+        .unwrap_or_else(|| String::new())
     } else {
       // 更新现有：如果 changeset 中有值就用，否则保持旧值
-      changeset.repeat_rule_json.clone().unwrap_or_else(|| cell_data.repeat_rule_json.clone())
+      changeset
+        .repeat_rule_json
+        .clone()
+        .unwrap_or_else(|| cell_data.repeat_rule_json.clone())
     };
 
     // Compute timestamp/end_timestamp with validation; if validation fails, keep previous values
@@ -256,10 +265,13 @@ impl CellDataChangeset for DateTypeOption {
     // 使用 protobuf 序列化，确保格式一致
     let pb = self.protobuf_encode(cell_data.clone());
     let pb_bytes: Bytes = pb.try_into().map_err(|e| {
-      tracing::error!("❌ [DateTypeOption::apply_changeset] protobuf 序列化失败: {:?}", e);
+      tracing::error!(
+        "❌ [DateTypeOption::apply_changeset] protobuf 序列化失败: {:?}",
+        e
+      );
       flowy_error::FlowyError::internal().with_context(format!("protobuf 序列化失败: {:?}", e))
     })?;
-    
+
     let mut cell = new_cell_builder(FieldType::DateTime);
     cell.insert(CELL_DATA.into(), pb_bytes.to_vec().into());
 

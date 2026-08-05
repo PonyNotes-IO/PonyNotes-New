@@ -2,12 +2,14 @@ use crate::entities::WhiteboardData;
 use crate::notification::{whiteboard_notification_send_json, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Any, Collab, CollabBuilder, DeepObservable, GetString, Map, MapRef, Out, ReadTxn};
-use collab::preclude::Subscription;
 use collab::preclude::Event;
+use collab::preclude::Subscription;
+use collab::preclude::{
+  Any, Collab, CollabBuilder, DeepObservable, GetString, Map, MapRef, Out, ReadTxn,
+};
 use collab::util::MapExt;
-use collab_entity::EncodedCollab;
 use collab_entity::define::DOCUMENT_ROOT;
+use collab_entity::EncodedCollab;
 
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
@@ -72,15 +74,21 @@ impl Whiteboard {
     let _document_root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
     let data = collab.data.get_or_init_map(&mut txn, Self::DATA_KEY);
     Self::ensure_elements_map(&data, &mut txn);
-    
+
     // 检查现有的数据结构中是否有 roomId/roomKey
     if let Some(room_id) = Self::map_string_value(data.get(&txn, "roomId"), &txn) {
-      tracing::info!("[WBCollab] ✅ Whiteboard::open found existing roomId: {}", room_id);
+      tracing::info!(
+        "[WBCollab] ✅ Whiteboard::open found existing roomId: {}",
+        room_id
+      );
     }
     if let Some(room_key) = Self::map_string_value(data.get(&txn, "roomKey"), &txn) {
-      tracing::info!("[WBCollab] ✅ Whiteboard::open found existing roomKey: {}", room_key);
+      tracing::info!(
+        "[WBCollab] ✅ Whiteboard::open found existing roomKey: {}",
+        room_key
+      );
     }
-    
+
     drop(txn);
 
     let (notifier, _) = broadcast::channel(100);
@@ -88,7 +96,7 @@ impl Whiteboard {
     let notifier_clone = notifier.clone();
 
     tracing::info!("[WBCollab] 🔍 Whiteboard::open creating observe_deep subscription...");
-    
+
     // observe_deep 回调签名：(txn, events)
     // 有 origin 的事务是远程推送的变更
     let subscription = data.observe_deep(move |txn, events| {
@@ -126,7 +134,11 @@ impl Whiteboard {
                 "element": element,
               }));
 
-              trace!("[WBCollab] observe_deep: elements.{}, is_remote={}", key, is_remote);
+              trace!(
+                "[WBCollab] observe_deep: elements.{}, is_remote={}",
+                key,
+                is_remote
+              );
             }
 
             if changed_elements.is_empty() {
@@ -137,7 +149,8 @@ impl Whiteboard {
               "key": Self::ELEMENTS_KEY,
               "is_remote": is_remote,
               "value": { "changed": changed_elements },
-            }).to_string();
+            })
+            .to_string();
             let changed = WhiteboardChanged {
               key: Self::ELEMENTS_KEY.to_string(),
               value: event_json,
@@ -154,9 +167,14 @@ impl Whiteboard {
                 "is_remote": is_remote,
                 "value": value,
                 "change_type": format!("{:?}", change),
-              }).to_string();
+              })
+              .to_string();
 
-              trace!("[WBCollab] observe_deep: key={}, is_remote={}", key_str, is_remote);
+              trace!(
+                "[WBCollab] observe_deep: key={}, is_remote={}",
+                key_str,
+                is_remote
+              );
 
               let changed = WhiteboardChanged {
                 key: key_str,
@@ -210,7 +228,10 @@ impl Whiteboard {
   /// 这里的 data 字段是 JSON 字符串，需要二次解析
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
     // 每次保存都会打印，Windows 上每条日志都有成本；降为 debug/trace（trace 才输出全量 JSON）。
-    tracing::debug!("[WBCollab] update_from_json called, len: {}", json_str.len());
+    tracing::debug!(
+      "[WBCollab] update_from_json called, len: {}",
+      json_str.len()
+    );
     tracing::trace!("[WBCollab] update_from_json raw: {}", json_str);
 
     #[derive(serde::Deserialize)]
@@ -221,8 +242,8 @@ impl Whiteboard {
       data: serde_json::Value,
     }
 
-    let wrapper: UpdateWrapper = serde_json::from_str(json_str)
-      .map_err(|e| anyhow!("Failed to parse wrapper JSON: {}", e))?;
+    let wrapper: UpdateWrapper =
+      serde_json::from_str(json_str).map_err(|e| anyhow!("Failed to parse wrapper JSON: {}", e))?;
 
     let data_map: HashMap<String, serde_json::Value> = match wrapper.data {
       serde_json::Value::String(data_str) => {
@@ -237,12 +258,21 @@ impl Whiteboard {
       _ => HashMap::new(),
     };
 
-    tracing::debug!("[WBCollab] update_from_json data_map keys: {:?}", data_map.keys());
+    tracing::debug!(
+      "[WBCollab] update_from_json data_map keys: {:?}",
+      data_map.keys()
+    );
     if data_map.contains_key("roomId") {
-      tracing::debug!("[WBCollab] roomId found in update data: {}", data_map["roomId"]);
+      tracing::debug!(
+        "[WBCollab] roomId found in update data: {}",
+        data_map["roomId"]
+      );
     }
     if data_map.contains_key("roomKey") {
-      tracing::debug!("[WBCollab] roomKey found in update data: {}", data_map["roomKey"]);
+      tracing::debug!(
+        "[WBCollab] roomKey found in update data: {}",
+        data_map["roomKey"]
+      );
     }
 
     // 【协作丢元素修复 2026-07-01】移除文档级 revision 门控。
@@ -274,7 +304,12 @@ impl Whiteboard {
           } else {
             let json = serde_json::to_string(value)
               .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
-            tracing::trace!("[WBCollab] Inserting key='{}' with value='{}' (type={})", key, json, value.as_str().unwrap_or("non-string"));
+            tracing::trace!(
+              "[WBCollab] Inserting key='{}' with value='{}' (type={})",
+              key,
+              json,
+              value.as_str().unwrap_or("non-string")
+            );
             if key == "roomId" || key == "roomKey" {
               tracing::debug!("[WBCollab] Saving {} to collab: {}", key, json);
             }
@@ -289,7 +324,8 @@ impl Whiteboard {
           } else {
             tracing::error!("[WBCollab] ❌ roomId not found after insert!");
           }
-          if let Some(saved_room_key) = Self::map_string_value(self.data.get(&txn, "roomKey"), &txn) {
+          if let Some(saved_room_key) = Self::map_string_value(self.data.get(&txn, "roomKey"), &txn)
+          {
             tracing::debug!("[WBCollab] Verified roomKey: {}", saved_room_key);
           } else {
             tracing::error!("[WBCollab] ❌ roomKey not found after insert!");
@@ -327,13 +363,17 @@ impl Whiteboard {
       if !value.is_null() {
         data_map.insert(key.clone(), value);
         if key == "roomId" || key == "roomKey" {
-          tracing::debug!("[WBCollab] Found {} in stored data: {}", key, data_map[&key]);
+          tracing::debug!(
+            "[WBCollab] Found {} in stored data: {}",
+            key,
+            data_map[&key]
+          );
         }
       } else {
         tracing::warn!("[WBCollab] ⚠️ Value for key '{}' is null", key);
       }
     }
-    
+
     tracing::debug!("[WBCollab] get_data returning keys: {:?}", data_map.keys());
 
     let mut elements = Vec::new();
@@ -356,7 +396,8 @@ impl Whiteboard {
   #[allow(dead_code)]
   fn stored_revision(&self) -> Option<i64> {
     let txn = self.collab.context.transact();
-    self.data
+    self
+      .data
       .get(&txn, "revision")
       .and_then(|value| Self::map_string_value_to_json(Some(value), &txn).as_i64())
   }
@@ -377,7 +418,7 @@ impl Whiteboard {
           .ok()
           .and_then(|value| value.as_object().map(|object| object.is_empty()))
           .unwrap_or(true)
-      }
+      },
       _ => true,
     }
   }
@@ -396,10 +437,7 @@ impl Whiteboard {
     elements_blank && files_blank
   }
 
-  fn ensure_elements_map(
-    data: &MapRef,
-    txn: &mut collab::preclude::TransactionMut,
-  ) -> MapRef {
+  fn ensure_elements_map(data: &MapRef, txn: &mut collab::preclude::TransactionMut) -> MapRef {
     match data.get(txn, Self::ELEMENTS_KEY) {
       Some(Out::YMap(map)) => map,
       Some(Out::Any(Any::String(elements_json))) => {
@@ -482,7 +520,9 @@ impl Whiteboard {
 
     // 读取并解析已有的 files 字符串
     let mut merged = Self::map_string_value(data.get(txn, Self::FILES_KEY), txn)
-      .and_then(|json| serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json).ok())
+      .and_then(|json| {
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&json).ok()
+      })
       .unwrap_or_default();
 
     let mut changed = false;
@@ -570,7 +610,8 @@ impl Whiteboard {
       while let Ok(changed) = rx.recv().await {
         trace!(
           "[WBCollab] Broadcasting change: key={}, is_remote={}",
-          changed.key, changed.is_remote
+          changed.key,
+          changed.is_remote
         );
         whiteboard_notification_send_json(
           view_id.clone(),
@@ -603,7 +644,8 @@ pub fn whiteboard_data_to_encoded_collab(
 ) -> Result<EncodedCollab, Error> {
   tracing::info!(
     "[WBCollab] whiteboard_data_to_encoded_collab: object_id={}, uid={}",
-    object_id, uid
+    object_id,
+    uid
   );
 
   if device_id.is_empty() {
@@ -708,7 +750,10 @@ mod tests {
 
     let data = whiteboard.get_data().unwrap();
     let elements = data.0["elements"].as_array().unwrap();
-    let element = elements.iter().find(|element| element["id"] == "a").unwrap();
+    let element = elements
+      .iter()
+      .find(|element| element["id"] == "a")
+      .unwrap();
     assert_eq!(element["version"], 5);
   }
 
@@ -730,7 +775,10 @@ mod tests {
 
     let data = whiteboard.get_data().unwrap();
     let elements = data.0["elements"].as_array().unwrap();
-    let element = elements.iter().find(|element| element["id"] == "a").unwrap();
+    let element = elements
+      .iter()
+      .find(|element| element["id"] == "a")
+      .unwrap();
     assert_eq!(element["version"], 2);
     assert_eq!(element["isDeleted"], true);
   }

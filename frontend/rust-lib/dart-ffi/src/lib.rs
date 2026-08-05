@@ -141,6 +141,10 @@ impl DartAppFlowyCore {
 
 #[no_mangle]
 pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
+  // The dependency graph contains both rustls providers. Select one before any
+  // HTTP or WebSocket client can build a TLS configuration.
+  let _ = rustls::crypto::ring::default_provider().install_default();
+
   let c_str = unsafe {
     if data.is_null() {
       return -1;

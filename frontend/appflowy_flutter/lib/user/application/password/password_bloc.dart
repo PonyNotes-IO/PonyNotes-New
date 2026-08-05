@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -53,8 +54,7 @@ class PasswordBloc extends Bloc<PasswordEvent, PasswordState> {
 
     final baseUrl = await getAppFlowyCloudUrl();
     try {
-      // token 已经是 access_token 字符串，不需要解析
-      final authToken = userProfile.token;
+      final authToken = userProfile.authorizationAccessToken ?? '';
       passwordHttpService = PasswordHttpService(
         baseUrl: baseUrl,
         authToken: authToken,

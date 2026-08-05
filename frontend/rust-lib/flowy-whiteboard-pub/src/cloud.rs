@@ -45,5 +45,3 @@ pub struct WhiteboardSnapshot {
   pub data: Vec<u8>,
   pub created_at: i64,
 }
-
-

@@ -227,19 +227,21 @@ pub fn view_layout_pb_from_view(view: &View) -> ViewLayoutPB {
     ViewLayout::Document => {
       // Check extra field to determine if this is actually a folder, notebook, or whiteboard
       if let Some(extra) = &view.extra {
-        if let Ok(extra_map) = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra) {
+        if let Ok(extra_map) =
+          serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra)
+        {
           if let Some(view_type) = extra_map.get("view_type").and_then(|v| v.as_str()) {
             match view_type {
               "folder" => return ViewLayoutPB::Folder,
               "notebook" => return ViewLayoutPB::Notebook,
               "whiteboard" => return ViewLayoutPB::Whiteboard,
-              _ => {}
+              _ => {},
             }
           }
         }
       }
       ViewLayoutPB::Document
-    }
+    },
   }
 }
 

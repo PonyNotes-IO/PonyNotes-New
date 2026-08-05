@@ -8,7 +8,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show UserProfilePB;
-import 'package:flowy_infra/platform_extension.dart' show  PlatformInfo;
+import 'package:flowy_infra/platform_extension.dart' show PlatformInfo;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -44,6 +44,10 @@ class AuthRouter {
       '[AuthRouter] goHomeScreen called for user: ${userProfile.email}',
     );
     final result = await FolderEventGetCurrentWorkspaceSetting().send();
+    if (!context.mounted) {
+      Log.warn('[AuthRouter] Sign-in context was disposed before navigation');
+      return;
+    }
     Log.info(
       '[AuthRouter] FolderEventGetCurrentWorkspaceSetting result received',
     );

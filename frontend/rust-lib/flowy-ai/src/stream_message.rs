@@ -164,8 +164,14 @@ mod tests {
       ("404 Not Found", "AI 服务或模型不可用，请联系管理员。"),
       ("408 Request Timeout", "请求超时，请稍后重试。"),
       ("409 Conflict", "请求冲突，请稍后重试。"),
-      ("413 Payload Too Large", "发送内容过大，请减少文字或附件后重试。"),
-      ("422 Unprocessable Entity", "请求内容无法处理，请调整后重试。"),
+      (
+        "413 Payload Too Large",
+        "发送内容过大，请减少文字或附件后重试。",
+      ),
+      (
+        "422 Unprocessable Entity",
+        "请求内容无法处理，请调整后重试。",
+      ),
       (
         "Doubao web search API error: 429 Too Many Requests - {\"error\":{\"code\":\"ServerOverloaded\",\"message\":\"service overloaded\",\"request_id\":\"secret-request-id\"}}",
         "请求过于频繁，请稍后重试。",

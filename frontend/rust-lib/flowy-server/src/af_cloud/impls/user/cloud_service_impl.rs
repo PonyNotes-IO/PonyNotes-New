@@ -199,7 +199,7 @@ where
       profile.phone,
       profile.name
     );
-    
+
     let mut conn = logged_user.get_sqlite_db(uid)?;
     let workspace_auth_type = select_user_workspace(workspace_id, &mut conn)
       .map(|row| AuthType::from(row.workspace_type))
@@ -340,9 +340,13 @@ where
       .map_err(|e| anyhow!("Failed to get client: {}", e))?;
 
     // user_identifier 现在统一传 uid 字符串（i64 格式）
-    let uid: i64 = user_identifier
-      .parse()
-      .map_err(|e| anyhow!("Failed to parse uid from identifier '{}': {}", user_identifier, e))?;
+    let uid: i64 = user_identifier.parse().map_err(|e| {
+      anyhow!(
+        "Failed to parse uid from identifier '{}': {}",
+        user_identifier,
+        e
+      )
+    })?;
 
     let changeset = WorkspaceMemberChangeset::new(uid).with_role(to_af_role(role));
     client

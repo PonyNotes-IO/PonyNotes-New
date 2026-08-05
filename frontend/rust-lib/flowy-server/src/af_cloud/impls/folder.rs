@@ -220,9 +220,7 @@ where
 
   /// 获取所有发布的笔记列表（不限制 workspace_id）
   /// 用于侧边栏发布菜单显示所有发布的笔记
-  async fn list_all_published_views(
-    &self,
-  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
+  async fn list_all_published_views(&self) -> Result<ListAllPublishedCollabResponse, FlowyError> {
     let response: ApiListResponse = self
       .inner
       .try_get_client()?
@@ -230,17 +228,21 @@ where
       .await
       .map_err(FlowyError::from)?;
     // Convert from client_api type to flowy_folder_pub type
-    let items = response.items.into_iter().map(|item| AllPublishedCollabItem {
-      published_view_id: item.published_view_id,
-      view_id: item.view_id,
-      workspace_id: item.workspace_id,
-      name: item.name,
-      publish_name: item.publish_name,
-      publisher_email: item.publisher_email,
-      published_at: item.published_at,
-      is_received: item.is_received,
-      is_readonly: item.is_readonly,
-    }).collect();
+    let items = response
+      .items
+      .into_iter()
+      .map(|item| AllPublishedCollabItem {
+        published_view_id: item.published_view_id,
+        view_id: item.view_id,
+        workspace_id: item.workspace_id,
+        name: item.name,
+        publish_name: item.publish_name,
+        publisher_email: item.publisher_email,
+        published_at: item.published_at,
+        is_received: item.is_received,
+        is_readonly: item.is_readonly,
+      })
+      .collect();
     Ok(ListAllPublishedCollabResponse { items })
   }
 

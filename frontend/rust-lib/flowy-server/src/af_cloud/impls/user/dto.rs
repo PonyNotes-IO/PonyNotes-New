@@ -36,7 +36,7 @@ pub fn user_profile_from_af_profile(
     profile.phone,
     profile.name
   );
-  
+
   let icon_url = {
     profile
       .metadata
@@ -47,7 +47,7 @@ pub fn user_profile_from_af_profile(
       .unwrap_or_default()
   };
   let workspace_type = WorkspaceType::from(&auth_type);
-  
+
   let user_profile = UserProfile {
     email: profile.email.unwrap_or("".to_string()),
     name: profile.name.unwrap_or("".to_string()),
@@ -59,14 +59,14 @@ pub fn user_profile_from_af_profile(
     updated_at: profile.updated_at,
     workspace_type,
   };
-  
+
   tracing::debug!(
     "user_profile_from_af_profile result: email={}, phone={:?}, name={}",
     user_profile.email,
     user_profile.phone,
     user_profile.name
   );
-  
+
   Ok(user_profile)
 }
 

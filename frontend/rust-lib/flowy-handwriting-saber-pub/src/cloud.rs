@@ -39,4 +39,3 @@ pub trait HandwritingSaberCloudService: Send + Sync + 'static {
     version: i64,
   ) -> Result<i64, FlowyError>;
 }
-

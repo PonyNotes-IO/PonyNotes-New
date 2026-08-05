@@ -2,10 +2,10 @@ use crate::entities::icon::UpdateViewIconParams;
 use crate::entities::{
   AFAccessLevelPB, AFRolePB, CreateViewParams, DeletedViewPB, DuplicateViewParams,
   FolderSnapshotPB, MoveNestedViewParams, RepeatedSharedUserPB, RepeatedSharedViewResponsePB,
-  RepeatedTrashPB, RepeatedViewIdPB, RepeatedViewPB, SharedUserPB, SharedViewPB,
-  SaveSharedViewMetaPB, SharedViewSectionPB, UpdateViewParams, ViewLayoutPB, ViewPB, ViewSectionPB, WorkspaceLatestPB,
-  WorkspacePB, view_pb_with_all_child_views, view_pb_with_child_views, view_pb_without_child_views,
-  view_pb_without_child_views_from_arc,
+  RepeatedTrashPB, RepeatedViewIdPB, RepeatedViewPB, SaveSharedViewMetaPB, SharedUserPB,
+  SharedViewPB, SharedViewSectionPB, UpdateViewParams, ViewLayoutPB, ViewPB, ViewSectionPB,
+  WorkspaceLatestPB, WorkspacePB, view_pb_with_all_child_views, view_pb_with_child_views,
+  view_pb_without_child_views, view_pb_without_child_views_from_arc,
 };
 use crate::manager_observer::{
   ChildViewChangeReason, notify_child_views_changed, notify_did_update_workspace,
@@ -34,12 +34,14 @@ use collab_folder::{
   ViewLayout, ViewUpdate, Workspace,
 };
 use collab_integrate::CollabKVDB;
-use collab_integrate::private_views::PrivateViewRegistry;
 use collab_integrate::collab_builder::{
   AppFlowyCollabBuilder, CollabBuilderConfig, CollabPersistenceImpl,
 };
+use collab_integrate::private_views::PrivateViewRegistry;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
-use flowy_folder_pub::cloud::{FolderCloudService, FolderCollabParams, gen_view_id, ListAllPublishedCollabResponse};
+use flowy_folder_pub::cloud::{
+  FolderCloudService, FolderCollabParams, ListAllPublishedCollabResponse, gen_view_id,
+};
 use flowy_folder_pub::entities::{
   PublishDatabaseData, PublishDatabasePayload, PublishDocumentPayload, PublishPayload,
   PublishViewInfo, PublishViewMeta, PublishViewMetaData,
@@ -49,8 +51,8 @@ use flowy_folder_pub::sql::workspace_shared_user_sql::{
   select_all_workspace_shared_users,
 };
 use flowy_folder_pub::sql::workspace_shared_view_sql::{
-  WorkspaceSharedViewTable, replace_all_workspace_shared_views,
-  select_all_shared_views_for_uid, select_shared_view_by_view_id,
+  WorkspaceSharedViewTable, replace_all_workspace_shared_views, select_all_shared_views_for_uid,
+  select_shared_view_by_view_id,
 };
 use flowy_sqlite::DBConnection;
 use flowy_sqlite::kv::KVStorePreferences;
@@ -81,7 +83,8 @@ pub struct FolderManager {
   pub(crate) operation_handlers: FolderOperationHandlers,
   /// Additional handlers for custom view types that don't have dedicated ViewLayout variants
   /// These handlers are searched by their name() when get_handler_for_layout_pb is called
-  pub(crate) extra_handlers: Arc<parking_lot::RwLock<Vec<Arc<dyn FolderOperationHandler + Send + Sync>>>>,
+  pub(crate) extra_handlers:
+    Arc<parking_lot::RwLock<Vec<Arc<dyn FolderOperationHandler + Send + Sync>>>>,
   pub cloud_service: Weak<dyn FolderCloudService>,
   pub(crate) store_preferences: Arc<KVStorePreferences>,
   pub(crate) folder_ready_notifier: tokio::sync::watch::Sender<bool>,
@@ -173,7 +176,7 @@ impl FolderManager {
   ) {
     self.operation_handlers.insert(layout, handler);
   }
-  
+
   /// Register an extra handler that doesn't have a corresponding ViewLayout variant
   /// These handlers are identified by their name() and used for custom view types
   pub fn register_extra_handler(&self, handler: Arc<dyn FolderOperationHandler + Send + Sync>) {
@@ -627,15 +630,18 @@ impl FolderManager {
     // We try best-effort to read workspace settings from local DB; failures fall back to allowing creation.
     // Skip permission check for private spaces (ViewSectionPB::Private) or when section is not specified (default to private)
     // Also check extra field to determine if this is a private space creation
-    let mut is_private_space = params.section == Some(ViewSectionPB::Private) || params.section.is_none();
+    let mut is_private_space =
+      params.section == Some(ViewSectionPB::Private) || params.section.is_none();
 
     // Check extra field to see if this is a private space creation
     if let Some(extra_json) = &params.extra {
-      if extra_json.contains("\"space_permission\":1") || extra_json.contains("\"space_permission\": 1") {
+      if extra_json.contains("\"space_permission\":1")
+        || extra_json.contains("\"space_permission\": 1")
+      {
         is_private_space = true;
       }
     }
-    
+
     if !is_private_space {
       if let Ok(user_id) = self.user.user_id() {
         if let Ok(mut conn) = self.user.sqlite_connection(user_id) {
@@ -644,7 +650,9 @@ impl FolderManager {
               // Detect space creation by checking params.extra JSON for is_space flag.
               let mut is_space_creation = false;
               if let Some(extra_json) = &params.extra {
-                if extra_json.contains("\"is_space\":true") || extra_json.contains("\"is_space\": true") {
+                if extra_json.contains("\"is_space\":true")
+                  || extra_json.contains("\"is_space\": true")
+                {
                   is_space_creation = true;
                 }
               }
@@ -771,7 +779,7 @@ impl FolderManager {
     // 尝试解析分享链接中的 viewId
     let resolved_view_id = Self::resolve_share_link_view_id(view_id);
     let view_id = resolved_view_id;
-    
+
     let workspace = self.user.get_active_user_workspace()?;
     let role = workspace.role;
 
@@ -1477,27 +1485,34 @@ impl FolderManager {
       drop(folder);
       view
     };
-    
+
     // Try to get the view, but handle the case where it doesn't exist
     match self.get_view_pb(&view_id).await {
       Ok(view) => Some(view),
       Err(err) => {
         // If the current view doesn't exist, try to find any available view
-        tracing::warn!("Current view {} not found: {:?}, trying to find alternative view", view_id, err);
-        
+        tracing::warn!(
+          "Current view {} not found: {:?}, trying to find alternative view",
+          view_id,
+          err
+        );
+
         // Get all public views and use the first one as fallback
         if let Ok(public_views) = self.get_workspace_public_views().await {
           if let Some(first_view) = public_views.first() {
-            info!("Using fallback view: {} ({})", first_view.name, first_view.id);
+            info!(
+              "Using fallback view: {} ({})",
+              first_view.name, first_view.id
+            );
             // Just return the fallback view without setting it as current to avoid recursion
             return Some(first_view.clone());
           }
         }
-        
+
         // If no public views are available, return None
         tracing::warn!("No alternative views found, returning None");
         None
-      }
+      },
     }
   }
 
@@ -1579,7 +1594,11 @@ impl FolderManager {
                     user.role.clone() as i32,
                     user.access_level as i32,
                     order as i32,
-                    user.user_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
+                    user
+                      .user_id
+                      .as_ref()
+                      .map(|id| id.to_string())
+                      .unwrap_or_default(),
                   )
                 })
                 .collect::<Vec<_>>();
@@ -1692,7 +1711,11 @@ impl FolderManager {
             Some(user.avatar_url)
           },
           pending_invitation: false,
-          user_id: if user.user_id.is_empty() { None } else { Some(user.user_id) },
+          user_id: if user.user_id.is_empty() {
+            None
+          } else {
+            Some(user.user_id)
+          },
         })
         .collect();
 
@@ -1728,7 +1751,11 @@ impl FolderManager {
                   user.role.clone() as i32,
                   user.access_level as i32,
                   order as i32,
-                  user.user_id.as_ref().map(|id| id.to_string()).unwrap_or_default(),
+                  user
+                    .user_id
+                    .as_ref()
+                    .map(|id| id.to_string())
+                    .unwrap_or_default(),
                 )
               })
               .collect::<Vec<_>>();
@@ -1900,10 +1927,7 @@ impl FolderManager {
   /// Used for sidebar to display all published documents
   #[tracing::instrument(level = "debug", skip(self), err)]
   pub async fn list_all_published_views(&self) -> FlowyResult<ListAllPublishedCollabResponse> {
-    let response = self
-      .cloud_service()?
-      .list_all_published_views()
-      .await?;
+    let response = self.cloud_service()?.list_all_published_views().await?;
     Ok(response)
   }
 
@@ -2217,7 +2241,9 @@ impl FolderManager {
       let mut folder = lock.write().await;
 
       let was_favorite_key = format!("trash_fav_{}", trash_id);
-      let was_favorite = self.store_preferences.get_bool_or_default(&was_favorite_key);
+      let was_favorite = self
+        .store_preferences
+        .get_bool_or_default(&was_favorite_key);
 
       folder.delete_trash_view_ids(vec![trash_id.to_string()]);
 
@@ -2287,7 +2313,9 @@ impl FolderManager {
         }
       }
     }
-    let _ = self.store_preferences.remove(&format!("trash_fav_{}", view_id));
+    let _ = self
+      .store_preferences
+      .remove(&format!("trash_fav_{}", view_id));
     Ok(())
   }
 
@@ -2451,12 +2479,18 @@ impl FolderManager {
     }
   }
 
-  fn get_handler_for_layout_pb(&self, layout_pb: &ViewLayoutPB) -> FlowyResult<Arc<dyn FolderOperationHandler>> {
+  fn get_handler_for_layout_pb(
+    &self,
+    layout_pb: &ViewLayoutPB,
+  ) -> FlowyResult<Arc<dyn FolderOperationHandler>> {
     // Special handling for Whiteboard, Folder, and Notebook types
     // These types are mapped to ViewLayout::Document in the conversion, but we want to find
     // their dedicated handlers by checking extra_handlers
     // Note: Folder and Notebook views reuse DocumentFolderOperationHandler (just different icons in UI)
-    if matches!(layout_pb, ViewLayoutPB::Whiteboard | ViewLayoutPB::Folder | ViewLayoutPB::Notebook) {
+    if matches!(
+      layout_pb,
+      ViewLayoutPB::Whiteboard | ViewLayoutPB::Folder | ViewLayoutPB::Notebook
+    ) {
       // Determine the target handler name
       let target_handler_name = match layout_pb {
         ViewLayoutPB::Whiteboard => "WhiteboardFolderOperationHandler",
@@ -2465,7 +2499,7 @@ impl FolderManager {
         ViewLayoutPB::Notebook => "DocumentFolderOperationHandler",
         _ => unreachable!(),
       };
-      
+
       // Search in extra_handlers first
       {
         let extra_handlers_guard = self.extra_handlers.read();
@@ -2475,21 +2509,21 @@ impl FolderManager {
           }
         }
       }
-      
+
       // If not found in extra_handlers, try operation_handlers (for Document handler)
       if matches!(layout_pb, ViewLayoutPB::Folder | ViewLayoutPB::Notebook) {
         if let Some(handler) = self.operation_handlers.get(&ViewLayout::Document) {
           return Ok(handler.clone());
         }
       }
-      
+
       // If no dedicated handler found, log a warning and fall back to Document handler
       tracing::warn!(
         "[FolderManager] No dedicated handler found for {:?}, falling back to Document handler",
         layout_pb
       );
     }
-    
+
     let view_layout: ViewLayout = layout_pb.clone().into();
     self.get_handler(&view_layout)
   }
@@ -2608,7 +2642,7 @@ impl FolderManager {
 
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
-      
+
       // Get all private view IDs
       let private_view_ids = folder
         .get_my_private_sections()
@@ -2618,10 +2652,8 @@ impl FolderManager {
 
       // Get all actual views that exist in the workspace
       let existing_views = folder.get_views_belong_to(&workspace_id.to_string());
-      let existing_view_ids: std::collections::HashSet<String> = existing_views
-        .iter()
-        .map(|view| view.id.clone())
-        .collect();
+      let existing_view_ids: std::collections::HashSet<String> =
+        existing_views.iter().map(|view| view.id.clone()).collect();
 
       // Find duplicate and invalid private view IDs
       let mut seen_ids = std::collections::HashSet::new();
@@ -2654,10 +2686,10 @@ impl FolderManager {
           .into_iter()
           .map(|section| section.id)
           .collect();
-        
+
         // Then remove all private view IDs
         folder.delete_private_view_ids(private_section_ids);
-        
+
         // Then add back only the valid ones
         if !valid_private_view_ids.is_empty() {
           folder.add_private_view_ids(valid_private_view_ids);
@@ -2665,8 +2697,11 @@ impl FolderManager {
 
         // Notify workspace update
         notify_did_update_workspace(&workspace_id, &folder);
-        
-        info!("Cleaned up {} duplicate/invalid private view entries", cleaned_count);
+
+        info!(
+          "Cleaned up {} duplicate/invalid private view entries",
+          cleaned_count
+        );
       }
     }
 
@@ -2810,7 +2845,8 @@ impl FolderManager {
               .shared_views
               .iter()
               .map(|shared_view| {
-                let doc_workspace_id = shared_view.workspace_id
+                let doc_workspace_id = shared_view
+                  .workspace_id
                   .as_ref()
                   .map(|id| id.to_string())
                   .unwrap_or_else(|| cloud_workspace_id.to_string());
@@ -2852,13 +2888,17 @@ impl FolderManager {
                   .max()
                   .unwrap_or(AFAccessLevel::ReadOnly);
 
-                let workspace_id_str = shared_view.workspace_id
+                let workspace_id_str = shared_view
+                  .workspace_id
                   .as_ref()
                   .map(|id| id.to_string())
                   .unwrap_or_else(|| cloud_workspace_id.to_string());
 
                 // Use local folder view if available, otherwise create minimal ViewPB
-                if let Some(view) = all_views.iter().find(|v| v.id == shared_view.view_id.to_string()) {
+                if let Some(view) = all_views
+                  .iter()
+                  .find(|v| v.id == shared_view.view_id.to_string())
+                {
                   let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
                     all_views
                       .iter()
@@ -3022,12 +3062,12 @@ impl FolderManager {
   async fn start_auto_cleanup_task(manager: Arc<Self>) {
     use std::time::Duration;
     use tokio::time::interval;
-    
+
     let mut interval = interval(Duration::from_secs(3600)); // Run every hour
-    
+
     loop {
       interval.tick().await;
-      
+
       let _ = manager.cleanup_expired_trash().await;
     }
   }
@@ -3039,9 +3079,9 @@ impl FolderManager {
   ) {
     use std::time::Duration;
     use tokio::time::interval;
-    
+
     let mut interval = interval(Duration::from_secs(3600)); // Run every hour
-    
+
     loop {
       interval.tick().await;
     }
@@ -3052,12 +3092,12 @@ impl FolderManager {
     const SEVEN_DAYS_IN_SECONDS: i64 = 7 * 24 * 60 * 60;
     let current_timestamp = lib_infra::util::timestamp();
     let cutoff_timestamp = current_timestamp - SEVEN_DAYS_IN_SECONDS;
-    
+
     if let Some(lock) = self.mutex_folder.load_full() {
       let expired_trash_ids = {
         let folder = lock.read().await;
         let trash_info = folder.get_my_trash_info();
-        
+
         // Filter out trash items that are older than 7 days
         // created_at represents when the item was moved to trash
         trash_info
@@ -3066,25 +3106,25 @@ impl FolderManager {
           .map(|trash| trash.id)
           .collect::<Vec<String>>()
       };
-      
+
       if !expired_trash_ids.is_empty() {
         for trash_id in expired_trash_ids {
           let _ = self.delete_trash(&trash_id).await;
         }
-        
+
         // Get updated trash info and notify frontend
         let updated_trash = {
           let folder = lock.read().await;
           folder.get_my_trash_info()
         };
-        
+
         let repeated_trash: RepeatedTrashPB = updated_trash.into();
         folder_notification_builder("trash", FolderNotification::DidUpdateTrash)
           .payload(repeated_trash)
           .send();
       }
     }
-    
+
     Ok(())
   }
 }

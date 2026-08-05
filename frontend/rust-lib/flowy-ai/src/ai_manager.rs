@@ -278,15 +278,9 @@ impl AIManager {
       .await
     {
       if err.is_record_not_found() {
-        warn!(
-          "[Chat] 云端会话已不存在 chat_id={}, err={:?}",
-          chat_id, err
-        );
+        warn!("[Chat] 云端会话已不存在 chat_id={}, err={:?}", chat_id, err);
       } else {
-        warn!(
-          "[Chat] 删除云端会话失败 chat_id={}, err={:?}",
-          chat_id, err
-        );
+        warn!("[Chat] 删除云端会话失败 chat_id={}, err={:?}", chat_id, err);
         return Err(err);
       }
     }
@@ -577,7 +571,7 @@ impl AIManager {
 
     let is_local_mode = self.user_service.is_local_model().await?;
     info!("[Model Selection] is_local_mode={}", is_local_mode);
-    
+
     if is_local_mode {
       info!("[Model Selection] 本地模式，直接返回本地模型");
       return self.get_local_available_models(Some(source)).await;
@@ -591,21 +585,20 @@ impl AIManager {
     // setting_only=false 时才使用已保存的本地模型名称进行过滤
     let local_model_name = if setting_only {
       info!("[Model Selection] setting_only=true，返回所有服务器模型");
-      None  // 设置页面：返回所有服务器模型
+      None // 设置页面：返回所有服务器模型
     } else {
       // Chat页面：使用已保存的模型名称
       let name = self.local_ai.get_local_ai_setting().chat_model_name;
-      info!("[Model Selection] setting_only=false, chat_model_name={}", name);
-      if name.is_empty() {
-        None
-      } else {
-        Some(name)
-      }
+      info!(
+        "[Model Selection] setting_only=false, chat_model_name={}",
+        name
+      );
+      if name.is_empty() { None } else { Some(name) }
     };
 
     let source_key = SourceKey::new(source);
     let model_control = self.model_control.lock().await;
-    
+
     info!("[Model Selection] 正在获取 active_model...");
     let active_model = model_control
       .get_active_model(&workspace_id, &source_key)
@@ -618,7 +611,10 @@ impl AIManager {
       .await;
     info!("[Model Selection] 获取到 {} 个模型", all_models.len());
     for (i, model) in all_models.iter().enumerate() {
-      info!("  [Model {}] name={}, is_local={}", i, model.name, model.is_local);
+      info!(
+        "  [Model {}] name={}, is_local={}",
+        i, model.name, model.is_local
+      );
     }
     drop(model_control);
 

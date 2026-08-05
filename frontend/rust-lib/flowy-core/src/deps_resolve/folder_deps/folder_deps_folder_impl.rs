@@ -54,7 +54,10 @@ impl FolderOperationHandler for FolderFolderOperation {
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
     info!("[FolderFolderOperation] Opening folder view: {}", view_id);
     // Folder 使用 Document 的底层实现来存储其元数据
-    self.document_manager()?.open_document(view_id, None).await?;
+    self
+      .document_manager()?
+      .open_document(view_id, None)
+      .await?;
     Ok(())
   }
 
@@ -72,14 +75,20 @@ impl FolderOperationHandler for FolderFolderOperation {
         Ok(())
       },
       Err(e) => {
-        error!("[FolderFolderOperation] Failed to delete folder: {}, error: {}", view_id, e);
+        error!(
+          "[FolderFolderOperation] Failed to delete folder: {}, error: {}",
+          view_id, e
+        );
         Err(e)
       },
     }
   }
 
   async fn duplicate_view(&self, view_id: &Uuid) -> Result<Bytes, FlowyError> {
-    info!("[FolderFolderOperation] Duplicating folder view: {}", view_id);
+    info!(
+      "[FolderFolderOperation] Duplicating folder view: {}",
+      view_id
+    );
     // Folder 可以被复制
     let data: DocumentDataPB = self
       .document_manager()?
@@ -108,7 +117,7 @@ impl FolderOperationHandler for FolderFolderOperation {
       "[FolderFolderOperation] Creating folder with view data: {}",
       params.view_id
     );
-    
+
     // 检查是否是 Folder 类型
     if params.layout != ViewLayoutPB::Folder {
       error!(
@@ -123,12 +132,12 @@ impl FolderOperationHandler for FolderFolderOperation {
       ViewData::Data(data) => Some(DocumentDataPB::try_from(data)?),
       ViewData::Empty => None,
     };
-    
+
     let encoded_collab = self
       .document_manager()?
       .create_document(user_id, &params.view_id, data.map(|d| d.into()))
       .await?;
-    
+
     info!(
       "[FolderFolderOperation] Created folder with view data: {}",
       params.view_id
@@ -148,14 +157,17 @@ impl FolderOperationHandler for FolderFolderOperation {
       "[FolderFolderOperation] Creating default folder view: {}",
       view_id
     );
-    
+
     match self
       .document_manager()?
       .create_document(user_id, view_id, None)
       .await
     {
       Ok(_) => {
-        info!("[FolderFolderOperation] Created default folder: {}", view_id);
+        info!(
+          "[FolderFolderOperation] Created default folder: {}",
+          view_id
+        );
         Ok(())
       },
       Err(err) => {
@@ -163,7 +175,10 @@ impl FolderOperationHandler for FolderFolderOperation {
           info!("[FolderFolderOperation] Folder already exists: {}", view_id);
           Ok(())
         } else {
-          error!("[FolderFolderOperation] Failed to create folder: {}, error: {}", view_id, err);
+          error!(
+            "[FolderFolderOperation] Failed to create folder: {}, error: {}",
+            view_id, err
+          );
           Err(err)
         }
       },
@@ -178,7 +193,10 @@ impl FolderOperationHandler for FolderFolderOperation {
     _import_type: ImportType,
     bytes: Vec<u8>,
   ) -> Result<Vec<ImportedData>, FlowyError> {
-    info!("[FolderFolderOperation] Importing folder from bytes: {}", view_id);
+    info!(
+      "[FolderFolderOperation] Importing folder from bytes: {}",
+      view_id
+    );
     let data = DocumentDataPB::try_from(Bytes::from(bytes))?;
     let encoded_collab = self
       .document_manager()?
@@ -201,5 +219,3 @@ impl FolderOperationHandler for FolderFolderOperation {
     Err(FlowyError::not_support().with_context("Folder file import is not supported yet"))
   }
 }
-
-

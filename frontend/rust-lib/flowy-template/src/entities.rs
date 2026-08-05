@@ -74,7 +74,7 @@ impl std::convert::From<i32> for TemplateEventPB {
 
 impl TryFrom<&[u8]> for TemplateItemPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -82,7 +82,7 @@ impl TryFrom<&[u8]> for TemplateItemPB {
 
 impl TryFrom<&[u8]> for RepeatedTemplateItemPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -90,7 +90,7 @@ impl TryFrom<&[u8]> for RepeatedTemplateItemPB {
 
 impl TryFrom<&[u8]> for TemplateIdPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -98,7 +98,7 @@ impl TryFrom<&[u8]> for TemplateIdPB {
 
 impl TryFrom<&[u8]> for TemplateCategoryPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -106,7 +106,7 @@ impl TryFrom<&[u8]> for TemplateCategoryPB {
 
 impl TryFrom<&[u8]> for TemplateSearchPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -114,7 +114,7 @@ impl TryFrom<&[u8]> for TemplateSearchPB {
 
 impl TryFrom<&[u8]> for AddTemplateToMyTemplatesPayloadPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -122,7 +122,7 @@ impl TryFrom<&[u8]> for AddTemplateToMyTemplatesPayloadPB {
 
 impl TryFrom<&[u8]> for RemoveTemplateFromMyTemplatesPayloadPB {
   type Error = serde_json::Error;
-  
+
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     serde_json::from_slice(data)
   }
@@ -130,7 +130,7 @@ impl TryFrom<&[u8]> for RemoveTemplateFromMyTemplatesPayloadPB {
 
 impl TryInto<Vec<u8>> for RepeatedTemplateItemPB {
   type Error = serde_json::Error;
-  
+
   fn try_into(self) -> Result<Vec<u8>, Self::Error> {
     serde_json::to_vec(&self)
   }

@@ -52,34 +52,52 @@ impl FolderOperationHandler for NotebookFolderOperation {
   }
 
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[NotebookFolderOperation] Opening notebook view: {}", view_id);
+    info!(
+      "[NotebookFolderOperation] Opening notebook view: {}",
+      view_id
+    );
     // Notebook 使用 Document 的底层实现来存储其元数据
-    self.document_manager()?.open_document(view_id, None).await?;
+    self
+      .document_manager()?
+      .open_document(view_id, None)
+      .await?;
     Ok(())
   }
 
   async fn close_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[NotebookFolderOperation] Closing notebook view: {}", view_id);
+    info!(
+      "[NotebookFolderOperation] Closing notebook view: {}",
+      view_id
+    );
     self.document_manager()?.close_document(view_id).await?;
     Ok(())
   }
 
   async fn delete_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    info!("[NotebookFolderOperation] Deleting notebook view: {}", view_id);
+    info!(
+      "[NotebookFolderOperation] Deleting notebook view: {}",
+      view_id
+    );
     match self.document_manager()?.delete_document(view_id).await {
       Ok(_) => {
         info!("[NotebookFolderOperation] Deleted notebook: {}", view_id);
         Ok(())
       },
       Err(e) => {
-        error!("[NotebookFolderOperation] Failed to delete notebook: {}, error: {}", view_id, e);
+        error!(
+          "[NotebookFolderOperation] Failed to delete notebook: {}, error: {}",
+          view_id, e
+        );
         Err(e)
       },
     }
   }
 
   async fn duplicate_view(&self, view_id: &Uuid) -> Result<Bytes, FlowyError> {
-    info!("[NotebookFolderOperation] Duplicating notebook view: {}", view_id);
+    info!(
+      "[NotebookFolderOperation] Duplicating notebook view: {}",
+      view_id
+    );
     // Notebook 可以被复制
     let data: DocumentDataPB = self
       .document_manager()?
@@ -108,7 +126,7 @@ impl FolderOperationHandler for NotebookFolderOperation {
       "[NotebookFolderOperation] Creating notebook with view data: {}",
       params.view_id
     );
-    
+
     // 检查是否是 Notebook 类型
     if params.layout != ViewLayoutPB::Notebook {
       error!(
@@ -123,12 +141,12 @@ impl FolderOperationHandler for NotebookFolderOperation {
       ViewData::Data(data) => Some(DocumentDataPB::try_from(data)?),
       ViewData::Empty => None,
     };
-    
+
     let encoded_collab = self
       .document_manager()?
       .create_document(user_id, &params.view_id, data.map(|d| d.into()))
       .await?;
-    
+
     info!(
       "[NotebookFolderOperation] Created notebook with view data: {}",
       params.view_id
@@ -148,22 +166,31 @@ impl FolderOperationHandler for NotebookFolderOperation {
       "[NotebookFolderOperation] Creating default notebook view: {}",
       view_id
     );
-    
+
     match self
       .document_manager()?
       .create_document(user_id, view_id, None)
       .await
     {
       Ok(_) => {
-        info!("[NotebookFolderOperation] Created default notebook: {}", view_id);
+        info!(
+          "[NotebookFolderOperation] Created default notebook: {}",
+          view_id
+        );
         Ok(())
       },
       Err(err) => {
         if err.is_already_exists() {
-          info!("[NotebookFolderOperation] Notebook already exists: {}", view_id);
+          info!(
+            "[NotebookFolderOperation] Notebook already exists: {}",
+            view_id
+          );
           Ok(())
         } else {
-          error!("[NotebookFolderOperation] Failed to create notebook: {}, error: {}", view_id, err);
+          error!(
+            "[NotebookFolderOperation] Failed to create notebook: {}, error: {}",
+            view_id, err
+          );
           Err(err)
         }
       },
@@ -178,7 +205,10 @@ impl FolderOperationHandler for NotebookFolderOperation {
     _import_type: ImportType,
     bytes: Vec<u8>,
   ) -> Result<Vec<ImportedData>, FlowyError> {
-    info!("[NotebookFolderOperation] Importing notebook from bytes: {}", view_id);
+    info!(
+      "[NotebookFolderOperation] Importing notebook from bytes: {}",
+      view_id
+    );
     let data = DocumentDataPB::try_from(Bytes::from(bytes))?;
     let encoded_collab = self
       .document_manager()?
@@ -201,5 +231,3 @@ impl FolderOperationHandler for NotebookFolderOperation {
     Err(FlowyError::not_support().with_context("Notebook file import is not supported yet"))
   }
 }
-
-

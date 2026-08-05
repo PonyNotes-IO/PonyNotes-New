@@ -31,7 +31,8 @@ pub fn make_plugins(
   let ai_plugin = flowy_ai::event_map::init(ai_manager);
   let file_storage_plugin = flowy_storage::event_map::init(file_storage_manager);
   let whiteboard_plugin = flowy_whiteboard::event_map::init(whiteboard_manager);
-  let handwriting_saber_plugin = flowy_handwriting_saber::event_map::init(handwriting_saber_manager);
+  let handwriting_saber_plugin =
+    flowy_handwriting_saber::event_map::init(handwriting_saber_manager);
   vec![
     user_plugin,
     folder_plugin,

@@ -25,4 +25,3 @@ pub enum FileStorageEvent {
   #[event(input = "QueryFilePB", output = "FileStatePB")]
   QueryFile = 1,
 }
-

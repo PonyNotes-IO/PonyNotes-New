@@ -27,6 +27,7 @@ lazy_static = "1.4.0"
 tracing.workspace = true
 lib-log.workspace = true
 semver = "1.0.22"
+rustls = { version = "0.23.39", default-features = false, features = ["ring"] }
 
 # workspace
 lib-dispatch = { workspace = true, features = ["local_set"] }

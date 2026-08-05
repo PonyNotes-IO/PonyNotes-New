@@ -1,4 +1,4 @@
-use diesel::{RunQueryDsl, insert_into, OptionalExtension};
+use diesel::{OptionalExtension, RunQueryDsl, insert_into};
 use flowy_error::FlowyResult;
 use flowy_sqlite::schema::workspace_shared_view;
 use flowy_sqlite::schema::workspace_shared_view::dsl;
@@ -122,11 +122,7 @@ pub fn replace_all_workspace_shared_views<T: Into<WorkspaceSharedViewTable> + Cl
   uid: i64,
   new_shared_views: &[T],
 ) -> FlowyResult<()> {
-  delete(
-    workspace_shared_view::table
-      .filter(workspace_shared_view::uid.eq(uid)),
-  )
-  .execute(conn)?;
+  delete(workspace_shared_view::table.filter(workspace_shared_view::uid.eq(uid))).execute(conn)?;
 
   upsert_workspace_shared_views(conn, _workspace_id, uid, new_shared_views)?;
 

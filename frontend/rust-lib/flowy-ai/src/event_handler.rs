@@ -42,7 +42,10 @@ pub(crate) async fn stream_chat_message_handler(
   } = data;
 
   if has_images {
-    tracing::info!("[EventHandler] 收到带图片的消息，图片数量: {}", images.len());
+    tracing::info!(
+      "[EventHandler] 收到带图片的消息，图片数量: {}",
+      images.len()
+    );
   }
 
   let message_type = match message_type {

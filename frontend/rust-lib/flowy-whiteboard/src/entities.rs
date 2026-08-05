@@ -2,8 +2,6 @@ use flowy_derive::ProtoBuf;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WhiteboardData(pub HashMap<String, serde_json::Value>);
 
@@ -107,7 +105,6 @@ pub struct FileData {
 }
 
 impl WhiteboardData {
-
   /// 从 JSON 字符串解析
   pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
     serde_json::from_str(json)

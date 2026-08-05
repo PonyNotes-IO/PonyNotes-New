@@ -1,9 +1,9 @@
-use flowy_whiteboard::{WhiteboardManager, WhiteboardUserService};
-use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
-use flowy_user::services::authenticate_user::AuthenticateUser;
-use flowy_error::FlowyError;
 use collab_integrate::collab_builder::AppFlowyCollabBuilder;
 use collab_plugins::CollabKVDB;
+use flowy_error::FlowyError;
+use flowy_user::services::authenticate_user::AuthenticateUser;
+use flowy_whiteboard::{WhiteboardManager, WhiteboardUserService};
+use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
 
@@ -15,10 +15,8 @@ impl WhiteboardDepsResolver {
     collab_builder: Weak<AppFlowyCollabBuilder>,
     cloud_service: Arc<dyn WhiteboardCloudService>,
   ) -> Arc<WhiteboardManager> {
-    let user_service = Arc::new(WhiteboardUserServiceImpl {
-      authenticate_user,
-    });
-    
+    let user_service = Arc::new(WhiteboardUserServiceImpl { authenticate_user });
+
     Arc::new(WhiteboardManager::new(
       user_service,
       collab_builder,
@@ -39,7 +37,7 @@ impl WhiteboardUserService for WhiteboardUserServiceImpl {
       .ok_or(FlowyError::internal().with_context("Authenticate user is dropped"))?
       .user_id()
   }
-  
+
   fn device_id(&self) -> Result<String, FlowyError> {
     self
       .authenticate_user
@@ -47,7 +45,7 @@ impl WhiteboardUserService for WhiteboardUserServiceImpl {
       .ok_or(FlowyError::internal().with_context("Authenticate user is dropped"))?
       .device_id()
   }
-  
+
   fn workspace_id(&self) -> Result<Uuid, FlowyError> {
     self
       .authenticate_user
@@ -55,7 +53,7 @@ impl WhiteboardUserService for WhiteboardUserServiceImpl {
       .ok_or(FlowyError::internal().with_context("Authenticate user is dropped"))?
       .workspace_id()
   }
-  
+
   fn collab_db(&self, uid: i64) -> Result<Weak<CollabKVDB>, FlowyError> {
     self
       .authenticate_user
@@ -64,5 +62,3 @@ impl WhiteboardUserService for WhiteboardUserServiceImpl {
       .get_collab_db(uid)
   }
 }
-
-

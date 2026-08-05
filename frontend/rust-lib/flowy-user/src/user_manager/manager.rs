@@ -615,7 +615,9 @@ impl UserManager {
     old_user_profile: &UserProfile,
     workspace_id: &str,
   ) -> FlowyResult<()> {
-    self.refresh_user_profile_with_force(old_user_profile, workspace_id, false).await
+    self
+      .refresh_user_profile_with_force(old_user_profile, workspace_id, false)
+      .await
   }
 
   #[tracing::instrument(level = "info", skip_all, err)]
@@ -669,7 +671,7 @@ impl UserManager {
           new_user_profile.email,
           new_user_profile.name
         );
-        
+
         // Always save the new user profile from cloud to ensure data consistency
         // Previously we only saved if updated_at was newer, but this could cause
         // issues when phone/email changes don't update the timestamp
@@ -678,7 +680,7 @@ impl UserManager {
           "💾 Saving user profile to local DB: phone={:?}",
           changeset.phone_number
         );
-        
+
         let _ = upsert_user_profile_change(
           uid,
           workspace_id,
@@ -819,12 +821,12 @@ impl UserManager {
     };
     let mut meta = std::collections::HashMap::new();
     meta.insert("notification_type".to_string(), tab_type.to_string());
-    meta.insert("cloud_notification_type".to_string(), notification_type.to_string());
-    meta.insert("payload".to_string(), payload_json.to_string());
     meta.insert(
-      "created_at".to_string(),
-      created_at.to_string(),
+      "cloud_notification_type".to_string(),
+      notification_type.to_string(),
     );
+    meta.insert("payload".to_string(), payload_json.to_string());
+    meta.insert("created_at".to_string(), created_at.to_string());
 
     let reminder_pb = crate::entities::ReminderPB {
       id: id.to_string(),
@@ -846,12 +848,17 @@ impl UserManager {
     send_notification("user_reminder", UserNotification::DidUpdateReminder)
       .payload(reminder_pb)
       .send();
-    info!("Forwarded system notification {} to Flutter as refresh signal", id);
+    info!(
+      "Forwarded system notification {} to Flutter as refresh signal",
+      id
+    );
   }
 
   /// 订阅系统通知并处理
   /// 注意：此方法需要在 Arc<UserManager> 上调用
-  pub fn subscribe_system_notifications_with_manager<T: flowy_user_pub::cloud::UserCloudServiceProvider + 'static>(
+  pub fn subscribe_system_notifications_with_manager<
+    T: flowy_user_pub::cloud::UserCloudServiceProvider + 'static,
+  >(
     manager: Arc<UserManager>,
     cloud_service: &Arc<T>,
   ) {
@@ -880,7 +887,10 @@ impl UserManager {
             Ok(m) => m,
             // Lagged: 广播信道满了丢弃了部分消息，继续循环不要退出
             Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-              warn!("system notification receiver lagged, skipped {} messages", n);
+              warn!(
+                "system notification receiver lagged, skipped {} messages",
+                n
+              );
               continue;
             },
             // 信道关闭（server 被替换），退出内循环，外循环将重新订阅
@@ -899,9 +909,7 @@ impl UserManager {
             if let Some(manager) = weak_manager.upgrade() {
               if matches!(
                 notification.notification_type.as_str(),
-                "collab_permission_changed"
-                  | "collab_shared"
-                  | "collab_share_link_self_received"
+                "collab_permission_changed" | "collab_shared" | "collab_share_link_self_received"
               ) {
                 if let Ok(payload) = serde_json::from_str::<Value>(&notification.payload_json) {
                   if let Some(view_id) = payload
@@ -909,9 +917,8 @@ impl UserManager {
                     .and_then(|view_id| view_id.as_str())
                     .map(ToString::to_string)
                   {
-                    let access_removed =
-                      payload.get("event").and_then(|event| event.as_str())
-                        == Some("access_removed");
+                    let access_removed = payload.get("event").and_then(|event| event.as_str())
+                      == Some("access_removed");
 
                     if access_removed {
                       // Full access revocation is recipient-only. Keep it off the
@@ -943,9 +950,15 @@ impl UserManager {
               };
               let mut meta = std::collections::HashMap::new();
               meta.insert("notification_type".to_string(), tab_type.to_string());
-              meta.insert("cloud_notification_type".to_string(), notification.notification_type.clone());
+              meta.insert(
+                "cloud_notification_type".to_string(),
+                notification.notification_type.clone(),
+              );
               meta.insert("payload".to_string(), notification.payload_json.clone());
-              meta.insert("created_at".to_string(), notification.created_at.to_string());
+              meta.insert(
+                "created_at".to_string(),
+                notification.created_at.to_string(),
+              );
 
               let reminder_pb = crate::entities::ReminderPB {
                 id: notification.id.clone(),
@@ -980,9 +993,14 @@ impl UserManager {
                 info!("workspace_member_removed received, applying immediate local removal");
 
                 // 从 payload_json 解析 workspace_id
-                let removed_workspace_id = serde_json::from_str::<Value>(&notification.payload_json)
-                  .ok()
-                  .and_then(|v| v.get("workspace_id").and_then(|id| id.as_str()).map(|s| s.to_string()));
+                let removed_workspace_id =
+                  serde_json::from_str::<Value>(&notification.payload_json)
+                    .ok()
+                    .and_then(|v| {
+                      v.get("workspace_id")
+                        .and_then(|id| id.as_str())
+                        .map(|s| s.to_string())
+                    });
 
                 if let Ok(session) = manager.get_session() {
                   let uid = session.user_id;
@@ -991,8 +1009,14 @@ impl UserManager {
                   if let Some(ref ws_id) = removed_workspace_id {
                     if let Ok(conn) = manager.db_connection(uid) {
                       match delete_user_workspace(conn, ws_id) {
-                        Ok(_) => info!("Deleted workspace {} from local DB after member removal", ws_id),
-                        Err(e) => warn!("Failed to delete workspace {} from local DB: {:?}", ws_id, e),
+                        Ok(_) => info!(
+                          "Deleted workspace {} from local DB after member removal",
+                          ws_id
+                        ),
+                        Err(e) => warn!(
+                          "Failed to delete workspace {} from local DB: {:?}",
+                          ws_id, e
+                        ),
                       }
                     }
                     // 查询本地剩余工作区列表并立即通知 Flutter 层切换工作区
@@ -1003,7 +1027,8 @@ impl UserManager {
                             "Sending DidUpdateUserWorkspaces after removal: {} workspaces remain",
                             workspaces.len()
                           );
-                          let repeated_pb = crate::entities::RepeatedUserWorkspacePB::from(workspaces);
+                          let repeated_pb =
+                            crate::entities::RepeatedUserWorkspacePB::from(workspaces);
                           send_notification(uid, UserNotification::DidUpdateUserWorkspaces)
                             .payload(repeated_pb)
                             .send();
@@ -1034,8 +1059,8 @@ impl UserManager {
               }
             }
           }
-        }  // end inner message loop
-      }  // end outer retry loop
+        } // end inner message loop
+      } // end outer retry loop
     });
   }
 
@@ -1106,7 +1131,9 @@ impl UserManager {
     // This is a placeholder. The actual implementation should be done in Dart
     // by calling the /api/user/verify-phone endpoint directly via HTTP.
     // The backend API is already implemented in user_verify.rs
-    Err(FlowyError::not_support().with_context("Use Dart HTTP client to call /api/user/verify-phone"))
+    Err(
+      FlowyError::not_support().with_context("Use Dart HTTP client to call /api/user/verify-phone"),
+    )
   }
 
   #[instrument(level = "info", skip_all)]
@@ -1215,7 +1242,6 @@ fn is_same_visible_user_profile(a: &UserProfile, b: &UserProfile) -> bool {
     && a.auth_type == b.auth_type
     && a.workspace_type == b.workspace_type
 }
-
 
 #[instrument(level = "info", skip_all, err)]
 fn save_user_token(

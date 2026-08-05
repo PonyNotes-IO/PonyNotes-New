@@ -3,8 +3,8 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use collab::core::collab::DataSource;
 use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
 use collab::util::MapExt;
-use collab_entity::EncodedCollab;
 use collab_entity::define::DOCUMENT_ROOT;
+use collab_entity::EncodedCollab;
 use std::borrow::BorrowMut;
 use tracing::trace;
 

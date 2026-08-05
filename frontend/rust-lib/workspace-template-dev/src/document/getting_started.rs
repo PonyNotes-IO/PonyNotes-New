@@ -1,4 +1,3 @@
-
 use async_trait::async_trait;
 
 use collab_database::database::timestamp;
@@ -41,7 +40,6 @@ impl GettingStartedTemplate {
 
     Ok((general_data, welcome_letter_data))
   }
-
 }
 
 #[async_trait]
@@ -63,10 +61,7 @@ impl WorkspaceTemplate for GettingStartedTemplate {
     let welcome_letter_view_uuid = gen_view_id().to_string();
 
     let (general_data, welcome_letter_data) = self
-      .create_document_data(
-        general_view_uuid.clone(),
-        welcome_letter_view_uuid.clone(),
-      )
+      .create_document_data(general_view_uuid.clone(), welcome_letter_view_uuid.clone())
       .await?;
 
     // 唯一的默认空间，内含一封欢迎信。二者用户均可自行删除或保留。

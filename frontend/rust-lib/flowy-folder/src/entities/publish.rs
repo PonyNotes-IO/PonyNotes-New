@@ -9,28 +9,28 @@ use super::{RepeatedViewIdPB, ViewIconPB, ViewLayoutPB};
 pub struct AllPublishedCollabItemPB {
   #[pb(index = 1)]
   pub published_view_id: String,
-  
+
   #[pb(index = 2)]
   pub view_id: String,
-  
+
   #[pb(index = 3)]
   pub workspace_id: String,
-  
+
   #[pb(index = 4)]
   pub name: String,
-  
+
   #[pb(index = 5)]
   pub publish_name: String,
-  
+
   #[pb(index = 6, one_of)]
   pub publisher_email: Option<String>,
-  
+
   #[pb(index = 7)]
   pub published_at: i64,
-  
+
   #[pb(index = 8)]
   pub is_received: bool,
-  
+
   #[pb(index = 9)]
   pub is_readonly: bool,
 }

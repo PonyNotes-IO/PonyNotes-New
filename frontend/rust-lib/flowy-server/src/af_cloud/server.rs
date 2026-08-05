@@ -406,7 +406,9 @@ async fn attempt_reconnect(
   cancellation_token.store(Arc::new(new_cancel_token.clone()));
 
   // 缩短延迟：0-3秒随机延迟（原来是2-10秒），提高响应速度
-  let delay_seconds = rand::thread_rng().gen_range(minimum_delay_in_secs.saturating_sub(1)..3);
+  // 注意 minimum_delay_in_secs 可能大于 3（如断线重传传 5），
+  // gen_range(a..b) 在 a>=b 时 panic("cannot sample empty range")，故上限取 max(3, minimum)
+  let delay_seconds = rand::thread_rng().gen_range(0..minimum_delay_in_secs.max(3));
   // 确保至少延迟100ms
   let delay_ms = std::cmp::max(delay_seconds * 1000, 100);
   let ws_client_clone = ws_client.clone();

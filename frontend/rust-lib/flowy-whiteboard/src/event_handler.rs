@@ -2,7 +2,7 @@ use crate::entities::{CreateWhiteboardPayloadPB, UpdateWhiteboardPayloadPB, Whit
 use crate::manager::WhiteboardManager;
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder::entities::ViewIdPB;
-use lib_dispatch::prelude::{AFPluginData, AFPluginState, data_result_ok, DataResult};
+use lib_dispatch::prelude::{data_result_ok, AFPluginData, AFPluginState, DataResult};
 use std::sync::{Arc, Weak};
 use tracing::{debug, info, instrument};
 use uuid::Uuid;
@@ -23,7 +23,7 @@ pub(crate) async fn create_whiteboard_handler(
 ) -> FlowyResult<()> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.view_id)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
@@ -53,13 +53,19 @@ pub(crate) async fn open_whiteboard_handler(
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
 
-  debug!("[Whiteboard] open_whiteboard_handler called, ViewID: {}", payload.value);
+  debug!(
+    "[Whiteboard] open_whiteboard_handler called, ViewID: {}",
+    payload.value
+  );
 
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
   let json_data = manager.get_whiteboard_data(&view_id).await?;
-  debug!("[Whiteboard] Got whiteboard data, length: {} bytes", json_data.len());
+  debug!(
+    "[Whiteboard] Got whiteboard data, length: {} bytes",
+    json_data.len()
+  );
 
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,
@@ -85,7 +91,9 @@ pub(crate) async fn update_whiteboard_handler(
   let view_id = Uuid::parse_str(&payload.view_id)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  manager.update_whiteboard(&view_id, &payload.json_data).await?;
+  manager
+    .update_whiteboard(&view_id, &payload.json_data)
+    .await?;
   debug!("[Whiteboard] update_whiteboard completed successfully");
   Ok(())
 }
@@ -98,7 +106,7 @@ pub(crate) async fn close_whiteboard_handler(
 ) -> FlowyResult<()> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
@@ -114,7 +122,7 @@ pub(crate) async fn delete_whiteboard_handler(
 ) -> FlowyResult<()> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
@@ -131,13 +139,19 @@ pub(crate) async fn get_whiteboard_data_handler(
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
 
-  debug!("[Whiteboard] get_whiteboard_data_handler called, ViewID: {}", payload.value);
+  debug!(
+    "[Whiteboard] get_whiteboard_data_handler called, ViewID: {}",
+    payload.value
+  );
 
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
   let json_data = manager.get_whiteboard_data(&view_id).await?;
-  debug!("[Whiteboard] Got whiteboard data, length: {} bytes", json_data.len());
+  debug!(
+    "[Whiteboard] Got whiteboard data, length: {} bytes",
+    json_data.len()
+  );
 
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,
@@ -153,7 +167,7 @@ pub(crate) async fn force_save_whiteboard_handler(
 ) -> FlowyResult<()> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
@@ -169,12 +183,12 @@ pub(crate) async fn get_whiteboard_json_data_handler(
 ) -> DataResult<WhiteboardDataPB, FlowyError> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
   let json_data = manager.get_whiteboard_data(&view_id).await?;
-  
+
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,
     json_data,
@@ -189,13 +203,14 @@ pub(crate) async fn get_encoded_collab_handler(
 ) -> DataResult<WhiteboardDataPB, FlowyError> {
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
-  
+
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
   let encoded_collab = manager.get_encoded_collab(&view_id).await?;
-  let json = serde_json::to_string(&encoded_collab)
-    .map_err(|e| FlowyError::internal().with_context(format!("Failed to serialize encoded collab: {}", e)))?;
+  let json = serde_json::to_string(&encoded_collab).map_err(|e| {
+    FlowyError::internal().with_context(format!("Failed to serialize encoded collab: {}", e))
+  })?;
 
   data_result_ok(WhiteboardDataPB {
     view_id: payload.value,

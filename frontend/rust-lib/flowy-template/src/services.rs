@@ -1,9 +1,9 @@
 use crate::entities::*;
-use flowy_sqlite::schema::user_template_table;
 use chrono::Utc;
 use diesel::prelude::*;
 use flowy_error::FlowyResult;
-use flowy_sqlite::{DBConnection, RunQueryDsl, ConnectionPool};
+use flowy_sqlite::schema::user_template_table;
+use flowy_sqlite::{ConnectionPool, DBConnection, RunQueryDsl};
 use std::sync::Arc;
 
 #[derive(Clone, Queryable, Identifiable, Insertable, AsChangeset)]
@@ -80,7 +80,7 @@ impl TemplateService {
   pub async fn get_my_templates(&self) -> FlowyResult<Vec<TemplateItemPB>> {
     let mut conn = self.pool.get()?;
     let user_id = self.get_current_user_id(&mut conn)?;
-    
+
     let templates = user_template_table::dsl::user_template_table
       .filter(user_template_table::user_id.eq(user_id))
       .order(user_template_table::created_at.desc())
@@ -119,7 +119,7 @@ impl TemplateService {
     diesel::delete(
       user_template_table::dsl::user_template_table
         .filter(user_template_table::user_id.eq(user_id))
-        .filter(user_template_table::template_id.eq(template_id))
+        .filter(user_template_table::template_id.eq(template_id)),
     )
     .execute(&mut *conn)?;
 
@@ -132,7 +132,10 @@ impl TemplateService {
     Ok(vec![])
   }
 
-  pub async fn get_templates_by_category(&self, _category: &str) -> FlowyResult<Vec<TemplateItemPB>> {
+  pub async fn get_templates_by_category(
+    &self,
+    _category: &str,
+  ) -> FlowyResult<Vec<TemplateItemPB>> {
     // This would typically fetch from external API or local cache
     // For now, return empty vector as this should be handled by the Flutter side
     Ok(vec![])

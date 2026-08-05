@@ -88,12 +88,12 @@ pub fn register_handlers(
   let whiteboard_folder_operation = Arc::new(WhiteboardFolderOperation(whiteboard_manager));
   // Folder and Notebook views reuse DocumentFolderOperation - only icons differ in UI
   // No need to register FolderFolderOperation or NotebookFolderOperation
-  
+
   folder_manager.register_operation_handler(ViewLayout::Board, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Grid, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Calendar, database_folder_operation);
   folder_manager.register_operation_handler(ViewLayout::Chat, chat_folder_operation);
-  
+
   // Register whiteboard handler as extra handler
   // (since ViewLayout doesn't have Whiteboard variant)
   // It will be routed by get_handler_for_layout_pb() which searches extra_handlers by name
