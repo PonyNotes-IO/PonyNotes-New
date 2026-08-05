@@ -21,4 +21,38 @@ rustflags = ["-C", "link-arg=-miphoneos-version-min=10.0"]
 rustflags = ["-C", "link-arg=-mios-simulator-version-min=10.0"]
 
 [target.aarch64-linux-android]
-rustflags = ["-C", "link-arg=-Wl,-soname,libdart_ffi.so"]
+# Use the bare clang.exe from NDK as the linker and pass --target via link-args.
+# The NDK's per-API wrapper (aarch64-linux-android33-clang) is a bash script on
+# Windows (no .exe suffix), so cargo cannot invoke it directly.
+# -fuse-ld=lld makes clang pick the GNU-compatible ld.lld (must be on PATH
+# ahead of the system LLVM at D:\LLVM\bin which ships a bare `lld.exe`
+# that doesn't understand --version-script / --strip-all).
+#
+# CRITICAL ordering:
+#   rustc appends each `-C link-arg=` to the end of the driver command line.
+#   The clang driver decides what mode to run the linker in (PE vs ELF) based
+#   on the FIRST `--target=` it sees. If --target=aarch64-linux-android33 comes
+#   AFTER `-Wl,--soname=libdart_ffi.so`, clang hands the soname option to the
+#   default Windows PE ld.lld which rejects it (PE has no DT_SONAME).
+#   So --target=... must be listed BEFORE any -Wl,... link args.
+#
+# DT_SONAME uses ld.lld's `--soname=` form (cloned via -Wl,--soname=...).
+linker = "D:/Android/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe"
+rustflags = [
+  "-C", "link-arg=--target=aarch64-linux-android33",
+  "-C", "link-arg=--sysroot=D:/Android/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/windows-x86_64/sysroot",
+  "-C", "link-arg=-EL",
+  "-C", "link-arg=-fuse-ld=lld",
+  "-C", "link-arg=-Wl,--soname=libdart_ffi.so",
+  "-C", "link-arg=-Wl,--build-id=none",
+]
+
+[target.x86_64-linux-android]
+linker = "D:/Android/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe"
+rustflags = [
+  "-C", "link-arg=--target=x86_64-linux-android33",
+  "-C", "link-arg=--sysroot=D:/Android/android-sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/windows-x86_64/sysroot",
+  "-C", "link-arg=-fuse-ld=lld",
+  "-C", "link-arg=-Wl,--soname=libdart_ffi.so",
+  "-C", "link-arg=-Wl,--build-id=none",
+]
