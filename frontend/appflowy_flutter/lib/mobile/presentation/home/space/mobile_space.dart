@@ -110,18 +110,27 @@ class MobileSpace extends StatelessWidget {
           view: space,
           onAction: (layout, {String? extra}) {
             Navigator.of(sheetContext).pop();
-            context.read<SpaceBloc>().add(
-                  SpaceEvent.createPage(
-                    name: layout.defaultName,
-                    layout: layout,
-                    index: 0,
-                    openAfterCreate: true,
-                    extra: extra,
-                  ),
-                );
-            context.read<SpaceBloc>().add(
-                  SpaceEvent.expand(space, true),
-                );
+            final spaceBloc = context.read<SpaceBloc>();
+            void createPage() {
+              spaceBloc.add(
+                SpaceEvent.createPage(
+                  name: layout.defaultName,
+                  layout: layout,
+                  index: 0,
+                  openAfterCreate: true,
+                  extra: extra,
+                ),
+              );
+              spaceBloc.add(SpaceEvent.expand(space, true));
+            }
+
+            if (spaceBloc.state.currentSpace?.id == space.id) {
+              createPage();
+            } else {
+              spaceBloc.add(
+                SpaceEvent.open(space: space, afterOpen: createPage),
+              );
+            }
           },
         );
       },
@@ -329,17 +338,26 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
           view: widget.space,
           onAction: (layout, {String? extra}) {
             Navigator.of(sheetContext).pop();
-            context.read<SpaceBloc>().add(
-                  SpaceEvent.createPage(
-                    name: layout.defaultName,
-                    layout: layout,
-                    index: 0,
-                    openAfterCreate: true,
-                  ),
-                );
-            context.read<SpaceBloc>().add(
-                  SpaceEvent.expand(widget.space, true),
-                );
+            final spaceBloc = context.read<SpaceBloc>();
+            void createPage() {
+              spaceBloc.add(
+                SpaceEvent.createPage(
+                  name: layout.defaultName,
+                  layout: layout,
+                  index: 0,
+                  openAfterCreate: true,
+                ),
+              );
+              spaceBloc.add(SpaceEvent.expand(widget.space, true));
+            }
+
+            if (spaceBloc.state.currentSpace?.id == widget.space.id) {
+              createPage();
+            } else {
+              spaceBloc.add(
+                SpaceEvent.open(space: widget.space, afterOpen: createPage),
+              );
+            }
           },
         );
       },
@@ -412,73 +430,82 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
             child: BlocProvider(
               create: (context) =>
                   ViewBloc(view: widget.space)..add(const ViewEvent.initial()),
-              child: BlocBuilder<ViewBloc, ViewState>(
-                builder: (context, state) {
-                  final spaceType =
-                      widget.space.spacePermission == SpacePermission.publicToAll
-                          ? FolderSpaceType.public
-                          : FolderSpaceType.private;
-                  final childViews =
-                      state.view.childViews.unique((view) => view.id);
-                  if (childViews.length != state.view.childViews.length) {
-                    final duplicatedViews = state.view.childViews
-                        .where((view) => childViews.contains(view))
-                        .toList();
-                    Log.error('some view id are duplicated: $duplicatedViews');
-                  }
-                  return Column(
-                    children: childViews.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final view = entry.value;
-                      return Column(
-                        children: [
-                          if (index > 0)
-                            Divider(
-                              height: 0.5,
-                              thickness: 0.5,
-                              color: borderColor,
+              child: BlocListener<SpaceBloc, SpaceState>(
+                listenWhen: (previous, current) =>
+                    previous.lastCreatedPage?.id !=
+                        current.lastCreatedPage?.id &&
+                    (current.lastCreatedPage?.parentViewId == widget.space.id ||
+                        current.currentSpace?.id == widget.space.id),
+                listener: (context, _) =>
+                    context.read<ViewBloc>().reloadChildViews(),
+                child: BlocBuilder<ViewBloc, ViewState>(
+                  builder: (context, state) {
+                    final spaceType =
+                        widget.space.spacePermission == SpacePermission.publicToAll
+                            ? FolderSpaceType.public
+                            : FolderSpaceType.private;
+                    final childViews =
+                        state.view.childViews.unique((view) => view.id);
+                    if (childViews.length != state.view.childViews.length) {
+                      final duplicatedViews = state.view.childViews
+                          .where((view) => childViews.contains(view))
+                          .toList();
+                      Log.error('some view id are duplicated: $duplicatedViews');
+                    }
+                    return Column(
+                      children: childViews.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final view = entry.value;
+                        return Column(
+                          children: [
+                            if (index > 0)
+                              Divider(
+                                height: 0.5,
+                                thickness: 0.5,
+                                color: borderColor,
+                              ),
+                            MobileViewItem(
+                              key: ValueKey(
+                                '${widget.space.id} ${view.id}',
+                              ),
+                              spaceType: spaceType,
+                              isFirstChild: view.id ==
+                                  state.view.childViews.first.id,
+                              view: view,
+                              level: 0,
+                              leftPadding: HomeSpaceViewSizes.leftPadding,
+                              isFeedback: false,
+                              favoriteBloc: widget.favoriteBloc,
+                              onSelected: (v) => context.pushView(
+                                v,
+                                tabs: [
+                                  PickerTabType.emoji,
+                                  PickerTabType.icon,
+                                  PickerTabType.custom,
+                                ].map((e) => e.name).toList(),
+                              ),
+                              endActionPane: (context) {
+                                final view =
+                                    context.read<ViewBloc>().state.view;
+                                final actions = [
+                                  MobilePaneActionType.more,
+                                  if (view.layout == ViewLayoutPB.Document)
+                                    MobilePaneActionType.add,
+                                ];
+                                return buildEndActionPane(
+                                  context,
+                                  actions,
+                                  spaceType: spaceType,
+                                  spaceRatio: actions.length == 1 ? 3 : 4,
+                                );
+                              },
                             ),
-                          MobileViewItem(
-                            key: ValueKey(
-                              '${widget.space.id} ${view.id}',
-                            ),
-                            spaceType: spaceType,
-                            isFirstChild: view.id ==
-                                state.view.childViews.first.id,
-                            view: view,
-                            level: 0,
-                            leftPadding: HomeSpaceViewSizes.leftPadding,
-                            isFeedback: false,
-                            favoriteBloc: widget.favoriteBloc,
-                            onSelected: (v) => context.pushView(
-                              v,
-                              tabs: [
-                                PickerTabType.emoji,
-                                PickerTabType.icon,
-                                PickerTabType.custom,
-                              ].map((e) => e.name).toList(),
-                            ),
-                            endActionPane: (context) {
-                              final view =
-                                  context.read<ViewBloc>().state.view;
-                              final actions = [
-                                MobilePaneActionType.more,
-                                if (view.layout == ViewLayoutPB.Document)
-                                  MobilePaneActionType.add,
-                              ];
-                              return buildEndActionPane(
-                                context,
-                                actions,
-                                spaceType: spaceType,
-                                spaceRatio: actions.length == 1 ? 3 : 4,
-                              );
-                            },
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  );
-                },
+                          ],
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
               ),
             ),
           ),
