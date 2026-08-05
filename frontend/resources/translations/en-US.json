@@ -141,7 +141,8 @@
     "weChatNotInstalledTitle": "WeChat not detected",
     "weChatNotInstalledMessage": "Please install WeChat on your device and try again. If WeChat is already installed, restart this app and try once more.",
     "douYinNotInstalledTitle": "Douyin not detected",
-    "douYinNotInstalledMessage": "Please install Douyin on your device and try again."
+    "douYinNotInstalledMessage": "Please install Douyin on your device and try again.",
+    "passwordRequirementHint": "请输入8位以上的密码，需包含大小写字母、数字和特殊字符。"
   },
   "workspace": {
     "chooseWorkspace": "Choose your workspace",

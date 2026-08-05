@@ -147,7 +147,8 @@
     "weChatNotInstalledTitle": "未检测到微信客户端",
     "weChatNotInstalledMessage": "请先在手机上安装微信，然后再次尝试登录。如微信已安装，请尝试重启本应用后再试。",
     "douYinNotInstalledTitle": "未检测到抖音客户端",
-    "douYinNotInstalledMessage": "请先在手机上安装抖音，然后再次尝试登录。"
+    "douYinNotInstalledMessage": "请先在手机上安装抖音，然后再次尝试登录。",
+    "passwordRequirementHint": "请输入8位以上的密码，需包含大小写字母、数字和特殊字符。"
   },
   "workspace": {
     "chooseWorkspace": "选择您的工作区",

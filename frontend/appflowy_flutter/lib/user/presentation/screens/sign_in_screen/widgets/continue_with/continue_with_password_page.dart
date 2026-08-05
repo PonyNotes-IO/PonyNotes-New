@@ -1,9 +1,8 @@
-import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/back_to_login_in_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
-import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/forgot_password_page.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/forgot_password_flow_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/title_logo.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/verifying_button.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/password_suffix_icon.dart';
@@ -254,7 +253,11 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
 
   Future<void> _pushForgotPasswordPage() async {
     final signInBloc = context.read<SignInBloc>();
-    final baseUrl = await getAppFlowyCloudUrl();
+
+    // 与桌面端逻辑一致：先发送验证码，再跳转到忘记密码流程页面
+    signInBloc.add(
+      SignInEvent.forgotPassword(email: widget.email),
+    );
 
     if (mounted && context.mounted) {
       await Navigator.push(
@@ -263,10 +266,9 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
           settings: const RouteSettings(name: '/forgot-password'),
           builder: (context) => BlocProvider.value(
             value: signInBloc,
-            child: ForgotPasswordPage(
-              email: widget.email,
+            child: ForgotPasswordFlowPage(
+              phoneOrEmail: widget.email,
               backToLogin: widget.backToLogin,
-              baseUrl: baseUrl,
             ),
           ),
         ),

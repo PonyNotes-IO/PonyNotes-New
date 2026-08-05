@@ -113,7 +113,8 @@
     "youAreInLocalMode": "您目前處於本地模式。",
     "loginToAppFlowyCloud": "登入 PonyNotes Cloud",
     "signInWithWeChat": "繼續使用微信登入",
-    "signInWithDouYin": "繼續使用抖音登入"
+    "signInWithDouYin": "繼續使用抖音登入",
+    "passwordRequirementHint": "请输入8位以上的密码，需包含大小写字母、数字和特殊字符。"
   },
   "workspace": {
     "chooseWorkspace": "選擇你的工作區",
