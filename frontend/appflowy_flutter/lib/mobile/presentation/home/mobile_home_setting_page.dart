@@ -413,12 +413,6 @@ class _MobileSettingsMenuContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final isServerWorkspace =
-        userProfile.workspaceType == WorkspaceTypePB.ServerW;
-    final isBillingEnabled = isServerWorkspace &&
-        FeatureFlag.planBilling.isOn &&
-        subscriptionInfo != null;
-
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -474,16 +468,6 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                   label: '存储设置',
                   onTap: () => onNavigate(MobileSettingsSection.storage),
                 ),
-                if (isBillingEnabled)
-                  _SettingsItem(
-                    label: LocaleKeys.settings_planPage_menuLabel.tr(),
-                    onTap: () => onNavigate(MobileSettingsSection.plan),
-                  ),
-                if (isBillingEnabled)
-                  _SettingsItem(
-                    label: LocaleKeys.settings_billingPage_menuLabel.tr(),
-                    onTap: () => onNavigate(MobileSettingsSection.billing),
-                  ),
                 _SettingsItem(
                   label: LocaleKeys.legal_aboutXiaoma.tr(),
                   onTap: () => onNavigate(MobileSettingsSection.about),
