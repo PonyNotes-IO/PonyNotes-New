@@ -73,14 +73,19 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 ),
                 SafeArea(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 30),
                     child: Column(
                       children: [
-                        VSpace(60),
+                        VSpace(45),
                         // Logo and welcome text
                         FlowyLogoTitle(
                           title: LocaleKeys.welcomeToPonyNotes.tr(),
-                          logoSize: Size.square(48),
+                          logoSize: Size.square(56),
+                          titleStyle: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: theme.textColorScheme.primary,
+                          ),
                         ),
                         VSpace(16),
 
@@ -93,7 +98,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                           },
                           initialAgreed: _agreedToTerms,
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
 
                         QuickStartButton(
                           onTap: () {

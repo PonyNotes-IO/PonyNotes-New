@@ -36,16 +36,16 @@ class QuickStartButton extends StatelessWidget {
           border: Border.all(color: theme.borderColorScheme.primary),
           borderRadius: BorderRadius.circular(18),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Text(
-          "快速开始",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: theme.textColorScheme.primary,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Text(
+        "快速开始",
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: theme.textColorScheme.primary,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
         ),
+      ),
       ),
     );
   }

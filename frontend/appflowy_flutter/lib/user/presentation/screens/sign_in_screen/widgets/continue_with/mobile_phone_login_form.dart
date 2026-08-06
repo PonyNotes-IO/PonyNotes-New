@@ -81,16 +81,16 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 color: Theme.of(context).brightness == Brightness.light
                     ? const Color(0xFF999999)
                     : const Color(0xFF888888),
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             ),
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
               color: Theme.of(context).brightness == Brightness.light
                   ? Colors.black
@@ -116,7 +116,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 color: primaryColor,
                 borderRadius: BorderRadius.circular(18),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
                 _isLoading
                     ? "登录中..."
@@ -124,7 +124,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
