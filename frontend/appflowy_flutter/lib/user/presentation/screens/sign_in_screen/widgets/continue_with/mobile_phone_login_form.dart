@@ -1,6 +1,6 @@
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
-import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_password_page.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_continue_with_password_page.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -332,7 +332,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
         settings: const RouteSettings(name: '/continue-with-password'),
         builder: (context) => BlocProvider.value(
           value: signInBloc,
-          child: ContinueWithPasswordPage(
+          child: MobileContinueWithPasswordPage(
             email: email,
             backToLogin: () {
               emailKey.currentState?.clearError();
