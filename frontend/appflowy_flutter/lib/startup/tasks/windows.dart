@@ -18,12 +18,35 @@ var _windowsSurfaceGeneration = 0;
 
 int nextWindowsSurfaceGeneration() => ++_windowsSurfaceGeneration;
 
+/// 启动阶段（Rust 日志器就绪之前）的窗口初始化轨迹。
+///
+/// InitAppWindowTask 排在 InitRustSDKTask 之前，此时 Log.* 还写不进日志文件，
+/// 整个建窗/设尺寸/居中/显示过程在日志里是一片空白。这里先把轨迹攒起来，
+/// 等首帧后表面同步时统一 flush 出去。
+final List<String> _windowSetupTrace = <String>[];
+
+void traceWindowSetup(String message) {
+  if (_windowSetupTrace.length >= 32) {
+    _windowSetupTrace.removeAt(0);
+  }
+  _windowSetupTrace.add(message);
+}
+
+void _flushWindowSetupTrace() {
+  if (_windowSetupTrace.isEmpty) {
+    return;
+  }
+  Log.info('[Windows] window setup trace: ${_windowSetupTrace.join(' | ')}');
+  _windowSetupTrace.clear();
+}
+
 class WindowsSurfaceDimensions {
   const WindowsSurfaceDimensions({
     required this.clientWidth,
     required this.clientHeight,
     required this.childWidth,
     required this.childHeight,
+    this.events = const [],
   });
 
   factory WindowsSurfaceDimensions.fromMap(Map<dynamic, dynamic> values) {
@@ -35,11 +58,16 @@ class WindowsSurfaceDimensions {
       throw StateError('Missing Windows surface dimension: $key');
     }
 
+    final rawEvents = values['events'];
+
     return WindowsSurfaceDimensions(
       clientWidth: valueFor('clientWidth'),
       clientHeight: valueFor('clientHeight'),
       childWidth: valueFor('childWidth'),
       childHeight: valueFor('childHeight'),
+      events: rawEvents is List
+          ? rawEvents.map((e) => e.toString()).toList(growable: false)
+          : const [],
     );
   }
 
@@ -47,6 +75,9 @@ class WindowsSurfaceDimensions {
   final int clientHeight;
   final int childWidth;
   final int childHeight;
+
+  /// 原生侧记录的窗口几何事件（WM_SIZE / WM_DPICHANGED 等），仅用于诊断。
+  final List<String> events;
 
   @override
   bool operator ==(Object other) {
@@ -92,35 +123,81 @@ class WindowsSurfaceSynchronizer {
   }
 }
 
+/// 等待一帧结束。带超时，避免窗口不可见等极端情况下把整个启动流程卡住。
+Future<void> _waitForFrame() {
+  return WidgetsBinding.instance.endOfFrame.timeout(
+    const Duration(milliseconds: 500),
+    onTimeout: () {},
+  );
+}
+
+/// 首帧之后强制让引擎重新协商渲染表面，并校验 Flutter 侧尺寸是否与原生客户区一致。
+///
+/// 背景（2026-08-06 Windows 启动黑边根因）：启动期窗口几何会在首帧之前被多次修改
+/// （runner 建窗 → window_manager setSize/center/show），而引擎的 resize 握手在
+/// runApp() 之前根本等不到任何一帧，只能超时，导致首帧尺寸与 GL 表面尺寸失步：
+/// 画面按 OpenGL 左下原点贴底渲染，上方留出未绘制的黑带。用户手动拖动窗口边缘
+/// 1 像素即可恢复 —— 因为那会产生一次真实的 WM_SIZE。
+///
+/// 这里做的就是把"拖那一下"自动化：原生侧把子窗口先加高 1px 再复原，产生两次真实
+/// WM_SIZE；随后等一帧并核对 Flutter 的 physicalSize 与原生客户区，不一致则重试。
 Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
   required int generation,
+  int maxAttempts = 3,
 }) async {
   if (!Platform.isWindows) {
     return;
   }
 
-  await WidgetsBinding.instance.endOfFrame;
+  await _waitForFrame();
+  _flushWindowSetupTrace();
+
+  final synchronizer = WindowsSurfaceSynchronizer();
 
   try {
-    final dimensions = await WindowsSurfaceSynchronizer().synchronize();
-    final views = PlatformDispatcher.instance.views;
-    final dartView = views.isEmpty ? null : views.first;
-    final dartSize = dartView?.physicalSize;
-    final devicePixelRatio = dartView?.devicePixelRatio;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      final dimensions = await synchronizer.synchronize();
 
-    if (dimensions == null) {
-      Log.warn(
-        '[Windows] surface synchronization returned no dimensions '
-        'for generation=$generation',
+      if (dimensions == null) {
+        Log.warn(
+          '[Windows] surface synchronization returned no dimensions '
+          'for generation=$generation',
+        );
+        return;
+      }
+
+      // 原生侧的 resync 抖动是在通道回复之后、从消息循环里执行的（避免阻塞平台线程），
+      // 所以这里要多等一帧，让新的 window metrics 到达框架并完成一次重新布局渲染。
+      WidgetsBinding.instance.scheduleFrame();
+      await _waitForFrame();
+      await _waitForFrame();
+
+      final views = PlatformDispatcher.instance.views;
+      final dartView = views.isEmpty ? null : views.first;
+      final dartSize = dartView?.physicalSize;
+      final devicePixelRatio = dartView?.devicePixelRatio;
+      final matched = dartSize != null &&
+          dartSize.width.round() == dimensions.clientWidth &&
+          dartSize.height.round() == dimensions.clientHeight;
+
+      Log.info(
+        '[Windows] surface synchronized for generation=$generation '
+        'attempt=$attempt/$maxAttempts: matched=$matched, '
+        'dartPhysicalSize=${dartSize?.width.round()}x${dartSize?.height.round()}, '
+        'devicePixelRatio=$devicePixelRatio, '
+        'clientSize=${dimensions.clientWidth}x${dimensions.clientHeight}, '
+        'childSize=${dimensions.childWidth}x${dimensions.childHeight}'
+        '${dimensions.events.isEmpty ? '' : ', nativeEvents=[${dimensions.events.join(' | ')}]'}',
       );
-      return;
+
+      if (matched) {
+        return;
+      }
     }
 
-    Log.info(
-      '[Windows] surface synchronized for generation=$generation: '
-      'dartPhysicalSize=$dartSize, devicePixelRatio=$devicePixelRatio, '
-      'clientSize=${dimensions.clientWidth}x${dimensions.clientHeight}, '
-      'childSize=${dimensions.childWidth}x${dimensions.childHeight}',
+    Log.warn(
+      '[Windows] surface still out of sync after $maxAttempts attempts '
+      'for generation=$generation',
     );
   } catch (error, stackTrace) {
     Log.warn(
@@ -193,17 +270,29 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     final position = await windowSizeManager.getPosition();
 
     if (UniversalPlatform.isWindows) {
+      final dpr = PlatformDispatcher.instance.views.isEmpty
+          ? null
+          : PlatformDispatcher.instance.views.first.devicePixelRatio;
+      traceWindowSetup(
+        'stored=${storedWindowSize.width.round()}x${storedWindowSize.height.round()} '
+        'requested=${windowSize.width.round()}x${windowSize.height.round()} dpr=$dpr',
+      );
+
       await windowManager.setTitleBarStyle(
         useCustomWindowTitleBar ? TitleBarStyle.hidden : TitleBarStyle.normal,
       );
+      traceWindowSetup('titleBarStyle done');
       await windowManager.waitUntilReadyToShow(windowOptions);
+      traceWindowSetup('waitUntilReadyToShow done');
       // Do not restore a saved maximized state before the first Windows
       // show. Creating Flutter's surface directly in maximized bounds can
       // leave the first frame with a stale client area until a manual resize.
       await windowSizeManager.setWindowMaximized(false);
       await windowManager.center();
+      traceWindowSetup('center done');
       await windowManager.show();
       await windowManager.focus();
+      traceWindowSetup('show+focus done');
       _hasInitializedWindowsWindow = true;
     } else {
       await windowManager.waitUntilReadyToShow(windowOptions, () async {

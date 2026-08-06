@@ -32,8 +32,11 @@ dependencies:
   auto_updater: ^1.0.0
   avatar_stack: ^3.0.0
 
-  # BitsDojo Window for Windows
-  bitsdojo_window: ^0.1.6
+  # 注意：不要重新引入 bitsdojo_window。它的 Windows 原生实现在进程加载时通过
+  # 静态初始化装 WH_CBT 钩子并自动子类化顶层窗口与 FLUTTERVIEW（无需任何 Dart 调用），
+  # 会与 window_manager 争抢同一个窗口：吞掉 WM_ERASEBKGND、首帧前额外制造 DPI 消息与
+  # ±1px 子窗口抖动、屏蔽 WM_GETMINMAXINFO，是 Windows 启动黑边的根因之一。
+  # 详见 devops-docs/2026-08-06-Windows客户端启动黑屏窗体压扁根因分析.md
   bloc: ^9.0.0
   cached_network_image: ^3.4.1
   calendar_view:

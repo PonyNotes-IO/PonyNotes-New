@@ -199,13 +199,22 @@ Win32Window::MessageHandler(HWND hwnd,
       LONG newWidth = newRectSize->right - newRectSize->left;
       LONG newHeight = newRectSize->bottom - newRectSize->top;
 
+      RecordEvent("WM_DPICHANGED dpi=" + std::to_string(LOWORD(wparam)) +
+                  " window=" + std::to_string(newWidth) + "x" +
+                  std::to_string(newHeight));
+
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 
       return 0;
     }
     case WM_SIZE: {
-      SynchronizeChildContent();
+      const SurfaceMetrics metrics = SynchronizeChildContent();
+      RecordEvent("WM_SIZE wparam=" + std::to_string(wparam) + " client=" +
+                  std::to_string(metrics.client_width) + "x" +
+                  std::to_string(metrics.client_height) + " child=" +
+                  std::to_string(metrics.child_width) + "x" +
+                  std::to_string(metrics.child_height));
       return 0;
     }
 
@@ -243,13 +252,17 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
-  SynchronizeChildContent();
+  const SurfaceMetrics metrics = SynchronizeChildContent();
+  RecordEvent("SetChildContent client=" + std::to_string(metrics.client_width) +
+              "x" + std::to_string(metrics.client_height) + " child=" +
+              std::to_string(metrics.child_width) + "x" +
+              std::to_string(metrics.child_height));
 
   SetFocus(child_content_);
 }
 
 Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
-    bool force_redraw) {
+    bool force_resync) {
   const RECT client_area = GetClientArea();
   const LONG client_width = client_area.right - client_area.left;
   const LONG client_height = client_area.bottom - client_area.top;
@@ -257,9 +270,19 @@ Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
   LONG child_width = 0;
   LONG child_height = 0;
   if (child_content_ != nullptr) {
+    if (force_resync && client_width > 0 && client_height > 0) {
+      // See the comment on the declaration: a same-size MoveWindow produces no
+      // WM_SIZE, so the engine would never re-negotiate its render surface.
+      // The extra pixel is clipped by the parent and never reaches the screen.
+      MoveWindow(child_content_, client_area.left, client_area.top,
+                 client_width, client_height + 1, FALSE);
+      RecordEvent("resync nudge client=" + std::to_string(client_width) + "x" +
+                  std::to_string(client_height));
+    }
+
     MoveWindow(child_content_, client_area.left, client_area.top, client_width,
                client_height, TRUE);
-    if (force_redraw) {
+    if (force_resync) {
       InvalidateRect(child_content_, nullptr, TRUE);
       RedrawWindow(child_content_, nullptr, nullptr,
                    RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
@@ -273,6 +296,22 @@ Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
   }
 
   return {client_width, client_height, child_width, child_height};
+}
+
+void Win32Window::RecordEvent(const std::string& event) {
+  // Bounded buffer: the interesting window is startup, and the Dart side
+  // drains it after the first frame.
+  constexpr size_t kMaxGeometryEvents = 32;
+  if (geometry_events_.size() >= kMaxGeometryEvents) {
+    geometry_events_.erase(geometry_events_.begin());
+  }
+  geometry_events_.push_back(event);
+}
+
+std::vector<std::string> Win32Window::TakeGeometryEvents() {
+  std::vector<std::string> events;
+  events.swap(geometry_events_);
+  return events;
 }
 
 RECT Win32Window::GetClientArea() {

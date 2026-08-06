@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
 // inherited from by classes that wish to specialize with custom
@@ -67,11 +68,25 @@ class Win32Window {
   // This method enables our app to be with a single instance too.
   bool SendAppLinkToInstance(const std::wstring &title);
 
+  // Returns the geometry events recorded since startup (see |RecordEvent|) and
+  // clears the buffer. Used to give the Dart side visibility into the window
+  // messages that happen before the Rust logger exists.
+  std::vector<std::string> TakeGeometryEvents();
+
  protected:
-  // Sizes the hosted content to the current client area. The explicit surface
-  // synchronization path can additionally request a redraw without changing
-  // the top-level window's size.
-  SurfaceMetrics SynchronizeChildContent(bool force_redraw = false);
+  // Sizes the hosted content to the current client area.
+  //
+  // When |force_resync| is true the child is first moved to a height that is
+  // one pixel taller than the client area and then back. Moving a window to
+  // the size it already has produces no WM_SIZE, so without this nudge the
+  // Flutter engine never re-negotiates its render surface. The nudge is the
+  // programmatic equivalent of the user dragging the window border by one
+  // pixel, which is the only action known to recover a first frame that was
+  // rendered against a stale surface size.
+  SurfaceMetrics SynchronizeChildContent(bool force_resync = false);
+
+  // Appends one line to the geometry event buffer (capped, oldest dropped).
+  void RecordEvent(const std::string& event);
 
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
@@ -114,6 +129,9 @@ class Win32Window {
 
   // window handle for hosted content.
   HWND child_content_ = nullptr;
+
+  // Startup geometry trace, drained by the Dart side after the first frame.
+  std::vector<std::string> geometry_events_;
 };
 
 #endif  // RUNNER_WIN32_WINDOW_H_

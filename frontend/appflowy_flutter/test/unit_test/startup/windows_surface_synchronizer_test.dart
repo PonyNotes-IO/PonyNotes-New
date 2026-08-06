@@ -61,6 +61,31 @@ void main() {
     expect(didCallNative, isFalse);
   });
 
+  test('keeps the native geometry events for diagnostics', () {
+    final dimensions = WindowsSurfaceDimensions.fromMap({
+      'clientWidth': 1778,
+      'clientHeight': 1024,
+      'childWidth': 1778,
+      'childHeight': 1024,
+      'events': ['WM_SIZE wparam=0 client=1778x1024 child=1778x1024'],
+    });
+
+    expect(dimensions.events, [
+      'WM_SIZE wparam=0 client=1778x1024 child=1778x1024',
+    ]);
+  });
+
+  test('tolerates a native response without geometry events', () {
+    final dimensions = WindowsSurfaceDimensions.fromMap({
+      'clientWidth': 1778,
+      'clientHeight': 1024,
+      'childWidth': 1778,
+      'childHeight': 1024,
+    });
+
+    expect(dimensions.events, isEmpty);
+  });
+
   test('rejects an incomplete native surface response', () {
     expect(
       () => WindowsSurfaceDimensions.fromMap({

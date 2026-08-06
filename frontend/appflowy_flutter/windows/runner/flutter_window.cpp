@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include <flutter/standard_method_codec.h>
 
@@ -11,6 +13,14 @@ namespace {
 
 constexpr char kWindowSurfaceChannel[] = "ponynotes/window_surface";
 constexpr char kSynchronizeSurfaceMethod[] = "synchronizeSurface";
+
+// Posted to ourselves to run the surface resync nudge outside of the method
+// channel handler. The nudge makes the engine re-negotiate its render surface,
+// and that handshake waits for the raster thread to present a frame - which
+// cannot happen while the Dart isolate is blocked awaiting our channel reply.
+// The offset is arbitrary but distinctive, to avoid colliding with a plugin
+// that also posts private messages to the top-level window.
+constexpr UINT kResyncSurfaceMessage = WM_APP + 0x4D2;
 
 }  // namespace
 
@@ -89,6 +99,12 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+    case kResyncSurfaceMessage:
+      SynchronizeChildContent(true);
+      if (flutter_controller_) {
+        flutter_controller_->ForceRedraw();
+      }
+      return 0;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
@@ -102,9 +118,15 @@ void FlutterWindow::SynchronizeSurface(
     return;
   }
 
-  const SurfaceMetrics metrics = SynchronizeChildContent(true);
-  if (flutter_controller_) {
-    flutter_controller_->ForceRedraw();
+  // Measure and re-align the child synchronously so the reply carries the
+  // current geometry, then run the actual resync nudge from the message loop
+  // (see kResyncSurfaceMessage) to keep this handler non-blocking.
+  const SurfaceMetrics metrics = SynchronizeChildContent(false);
+  PostMessage(GetHandle(), kResyncSurfaceMessage, 0, 0);
+
+  flutter::EncodableList events;
+  for (const std::string& event : TakeGeometryEvents()) {
+    events.push_back(flutter::EncodableValue(event));
   }
 
   flutter::EncodableMap dimensions = {
@@ -116,6 +138,7 @@ void FlutterWindow::SynchronizeSurface(
        flutter::EncodableValue(static_cast<int32_t>(metrics.child_width))},
       {flutter::EncodableValue("childHeight"),
        flutter::EncodableValue(static_cast<int32_t>(metrics.child_height))},
+      {flutter::EncodableValue("events"), flutter::EncodableValue(events)},
   };
   result->Success(flutter::EncodableValue(dimensions));
 }
