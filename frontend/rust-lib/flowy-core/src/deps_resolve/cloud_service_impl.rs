@@ -674,9 +674,15 @@ impl CollabCloudPluginProvider for ServerProvider {
                 Uuid::from_str(&collab_object.object_id),
                 Uuid::from_str(&collab_object.workspace_id),
               ) {
+                // collab_type 是排查「同步通道数量异常」的关键维度：
+                // 每个 collab 对象建一条通道，而 DatabaseRow 是【按行】建的
+                // （database_editor.rs 的 async_load_rows 会把一个 database 视图的
+                // 全部行都 init 一遍），行多时单次打开就能建出几十条通道。
+                // 不打印类型就只能靠 id 归属特征反推，无法直接区分文档与行。
                 tracing::info!(
-                  "[云同步] 创建 SyncPlugin, object_id: {}, workspace_id: {}",
+                  "[云同步] 创建 SyncPlugin, object_id: {}, collab_type: {:?}, workspace_id: {}",
                   object_id,
+                  collab_object.collab_type,
                   workspace_id
                 );
                 let sync_object = SyncObject::new(

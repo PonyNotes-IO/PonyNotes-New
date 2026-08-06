@@ -601,6 +601,30 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     // 例如：通过全局通知或回调机制通知白板组件
   }
 
+  /// 挑一个可以安全「自动打开」的文档；没有则返回 null（保持空态，由用户主动选）。
+  ///
+  /// database（表格/看板/日历）**不参与自动打开**。
+  ///
+  /// 原因：打开一个 database 视图会为它的**每一行**建立一条 WebSocket 同步通道 ——
+  /// `database_editor.rs` 的 `async_load_rows` 会把该视图的全部 row_orders 按 10 个
+  /// 一块并发 `init_database_row`，每行 `collab_builder.finalize()` 一次，最终走到
+  /// `cloud_service_impl.rs` 的 `get_plugins()` 建一个 SyncPlugin。**行数即通道数**，
+  /// 且没有上限约束（而 `finalized_rows` 缓存上限只有 50，超出还会边建边拆）。
+  ///
+  /// 2026-08-06 的卡顿实测：点一次空间，8 秒内建了 46 条通道（1 个空间 collab +
+  /// 45 个 DatabaseRow），同期还有 90 条 database cell 处理告警，表现为界面转圈。
+  /// 三次卡顿全部由「点击空间 → 自动打开第一个文档恰好是 database」引爆。
+  ///
+  /// 这里只是不再**替用户**打开它；用户主动点开 database 时行为不变。
+  ViewPB? _firstAutoOpenableView(List<ViewPB> views) {
+    for (final view in views) {
+      if (!view.layout.isDatabaseView) {
+        return view;
+      }
+    }
+    return null;
+  }
+
   void _trySelectFirstDocument() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -610,7 +634,11 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         if (currentSpace?.id == widget.spaceView.id &&
             currentSpace!.childViews.isNotEmpty &&
             _selectedView == null) {
-          final firstView = currentSpace.childViews.first;
+          final firstView = _firstAutoOpenableView(currentSpace.childViews);
+          if (firstView == null) {
+            // 全是 database，保持空态等用户主动点，避免开局就建几十条同步通道。
+            return;
+          }
           setState(() {
             _selectedView = firstView;
           });
@@ -1107,7 +1135,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     // 空间切换时强制选中第一条笔记，或当前选中的笔记不存在于列表中时
     if (_selectedView == null ||
         !childViews.any((v) => v.id == _selectedView!.id)) {
-      final firstView = childViews.first;
+      // 与 _trySelectFirstDocument 同一条规则：database 不参与自动打开，
+      // 否则一次空间切换就会为它的每一行建一条同步通道（详见该方法注释）。
+      final firstView = _firstAutoOpenableView(childViews);
+      if (firstView == null) {
+        // 全是 database，不自动打开。但当前选中项此时已经失效（不在列表里），
+        // 必须清掉，否则右侧会继续渲染一个已不属于本空间的文档。
+        if (_selectedView != null) {
+          setState(() {
+            _selectedView = null;
+          });
+          widget.selectedViewNotifier.value = null;
+          spaceHubSelectedViewLayoutNotifier.value = null;
+        }
+        return;
+      }
       setState(() {
         _selectedView = firstView;
       });
