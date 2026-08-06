@@ -37,6 +37,13 @@ class SettingsPlanView extends StatefulWidget {
   State<SettingsPlanView> createState() => _SettingsPlanViewState();
 }
 
+/// 计算 _UsageBox 进度条的进度值。
+/// 包裹 [used] / [limit] 的除法，防止 [limit] 为 0 时产生 NaN 触发布局错误。
+double _safeProgress(int used, int limit) {
+  if (limit <= 0) return 0.0;
+  return used / limit;
+}
+
 class _SettingsPlanViewState extends State<SettingsPlanView> {
   Loading? loadingIndicator;
 
@@ -293,8 +300,10 @@ class _PlanUsageSummary extends StatelessWidget {
                     usage.totalBlobInGb,
                   ],
                 ),
-                value: usage.storageBytes.toInt() /
-                    usage.storageBytesLimit.toInt(),
+                value: _safeProgress(
+                  usage.storageBytes.toInt(),
+                  usage.storageBytesLimit.toInt(),
+                ),
               ),
             ),
             Expanded(
@@ -312,8 +321,10 @@ class _PlanUsageSummary extends StatelessWidget {
                     .settings_planPage_planUsage_unlimitedAILabel
                     .tr(),
                 unlimited: usage.aiResponsesUnlimited,
-                value: usage.aiResponsesCount.toInt() /
-                    usage.aiResponsesCountLimit.toInt(),
+                value: _safeProgress(
+                  usage.aiResponsesCount.toInt(),
+                  usage.aiResponsesCountLimit.toInt(),
+                ),
               ),
             ),
           ],

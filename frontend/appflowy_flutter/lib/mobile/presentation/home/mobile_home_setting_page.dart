@@ -410,6 +410,18 @@ class _MobileSettingsMenuContent extends StatelessWidget {
   final void Function(MobileSettingsSection) onNavigate;
   final WorkspaceUsagePB? workspaceUsage;
 
+  /// 对应电脑端 `_isBillingEnabled` 的拦截逻辑：匿名登录（[WorkspaceTypePB.LocalW]
+  /// 或 [AuthTypePB.Local]）不展示订阅/套餐卡片。云端登录的工作空间才会显示。
+  static bool _isBillingVisible(UserProfilePB userProfile) {
+    if (userProfile.workspaceType == WorkspaceTypePB.LocalW) {
+      return false;
+    }
+    if (userProfile.userAuthType != AuthTypePB.Server) {
+      return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -420,14 +432,15 @@ class _MobileSettingsMenuContent extends StatelessWidget {
           children: [
             _UserProfileHeader(userProfile: userProfile),
             const SizedBox(height: 16),
-            if (subscriptionInfo != null)
+            if (subscriptionInfo != null && _isBillingVisible(userProfile)) ...[
               _MobileUpgradePlanCard(
                 subscriptionInfo: subscriptionInfo!,
                 workspaceUsage: workspaceUsage,
                 onUpgrade: () => _showUpgradeDialog(context),
                 currentSubscription: currentSubscription,
               ),
-            if (subscriptionInfo != null) const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
             _SettingsGroupCard(
               items: [
                 _SettingsItem(
@@ -910,9 +923,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          workspaceUsage != null
-                              ? '${workspaceUsage!.totalBlobInGb}GB / ${((workspaceUsage!.storageBytesLimit.toInt() - workspaceUsage!.storageBytes.toInt()) / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB'
-                              : '加载中...',
+                          _buildStorageText(workspaceUsage),
                           style: TextStyle(
                             color: const Color(0xFF4B1B03),
                             fontSize: 14,
@@ -985,6 +996,22 @@ class _MobileUpgradePlanCard extends StatelessWidget {
         ],
       )
     );
+  }
+
+  String _buildStorageText(WorkspaceUsagePB? usage) {
+    if (usage == null) {
+      return '加载中...';
+    }
+    if (usage.storageBytesUnlimited) {
+      return '不限';
+    }
+    if (usage.storageBytesLimit.toInt() == 0) {
+      return '0GB / 0GB';
+    }
+    final total = usage.storageBytesLimit.toInt() / (1024 * 1024 * 1024);
+    final remaining = usage.storageBytesLimit.toInt() - usage.storageBytes.toInt();
+    return '${total.toStringAsFixed(1)}GB / '
+        '${(remaining <= 0 ? 0 : remaining / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB';
   }
 
   Widget _buildAIUsageRow(AppFlowyThemeData theme) {
