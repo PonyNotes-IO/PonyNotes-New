@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
@@ -8,6 +9,7 @@ import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
 import 'package:appflowy/mobile/presentation/chat/mobile_chat_history_screen.dart';
 import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
+import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
@@ -25,6 +27,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 class MobileChatScreen extends StatefulWidget {
   const MobileChatScreen({
@@ -268,13 +271,14 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   }
 
   void _handleWelcomeInputSubmit(
-      String text, String? modelId, bool deepThinking, bool webSearch) {
+      String text, String? modelId, bool deepThinking, bool webSearch, List<ChatImage> images) {
     if (_isSending) return;
-    if (text.trim().isEmpty) return;
+    if (text.trim().isEmpty && images.isEmpty) return;
     _sendMessage(text,
         modelId: modelId,
         enableDeepThinking: deepThinking,
-        enableWebSearch: webSearch);
+        enableWebSearch: webSearch,
+        images: images);
   }
 
   Future<void> _sendMessage(
@@ -282,6 +286,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     String? modelId,
     bool? enableDeepThinking,
     bool? enableWebSearch,
+    List<ChatImage>? images,
   }) async {
     if (_isSending) return;
     if (message.trim().isEmpty) return;
@@ -306,6 +311,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
         selectedModelId: effectiveModelId,
         enableDeepThinking: effectiveDeepThinking,
         enableWebSearch: effectiveWebSearch,
+        initialImages: images,
       );
 
       if (view == null) {
@@ -412,7 +418,7 @@ class _MobileWelcomeInputBar extends StatefulWidget {
   });
 
   final bool isSending;
-  final void Function(String, String?, bool, bool) onSend;
+  final void Function(String, String?, bool, bool, List<ChatImage>) onSend;
   final String? preferredModelId;
   final bool enableDeepThinking;
   final bool enableWebSearch;
@@ -440,6 +446,11 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   // Attachment state
   bool _isAttachmentLoading = false;
+  final List<_MobileAttachmentItem> _attachments = [];
+  final ScrollController _attachmentScrollController = ScrollController();
+
+  // Image picker
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -501,19 +512,43 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
+    _attachmentScrollController.dispose();
     super.dispose();
   }
 
   void _submit() {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && _attachments.isEmpty) return;
+
+    // 如果有附件但文本为空，给出提示
+    if (text.isEmpty && _attachments.isNotEmpty) {
+      _showToast('请输入消息内容');
+      return;
+    }
+
+    // 提取附件中的图片
+    final List<ChatImage> images = [];
+    for (final attachment in _attachments) {
+      if (attachment.type == _MobileAttachmentType.image && attachment.image != null) {
+        images.add(attachment.image!);
+      }
+    }
+
+    // 保存模型ID用于恢复
+    final modelId = _selectedModel?.id;
+
     _controller.clear();
-    setState(() => _charCount = 0);
+    setState(() {
+      _charCount = 0;
+      _attachments.clear();
+    });
+
     widget.onSend(
       text,
-      _selectedModel?.id,
+      modelId,
       _isDeepThinkingEnabled,
       _isWebSearchEnabled,
+      images,
     );
   }
 
@@ -710,46 +745,237 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     final iconColor = isDisabled
         ? colorScheme.onSurface.withValues(alpha: 0.3)
         : colorScheme.onSurfaceVariant;
+    final hasAttachments = _attachments.isNotEmpty;
 
     return GestureDetector(
-      onTap: isDisabled || _isAttachmentLoading ? null : _pickAttachment,
+      onTap: isDisabled || _isAttachmentLoading ? null : _showAttachmentSourceMenu,
       child: SizedBox(
         width: 28,
         height: 28,
-        child: Center(
-          child: _isAttachmentLoading
-              ? SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
-                )
-              : FlowySvg(
-                  FlowySvgs.m_ai_attachment_m,
-                  size: const Size.square(24),
-                  color: iconColor,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Center(
+              child: _isAttachmentLoading
+                  ? SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
+                    )
+                  : FlowySvg(
+                      FlowySvgs.m_ai_attachment_m,
+                      size: const Size.square(24),
+                      color: iconColor,
+                    ),
+            ),
+            if (hasAttachments)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE94618),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${_attachments.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Future<void> _pickAttachment() async {
+  /// 检查是否有附件（图片或文件）
+  bool get _hasAttachments => _attachments.isNotEmpty;
+
+  /// 获取过滤后的模型列表
+  /// 当有附件时，只返回支持多模态的模型
+  List<AIModel> _getFilteredModels() {
+    if (!_hasAttachments) {
+      return _availableModels;
+    }
+    return _availableModels.where((model) => model.supportsImages).toList();
+  }
+
+  /// 确保当前选择的模型支持图片/附件
+  void _ensureModelSupportsImages() {
+    if (!_hasAttachments) return;
+
+    if (_selectedModel == null || !_selectedModel!.supportsImages) {
+      final filteredModels = _getFilteredModels();
+      if (filteredModels.isNotEmpty) {
+        setState(() {
+          _selectedModel = filteredModels.first;
+        });
+        debugPrint('[MobileAI] 有附件但当前模型不支持，自动切换到 ${filteredModels.first.name}');
+      }
+    }
+  }
+
+  /// 显示附件来源选择菜单（图片或文件）
+  void _showAttachmentSourceMenu() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.photo_library, color: Colors.blue),
+                ),
+                title: const Text('从相册选择'),
+                subtitle: const Text('选择图片'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImages();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.folder_open, color: Colors.green),
+                ),
+                title: const Text('从文件选择'),
+                subtitle: const Text('PDF、Word、文本等'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickFiles();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImages() async {
+    setState(() => _isAttachmentLoading = true);
+    try {
+      final xFiles = await _imagePicker.pickMultiImage();
+      if (xFiles.isEmpty) return;
+
+      for (final xFile in xFiles) {
+        final file = File(xFile.path);
+        if (!file.existsSync()) continue;
+
+        final fileSize = file.lengthSync();
+        ChatImage? chatImage;
+        try {
+          chatImage = await ChatImage.fromFile(file);
+        } catch (_) {}
+
+        setState(() {
+          _attachments.add(_MobileAttachmentItem(
+            type: _MobileAttachmentType.image,
+            name: xFile.name,
+            size: fileSize,
+            image: chatImage,
+            file: file,
+            uploadStatus: _MobileUploadStatus.success,
+          ));
+        });
+      }
+
+      // 确保模型支持图片
+      _ensureModelSupportsImages();
+      debugPrint('[MobileAI] 选择了 ${xFiles.length} 张图片');
+    } catch (e) {
+      debugPrint('[MobileAI] 选择图片失败: $e');
+      _showToast('选择图片失败');
+    } finally {
+      if (mounted) setState(() => _isAttachmentLoading = false);
+    }
+  }
+
+  Future<void> _pickFiles() async {
     setState(() => _isAttachmentLoading = true);
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'txt'],
+        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'],
         withData: false,
       );
       if (result == null || result.files.isEmpty) return;
-      // TODO: 显示附件预览并支持发送（与桌面端附件系统对接）
-      Log.debug('[MobileAI] 选择了 ${result.files.length} 个附件');
+
+      for (final pickedFile in result.files) {
+        final filePath = pickedFile.path;
+        if (filePath == null || filePath.isEmpty) continue;
+
+        final file = File(filePath);
+        if (!file.existsSync()) continue;
+
+        final fileSize = file.lengthSync();
+
+        setState(() {
+          _attachments.add(_MobileAttachmentItem(
+            type: _MobileAttachmentType.file,
+            name: pickedFile.name,
+            size: fileSize,
+            image: null,
+            file: file,
+            uploadStatus: _MobileUploadStatus.success,
+          ));
+        });
+      }
+
+      // 确保模型支持附件
+      _ensureModelSupportsImages();
+      debugPrint('[MobileAI] 选择了 ${result.files.length} 个文件');
     } catch (e) {
-      Log.debug('[MobileAI] 附件选择失败: $e');
+      debugPrint('[MobileAI] 选择文件失败: $e');
+      _showToast('选择文件失败');
     } finally {
       if (mounted) setState(() => _isAttachmentLoading = false);
     }
+  }
+
+  void _showToast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   @override
@@ -820,6 +1046,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                 style: const TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 10),
+              // 附件预览区域
+              if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
               // Toolbar row: 模型 / 深度思考 / 联网搜索 / 附件 / 发送
               SizedBox(
                 height: 36,
@@ -892,4 +1120,167 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
       ),
     );
   }
+
+  /// 构建附件预览区域
+  Widget _buildAttachmentPreviewArea() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withValues(alpha: 0.2)
+            : Colors.grey.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.attach_file,
+                size: 14,
+                color: Theme.of(context).hintColor,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${_attachments.length} 个附件',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).hintColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _attachments
+                .map((attachment) => _buildAttachmentItem(attachment))
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建单个附件项
+  Widget _buildAttachmentItem(_MobileAttachmentItem attachment) {
+    final extension = attachment.name.split('.').last.toLowerCase();
+    final isImage = attachment.type == _MobileAttachmentType.image;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 140),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.1)
+            : Colors.white.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 文件类型图标
+          Icon(
+            isImage
+                ? Icons.image
+                : _getFileIcon(extension),
+            size: 18,
+            color: isImage ? Colors.red : Colors.blue,
+          ),
+          const SizedBox(width: 6),
+          // 文件名
+          Flexible(
+            child: Text(
+              attachment.name,
+              style: const TextStyle(fontSize: 11),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          // 删除按钮
+          GestureDetector(
+            onTap: () => _removeAttachment(attachment),
+            child: Icon(
+              Icons.close,
+              size: 14,
+              color: Theme.of(context).hintColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 获取文件类型图标
+  IconData _getFileIcon(String extension) {
+    switch (extension) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow;
+      case 'txt':
+      case 'md':
+        return Icons.text_snippet;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  /// 移除附件
+  void _removeAttachment(_MobileAttachmentItem attachment) {
+    setState(() {
+      _attachments.remove(attachment);
+    });
+    debugPrint('[MobileAI] 移除了附件: ${attachment.name}');
+  }
+}
+
+/// 附件类型枚举
+enum _MobileAttachmentType {
+  image,
+  file,
+}
+
+/// 上传状态枚举
+enum _MobileUploadStatus {
+  success,
+  failed,
+}
+
+/// 附件项数据模型
+class _MobileAttachmentItem {
+  final _MobileAttachmentType type;
+  final String name;
+  final int? size;
+  final ChatImage? image;
+  final File? file;
+  final _MobileUploadStatus uploadStatus;
+
+  _MobileAttachmentItem({
+    required this.type,
+    required this.name,
+    this.size,
+    this.image,
+    this.file,
+    required this.uploadStatus,
+  });
 }

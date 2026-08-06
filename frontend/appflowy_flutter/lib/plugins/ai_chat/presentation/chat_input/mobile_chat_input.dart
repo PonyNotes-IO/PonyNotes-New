@@ -6,14 +6,17 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
 import 'package:extended_text_field/extended_text_field.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:flowy_infra/platform_extension.dart';
 
@@ -42,6 +45,9 @@ class _MobileChatInputState extends State<MobileChatInput> {
   final inputControlCubit = ChatInputControlCubit();
   final focusNode = FocusNode();
   final textController = TextEditingController();
+
+  // 附件加载状态
+  bool _isAttachmentLoading = false;
 
   @override
   void initState() {
@@ -221,26 +227,208 @@ class _MobileChatInputState extends State<MobileChatInput> {
 
   /// 对标欢迎页：附件上传按钮
   Widget _buildAttachmentButton(BuildContext context) {
-    final iconColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    return BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
+      buildWhen: (prev, curr) =>
+          prev.attachedFiles.length != curr.attachedFiles.length ||
+          prev.enableDeepThinking != curr.enableDeepThinking ||
+          prev.enableWebSearch != curr.enableWebSearch,
+      builder: (context, state) {
+        final hasAttachments = state.attachedFiles.isNotEmpty;
+        final isDisabled = state.enableDeepThinking || state.enableWebSearch;
+        final colorScheme = Theme.of(context).colorScheme;
+        final iconColor = isDisabled
+            ? colorScheme.onSurface.withValues(alpha: 0.3)
+            : colorScheme.onSurfaceVariant;
 
-    return GestureDetector(
-      onTap: _pickAttachment,
-      child: SizedBox(
-        width: 28,
-        height: 28,
-        child: Center(
-          child: FlowySvg(
-            FlowySvgs.m_ai_attachment_m,
-            size: const Size.square(24),
-            color: iconColor,
+        return GestureDetector(
+          onTap: isDisabled || _isAttachmentLoading
+              ? null
+              : () => _showAttachmentSourceMenu(context),
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Center(
+                  child: _isAttachmentLoading
+                      ? SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator.adaptive(
+                            strokeWidth: 1.5,
+                          ),
+                        )
+                      : FlowySvg(
+                          FlowySvgs.m_ai_attachment_m,
+                          size: const Size.square(24),
+                          color: iconColor,
+                        ),
+                ),
+                if (hasAttachments)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE94618),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Theme.of(context).scaffoldBackgroundColor,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${state.attachedFiles.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 显示附件来源选择菜单
+  void _showAttachmentSourceMenu(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.photo_library, color: Colors.blue),
+                ),
+                title: const Text('从相册选择'),
+                subtitle: const Text('选择图片'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImages();
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.folder_open, color: Colors.green),
+                ),
+                title: const Text('从文件选择'),
+                subtitle: const Text('PDF、Word、文本等'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickFiles();
+                },
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Future<void> _pickAttachment() async {
-    // TODO: 对接附件上传逻辑，与桌面端保持一致
+  Future<void> _pickImages() async {
+    if (!mounted) return;
+    setState(() => _isAttachmentLoading = true);
+    try {
+      final hasPermission =
+          await PermissionChecker.checkPhotoPermission(context);
+      if (!hasPermission) {
+        debugPrint('[MobileAI] 没有相册访问权限');
+        return;
+      }
+
+      final xFiles = await ImagePicker().pickMultiImage();
+      if (xFiles.isEmpty) return;
+
+      if (!mounted) return;
+      final bloc = context.read<AIPromptInputBloc>();
+      for (final xFile in xFiles) {
+        bloc.add(AIPromptInputEvent.attachFile(xFile.path, xFile.name));
+      }
+
+      debugPrint('[MobileAI] 选择了 ${xFiles.length} 张图片');
+    } catch (e) {
+      debugPrint('[MobileAI] 选择图片失败: $e');
+      if (mounted) _showToast('选择图片失败');
+    } finally {
+      if (mounted) setState(() => _isAttachmentLoading = false);
+    }
+  }
+
+  Future<void> _pickFiles() async {
+    if (!mounted) return;
+    setState(() => _isAttachmentLoading = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.custom,
+        allowedExtensions: [
+          'jpg', 'jpeg', 'png', 'gif', 'webp',
+          'pdf', 'doc', 'docx', 'txt', 'md',
+          'xls', 'xlsx', 'ppt', 'pptx',
+        ],
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      if (!mounted) return;
+      final bloc = context.read<AIPromptInputBloc>();
+      for (final pickedFile in result.files) {
+        if (pickedFile.path != null && pickedFile.path!.isNotEmpty) {
+          bloc.add(AIPromptInputEvent.attachFile(pickedFile.path!, pickedFile.name));
+        }
+      }
+
+      debugPrint('[MobileAI] 选择了 ${result.files.length} 个文件');
+    } catch (e) {
+      debugPrint('[MobileAI] 选择文件失败: $e');
+      if (mounted) _showToast('选择文件失败');
+    } finally {
+      if (mounted) setState(() => _isAttachmentLoading = false);
+    }
+  }
+
+  void _showToast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
   }
 
   Widget sendButton() {
