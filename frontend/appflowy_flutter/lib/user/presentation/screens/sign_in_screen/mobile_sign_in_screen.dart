@@ -60,10 +60,10 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: const [
-                            Color(0xFFFFFAF8), // start - 近透明浅青，露出底色
-                            Color(0xFFFFFAF8), // center - 半透明白
-                            Color(0xFFFFFFFF), // end - 不透明白
+                          colors: [
+                            Theme.of(context).scaffoldBackgroundColor,
+                            Theme.of(context).scaffoldBackgroundColor,
+                            Theme.of(context).scaffoldBackgroundColor,
                           ],
                           stops: const [0.0, 0.5, 1.0],
                         ),
