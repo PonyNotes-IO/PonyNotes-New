@@ -76,13 +76,13 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
                     child: Column(
                       children: [
-                        VSpace(110),
+                        VSpace(60),
                         // Logo and welcome text
                         FlowyLogoTitle(
                           title: LocaleKeys.welcomeToPonyNotes.tr(),
-                          logoSize: Size.square(60),
+                          logoSize: Size.square(48),
                         ),
-                        VSpace(40),
+                        VSpace(16),
 
                         // Phone input and login button
                         MobilePhoneLoginForm(
@@ -93,7 +93,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                           },
                           initialAgreed: _agreedToTerms,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
 
                         QuickStartButton(
                           onTap: () {

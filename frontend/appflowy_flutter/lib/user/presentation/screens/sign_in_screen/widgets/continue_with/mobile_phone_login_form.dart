@@ -87,7 +87,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             ),
             style: TextStyle(
               fontSize: 16,
