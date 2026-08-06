@@ -311,7 +311,7 @@ class _ViewCover extends StatelessWidget {
           FlowySvgs.m_grid_thumbnail_m,
           isLightMode ? const Color(0xFFF5F4FF) : const Color(0x338B80AD)
         ),
-      ViewLayoutPB.Board => (
+      ViewLayoutPB.Board || ViewLayoutPB.Whiteboard => (
           FlowySvgs.m_board_thumbnail_m,
           isLightMode ? const Color(0x7FE0FDD9) : const Color(0x3372936B),
         ),
@@ -337,7 +337,7 @@ class _ViewCover extends StatelessWidget {
       child: Center(
         child: FlowySvg(
           svg,
-          blendMode: null,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );
