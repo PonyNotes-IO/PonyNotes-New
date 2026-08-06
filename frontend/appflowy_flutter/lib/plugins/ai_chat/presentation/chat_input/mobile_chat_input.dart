@@ -1,6 +1,6 @@
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/ai/service/ai_model_capabilities.dart';
 import 'package:appflowy/ai/service/ai_model_state_notifier.dart';
-import 'package:appflowy/ai/service/select_model_bloc.dart';
 import 'package:appflowy/ai/widgets/prompt_input/mentioned_page_text_span.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
@@ -10,7 +10,9 @@ import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:extended_text_field/extended_text_field.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -378,6 +380,9 @@ class _MobileChatInputState extends State<MobileChatInput> {
       }
 
       debugPrint('[MobileAI] 选择了 ${xFiles.length} 张图片');
+
+      // 【PonyNotes】添加图片后，自动切换到支持多模态的模型（如 DeepSeek 不支持图片）
+      await _ensureModelSupportsImages(showHint: true);
     } catch (e) {
       debugPrint('[MobileAI] 选择图片失败: $e');
       if (mounted) _showToast('选择图片失败');
@@ -419,6 +424,131 @@ class _MobileChatInputState extends State<MobileChatInput> {
     }
   }
 
+  /// 【PonyNotes】确保当前选中的 AI 模型支持多模态（图片附件）
+  ///
+  /// 若当前模型不支持图片附件（例如 DeepSeek），
+  /// 自动切换到第一个支持多模态的模型（通义千问 / 豆包）。
+  /// 行为与电脑端 `ai_input_area.dart._ensureModelSupportsImages` 一致。
+  ///
+  /// 实现说明：依次尝试 3 种数据源读取模型列表：
+  /// 1. 全局设置模型列表（kGlobalAIModelSource）
+  /// 2. 本地模型列表（AIEventGetLocalModelSelection）
+  /// 3. 当前会话模型列表（notifier）
+  /// 以最先返回非空列表的数据源为准。
+  ///
+  /// 返回值：true = 当前模型已支持 / 已成功切换；false = 切换失败或无可用模型。
+  Future<bool> _ensureModelSupportsImages({bool showHint = false}) async {
+    if (!mounted) return false;
+    final notifier = context.read<AIPromptInputBloc>().aiModelStateNotifier;
+    final (sessionModels, selectedModel) = notifier.getModelSelection();
+
+    debugPrint(
+      '[MobileAI] _ensureModelSupportsImages: '
+      'selectedModel=${selectedModel?.name ?? 'null'}, '
+      'sessionModels.length=${sessionModels.length}',
+    );
+
+    if (AIModelCapabilities.supportsAIModelPB(selectedModel)) {
+      debugPrint('[MobileAI] 当前模型已支持图片，无需切换');
+      return true;
+    }
+
+    // 依次尝试 3 种数据源读取模型列表
+    List<AIModelPB>? allModels;
+
+    // 数据源 1：全局设置模型
+    try {
+      final result = await AIEventGetSettingModelSelection(
+        ModelSourcePB(source: kGlobalAIModelSource),
+      ).send();
+      allModels = result.fold(
+        (ms) {
+          debugPrint('[MobileAI] 全局设置模型数量: ${ms.models.length}');
+          for (final m in ms.models) {
+            debugPrint('  - ${m.name} (isLocal=${m.isLocal})');
+          }
+          return ms.models;
+        },
+        (err) {
+          debugPrint('[MobileAI] 读取全局设置失败: ${err.msg}');
+          return null;
+        },
+      );
+    } catch (e) {
+      debugPrint('[MobileAI] 读取全局设置异常: $e');
+    }
+
+    // 数据源 2：本地模型
+    if ((allModels == null || allModels.isEmpty) && mounted) {
+      try {
+        final result = await AIEventGetLocalModelSelection().send();
+        allModels = result.fold(
+          (ms) {
+            debugPrint('[MobileAI] 本地模型数量: ${ms.models.length}');
+            return ms.models;
+          },
+          (err) {
+            debugPrint('[MobileAI] 读取本地模型失败: ${err.msg}');
+            return null;
+          },
+        );
+      } catch (e) {
+        debugPrint('[MobileAI] 读取本地模型异常: $e');
+      }
+    }
+
+    // 数据源 3：当前会话模型（作为最后 fallback）
+    if ((allModels == null || allModels.isEmpty) && sessionModels.isNotEmpty) {
+      debugPrint('[MobileAI] 使用当前会话模型: ${sessionModels.length}');
+      allModels = sessionModels;
+    }
+
+    if (allModels == null || allModels.isEmpty) {
+      if (showHint && mounted) {
+        _showToast('当前无可用模型，请检查网络或 AI 配置');
+      }
+      debugPrint('[MobileAI] 所有数据源均无模型，放弃切换');
+      return false;
+    }
+
+    // 过滤出支持图片的模型（诊断日志已内置在 AIModelCapabilities.supportsAIModelPB）
+    final multimodalModels =
+        allModels.where(AIModelCapabilities.supportsAIModelPB).toList();
+    if (multimodalModels.isEmpty) {
+      debugPrint('[MobileAI] 可用模型中无多模态模型: ${allModels.map((m) => m.name).join(', ')}');
+      if (showHint && mounted) {
+        _showToast('当前无可支持图片的多模态模型');
+      }
+      return false;
+    }
+
+    final newModel = multimodalModels.first;
+    final oldName = selectedModel?.name ?? 'null';
+    debugPrint(
+      '[MobileAI] 自动切换: $oldName → ${newModel.name} (source=${notifier.objectId})',
+    );
+
+    // 调用后端切换模型
+    final payload = UpdateSelectedModelPB(
+      source: notifier.objectId,
+      selectedModel: newModel,
+    );
+    final result = await AIEventUpdateSelectedModel(payload).send();
+    if (result.isFailure) {
+      final err = result.fold((_) => null, (err) => err);
+      debugPrint('[MobileAI] 切换模型失败: ${err?.msg ?? '未知错误'}');
+      if (showHint && mounted) {
+        _showToast('切换模型失败：${err?.msg ?? '请稍后重试'}');
+      }
+      return false;
+    }
+
+    if (showHint && mounted) {
+      _showToast('已自动切换到 ${newModel.i18n}');
+    }
+    return true;
+  }
+
   void _showToast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -457,14 +587,41 @@ class _MobileChatInputState extends State<MobileChatInput> {
   }
 
   Future<void> handleSendPressed() async {
+    final bloc = context.read<AIPromptInputBloc>();
     final canUseAI = await context.checkAndHandleAIChatLimit();
     if (!canUseAI) return;
 
     if (widget.isStreaming) return;
     final trimmedText = textController.text.trim();
     if (trimmedText.isEmpty) return;
+
+    // 【PonyNotes】如果当前消息包含图片附件，确保模型支持多模态（DeepSeek 不支持图片）
+    // - 必须在 consumeMetadata() 之前执行，否则附件已被清空，无法再判断
+    final hasImageAttachment = bloc.state.attachedFiles.any(
+      (f) => _isImageExtension(f.filePath),
+    );
+    if (hasImageAttachment) {
+      // 显示提示框说明切换
+      if (!mounted) return;
+      final ok = await _ensureModelSupportsImages(showHint: true);
+      // 切换成功与否都继续：失败时让后端返回错误，行为更透明
+      if (!ok) {
+        debugPrint('[MobileAI] 自动切换模型失败，仍尝试发送，可能后端会拒绝');
+      }
+    }
+
     textController.clear();
     onSubmitText(trimmedText);
+  }
+
+  /// 判断文件名是否为图片（基于扩展名）
+  bool _isImageExtension(String filePath) {
+    final ext = filePath.split('.').last.toLowerCase();
+    return ext == 'jpg' ||
+        ext == 'jpeg' ||
+        ext == 'png' ||
+        ext == 'gif' ||
+        ext == 'webp';
   }
 
   Future<void> onSubmitText(String text) async {
