@@ -1,8 +1,10 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
 import 'package:appflowy/mobile/presentation/home/section_folder/mobile_home_section_folder_header.dart';
+import 'package:appflowy/mobile/presentation/home/workspaces/create_workspace_menu.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
@@ -11,6 +13,7 @@ import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -46,7 +49,13 @@ class MobileSectionFolder extends StatelessWidget {
                   onPressed: () => context
                       .read<FolderBloc>()
                       .add(const FolderEvent.expandOrUnExpand()),
-                  onAdded: () => _createNewPage(context),
+                  onAdded: () => spaceType == FolderSpaceType.public &&
+                          context
+                              .read<UserWorkspaceBloc>()
+                              .state
+                              .isCollabWorkspaceOn
+                      ? _showCreateWorkspaceBottomSheet(context)
+                      : _createNewPage(context),
                 ),
               ),
               if (state.isExpanded)
@@ -94,6 +103,33 @@ class MobileSectionFolder extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  void _showCreateWorkspaceBottomSheet(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      title: LocaleKeys.workspace_create.tr(),
+      showCloseButton: true,
+      showDragHandle: true,
+      showDivider: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      builder: (bottomSheetContext) {
+        return EditWorkspaceNameBottomSheet(
+          type: EditWorkspaceNameType.create,
+          workspaceName: LocaleKeys.workspace_defaultName.tr(),
+          onSubmitted: (name) {
+            Navigator.of(bottomSheetContext).pop();
+            context.read<UserWorkspaceBloc>().add(
+                  UserWorkspaceEvent.createWorkspace(
+                    name: name,
+                    workspaceType: WorkspaceTypePB.ServerW,
+                  ),
+                );
+          },
+        );
+      },
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
+import 'package:appflowy/mobile/presentation/home/workspaces/create_workspace_menu.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/shared/list_extension.dart';
@@ -17,6 +18,7 @@ import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -65,12 +67,7 @@ class MobileSpace extends StatelessWidget {
                 title: LocaleKeys.sideBar_workspace.tr(),
                 spaces: publicSpaces,
                 spaceType: FolderSpaceType.public,
-                onAddPressed: () => _showCreatePageMenu(
-                  context,
-                  publicSpaces.isNotEmpty
-                      ? publicSpaces.first
-                      : state.currentSpace ?? state.spaces.first,
-                ),
+                onAddPressed: () => _showCreateWorkspaceBottomSheet(context),
                 favoriteBloc: favoriteBloc,
               ),
             ] else ...[
@@ -131,6 +128,33 @@ class MobileSpace extends StatelessWidget {
                 SpaceEvent.open(space: space, afterOpen: createPage),
               );
             }
+          },
+        );
+      },
+    );
+  }
+
+  void _showCreateWorkspaceBottomSheet(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      title: LocaleKeys.workspace_create.tr(),
+      showCloseButton: true,
+      showDragHandle: true,
+      showDivider: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      builder: (bottomSheetContext) {
+        return EditWorkspaceNameBottomSheet(
+          type: EditWorkspaceNameType.create,
+          workspaceName: LocaleKeys.workspace_defaultName.tr(),
+          onSubmitted: (name) {
+            Navigator.of(bottomSheetContext).pop();
+            context.read<UserWorkspaceBloc>().add(
+                  UserWorkspaceEvent.createWorkspace(
+                    name: name,
+                    workspaceType: WorkspaceTypePB.ServerW,
+                  ),
+                );
           },
         );
       },
