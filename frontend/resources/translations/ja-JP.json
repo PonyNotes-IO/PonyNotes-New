@@ -89,8 +89,7 @@
     "errorActions": {
       "reportIssue": "問題を報告",
       "reportIssueOnGithub": "Githubで問題を報告",
-      "exportLogFiles": "ログファイルをエクスポート",
-      "reachOut": "Discordで連絡"
+      "exportLogFiles": "ログファイルをエクスポート"
     },
     "menuTitle": "ワークスペース",
     "deleteWorkspaceHintText": "ワークスペースを削除してもよろしいですか？この操作は元に戻せません。公開したページはすべて非公開になります。",
@@ -263,9 +262,6 @@
   },
   "dialogCreatePageNameHint": "ページ名",
   "questionBubble": {
-    "shortcuts": "ショートカット",
-    "whatsNew": "新着情報",
-    "markdown": "Markdown",
     "debug": {
       "name": "デバッグ情報",
       "success": "デバッグ情報をクリップボードにコピーしました！",
@@ -1318,7 +1314,6 @@
       "about": "概要",
       "pushNotifications": "プッシュ通知",
       "support": "サポート",
-      "joinDiscord": "Discordに参加",
       "privacyPolicy": "プライバシーポリシー",
       "userAgreement": "利用規約",
       "termsAndConditions": "利用条件",

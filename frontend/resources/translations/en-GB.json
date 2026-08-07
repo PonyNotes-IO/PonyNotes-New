@@ -89,8 +89,7 @@
     "errorActions": {
       "reportIssue": "Report an issue",
       "reportIssueOnGithub": "Report an issue on Github",
-      "exportLogFiles": "Export log files",
-      "reachOut": "Reach out on Discord"
+      "exportLogFiles": "Export log files"
     },
     "menuTitle": "Workspaces",
     "deleteWorkspaceHintText": "Are you sure you want to delete the workspace? This action cannot be undone, and any pages you have published will be unpublished.",
@@ -307,11 +306,7 @@
   },
   "dialogCreatePageNameHint": "Page name",
   "questionBubble": {
-    "shortcuts": "Shortcuts",
-    "whatsNew": "What's new?",
-    "helpAndDocumentation": "Help & documentation",
     "getSupport": "Get support",
-    "markdown": "Markdown",
     "debug": {
       "name": "Debug Info",
       "success": "Copied debug info to clipboard!",
@@ -1388,7 +1383,6 @@
       "about": "About",
       "pushNotifications": "Push Notifications",
       "support": "Support",
-      "joinDiscord": "Join us in Discord",
       "privacyPolicy": "Privacy Policy",
       "userAgreement": "User Agreement",
       "termsAndConditions": "Terms and Conditions",

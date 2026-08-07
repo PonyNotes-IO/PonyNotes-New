@@ -29,13 +29,8 @@ class SupportSettingGroup extends StatelessWidget {
       builder: (context, snapshot) => MobileSettingGroup(
         groupTitle: LocaleKeys.settings_mobile_support.tr(),
         settingItemList: [
-          MobileSettingItem(
-            name: LocaleKeys.settings_mobile_joinDiscord.tr(),
-            trailing: MobileSettingTrailing(
-              text: '',
-            ),
-            onTap: () => afLaunchUrlString('https://discord.gg/JucBXeU2FE'),
-          ),
+          // 已移除「在 Discord 中加入我们」：它指向上游 AppFlowy 的官方
+          // Discord 服务器，我们的用户点进去只会看到陌生的加入服务器页面。
           MobileSettingItem(
             name: LocaleKeys.workspace_errorActions_reportIssue.tr(),
             trailing: MobileSettingTrailing(
@@ -112,8 +107,9 @@ class _ReportIssuesWidget extends StatelessWidget {
           text: LocaleKeys.workspace_errorActions_reportIssueOnGithub.tr(),
           onTap: () {
             final String os = Platform.operatingSystem;
+            // 指向本项目仓库；bug_report.yaml 模板本仓库同样存在。
             afLaunchUrlString(
-              'https://github.com/AppFlowy-IO/AppFlowy/issues/new?assignees=&labels=&projects=&template=bug_report.yaml&title=[Bug]%20Mobile:%20&version=$version&os=$os',
+              'https://github.com/PonyNotes-IO/PonyNotes-New/issues/new?assignees=&labels=&projects=&template=bug_report.yaml&title=[Bug]%20Mobile:%20&version=$version&os=$os',
             );
           },
         ),

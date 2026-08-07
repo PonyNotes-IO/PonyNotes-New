@@ -85,8 +85,7 @@
     "notFoundError": "Area kerja tidak ditemukan",
     "failedToLoad": "Ada yang tidak beres! Gagal memuat area kerja. Coba tutup @:appName yang terbuka dan coba lagi.",
     "errorActions": {
-      "reportIssue": "Melaporkan isu",
-      "reachOut": "Hubungi di Discord"
+      "reportIssue": "Melaporkan isu"
     }
   },
   "shareAction": {
@@ -160,9 +159,6 @@
   },
   "dialogCreatePageNameHint": "Nama halaman",
   "questionBubble": {
-    "shortcuts": "Pintasan",
-    "whatsNew": "Apa yang baru?",
-    "markdown": "Penurunan harga",
     "debug": {
       "name": "Info debug",
       "success": "Info debug disalin ke papan klip!",
@@ -412,7 +408,6 @@
       "about": "Tentang",
       "pushNotifications": "Pemberitahuan Dorong",
       "support": "Dukungan",
-      "joinDiscord": "Bergabunglah dengan kami di Discord",
       "privacyPolicy": "Kebijakan Privasi",
       "userAgreement": "Perjanjian Pengguna"
     },

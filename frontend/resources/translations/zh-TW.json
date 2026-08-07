@@ -133,8 +133,7 @@
     "errorActions": {
       "reportIssue": "回報問題",
       "reportIssueOnGithub": "在 GitHub 上回報問題",
-      "exportLogFiles": "匯出記錄檔",
-      "reachOut": "在 Discord 上聯絡我們"
+      "exportLogFiles": "匯出記錄檔"
     },
     "menuTitle": "工作區",
     "deleteWorkspaceHintText": "您確定要刪除工作區嗎？ 此動作無法復原，您已發布的任何頁面都將會取消發布。",
@@ -351,11 +350,7 @@
   },
   "dialogCreatePageNameHint": "頁面名稱",
   "questionBubble": {
-    "shortcuts": "快捷鍵",
-    "whatsNew": "最新消息？",
-    "helpAndDocumentation": "說明與文件。",
     "getSupport": "取得支援",
-    "markdown": "Markdown",
     "debug": {
       "name": "除錯資訊",
       "success": "已將除錯資訊複製到剪貼簿",
@@ -1472,7 +1467,6 @@
       "about": "關於",
       "pushNotifications": "推播通知",
       "support": "支援",
-      "joinDiscord": "加入我們的 Discord",
       "privacyPolicy": "隱私權政策",
       "userAgreement": "使用者協議",
       "termsAndConditions": "條款與條件",

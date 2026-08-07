@@ -59,8 +59,7 @@
     "notFoundError": "የስራ ቦታ አልተገኘም",
     "failedToLoad": "የሆነ ስህተት ተከስቷል! የስራ ቦታውን መጫን አልተሳካም። ማንኛውንም የተከፈተ የአፕሊኬሽንን ምሳሌ ለመዝጋት ይሞክሩ ከዛ እንደገና ይሞክሩ።",
     "errorActions": {
-      "reportIssue": "ችግር ሪፖርት ያድርጉ",
-      "reachOut": "Discord ላይ ያግኙን"
+      "reportIssue": "ችግር ሪፖርት ያድርጉ"
     }
   },
   "shareAction": {
@@ -127,10 +126,7 @@
   },
   "dialogCreatePageNameHint": "ገጽ ስም",
   "questionBubble": {
-    "shortcuts": "አቋራጮች",
-    "whatsNew": "ምን አዲስ ነገር አለ?",
     "help": "እገዛ እና ድጋፍ",
-    "markdown": "ምልክት ተደርጎበታል",
     "debug": {
       "name": "ማረም መረጃ",
       "success": "የተገለበጠ የአድራሻ መረጃ ወደ ቅንጥብ ሰሌዳ!",

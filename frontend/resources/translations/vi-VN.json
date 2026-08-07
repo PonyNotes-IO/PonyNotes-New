@@ -88,8 +88,7 @@
     "errorActions": {
       "reportIssue": "Báo cáo một vấn đề",
       "reportIssueOnGithub": "Báo cáo sự cố trên Github",
-      "exportLogFiles": "Xuất tệp nhật ký",
-      "reachOut": "Báo cáo trên Discord"
+      "exportLogFiles": "Xuất tệp nhật ký"
     },
     "menuTitle": "Không gian làm việc",
     "deleteWorkspaceHintText": "Bạn có chắc chắn muốn xóa không gian làm việc không? Hành động này không thể được hoàn tác.",
@@ -226,9 +225,6 @@
   },
   "dialogCreatePageNameHint": "Tên trang",
   "questionBubble": {
-    "shortcuts": "Phím tắt",
-    "whatsNew": "Có gì mới?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Thông tin gỡ lỗi",
       "success": "Đã sao chép thông tin gỡ lỗi vào khay nhớ tạm!",
@@ -1195,7 +1191,6 @@
       "about": "Về",
       "pushNotifications": "Thông báo",
       "support": "Ủng hộ",
-      "joinDiscord": "Tham gia cùng chúng tôi trên Discord",
       "privacyPolicy": "Chính sách bảo mật",
       "userAgreement": "Thoả thuận người dùng",
       "termsAndConditions": "Điều khoản và điều kiện",

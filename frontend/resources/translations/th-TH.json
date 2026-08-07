@@ -91,8 +91,7 @@
     "errorActions": {
       "reportIssue": "รายงานปัญหา",
       "reportIssueOnGithub": "รายงานปัญหาบน Github",
-      "exportLogFiles": "ส่งออกไฟล์บันทึก",
-      "reachOut": "ติดต่อได้ที่ Discord"
+      "exportLogFiles": "ส่งออกไฟล์บันทึก"
     },
     "menuTitle": "พื้นที่ทำงาน",
     "deleteWorkspaceHintText": "คุณแน่ใจหรือไม่ว่าต้องการลบพื้นที่ทำงาน? การกระทำนี้ไม่สามารถย้อนกลับได้ และทุกหน้าที่คุณเผยแพร่จะถูกยกเลิกการเผยแพร่",
@@ -250,9 +249,6 @@
   },
   "dialogCreatePageNameHint": "ชื่อหน้า",
   "questionBubble": {
-    "shortcuts": "ทางลัด",
-    "whatsNew": "มีอะไรใหม่?",
-    "markdown": "Markdown",
     "debug": {
       "name": "ข้อมูลดีบัก",
       "success": "คัดลอกข้อมูลดีบักไปยังคลิปบอร์ดแล้ว!",
@@ -1301,7 +1297,6 @@
       "about": "เกี่ยวกับ",
       "pushNotifications": "การแจ้งเตือนแบบพุช",
       "support": "การสนับสนุน",
-      "joinDiscord": "เข้าร่วมกับเราบน Discord",
       "privacyPolicy": "นโยบายความเป็นส่วนตัว",
       "userAgreement": "ข้อตกลงผู้ใช้",
       "termsAndConditions": "ข้อกำหนดและเงื่อนไข",

@@ -87,8 +87,7 @@
     "errorActions": {
       "reportIssue": "Повідомити про проблему",
       "reportIssueOnGithub": "Повідомити про проблему на Github",
-      "exportLogFiles": "Експорт файлів журналу",
-      "reachOut": "Звернутися на Discord"
+      "exportLogFiles": "Експорт файлів журналу"
     },
     "menuTitle": "Робочі області",
     "deleteWorkspaceHintText": "Ви впевнені, що хочете видалити робочу область? Цю дію неможливо скасувати, і всі опубліковані вами сторінки буде скасовано.",
@@ -225,9 +224,6 @@
   },
   "dialogCreatePageNameHint": "Назва сторінки",
   "questionBubble": {
-    "shortcuts": "Комбінації клавіш",
-    "whatsNew": "Що нового?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Інформація для налагодження",
       "success": "Інформацію для налагодження скопійовано в буфер обміну!",
@@ -1194,7 +1190,6 @@
       "about": "Про",
       "pushNotifications": "Push-сповіщення",
       "support": "Підтримка",
-      "joinDiscord": "Приєднуйтесь до нас у Discord",
       "privacyPolicy": "Політика конфіденційності",
       "userAgreement": "Угода користувача",
       "termsAndConditions": "Правила та умови",

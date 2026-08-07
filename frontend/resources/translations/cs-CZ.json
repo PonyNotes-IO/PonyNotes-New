@@ -131,8 +131,7 @@
     "errorActions": {
       "reportIssue": "Nahlásit problém",
       "reportIssueOnGithub": "Nahlásit problém na Githubu",
-      "exportLogFiles": "Exportovat soubory protokolu",
-      "reachOut": "Ozvat se na Discordu"
+      "exportLogFiles": "Exportovat soubory protokolu"
     },
     "menuTitle": "Pracovní prostory",
     "deleteWorkspaceHintText": "Opravdu chcete smazat pracovní prostor? Tuto akci nelze vrátit zpět a všechny zveřejněné stránky přestanou být dostupné.",
@@ -346,11 +345,7 @@
   },
   "dialogCreatePageNameHint": "Název stránky",
   "questionBubble": {
-    "shortcuts": "Klávesové zkratky",
-    "whatsNew": "Co je nového?",
-    "helpAndDocumentation": "Nápověda a dokumentace",
     "getSupport": "Získejte podporu",
-    "markdown": "Markdown",
     "debug": {
       "name": "Debug informace",
       "success": "Debug informace zkopírovány do schránky!",
@@ -802,7 +797,6 @@
       "about": "O aplikaci",
       "pushNotifications": "Push upozornění",
       "support": "Podpora",
-      "joinDiscord": "Přidejte se k nám na Discordu",
       "privacyPolicy": "Podmínky použití osobních údajů",
       "userAgreement": "Uživatels",
       "userprofileError": "Nepodařilo se načíst uživatelský profil",

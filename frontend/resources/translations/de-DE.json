@@ -88,8 +88,7 @@
     "errorActions": {
       "reportIssue": "Problem melden",
       "reportIssueOnGithub": "Melde ein Problem auf GitHub",
-      "exportLogFiles": "Exportiere Log-Dateien",
-      "reachOut": "Kontaktiere uns auf Discord"
+      "exportLogFiles": "Exportiere Log-Dateien"
     },
     "menuTitle": "Arbeitsbereiche",
     "deleteWorkspaceHintText": "Sicher, dass du deinen Arbeitsbereich löschen möchtest? Dies kann nicht mehr Rückgängig gemacht werden.",
@@ -252,9 +251,6 @@
   },
   "dialogCreatePageNameHint": "Seitenname",
   "questionBubble": {
-    "shortcuts": "Tastenkürzel",
-    "whatsNew": "Was gibt es Neues?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Debug-Informationen",
       "success": "Debug-Informationen in die Zwischenablage kopiert!",
@@ -1345,7 +1341,6 @@
       "about": "Über",
       "pushNotifications": "Push Benachrichtigungen",
       "support": "Support",
-      "joinDiscord": "Komm zu uns auf Discord",
       "privacyPolicy": "Datenschutz",
       "userAgreement": "Nutzungsbedingungen",
       "termsAndConditions": "Geschäftsbedingungen",

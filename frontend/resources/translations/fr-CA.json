@@ -93,8 +93,7 @@
     "errorActions": {
       "reportIssue": "Signaler un problème",
       "reportIssueOnGithub": "Signaler un bug sur Github",
-      "exportLogFiles": "Exporter les logs",
-      "reachOut": "Contactez-nous sur Discord"
+      "exportLogFiles": "Exporter les logs"
     },
     "menuTitle": "Espaces de travail",
     "deleteWorkspaceHintText": "Êtes-vous sûr de vouloir supprimer l'espace de travail ? Cette action ne peut pas être annulée.",
@@ -196,9 +195,6 @@
   },
   "dialogCreatePageNameHint": "Nom de la page",
   "questionBubble": {
-    "shortcuts": "Raccourcis",
-    "whatsNew": "Nouveautés",
-    "markdown": "Réduction",
     "debug": {
       "name": "Infos du système",
       "success": "Informations de débogage copiées dans le presse-papiers !",
@@ -493,7 +489,6 @@
       "about": "À propos",
       "pushNotifications": "Notifications push",
       "support": "Support",
-      "joinDiscord": "Rejoignez-nous sur Discord",
       "privacyPolicy": "Politique de Confidentialité",
       "userAgreement": "Accord de l'utilisateur",
       "termsAndConditions": "Termes et conditions",

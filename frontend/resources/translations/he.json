@@ -81,8 +81,7 @@
     "errorActions": {
       "reportIssue": "דיווח על תקלה",
       "reportIssueOnGithub": "דיווח על תקלה דרך GitHub",
-      "exportLogFiles": "ייצוא קובצי יומנים",
-      "reachOut": "פנייה אלינו דרך Discord"
+      "exportLogFiles": "ייצוא קובצי יומנים"
     },
     "menuTitle": "מרחבי עבודה",
     "deleteWorkspaceHintText": "למחוק את מרחב העבודה? הפעולה הזאת היא בלתי הפיכה, ועמודים שפרסמת יוסתרו.",
@@ -206,9 +205,6 @@
   },
   "dialogCreatePageNameHint": "שם העמוד",
   "questionBubble": {
-    "shortcuts": "מקשי קיצור",
-    "whatsNew": "מה חדש?",
-    "markdown": "Markdown",
     "debug": {
       "name": "פרטי ניפוי שגיאות",
       "success": "פרטי ניפוי השגיאות הועתקו ללוח הגזירים!",
@@ -1004,7 +1000,6 @@
       "about": "על אודות",
       "pushNotifications": "התראות בדחיפה",
       "support": "תמיכה",
-      "joinDiscord": "להצטרף אלינו ב־Discord",
       "privacyPolicy": "מדיניות פרטיות",
       "userAgreement": "הסכם שימוש",
       "termsAndConditions": "תנאים והתניות",

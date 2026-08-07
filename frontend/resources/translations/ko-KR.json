@@ -89,8 +89,7 @@
     "errorActions": {
       "reportIssue": "문제 보고",
       "reportIssueOnGithub": "GitHub에서 문제 보고",
-      "exportLogFiles": "로그 파일 내보내기",
-      "reachOut": "Discord에서 문의"
+      "exportLogFiles": "로그 파일 내보내기"
     },
     "menuTitle": "작업 공간",
     "deleteWorkspaceHintText": "작업 공간을 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 게시한 모든 페이지가 게시 취소됩니다.",
@@ -301,9 +300,6 @@
   },
   "dialogCreatePageNameHint": "페이지 이름",
   "questionBubble": {
-    "shortcuts": "단축키",
-    "whatsNew": "새로운 기능",
-    "markdown": "Markdown",
     "debug": {
       "name": "디버그 정보",
       "success": "디버그 정보를 클립보드에 복사했습니다!",
@@ -1374,7 +1370,6 @@
       "about": "정보",
       "pushNotifications": "푸시 알림",
       "support": "지원",
-      "joinDiscord": "Discord에 참여",
       "privacyPolicy": "개인정보 보호정책",
       "userAgreement": "사용자 계약",
       "termsAndConditions": "이용 약관",

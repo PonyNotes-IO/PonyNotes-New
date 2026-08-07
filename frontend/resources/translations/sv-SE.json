@@ -107,9 +107,6 @@
   },
   "dialogCreatePageNameHint": "Sidnamn",
   "questionBubble": {
-    "shortcuts": "Genvägar",
-    "whatsNew": "Vad nytt?",
-    "markdown": "Prissänkning",
     "debug": {
       "name": "Felsökningsinfo",
       "success": "Kopierade felsökningsinfo till urklipp!",

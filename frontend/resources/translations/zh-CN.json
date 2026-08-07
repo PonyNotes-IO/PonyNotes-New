@@ -167,8 +167,7 @@
     "errorActions": {
       "reportIssue": "上报问题",
       "reportIssueOnGithub": "在 Github 上报告问题",
-      "exportLogFiles": "导出日志文件",
-      "reachOut": "在 Discord 联系我们"
+      "exportLogFiles": "导出日志文件"
     },
     "menuTitle": "工作区",
     "deleteWorkspaceHintText": "您确定要删除这个工作区嘛？这个操作不可恢复。",
@@ -385,9 +384,6 @@
   },
   "dialogCreatePageNameHint": "页面名称",
   "questionBubble": {
-    "shortcuts": "快捷键",
-    "whatsNew": "新功能",
-    "markdown": "Markdown",
     "debug": {
       "name": "调试信息",
       "success": "已将调试信息复制到剪贴板！",
@@ -395,8 +391,7 @@
     },
     "feedback": "反馈",
     "help": "帮助和支持",
-    "getSupport": "获取支持",
-    "helpAndDocumentation": "帮助和文档"
+    "getSupport": "获取支持"
   },
   "menuAppHeader": {
     "moreButtonToolTip": "更多按钮工具",
@@ -1500,7 +1495,6 @@
       "about": "关于",
       "pushNotifications": "推送通知",
       "support": "支持",
-      "joinDiscord": "在 Discord 中加入我们",
       "privacyPolicy": "隐私政策",
       "userAgreement": "用户协议",
       "termsAndConditions": "条款和条件",

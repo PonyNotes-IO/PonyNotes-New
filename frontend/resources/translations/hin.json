@@ -122,10 +122,7 @@
   },
   "dialogCreatePageNameHint": "पेज का नाम",
   "questionBubble": {
-    "shortcuts": "शॉर्टकट",
-    "whatsNew": "क्या नया है?",
     "help": "सहायता",
-    "markdown": "markdown",
     "debug": {
       "name": "डीबग जानकारी",
       "success": "डिबग जानकारी क्लिपबोर्ड पर कॉपी की गई!",

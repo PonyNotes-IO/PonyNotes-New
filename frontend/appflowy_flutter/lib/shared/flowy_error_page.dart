@@ -138,8 +138,10 @@ class _DesktopSyncErrorPage extends StatelessWidget {
                   ),
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
+                      // 指向本项目仓库；bug_report.yaml 模板本仓库同样存在
+                      // （.github/ISSUE_TEMPLATE/），故保留模板参数。
                       afLaunchUrlString(
-                        'https://github.com/AppFlowy-IO/AppFlowy/issues/new?template=bug_report.yaml',
+                        'https://github.com/PonyNotes-IO/PonyNotes-New/issues/new?template=bug_report.yaml',
                       );
                     },
                 ),

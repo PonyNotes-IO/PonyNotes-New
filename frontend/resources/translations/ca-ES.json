@@ -59,8 +59,7 @@
     "hint": "espai de treball",
     "notFoundError": "No s'ha trobat l'espai de treball",
     "errorActions": {
-      "reportIssue": "Informar d'un problema",
-      "reachOut": "Posa't en contacte amb Discord"
+      "reportIssue": "Informar d'un problema"
     }
   },
   "shareAction": {
@@ -133,9 +132,6 @@
   },
   "dialogCreatePageNameHint": "Nom de la pàgina",
   "questionBubble": {
-    "shortcuts": "Dreceres",
-    "whatsNew": "Què hi ha de nou?",
-    "markdown": "Reducció",
     "debug": {
       "name": "Informació de depuració",
       "success": "S'ha copiat la informació de depuració!",
@@ -393,7 +389,6 @@
       "about": "Sobre",
       "pushNotifications": "Notificacions push",
       "support": "Suport",
-      "joinDiscord": "Uneix-te a nosaltres a Discord",
       "privacyPolicy": "Política de privacitat",
       "userAgreement": "Acord d'usuari",
       "termsAndConditions": "Termes i condicions",
