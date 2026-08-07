@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -88,6 +89,39 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   }
 
   bool get _hasChat => widget.id != null;
+
+  /// 是否为匿名（本地体验）用户。
+  ///
+  /// 匿名登录（"快速体验"）走 `signUpAsGuest`，最终 `userAuthType`
+  /// 为 [AuthTypePB.Local]，且 `workspaceType` 为 [WorkspaceTypePB.LocalW]。
+  /// 这种账号没有 AI 服务配额，直接调 AI 会失败，需要引导用户登录。
+  bool get _isAnonymousUser {
+    final profile = _userProfile;
+    if (profile == null) return false;
+    return profile.userAuthType == AuthTypePB.Local;
+  }
+
+  /// 弹出匿名用户提示，提供"去登录"入口。
+  ///
+  /// 使用项目统一的 `showSimpleAFDialog`（AppFlowy 主题弹窗），
+  /// 与桌面端 `MembershipCheckerService.showFeatureRestrictedDialog` 风格一致。
+  Future<void> _showAnonymousUserDialog() async {
+    if (!mounted) return;
+    await showSimpleAFDialog(
+      context: context,
+      title: 'AI 功能暂不可用',
+      content: '当前为匿名体验账号，无法使用 AI 服务。登录账号即可使用 AI 对话功能。',
+      primaryAction: (
+        '去登录',
+        (ctx) {
+          if (!ctx.mounted) return;
+          // 跳转登录页（与全局 SignInScreen.routeName 一致）
+          GoRouter.of(ctx).go('/SignInScreen');
+        },
+      ),
+      secondaryAction: ('取消', null),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -291,10 +325,18 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     if (_isSending) return;
     if (message.trim().isEmpty) return;
 
+    // 匿名（本地体验）用户没有 AI 服务，直接拦截并引导登录，
+    // 避免调用后端失败导致 FlutterError 与首页路由错乱。
+    if (_isAnonymousUser) {
+      await _showAnonymousUserDialog();
+      return;
+    }
+
     setState(() => _isSending = true);
 
     try {
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
+      if (!mounted) return;
       if (workspaceId == null) {
         _showError('无法获取工作空间信息');
         setState(() => _isSending = false);
@@ -314,12 +356,16 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
         initialImages: images,
       );
 
+      if (!mounted) return;
       if (view == null) {
         _showError('创建AI对话失败');
         setState(() => _isSending = false);
         return;
       }
 
+      // Mark as not sending before navigation — the new route will own
+      // its own sending state, and we must not touch `this` after navigation.
+      setState(() => _isSending = false);
       if (mounted) {
         context.pushReplacement(
           '${MobileChatScreen.routeName}'
@@ -328,10 +374,10 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       Log.error('[MobileAI] 发送消息失败: $e');
       _showError('发送消息失败');
-    } finally {
-      if (mounted) setState(() => _isSending = false);
+      setState(() => _isSending = false);
     }
   }
 
