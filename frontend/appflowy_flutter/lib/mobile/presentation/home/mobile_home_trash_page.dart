@@ -1,7 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
-import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_dialog.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -452,7 +451,6 @@ class _TrashActionAllButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isDeleteAll = type == _TrashActionType.deleteAll;
     return BlocProvider.value(
       value: trashBloc,
@@ -465,25 +463,20 @@ class _TrashActionAllButton extends StatelessWidget {
           final trashList = trashBloc.state.objects;
           if (trashList.isNotEmpty) {
             context.pop();
-            showFlowyMobileConfirmDialog(
-              context,
-              title: FlowyText(
-                isDeleteAll
-                    ? LocaleKeys.trash_confirmDeleteAll_title.tr()
-                    : LocaleKeys.trash_restoreAll.tr(),
-              ),
-              content: FlowyText(
-                isDeleteAll
-                    ? LocaleKeys.trash_confirmDeleteAll_caption.tr()
-                    : LocaleKeys.trash_confirmRestoreAll_caption.tr(),
-              ),
-              actionButtonTitle: isDeleteAll
+            // 统一使用与单个笔记相同的弹窗风格
+            showTrashConfirmDialog(
+              context: context,
+              title: isDeleteAll
+                  ? LocaleKeys.trash_confirmDeleteAll_title.tr()
+                  : LocaleKeys.trash_confirmRestoreAll_title.tr(),
+              content: isDeleteAll
+                  ? LocaleKeys.trash_confirmDeleteAll_caption.tr()
+                  : LocaleKeys.trash_confirmRestoreAll_caption.tr(),
+              confirmText: isDeleteAll
                   ? LocaleKeys.trash_deleteAll.tr()
                   : LocaleKeys.trash_restoreAll.tr(),
-              actionButtonColor: isDeleteAll
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.primary,
-              onActionButtonPressed: () {
+              isDestructive: isDeleteAll,
+              onConfirm: () {
                 if (isDeleteAll) {
                   trashBloc.add(
                     const TrashEvent.deleteAll(),
@@ -494,7 +487,6 @@ class _TrashActionAllButton extends StatelessWidget {
                   );
                 }
               },
-              cancelButtonTitle: LocaleKeys.button_cancel.tr(),
             );
           } else {
             // when there is no deleted files
