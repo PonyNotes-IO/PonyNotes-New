@@ -38,7 +38,11 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
-target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app shlwapi.lib)
+# dwmapi.lib is required by Win32Window::UpdateTheme (DwmSetWindowAttribute).
+# It used to be pulled in transitively by the bitsdojo_window plugin; once that
+# dependency was removed the runner had to declare it itself. Newer Flutter
+# Windows runner templates list it here as well.
+target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app shlwapi.lib dwmapi.lib)
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
