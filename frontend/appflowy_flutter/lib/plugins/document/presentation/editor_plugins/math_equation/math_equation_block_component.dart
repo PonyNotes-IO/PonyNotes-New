@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/actions/mobile_block_action_buttons.dart';
@@ -267,8 +269,8 @@ class MathEquationBlockComponentWidgetState
     final editorOffset = editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
     final editorSize = editorState.renderBox?.size ?? Size.zero;
 
-    const editorWidth = 400.0;
-    const editorHeight = 120.0;
+    final editorWidth = math.min(400.0, editorSize.width - 16);
+    const editorHeight = 150.0;
 
     double offsetX = position.dx + (size.width - editorWidth) / 2;
     double offsetY = position.dy + size.height + 8;
@@ -307,6 +309,7 @@ class MathEquationBlockComponentWidgetState
                     offset: Offset(offsetX, offsetY),
                     editorState: editorState,
                     node: widget.node,
+                    width: editorWidth,
                     onDismiss: dismissOverlay,
                   ),
                 ],
@@ -403,6 +406,7 @@ class _MathEquationEditorOverlay extends StatefulWidget {
     required this.offset,
     required this.editorState,
     required this.node,
+    required this.width,
     required this.onDismiss,
   });
 
@@ -411,6 +415,7 @@ class _MathEquationEditorOverlay extends StatefulWidget {
   final Offset offset;
   final EditorState editorState;
   final Node node;
+  final double width;
   final VoidCallback onDismiss;
 
   @override
@@ -457,7 +462,7 @@ class _MathEquationEditorOverlayState extends State<_MathEquationEditorOverlay> 
       child: GestureDetector(
         onTap: () {},
         child: Container(
-          width: 400,
+          width: widget.width,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
@@ -485,6 +490,10 @@ class _MathEquationEditorOverlayState extends State<_MathEquationEditorOverlay> 
                 textAlign: TextAlign.left,
                 controller: controller,
                 hintText: 'E = MC^2',
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
                 onEditingComplete: _submit,
               ),
               const SizedBox(height: 12),
