@@ -200,9 +200,9 @@ class InnerMobileViewItem extends StatelessWidget {
       child = DraggableViewItem(
         isFirstChild: isFirstChild,
         view: view,
-        centerHighlightColor: Colors.blue.shade200,
-        topHighlightColor: Colors.blue.shade200,
-        bottomHighlightColor: Colors.blue.shade200,
+        centerHighlightColor: Theme.of(context).colorScheme.primary,
+        topHighlightColor: Theme.of(context).colorScheme.primary,
+        bottomHighlightColor: Theme.of(context).colorScheme.primary,
         feedback: (context) {
           return MobileViewItem(
             view: view,
