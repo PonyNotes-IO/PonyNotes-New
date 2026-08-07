@@ -298,6 +298,72 @@ Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
   return {client_width, client_height, child_width, child_height};
 }
 
+void Win32Window::ResyncTopLevelSurface() {
+  if (window_handle_ == nullptr) {
+    return;
+  }
+
+  RECT window_rect{};
+  if (!GetWindowRect(window_handle_, &window_rect)) {
+    return;
+  }
+
+  const LONG width = window_rect.right - window_rect.left;
+  const LONG height = window_rect.bottom - window_rect.top;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  RecordEvent("resync toplevel begin " + DescribeGeometry());
+
+  constexpr UINT kFlags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOMOVE |
+                          SWP_NOACTIVATE | SWP_FRAMECHANGED;
+  SetWindowPos(window_handle_, nullptr, window_rect.left, window_rect.top,
+               width, height + 1, kFlags);
+  SetWindowPos(window_handle_, nullptr, window_rect.left, window_rect.top,
+               width, height, kFlags);
+
+  RecordEvent("resync toplevel end " + DescribeGeometry());
+}
+
+std::string Win32Window::DescribeGeometry() {
+  auto rect_to_string = [](const RECT& rect) {
+    return std::to_string(rect.right - rect.left) + "x" +
+           std::to_string(rect.bottom - rect.top) + "@(" +
+           std::to_string(rect.left) + "," + std::to_string(rect.top) + ")";
+  };
+
+  std::string description;
+  RECT rect{};
+  if (window_handle_ != nullptr) {
+    if (GetWindowRect(window_handle_, &rect)) {
+      description += "win=" + rect_to_string(rect);
+    }
+    if (GetClientRect(window_handle_, &rect)) {
+      description += " winClient=" + rect_to_string(rect);
+    }
+    description += " visible=" + std::to_string(IsWindowVisible(window_handle_));
+    description += " dpi=" + std::to_string(FlutterDesktopGetDpiForHWND(window_handle_));
+  }
+  if (child_content_ != nullptr) {
+    if (GetWindowRect(child_content_, &rect)) {
+      // Map to the parent's client space so an offset child is obvious.
+      POINT top_left{rect.left, rect.top};
+      ScreenToClient(window_handle_, &top_left);
+      description += " child=" + std::to_string(rect.right - rect.left) + "x" +
+                     std::to_string(rect.bottom - rect.top) + "@(" +
+                     std::to_string(top_left.x) + "," +
+                     std::to_string(top_left.y) + ")";
+    }
+    if (GetClientRect(child_content_, &rect)) {
+      description += " childClient=" + rect_to_string(rect);
+    }
+    description +=
+        " childDpi=" + std::to_string(FlutterDesktopGetDpiForHWND(child_content_));
+  }
+  return description;
+}
+
 void Win32Window::RecordEvent(const std::string& event) {
   // Bounded buffer: the interesting window is startup, and the Dart side
   // drains it after the first frame.

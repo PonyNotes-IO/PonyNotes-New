@@ -14,13 +14,20 @@ namespace {
 constexpr char kWindowSurfaceChannel[] = "ponynotes/window_surface";
 constexpr char kSynchronizeSurfaceMethod[] = "synchronizeSurface";
 
-// Posted to ourselves to run the surface resync nudge outside of the method
-// channel handler. The nudge makes the engine re-negotiate its render surface,
-// and that handshake waits for the raster thread to present a frame - which
-// cannot happen while the Dart isolate is blocked awaiting our channel reply.
-// The offset is arbitrary but distinctive, to avoid colliding with a plugin
-// that also posts private messages to the top-level window.
-constexpr UINT kResyncSurfaceMessage = WM_APP + 0x4D2;
+// Posted to ourselves to run the surface resync outside of the method channel
+// handler. The resync makes the engine re-negotiate its render surface, and
+// that handshake waits for the raster thread to present a frame - which cannot
+// happen while the Dart isolate is blocked awaiting our channel reply.
+//
+// A registered message is used rather than WM_APP+n: the WM_APP range is
+// per-window private and a plugin window proc delegate could legitimately claim
+// the same value, silently swallowing the resync (which is what happened with
+// WM_APP + 0x4D2 in 1.1.13).
+UINT ResyncSurfaceMessage() {
+  static const UINT message =
+      RegisterWindowMessageW(L"PonyNotesResyncWindowSurface");
+  return message;
+}
 
 }  // namespace
 
@@ -56,9 +63,15 @@ bool FlutterWindow::OnCreate() {
         SynchronizeSurface(call, std::move(result));
       });
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    // https://pub.dev/packages/window_manager#windows
-    // this->Show();
+  flutter_controller_->engine()->SetNextFrameCallback([this]() {
+    // Safety net only. main.cpp deliberately does not show the window, and
+    // window_manager shows it from Dart once the geometry is final. If the Dart
+    // side never got there (early failure), show it here so the app is not
+    // invisible. Showing an already visible window is a no-op.
+    if (!IsWindowVisible(GetHandle())) {
+      RecordEvent("first frame: showing window as fallback");
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -85,6 +98,16 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Handled before the plugins get a chance, so nothing can swallow it.
+  if (message == ResyncSurfaceMessage()) {
+    RecordEvent("resync handler ran");
+    ResyncTopLevelSurface();
+    if (flutter_controller_) {
+      flutter_controller_->ForceRedraw();
+    }
+    return 0;
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -99,12 +122,6 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
-    case kResyncSurfaceMessage:
-      SynchronizeChildContent(true);
-      if (flutter_controller_) {
-        flutter_controller_->ForceRedraw();
-      }
-      return 0;
   }
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
@@ -119,10 +136,11 @@ void FlutterWindow::SynchronizeSurface(
   }
 
   // Measure and re-align the child synchronously so the reply carries the
-  // current geometry, then run the actual resync nudge from the message loop
-  // (see kResyncSurfaceMessage) to keep this handler non-blocking.
+  // current geometry, then run the actual resync from the message loop (see
+  // ResyncSurfaceMessage) to keep this handler non-blocking.
   const SurfaceMetrics metrics = SynchronizeChildContent(false);
-  PostMessage(GetHandle(), kResyncSurfaceMessage, 0, 0);
+  const std::string geometry = DescribeGeometry();
+  PostMessage(GetHandle(), ResyncSurfaceMessage(), 0, 0);
 
   flutter::EncodableList events;
   for (const std::string& event : TakeGeometryEvents()) {
@@ -139,6 +157,7 @@ void FlutterWindow::SynchronizeSurface(
       {flutter::EncodableValue("childHeight"),
        flutter::EncodableValue(static_cast<int32_t>(metrics.child_height))},
       {flutter::EncodableValue("events"), flutter::EncodableValue(events)},
+      {flutter::EncodableValue("geometry"), flutter::EncodableValue(geometry)},
   };
   result->Success(flutter::EncodableValue(dimensions));
 }

@@ -73,16 +73,29 @@ class Win32Window {
   // messages that happen before the Rust logger exists.
   std::vector<std::string> TakeGeometryEvents();
 
+  // Returns a one line description of the current top-level/child geometry and
+  // DPI. Purely diagnostic.
+  std::string DescribeGeometry();
+
+  // Resizes the *top-level* window by one pixel and back.
+  //
+  // This is the programmatic equivalent of the user dragging the window border,
+  // which is empirically the only action that recovers the startup rendering
+  // defect where the frame ends up squeezed against the bottom of the window.
+  // Nudging only the hosted child window is NOT equivalent: it does not make
+  // Windows rebuild the top-level window's presentation surface.
+  //
+  // Must not be called from a platform message channel handler: each resize
+  // makes the engine wait for the raster thread to present a frame, which
+  // cannot happen while the Dart isolate is blocked awaiting a channel reply.
+  void ResyncTopLevelSurface();
+
  protected:
   // Sizes the hosted content to the current client area.
   //
-  // When |force_resync| is true the child is first moved to a height that is
-  // one pixel taller than the client area and then back. Moving a window to
-  // the size it already has produces no WM_SIZE, so without this nudge the
-  // Flutter engine never re-negotiates its render surface. The nudge is the
-  // programmatic equivalent of the user dragging the window border by one
-  // pixel, which is the only action known to recover a first frame that was
-  // rendered against a stale surface size.
+  // When |force_resync| is true the child is additionally moved to a height
+  // one pixel taller than the client area and back, so that the engine sees a
+  // real WM_SIZE (a same-size MoveWindow produces none).
   SurfaceMetrics SynchronizeChildContent(bool force_resync = false);
 
   // Appends one line to the geometry event buffer (capped, oldest dropped).

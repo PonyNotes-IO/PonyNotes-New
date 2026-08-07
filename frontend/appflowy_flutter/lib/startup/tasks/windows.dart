@@ -47,6 +47,7 @@ class WindowsSurfaceDimensions {
     required this.childWidth,
     required this.childHeight,
     this.events = const [],
+    this.geometry = '',
   });
 
   factory WindowsSurfaceDimensions.fromMap(Map<dynamic, dynamic> values) {
@@ -68,6 +69,7 @@ class WindowsSurfaceDimensions {
       events: rawEvents is List
           ? rawEvents.map((e) => e.toString()).toList(growable: false)
           : const [],
+      geometry: values['geometry']?.toString() ?? '',
     );
   }
 
@@ -78,6 +80,9 @@ class WindowsSurfaceDimensions {
 
   /// 原生侧记录的窗口几何事件（WM_SIZE / WM_DPICHANGED 等），仅用于诊断。
   final List<String> events;
+
+  /// 原生侧的顶层窗口/子窗口矩形与 DPI 快照，仅用于诊断。
+  final String geometry;
 
   @override
   bool operator ==(Object other) {
@@ -123,6 +128,12 @@ class WindowsSurfaceSynchronizer {
   }
 }
 
+/// resync 期间为 true。顶层窗口的 1px 抖动会触发 onWindowResize/onWindowMoved，
+/// 此时不能把中间尺寸写进存储，否则保存的窗口尺寸会被污染。
+bool _isResynchronizingSurface = false;
+
+bool get isResynchronizingWindowsSurface => _isResynchronizingSurface;
+
 /// 等待一帧结束。带超时，避免窗口不可见等极端情况下把整个启动流程卡住。
 Future<void> _waitForFrame() {
   return WidgetsBinding.instance.endOfFrame.timeout(
@@ -131,16 +142,18 @@ Future<void> _waitForFrame() {
   );
 }
 
-/// 首帧之后强制让引擎重新协商渲染表面，并校验 Flutter 侧尺寸是否与原生客户区一致。
+/// 首帧之后强制让引擎重新协商渲染表面。
 ///
-/// 背景（2026-08-06 Windows 启动黑边根因）：启动期窗口几何会在首帧之前被多次修改
-/// （runner 建窗 → window_manager setSize/center/show），而引擎的 resize 握手在
-/// runApp() 之前根本等不到任何一帧，只能超时，导致首帧尺寸与 GL 表面尺寸失步：
-/// 画面按 OpenGL 左下原点贴底渲染，上方留出未绘制的黑带。用户手动拖动窗口边缘
-/// 1 像素即可恢复 —— 因为那会产生一次真实的 WM_SIZE。
+/// 背景（Windows 启动黑边）：启动期窗口几何在首帧之前会变化一次（runner 以 1280x720
+/// 逻辑尺寸建窗 → window_manager 改成存储尺寸），而引擎的 resize 握手要等一帧、在
+/// runApp() 之前只能超时，首帧因此渲染在与窗口不一致的表面上：画面贴底、上方留黑。
+/// 用户手动拖动窗口边缘 1 像素即可恢复。
 ///
-/// 这里做的就是把"拖那一下"自动化：原生侧把子窗口先加高 1px 再复原，产生两次真实
-/// WM_SIZE；随后等一帧并核对 Flutter 的 physicalSize 与原生客户区，不一致则重试。
+/// 1.1.13 的日志证明：此时 Flutter 的 physicalSize 与原生客户区是**一致的**
+/// （matched=true），所以问题不在框架的 metrics，而在其下方的渲染表面；仅抖动子窗口
+/// 也无效。因此这里改为由原生侧抖动**顶层窗口** —— 即用户手动拖动的那个对象。
+///
+/// [maxAttempts] 只影响重试次数；第一次调用就会执行一次 resync，无论 matched 与否。
 Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
   required int generation,
   int maxAttempts = 3,
@@ -153,6 +166,8 @@ Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
   _flushWindowSetupTrace();
 
   final synchronizer = WindowsSurfaceSynchronizer();
+  // 顶层窗口抖动会触发 onWindowResize/onWindowMoved，期间不要持久化窗口尺寸。
+  _isResynchronizingSurface = true;
 
   try {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -187,6 +202,7 @@ Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
         'devicePixelRatio=$devicePixelRatio, '
         'clientSize=${dimensions.clientWidth}x${dimensions.clientHeight}, '
         'childSize=${dimensions.childWidth}x${dimensions.childHeight}'
+        '${dimensions.geometry.isEmpty ? '' : ', geometry=[${dimensions.geometry}]'}'
         '${dimensions.events.isEmpty ? '' : ', nativeEvents=[${dimensions.events.join(' | ')}]'}',
       );
 
@@ -206,6 +222,10 @@ Future<void> synchronizeWindowsSurfaceAfterFirstFrame({
       error,
       stackTrace,
     );
+  } finally {
+    // 抖动是异步执行的，多留一帧再恢复尺寸持久化。
+    await _waitForFrame();
+    _isResynchronizingSurface = false;
   }
 }
 
@@ -363,7 +383,7 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowResize() async {
-    if (_isDisposed) {
+    if (_isDisposed || _isResynchronizingSurface) {
       return;
     }
     super.onWindowResize();
@@ -378,7 +398,7 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   @override
   Future<void> onWindowMoved() async {
-    if (_isDisposed) {
+    if (_isDisposed || _isResynchronizingSurface) {
       return;
     }
     super.onWindowMoved();
