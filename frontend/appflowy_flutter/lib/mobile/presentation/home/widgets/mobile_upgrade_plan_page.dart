@@ -168,7 +168,6 @@ class _UpgradePlanBody extends StatefulWidget {
 
 class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   bool _isProcessingPayment = false;
-  PaymentMethod? _selectedPaymentMethod;
 
   @override
   Widget build(BuildContext context) {
@@ -283,10 +282,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
                           subscriptionInfo,
                         ),
                     const SizedBox(height: 24),
-                    Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: _buildPaymentMethodSelector(theme)),
-                    const SizedBox(height: 16),
                     Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: _buildAgreementActionRow(
@@ -789,102 +784,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
   }
 
-  Widget _buildPaymentMethodSelector(AppFlowyThemeData theme) {
-    final paymentMethods = PaymentPlatformSupport.getAvailableMethods();
-    if (paymentMethods.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    if (_selectedPaymentMethod == null) {
-      if (Platform.isIOS) {
-        _selectedPaymentMethod = PaymentMethod.applePay;
-      } else {
-        final alipayIndex = paymentMethods.indexOf(PaymentMethod.alipay);
-        if (alipayIndex >= 0) {
-          _selectedPaymentMethod = PaymentMethod.alipay;
-        } else {
-          _selectedPaymentMethod = paymentMethods.first;
-        }
-      }
-    }
-
-    final methodNames = <PaymentMethod, String>{
-      PaymentMethod.applePay: 'Apple Pay',
-      PaymentMethod.wechatPay: '微信支付',
-      PaymentMethod.alipay: '支付宝',
-    };
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '支付方式',
-          style: theme.textStyle.body
-              .standard(color: theme.textColorScheme.primary)
-              .copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: paymentMethods.map((method) {
-            final isSelected = _selectedPaymentMethod == method;
-            final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedPaymentMethod = method),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? (isDarkMode ? const Color(0xFF3A3A3A) : Colors.white)
-                        : (isDarkMode
-                            ? const Color(0xFF2A2A2A)
-                            : const Color(0xFFF5F5F5)),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFFFF3800)
-                          : (isDarkMode
-                              ? const Color(0xFF3A3A3A)
-                              : Colors.transparent),
-                      width: isSelected ? 2 : 0,
-                    ),
-                    boxShadow: isSelected
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    methodNames[method] ?? method.name,
-                    style: theme.textStyle.body
-                        .standard(
-                          color: isSelected
-                              ? theme.textColorScheme.primary
-                              : theme.textColorScheme.secondary,
-                        )
-                        .copyWith(
-                          fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAgreementActionRow(
     BuildContext context,
     AppFlowyThemeData theme,
@@ -1058,39 +957,19 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       final userProfile = await UserBackendService.getCurrentUserProfile();
       final userUuid = userProfile.fold((p) => p.id.toString(), (_) => '');
 
-      final paymentMethods = PaymentPlatformSupport.getAvailableMethods();
-      if (paymentMethods.isEmpty) {
-        if (mounted) {
-          showToastNotification(message: '当前平台暂不支持支付');
-        }
-        return;
-      }
-
-      PaymentMethod paymentMethod;
-      if (_selectedPaymentMethod != null &&
-          paymentMethods.contains(_selectedPaymentMethod)) {
-        paymentMethod = _selectedPaymentMethod!;
-      } else {
-        if (Platform.isIOS) {
-          paymentMethod = PaymentMethod.applePay;
-        } else {
-          final alipayIndex = paymentMethods.indexOf(PaymentMethod.alipay);
-          if (alipayIndex >= 0) {
-            paymentMethod = PaymentMethod.alipay;
-          } else {
-            paymentMethod = paymentMethods.first;
-          }
-        }
-        setState(() => _selectedPaymentMethod = paymentMethod);
-      }
-
-      Log.info(
-          '[MobileUpgradePlan] 支付方式: $paymentMethod, 平台: ${Platform.operatingSystem}');
-
       if (Platform.isIOS) {
+        // iPhone/iPad 直接调用 Apple Pay 内购
+        Log.info('[MobileUpgradePlan] iOS 直接调用 Apple Pay');
         await _handleIOSPayment(
-            paymentMethod, config, price, billingType, userUuid);
+            PaymentMethod.applePay, config, price, billingType, userUuid);
       } else {
+        // Android 弹出支付方式选择弹框
+        final paymentMethod = await _showAndroidPaymentSelector();
+        if (paymentMethod == null) {
+          // 用户取消了选择
+          return;
+        }
+        Log.info('[MobileUpgradePlan] Android 选择支付方式: $paymentMethod');
         await _handleAndroidPayment(
             paymentMethod, config, price, billingType, userUuid);
       }
@@ -1100,6 +979,93 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     } finally {
       if (mounted) setState(() => _isProcessingPayment = false);
     }
+  }
+
+  /// Android 端弹出支付方式选择弹框，返回用户选择的支付方式
+  Future<PaymentMethod?> _showAndroidPaymentSelector() {
+    final theme = AppFlowyTheme.of(context);
+    return showModalBottomSheet<PaymentMethod>(
+      context: context,
+      backgroundColor: theme.surfaceColorScheme.layer01,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: theme.textColorScheme.tertiary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Text(
+                  '选择支付方式',
+                  style: theme.textStyle.body
+                      .standard(color: theme.textColorScheme.primary)
+                      .copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 16),
+                _buildPaymentOptionTile(
+                  theme,
+                  icon: FlowySvgs.m_rights_ai_xl,
+                  label: '支付宝',
+                  onTap: () => Navigator.of(sheetContext).pop(PaymentMethod.alipay),
+                ),
+                _buildPaymentOptionTile(
+                  theme,
+                  icon: FlowySvgs.m_rights_ai_xl,
+                  label: '微信支付',
+                  onTap: () => Navigator.of(sheetContext).pop(PaymentMethod.wechatPay),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPaymentOptionTile(
+    AppFlowyThemeData theme, {
+    required FlowySvgData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        child: Row(
+          children: [
+            FlowySvg(icon, size: const Size(24, 24), blendMode: null),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textStyle.body
+                    .standard(color: theme.textColorScheme.primary)
+                    .copyWith(fontSize: 15),
+              ),
+            ),
+            FlowySvg(
+              FlowySvgs.arrow_right_s,
+              size: const Size(6, 12),
+              color: theme.iconColorScheme.secondary,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _handleIOSPayment(
@@ -1209,23 +1175,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   }
 
   String? _getProductId(String planId, String billingType) {
-    final productIds = <String, String>{
-      'student_monthly': 'com.ponynotes.student.monthly',
-      'student_yearly': 'com.ponynotes.student.yearly',
-      'standard_monthly': 'com.ponynotes.standard.monthly',
-      'standard_yearly': 'com.ponynotes.standard.yearly',
-      'pro_monthly': 'com.ponynotes.pro.monthly',
-      'pro_yearly': 'com.ponynotes.pro.yearly',
-      'premium_monthly': 'com.ponynotes.premium.monthly',
-      'premium_yearly': 'com.ponynotes.premium.yearly',
-      'stand_monthly': 'com.ponynotes.standard.monthly',
-      'stand_yearly': 'com.ponynotes.standard.yearly',
-      'profersor_monthly': 'com.ponynotes.pro.monthly',
-      'profersor_yearly': 'com.ponynotes.pro.yearly',
-      'hiclass_monthly': 'com.ponynotes.premium.monthly',
-      'hiclass_yearly': 'com.ponynotes.premium.yearly',
-    };
-    return productIds['${planId}_$billingType'];
+    return PaymentUtil.getAppleProductId(planId, billingType);
   }
 
   Widget _buildBenefitIcons(AppFlowyThemeData theme) {

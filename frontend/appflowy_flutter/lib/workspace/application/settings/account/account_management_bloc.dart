@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:appflowy/env/cloud_env.dart';
@@ -1429,6 +1430,84 @@ class AccountManagementBloc
 
           // 设置会员升级参数
           String? planIdValue = '$planId';
+
+          // iPad（iOS 平台）直接调用 Apple Pay 内购，不走 H5 网页支付
+          if (Platform.isIOS && !PaymentDevConfig.enableTestMode) {
+            final billingTypeStr = selectedDuration == PurchaseDurationOption.monthly
+                ? 'monthly'
+                : 'yearly';
+            final planCode = planConfig.planCode ?? '';
+            final productId = PaymentUtil.getAppleProductId(planCode, billingTypeStr);
+
+            if (productId == null) {
+              emit(
+                AccountManagementState.ready(
+                  subscriptionInfo: subscriptionInfo,
+                  planConfigs: planConfigs,
+                  selectedPlan: selectedPlan,
+                  selectedDuration: selectedDuration,
+                  selectedTab: selectedTab,
+                  agreedProtocols: agreedProtocols,
+                  isLoadingSubscription: isLoadingSubscription,
+                  isLoadingPlans: isLoadingPlans,
+                  isProcessingPayment: false,
+                  error: '暂不支持该套餐的 Apple Pay 支付',
+                  paymentResult: paymentResult,
+                ),
+              );
+              return;
+            }
+
+            final userUuid = _getUserUuid();
+            final extra = <String, dynamic>{
+              'productId': productId,
+              'planId': planConfig.id,
+              'billingType': billingTypeStr,
+              'userInfo': userUuid,
+            };
+
+            await PaymentUtil.pay(
+              method: PaymentMethod.applePay,
+              amount: (selectedPrice * 100).toInt(),
+              currency: 'CNY',
+              orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
+              extra: extra,
+            );
+
+            state.maybeWhen(
+              orElse: () {},
+              ready: (
+                subscriptionInfo,
+                planConfigs,
+                selectedPlan,
+                selectedDuration,
+                selectedTab,
+                agreedProtocols,
+                isLoadingSubscription,
+                isLoadingPlans,
+                isProcessingPayment,
+                error,
+                paymentResult,
+              ) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isProcessingPayment: false,
+                    error: null,
+                    paymentResult: 'PAYMENT_INITIATED',
+                  ),
+                );
+              },
+            );
+            return;
+          }
 
           if (!PaymentDevConfig.enableTestMode) {
             // 1. 获取当前云端配置（拿到 serverUrl）

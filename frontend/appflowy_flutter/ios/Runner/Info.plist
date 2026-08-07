@@ -28,7 +28,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string></string>
+			<string/>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>ponynotes</string>
@@ -43,11 +43,11 @@
 			</array>
 		</dict>
 		<dict>
-            <key>CFBundleTypeRole</key>
-            <string>Editor</string>
-            <key>CFBundleURLName</key>
-            <string>douyin</string>
-            <key>CFBundleURLSchemes</key>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>douyin</string>
+			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>aws8ujfhmwybxv72</string>
 			</array>
@@ -59,10 +59,12 @@
 	<array>
 		<string>weixin</string>
 		<string>wechat</string>
-        <string>douyinopensdk</string>
-        <string>douyinliteopensdk</string>
-        <string>douyinsharesdk</string>
-        <string>snssdk1128</string>
+		<string>douyinopensdk</string>
+		<string>douyinliteopensdk</string>
+		<string>douyinsharesdk</string>
+		<string>snssdk1128</string>
+		<string>weixinULAPI</string>
+		<string>weixinURLParamsAPI</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -70,16 +72,26 @@
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartVmService._tcp</string>
+	</array>
 	<key>NSCalendarsUsageDescription</key>
 	<string>AppFlowy needs access to your calendar to sync your schedule and events</string>
 	<key>NSCameraUsageDescription</key>
 	<string>AppFlowy needs access to your camera to let you add images to your documents from
 			camera</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Looking for local tcp Bonjour service for Flutter debugging.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>AppFlowy needs access to your photos to let you add images to your photo library</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>AppFlowy needs access to your photos to let you add images to your documents</string>
+	<key>SKProductsRequestUsageDescription</key>
+	<string>用于查询内购产品信息，以便用户购买会员服务</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -92,8 +104,6 @@
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
@@ -101,13 +111,5 @@
 	<true/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-    <key>NSBonjourServices</key>
-    <array>
-            <string>_dartVmService._tcp</string>
-    </array>
-    <key>NSLocalNetworkUsageDescription</key>
-	<string>Looking for local tcp Bonjour service for Flutter debugging.</string>
-	<key>SKProductsRequestUsageDescription</key>
-	<string>用于查询内购产品信息，以便用户购买会员服务</string>
 </dict>
 </plist>
