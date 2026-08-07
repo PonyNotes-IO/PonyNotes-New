@@ -300,7 +300,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
         if (rootNavigator != null) {
           final rootContext = rootNavigator.context;
           if (rootContext.mounted) {
-            getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+            await runAppFlowy();
           }
         }
       } else {
@@ -369,7 +369,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
               if (rootNavigator != null) {
                 final rootContext = rootNavigator.context;
                 if (rootContext.mounted) {
-                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  await runAppFlowy();
                 }
               }
             } else {
@@ -412,7 +412,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 if (rootNavigator != null) {
                   final rootContext = rootNavigator.context;
                   if (rootContext.mounted) {
-                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                    await runAppFlowy();
                   }
                 }
               } else {
@@ -445,7 +445,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
             return;
           }
           if (rootContext.mounted) {
-            getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+            await runAppFlowy();
           }
         });
       } else {
