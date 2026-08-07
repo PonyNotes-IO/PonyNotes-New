@@ -71,10 +71,10 @@ extension DocumentDataPBFromTo on DocumentDataPB {
         childrenMap[childrenId]!.children.add(value.id);
       }
     });
-    final meta = MetaPB(childrenMap: childrenMap);
+    final meta = MetaPB(childrenMap: childrenMap.entries);
 
     return DocumentDataPB(
-      blocks: blocks,
+      blocks: blocks.entries,
       pageId: pageId,
       meta: meta,
     );

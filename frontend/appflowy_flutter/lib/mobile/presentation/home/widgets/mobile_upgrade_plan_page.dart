@@ -320,11 +320,13 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     return Stack(
       children: [
-        SvgPicture.asset(
-          bgAsset,
+        SizedBox(
           width: double.infinity,
           height: bgHeight,
-          fit: BoxFit.fill,
+          child: SvgPicture.asset(
+            bgAsset,
+            fit: BoxFit.fill,
+          ),
         ),
         Padding(
           padding: const EdgeInsets.only(top: 80, left: 20),
@@ -862,6 +864,9 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
                     AccountManagementEvent.setAgreedProtocols(value ?? false),
                   ),
               activeColor: Theme.of(context).colorScheme.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
             Expanded(
               child: RichText(

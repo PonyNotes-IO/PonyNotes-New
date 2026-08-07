@@ -1,12 +1,14 @@
 import 'dart:io';
 
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/application/base/mobile_view_page_bloc.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/base/build_context_extension.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/cover/document_immersive_cover_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_cover_image.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_icon_bloc.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/shared/flowy_gradient_colors.dart';
@@ -91,34 +93,66 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
           },
           builder: (_, state) {
             final iconAndTitle = _buildIconAndTitle(context, state);
-            if (state.cover.type == PageStyleCoverImageType.none) {
-              return Padding(
-                padding: EdgeInsets.only(
-                  top: context.statusBarAndAppBarHeight + kDocumentTitlePadding,
-                ),
-                child: iconAndTitle,
-              );
-            }
-
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Stack(
+              padding: EdgeInsets.only(
+                top: state.cover.isNone ? kDocumentTitlePadding : 0,
+                bottom: 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCover(context, state),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24.0),
-                      child: iconAndTitle,
-                    ),
-                  ),
+                  if (!state.cover.isNone) _buildCover(context, state),
+                  _buildHeaderActions(context, state),
+                  iconAndTitle,
                 ],
               ),
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderActions(
+    BuildContext context,
+    DocumentImmersiveCoverState state,
+  ) {
+    final icon = state.icon;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+      child: Wrap(
+        spacing: 4,
+        children: [
+          FlowyButton(
+            useIntrinsicWidth: true,
+            leftIcon: const FlowySvg(FlowySvgs.add_cover_s),
+            leftIconSize: const Size.square(18),
+            text: FlowyText.small(
+              (state.cover.isNone
+                      ? LocaleKeys.document_plugins_cover_addCover
+                      : LocaleKeys.document_plugins_cover_changeCover)
+                  .tr(),
+              color: Theme.of(context).hintColor,
+            ),
+            onTap: () => _showCoverSelector(context),
+          ),
+          FlowyButton(
+            useIntrinsicWidth: true,
+            leftIcon: const FlowySvg(FlowySvgs.add_icon_s),
+            leftIconSize: const Size.square(18),
+            text: FlowyText.small(
+              ((icon?.isNotEmpty ?? false)
+                      ? LocaleKeys.document_plugins_cover_changeIcon
+                      : LocaleKeys.document_plugins_cover_addIcon)
+                  .tr(),
+              color: Theme.of(context).hintColor,
+            ),
+            onTap: () => _showIconSelector(
+              context,
+              icon ?? EmojiIconData.none(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -136,16 +170,13 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
             _buildIcon(context, icon),
             const HSpace(8.0),
           ],
-          Expanded(child: _buildTitle(context, state)),
+          Expanded(child: _buildTitle(context)),
         ],
       ),
     );
   }
 
-  Widget _buildTitle(
-    BuildContext context,
-    DocumentImmersiveCoverState state,
-  ) {
+  Widget _buildTitle(BuildContext context) {
     String? fontFamily = defaultFontFamily;
     final documentFontFamily =
         context.read<DocumentPageStyleBloc>().state.fontFamily;
@@ -159,8 +190,6 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
         fontSize: 28.0,
         fontWeight: FontWeight.w700,
         fontFamily: fontFamily,
-        color:
-            state.cover.isNone || state.cover.isPresets ? null : Colors.white,
         overflow: TextOverflow.ellipsis,
       );
     }
@@ -184,8 +213,6 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
         fontSize: 28.0,
         fontWeight: FontWeight.w700,
         fontFamily: fontFamily,
-        color:
-            state.cover.isNone || state.cover.isPresets ? null : Colors.white,
         overflow: TextOverflow.ellipsis,
       ),
       onChanged: (name) => Debounce.debounce(
@@ -214,48 +241,74 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
           emojiSize: 26,
         ),
       ),
-      onTap: () async {
-        final pageStyleIconBloc = PageStyleIconBloc(view: widget.view)
-          ..add(const PageStyleIconEvent.initial());
-        await showMobileBottomSheet(
-          context,
-          showDragHandle: true,
-          showDivider: false,
-          showHeader: true,
-          title: LocaleKeys.titleBar_pageIcon.tr(),
-          backgroundColor: AFThemeExtension.of(context).background,
-          enableDraggableScrollable: true,
-          minChildSize: 0.6,
-          initialChildSize: 0.61,
-          scrollableWidgetBuilder: (_, controller) {
-            return BlocProvider.value(
-              value: pageStyleIconBloc,
-              child: Expanded(
-                child: FlowyIconEmojiPicker(
-                  initialType: icon.type.toPickerTabType(),
-                  tabs: widget.tabs,
-                  documentId: widget.view.id,
-                  onSelectedEmoji: (r) {
-                    pageStyleIconBloc.add(
-                      PageStyleIconEvent.updateIcon(r.data, true),
-                    );
-                    if (!r.keepOpen) Navigator.pop(context);
-                  },
-                ),
-              ),
-            );
-          },
-          builder: (_) => const SizedBox.shrink(),
+      onTap: () => _showIconSelector(context, icon),
+    );
+  }
+
+  Future<void> _showIconSelector(
+    BuildContext context,
+    EmojiIconData icon,
+  ) async {
+    final pageStyleIconBloc = PageStyleIconBloc(view: widget.view)
+      ..add(const PageStyleIconEvent.initial());
+    await showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showDivider: false,
+      showHeader: true,
+      title: LocaleKeys.titleBar_pageIcon.tr(),
+      backgroundColor: AFThemeExtension.of(context).background,
+      enableDraggableScrollable: true,
+      minChildSize: 0.6,
+      initialChildSize: 0.61,
+      scrollableWidgetBuilder: (_, controller) {
+        return BlocProvider.value(
+          value: pageStyleIconBloc,
+          child: Expanded(
+            child: FlowyIconEmojiPicker(
+              initialType: icon.type.toPickerTabType(),
+              tabs: widget.tabs,
+              documentId: widget.view.id,
+              onSelectedEmoji: (r) {
+                pageStyleIconBloc.add(
+                  PageStyleIconEvent.updateIcon(r.data, true),
+                );
+                if (!r.keepOpen) Navigator.pop(context);
+              },
+            ),
+          ),
         );
       },
+      builder: (_) => const SizedBox.shrink(),
+    );
+  }
+
+  Future<void> _showCoverSelector(BuildContext context) {
+    return showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showDivider: false,
+      showDoneButton: true,
+      showHeader: true,
+      title: LocaleKeys.pageStyle_coverImage.tr(),
+      backgroundColor: AFThemeExtension.of(context).background,
+      builder: (_) => MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: context.read<DocumentPageStyleBloc>()),
+          BlocProvider.value(value: context.read<MobileViewPageBloc>()),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: PageStyleCoverImage(documentId: widget.view.id),
+        ),
+      ),
     );
   }
 
   Widget _buildCover(BuildContext context, DocumentImmersiveCoverState state) {
     final cover = state.cover;
     final type = cover.type;
-    final naviBarHeight = MediaQuery.of(context).padding.top;
-    final height = naviBarHeight + kDocumentCoverHeight;
+    final height = kDocumentCoverHeight;
 
     if (type == PageStyleCoverImageType.customImage ||
         type == PageStyleCoverImageType.unsplashImage) {
@@ -310,7 +363,7 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
     }
 
     return SizedBox(
-      height: naviBarHeight,
+      height: 0,
       width: double.infinity,
     );
   }

@@ -213,6 +213,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
                 showCollaborators: false,
                 useFloatingSurface: true,
                 showShareButton: false,
+                showFullWindowButton: !isMobile,
                 iconColorOverride:
                     isWhiteboard ? const Color(0xFF111111) : null,
               ),
