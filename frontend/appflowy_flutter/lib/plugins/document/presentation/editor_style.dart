@@ -155,6 +155,8 @@ class EditorStyleCustomizer {
 
     return EditorStyle.mobile(
       padding: padding,
+      cursorColor: theme.colorScheme.primary,
+      dragHandleColor: theme.colorScheme.primary,
       defaultTextDirection: defaultTextDirection,
       textStyleConfiguration: TextStyleConfiguration(
         lineHeight: lineHeight,

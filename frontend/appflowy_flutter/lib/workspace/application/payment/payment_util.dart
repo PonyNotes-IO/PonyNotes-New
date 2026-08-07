@@ -11,6 +11,7 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -96,14 +97,33 @@ class PaymentUtil {
   static const MethodChannel _channel =
       MethodChannel('com.ponynotes.payment/channel');
 
-  static InAppPurchase? _inAppPurchase;
-
-  static InAppPurchase get _inAppPurchaseInstance {
-    _inAppPurchase ??= InAppPurchase.instance;
-    return _inAppPurchase!;
-  }
+  static InAppPurchase get _inAppPurchaseInstance => InAppPurchase.instance;
 
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
+
+  /// 根据 planCode 和 billingType 获取 App Store Connect 内购产品 ID
+  /// App Store Connect 配置的数字产品 ID（消耗型项目）：
+  /// 000001=月付-标准版, 000002=月付-专业版, 000003=月付-高级版
+  /// 000004=年付-标准版, 000005=年付-专业版, 000006=年付-高级版
+  static String? getAppleProductId(String planCode, String billingType) {
+    final productIds = <String, String>{
+      'student_monthly': '000001',
+      'student_yearly': '000004',
+      'standard_monthly': '000001',
+      'standard_yearly': '000004',
+      'pro_monthly': '000002',
+      'pro_yearly': '000005',
+      'premium_monthly': '000003',
+      'premium_yearly': '000006',
+      'stand_monthly': '000001',
+      'stand_yearly': '000004',
+      'profersor_monthly': '000002',
+      'profersor_yearly': '000005',
+      'hiclass_monthly': '000003',
+      'hiclass_yearly': '000006',
+    };
+    return productIds['${planCode}_$billingType'];
+  }
 
   static Future<PaymentResult> pay({
     required PaymentMethod method,
@@ -198,8 +218,10 @@ class PaymentUtil {
         productDetails: productDetails,
       );
 
-      final bool purchaseInitiated = await _inAppPurchaseInstance.buyNonConsumable(
+      // App Store Connect 配置的是"消耗型项目"，必须使用 buyConsumable
+      final bool purchaseInitiated = await _inAppPurchaseInstance.buyConsumable(
         purchaseParam: purchaseParam,
+        autoConsume: true,
       );
 
       if (!purchaseInitiated) {
@@ -268,16 +290,34 @@ class PaymentUtil {
 
       final planId = planInfo['planId'] ?? '';
       final billingType = planInfo['billingType'] ?? 'monthly';
+      final planName = planInfo['planName'] ?? '';
 
-      Log.info('Apple Pay: 调用后端更新会员订阅，planId: $planId, billingType: $billingType');
+      Log.info('Apple Pay: 调用后端更新会员订阅，planId: $planId, billingType: $billingType, planName: $planName');
 
-      await _updateSubscription(planId, billingType, transactionId);
+      await _updateSubscription(planId, billingType, planName, transactionId);
     } catch (e, s) {
       Log.error('Apple Pay: 验证并更新订阅异常: $e\n$s');
     }
   }
 
   static Map<String, String>? _parseProductId(String productId) {
+    // 先尝试解析 App Store Connect 配置的数字产品 ID
+    // 000001=月付-标准版(planId=2), 000002=月付-专业版(planId=3), 000003=月付-高级版(planId=4)
+    // 000004=年付-标准版(planId=2), 000005=年付-专业版(planId=3), 000006=年付-高级版(planId=4)
+    const numericIdMap = <String, Map<String, String>>{
+      '000001': {'planId': '2', 'billingType': 'monthly', 'planName': 'standard'},
+      '000002': {'planId': '3', 'billingType': 'monthly', 'planName': 'pro'},
+      '000003': {'planId': '4', 'billingType': 'monthly', 'planName': 'premium'},
+      '000004': {'planId': '2', 'billingType': 'yearly', 'planName': 'standard'},
+      '000005': {'planId': '3', 'billingType': 'yearly', 'planName': 'pro'},
+      '000006': {'planId': '4', 'billingType': 'yearly', 'planName': 'premium'},
+    };
+
+    if (numericIdMap.containsKey(productId)) {
+      return numericIdMap[productId];
+    }
+
+    // 兼容旧格式：com.ponynotes.{planName}.{billingType}
     final parts = productId.split('.');
     if (parts.length < 3) {
       return null;
@@ -306,7 +346,7 @@ class PaymentUtil {
     };
   }
 
-  static Future<void> _updateSubscription(String planId, String billingType, String? transactionId) async {
+  static Future<void> _updateSubscription(String planId, String billingType, String planName, String? transactionId) async {
     try {
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       final cloudConfig = cloudConfigResult.fold(
@@ -359,7 +399,13 @@ class PaymentUtil {
       );
 
       if (response.statusCode == 200) {
-        Log.info('Apple Pay: 会员订阅更新成功！');
+        Log.info('Apple Pay: 会员订阅更新成功！planName: $planName');
+        // 通知 UI 订阅成功，触发 AccountManagementBloc 刷新订阅信息
+        try {
+          getIt<SubscriptionSuccessListenable>().onPaymentSuccess(planName);
+        } catch (e) {
+          Log.error('Apple Pay: 通知 SubscriptionSuccessListenable 失败: $e');
+        }
       } else {
         final errorMsg = response.body.isNotEmpty
             ? response.body

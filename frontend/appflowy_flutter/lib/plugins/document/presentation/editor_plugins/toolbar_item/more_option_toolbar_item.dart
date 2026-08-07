@@ -539,6 +539,10 @@ class _FormulaEditOverlay extends StatelessWidget {
                     maxLines: 3,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       hintText: 'E = MC^2',
                     ),
                     onSubmitted: (value) => onSubmit(value),
