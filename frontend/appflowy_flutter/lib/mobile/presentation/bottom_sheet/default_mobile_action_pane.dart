@@ -70,7 +70,7 @@ enum MobilePaneActionType {
         );
       case MobilePaneActionType.add:
         return MobileSlideActionButton(
-          backgroundColor: const Color(0xFF00C8FF),
+          backgroundColor: Theme.of(context).colorScheme.primary,
           svg: FlowySvgs.add_m,
           size: 28.0,
           onPressed: (context) {
