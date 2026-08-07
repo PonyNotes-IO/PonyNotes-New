@@ -213,10 +213,13 @@ class GitHubRedirectButton extends StatelessWidget {
 
   static const _height = 32.0;
 
+  // 指向本项目仓库。这里保留 new-issue + bug_report 模板（本仓库
+  // .github/ISSUE_TEMPLATE/ 下同样有该模板），因为 query 里带的
+  // stackTrace / message 对排查很有价值，跳到 issues 列表反而会丢掉它们。
   Uri get _gitHubNewBugUri => Uri(
         scheme: 'https',
         host: 'github.com',
-        path: '/AppFlowy-IO/AppFlowy/issues/new',
+        path: '/PonyNotes-IO/PonyNotes-New/issues/new',
         query:
             'assignees=&labels=&projects=&template=bug_report.yaml&os=$_platform&title=%5BBug%5D+$title&context=$_contextString',
       );

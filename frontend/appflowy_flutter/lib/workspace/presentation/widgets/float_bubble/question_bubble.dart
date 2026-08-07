@@ -123,9 +123,6 @@ class _BubbleActionListState extends State<BubbleActionList> {
             case BubbleAction.whatsNews:
               afLaunchUrlString('https://www.appflowy.io/what-is-new');
               break;
-            case BubbleAction.getSupport:
-              afLaunchUrlString('https://discord.gg/9Q2xaN37tV');
-              break;
             case BubbleAction.debug:
               _DebugToast().show();
               break;
@@ -140,8 +137,9 @@ class _BubbleActionListState extends State<BubbleActionList> {
               );
               break;
             case BubbleAction.github:
+              // 指向本项目 issues，而不是上游 AppFlowy 仓库。
               afLaunchUrlString(
-                'https://github.com/AppFlowy-IO/AppFlowy/issues/new/choose',
+                'https://github.com/PonyNotes-IO/PonyNotes-New/issues',
               );
               break;
             case BubbleAction.helpAndDocumentation:
@@ -184,10 +182,13 @@ class _DebugToast {
   }
 }
 
+/// 帮助气泡的菜单项。菜单直接由 `BubbleAction.values` 生成，增删项即改这里。
+///
+/// 已移除 `getSupport`：它跳转的是上游 AppFlowy 的官方 Discord 服务器，
+/// 我们的用户点进去只会看到一个陌生的「加入服务器」页面，无法真正获得支持。
 enum BubbleAction {
   whatsNews,
   helpAndDocumentation,
-  getSupport,
   debug,
   shortcuts,
   markdown,
@@ -212,8 +213,6 @@ extension QuestionBubbleExtension on BubbleAction {
         return LocaleKeys.questionBubble_whatsNew.tr();
       case BubbleAction.helpAndDocumentation:
         return LocaleKeys.questionBubble_helpAndDocumentation.tr();
-      case BubbleAction.getSupport:
-        return LocaleKeys.questionBubble_getSupport.tr();
       case BubbleAction.debug:
         return LocaleKeys.questionBubble_debug_name.tr();
       case BubbleAction.shortcuts:
@@ -234,8 +233,6 @@ extension QuestionBubbleExtension on BubbleAction {
           FlowySvgs.help_and_documentation_s,
           size: Size.square(16.0),
         );
-      case BubbleAction.getSupport:
-        return const FlowySvg(FlowySvgs.message_support_s);
       case BubbleAction.debug:
         return const FlowySvg(FlowySvgs.debug_s);
       case BubbleAction.shortcuts:

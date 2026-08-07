@@ -77,25 +77,22 @@ class FlowyMobileStateContainer extends StatelessWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // 指向本项目仓库；bug_report.yaml 模板本仓库同样存在，
+                      // 且 query 里带的错误日志对排查有价值，故保留模板参数。
                       OutlinedButton(
                         onPressed: () {
                           final String? version = snapshot.data?.version;
                           final String os = Platform.operatingSystem;
                           afLaunchUrlString(
-                            'https://github.com/AppFlowy-IO/AppFlowy/issues/new?assignees=&labels=&projects=&template=bug_report.yaml&title=[Bug]%20Mobile:%20&version=$version&os=$os&context=Error%20log:%20$errorMsg',
+                            'https://github.com/PonyNotes-IO/PonyNotes-New/issues/new?assignees=&labels=&projects=&template=bug_report.yaml&title=[Bug]%20Mobile:%20&version=$version&os=$os&context=Error%20log:%20$errorMsg',
                           );
                         },
                         child: Text(
                           LocaleKeys.workspace_errorActions_reportIssue.tr(),
                         ),
                       ),
-                      OutlinedButton(
-                        onPressed: () =>
-                            afLaunchUrlString('https://discord.gg/JucBXeU2FE'),
-                        child: Text(
-                          LocaleKeys.workspace_errorActions_reachOut.tr(),
-                        ),
-                      ),
+                      // 已移除「在 Discord 联系我们」：指向上游 AppFlowy 的
+                      // 官方 Discord 服务器，对我们的用户无意义。
                     ],
                   );
                 },
