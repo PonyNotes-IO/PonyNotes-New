@@ -1,13 +1,9 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
-import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/af_navigator_observer.dart';
-import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import 'mobile_search_page.dart';
 
@@ -34,13 +30,7 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
   late final TextEditingController controller;
 
   FocusNode get focusNode => widget.focusNode;
-  late String lastPage = bottomNavigationBarItemType.value ?? '';
   String lastText = '';
-
-  /// Guard flag to prevent infinite loops in onBackOrLeave.
-  /// This is needed because setting bottomNavigationBarItemType.value
-  /// triggers the listener again, which can cause re-entry.
-  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -79,40 +69,6 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
         builder: (context, _, __) {
           return Row(
             children: [
-              GestureDetector(
-                onTap: () {
-                  if (lastPage.isEmpty) return;
-                  // close the popup menu
-                  closePopupMenu();
-                  try {
-                    BottomNavigationBarItemType label =
-                        BottomNavigationBarItemType.values.byName(lastPage);
-                    if (label == BottomNavigationBarItemType.search) {
-                      label = BottomNavigationBarItemType.home;
-                    }
-                    if (label == BottomNavigationBarItemType.notification) {
-                      getIt<ReminderBloc>().add(const ReminderEvent.refresh());
-                    }
-                    bottomNavigationBarItemType.value = label.label;
-                    final routeName = label.routeName;
-                    if (routeName != null) GoRouter.of(context).go(routeName);
-                  } on ArgumentError {
-                    Log.error(
-                      'lastPage: [$lastPage] cannot be converted to BottomNavigationBarItemType',
-                    );
-                  }
-                },
-                child: SizedBox.square(
-                  dimension: 40,
-                  child: Center(
-                    child: FlowySvg(
-                      FlowySvgs.mobile_return_s,
-                      size: const Size(7, 12),
-                      color: theme.iconColorScheme.primary,
-                    ),
-                  ),
-                ),
-              ),
               Expanded(
                 child: TextFormField(
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -191,18 +147,12 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
   }
 
   void onBackOrLeave() {
-    if (_isNavigating) return;
     final label = bottomNavigationBarItemType.value;
     if (label == BottomNavigationBarItemType.search.label) {
       focusNode.requestFocus();
     } else {
-      _isNavigating = true;
       focusNode.unfocus();
       controller.clear();
-      lastPage = label ?? '';
-      Future.delayed(const Duration(milliseconds: 500), () {
-        _isNavigating = false;
-      });
     }
   }
 
