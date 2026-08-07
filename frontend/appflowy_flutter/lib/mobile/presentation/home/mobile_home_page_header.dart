@@ -11,6 +11,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/built_in_svgs.dart';
 import 'package:appflowy/workspace/application/user/settings_user_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -48,6 +49,10 @@ class MobileHomePageHeader extends StatelessWidget {
                       : _MobileUser(userProfile: userProfile),
                 ),
                 const HSpace(8.0),
+                const SidebarCloudSyncButton(
+                  useHighContrastForeground: true,
+                  iconSize: 22.0,
+                ),
                 _CalendarButton(
                   onPressed: () {
                     context.push('/mobile_calendar');
@@ -279,5 +284,3 @@ class _CalendarButton extends StatelessWidget {
     );
   }
 }
-
-

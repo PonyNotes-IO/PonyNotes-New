@@ -12,7 +12,6 @@ import 'package:appflowy/plugins/database/grid/application/sort/sort_editor_bloc
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
-import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -49,8 +48,11 @@ class MobileTabBarHeader extends StatelessWidget {
         children: [
           _buildBackButton(context, afTheme),
           const HSpace(8),
-          const Flexible(
-            child: _DatabaseViewSelectorButton(),
+          const Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _DatabaseViewSelectorButton(),
+            ),
           ),
           const HSpace(8),
           _buildTrailingActions(context),
@@ -106,11 +108,6 @@ class MobileTabBarHeader extends StatelessWidget {
           children: [
             ViewFavoriteButton(
               key: ValueKey('favorite_button_${currentView.viewId}'),
-              view: currentView.view,
-            ),
-            const SizedBox(width: 10),
-            ShareButton(
-              key: ValueKey('share_button_${currentView.viewId}'),
               view: currentView.view,
             ),
             const SizedBox(width: 4),

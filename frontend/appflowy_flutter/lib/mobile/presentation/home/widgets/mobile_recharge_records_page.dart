@@ -176,6 +176,7 @@ class _MobileRechargeRecordsPageState extends State<MobileRechargeRecordsPage> {
             children: [
               FlowySvg(
                 FlowySvgs.pony_notes_logo_xl,
+                blendMode: null,
                 size: const Size(20, 20),
               ),
               const SizedBox(width: 8),

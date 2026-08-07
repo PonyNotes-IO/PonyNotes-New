@@ -3,6 +3,8 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/import/import_panel.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart'
@@ -12,6 +14,7 @@ import 'package:go_router/go_router.dart';
 
 enum _MobileSettingsPopupMenuItem {
   settings,
+  import,
   trash,
 }
 
@@ -40,6 +43,12 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
         ),
         const PopupMenuDivider(height: 0.5),
         _buildItem(
+          value: _MobileSettingsPopupMenuItem.import,
+          svg: FlowySvgs.icon_import_mobile_lg,
+          text: LocaleKeys.moreAction_import.tr(),
+        ),
+        const PopupMenuDivider(height: 0.5),
+        _buildItem(
           value: _MobileSettingsPopupMenuItem.trash,
           svg: FlowySvgs.trash_s,
           text: LocaleKeys.settings_popupMenuItem_trash.tr(),
@@ -52,6 +61,9 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
             break;
           case _MobileSettingsPopupMenuItem.settings:
             _openSettingsPage(context);
+            break;
+          case _MobileSettingsPopupMenuItem.import:
+            _openImportPanel(context);
             break;
         }
       },
@@ -92,6 +104,28 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
       MobileHomeSettingPage.routeName,
       extra: workspaceState,
     );
+  }
+
+  void _openImportPanel(BuildContext context) {
+    try {
+      final currentWorkspace =
+          context.read<UserWorkspaceBloc>().state.currentWorkspace;
+      if (currentWorkspace != null) {
+        showImportPanel(
+          currentWorkspace.workspaceId,
+          context,
+          (type, name, document, importedViews) {
+            if (importedViews != null && importedViews.isNotEmpty) {
+              showToastNotification(
+                message: '成功导入 ${importedViews.length} 个文件',
+              );
+            }
+          },
+        );
+      }
+    } catch (e) {
+      showToastNotification(message: '打开导入页面时发生错误: $e');
+    }
   }
 }
 
