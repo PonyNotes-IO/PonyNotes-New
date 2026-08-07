@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -253,7 +254,7 @@ class _UnifiedViewTopRightActionsContentState
           ),
           const HSpace(4),
         ],
-        if (widget.showFullWindowButton) ...[
+        if (_shouldShowFullWindowButton) ...[
           ValueListenableBuilder<bool>(
             valueListenable: FullWindowController.isFullWindow,
             builder: (context, isFullWindow, _) {
@@ -297,6 +298,13 @@ class _UnifiedViewTopRightActionsContentState
         HSpace(widget.trailingSpacing),
       ],
     );
+  }
+
+  bool get _shouldShowFullWindowButton {
+    final isMobile =
+        UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
+    return widget.showFullWindowButton &&
+        (!isMobile || widget.view.layout != ViewLayoutPB.Whiteboard);
   }
 
   Color _floatingActionIconColor(BuildContext context) {
