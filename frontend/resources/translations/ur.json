@@ -122,10 +122,7 @@
   },
   "dialogCreatePageNameHint": "صفحہ کا نام",
   "questionBubble": {
-    "shortcuts": "شارٹ کٹس",
-    "whatsNew": "کیا نیا ہے؟",
     "help": "مدد اور سپورٹ",
-    "markdown": "مارک ڈاؤن",
     "debug": {
       "name": "ڈیبگ معلومات",
       "success": "ڈیبگ معلومات کلپ بورڈ پر کاپی ہو گئیں!",

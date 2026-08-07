@@ -106,8 +106,7 @@
     "errorActions": {
       "reportIssue": "Сообщить о проблеме",
       "reportIssueOnGithub": "Сообщить о проблеме на Github",
-      "exportLogFiles": "Экспортировать файлы логов",
-      "reachOut": "Связаться через Discord"
+      "exportLogFiles": "Экспортировать файлы логов"
     },
     "menuTitle": "Рабочие пространства",
     "deleteWorkspaceHintText": "Вы уверены, что хотите удалить рабочее пространство? Это действие нельзя отменить, и все опубликованные вами страницы будут сняты с публикации.",
@@ -324,11 +323,7 @@
   },
   "dialogCreatePageNameHint": "Название страницы",
   "questionBubble": {
-    "shortcuts": "Быстрые клавиши",
-    "whatsNew": "Что нового?",
-    "helpAndDocumentation": "Помощь и документация",
     "getSupport": "Получить поддержку",
-    "markdown": "Markdown",
     "debug": {
       "name": "Отладочная информация",
       "success": "Отладочная информация скопирована в буфер обмена!",
@@ -1424,7 +1419,6 @@
       "about": "О программе",
       "pushNotifications": "Push-уведомления",
       "support": "Поддержка",
-      "joinDiscord": "Присоединяйтесь к нам в Discord",
       "privacyPolicy": "Политика конфиденциальности",
       "userAgreement": "Пользовательское соглашение",
       "termsAndConditions": "Правила и условия",

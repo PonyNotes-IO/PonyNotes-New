@@ -60,8 +60,7 @@
     "notFoundError": "Ambiente de trabalho não encontrada",
     "failedToLoad": "Algo correu mal! Falha ao carregar o espaço de trabalho. Tente fechar qualquer instância aberta do @:appName e tente novamente.",
     "errorActions": {
-      "reportIssue": "Relatar problema",
-      "reachOut": "Entre em contacto no Discord"
+      "reportIssue": "Relatar problema"
     }
   },
   "shareAction": {
@@ -128,9 +127,6 @@
   },
   "dialogCreatePageNameHint": "Nome da página",
   "questionBubble": {
-    "shortcuts": "Atalhos",
-    "whatsNew": "O que há de novo?",
-    "markdown": "Remarcação",
     "debug": {
       "name": "Informação de depuração",
       "success": "Copiar informação de depuração para o clipboard!",

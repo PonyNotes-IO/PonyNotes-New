@@ -70,8 +70,7 @@
     "errorActions": {
       "reportIssue": "ڕاپۆرت کردنی کێشەیەک",
       "reportIssueOnGithub": "ڕاپۆرت کردنی کێشەیەک لەسەر گیتهابەوە ",
-      "exportLogFiles": "هەناردەکردنی فایلەکانی گوزارش",
-      "reachOut": "پەیوەندی لەگەڵ دیسکۆرد"
+      "exportLogFiles": "هەناردەکردنی فایلەکانی گوزارش"
     },
     "menuTitle": "شوێنی کارکردن",
     "deleteWorkspaceHintText": "ئایا دڵنیای کە دەتەوێت شوێنی کارەکە بسڕیتەوە؟ ئەم کارە ناتوانرێت پووچەڵ بکرێتەوە.",
@@ -170,9 +169,6 @@
   },
   "dialogCreatePageNameHint": "ناوی لاپەڕە",
   "questionBubble": {
-    "shortcuts": "کورتە ڕێگاکان",
-    "whatsNew": "نوێترین",
-    "markdown": "Markdown",
     "debug": {
       "name": "زانیاری دیباگ",
       "success": "زانیارییەکانی دیباگ کۆپی کراون بۆ کلیپبۆرد!",
@@ -489,7 +485,6 @@
       "about": "لەربارەی",
       "pushNotifications": "ئاگادارکردنەوەکانی خستنه‌سه‌ر",
       "support": "پشتیوانی",
-      "joinDiscord": "لە دیسکۆرد لەگەڵمان بن",
       "privacyPolicy": "سیاسەتی پاراستنی نهێنی",
       "userAgreement": "ڕێککەوتنی بەکارهێنەر",
       "termsAndConditions": "بار و دۆخ و مەرجەکان",

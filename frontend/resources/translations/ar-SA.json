@@ -133,8 +133,7 @@
     "errorActions": {
       "reportIssue": "بلغ عن خطأ",
       "reportIssueOnGithub": "الإبلاغ عن مشكلة على Github",
-      "exportLogFiles": "تصدير ملفات السجل",
-      "reachOut": "تواصل مع ديسكورد"
+      "exportLogFiles": "تصدير ملفات السجل"
     },
     "menuTitle": "مساحات العمل",
     "deleteWorkspaceHintText": " هل أنت متأكد من أنك تريد حذف مساحة العمل؟ لا يمكن التراجع عن هذا الإجراء، وستختفي أي صفحات قمت بنشرها سابقاً.",
@@ -351,11 +350,7 @@
   },
   "dialogCreatePageNameHint": "اسم الصفحة",
   "questionBubble": {
-    "shortcuts": "الاختصارات",
-    "whatsNew": "ما هو الجديد؟",
-    "helpAndDocumentation": "المساعدة والتوثيق",
     "getSupport": "احصل على الدعم",
-    "markdown": "Markdown",
     "debug": {
       "name": "معلومات التصحيح",
       "success": "تم نسخ معلومات التصحيح إلى الحافظة!",
@@ -1471,7 +1466,6 @@
       "about": "حول",
       "pushNotifications": "اشعارات لحظية",
       "support": "دعم",
-      "joinDiscord": "انضم إلينا على ديسكورد",
       "privacyPolicy": "سياسة الخصوصية",
       "userAgreement": "اتفاقية المستخدم",
       "termsAndConditions": "الشروط والأحكام",

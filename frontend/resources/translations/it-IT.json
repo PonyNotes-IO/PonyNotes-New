@@ -85,8 +85,7 @@
     "errorActions": {
       "reportIssue": "Segnala un problema",
       "reportIssueOnGithub": "Segnalate un problema su Github",
-      "exportLogFiles": "Esporta i file di log",
-      "reachOut": "Contattaci su Discord"
+      "exportLogFiles": "Esporta i file di log"
     },
     "deleteWorkspaceHintText": "Sei sicuro di voler cancellare la workspace? Questa azione non è reversibile, e ogni pagina che hai pubblicato sarà rimossa.",
     "createSuccess": "Workspace creata con successo",
@@ -221,9 +220,6 @@
   },
   "dialogCreatePageNameHint": "Nome pagina",
   "questionBubble": {
-    "shortcuts": "Scorciatoie",
-    "whatsNew": "Cosa c'è di nuovo?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Informazioni di debug",
       "success": "Informazioni di debug copiate negli appunti!",
@@ -545,7 +541,6 @@
       "about": "Informazioni",
       "pushNotifications": "Notifiche push",
       "support": "Supporto",
-      "joinDiscord": "Unisciti a noi su Discord",
       "privacyPolicy": "Politica sulla riservatezza",
       "userAgreement": "Accordo per gli utenti",
       "termsAndConditions": "Termini e Condizioni",

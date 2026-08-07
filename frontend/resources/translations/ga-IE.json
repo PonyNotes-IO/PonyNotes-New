@@ -86,8 +86,7 @@
     "errorActions": {
       "reportIssue": "Tuairiscigh saincheist",
       "reportIssueOnGithub": "Tuairiscigh ceist faoi Github",
-      "exportLogFiles": "Easpórtáil comhaid logáil",
-      "reachOut": "Bhaint amach le Discord"
+      "exportLogFiles": "Easpórtáil comhaid logáil"
     },
     "menuTitle": "Spásanna oibre",
     "createSuccess": "Cruthaíodh spás oibre go rathúil",

@@ -86,8 +86,7 @@
     "errorActions": {
       "reportIssue": "Reportar un problema",
       "reportIssueOnGithub": "Informar un problema en Github",
-      "exportLogFiles": "Exportar archivos de registro (logs)",
-      "reachOut": "Comuníquese con Discord"
+      "exportLogFiles": "Exportar archivos de registro (logs)"
     },
     "menuTitle": "Espacios de trabajo",
     "deleteWorkspaceHintText": "¿Está seguro de que desea eliminar el espacio de trabajo? Esta acción no se puede deshacer.",
@@ -218,9 +217,6 @@
   },
   "dialogCreatePageNameHint": "Nombre de página",
   "questionBubble": {
-    "shortcuts": "Atajos",
-    "whatsNew": "¿Qué hay de nuevo?",
-    "markdown": "Reducción",
     "debug": {
       "name": "Información de depuración",
       "success": "¡Información copiada!",
@@ -617,7 +613,6 @@
       "about": "Acerca de",
       "pushNotifications": "Notificaciones ",
       "support": "Soporte",
-      "joinDiscord": "Únete a nosotros en Discord",
       "privacyPolicy": "política de privacidad",
       "userAgreement": "Acuerdo del Usuario",
       "termsAndConditions": "Términos y condiciones",

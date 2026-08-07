@@ -89,8 +89,7 @@
     "errorActions": {
       "reportIssue": "समस्या नोंदवा",
       "reportIssueOnGithub": "Github वर समस्या नोंदवा",
-      "exportLogFiles": "लॉग फाइल्स निर्यात करा",
-      "reachOut": "Discord वर संपर्क करा"
+      "exportLogFiles": "लॉग फाइल्स निर्यात करा"
     },
     "menuTitle": "कार्यक्षेत्रे",
     "deleteWorkspaceHintText": "तुम्हाला हे कार्यक्षेत्र हटवायचे आहे का? ही कृती पूर्ववत केली जाऊ शकत नाही आणि तुम्ही प्रकाशित केलेली कोणतीही पृष्ठे अप्रकाशित होतील.",
@@ -317,10 +316,7 @@
   },
   "dialogCreatePageNameHint": "पृष्ठाचे नाव",
   "questionBubble": {
-    "shortcuts": "शॉर्टकट्स",
-    "whatsNew": "नवीन काय आहे?",
     "help": "मदत आणि समर्थन",
-    "markdown": "Markdown",
     "debug": {
       "name": "डीबग माहिती",
       "success": "डीबग माहिती क्लिपबोर्डवर कॉपी केली!",

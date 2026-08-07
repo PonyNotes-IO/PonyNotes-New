@@ -103,9 +103,6 @@
   },
   "dialogCreatePageNameHint": "Oldalnév",
   "questionBubble": {
-    "shortcuts": "Parancsikonok",
-    "whatsNew": "Újdonságok",
-    "markdown": "Markdown",
     "debug": {
       "name": "Debug Információ",
       "success": "Debug információ a vágólapra másolva",

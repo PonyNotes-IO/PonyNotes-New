@@ -89,8 +89,7 @@
     "errorActions": {
       "reportIssue": "Hata bildir",
       "reportIssueOnGithub": "GitHub'da hata bildir",
-      "exportLogFiles": "Günlük dosyalarını dışa aktar",
-      "reachOut": "Discord'da iletişime geç"
+      "exportLogFiles": "Günlük dosyalarını dışa aktar"
     },
     "menuTitle": "Çalışma Alanları",
     "deleteWorkspaceHintText": "Çalışma alanını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz ve yayınladığınız tüm sayfaların yayını kaldırılacaktır.",
@@ -288,9 +287,6 @@
   },
   "dialogCreatePageNameHint": "Sayfa adı",
   "questionBubble": {
-    "shortcuts": "Kısayollar",
-    "whatsNew": "Yenilikler",
-    "markdown": "Markdown",
     "debug": {
       "name": "Hata Ayıklama Bilgisi",
       "success": "Hata ayıklama bilgisi panoya kopyalandı!",
@@ -1349,7 +1345,6 @@
       "about": "Hakkında",
       "pushNotifications": "Anlık Bildirimler",
       "support": "Destek",
-      "joinDiscord": "Discord'da bize katılın",
       "privacyPolicy": "Gizlilik Politikası",
       "userAgreement": "Kullanıcı Sözleşmesi",
       "termsAndConditions": "Şartlar ve Koşullar",

@@ -76,8 +76,7 @@
     "failedToLoad": "Coś poszło nie tak! Wczytywanie przestrzeni roboczej nie powiodło się. Spróbuj wyłączyć wszystkie otwarte instancje @:appName i spróbuj ponownie.",
     "errorActions": {
       "reportIssue": "Zgłoś problem",
-      "reportIssueOnGithub": "Zgłoś problem na Githubie",
-      "reachOut": "Skontaktuj się na Discord"
+      "reportIssueOnGithub": "Zgłoś problem na Githubie"
     },
     "menuTitle": "Obszary robocze",
     "deleteWorkspaceHintText": "Czy na pewno chcesz usunąć obszar roboczy? Tej akcji nie można cofnąć.",
@@ -164,9 +163,6 @@
   },
   "dialogCreatePageNameHint": "Nazwa Strony",
   "questionBubble": {
-    "shortcuts": "Skróty",
-    "whatsNew": "Co nowego?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Informacje Debugowania",
       "success": "Skopiowano informacje debugowania do schowka!",
@@ -459,7 +455,6 @@
       "about": "About",
       "pushNotifications": "Powiadomienia Push",
       "support": "Wsparcie",
-      "joinDiscord": "Dołącz do nas na Discord",
       "privacyPolicy": "Polityka prywatności",
       "userAgreement": "Regulamin Użytkowania",
       "userprofileError": "Nie udało się wczytać profilu użytkownika",

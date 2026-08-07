@@ -99,9 +99,6 @@
   },
   "dialogCreatePageNameHint": "Orriaren izena",
   "questionBubble": {
-    "shortcuts": "Lasterbideak",
-    "whatsNew": "Ze berri?",
-    "markdown": "Markdown",
     "debug": {
       "name": "Debug informazioa",
       "success": "Debug informazioa kopiatu da!",
