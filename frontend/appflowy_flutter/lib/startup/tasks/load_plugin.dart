@@ -51,6 +51,7 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: ImportPagePluginBuilder(),
+      config: ImportPagePluginConfig(),
     );
     registerPlugin(
       builder: HomePagePluginBuilder(),
@@ -76,6 +77,7 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: NotebookPluginBuilder(),
+      config: NotebookPluginConfig(),
     );
     registerPlugin(
       builder: AIWelcomePluginBuilder(),

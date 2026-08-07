@@ -15,6 +15,13 @@ class ImportPagePlugin {
   static String get pluginId => "import_page";
 }
 
+/// 「导入页面」不再对用户开放新建入口（理由同 NotebookPluginConfig）。
+/// 注意菜单里另有一项「导入」，走的是 ViewImportActionWrapper，不受此处影响。
+class ImportPagePluginConfig implements PluginConfig {
+  @override
+  bool get creatable => false;
+}
+
 class ImportPagePluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
