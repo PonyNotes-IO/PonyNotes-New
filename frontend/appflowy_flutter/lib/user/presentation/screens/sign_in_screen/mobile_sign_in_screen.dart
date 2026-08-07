@@ -1,5 +1,7 @@
 // ignore_for_file: undefined_getter
 
+import 'dart:async' show unawaited;
+
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -300,7 +302,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
         if (rootNavigator != null) {
           final rootContext = rootNavigator.context;
           if (rootContext.mounted) {
-            await runAppFlowy();
+            unawaited(runAppFlowy());
           }
         }
       } else {
@@ -369,7 +371,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
               if (rootNavigator != null) {
                 final rootContext = rootNavigator.context;
                 if (rootContext.mounted) {
-                  await runAppFlowy();
+                  unawaited(runAppFlowy());
                 }
               }
             } else {
@@ -412,7 +414,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 if (rootNavigator != null) {
                   final rootContext = rootNavigator.context;
                   if (rootContext.mounted) {
-                    await runAppFlowy();
+                    unawaited(runAppFlowy());
                   }
                 }
               } else {
@@ -445,7 +447,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
             return;
           }
           if (rootContext.mounted) {
-            await runAppFlowy();
+            unawaited(runAppFlowy());
           }
         });
       } else {

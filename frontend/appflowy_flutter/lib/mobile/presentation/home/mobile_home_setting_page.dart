@@ -165,46 +165,45 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       userId: _userProfile!.id,
     );
 
-    final subscriptionFuture =
-        UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
-    final usageFuture = service.getWorkspaceUsage();
-    final currentSubscriptionFuture = SubscriptionService()
-        .getCurrentSubscription(
-      userProfile: _userProfile!,
-      caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
-    );
+    try {
+      // 分别等待每个 Future，避免 Future.wait 可能的问题
+      final subscriptionResult = await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+      if (!mounted) return;
 
-    await Future.wait([
-      subscriptionFuture,
-      usageFuture,
-      currentSubscriptionFuture,
-    ]);
+      final usageResult = await service.getWorkspaceUsage();
+      if (!mounted) return;
 
-    final subscriptionResult = await subscriptionFuture;
-    final usageResult = await usageFuture;
-    final currentSubscription = await currentSubscriptionFuture;
+      final currentSubscription = await SubscriptionService()
+          .getCurrentSubscription(
+        userProfile: _userProfile!,
+        caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
+      );
 
-    subscriptionResult.fold(
-      (info) {
-        if (mounted) {
-          setState(
-              () => _subscriptionInfo = info as WorkspaceSubscriptionInfoPB);
-        }
-      },
-      (error) => Log.error('Failed to load subscription info: ${error.msg}'),
-    );
+      subscriptionResult.fold(
+        (info) {
+          if (mounted) {
+            setState(
+              () => _subscriptionInfo = info as WorkspaceSubscriptionInfoPB,
+            );
+          }
+        },
+        (error) => Log.error('Failed to load subscription info: ${error.msg}'),
+      );
 
-    usageResult.fold(
-      (usage) {
-        if (mounted) {
-          setState(() => _workspaceUsage = usage as WorkspaceUsagePB?);
-        }
-      },
-      (error) => Log.error('Failed to load workspace usage: ${error.msg}'),
-    );
+      usageResult.fold(
+        (usage) {
+          if (mounted) {
+            setState(() => _workspaceUsage = usage as WorkspaceUsagePB?);
+          }
+        },
+        (error) => Log.error('Failed to load workspace usage: ${error.msg}'),
+      );
 
-    if (mounted && currentSubscription != null) {
-      setState(() => _currentSubscription = currentSubscription);
+      if (mounted && currentSubscription != null) {
+        setState(() => _currentSubscription = currentSubscription);
+      }
+    } catch (e, s) {
+      Log.error('Error loading subscription info: $e', e, s);
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/settings/data/repositories/rust_settings_repository_impl.dart';
 import 'package:appflowy/features/settings/logic/data_location_bloc.dart';
@@ -27,7 +29,7 @@ class StorageSettingGroup extends StatelessWidget {
             previous.userDataLocation != null &&
             previous.userDataLocation != current.userDataLocation,
         listener: (context, state) {
-          runAppFlowy(isAnon: true);
+          unawaited(runAppFlowy(isAnon: true));
         },
         builder: (context, state) {
           final path = state.userDataLocation?.path;

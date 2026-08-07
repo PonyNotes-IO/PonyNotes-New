@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
@@ -66,7 +68,7 @@ class UserSessionSettingGroup extends StatelessWidget {
       child: BlocConsumer<SignInBloc, SignInState>(
         listener: (context, state) {
           state.successOrFail?.fold(
-            (result) => runAppFlowy(),
+            (result) => unawaited(runAppFlowy()),
             (e) => Log.error(e),
           );
         },
