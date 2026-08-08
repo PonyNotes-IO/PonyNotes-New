@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/features/share_tab/data/models/shared_user.dart';
@@ -6,6 +7,8 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_dialog.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -215,7 +218,15 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: _spaceBloc!,
         onCreated: () {
-          _spaceBloc?.add(const SpaceEvent.initial(openFirstPage: false));
+          // `_onCreate` 已经把新 space 写进 `state.spaces`，本页 UI
+          // 会自动 rebuild。
+          //
+          // 通知 home 屏的 `SpaceBloc`（不同实例）刷新 spaces 列表。
+          // Home 屏会 `SpaceEvent.initial` 重拉 backend —— backend
+          // 的 `getPublicViews` 在 create 之后可能有几百毫秒滞后，
+          // 偶尔会出现新 space 短暂消失，下次后台 listener
+          // (`didReceiveSpaceUpdate`) 会再拉一次修复。
+          MobileSpaceChangeNotifier.instance.notifySpacesChanged();
         },
       ),
     );
@@ -351,8 +362,31 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
 
     return BlocBuilder<SpaceBloc, SpaceState>(
       bloc: widget.spaceBloc,
+      buildWhen: (prev, curr) {
+        // Only rebuild when the space list actually changes — otherwise
+        // every state mutation (currentSpace, child views, etc.) thrashes
+        // the UI.
+        if (prev.spaces.length != curr.spaces.length) return true;
+        final prevIds = prev.spaces.map((s) => s.id).toSet();
+        final currIds = curr.spaces.map((s) => s.id).toSet();
+        return !prevIds.difference(currIds).isEmpty ||
+            !currIds.difference(prevIds).isEmpty;
+      },
       builder: (context, state) {
+        // Use `SpaceBloc.state.spaces` (sourced from `_getSpaces` RPC) so
+        // freshly-created spaces show up here immediately: `_onCreate`
+        // emits `[...state.spaces, space]` right after the backend
+        // `createView` RPC returns. This mirrors the desktop sidebar's
+        // rendering source.
         final spaces = widget.spaceBloc!.publicSpaces;
+        Log.debug(
+          '[SpaceCreate] _SpaceManagementContent.build: '
+          'embedMode=${widget.embedMode}, '
+          'blocHash=${widget.spaceBloc.hashCode}, '
+          'spaceBloc.state.spaces.count=${widget.spaceBloc!.state.spaces.length}, '
+          'publicSpaces.count=${spaces.length}, '
+          'publicSpaces=${spaces.map((s) => "${s.name}(${s.id}, isSpace=${s.isSpace}, perm=${s.spacePermission})").toList()}',
+        );
 
         if (spaces.isEmpty) {
           return SizedBox(
@@ -381,6 +415,11 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
             ),
           );
         }
+
+        Log.debug(
+          '[SpaceCreate] _SpaceManagementContent: rendering ${spaces.length} spaces '
+          'in embedMode=${widget.embedMode}',
+        );
 
         return Column(
           mainAxisSize: widget.embedMode ? MainAxisSize.min : MainAxisSize.max,
@@ -491,7 +530,22 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: widget.spaceBloc!,
         onCreated: () {
-          widget.spaceBloc?.add(const SpaceEvent.initial(openFirstPage: false));
+          // `_onCreate` already emits the freshly-created space into
+          // `state.spaces`; the management page UI rebuilds from that.
+          //
+          // We deliberately do NOT dispatch `SpaceEvent.initial` here:
+          // `initial` re-pulls `getPublicViews` from the backend, which
+          // returns a stale list right after the create (the in-memory
+          // folder cache hasn't caught up yet), so the freshly-created
+          // space would briefly disappear from the list. We let the
+          // background listener (`didReceiveSpaceUpdate`) handle the
+          // eventual sync.
+          //
+          // We still need to notify the *home* SpaceBloc (a different
+          // instance) so the home page can render the new space. The
+          // home page will dispatch its own `SpaceEvent.initial` in
+          // response to this notification.
+          MobileSpaceChangeNotifier.instance.notifySpacesChanged();
         },
       ),
     );
@@ -525,6 +579,8 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
 
     widget.spaceBloc?.add(SpaceEvent.delete(space));
     showToastNotification(message: '已删除「${space.name}」');
+    // 通知首页 SpaceBloc 重新拉取
+    MobileSpaceChangeNotifier.instance.notifySpacesChanged();
   }
 
   void _updateSpacePermission(ViewPB space, SpacePermission newPerm) {
@@ -532,6 +588,8 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
       SpaceEvent.update(space: space, permission: newPerm),
     );
     showToastNotification(message: '权限已更新');
+    // 通知首页 SpaceBloc 重新拉取
+    MobileSpaceChangeNotifier.instance.notifySpacesChanged();
   }
 
   void _showMemberManagementSheet(ViewPB space) {
@@ -913,278 +971,6 @@ class _PermissionChip extends StatelessWidget {
         label,
         fontSize: 11,
         color: theme.textColorScheme.secondary,
-      ),
-    );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// MobileCreateSpaceSheet — with icon/color picker
-// ────────────────────────────────────────────────────────────────────────────
-
-class MobileCreateSpaceSheet extends StatefulWidget {
-  const MobileCreateSpaceSheet({
-    super.key,
-    required this.spaceBloc,
-    required this.onCreated,
-  });
-
-  final SpaceBloc spaceBloc;
-  final VoidCallback onCreated;
-
-  @override
-  State<MobileCreateSpaceSheet> createState() => _MobileCreateSpaceSheetState();
-}
-
-class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
-  final _nameController = TextEditingController();
-  SpacePermission _permission = SpacePermission.publicToAll;
-  bool _isCreating = false;
-  String _selectedIconId = builtInSpaceIcons.first;
-  String _selectedColor = builtInSpaceColors.first;
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  bool get _isValid => _nameController.text.trim().isNotEmpty;
-
-  void _createSpace() {
-    if (!_isValid || _isCreating) return;
-
-    setState(() => _isCreating = true);
-
-    final name = _nameController.text.trim();
-    widget.spaceBloc.add(
-          SpaceEvent.create(
-            name: name,
-            icon: _selectedIconId,
-            iconColor: _selectedColor,
-            permission: _permission,
-            createNewPageByDefault: true,
-            openAfterCreate: true,
-          ),
-        );
-
-    widget.onCreated();
-    Navigator.of(context).pop();
-    showToastNotification(message: '团队协作区「$name」已创建');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildIconPicker(theme),
-            const SizedBox(height: 20),
-            FlowyTextField(
-              controller: _nameController,
-              hintText: '团队协作区名称',
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 20),
-            FlowyText.medium(
-              '访问权限',
-              fontSize: 14,
-              color: theme.textColorScheme.primary,
-            ),
-            const SizedBox(height: 8),
-            _buildPermissionOption(
-              SpacePermission.publicToAll,
-              '开放式',
-              '所有工作空间成员可见并可访问',
-              theme,
-            ),
-            const SizedBox(height: 8),
-            _buildPermissionOption(
-              SpacePermission.private,
-              '私人',
-              '仅被邀请的成员可见',
-              theme,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: AFFilledTextButton.primary(
-                text: _isCreating
-                    ? '创建中...'
-                    : LocaleKeys.button_confirm.tr(),
-                onTap: () {
-                  if (_isValid && !_isCreating) {
-                    _createSpace();
-                  }
-                },
-                size: AFButtonSize.l,
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIconPicker(AppFlowyThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText.medium(
-          '图标和颜色',
-          fontSize: 14,
-          color: theme.textColorScheme.primary,
-        ),
-        const SizedBox(height: 12),
-        _buildColorGrid(theme),
-        const SizedBox(height: 12),
-        _buildIconGrid(theme),
-      ],
-    );
-  }
-
-  Widget _buildColorGrid(AppFlowyThemeData theme) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: builtInSpaceColors.map((color) {
-        final isSelected = _selectedColor == color;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedColor = color),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Color(int.parse(color)),
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected
-                  ? Border.all(color: Colors.white, width: 2)
-                  : null,
-              boxShadow: isSelected
-                  ? [BoxShadow(color: Color(int.parse(color)).withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 1)]
-                  : null,
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildIconGrid(AppFlowyThemeData theme) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: builtInSpaceIcons.map((icon) {
-        final isSelected = _selectedIconId == icon;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedIconId = icon),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Color(int.parse(_selectedColor)),
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected
-                  ? Border.all(color: theme.textColorScheme.primary, width: 2)
-                  : null,
-            ),
-            child: Center(
-              child: FlowySvg(
-                FlowySvgData('assets/flowy_icons/16x/$icon.svg'),
-                size: const Size.square(24),
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPermissionOption(
-    SpacePermission permission,
-    String title,
-    String description,
-    AppFlowyThemeData theme,
-  ) {
-    final isSelected = _permission == permission;
-
-    return GestureDetector(
-      onTap: () => setState(() => _permission = permission),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? theme.surfaceColorScheme.layer01
-              : theme.surfaceColorScheme.layer02,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected
-                ? theme.textColorScheme.primary
-                : theme.borderColorScheme.primary,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected
-                      ? theme.textColorScheme.primary
-                      : theme.borderColorScheme.primary,
-                  width: 1.5,
-                ),
-              ),
-              child: isSelected
-                  ? Center(
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: theme.textColorScheme.primary,
-                        ),
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FlowyText.medium(
-                    title,
-                    fontSize: 14,
-                    color: theme.textColorScheme.primary,
-                  ),
-                  const SizedBox(height: 2),
-                  FlowyText(
-                    description,
-                    fontSize: 12,
-                    color: theme.textColorScheme.secondary,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -3,8 +3,9 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
-import 'package:appflowy/mobile/presentation/home/workspaces/create_workspace_menu.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/shared/list_extension.dart';
@@ -24,10 +25,53 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-class MobileSpace extends StatelessWidget {
+class MobileSpace extends StatefulWidget {
   const MobileSpace({super.key, required this.favoriteBloc});
 
   final FavoriteBloc favoriteBloc;
+
+  @override
+  State<MobileSpace> createState() => _MobileSpaceState();
+}
+
+class _MobileSpaceState extends State<MobileSpace> {
+  @override
+  void initState() {
+    super.initState();
+    // 当其他组件（例如空间管理页）创建/删除/修改了协作区，
+    // 通过全局 notifier 通知首页重新拉取 SpaceBloc。
+    MobileSpaceChangeNotifier.instance.addListener(_refreshSpace);
+  }
+
+  @override
+  void dispose() {
+    MobileSpaceChangeNotifier.instance.removeListener(_refreshSpace);
+    super.dispose();
+  }
+
+  void _refreshSpace() {
+    Log.debug('[SpaceCreate] MobileSpace._refreshSpace triggered');
+    if (!mounted) return;
+    try {
+      final spaceBloc = context.read<SpaceBloc>();
+
+      // 重新拉 backend（包含刚刚的改动）。我们故意只 dispatch `initial`，
+      // 不动 SpaceBloc 内部状态（避免与桌面端共享路径冲突）。
+      //
+      // 注意：如果刚刚创建了 space，backend 的 `getPublicViews` 缓存
+      // 可能有几百毫秒的滞后，导致新 space 短暂从列表中消失。
+      // 下一次 `_onCreate` 后台 listener 的 `didReceiveSpaceUpdate` 会
+      // 自动重新拉取并恢复显示。
+      Log.debug(
+        '[SpaceCreate] dispatching SpaceEvent.initial to home SpaceBloc',
+      );
+      spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
+    } catch (e, st) {
+      Log.error(
+        '[SpaceCreate] MobileSpace: failed to refresh SpaceBloc: $e\n$st',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +103,7 @@ class MobileSpace extends StatelessWidget {
                           ? publicSpaces.first
                           : state.currentSpace ?? state.spaces.first,
                 ),
-                favoriteBloc: favoriteBloc,
+                favoriteBloc: widget.favoriteBloc,
               ),
               const VSpace(4.0),
               // 协作区 / 公共空间（仅 Space）
@@ -67,8 +111,8 @@ class MobileSpace extends StatelessWidget {
                 title: LocaleKeys.sideBar_workspace.tr(),
                 spaces: publicSpaces,
                 spaceType: FolderSpaceType.public,
-                onAddPressed: () => _showCreateWorkspaceBottomSheet(context),
-                favoriteBloc: favoriteBloc,
+                onAddPressed: () => _showCreateSpaceBottomSheet(context),
+                favoriteBloc: widget.favoriteBloc,
               ),
             ] else ...[
               // 非协作工作区：个人空间仅使用公共空间中的 Space
@@ -82,7 +126,7 @@ class MobileSpace extends StatelessWidget {
                       ? publicSpaces.first
                       : state.currentSpace ?? state.spaces.first,
                 ),
-                favoriteBloc: favoriteBloc,
+                favoriteBloc: widget.favoriteBloc,
               ),
             ],
           ],
@@ -134,30 +178,26 @@ class MobileSpace extends StatelessWidget {
     );
   }
 
-  void _showCreateWorkspaceBottomSheet(BuildContext context) {
+  void _showCreateSpaceBottomSheet(BuildContext context) {
+    // 与桌面端 sidebar 的 "+" 行为对齐：调 `SpaceBloc.create` 让新 space
+    // 进入 home 的 SpaceBloc.state.spaces (而不是创建新的工作空间)。
+    // 新 space 由 SpaceBloc 内部 `_onCreate` 触发 emit，本页
+    // `BlocBuilder<SpaceBloc>` 立刻 rebuild，无需 notifier 桥接。
+    final spaceBloc = context.read<SpaceBloc>();
     showMobileBottomSheet(
       context,
-      showHeader: true,
-      title: LocaleKeys.workspace_create.tr(),
-      showCloseButton: true,
       showDragHandle: true,
-      showDivider: false,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      builder: (bottomSheetContext) {
-        return EditWorkspaceNameBottomSheet(
-          type: EditWorkspaceNameType.create,
-          workspaceName: LocaleKeys.workspace_defaultName.tr(),
-          onSubmitted: (name) {
-            Navigator.of(bottomSheetContext).pop();
-            context.read<UserWorkspaceBloc>().add(
-                  UserWorkspaceEvent.createWorkspace(
-                    name: name,
-                    workspaceType: WorkspaceTypePB.ServerW,
-                  ),
-                );
-          },
-        );
-      },
+      showHeader: true,
+      title: '新建团队协作区',
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      // MobileCreateSpaceSheet 内部已经用 _ScrollableColumn 自动处理
+      // 键盘弹起时的滚动 —— 不需要外层再包一层。
+      builder: (_) => MobileCreateSpaceSheet(
+        spaceBloc: spaceBloc,
+        onCreated: () {
+          // Sheet 内部已经 pop 过了；这里只做 toast（如需要）。
+        },
+      ),
     );
   }
 }

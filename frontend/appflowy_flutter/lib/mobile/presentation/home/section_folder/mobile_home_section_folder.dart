@@ -4,11 +4,12 @@ import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
 import 'package:appflowy/mobile/presentation/home/section_folder/mobile_home_section_folder_header.dart';
-import 'package:appflowy/mobile/presentation/home/workspaces/create_workspace_menu.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
@@ -54,7 +55,7 @@ class MobileSectionFolder extends StatelessWidget {
                               .read<UserWorkspaceBloc>()
                               .state
                               .isCollabWorkspaceOn
-                      ? _showCreateWorkspaceBottomSheet(context)
+                      ? _showCreateSpaceBottomSheet(context)
                       : _createNewPage(context),
                 ),
               ),
@@ -106,30 +107,24 @@ class MobileSectionFolder extends StatelessWidget {
     );
   }
 
-  void _showCreateWorkspaceBottomSheet(BuildContext context) {
+  void _showCreateSpaceBottomSheet(BuildContext context) {
+    // 与桌面端 sidebar 的 "+" 行为对齐：调 `SpaceBloc.create` 让新 space
+    // 进入 sidebar 树里的 SpaceBloc.state.spaces。
+    // (这与 `_createNewPage` 调 `SidebarSectionsEvent.createRootView...`
+    // 完全不同 —— 后者创建一个普通 view，而不是一个 space。)
+    final spaceBloc = context.read<SpaceBloc>();
     showMobileBottomSheet(
       context,
-      showHeader: true,
-      title: LocaleKeys.workspace_create.tr(),
-      showCloseButton: true,
       showDragHandle: true,
-      showDivider: false,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      builder: (bottomSheetContext) {
-        return EditWorkspaceNameBottomSheet(
-          type: EditWorkspaceNameType.create,
-          workspaceName: LocaleKeys.workspace_defaultName.tr(),
-          onSubmitted: (name) {
-            Navigator.of(bottomSheetContext).pop();
-            context.read<UserWorkspaceBloc>().add(
-                  UserWorkspaceEvent.createWorkspace(
-                    name: name,
-                    workspaceType: WorkspaceTypePB.ServerW,
-                  ),
-                );
-          },
-        );
-      },
+      showHeader: true,
+      title: '新建团队协作区',
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      // MobileCreateSpaceSheet 内部已经用 _ScrollableColumn 自动处理
+      // 键盘弹起时的滚动 —— 不需要外层再包一层。
+      builder: (_) => MobileCreateSpaceSheet(
+        spaceBloc: spaceBloc,
+        onCreated: () {},
+      ),
     );
   }
 }
