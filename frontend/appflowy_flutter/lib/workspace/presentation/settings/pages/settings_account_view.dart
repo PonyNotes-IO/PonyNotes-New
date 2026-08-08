@@ -232,7 +232,6 @@ class _AccountQuickActionsSection extends StatelessWidget {
     required bool showArrow,
   }) {
     final theme = AppFlowyTheme.of(context);
-    const rightColumnWidth = 360.0;
     final trailingText = trailing == _aiUsageTrailingSentinel
         ? FutureBuilder<String>(
             future: _loadAiUsageSubtitle(context),
@@ -262,33 +261,32 @@ class _AccountQuickActionsSection extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(
-            child: FlowyText(
+         FlowyText(
               title,
               fontSize: 16,
               color: theme.textColorScheme.primary,
+              overflow: TextOverflow.visible,
+              maxLines: 1,
             ),
-          ),
-          SizedBox(
-            width: rightColumnWidth,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: trailingText,
+          Spacer(),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: trailingText,
+              ),
+              if (showArrow) ...[
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 16,
+                  color: Colors.grey,
                 ),
-                if (showArrow) ...[
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ],
       ),
