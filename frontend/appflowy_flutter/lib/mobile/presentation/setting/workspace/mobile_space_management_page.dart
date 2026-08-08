@@ -383,35 +383,66 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
         }
 
         return Column(
+          mainAxisSize: widget.embedMode ? MainAxisSize.min : MainAxisSize.max,
           children: [
             if (widget.embedMode && _canCreateSpace) _buildEmbeddedHeader(context),
-            Expanded(
-              child: ListView.separated(
-                shrinkWrap: widget.embedMode,
-                physics: widget.embedMode
-                    ? const NeverScrollableScrollPhysics()
-                    : const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: spaces.length,
-                separatorBuilder: (_, __) => const Divider(
-                  height: 1,
-                  indent: 16,
-                  endIndent: 16,
+            if (widget.embedMode)
+              // 在 SingleChildScrollView 等高度无限的父级中，不能用 Expanded
+              // 改用 Flexible + shrinkWrap + NeverScrollableScrollPhysics，
+              // 让 ListView 自适应内容高度。
+              Flexible(
+                fit: FlexFit.loose,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: spaces.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final s = spaces[index];
+                    return _SpaceListItem(
+                      space: s,
+                      userProfile: widget.userProfile,
+                      currentWorkspaceRole: widget.currentWorkspaceRole,
+                      workspaceId: widget.currentWorkspace?.id ?? '',
+                      onDelete: () => _deleteSpace(s),
+                      onPermissionChanged: (newPerm) =>
+                          _updateSpacePermission(s, newPerm),
+                      onManageMembers: () => _showMemberManagementSheet(s),
+                    );
+                  },
                 ),
-                itemBuilder: (context, index) {
-                  final s = spaces[index];
-                  return _SpaceListItem(
-                    space: s,
-                    userProfile: widget.userProfile,
-                    currentWorkspaceRole: widget.currentWorkspaceRole,
-                    workspaceId: widget.currentWorkspace?.id ?? '',
-                    onDelete: () => _deleteSpace(s),
-                    onPermissionChanged: (newPerm) => _updateSpacePermission(s, newPerm),
-                    onManageMembers: () => _showMemberManagementSheet(s),
-                  );
-                },
+              )
+            else
+              Expanded(
+                child: ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: spaces.length,
+                  separatorBuilder: (_, __) => const Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                  ),
+                  itemBuilder: (context, index) {
+                    final s = spaces[index];
+                    return _SpaceListItem(
+                      space: s,
+                      userProfile: widget.userProfile,
+                      currentWorkspaceRole: widget.currentWorkspaceRole,
+                      workspaceId: widget.currentWorkspace?.id ?? '',
+                      onDelete: () => _deleteSpace(s),
+                      onPermissionChanged: (newPerm) =>
+                          _updateSpacePermission(s, newPerm),
+                      onManageMembers: () => _showMemberManagementSheet(s),
+                    );
+                  },
+                ),
               ),
-            ),
           ],
         );
       },
