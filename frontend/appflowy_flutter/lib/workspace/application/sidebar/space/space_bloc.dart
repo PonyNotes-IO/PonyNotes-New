@@ -18,6 +18,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_request_service.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
@@ -80,18 +81,47 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             _initial(userProfile, workspaceId);
 
-            final (spaces, publicViews, privateViews) = await _getSpaces();
+            Log.info('[SpaceHomeSync] bloc_initial_started blocHash=$hashCode');
 
-            final currentSpace = await _getLastOpenedSpace(spaces);
+            final (fetchedSpaces, publicViews, privateViews) =
+                await _getSpaces();
+
+            Log.info(
+              '[SpaceHomeSync] bloc_initial_fetched blocHash=$hashCode '
+              'fetched_spaces=${fetchedSpaces.length} '
+              'fetched_names=${fetchedSpaces.map((s) => s.name).toList()} '
+              'public_views=${publicViews.length} '
+              'private_views=${privateViews.length}',
+            );
+
+            // Merge: keep any local spaces that backend hasn't returned yet
+            // (newly created via `create` event but not yet propagated to
+            // backend cache). Without this merge, every `initial` would
+            // wipe out freshly-created spaces.
+            Log.info(
+              '[SpaceHomeSync] before_merge blocHash=$hashCode '
+              'pending_ids=${SpaceChangeNotifier.instance.pendingNewSpaceIds} '
+              'pending_count=${SpaceChangeNotifier.instance.pendingNewSpaceIds.length} '
+              'current_state_spaces=${state.spaces.length}',
+            );
+            final mergedSpaces = _mergeWithLocalPendingSpaces(fetchedSpaces);
+
+            final currentSpace = await _getLastOpenedSpace(mergedSpaces);
             final isExpanded = await _getSpaceExpandStatus(currentSpace);
             emit(
               state.copyWith(
-                spaces: spaces,
+                spaces: mergedSpaces,
                 currentSpace: currentSpace,
                 isExpanded: isExpanded,
                 shouldShowUpgradeDialog: false,
                 isInitialized: true,
               ),
+            );
+
+            Log.info(
+              '[SpaceHomeSync] bloc_initial_emitted blocHash=$hashCode '
+              'emitted_spaces=${state.spaces.length} '
+              'emitted_names=${state.spaces.map((s) => s.name).toList()}',
             );
 
             if (openFirstPage) {
@@ -179,11 +209,29 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             Log.info('create space: $space');
 
             if (space != null) {
+              // 把这个 space 标记为"全局 pending"，这样所有客户端
+              // `SpaceBloc` 在拉 backend 时都不会覆盖它。
+              // 注意：不调用 `notifySpaceCreated`（它会触发 listener
+              // 造成循环）。设置页路径下，调用方会自己通过 onCreated
+              // 回调通知 home 屏。
+              SpaceChangeNotifier.instance
+                  .markPendingNewSpace(space.id);
+              Log.info(
+                '[SpaceHomeSync] bloc_create_emitted blocHash=$hashCode '
+                'new_space=${space.name}(${space.id}) '
+                'spaces_now=${[...state.spaces, space].length}',
+              );
               emit(
                 state.copyWith(
                   spaces: [...state.spaces, space],
                   currentSpace: space,
                 ),
+              );
+              Log.info(
+                '[SpaceHomeSync] bloc_create_after_emit '
+                'blocHash=$hashCode '
+                'state_spaces=${state.spaces.length} '
+                'state_names=${state.spaces.map((s) => s.name).toList()}',
               );
               add(SpaceEvent.open(space: space));
               Log.info('open space: ${space.name}(${space.id})');
@@ -570,8 +618,13 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             );
           },
           didReceiveSpaceUpdate: () async {
-            final (spaces, _, _) = await _getSpaces();
-            var currentSpace = await _getLastOpenedSpace(spaces);
+            final (fetchedSpaces, _, _) = await _getSpaces();
+
+            // Merge: keep any local spaces that backend hasn't returned yet.
+            final mergedSpaces =
+                _mergeWithLocalPendingSpaces(fetchedSpaces);
+
+            var currentSpace = await _getLastOpenedSpace(mergedSpaces);
 
             // 如果当前空间存在，重新加载它的子视图列表
             // 这样在删除子视图后，列表会立即更新
@@ -596,9 +649,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             emit(
               state.copyWith(
-                spaces: spaces,
+                spaces: mergedSpaces,
                 currentSpace: currentSpace,
               ),
+            );
+
+            Log.info(
+              '[SpaceHomeSync] bloc_didReceiveSpaceUpdate_emitted '
+              'fetched=${fetchedSpaces.length} '
+              'merged=${mergedSpaces.length} '
+              'names=${mergedSpaces.map((s) => s.name).toList()}',
             );
           },
           didUpdateCurrentSpaceChildViews: () async {
@@ -855,6 +915,31 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             emit(state.copyWith(isDuplicatingSpace: false));
           },
+          upsertSpaces: (incoming) async {
+            // Merge incoming spaces into state.spaces (deduped by id).
+            // Used by the mobile home screen to immediately reflect a
+            // freshly-created space pushed in by another component's
+            // `SpaceBloc` (via `SpaceChangeNotifier`), without
+            // waiting for backend `getPublicViews` cache to sync.
+            if (incoming.isEmpty) return;
+            final existingIds = state.spaces.map((s) => s.id).toSet();
+            final newOnes =
+                incoming.where((s) => !existingIds.contains(s.id)).toList();
+            if (newOnes.isEmpty) {
+              Log.info(
+                '[SpaceHomeSync] bloc_upsertSpaces no_new blocHash=$hashCode',
+              );
+              return;
+            }
+            final merged = [...state.spaces, ...newOnes];
+            Log.info(
+              '[SpaceHomeSync] bloc_upsertSpaces merged '
+              'blocHash=$hashCode new_count=${newOnes.length} '
+              'new_names=${newOnes.map((s) => s.name).toList()} '
+              'spaces_after=${merged.length}',
+            );
+            emit(state.copyWith(spaces: merged));
+          },
         );
       },
     );
@@ -970,6 +1055,44 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       Log.error('Failed to get section views: $e');
       return null;
     }
+  }
+
+  /// 在 backend 拉取结果的基础上，保留"全局 pending 但 backend cache
+  /// 还没同步"的 space。返回的列表里这些 pending space 排在最前面。
+  ///
+  /// pending 集合存在 [SpaceChangeNotifier] 里（全局单例），
+  /// 这样多个 `SpaceBloc` 实例（设置页和首页各一个）都能正确合并。
+  ///
+  /// 关键行为：
+  ///   - 如果 backend **这次** 拉到了某个 pending id（说明 cache 已经
+  ///     同步），就从全局 set 中移除（所有客户端都生效）。
+  ///   - 否则从当前 state.spaces 中找到对应的本地 ViewPB 保留下来。
+  List<ViewPB> _mergeWithLocalPendingSpaces(List<ViewPB> fetched) {
+    final pending = SpaceChangeNotifier.instance.pendingNewSpaceIds;
+    if (pending.isEmpty) {
+      return fetched;
+    }
+    final fetchedIds = fetched.map((s) => s.id).toSet();
+    // 哪些 pending 已经被 backend 同步了？清理掉（全局）
+    final resolved = SpaceChangeNotifier.instance
+        .resolvePending(fetchedIds);
+    final stillPending = SpaceChangeNotifier.instance.pendingNewSpaceIds;
+    if (stillPending.isEmpty) {
+      return fetched;
+    }
+    final pendingSpaces = state.spaces
+        .where((s) => stillPending.contains(s.id))
+        .toList();
+    final merged = <ViewPB>[...pendingSpaces, ...fetched];
+    Log.info(
+      '[SpaceHomeSync] merge_with_pending '
+      'fetched=${fetched.length} '
+      'pending_added=${pendingSpaces.length} '
+      'pending_names=${pendingSpaces.map((s) => s.name).toList()} '
+      'resolved=$resolved '
+      'still_pending=${stillPending.length}',
+    );
+    return merged;
   }
 
   void _initial(UserProfilePB userProfile, String workspaceId) {
@@ -1376,6 +1499,14 @@ class SpaceEvent with _$SpaceEvent {
     required String requestId,
     required bool approve,
   }) = _HandleJoinRequest;
+  /// Merge [spaces] into `state.spaces` (deduped by id). Used by the
+  /// mobile home screen when it receives a freshly-created space from
+  /// another component's `SpaceBloc` (via
+  /// `SpaceChangeNotifier`) and wants to show it without waiting
+  /// for backend `getPublicViews` cache to sync.
+  const factory SpaceEvent.upsertSpaces({
+    required List<ViewPB> spaces,
+  }) = _UpsertSpaces;
 }
 
 @freezed

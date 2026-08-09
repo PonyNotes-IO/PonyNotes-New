@@ -24,6 +24,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:async';
 
 class MobileSpace extends StatefulWidget {
   const MobileSpace({super.key, required this.favoriteBloc});
@@ -40,37 +41,200 @@ class _MobileSpaceState extends State<MobileSpace> {
     super.initState();
     // 当其他组件（例如空间管理页）创建/删除/修改了协作区，
     // 通过全局 notifier 通知首页重新拉取 SpaceBloc。
-    MobileSpaceChangeNotifier.instance.addListener(_refreshSpace);
+    SpaceChangeNotifier.instance.addListener(_onNotifierFire);
   }
 
   @override
   void dispose() {
-    MobileSpaceChangeNotifier.instance.removeListener(_refreshSpace);
+    SpaceChangeNotifier.instance.removeListener(_onNotifierFire);
     super.dispose();
   }
 
-  void _refreshSpace() {
-    Log.debug('[SpaceCreate] MobileSpace._refreshSpace triggered');
-    if (!mounted) return;
+  void _onNotifierFire() {
+    // 把 notifier 当前携带的新创建 space（如果有）传给 refresh。
+    final pending =
+        SpaceChangeNotifier.instance.lastCreatedSpace;
+    _refreshSpace(newSpaceFromNotifier: pending);
+  }
+
+  void _refreshSpace({ViewPB? newSpaceFromNotifier}) {
+    Log.info('[SpaceHomeSync] step1_refresh_started');
+    if (!mounted) {
+      Log.warn('[SpaceHomeSync] step1_skip_not_mounted');
+      return;
+    }
     try {
       final spaceBloc = context.read<SpaceBloc>();
+      Log.info(
+        '[SpaceHomeSync] step2_before_dispatch '
+        'blocHash=${spaceBloc.hashCode} '
+        'spaces=${spaceBloc.state.spaces.length} '
+        'names=${spaceBloc.state.spaces.map((s) => s.name).toList()}',
+      );
 
-      // 重新拉 backend（包含刚刚的改动）。我们故意只 dispatch `initial`，
-      // 不动 SpaceBloc 内部状态（避免与桌面端共享路径冲突）。
+      // 关键修复：如果 notifier 传来了刚刚创建的新 space（带 viewId
+      // + name + icon + permission 等元数据，已经 backend 返回），我们
+      // **直接派发 SpaceEvent.upsertSpaces 让 SpaceBloc 把它合并到
+      // state.spaces**，不等 backend `getPublicViews` 缓存同步。
       //
-      // 注意：如果刚刚创建了 space，backend 的 `getPublicViews` 缓存
-      // 可能有几百毫秒的滞后，导致新 space 短暂从列表中消失。
-      // 下一次 `_onCreate` 后台 listener 的 `didReceiveSpaceUpdate` 会
-      // 自动重新拉取并恢复显示。
-      Log.debug(
-        '[SpaceCreate] dispatching SpaceEvent.initial to home SpaceBloc',
-      );
+      // 后端 cache 在创建后可能有秒级滞后（之前的 log 显示 2s 后
+      // 还没拉到），listener `DidUpdateSectionViews` 也不一定每次都
+      // 触发，所以兜底方案是直接 push。
+      if (newSpaceFromNotifier != null) {
+        Log.info(
+          '[SpaceHomeSync] step2.5_dispatch_upsertSpaces '
+          'new_space=${newSpaceFromNotifier.name}(${newSpaceFromNotifier.id})',
+        );
+        spaceBloc.add(SpaceEvent.upsertSpaces(spaces: [newSpaceFromNotifier]));
+      }
+
+      // 仍然触发一次 backend 拉取，等 cache 同步后会自动刷新。
+      Log.info('[SpaceHomeSync] step3_dispatch_initial');
       spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
+
+      // 800ms 后再补一次 dispatch。
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (!mounted) return;
+        try {
+          final sb = context.read<SpaceBloc>();
+          Log.info(
+            '[SpaceHomeSync] step4_800ms_redispatch '
+            'spaces=${sb.state.spaces.length} '
+            'names=${sb.state.spaces.map((s) => s.name).toList()}',
+          );
+          sb.add(const SpaceEvent.initial(openFirstPage: false));
+        } catch (e, st) {
+          Log.error('[SpaceHomeSync] step4_800ms_failed: $e\n$st');
+        }
+      });
+
+      // 2s 后再补一次 dispatch。
+      Future.delayed(const Duration(milliseconds: 2000), () {
+        if (!mounted) return;
+        try {
+          final sb = context.read<SpaceBloc>();
+          Log.info(
+            '[SpaceHomeSync] step5_2s_redispatch '
+            'spaces=${sb.state.spaces.length} '
+            'names=${sb.state.spaces.map((s) => s.name).toList()}',
+          );
+          sb.add(const SpaceEvent.initial(openFirstPage: false));
+        } catch (e, st) {
+          Log.error('[SpaceHomeSync] step5_2s_failed: $e\n$st');
+        }
+      });
+
+      // 关键修复：backend `getPublicViews` 缓存和 `DidUpdateSectionViews`
+      // 通知可能在我们 dispatch upsertSpaces 之后**晚于 2s 才到达**，把
+      // 刚合并的新 space 又覆盖回旧数据。`SpaceBloc` 是 desktop 端共用的，
+      // 我们不该改它的核心 handler；这里在 mobile 端本地轮询：每次
+      // SpaceBloc state 变化后，如果 backend 还没同步 new space 且
+      // notifier 还缓存着，就**再次派发 upsertSpaces**。
+      if (newSpaceFromNotifier != null) {
+        _guardNewSpace(
+          spaceBloc: spaceBloc,
+          newSpace: newSpaceFromNotifier,
+          // 持续 8s，足够 backend cache 同步
+          duration: const Duration(seconds: 8),
+        );
+      }
     } catch (e, st) {
-      Log.error(
-        '[SpaceCreate] MobileSpace: failed to refresh SpaceBloc: $e\n$st',
-      );
+      Log.error('[SpaceHomeSync] overall_failed: $e\n$st');
     }
+  }
+
+  /// 在 [duration] 内监听 [spaceBloc]，如果 backend 的 `initial` 或
+  /// `didReceiveSpaceUpdate` 把 [newSpace] 覆盖掉了，就重新 push 一次。
+  /// 仅 mobile 端生效，不影响 SpaceBloc 的核心行为。
+  ///
+  /// 关闭策略：
+  ///   1. 启动后先观察一个**最小保护窗口**（2s），避免太早关闭。
+  ///   2. 窗口过后，每次 emit 都判断：state.spaces 中仍包含 newSpace，
+  ///      且 **lastBackendSyncCount > 0**（说明至少发生了一次 backend
+  ///      同步覆盖事件），才认为 backend 已同步完成 → 关闭 guard。
+  ///   3. 超时（duration）兜底关闭。
+  void _guardNewSpace({
+    required SpaceBloc spaceBloc,
+    required ViewPB newSpace,
+    required Duration duration,
+  }) {
+    DateTime? lastRescueAt;
+    bool isClosed = false;
+    late final StreamSubscription<SpaceState> sub;
+    final start = DateTime.now();
+    const minProtectWindow = Duration(seconds: 2);
+    // 自 guard 启动以来观察到 state.spaces 数量**减少**的次数（说明有
+    // backend 同步事件发生）。只有这个 > 0 之后，我们才允许关闭 guard。
+    int backendSyncCount = 0;
+    int? lastSpacesCount;
+
+    void maybeRescue(SpaceState current) {
+      if (isClosed) return;
+      final elapsed = DateTime.now().difference(start);
+      final hasIt = current.spaces.any((s) => s.id == newSpace.id);
+
+      // 检测 backend 同步覆盖：state.spaces 数量比上次的观察值少
+      // （说明 backend 拉取结果覆盖了之前的合并值）。
+      if (lastSpacesCount != null &&
+          current.spaces.length < lastSpacesCount!) {
+        backendSyncCount++;
+        Log.info(
+          '[SpaceHomeSync] guard_detected_backend_sync '
+          'new_space=${newSpace.name} '
+          'from=${lastSpacesCount} to=${current.spaces.length} '
+          'has_it=$hasIt '
+          'sync_count=$backendSyncCount '
+          'elapsed_ms=${elapsed.inMilliseconds}',
+        );
+      }
+      lastSpacesCount = current.spaces.length;
+
+      // 最小保护窗口 + 看到 backend 同步 + 同步后 state 仍包含 newSpace
+      // → 关闭
+      if (hasIt &&
+          elapsed >= minProtectWindow &&
+          backendSyncCount > 0) {
+        isClosed = true;
+        sub.cancel();
+        Log.info(
+          '[SpaceHomeSync] guard_resolved '
+          'new_space=${newSpace.name} '
+          'after_ms=${elapsed.inMilliseconds} '
+          'sync_count=$backendSyncCount',
+        );
+        return;
+      }
+
+      // 没同步 → 重新派发 upsertSpaces（throttle 200ms）
+      final now = DateTime.now();
+      if (lastRescueAt != null &&
+          now.difference(lastRescueAt!) < const Duration(milliseconds: 200)) {
+        return;
+      }
+      lastRescueAt = now;
+      Log.info(
+        '[SpaceHomeSync] guard_re_dispatch_upsertSpaces '
+        'new_space=${newSpace.name} '
+        'elapsed_ms=${elapsed.inMilliseconds} '
+        'current_spaces=${current.spaces.length} '
+        'has_it=$hasIt',
+      );
+      spaceBloc.add(SpaceEvent.upsertSpaces(spaces: [newSpace]));
+    }
+
+    sub = spaceBloc.stream.listen(maybeRescue);
+    // 兜底：超时后停止监听（即使 backend 还没同步）
+    Future.delayed(duration, () {
+      if (!isClosed) {
+        isClosed = true;
+        sub.cancel();
+        Log.warn(
+          '[SpaceHomeSync] guard_timeout '
+          'new_space=${newSpace.name} '
+          'duration_ms=${duration.inMilliseconds}',
+        );
+      }
+    });
   }
 
   @override

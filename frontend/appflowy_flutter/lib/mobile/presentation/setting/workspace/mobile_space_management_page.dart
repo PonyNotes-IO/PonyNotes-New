@@ -218,15 +218,28 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: _spaceBloc!,
         onCreated: () {
-          // `_onCreate` 已经把新 space 写进 `state.spaces`，本页 UI
-          // 会自动 rebuild。
+          // `_onCreate` 已经把新 space 写进 `_spaceBloc!.state.spaces`，
+          // 取最后一个作为刚刚创建的 view。
           //
           // 通知 home 屏的 `SpaceBloc`（不同实例）刷新 spaces 列表。
-          // Home 屏会 `SpaceEvent.initial` 重拉 backend —— backend
-          // 的 `getPublicViews` 在 create 之后可能有几百毫秒滞后，
-          // 偶尔会出现新 space 短暂消失，下次后台 listener
-          // (`didReceiveSpaceUpdate`) 会再拉一次修复。
-          MobileSpaceChangeNotifier.instance.notifySpacesChanged();
+          // 同时把刚刚创建的 `ViewPB` 通过 notifier 携带过去，让 home
+          // 端能立即 merge 进自己的 state.spaces（不等 backend
+          // `getPublicViews` 缓存同步 —— log 显示这个缓存滞后可能是
+          // 秒级，且 `DidUpdateSectionViews` 也不一定每次都触发）。
+          final allSpaces = _spaceBloc!.state.spaces;
+          Log.info(
+            '[SpaceHomeSync] mng_onCreated_called '
+            'spaces_count=${allSpaces.length} '
+            'last_name=${allSpaces.isNotEmpty ? allSpaces.last.name : "<empty>"} '
+            'last_id=${allSpaces.isNotEmpty ? allSpaces.last.id : "<empty>"}',
+          );
+          if (allSpaces.isNotEmpty) {
+            SpaceChangeNotifier.instance.notifySpaceCreated(
+              allSpaces.last,
+            );
+          } else {
+            SpaceChangeNotifier.instance.notifySpacesChanged();
+          }
         },
       ),
     );
@@ -542,10 +555,25 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
           // eventual sync.
           //
           // We still need to notify the *home* SpaceBloc (a different
-          // instance) so the home page can render the new space. The
-          // home page will dispatch its own `SpaceEvent.initial` in
-          // response to this notification.
-          MobileSpaceChangeNotifier.instance.notifySpacesChanged();
+          // instance) so the home page can render the new space. We
+          // also pass the freshly-created `ViewPB` along so the home
+          // page can merge it into its state.spaces immediately,
+          // instead of waiting for backend `getPublicViews` cache to
+          // sync (which can lag several seconds, per the diagnostic
+          // log).
+          final allSpaces = widget.spaceBloc!.state.spaces;
+          Log.info(
+            '[SpaceHomeSync] mng2_onCreated_called '
+            'spaces_count=${allSpaces.length} '
+            'last_name=${allSpaces.isNotEmpty ? allSpaces.last.name : "<empty>"}',
+          );
+          if (allSpaces.isNotEmpty) {
+            SpaceChangeNotifier.instance.notifySpaceCreated(
+              allSpaces.last,
+            );
+          } else {
+            SpaceChangeNotifier.instance.notifySpacesChanged();
+          }
         },
       ),
     );
@@ -580,7 +608,7 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
     widget.spaceBloc?.add(SpaceEvent.delete(space));
     showToastNotification(message: '已删除「${space.name}」');
     // 通知首页 SpaceBloc 重新拉取
-    MobileSpaceChangeNotifier.instance.notifySpacesChanged();
+    SpaceChangeNotifier.instance.notifySpacesChanged();
   }
 
   void _updateSpacePermission(ViewPB space, SpacePermission newPerm) {
@@ -589,7 +617,7 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
     );
     showToastNotification(message: '权限已更新');
     // 通知首页 SpaceBloc 重新拉取
-    MobileSpaceChangeNotifier.instance.notifySpacesChanged();
+    SpaceChangeNotifier.instance.notifySpacesChanged();
   }
 
   void _showMemberManagementSheet(ViewPB space) {

@@ -94,8 +94,25 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
     setState(() => _isCreating = false);
 
     if (succeeded) {
-      widget.onCreated();
-      Navigator.of(context).pop();
+      // 先关闭 sheet，让 sheet 的 ScrollController 在 drag cancel
+      // 处理之前完成销毁，避免 Flutter 框架内部的 _handleDragCancel
+      // 在 Scrollable 已 dispose 后触发 `_hold == null` 的断言错误。
+      // 然后再用 microtask 把新 space 通过 notifier 推到 home 端
+      // SpaceBloc，让 BlocBuilder rebuild。
+      final navigator = Navigator.of(context);
+      final onCreated = widget.onCreated;
+      navigator.pop();
+      Future.microtask(() {
+        Log.info(
+          '[SpaceHomeSync] sheet_microtask_firing '
+          'mounted=$mounted',
+        );
+        try {
+          onCreated();
+        } catch (e, st) {
+          Log.error('[SpaceHomeSync] sheet_microtask_failed: $e\n$st');
+        }
+      });
       showToastNotification(message: '团队协作区「$name」已创建');
     } else {
       Log.warn(
