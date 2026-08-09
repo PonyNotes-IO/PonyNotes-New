@@ -204,33 +204,29 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
       ],
     );
 
-    // 关键洞察：外层 `SafeArea > Column(mainAxisSize: min)` 会把所有
-    // 子节点 intrinsic 累加，因此 SCV(自适应) 解决不了问题 —— SCV
-    // intrinsic 永远等于其 content intrinsic，Column 还是会累加。
+    // 关键洞察：sheet 是 modal，从屏幕底部弹出。但 mobile app 有 5 按钮
+    // bottomNavigationBar (高 ~64px) + system nav bar (~28px)，合计约
+    // 92px 的"底部禁区"。如果 sheet 内容底部贴着屏幕底部，会被 5
+    // 按钮栏挡住。
     //
-    // 我们用一个固定高度的 `SizedBox(height: 500)` 来"消化"内容：
-    // 外层 Column 看到的 intrinsic = 500（不是内容实际高度）。
-    // 当可用高度 < 500 时，Column 仍然会 overflow —— 但 500 < modal
-    // 默认高度 (381+keyboard=381-with-keyboard 似乎矛盾……)。
+    // 修复：
+    // 1. `SafeArea(top: false)` 让 sheet 避开 system nav bar (~28px)
+    // 2. 显式 `bottom: kBottomNavigationBarHeight + 16` 让 sheet 额外
+    //    避开 5 按钮栏 (~64px) + 一些 buffer。
     //
-    // 更稳的：用屏幕可用高度的 70%，保证不论键盘是否弹起都不会
-    // 超出可用空间。
-    final screenHeight = MediaQuery.of(context).size.height;
-    final statusBar = MediaQuery.of(context).padding.top;
-    final safeMax = (screenHeight - viewInsetsBottom - statusBar - 16)
-        .clamp(280.0, double.infinity);
-    final sheetHeight = safeMax * 0.7;
-
-    return SizedBox(
-      height: sheetHeight,
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 8,
-          bottom: 16,
-        ),
-        child: SingleChildScrollView(
+    // 这样"确 定"按钮就不会被 5 按钮栏遮住。
+    //
+    // 同时用 `SingleChildScrollView` 让内容超过可用高度时可滚动。
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 8,
+            bottom: 16,
+          ),
           child: content,
         ),
       ),
