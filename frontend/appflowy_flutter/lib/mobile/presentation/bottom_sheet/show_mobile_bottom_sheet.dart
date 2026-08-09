@@ -176,16 +176,31 @@ Future<T?> showMobileBottomSheet<T>(
 
       // ----- content area -----
       if (enablePadding) {
-        // add content padding and extra bottom padding
+        // wrap content in Flexible(SingleChildScrollView) so the body's
+        // intrinsic height doesn't force the outer Column to overflow
+        // when the keyboard pops up and the available height shrinks.
+        // `Flexible(fit: FlexFit.loose)` lets the body shrink / scroll,
+        // and `mainAxisSize: min` on the outer Column still works
+        // because the Flexible takes whatever slack is left.
         children.add(
-          Padding(
-            padding:
-                padding + EdgeInsets.only(bottom: context.bottomSheetPadding()),
-            child: child,
+          Flexible(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: padding +
+                    EdgeInsets.only(bottom: context.bottomSheetPadding()),
+                child: child,
+              ),
+            ),
           ),
         );
       } else {
-        children.add(child);
+        children.add(
+          Flexible(
+            child: SingleChildScrollView(
+              child: child,
+            ),
+          ),
+        );
       }
       // ----- content area -----
 
@@ -193,16 +208,29 @@ Future<T?> showMobileBottomSheet<T>(
         return children.first;
       }
 
+      // Wrap the whole sheet in a `SingleChildScrollView` so that when
+      // the keyboard pops up and the available height shrinks below the
+      // sheet's intrinsic height (drag handle + header + divider + body),
+      // the sheet can scroll instead of triggering a RenderFlex overflow.
+      //
+      // We keep the `mainAxisSize: min` Column semantics by using
+      // `Column(mainAxisSize: min)` inside the SCV — that way the
+      // SCV still sizes itself to fit content when there's room, and
+      // becomes scrollable when there isn't.
       return useSafeArea
           ? SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: children,
+                ),
+              ),
+            )
+          : SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: children,
               ),
-            )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: children,
             );
     },
   );

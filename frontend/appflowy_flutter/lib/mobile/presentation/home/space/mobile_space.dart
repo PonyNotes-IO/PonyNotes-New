@@ -190,8 +190,9 @@ class _MobileSpaceState extends State<MobileSpace> {
       showHeader: true,
       title: '新建团队协作区',
       padding: const EdgeInsets.symmetric(horizontal: 4),
-      // MobileCreateSpaceSheet 内部已经用 _ScrollableColumn 自动处理
-      // 键盘弹起时的滚动 —— 不需要外层再包一层。
+      // 让外层 sheet 用 Flexible(SingleChildScrollView) 包住我们，
+      // 避免键盘弹起时外层 Column overflow。
+      enableScrollable: true,
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: spaceBloc,
         onCreated: () {

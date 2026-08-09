@@ -152,20 +152,12 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
 
-    // 键盘弹起时可用高度变小 —— 外层 showMobileBottomSheet 用
-    // `enableScrollable: true` 时已经用 Flexible(SingleChildScrollView)
-    // 把我们包了一层；这里直接返回 Column 让外层 scroll 接管。
-    // 这样不会出现"双层 SingleChildScrollView"，键盘弹起时只有一层滚动。
-    //
-    // 如果外层 sheet 没开 enableScrollable，则回退到内部滚动。
-    return _ScrollableColumn(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
+    // 内部 Column 总高度（自然）。
+    final content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildIconPicker(theme),
         const SizedBox(height: 20),
@@ -209,8 +201,39 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
             size: AFButtonSize.l,
           ),
         ),
-        const SizedBox(height: 8),
       ],
+    );
+
+    // 关键洞察：外层 `SafeArea > Column(mainAxisSize: min)` 会把所有
+    // 子节点 intrinsic 累加，因此 SCV(自适应) 解决不了问题 —— SCV
+    // intrinsic 永远等于其 content intrinsic，Column 还是会累加。
+    //
+    // 我们用一个固定高度的 `SizedBox(height: 500)` 来"消化"内容：
+    // 外层 Column 看到的 intrinsic = 500（不是内容实际高度）。
+    // 当可用高度 < 500 时，Column 仍然会 overflow —— 但 500 < modal
+    // 默认高度 (381+keyboard=381-with-keyboard 似乎矛盾……)。
+    //
+    // 更稳的：用屏幕可用高度的 70%，保证不论键盘是否弹起都不会
+    // 超出可用空间。
+    final screenHeight = MediaQuery.of(context).size.height;
+    final statusBar = MediaQuery.of(context).padding.top;
+    final safeMax = (screenHeight - viewInsetsBottom - statusBar - 16)
+        .clamp(280.0, double.infinity);
+    final sheetHeight = safeMax * 0.7;
+
+    return SizedBox(
+      height: sheetHeight,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: 16,
+        ),
+        child: SingleChildScrollView(
+          child: content,
+        ),
+      ),
     );
   }
 
@@ -369,63 +392,6 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Column that becomes scrollable as soon as its children no longer fit
-/// in the available height — without forcing a `SingleChildScrollView`
-/// when there's plenty of space.
-///
-/// This is the right primitive for a bottom-sheet body:
-///   * If the parent already wrapped us in a `SingleChildScrollView`
-///     (e.g. `showMobileBottomSheet(enableScrollable: true)`), then we
-///     are inside an unbounded vertical constraint and we don't need to
-///     scroll ourselves. Returning a plain `Column` keeps a single,
-///     smooth scroll layer.
-///   * If the parent did *not* wrap us, then we're inside the sheet's
-///     intrinsic column whose height is capped at the sheet's max height
-///     — and when the keyboard pops up, that cap shrinks and our
-///     children would overflow the fixed-size parent. In that case the
-///     `LayoutBuilder` detects the overflow and wraps in a
-///     `SingleChildScrollView` so the user can still scroll to the
-///     confirm button.
-class _ScrollableColumn extends StatelessWidget {
-  const _ScrollableColumn({
-    required this.children,
-    this.padding = EdgeInsets.zero,
-  });
-
-  final List<Widget> children;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final body = Padding(
-      padding: padding,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Unbounded vertical → parent is already scrollable, don't nest.
-        if (constraints.hasBoundedHeight == false ||
-            constraints.maxHeight == double.infinity) {
-          return body;
-        }
-
-        // Bounded → only scroll if we'd actually overflow.
-        return SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: IntrinsicHeight(
-            child: body,
-          ),
-        );
-      },
     );
   }
 }
