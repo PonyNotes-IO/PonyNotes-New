@@ -14,7 +14,7 @@ class GridPluginBuilder implements PluginBuilder {
   }
 
   @override
-  String get menuName => "网格";
+  String get menuName => "多维表";
 
   @override
   FlowySvgData get icon => FlowySvgs.icon_grid_s;
