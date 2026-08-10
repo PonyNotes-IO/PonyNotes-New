@@ -206,8 +206,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               permission: permission,
             );
 
-            Log.info('create space: $space');
-
             if (space != null) {
               // 把这个 space 标记为"全局 pending"，这样所有客户端
               // `SpaceBloc` 在拉 backend 时都不会覆盖它。
@@ -942,6 +940,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   Future<(List<ViewPB>, List<ViewPB>, List<ViewPB>)> _getSpaces() async {
     final sectionViews = await _getSectionViews();
     if (sectionViews == null || sectionViews.views.isEmpty) {
+      Log.info('[SpacePersist] _getSpaces: empty section');
       return (<ViewPB>[], <ViewPB>[], <ViewPB>[]);
     }
 
@@ -950,6 +949,20 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
     final publicSpaces = publicViews.where((e) => e.isSpace);
     final privateSpaces = privateViews.where((e) => e.isSpace);
+
+    // 诊断日志：每个 view 的 extra 完整打印，统一 tag
+    for (final v in publicViews) {
+      Log.info('[SpacePersist] _getSpaces_public_view '
+          'name=${v.name} id=${v.id} '
+          'extra="${v.extra}" isSpace=${v.isSpace}',
+      );
+    }
+    for (final v in privateViews) {
+      Log.info('[SpacePersist] _getSpaces_private_view '
+          'name=${v.name} id=${v.id} '
+          'extra="${v.extra}" isSpace=${v.isSpace}',
+      );
+    }
 
     return ([...publicSpaces, ...privateSpaces], publicViews, privateViews);
   }
@@ -998,11 +1011,17 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       extra: jsonEncode(extra),
     );
     return await result.fold((space) async {
-      Log.info('Space created: $space');
+      // 诊断：统一 tag，方便日志搜索
+      Log.info('[SpacePersist] _createSpace_result '
+          'name=${space.name} id=${space.id} '
+          'extra="${space.extra}" '
+          'isSpace=${space.isSpace} '
+          'spacePermission=${space.spacePermission}',
+      );
       return space;
     }, (error) {
       Log.error('Failed to create space: $error');
-      showToastNotification(message: '工作空间创建失败：${error.msg}',type: ToastificationType.error);
+      showToastNotification(message: '工作空间创建失败：${error.msg}', type: ToastificationType.error);
       return null;
     });
   }
@@ -1035,7 +1054,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   }
 
   /// 在 backend 拉取结果的基础上，保留"全局 pending 但 backend cache
-  /// 还没同步"的 space。返回的列表里这些 pending space 排在最前面。
+  /// 还没同步"的 space。
   ///
   /// pending 集合存在 [SpaceChangeNotifier] 里（全局单例），
   /// 这样多个 `SpaceBloc` 实例（设置页和首页各一个）都能正确合并。
@@ -1043,7 +1062,11 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   /// 关键行为：
   ///   - 如果 backend **这次** 拉到了某个 pending id（说明 cache 已经
   ///     同步），就从全局 set 中移除（所有客户端都生效）。
-  ///   - 否则从当前 state.spaces 中找到对应的本地 ViewPB 保留下来。
+  ///   - 否则从当前 state.spaces 中找到对应的本地 ViewPB **追加到
+  ///     末尾**，避免把它 prepend 到首部导致顺序错位（用户反馈：
+  ///     新建的协作区会跑到列表最前，下面的内容也对不上）。
+  ///   - 如果某个 pending id 在 fetched 和 state.spaces 里都不存在
+  ///     （极端 race condition），则忽略它。
   List<ViewPB> _mergeWithLocalPendingSpaces(List<ViewPB> fetched) {
     final pending = SpaceChangeNotifier.instance.pendingNewSpaceIds;
     if (pending.isEmpty) {
@@ -1060,12 +1083,27 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     final pendingSpaces = state.spaces
         .where((s) => stillPending.contains(s.id))
         .toList();
-    final merged = <ViewPB>[...pendingSpaces, ...fetched];
+    // 防御性去重：state.spaces 里不应该有重复 id，但万一有 upsert
+    // 路径出错导致重复，也只取首次出现的。
+    final seen = <String>{};
+    final dedupedPending = <ViewPB>[];
+    for (final s in pendingSpaces) {
+      if (seen.add(s.id)) {
+        dedupedPending.add(s);
+      }
+    }
+    // 注意：fetched 中也可能含有 pending space（如果 backend 这时候
+    // 恰好把它同步过来了），但我们的 `resolvePending(fetchedIds)` 已经
+    // 把它的 id 从 pending 里清掉了，所以它不会被加进 dedupedPending。
+    // 不过 fetched 里如果有重复 id（理论上不该有），仍然按它原始顺序。
+    // 最终顺序：fetched（backend 权威顺序）+ pending（追加在末尾），
+    // 与 `create` handler 里 `[...state.spaces, space]` 的追加策略一致。
+    final merged = <ViewPB>[...fetched, ...dedupedPending];
     Log.info(
       '[SpaceHomeSync] merge_with_pending '
       'fetched=${fetched.length} '
-      'pending_added=${pendingSpaces.length} '
-      'pending_names=${pendingSpaces.map((s) => s.name).toList()} '
+      'pending_added=${dedupedPending.length} '
+      'pending_names=${dedupedPending.map((s) => s.name).toList()} '
       'resolved=$resolved '
       'still_pending=${stillPending.length}',
     );
