@@ -157,6 +157,11 @@ class _MobileWorkspace extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              Icon(
+                Icons.arrow_drop_down,
+                size: 20.0,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ],
           ),
         );
