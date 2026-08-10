@@ -313,11 +313,13 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
     );
 
     if (widget.startActionPane != null || widget.endActionPane != null) {
-      child = Slidable(
-        key: ValueKey(widget.view.hashCode),
-        startActionPane: widget.startActionPane?.call(context),
-        endActionPane: widget.endActionPane?.call(context),
-        child: child,
+      child = ClipRect(
+        child: Slidable(
+          key: ValueKey(widget.view.hashCode),
+          startActionPane: widget.startActionPane?.call(context),
+          endActionPane: widget.endActionPane?.call(context),
+          child: child,
+        ),
       );
     }
 
