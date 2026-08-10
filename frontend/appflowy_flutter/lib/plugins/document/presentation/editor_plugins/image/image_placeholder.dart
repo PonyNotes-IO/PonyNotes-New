@@ -385,6 +385,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
         final (path, error) = await saveImageToCloudStorage(
           url,
           context.read<DocumentBloc>().documentId,
+          waitForUpload: false,
         );
 
         if (error != null) {
