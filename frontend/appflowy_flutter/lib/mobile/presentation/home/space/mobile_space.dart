@@ -313,13 +313,13 @@ class _MobileSpaceState extends State<MobileSpace> {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: space,
-          onAction: (layout, {String? extra}) {
+          onAction: (layout, {String? name, String? extra}) {
             Navigator.of(sheetContext).pop();
             final spaceBloc = context.read<SpaceBloc>();
             void createPage() {
               spaceBloc.add(
                 SpaceEvent.createPage(
-                  name: layout.defaultName,
+                  name: name ?? layout.defaultName,
                   layout: layout,
                   index: 0,
                   openAfterCreate: true,
@@ -565,16 +565,17 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: widget.space,
-          onAction: (layout, {String? extra}) {
+          onAction: (layout, {String? name, String? extra}) {
             Navigator.of(sheetContext).pop();
             final spaceBloc = context.read<SpaceBloc>();
             void createPage() {
               spaceBloc.add(
                 SpaceEvent.createPage(
-                  name: layout.defaultName,
+                  name: name ?? layout.defaultName,
                   layout: layout,
                   index: 0,
                   openAfterCreate: true,
+                  extra: extra,
                 ),
               );
               spaceBloc.add(SpaceEvent.expand(widget.space, true));

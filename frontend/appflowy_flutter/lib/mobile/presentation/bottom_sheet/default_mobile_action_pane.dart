@@ -89,11 +89,11 @@ enum MobilePaneActionType {
               builder: (sheetContext) {
                 return AddNewPageWidgetBottomSheet(
                   view: view,
-                  onAction: (layout, {String? extra}) {
+                  onAction: (layout, {String? name, String? extra}) {
                     Navigator.of(sheetContext).pop();
                     viewBloc.add(
                       ViewEvent.createView(
-                        layout.defaultName,
+                        name ?? layout.defaultName,
                         layout,
                         section: spaceType!.toViewSectionPB,
                         extra: extra,

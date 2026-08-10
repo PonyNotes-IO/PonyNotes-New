@@ -372,11 +372,11 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
       builder: (sheetContext) {
         return AddNewPageWidgetBottomSheet(
           view: widget.view,
-          onAction: (layout, {String? extra}) {
+          onAction: (layout, {String? name, String? extra}) {
             Navigator.of(sheetContext).pop();
             context.read<ViewBloc>().add(
                   ViewEvent.createView(
-                    layout.defaultName,
+                    name ?? layout.defaultName,
                     layout,
                     section: widget.spaceType.toViewSectionPB,
                     extra: extra,

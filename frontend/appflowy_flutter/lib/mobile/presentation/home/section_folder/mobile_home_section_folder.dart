@@ -88,11 +88,11 @@ class MobileSectionFolder extends StatelessWidget {
       backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (sheetCtx) => AddNewPageWidgetBottomSheet(
         view: context.read<ViewBloc>().state.view,
-        onAction: (layout, {String? extra}) {
+        onAction: (layout, {String? name, String? extra}) {
           Navigator.of(sheetCtx).pop();
           context.read<SidebarSectionsBloc>().add(
             SidebarSectionsEvent.createRootViewInSectionWithLayout(
-              name: layout.defaultName,
+              name: name ?? layout.defaultName,
               viewSection: spaceType.toViewSectionPB,
               index: 0,
               layout: layout,

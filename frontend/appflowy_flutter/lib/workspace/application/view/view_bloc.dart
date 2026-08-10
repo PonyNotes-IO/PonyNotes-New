@@ -456,6 +456,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               openAfterCreate: e.openAfterCreated,
               section: e.section,
               index: 0,
+              extra: e.extra,
             );
             await result.fold((createdView) async {
               if (createdView.layout == ViewLayoutPB.Whiteboard && roomId != null && roomKey != null) {
@@ -464,32 +465,11 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               }
             }, (_) {});
 
-            // If the caller supplied an `extra` payload (e.g. mobile
-            // marks the view as handwriting_saber via
-            // `{"view_type":"handwriting_saber"}`), write it into the
-            // view's `extra` field in a follow-up update. This only
-            // runs when `extra != null` so existing desktop callers
-            // that do not pass `extra` are unaffected.
-            var emittedView = result.fold(
-              (v) => v,
-              (_) => null,
-            );
-            FlowyResult<void, FlowyError>? extraResult;
-            if (emittedView != null && e.extra != null) {
-              final updateResult = await ViewBackendService.updateView(
-                viewId: emittedView.id,
-                extra: e.extra,
-              );
-              extraResult = updateResult.fold(
-                (_) => FlowyResult<void, FlowyError>.success(null),
-                (err) => FlowyResult<void, FlowyError>.failure(err),
-              );
-            }
             emit(
               result.fold(
                 (view) => state.copyWith(
                   lastCreatedView: view,
-                  successOrFailure: extraResult ?? FlowyResult.success(null),
+                  successOrFailure: FlowyResult.success(null),
                 ),
                 (error) => state.copyWith(
                   successOrFailure: FlowyResult<void, FlowyError>.failure(

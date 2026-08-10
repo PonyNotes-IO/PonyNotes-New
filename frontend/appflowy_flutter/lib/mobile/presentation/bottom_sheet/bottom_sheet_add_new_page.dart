@@ -13,7 +13,11 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
   });
 
   final ViewPB view;
-  final void Function(ViewLayoutPB layout, {String? extra}) onAction;
+  final void Function(
+    ViewLayoutPB layout, {
+    String? name,
+    String? extra,
+  }) onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -112,6 +116,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           showBottomBorder: false,
           onTap: () => onAction(
             ViewLayoutPB.Document,
+            name: '未命名手记',
             extra: '{"view_type": "handwriting_saber"}',
           ),
         ),

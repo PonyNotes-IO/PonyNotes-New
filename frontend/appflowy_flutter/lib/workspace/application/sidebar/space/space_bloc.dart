@@ -573,37 +573,14 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               parentViewId: parentViewId,
               index: index,
               openAfterCreate: openAfterCreate,
-            );
-            // If the caller supplied an `extra` payload (e.g. mobile
-            // marks the view as handwriting_saber via
-            // `{"view_type":"handwriting_saber"}`), write it into the
-            // view's `extra` field in a follow-up update. This only
-            // runs when `extra != null` so existing callers that do
-            // not pass `extra` are unaffected.
-            final extraError = await result.fold(
-              (view) async {
-                if (extra == null) {
-                  return null;
-                }
-                final updateResult = await ViewBackendService.updateView(
-                  viewId: view.id,
-                  extra: extra,
-                );
-                return updateResult.fold(
-                  (_) => null,
-                  (err) => err,
-                );
-              },
-              (error) async => error,
+              extra: extra,
             );
             result.fold(
               (view) {
                 emit(
                   state.copyWith(
                     lastCreatedPage: openAfterCreate ? view : null,
-                    createPageResult: extraError == null
-                        ? FlowyResult.success(null)
-                        : FlowyResult.failure(extraError),
+                    createPageResult: FlowyResult.success(null),
                   ),
                 );
               },
