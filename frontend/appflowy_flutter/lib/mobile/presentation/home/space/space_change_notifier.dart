@@ -1,4 +1,3 @@
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/foundation.dart';
 
@@ -31,7 +30,6 @@ class SpaceChangeNotifier extends ChangeNotifier {
   /// Bumps a counter and notifies listeners. Listeners should trigger a
   /// refresh on their `SpaceBloc` (e.g. re-add `SpaceEvent.initial`).
   void notifySpacesChanged() {
-    Log.info('[SpaceHomeSync] notifier_notifySpacesChanged_called');
     notifyListeners();
   }
 
@@ -41,10 +39,6 @@ class SpaceChangeNotifier extends ChangeNotifier {
   ///      (do not wait for backend `getPublicViews` cache to sync).
   ///   2) Still re-dispatch `SpaceEvent.initial` to pick up backend state.
   void notifySpaceCreated(ViewPB newSpace) {
-    Log.info(
-      '[SpaceHomeSync] notifier_notifySpaceCreated '
-      'name=${newSpace.name} id=${newSpace.id}',
-    );
     // 全局跟踪这个 space 为"待 backend cache 同步"，任何客户端
     // `SpaceBloc` 在拉 backend 时都会保留它，避免被覆盖。
     _markPendingInternal(newSpace.id);
@@ -70,10 +64,6 @@ class SpaceChangeNotifier extends ChangeNotifier {
 
   void _markPendingInternal(String spaceId) {
     _pendingNewSpaceIds.add(spaceId);
-    Log.info(
-      '[SpaceHomeSync] notifier_mark_pending id=$spaceId '
-      'pending_count=${_pendingNewSpaceIds.length}',
-    );
   }
 
   ViewPB? _lastCreatedSpace;
@@ -101,12 +91,6 @@ class SpaceChangeNotifier extends ChangeNotifier {
     final resolved = _pendingNewSpaceIds.where(fetchedIds.contains).toList();
     for (final id in resolved) {
       _pendingNewSpaceIds.remove(id);
-    }
-    if (resolved.isNotEmpty) {
-      Log.info(
-        '[SpaceHomeSync] notifier_resolve_pending resolved=$resolved '
-        'still_pending=${_pendingNewSpaceIds.length}',
-      );
     }
     return resolved.length;
   }

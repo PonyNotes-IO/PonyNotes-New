@@ -58,70 +58,39 @@ class _MobileSpaceState extends State<MobileSpace> {
   }
 
   void _refreshSpace({ViewPB? newSpaceFromNotifier}) {
-    Log.info('[SpaceHomeSync] step1_refresh_started');
-    if (!mounted) {
-      Log.warn('[SpaceHomeSync] step1_skip_not_mounted');
-      return;
-    }
+    if (!mounted) return;
     try {
       final spaceBloc = context.read<SpaceBloc>();
-      Log.info(
-        '[SpaceHomeSync] step2_before_dispatch '
-        'blocHash=${spaceBloc.hashCode} '
-        'spaces=${spaceBloc.state.spaces.length} '
-        'names=${spaceBloc.state.spaces.map((s) => s.name).toList()}',
-      );
 
       // 关键修复：如果 notifier 传来了刚刚创建的新 space（带 viewId
       // + name + icon + permission 等元数据，已经 backend 返回），我们
-      // **直接派发 SpaceEvent.upsertSpaces 让 SpaceBloc 把它合并到
-      // state.spaces**，不等 backend `getPublicViews` 缓存同步。
+      // 直接派发 SpaceEvent.upsertSpaces 让 SpaceBloc 把它合并到
+      // state.spaces，不等 backend `getPublicViews` 缓存同步。
       //
-      // 后端 cache 在创建后可能有秒级滞后（之前的 log 显示 2s 后
-      // 还没拉到），listener `DidUpdateSectionViews` 也不一定每次都
-      // 触发，所以兜底方案是直接 push。
+      // 后端 cache 在创建后可能有秒级滞后，listener `DidUpdateSectionViews`
+      // 也不一定每次都触发，所以兜底方案是直接 push。
       if (newSpaceFromNotifier != null) {
-        Log.info(
-          '[SpaceHomeSync] step2.5_dispatch_upsertSpaces '
-          'new_space=${newSpaceFromNotifier.name}(${newSpaceFromNotifier.id})',
-        );
         spaceBloc.add(SpaceEvent.upsertSpaces(spaces: [newSpaceFromNotifier]));
       }
 
-      // 仍然触发一次 backend 拉取，等 cache 同步后会自动刷新。
-      Log.info('[SpaceHomeSync] step3_dispatch_initial');
-      spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
-
-      // 800ms 后再补一次 dispatch。
-      Future.delayed(const Duration(milliseconds: 800), () {
+      // 先让 upsertSpaces 完成，再触发 initial。
+      // 这样 initial 执行时 collab 可能还没同步，但因为 state 里已经有
+      // newSpace 了，_mergeWithLocalPendingSpaces 会保护它。
+      Future.delayed(const Duration(milliseconds: 100), () {
         if (!mounted) return;
         try {
           final sb = context.read<SpaceBloc>();
-          Log.info(
-            '[SpaceHomeSync] step4_800ms_redispatch '
-            'spaces=${sb.state.spaces.length} '
-            'names=${sb.state.spaces.map((s) => s.name).toList()}',
-          );
           sb.add(const SpaceEvent.initial(openFirstPage: false));
-        } catch (e, st) {
-          Log.error('[SpaceHomeSync] step4_800ms_failed: $e\n$st');
-        }
+        } catch (_) {}
       });
 
-      // 2s 后再补一次 dispatch。
+      // 2s 后再补一次 dispatch（collab sync 可能比较慢）。
       Future.delayed(const Duration(milliseconds: 2000), () {
         if (!mounted) return;
         try {
           final sb = context.read<SpaceBloc>();
-          Log.info(
-            '[SpaceHomeSync] step5_2s_redispatch '
-            'spaces=${sb.state.spaces.length} '
-            'names=${sb.state.spaces.map((s) => s.name).toList()}',
-          );
           sb.add(const SpaceEvent.initial(openFirstPage: false));
-        } catch (e, st) {
-          Log.error('[SpaceHomeSync] step5_2s_failed: $e\n$st');
-        }
+        } catch (_) {}
       });
 
       // 关键修复：backend `getPublicViews` 缓存和 `DidUpdateSectionViews`
@@ -138,9 +107,7 @@ class _MobileSpaceState extends State<MobileSpace> {
           duration: const Duration(seconds: 8),
         );
       }
-    } catch (e, st) {
-      Log.error('[SpaceHomeSync] overall_failed: $e\n$st');
-    }
+    } catch (_) {}
   }
 
   /// 在 [duration] 内监听 [spaceBloc]，如果 backend 的 `initial` 或
@@ -178,14 +145,6 @@ class _MobileSpaceState extends State<MobileSpace> {
       if (lastSpacesCount != null &&
           current.spaces.length < lastSpacesCount!) {
         backendSyncCount++;
-        Log.info(
-          '[SpaceHomeSync] guard_detected_backend_sync '
-          'new_space=${newSpace.name} '
-          'from=${lastSpacesCount} to=${current.spaces.length} '
-          'has_it=$hasIt '
-          'sync_count=$backendSyncCount '
-          'elapsed_ms=${elapsed.inMilliseconds}',
-        );
       }
       lastSpacesCount = current.spaces.length;
 
@@ -196,12 +155,6 @@ class _MobileSpaceState extends State<MobileSpace> {
           backendSyncCount > 0) {
         isClosed = true;
         sub.cancel();
-        Log.info(
-          '[SpaceHomeSync] guard_resolved '
-          'new_space=${newSpace.name} '
-          'after_ms=${elapsed.inMilliseconds} '
-          'sync_count=$backendSyncCount',
-        );
         return;
       }
 
@@ -212,13 +165,6 @@ class _MobileSpaceState extends State<MobileSpace> {
         return;
       }
       lastRescueAt = now;
-      Log.info(
-        '[SpaceHomeSync] guard_re_dispatch_upsertSpaces '
-        'new_space=${newSpace.name} '
-        'elapsed_ms=${elapsed.inMilliseconds} '
-        'current_spaces=${current.spaces.length} '
-        'has_it=$hasIt',
-      );
       spaceBloc.add(SpaceEvent.upsertSpaces(spaces: [newSpace]));
     }
 
@@ -228,11 +174,6 @@ class _MobileSpaceState extends State<MobileSpace> {
       if (!isClosed) {
         isClosed = true;
         sub.cancel();
-        Log.warn(
-          '[SpaceHomeSync] guard_timeout '
-          'new_space=${newSpace.name} '
-          'duration_ms=${duration.inMilliseconds}',
-        );
       }
     });
   }
