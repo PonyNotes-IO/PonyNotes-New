@@ -240,11 +240,72 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 滚动控制器（用于滚动到指定页面）
   final ScrollController _pageScrollController = ScrollController();
 
+  /// 移动端画布横向滚动控制器（缩放后仍支持双指平移）
+  final ScrollController _canvasHorizontalScrollController =
+      ScrollController();
+
+  /// 移动端当前按下的手指，用于把画布滚动限制为双指操作
+  final Set<int> _mobileTouchPointers = <int>{};
+
   /// ✅ 页面之间的间距
   static const double _gapBetweenPages = 16;
 
   /// ✅ 标记是否正在执行程序触发的滚动（防止滚动通知干扰索引更新）
   bool _isProgrammaticScrolling = false;
+
+  bool get _isMobileMultiTouchActive =>
+      _isMobilePlatform && _mobileTouchPointers.length >= 2;
+
+  void _handleMobilePointerDown(PointerDownEvent event) {
+    if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
+      return;
+    }
+
+    _mobileTouchPointers.add(event.pointer);
+    if (_mobileTouchPointers.length == 2) {
+      // 第二根手指用于滚动，不提交第一根手指留下的临时笔迹。
+      _currentStrokeNotifier.value = null;
+      _currentPageIndexNotifier.value = null;
+      _shapeStartPoint = null;
+    }
+  }
+
+  void _handleMobilePointerMove(PointerMoveEvent event) {
+    if (!_isMobileMultiTouchActive ||
+        !_mobileTouchPointers.contains(event.pointer)) {
+      return;
+    }
+
+    final pointerDelta =
+        event.delta / _mobileTouchPointers.length.toDouble();
+    _jumpScroll(_pageScrollController, -pointerDelta.dy);
+    _jumpScroll(_canvasHorizontalScrollController, -pointerDelta.dx);
+  }
+
+  void _handleMobilePointerEnd(PointerEvent event) {
+    if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
+      return;
+    }
+    _mobileTouchPointers.remove(event.pointer);
+  }
+
+  void _jumpScroll(ScrollController controller, double delta) {
+    if (!controller.hasClients || delta == 0) {
+      return;
+    }
+
+    final position = controller.position;
+    if (!position.hasContentDimensions) {
+      return;
+    }
+
+    final target = (position.pixels + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if (target != position.pixels) {
+      controller.jumpTo(target);
+    }
+  }
 
   @override
   void initState() {
@@ -4169,6 +4230,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanStart: (DragStartDetails details) {
+        if (_isMobileMultiTouchActive) {
+          return;
+        }
+
         // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         // 父组件不再处理图片区域的手势
 
@@ -4242,6 +4307,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanUpdate: (DragUpdateDetails details) {
+        if (_isMobileMultiTouchActive) {
+          return;
+        }
+
         // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         // 父组件不再处理图片区域的手势
 
@@ -4257,6 +4326,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanEnd: (DragEndDetails details) {
+        if (_isMobileMultiTouchActive) {
+          return;
+        }
+
         // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         _endStroke();
       },
@@ -5238,6 +5311,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _showPageManagerNotifier.dispose();
     _viewingPageIndexNotifier.dispose();
     _pageScrollController.dispose();
+    _canvasHorizontalScrollController.dispose();
+    _mobileTouchPointers.clear();
 
     // ✅ 清理当前页面索引 notifier
     _currentPageIndexNotifier.dispose();
@@ -5461,6 +5536,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                               children: [
                                 // ✅ 主内容区域（支持鼠标滚轮缩放）
                                 Listener(
+                                  onPointerDown: _handleMobilePointerDown,
+                                  onPointerMove: _handleMobilePointerMove,
+                                  onPointerUp: _handleMobilePointerEnd,
+                                  onPointerCancel: _handleMobilePointerEnd,
                                   onPointerSignal: (PointerSignalEvent event) {
                                     // 监听鼠标滚轮事件
                                     if (event is PointerScrollEvent) {
@@ -5599,8 +5678,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                           controller:
                                               _pageScrollController, // ✅ 绑定滚动控制器
                                           scrollDirection: Axis.vertical,
+                                          physics: _isMobilePlatform
+                                              ? const NeverScrollableScrollPhysics()
+                                              : null,
                                           child: SingleChildScrollView(
+                                            controller:
+                                                _canvasHorizontalScrollController,
                                             scrollDirection: Axis.horizontal,
+                                            physics: _isMobilePlatform
+                                                ? const NeverScrollableScrollPhysics()
+                                                : null,
                                             child: Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
