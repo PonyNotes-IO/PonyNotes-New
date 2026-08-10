@@ -88,7 +88,7 @@ class Win32Window {
   // Must not be called from a platform message channel handler: each resize
   // makes the engine wait for the raster thread to present a frame, which
   // cannot happen while the Dart isolate is blocked awaiting a channel reply.
-  void ResyncTopLevelSurface();
+  bool ResyncTopLevelSurface();
 
  protected:
   // Sizes the hosted content to the current client area.

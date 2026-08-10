@@ -37,6 +37,12 @@ class FlutterWindow : public Win32Window {
   // Kept alive for the lifetime of the Flutter engine.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       window_surface_channel_;
+
+  // Completed by the posted native resync message, not by the initial channel
+  // handler. This makes the Dart await cover the actual top-level surface
+  // rebuild.
+  std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+      pending_surface_result_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

@@ -38,7 +38,6 @@ using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
-
 // Dynamically loads the |EnableNonClientDpiScaling| from the User32 module.
 // This API is only needed for PerMonitor V1 awareness mode.
 void EnableFullDpiSupportIfAvailable(HWND hwnd) {
@@ -298,32 +297,34 @@ Win32Window::SurfaceMetrics Win32Window::SynchronizeChildContent(
   return {client_width, client_height, child_width, child_height};
 }
 
-void Win32Window::ResyncTopLevelSurface() {
+bool Win32Window::ResyncTopLevelSurface() {
   if (window_handle_ == nullptr) {
-    return;
+    return false;
   }
 
   RECT window_rect{};
   if (!GetWindowRect(window_handle_, &window_rect)) {
-    return;
+    return false;
   }
 
   const LONG width = window_rect.right - window_rect.left;
   const LONG height = window_rect.bottom - window_rect.top;
   if (width <= 0 || height <= 0) {
-    return;
+    return false;
   }
 
   RecordEvent("resync toplevel begin " + DescribeGeometry());
 
   constexpr UINT kFlags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOMOVE |
                           SWP_NOACTIVATE | SWP_FRAMECHANGED;
-  SetWindowPos(window_handle_, nullptr, window_rect.left, window_rect.top,
-               width, height + 1, kFlags);
-  SetWindowPos(window_handle_, nullptr, window_rect.left, window_rect.top,
-               width, height, kFlags);
+  const bool nudged = SetWindowPos(window_handle_, nullptr, window_rect.left,
+                                   window_rect.top, width, height + 1,
+                                   kFlags);
+  const bool restored = SetWindowPos(window_handle_, nullptr, window_rect.left,
+                                     window_rect.top, width, height, kFlags);
 
   RecordEvent("resync toplevel end " + DescribeGeometry());
+  return nudged && restored;
 }
 
 std::string Win32Window::DescribeGeometry() {

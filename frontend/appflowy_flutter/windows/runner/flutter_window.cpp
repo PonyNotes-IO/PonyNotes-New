@@ -28,7 +28,6 @@ UINT ResyncSurfaceMessage() {
       RegisterWindowMessageW(L"PonyNotesResyncWindowSurface");
   return message;
 }
-
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -86,6 +85,12 @@ void FlutterWindow::OnDestroy() {
   if (window_surface_channel_) {
     window_surface_channel_->SetMethodCallHandler(nullptr);
   }
+  if (pending_surface_result_) {
+    pending_surface_result_->Error(
+        "WINDOW_SURFACE_DESTROYED",
+        "The window was destroyed before surface synchronization completed.");
+    pending_surface_result_.reset();
+  }
   window_surface_channel_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
@@ -101,9 +106,41 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   // Handled before the plugins get a chance, so nothing can swallow it.
   if (message == ResyncSurfaceMessage()) {
     RecordEvent("resync handler ran");
-    ResyncTopLevelSurface();
+    const bool resync_succeeded = ResyncTopLevelSurface();
     if (flutter_controller_) {
       flutter_controller_->ForceRedraw();
+    }
+
+    if (pending_surface_result_) {
+      auto result = std::move(pending_surface_result_);
+      if (!resync_succeeded) {
+        result->Error("WINDOW_SURFACE_RESYNC_FAILED",
+                      "The native window surface could not be resynchronized.");
+        return 0;
+      }
+
+      const SurfaceMetrics metrics = SynchronizeChildContent(false);
+      const std::string geometry = DescribeGeometry();
+
+      flutter::EncodableList events;
+      for (const std::string& event : TakeGeometryEvents()) {
+        events.push_back(flutter::EncodableValue(event));
+      }
+
+      flutter::EncodableMap dimensions = {
+          {flutter::EncodableValue("clientWidth"),
+           flutter::EncodableValue(static_cast<int32_t>(metrics.client_width))},
+          {flutter::EncodableValue("clientHeight"),
+           flutter::EncodableValue(static_cast<int32_t>(metrics.client_height))},
+          {flutter::EncodableValue("childWidth"),
+           flutter::EncodableValue(static_cast<int32_t>(metrics.child_width))},
+          {flutter::EncodableValue("childHeight"),
+           flutter::EncodableValue(static_cast<int32_t>(metrics.child_height))},
+          {flutter::EncodableValue("events"), flutter::EncodableValue(events)},
+          {flutter::EncodableValue("geometry"),
+           flutter::EncodableValue(geometry)},
+      };
+      result->Success(flutter::EncodableValue(dimensions));
     }
     return 0;
   }
@@ -135,29 +172,24 @@ void FlutterWindow::SynchronizeSurface(
     return;
   }
 
-  // Measure and re-align the child synchronously so the reply carries the
-  // current geometry, then run the actual resync from the message loop (see
-  // ResyncSurfaceMessage) to keep this handler non-blocking.
-  const SurfaceMetrics metrics = SynchronizeChildContent(false);
-  const std::string geometry = DescribeGeometry();
-  PostMessage(GetHandle(), ResyncSurfaceMessage(), 0, 0);
-
-  flutter::EncodableList events;
-  for (const std::string& event : TakeGeometryEvents()) {
-    events.push_back(flutter::EncodableValue(event));
+  if (pending_surface_result_) {
+    result->Error("WINDOW_SURFACE_BUSY",
+                  "Another Windows surface synchronization is still pending.");
+    return;
   }
 
-  flutter::EncodableMap dimensions = {
-      {flutter::EncodableValue("clientWidth"),
-       flutter::EncodableValue(static_cast<int32_t>(metrics.client_width))},
-      {flutter::EncodableValue("clientHeight"),
-       flutter::EncodableValue(static_cast<int32_t>(metrics.client_height))},
-      {flutter::EncodableValue("childWidth"),
-       flutter::EncodableValue(static_cast<int32_t>(metrics.child_width))},
-      {flutter::EncodableValue("childHeight"),
-       flutter::EncodableValue(static_cast<int32_t>(metrics.child_height))},
-      {flutter::EncodableValue("events"), flutter::EncodableValue(events)},
-      {flutter::EncodableValue("geometry"), flutter::EncodableValue(geometry)},
-  };
-  result->Success(flutter::EncodableValue(dimensions));
+  // Align the child immediately, but hold the Dart result until the posted
+  // top-level resync has run. The platform thread must return to its message
+  // loop before the resync, otherwise the Flutter raster thread cannot present
+  // the frame that the resize handshake waits for.
+  SynchronizeChildContent(false);
+  pending_surface_result_ = std::move(result);
+
+  const UINT message = ResyncSurfaceMessage();
+  if (message == 0 || !PostMessage(GetHandle(), message, 0, 0)) {
+    auto pending_result = std::move(pending_surface_result_);
+    pending_result->Error(
+        "WINDOW_SURFACE_POST_FAILED",
+        "The native surface resync message could not be posted.");
+  }
 }
