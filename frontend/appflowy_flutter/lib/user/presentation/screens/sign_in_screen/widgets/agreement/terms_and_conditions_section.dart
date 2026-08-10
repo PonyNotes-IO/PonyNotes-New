@@ -30,29 +30,35 @@ class TermsAndConditionsSection extends StatelessWidget {
           onTap: () {
             onAgreedToTermsChanged(!agreedToTerms);
           },
-          child: Builder(
-            builder: (context) {
-              final primaryColor = Theme.of(context).colorScheme.primary;
-              return Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(7),
-                  border: Border.all(
-                    color: agreedToTerms ? primaryColor : const Color(0xFFD0D0D0),
-                    width: 2,
-                  ),
-                  color: agreedToTerms ? primaryColor : Colors.transparent,
-                ),
-                child: agreedToTerms
-                    ? Icon(
-                        Icons.check,
-                        size: 10,
-                        color: Colors.white,
-                      )
-                    : null,
-              );
-            },
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Builder(
+                builder: (context) {
+                  final primaryColor = Theme.of(context).colorScheme.primary;
+                  return Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(
+                        color: agreedToTerms ? primaryColor : const Color(0xFFD0D0D0),
+                        width: 2,
+                      ),
+                      color: agreedToTerms ? primaryColor : Colors.transparent,
+                    ),
+                    child: agreedToTerms
+                        ? Icon(
+                            Icons.check,
+                            size: 10,
+                            color: Colors.white,
+                          )
+                        : null,
+                  );
+                },
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 6),
