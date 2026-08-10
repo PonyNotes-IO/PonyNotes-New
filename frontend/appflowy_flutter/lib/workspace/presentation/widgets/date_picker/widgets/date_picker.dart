@@ -191,7 +191,7 @@ class _CalendarStyle {
         dowHeight = 48,
         headerVisible = false,
         headerStyle = const HeaderStyle(),
-        selectedColor = const Color(0xFF00BCF0),
+        selectedColor = const Color(0xFFFF6B35),
         availableGestures = AvailableGestures.horizontalSwipe;
 
   _CalendarStyle({

@@ -238,7 +238,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddMenu,
         backgroundColor: const Color(0xFFFF6B35),
-        elevation: 4,
+        elevation: 0,
         child: const Icon(Icons.add, color: Colors.white, size: 28),
       ),
     );
