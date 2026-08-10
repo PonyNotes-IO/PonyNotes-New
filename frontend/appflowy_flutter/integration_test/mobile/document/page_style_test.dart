@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/cover/document_immersive_cover.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_icon.dart';
 import 'package:appflowy/shared/icon_emoji_picker/recent_icons.dart';
+import 'package:auto_size_text_field/auto_size_text_field.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -102,8 +103,15 @@ void main() {
 
       // click the getting start page
       await tester.openPage(gettingStarted);
-      // click the layout button
-      await tester.tapButton(find.byType(MobileViewPageLayoutButton));
+      final addCover = find.text(
+        LocaleKeys.document_plugins_cover_addCover.tr(),
+      );
+      expect(addCover, findsOneWidget);
+      expect(
+        find.text(LocaleKeys.document_plugins_cover_addIcon.tr()),
+        findsOneWidget,
+      );
+      await tester.tapButton(addCover);
       // toggle the preset button
       await tester.tapSvgButton(FlowySvgs.m_page_style_presets_m);
 
@@ -126,6 +134,15 @@ void main() {
         matching: firstBuiltInImage,
       );
       expect(builtInCover, findsOneWidget);
+
+      final title = find.descendant(
+        of: find.byType(DocumentImmersiveCover),
+        matching: find.byType(AutoSizeTextField),
+      );
+      expect(
+        tester.getTopLeft(title).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(builtInCover).dy),
+      );
     });
 
     testWidgets('page style icon', (tester) async {

@@ -54,14 +54,17 @@ class MobileBlockActionButtons extends StatelessWidget {
       children: [
         child,
         Positioned(
-          top: padding,
+          top: 0,
+          bottom: 0,
           right: padding,
-          child: FlowyIconButton(
-            icon: const FlowySvg(
-              FlowySvgs.three_dots_s,
+          child: Center(
+            child: FlowyIconButton(
+              icon: const FlowySvg(
+                FlowySvgs.three_dots_s,
+              ),
+              width: 20.0,
+              onPressed: () => _showBottomSheet(context),
             ),
-            width: 20.0,
-            onPressed: () => _showBottomSheet(context),
           ),
         ),
       ],
