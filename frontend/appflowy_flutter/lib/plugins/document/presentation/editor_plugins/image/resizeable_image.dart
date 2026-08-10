@@ -208,6 +208,9 @@ class _ResizableImageState extends State<ResizableImage> {
     return max(imageWidth, minManualWidth);
   }
 
+  bool get _showResizeHandles =>
+      onFocus || Platform.isAndroid || Platform.isIOS;
+
   void _commitProportionalResize() {
     final aspectRatio = _aspectRatio;
     final minManualWidth = _minimumResizeWidth(aspectRatio);
@@ -546,7 +549,7 @@ class _ResizableImageState extends State<ResizableImage> {
           cursor: isHorizontal
               ? SystemMouseCursors.resizeLeftRight
               : SystemMouseCursors.resizeUpDown,
-          child: onFocus
+          child: _showResizeHandles
               ? Center(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
@@ -627,7 +630,7 @@ class _ResizableImageState extends State<ResizableImage> {
         },
         child: MouseRegion(
           cursor: _getCornerCursor(isTop, isLeft),
-          child: onFocus
+          child: _showResizeHandles
               ? Center(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
