@@ -165,6 +165,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
     // bottom inset is now respected. Pure DocumentPlugin keeps its current
     // behaviour unchanged.
     final isDocument = view?.layout.isDocumentView ?? false;
+    final isGrid = view?.layout == ViewLayoutPB.Grid;
     final isHandwritingSaber =
         view?.pluginType == PluginType.handwritingSaber;
     return Scaffold(
@@ -172,7 +173,14 @@ class _MobileViewPageState extends State<MobileViewPage> {
           ? child
           : SafeArea(
               top: false,
-              child: child,
+              child: isGrid
+                  ? Padding(
+                      padding: EdgeInsets.only(
+                        top: MediaQuery.paddingOf(context).top / 2,
+                      ),
+                      child: child,
+                    )
+                  : child,
             ),
     );
   }
