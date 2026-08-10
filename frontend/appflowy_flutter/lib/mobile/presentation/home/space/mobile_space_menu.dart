@@ -504,21 +504,21 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
     BuildContext context,
     BuildContext bottomSheetContext,
   ) {
-    Navigator.of(bottomSheetContext).pop();
-
     _showConfirmDialog(
       context,
       '${LocaleKeys.space_delete.tr()}: ${widget.space.name}',
       LocaleKeys.space_deleteConfirmationDescription.tr(),
       LocaleKeys.button_delete.tr(),
-      (_) async {
+      (dialogContext) async {
+        // Close both the confirm dialog and the space menu.
+        Navigator.of(dialogContext).pop();         // dismiss confirm dialog
+        Navigator.of(bottomSheetContext).pop();    // dismiss SpaceMenuMoreOptions bottom sheet
+
         context.read<SpaceBloc>().add(SpaceEvent.delete(widget.space));
 
         showToastNotification(
           message: LocaleKeys.space_success_deleteSpace.tr(),
         );
-
-        Navigator.pop(context);
       },
     );
   }
