@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -96,6 +97,8 @@ class _ResizableImageState extends State<ResizableImage> {
   double _cornerAccumulatedX = 0;
   double _cornerAccumulatedY = 0;
   Widget? _cacheImage;
+  Timer? _androidLoadTimeout;
+  bool _androidLoadTimedOut = false;
 
   late double imageWidth;
   double? imageHeight;
@@ -112,9 +115,46 @@ class _ResizableImageState extends State<ResizableImage> {
     traceId = ponyNotesDiagTraceId('resizable_image', widget.src);
     imageWidth = widget.width;
     imageHeight = widget.height;
+    _armAndroidLoadTimeout();
 
     _userProfilePB = context.read<UserWorkspaceBloc?>()?.state.userProfile ??
         context.read<DocumentBloc>().state.userProfilePB;
+  }
+
+  @override
+  void didUpdateWidget(covariant ResizableImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.src != widget.src || oldWidget.type != widget.type) {
+      _armAndroidLoadTimeout();
+    }
+  }
+
+  @override
+  void dispose() {
+    _androidLoadTimeout?.cancel();
+    super.dispose();
+  }
+
+  void _armAndroidLoadTimeout() {
+    _androidLoadTimeout?.cancel();
+    _androidLoadTimedOut = false;
+    if (!Platform.isAndroid || widget.type == CustomImageType.local) {
+      return;
+    }
+    _androidLoadTimeout = Timer(const Duration(seconds: 20), () {
+      if (!mounted) return;
+      setState(() => _androidLoadTimedOut = true);
+      widget.onStateChange?.call(ResizableImageState.failed);
+    });
+  }
+
+  void _markAndroidImageLoaded() {
+    _androidLoadTimeout?.cancel();
+    _androidLoadTimeout = null;
+    if (_androidLoadTimedOut && mounted) {
+      setState(() => _androidLoadTimedOut = false);
+    }
+    widget.onStateChange?.call(ResizableImageState.loaded);
   }
 
   void _measureHeightFromRenderBox() {
@@ -235,6 +275,17 @@ class _ResizableImageState extends State<ResizableImage> {
     Widget child;
     final src = widget.src;
 
+    if (_androidLoadTimedOut) {
+      return _ImageLoadFailedWidget(
+        width: imageWidth,
+        error: TimeoutException('image load timed out'),
+        onRetry: () {
+          setState(() => _androidLoadTimedOut = false);
+          _armAndroidLoadTimeout();
+        },
+      );
+    }
+
     if (isURL(src)) {
       _cacheImage = FlowyNetworkImage(
         url: widget.src,
@@ -244,13 +295,13 @@ class _ResizableImageState extends State<ResizableImage> {
         userProfilePB: _userProfilePB,
         onImageLoaded: (isImageInCache) {
           if (isImageInCache) {
-            widget.onStateChange?.call(ResizableImageState.loaded);
+            _markAndroidImageLoaded();
           }
         },
         progressIndicatorBuilder: (context, _, progress) {
           if (progress.totalSize != null) {
             if (progress.progress == 1) {
-              widget.onStateChange?.call(ResizableImageState.loaded);
+              _markAndroidImageLoaded();
             } else {
               widget.onStateChange?.call(ResizableImageState.loading);
             }
@@ -279,6 +330,8 @@ class _ResizableImageState extends State<ResizableImage> {
             error: error,
           );
           widget.onStateChange?.call(ResizableImageState.failed);
+          _androidLoadTimeout?.cancel();
+          _androidLoadTimeout = null;
           return _ImageLoadFailedWidget(
             width: imageWidth,
             error: error,
@@ -300,6 +353,14 @@ class _ResizableImageState extends State<ResizableImage> {
         width: currentWidth,
         height: currentHeight,
         fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          widget.onStateChange?.call(ResizableImageState.failed);
+          return _ImageLoadFailedWidget(
+            width: imageWidth,
+            error: error,
+            onRetry: () => setState(() {}),
+          );
+        },
       );
       child = _cacheImage!;
     }

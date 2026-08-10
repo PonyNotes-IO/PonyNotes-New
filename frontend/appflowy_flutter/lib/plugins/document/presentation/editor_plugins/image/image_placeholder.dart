@@ -64,8 +64,8 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
 
   @override
   void didChangeDependencies() {
-    if (PlatformInfo.isMobile) {
-      dropManagerState = context.read<EditorDropManagerState>();
+    if (Platform.isAndroid) {
+      dropManagerState = context.read<EditorDropManagerState?>();
     }
     super.didChangeDependencies();
   }

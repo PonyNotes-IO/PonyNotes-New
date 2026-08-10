@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
@@ -8,11 +9,20 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 
 class CustomImageCacheManager extends CacheManager implements ICache {
-
   CustomImageCacheManager._()
       : super(
           Config(
             key,
+            repo: Platform.isAndroid
+                ? JsonCacheInfoRepository(
+                    path: p.join(
+                      '/data/data/com.xiaomabiji.app.note/cache',
+                      '$key.json',
+                    ),
+                  )
+                : Platform.isIOS || Platform.isMacOS
+                    ? CacheObjectProvider(databaseName: key)
+                    : JsonCacheInfoRepository(databaseName: key),
             fileSystem: _LazyFileSystem(key),
             maxNrOfCacheObjects: _maxCacheObjects,
             stalePeriod: _cacheMaxAge,

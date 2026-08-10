@@ -5,9 +5,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.WindowManager
+import com.baseflow.permissionhandler.PermissionHandlerPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin
+import io.flutter.plugins.imagepicker.ImagePickerPlugin
 import com.xiaomabiji.app.note.wechat.WeChatApi
 import com.xiaomabiji.app.note.wechat.WeChatBridge
 
@@ -38,7 +41,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
-        super.configureFlutterEngine(flutterEngine)
+        flutterEngine.plugins.add(DeviceInfoPlusPlugin())
+        flutterEngine.plugins.add(ImagePickerPlugin())
+        flutterEngine.plugins.add(PermissionHandlerPlugin())
         // Bypass url_launcher_android 6.x Pigeon channel (which fails to register
         // on this project due to AGP/plugin compileSdk mismatches) by providing
         // our own MethodChannel that opens URLs via ACTION_VIEW.
