@@ -207,7 +207,9 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
           Expanded(
             child: Text(
               widget.title ?? '小马笔记AI',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
               textAlign: TextAlign.center,
             ),
           ),
@@ -224,30 +226,43 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   }
 
   Widget _buildWelcomeLayout(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       resizeToAvoidBottomInset: true,
+      backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 8),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) => SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: constraints.maxHeight,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDark
+                  ? const [Color(0xFF3A211D), Color(0xFF2C2C2C)]
+                  : const [Color(0xFFFFEAE4), Colors.white],
+              stops: const [0.0, 0.28],
+            ),
+          ),
+          child: Column(
+            children: [
+              _buildHeader(context),
+              const SizedBox(height: 8),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
                         // Logo — PNG 图片
                         Image.asset(
                           'assets/images/ai_avatar.png',
-                          width: 48,
-                          height: 48,
+                          width: 62,
+                          height: 62,
                           fit: BoxFit.cover,
                         ),
                         const SizedBox(height: 16),
@@ -276,29 +291,30 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // Bottom input bar
-            _MobileWelcomeInputBar(
-              isSending: _isSending,
-              onSend: _handleWelcomeInputSubmit,
-              preferredModelId: _preferredModelId,
-              enableDeepThinking: _enableDeepThinking,
-              enableWebSearch: _enableWebSearch,
-            ),
-            // AI 剩余次数提示（输入框卡片下方，水平居中，底部额外安全距离）
-            Padding(
-              padding: EdgeInsets.only(
-                top: 4,
-                bottom: MediaQuery.of(context).padding.bottom + 10,
+              // Bottom input bar
+              _MobileWelcomeInputBar(
+                isSending: _isSending,
+                onSend: _handleWelcomeInputSubmit,
+                preferredModelId: _preferredModelId,
+                enableDeepThinking: _enableDeepThinking,
+                enableWebSearch: _enableWebSearch,
               ),
-              child: _buildRemainingUsageHint(context),
-            ),
-          ],
+              // AI 剩余次数提示（输入框卡片下方，水平居中，底部额外安全距离）
+              Padding(
+                padding: EdgeInsets.only(
+                  top: 4,
+                  bottom: MediaQuery.of(context).padding.bottom + 10,
+                ),
+                child: _buildRemainingUsageHint(context),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -425,7 +441,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                 : Theme.of(context).hintColor;
             return Center(
               child: Text(
-                '$remaining 次可用',
+                '$remaining次可用',
                 style: TextStyle(fontSize: 11, color: color),
               ),
             );
@@ -704,10 +720,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   Widget _modelButton(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor =
-        isDark ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
-    final borderColor =
-        isDark ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
+    final textColor = isDark ? const Color(0xFFFF8A66) : const Color(0xFFE94618);
+    final borderColor = isDark ? const Color(0xFFFF8A66) : const Color(0xFFF2A18A);
     final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
 
     return GestureDetector(
@@ -718,7 +732,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: borderColor),
         ),
         child: Row(
@@ -1029,6 +1043,9 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final cardBorderColor = isDark
+        ? const Color(0xFF444444)
+        : const Color(0xFFF0F0F0);
 
     return GestureDetector(
       onTap: () {
@@ -1046,10 +1063,10 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outline,
+              color: cardBorderColor,
             ),
           ),
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1072,10 +1089,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   fillColor: null,
                   hoverColor: Colors.transparent,
                   focusColor: Colors.transparent,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
