@@ -397,14 +397,15 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
   void _duplicateSpace(BuildContext context, BuildContext bottomSheetContext) {
     Log.info('duplicate the space: ${widget.space.name}');
 
-    context.read<SpaceBloc>().add(const SpaceEvent.duplicate());
+    context.read<SpaceBloc>().add(
+          SpaceEvent.duplicate(space: widget.space),
+        );
 
     showToastNotification(
       message: LocaleKeys.space_success_duplicateSpace.tr(),
     );
 
     Navigator.of(bottomSheetContext).pop();
-    Navigator.of(context).pop();
   }
 
   void _showRenameSpaceBottomSheet(BuildContext context) {
