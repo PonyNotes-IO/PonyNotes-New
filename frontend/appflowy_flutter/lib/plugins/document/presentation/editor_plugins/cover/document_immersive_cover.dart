@@ -9,7 +9,6 @@ import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/cover/document_immersive_cover_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_cover_image.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_icon_bloc.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/shared/flowy_gradient_colors.dart';
 import 'package:appflowy/shared/google_fonts_extension.dart';
@@ -91,8 +90,10 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
               textEditingController.text = state.name;
             }
           },
-          builder: (_, state) {
-            final iconAndTitle = _buildIconAndTitle(context, state);
+          builder: (context, state) {
+            final icon =
+                context.watch<ViewBloc>().state.view.icon.toEmojiIconData();
+            final iconAndTitle = _buildIconAndTitle(context, icon);
             return Padding(
               padding: EdgeInsets.only(
                 top: state.cover.isNone ? kDocumentTitlePadding : 0,
@@ -102,7 +103,7 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!state.cover.isNone) _buildCover(context, state),
-                  _buildHeaderActions(context, state),
+                  _buildHeaderActions(context, state, icon),
                   iconAndTitle,
                 ],
               ),
@@ -116,8 +117,8 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
   Widget _buildHeaderActions(
     BuildContext context,
     DocumentImmersiveCoverState state,
+    EmojiIconData icon,
   ) {
-    final icon = state.icon;
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
       child: Wrap(
@@ -141,7 +142,7 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
             leftIcon: const FlowySvg(FlowySvgs.add_icon_s),
             leftIconSize: const Size.square(18),
             text: FlowyText.small(
-              ((icon?.isNotEmpty ?? false)
+              (icon.isNotEmpty
                       ? LocaleKeys.document_plugins_cover_changeIcon
                       : LocaleKeys.document_plugins_cover_addIcon)
                   .tr(),
@@ -149,7 +150,7 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
             ),
             onTap: () => _showIconSelector(
               context,
-              icon ?? EmojiIconData.none(),
+              icon,
             ),
           ),
         ],
@@ -159,14 +160,13 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
 
   Widget _buildIconAndTitle(
     BuildContext context,
-    DocumentImmersiveCoverState state,
+    EmojiIconData icon,
   ) {
-    final icon = state.icon;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
         children: [
-          if (icon != null && icon.isNotEmpty) ...[
+          if (icon.isNotEmpty) ...[
             _buildIcon(context, icon),
             const HSpace(8.0),
           ],
@@ -249,8 +249,7 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
     BuildContext context,
     EmojiIconData icon,
   ) async {
-    final pageStyleIconBloc = PageStyleIconBloc(view: widget.view)
-      ..add(const PageStyleIconEvent.initial());
+    final viewBloc = context.read<ViewBloc>();
     await showMobileBottomSheet(
       context,
       showDragHandle: true,
@@ -261,21 +260,16 @@ class _DocumentImmersiveCoverState extends State<DocumentImmersiveCover> {
       enableDraggableScrollable: true,
       minChildSize: 0.6,
       initialChildSize: 0.61,
-      scrollableWidgetBuilder: (_, controller) {
-        return BlocProvider.value(
-          value: pageStyleIconBloc,
-          child: Expanded(
-            child: FlowyIconEmojiPicker(
-              initialType: icon.type.toPickerTabType(),
-              tabs: widget.tabs,
-              documentId: widget.view.id,
-              onSelectedEmoji: (r) {
-                pageStyleIconBloc.add(
-                  PageStyleIconEvent.updateIcon(r.data, true),
-                );
-                if (!r.keepOpen) Navigator.pop(context);
-              },
-            ),
+      scrollableWidgetBuilder: (bottomSheetContext, controller) {
+        return Expanded(
+          child: FlowyIconEmojiPicker(
+            initialType: icon.type.toPickerTabType(),
+            tabs: widget.tabs,
+            documentId: widget.view.id,
+            onSelectedEmoji: (r) {
+              viewBloc.add(ViewEvent.updateIcon(r.data));
+              if (!r.keepOpen) Navigator.pop(bottomSheetContext);
+            },
           ),
         );
       },

@@ -12,6 +12,7 @@ import 'package:appflowy/workspace/application/recent/cached_recent_service.dart
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
+import 'package:appflowy/workspace/application/view/view_icon_update_executor.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -34,12 +35,25 @@ import 'package:protobuf/protobuf.dart';
 
 part 'view_bloc.freezed.dart';
 
+typedef EmojiViewIconUpdater = Future<FlowyResult<void, FlowyError>> Function({
+  required ViewPB view,
+  required EmojiIconData viewIcon,
+});
+
 class ViewBloc extends Bloc<ViewEvent, ViewState> {
   ViewBloc({
     required this.view,
     this.shouldLoadChildViews = true,
     this.engagedInExpanding = false,
+    EmojiViewIconUpdater? updateViewIcon,
   })  : viewBackendSvc = ViewBackendService(),
+        _viewIconUpdateExecutor = ViewIconUpdateExecutor(
+          updateViewIcon: ({required view, required viewIcon}) =>
+              (updateViewIcon ?? ViewBackendService.updateViewIcon)(
+            view: view,
+            viewIcon: viewIcon.toEmojiIconData(),
+          ),
+        ),
         listener = ViewListener(viewId: view.id),
         favoriteListener = FavoriteListener(),
         super(ViewState.init(view)) {
@@ -55,6 +69,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
 
   final ViewPB view;
   final ViewBackendService viewBackendSvc;
+  final ViewIconUpdateExecutor _viewIconUpdateExecutor;
   final ViewListener listener;
   final FavoriteListener favoriteListener;
   final bool shouldLoadChildViews;
@@ -494,11 +509,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           updateIcon: (value) async {
-            await ViewBackendService.updateViewIcon(
-              view: view,
-              viewIcon: value.icon == null
-                  ? EmojiIconData.none()
-                  : EmojiIconData.emoji(value.icon!),
+            await _viewIconUpdateExecutor.execute(
+              currentView: state.view,
+              icon: value.icon.toViewIcon(),
+              readCurrentView: () => state.view,
+              emit: (updatedView, result) => emit(
+                state.copyWith(
+                  view: updatedView,
+                  successOrFailure: result,
+                ),
+              ),
             );
           },
           collapseAllPages: (value) async {
@@ -871,7 +891,7 @@ class ViewEvent with _$ViewEvent {
     bool isPublic,
   ) = UpdateViewVisibility;
 
-  const factory ViewEvent.updateIcon(String? icon) = UpdateIcon;
+  const factory ViewEvent.updateIcon(EmojiIconData icon) = UpdateIcon;
 
   const factory ViewEvent.collapseAllPages() = CollapseAllPages;
 
