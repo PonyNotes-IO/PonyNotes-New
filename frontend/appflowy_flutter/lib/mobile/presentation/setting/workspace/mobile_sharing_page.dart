@@ -85,48 +85,41 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
       appBar: MobileAppBar(
         title: '笔记共享',
       ),
-      body: _buildSharedContent(),
+      body: Center(
+        child: _buildSharedContent(),
+      ),
     );
   }
 
   Widget _buildSharedContent() {
     final theme = AppFlowyTheme.of(context);
     if (_isLoadingShared) {
-      return SizedBox(
-        height: 240,
-        child: const Center(child: CircularProgressIndicator.adaptive()),
-      );
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
     if (_sharedError != null && _sharedNotes.isEmpty) {
-      return SizedBox(
-        height: 240,
-        child: Center(
-          child: FlowyText(
-            '加载失败：$_sharedError',
-            color: theme.textColorScheme.tertiary,
-          ),
+      return Center(
+        child: FlowyText(
+          '加载失败：$_sharedError',
+          color: theme.textColorScheme.tertiary,
         ),
       );
     }
     if (_sharedNotes.isEmpty) {
-      return SizedBox(
-        height: 240,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FlowySvg(
-                FlowySvgs.share_s,
-                size: const Size(48, 48),
-                color: theme.iconColorScheme.tertiary,
-              ),
-              const VSpace(12),
-              FlowyText(
-                '暂无共享内容',
-                color: theme.textColorScheme.secondary,
-              ),
-            ],
-          ),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FlowySvg(
+              FlowySvgs.share_s,
+              size: const Size(48, 48),
+              color: theme.iconColorScheme.tertiary,
+            ),
+            const VSpace(12),
+            FlowyText(
+              '暂无共享内容',
+              color: theme.textColorScheme.secondary,
+            ),
+          ],
         ),
       );
     }
