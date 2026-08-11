@@ -906,11 +906,8 @@ class _AccountManagementViewState extends State<AccountManagementView>
 
   String _initStorage(int? cloudStorageGb) {
     if (cloudStorageGb != null) {
-      if (cloudStorageGb >= 1024) {
-        return "每月${(cloudStorageGb / 1024).toStringAsFixed(1)}TB${LocaleKeys.settings_billingPage_storageSpace.tr()}";
-      } else {
-        return "每月${cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}";
-      }
+      final storageGb = NumberFormat('#.##').format(cloudStorageGb / 1024);
+      return "每月${storageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}";
     }
     return "";
   }
