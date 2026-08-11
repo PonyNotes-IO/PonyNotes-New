@@ -429,69 +429,44 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
           );
         }
 
-        return Column(
-          mainAxisSize: widget.embedMode ? MainAxisSize.min : MainAxisSize.max,
-          children: [
-            if (widget.embedMode && _canCreateSpace) _buildEmbeddedHeader(context),
-            if (widget.embedMode)
-              // 在 SingleChildScrollView 等高度无限的父级中，不能用 Expanded
-              // 改用 Flexible + shrinkWrap + NeverScrollableScrollPhysics，
-              // 让 ListView 自适应内容高度。
-              Flexible(
-                fit: FlexFit.loose,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: spaces.length,
-                  separatorBuilder: (_, __) => const Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  itemBuilder: (context, index) {
-                    final s = spaces[index];
-                    return _SpaceListItem(
-                      space: s,
-                      userProfile: widget.userProfile,
-                      currentWorkspaceRole: widget.currentWorkspaceRole,
-                      workspaceId: widget.currentWorkspace?.id ?? '',
-                      onDelete: () => _deleteSpace(s),
-                      onPermissionChanged: (newPerm) =>
-                          _updateSpacePermission(s, newPerm),
-                      onManageMembers: () => _showMemberManagementSheet(s),
-                    );
-                  },
-                ),
-              )
-            else
-              Expanded(
-                child: ListView.separated(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: spaces.length,
-                  separatorBuilder: (_, __) => const Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                  ),
-                  itemBuilder: (context, index) {
-                    final s = spaces[index];
-                    return _SpaceListItem(
-                      space: s,
-                      userProfile: widget.userProfile,
-                      currentWorkspaceRole: widget.currentWorkspaceRole,
-                      workspaceId: widget.currentWorkspace?.id ?? '',
-                      onDelete: () => _deleteSpace(s),
-                      onPermissionChanged: (newPerm) =>
-                          _updateSpacePermission(s, newPerm),
-                      onManageMembers: () => _showMemberManagementSheet(s),
-                    );
-                  },
-                ),
-              ),
-          ],
+        final listView = ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: spaces.length,
+          separatorBuilder: (_, __) => const Divider(
+            height: 1,
+            indent: 16,
+            endIndent: 16,
+          ),
+          itemBuilder: (context, index) {
+            final s = spaces[index];
+            return _SpaceListItem(
+              space: s,
+              userProfile: widget.userProfile,
+              currentWorkspaceRole: widget.currentWorkspaceRole,
+              workspaceId: widget.currentWorkspace?.id ?? '',
+              onDelete: () => _deleteSpace(s),
+              onPermissionChanged: (newPerm) =>
+                  _updateSpacePermission(s, newPerm),
+              onManageMembers: () => _showMemberManagementSheet(s),
+            );
+          },
         );
+
+        if (widget.embedMode) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_canCreateSpace) _buildEmbeddedHeader(context),
+              listView,
+            ],
+          );
+        }
+
+        // In standalone mode, just return the list (will be wrapped in Expanded by parent)
+        return listView;
       },
     );
   }
@@ -1295,83 +1270,81 @@ class _MobileSpaceMemberSheetState extends State<MobileSpaceMemberSheet> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    return Column(
-      children: [
-        Expanded(
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator.adaptive())
-              : _errorMessage != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          FlowyText(_errorMessage!, color: theme.textColorScheme.secondary),
-                          const SizedBox(height: 12),
-                          FlowyButton(
-                            text: const FlowyText.regular('重试'),
-                            onTap: _loadMembers,
-                          ),
-                        ],
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isLoading)
+              const SizedBox(
+                height: 200,
+                child: Center(child: CircularProgressIndicator.adaptive()),
+              )
+            else if (_errorMessage != null)
+              SizedBox(
+                height: 200,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FlowyText(_errorMessage!, color: theme.textColorScheme.secondary),
+                      const SizedBox(height: 12),
+                      FlowyButton(
+                        text: const FlowyText.regular('重试'),
+                        onTap: _loadMembers,
                       ),
-                    )
-                  : CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: _buildAddMemberSection(theme),
-                        ),
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                            child: Row(
-                              children: [
-                                FlowyText(
-                                  '成员列表',
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.textColorScheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: theme.surfaceColorScheme.layer01,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: FlowyText(
-                                    '${_members.length}',
-                                    fontSize: 12,
-                                    color: theme.textColorScheme.secondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        _members.isEmpty
-                            ? SliverToBoxAdapter(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(32),
-                                  child: Center(
-                                    child: FlowyText(
-                                      '暂无成员',
-                                      color: theme.textColorScheme.secondary,
-                                    ),
-                                  ),
-                                ),
-                              )
-                            : SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    final member = _members[index];
-                                    return _buildMemberTile(member, theme);
-                                  },
-                                  childCount: _members.length,
-                                ),
-                              ),
-                      ],
+                    ],
+                  ),
+                ),
+              )
+            else ...[
+              _buildAddMemberSection(theme),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    FlowyText(
+                      '成员列表',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textColorScheme.primary,
                     ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: theme.surfaceColorScheme.layer01,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: FlowyText(
+                        '${_members.length}',
+                        fontSize: 12,
+                        color: theme.textColorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_members.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Center(
+                    child: FlowyText(
+                      '暂无成员',
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
+                )
+              else
+                ...List.generate(_members.length, (index) {
+                  final member = _members[index];
+                  return _buildMemberTile(member, theme);
+                }),
+              const SizedBox(height: 16),
+            ],
+          ],
         ),
-      ],
+      ),
     );
   }
 
