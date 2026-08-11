@@ -18,6 +18,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_request_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_update_executor.dart';
 import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
@@ -72,7 +73,13 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   SpaceBloc({
     required this.userProfile,
     required this.workspaceId,
-  }) : super(SpaceState.initial()) {
+    SpaceUpdateExecutor? spaceUpdateExecutor,
+  })  : _spaceUpdateExecutor = spaceUpdateExecutor ??
+            SpaceUpdateExecutor(
+              updateView: ViewBackendService.updateView,
+              updateVisibility: ViewBackendService.updateViewsVisibility,
+            ),
+        super(SpaceState.initial()) {
     on<SpaceEvent>(
       (event, emit) async {
         await event.when(
@@ -165,11 +172,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 }, (err) {
                   // failed to get settings - allow create attempt, backend will enforce if necessary
                   Log.error('Failed to get workspace settings: ${err.msg}');
-                  showToastNotification(message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',type: ToastificationType.error);
+                  showToastNotification(
+                      message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',
+                      type: ToastificationType.error);
                 });
               } catch (e, st) {
-                Log.error('Exception when checking workspace settings: $e\n$st');
-                showToastNotification(message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',type: ToastificationType.error);
+                Log.error(
+                    'Exception when checking workspace settings: $e\n$st');
+                showToastNotification(
+                    message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',
+                    type: ToastificationType.error);
               }
             }
 
@@ -190,8 +202,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               // 注意：不调用 `notifySpaceCreated`（它会触发 listener
               // 造成循环）。设置页路径下，调用方会自己通过 onCreated
               // 回调通知 home 屏。
-              SpaceChangeNotifier.instance
-                  .markPendingNewSpace(space.id);
+              SpaceChangeNotifier.instance.markPendingNewSpace(space.id);
               emit(
                 state.copyWith(
                   spaces: [...state.spaces, space],
@@ -278,10 +289,22 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               ),
             );
           },
-          update: (space, name, icon, iconColor, permission) async {
+          update: (
+            space,
+            name,
+            icon,
+            iconColor,
+            permission,
+            onResult,
+          ) async {
             space ??= state.currentSpace;
             if (space == null) {
               Log.error('update space failed, space is null');
+              onResult?.call(
+                FlowyResult.failure(
+                  FlowyError()..msg = 'Update space failed: space is null',
+                ),
+              );
               return;
             }
 
@@ -292,68 +315,31 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 message: '受限成员无法修改空间',
                 type: ToastificationType.error,
               );
+              onResult?.call(
+                FlowyResult.failure(
+                  FlowyError()..msg = '受限成员无法修改空间',
+                ),
+              );
               return;
             }
 
-            if (name != null) {
-              await _rename(space, name);
-            }
-
-            if (icon != null || iconColor != null || permission != null) {
-              try {
-                final extra = space.extra;
-                final current = extra.isNotEmpty == true
-                    ? jsonDecode(extra)
-                    : <String, dynamic>{};
-                final updated = <String, dynamic>{};
-                if (icon != null) {
-                  updated[ViewExtKeys.spaceIconKey] = icon;
-                }
-                if (iconColor != null) {
-                  updated[ViewExtKeys.spaceIconColorKey] = iconColor;
-                }
-                if (permission != null) {
-                  updated[ViewExtKeys.spacePermissionKey] = permission.index;
-                }
-                final merged = mergeMaps(current, updated);
-                await ViewBackendService.updateView(
-                  viewId: space.id,
-                  extra: jsonEncode(merged),
-                );
-
-                Log.info(
-                  'update space: ${space.name}(${space.id}), merged: $merged',
-                );
-              } catch (e) {
-                Log.error('Failed to migrating cover: $e');
-              }
-            } else if (icon == null) {
-              try {
-                final extra = space.extra;
-                final Map<String, dynamic> current = extra.isNotEmpty == true
-                    ? jsonDecode(extra)
-                    : <String, dynamic>{};
-                current.remove(ViewExtKeys.spaceIconKey);
-                current.remove(ViewExtKeys.spaceIconColorKey);
-                await ViewBackendService.updateView(
-                  viewId: space.id,
-                  extra: jsonEncode(current),
-                );
-
-                Log.info(
-                  'update space: ${space.name}(${space.id}), current: $current',
-                );
-              } catch (e) {
-                Log.error('Failed to migrating cover: $e');
-              }
-            }
-
-            if (permission != null) {
-              await ViewBackendService.updateViewsVisibility(
-                [space],
-                permission == SpacePermission.publicToAll,
-              );
-            }
+            final result = await _spaceUpdateExecutor.execute(
+              space: space,
+              name: name,
+              icon: icon,
+              iconColor: iconColor,
+              permissionIndex: permission?.index,
+              isPublic: permission == null
+                  ? null
+                  : permission == SpacePermission.publicToAll,
+            );
+            result.onFailure(
+              (error) => Log.error(
+                'Failed to update space ${space!.name}(${space.id}): '
+                '${error.msg}',
+              ),
+            );
+            onResult?.call(result);
           },
           open: (space, afterOpen) async {
             await _openSpace(space);
@@ -365,7 +351,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               (views) {
                 // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
                 views.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
-                
+
                 space.freeze();
                 return space.rebuild((b) {
                   b.childViews.clear();
@@ -385,10 +371,12 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             // 这样当删除子视图后，列表会立即更新
             await _currentSpaceListener?.stop();
             _currentSpaceListener = ViewListener(viewId: space.id);
-            Log.info('[SpaceBloc] Starting ViewListener for space: ${space.name} (${space.id})');
+            Log.info(
+                '[SpaceBloc] Starting ViewListener for space: ${space.name} (${space.id})');
             _currentSpaceListener?.start(
               onViewChildViewsUpdated: (update) {
-                Log.info('[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}, updateCount=${update.updateChildViews.length}');
+                Log.info(
+                    '[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}, updateCount=${update.updateChildViews.length}');
                 if (!isClosed) {
                   // 仅在有结构性变化（增删子视图）时才触发重载。
                   // 纯 update-only 事件（只有 lastEdited 等元数据变化）跳过，
@@ -404,39 +392,48 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                     });
                   }
                 } else {
-                  Log.warn('[SpaceBloc] Bloc is closed, ignoring child views update');
+                  Log.warn(
+                      '[SpaceBloc] Bloc is closed, ignoring child views update');
                 }
               },
               onViewDeleted: (result) {
                 // 监听视图删除事件，作为备用刷新机制
                 result.fold(
                   (deletedView) {
-                    Log.info('[SpaceBloc] Received view deleted notification: ${deletedView.id}, parentViewId: ${deletedView.parentViewId}');
+                    Log.info(
+                        '[SpaceBloc] Received view deleted notification: ${deletedView.id}, parentViewId: ${deletedView.parentViewId}');
                     // 检查删除的视图是否是当前空间的子视图
                     // 方法1: 通过 parentViewId 判断（更可靠）
                     final currentState = state;
                     final currentSpaceId = currentState.currentSpace?.id;
                     if (currentSpaceId != null && currentSpaceId == space.id) {
                       // 如果删除的视图的父视图ID是当前空间，或者删除的视图在当前空间的子视图列表中
-                      final isChildByParent = deletedView.parentViewId == currentSpaceId;
-                      final isChildInList = currentState.currentSpace?.childViews
-                          .any((v) => v.id == deletedView.id) ?? false;
-                      
+                      final isChildByParent =
+                          deletedView.parentViewId == currentSpaceId;
+                      final isChildInList = currentState
+                              .currentSpace?.childViews
+                              .any((v) => v.id == deletedView.id) ??
+                          false;
+
                       if ((isChildByParent || isChildInList) && !isClosed) {
-                        Log.info('[SpaceBloc] Deleted view is a child of current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList), triggering refresh');
+                        Log.info(
+                            '[SpaceBloc] Deleted view is a child of current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList), triggering refresh');
                         // 增加延迟时间，确保后端删除操作完成，特别是最后一条文档
                         Future.delayed(const Duration(milliseconds: 500), () {
                           if (!isClosed) {
-                            add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                            add(const SpaceEvent
+                                .didUpdateCurrentSpaceChildViews());
                           }
                         });
                       } else {
-                        Log.info('[SpaceBloc] Deleted view is not a child of current space, ignoring');
+                        Log.info(
+                            '[SpaceBloc] Deleted view is not a child of current space, ignoring');
                       }
                     }
                   },
                   (error) {
-                    Log.error('[SpaceBloc] View deleted notification error: $error');
+                    Log.error(
+                        '[SpaceBloc] View deleted notification error: $error');
                   },
                 );
               },
@@ -444,38 +441,51 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 // 监听视图恢复事件
                 result.fold(
                   (restoredView) {
-                    Log.info('[SpaceBloc] Received view restored notification: ${restoredView.id}, parentViewId: ${restoredView.parentViewId}');
+                    Log.info(
+                        '[SpaceBloc] Received view restored notification: ${restoredView.id}, parentViewId: ${restoredView.parentViewId}');
                     // 检查恢复的视图是否是当前空间的子视图
                     final currentState = state;
                     final currentSpaceId = currentState.currentSpace?.id;
-                    
-                    if (currentSpaceId != null && currentSpaceId == space.id && !isClosed) {
+
+                    if (currentSpaceId != null &&
+                        currentSpaceId == space.id &&
+                        !isClosed) {
                       // 方法1: 通过 parentViewId 判断（恢复后可能已经更新）
-                      final isChildByParent = restoredView.parentViewId == currentSpaceId;
+                      final isChildByParent =
+                          restoredView.parentViewId == currentSpaceId;
                       // 方法2: 检查恢复的视图是否在当前空间的子视图列表中（恢复前可能还在列表中）
-                      final isChildInList = currentState.currentSpace?.childViews
-                          .any((v) => v.id == restoredView.id) ?? false;
-                      
+                      final isChildInList = currentState
+                              .currentSpace?.childViews
+                              .any((v) => v.id == restoredView.id) ??
+                          false;
+
                       // 如果恢复的视图属于当前空间，或者当前空间ID匹配，都应该刷新
                       // 因为恢复操作可能会将视图恢复到原来的位置
                       // 即使 parentViewId 为空或不在列表中，也可能需要刷新（恢复操作可能还在进行中）
-                      if (isChildByParent || isChildInList || restoredView.parentViewId.isEmpty) {
-                        Log.info('[SpaceBloc] Restored view belongs to current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList, parentViewIdEmpty=${restoredView.parentViewId.isEmpty}), triggering refresh');
+                      if (isChildByParent ||
+                          isChildInList ||
+                          restoredView.parentViewId.isEmpty) {
+                        Log.info(
+                            '[SpaceBloc] Restored view belongs to current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList, parentViewIdEmpty=${restoredView.parentViewId.isEmpty}), triggering refresh');
                         // 增加延迟时间，确保后端恢复操作完成
                         Future.delayed(const Duration(milliseconds: 800), () {
                           if (!isClosed) {
-                            add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                            add(const SpaceEvent
+                                .didUpdateCurrentSpaceChildViews());
                           }
                         });
                       } else {
-                        Log.info('[SpaceBloc] Restored view does not belong to current space (parentViewId=${restoredView.parentViewId}, currentSpaceId=$currentSpaceId), ignoring');
+                        Log.info(
+                            '[SpaceBloc] Restored view does not belong to current space (parentViewId=${restoredView.parentViewId}, currentSpaceId=$currentSpaceId), ignoring');
                       }
                     } else {
-                      Log.info('[SpaceBloc] Current space is null or does not match (currentSpaceId=$currentSpaceId, spaceId=${space.id}), ignoring restore notification');
+                      Log.info(
+                          '[SpaceBloc] Current space is null or does not match (currentSpaceId=$currentSpaceId, spaceId=${space.id}), ignoring restore notification');
                     }
                   },
                   (error) {
-                    Log.error('[SpaceBloc] View restored notification error: $error');
+                    Log.error(
+                        '[SpaceBloc] View restored notification error: $error');
                   },
                 );
               },
@@ -489,7 +499,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 // 空间类型：不设置 lastCreatedPage，由 sidebar 的 BlocListener 打开空间统一页面
                 emit(
                   state.copyWith(
-                    lastCreatedPage: ViewPB(),  // 空 ViewPB，表示不自动打开文档
+                    lastCreatedPage: ViewPB(), // 空 ViewPB，表示不自动打开文档
                   ),
                 );
               } else {
@@ -563,8 +573,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             final (fetchedSpaces, _, _) = await _getSpaces();
 
             // Merge: keep any local spaces that backend hasn't returned yet.
-            final mergedSpaces =
-                _mergeWithLocalPendingSpaces(fetchedSpaces);
+            final mergedSpaces = _mergeWithLocalPendingSpaces(fetchedSpaces);
 
             var currentSpace = await _getLastOpenedSpace(mergedSpaces);
 
@@ -600,54 +609,62 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             // 当前空间的子视图发生变化时（如删除、导入），重新加载子视图列表
             // 注意：使用最新的 state，因为事件可能被多次触发
             final latestState = state;
-            Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: reloading child views');
+            Log.info(
+                '[SpaceBloc] didUpdateCurrentSpaceChildViews: reloading child views');
             final currentSpace = latestState.currentSpace;
             if (currentSpace == null) {
-              Log.warn('[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace is null');
+              Log.warn(
+                  '[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace is null');
               return;
             }
 
             final spaceId = currentSpace.id;
-            Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace=${currentSpace.name} ($spaceId), current childViews count=${currentSpace.childViews.length}');
-            
+            Log.info(
+                '[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace=${currentSpace.name} ($spaceId), current childViews count=${currentSpace.childViews.length}');
+
             final childViewsResult = await ViewBackendService.getChildViews(
               viewId: spaceId,
             );
             childViewsResult.fold(
               (childViews) {
-                Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: fetched ${childViews.length} child views for space $spaceId');
-                
+                Log.info(
+                    '[SpaceBloc] didUpdateCurrentSpaceChildViews: fetched ${childViews.length} child views for space $spaceId');
+
                 // 再次检查 state 是否仍然匹配（避免并发问题）
                 final currentState = state;
                 if (currentState.currentSpace?.id != spaceId) {
-                  Log.warn('[SpaceBloc] didUpdateCurrentSpaceChildViews: space changed during fetch, ignoring update');
+                  Log.warn(
+                      '[SpaceBloc] didUpdateCurrentSpaceChildViews: space changed during fetch, ignoring update');
                   return;
                 }
-                
+
                 // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
                 childViews.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
-                
+
                 // 创建新的 ViewPB 对象，确保引用变化
                 currentSpace.freeze();
                 final updatedSpace = currentSpace.rebuild((b) {
                   b.childViews.clear();
                   b.childViews.addAll(childViews);
                 });
-                
+
                 // 确保创建了新对象
                 if (identical(updatedSpace, currentSpace)) {
-                  Log.error('[SpaceBloc] didUpdateCurrentSpaceChildViews: rebuild did not create new object!');
+                  Log.error(
+                      '[SpaceBloc] didUpdateCurrentSpaceChildViews: rebuild did not create new object!');
                 }
-                
+
                 emit(
                   currentState.copyWith(
                     currentSpace: updatedSpace,
                   ),
                 );
-                Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: emitted new state with ${updatedSpace.childViews.length} child views (old count was ${currentSpace.childViews.length})');
+                Log.info(
+                    '[SpaceBloc] didUpdateCurrentSpaceChildViews: emitted new state with ${updatedSpace.childViews.length} child views (old count was ${currentSpace.childViews.length})');
               },
               (error) {
-                Log.error('[SpaceBloc] didUpdateCurrentSpaceChildViews: failed to get child views: $error');
+                Log.error(
+                    '[SpaceBloc] didUpdateCurrentSpaceChildViews: failed to get child views: $error');
               },
             );
           },
@@ -871,6 +888,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
   late WorkspaceService _workspaceService;
   late SpaceRequestService _spaceRequestService;
+  final SpaceUpdateExecutor _spaceUpdateExecutor;
   late String workspaceId;
   late UserProfilePB userProfile;
   WorkspaceSectionsListener? _listener;
@@ -902,20 +920,18 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   }
 
   /// 仅返回「空间」类型的私有空间列表（不包含普通文档等）
-  List<ViewPB> get privateSpaces =>
-      state.spaces
-          .where(
-            (e) => e.isSpace && e.spacePermission == SpacePermission.private,
-          )
-          .toList();
+  List<ViewPB> get privateSpaces => state.spaces
+      .where(
+        (e) => e.isSpace && e.spacePermission == SpacePermission.private,
+      )
+      .toList();
 
   /// 仅返回「空间」类型的公共 / 协作空间列表（不包含普通文档等）
-  List<ViewPB> get publicSpaces =>
-      state.spaces
-          .where(
-            (e) => e.isSpace && e.spacePermission == SpacePermission.publicToAll,
-          )
-          .toList();
+  List<ViewPB> get publicSpaces => state.spaces
+      .where(
+        (e) => e.isSpace && e.spacePermission == SpacePermission.publicToAll,
+      )
+      .toList();
 
   Future<ViewPB?> _createSpace({
     required String name,
@@ -948,7 +964,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       return space;
     }, (error) {
       Log.error('Failed to create space: $error');
-      showToastNotification(message: '工作空间创建失败：${error.msg}', type: ToastificationType.error);
+      showToastNotification(
+          message: '工作空间创建失败：${error.msg}', type: ToastificationType.error);
       return null;
     });
   }
@@ -1001,15 +1018,13 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     }
     final fetchedIds = fetched.map((s) => s.id).toSet();
     // 哪些 pending 已经被 backend 同步了？清理掉（全局）
-    final resolved = SpaceChangeNotifier.instance
-        .resolvePending(fetchedIds);
+    final resolved = SpaceChangeNotifier.instance.resolvePending(fetchedIds);
     final stillPending = SpaceChangeNotifier.instance.pendingNewSpaceIds;
     if (stillPending.isEmpty) {
       return fetched;
     }
-    final pendingSpaces = state.spaces
-        .where((s) => stillPending.contains(s.id))
-        .toList();
+    final pendingSpaces =
+        state.spaces.where((s) => stillPending.contains(s.id)).toList();
     // 防御性去重：state.spaces 里不应该有重复 id，但万一有 upsert
     // 路径出错导致重复，也只取首次出现的。
     final seen = <String>{};
@@ -1097,8 +1112,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     // 确保缓存已初始化
     await ExpandedViewsCache.instance.initialize();
     // 空间默认展开（如果缓存中没有记录）
-    return ExpandedViewsCache.instance.isExpanded(space.id) || 
-           !ExpandedViewsCache.instance.cache.containsKey(space.id);
+    return ExpandedViewsCache.instance.isExpanded(space.id) ||
+        !ExpandedViewsCache.instance.cache.containsKey(space.id);
   }
 
   /// 检查当前用户是否有创建权限
@@ -1193,8 +1208,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       final service = UserBackendService(userId: user.id);
       final members =
           await service.getWorkspaceMembers(workspaceId).getOrThrow();
-      final isOwner = members.items
-          .any((e) => e.role == AFRolePB.Owner && e.uid.toInt() == user.id.toInt());
+      final isOwner = members.items.any(
+          (e) => e.role == AFRolePB.Owner && e.uid.toInt() == user.id.toInt());
 
       if (members.items.isEmpty) {
         return true;
@@ -1390,6 +1405,7 @@ class SpaceEvent with _$SpaceEvent {
     String? icon,
     String? iconColor,
     SpacePermission? permission,
+    void Function(FlowyResult<void, FlowyError> result)? onResult,
   }) = _Update;
   const factory SpaceEvent.open({
     required ViewPB space,
@@ -1401,6 +1417,7 @@ class SpaceEvent with _$SpaceEvent {
     required ViewLayoutPB layout,
     int? index,
     required bool openAfterCreate,
+
     /// Optional JSON string to be written into the created view's
     /// `extra` field right after creation. Used by mobile to mark
     /// special view types (e.g. HandwritingSaber uses
@@ -1411,7 +1428,8 @@ class SpaceEvent with _$SpaceEvent {
   }) = _CreatePage;
   const factory SpaceEvent.delete(ViewPB? space) = _Delete;
   const factory SpaceEvent.didReceiveSpaceUpdate() = _DidReceiveSpaceUpdate;
-  const factory SpaceEvent.didUpdateCurrentSpaceChildViews() = _DidUpdateCurrentSpaceChildViews;
+  const factory SpaceEvent.didUpdateCurrentSpaceChildViews() =
+      _DidUpdateCurrentSpaceChildViews;
   const factory SpaceEvent.reset(
     UserProfilePB userProfile,
     String workspaceId,
@@ -1433,6 +1451,7 @@ class SpaceEvent with _$SpaceEvent {
     required String requestId,
     required bool approve,
   }) = _HandleJoinRequest;
+
   /// Merge [spaces] into `state.spaces` (deduped by id). Used by the
   /// mobile home screen when it receives a freshly-created space from
   /// another component's `SpaceBloc` (via

@@ -119,7 +119,8 @@ class _SpaceSectionHeader extends StatelessWidget {
           FlowyText.medium(
             title,
             fontSize: 13.0,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ],
       ),
@@ -480,14 +481,28 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
                 permission: permission.value,
                 iconColor: selectedColor.value,
                 icon: iconName,
+                onResult: (result) {
+                  if (!mounted || !bottomSheetContext.mounted) {
+                    return;
+                  }
+
+                  result.fold(
+                    (_) {
+                      showToastNotification(
+                        message: LocaleKeys.space_success_updateSpace.tr(),
+                      );
+                      Navigator.pop(bottomSheetContext);
+                    },
+                    (error) {
+                      showToastNotification(
+                        message: error.msg.isEmpty ? '空间更新失败，请重试' : error.msg,
+                        type: ToastificationType.error,
+                      );
+                    },
+                  );
+                },
               ),
             );
-
-        showToastNotification(
-          message: LocaleKeys.space_success_updateSpace.tr(),
-        );
-
-        Navigator.pop(bottomSheetContext);
       },
       padding: const EdgeInsets.symmetric(horizontal: 16),
       builder: (bottomSheetContext) => ManageSpaceWidget(
@@ -511,8 +526,9 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
       LocaleKeys.button_delete.tr(),
       (dialogContext) async {
         // Close both the confirm dialog and the space menu.
-        Navigator.of(dialogContext).pop();         // dismiss confirm dialog
-        Navigator.of(bottomSheetContext).pop();    // dismiss SpaceMenuMoreOptions bottom sheet
+        Navigator.of(dialogContext).pop(); // dismiss confirm dialog
+        Navigator.of(bottomSheetContext)
+            .pop(); // dismiss SpaceMenuMoreOptions bottom sheet
 
         context.read<SpaceBloc>().add(SpaceEvent.delete(widget.space));
 
