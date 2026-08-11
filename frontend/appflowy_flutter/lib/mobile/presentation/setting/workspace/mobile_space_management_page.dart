@@ -793,6 +793,26 @@ class _SpaceListItem extends StatelessWidget {
       color = const Color(0xFFA34AFD);
     }
 
+    // Handle old format: space_icon_1, space_icon_2, etc.
+    if (icon.startsWith('space_icon')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 40,
+          height: 40,
+          color: color,
+          child: Center(
+            child: FlowySvg(
+              FlowySvgData('assets/flowy_icons/16x/$icon.svg'),
+              size: const Size.square(20),
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Handle new format: groupName/iconName (e.g., computer_devices/amazon)
     if (icon.contains('/')) {
       final svgContent = kIconGroups?.findSvgContent(icon);
       if (svgContent != null) {
@@ -814,6 +834,7 @@ class _SpaceListItem extends StatelessWidget {
       }
     }
 
+    // Fallback: display as emoji/text
     return Container(
       width: 40,
       height: 40,
