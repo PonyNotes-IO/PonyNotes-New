@@ -334,14 +334,9 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       );
     }
 
-    // Space management page needs full height, wrap with Expanded
+    // Space management page handles its own layout in embed mode
     if (_currentSection == MobileSettingsSection.workspaceManagement) {
-      return const Expanded(
-        child: Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: MobileSpaceManagementPage(showAppBar: false),
-        ),
-      );
+      return const MobileSpaceManagementPage(showAppBar: false);
     }
 
     return SingleChildScrollView(
