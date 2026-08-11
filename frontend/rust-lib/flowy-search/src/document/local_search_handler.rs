@@ -90,3 +90,43 @@ fn tanvity_item_to_local_search_item(item: TanvitySearchResponseItem) -> LocalSe
     workspace_id: item.workspace_id,
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::{DocumentLocalSearchHandler, SearchHandler};
+  use flowy_search_pub::tantivy_state::DocumentTantivyState;
+  use futures::StreamExt;
+  use std::sync::Arc;
+  use tokio::sync::RwLock;
+  use uuid::Uuid;
+
+  #[tokio::test]
+  async fn mobile_global_search_returns_chinese_title_substring() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_id = Uuid::new_v4();
+    let mut state =
+      DocumentTantivyState::new(&workspace_id, temp_dir.path().to_path_buf()).unwrap();
+    state
+      .add_document(
+        "doc-1",
+        Some("无关正文内容".to_string()),
+        Some("可乐本地文档".to_string()),
+        None,
+      )
+      .unwrap();
+    state.reader.reload().unwrap();
+
+    let state = Arc::new(RwLock::new(state));
+    let handler = DocumentLocalSearchHandler::new(Arc::downgrade(&state));
+    let mut responses = handler
+      .perform_search("可乐".to_string(), &workspace_id)
+      .await;
+
+    let response = responses.next().await.unwrap().unwrap();
+    let items = response.local_search_result.unwrap().items;
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].id, "doc-1");
+    assert_eq!(items[0].display_name, "可乐本地文档");
+  }
+}

@@ -42,5 +42,8 @@ arc-swap.workspace = true
 [build-dependencies]
 flowy-codegen.workspace = true
 
+[dev-dependencies]
+tempfile = "3.8.1"
+
 [features]
 dart = ["flowy-codegen/dart"]

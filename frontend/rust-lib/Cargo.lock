@@ -3267,6 +3267,7 @@ dependencies = [
  "serde_json",
  "strum_macros 0.26.4",
  "tantivy",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tracing",
