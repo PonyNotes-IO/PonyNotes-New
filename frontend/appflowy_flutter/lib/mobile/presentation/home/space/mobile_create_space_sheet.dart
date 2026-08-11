@@ -7,7 +7,6 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -62,12 +61,6 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
     final initialSpaceCount = widget.spaceBloc.state.spaces.length;
     final previousLastCreatedPage = widget.spaceBloc.state.lastCreatedPage;
 
-    Log.info(
-      '[SpaceCreate] _createSpace: start, name="$name", permission=$_permission, '
-      'initialSpaceCount=$initialSpaceCount, '
-      'workspaceId=${widget.spaceBloc.workspaceId}',
-    );
-
     widget.spaceBloc.add(
       SpaceEvent.create(
         name: name,
@@ -87,8 +80,6 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
       previousLastCreatedPage: previousLastCreatedPage,
     );
 
-    Log.info('[SpaceCreate] _createSpace: finished, succeeded=$succeeded');
-
     if (!mounted) return;
 
     setState(() => _isCreating = false);
@@ -103,21 +94,11 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
       final onCreated = widget.onCreated;
       navigator.pop();
       Future.microtask(() {
-        Log.info(
-          '[SpaceHomeSync] sheet_microtask_firing '
-          'mounted=$mounted',
-        );
         try {
           onCreated();
-        } catch (e, st) {
-          Log.error('[SpaceHomeSync] sheet_microtask_failed: $e\n$st');
-        }
+        } catch (_) {}
       });
       showToastNotification(message: '团队协作区「$name」已创建');
-    } else {
-      Log.warn(
-        '[SpaceCreate] _createSpace: failed, keep sheet open for retry',
-      );
     }
   }
 
@@ -143,11 +124,6 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
       final hasNewSpace = s.spaces.length > initialSpaceCount;
       final hasNewPage = s.lastCreatedPage != null &&
           s.lastCreatedPage != previousLastCreatedPage;
-      Log.info(
-        '[SpaceCreate] bloc emit: spaces=${s.spaces.length}, '
-        'lastCreatedPage=${s.lastCreatedPage?.id ?? "null"}, '
-        'hasNewSpace=$hasNewSpace, hasNewPage=$hasNewPage',
-      );
       if (hasNewSpace || hasNewPage) {
         if (!completer.isCompleted) completer.complete(true);
       }
@@ -156,7 +132,6 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
     // 兜底超时：15s 足够后端 RPC + 创建默认页面
     Timer? timer;
     timer = Timer(const Duration(seconds: 15), () {
-      Log.warn('[SpaceCreate] wait timeout (15s) — treating as failure');
       if (!completer.isCompleted) completer.complete(false);
     });
 

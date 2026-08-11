@@ -81,29 +81,13 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             _initial(userProfile, workspaceId);
 
-            Log.info('[SpaceHomeSync] bloc_initial_started blocHash=$hashCode');
-
             final (fetchedSpaces, publicViews, privateViews) =
                 await _getSpaces();
-
-            Log.info(
-              '[SpaceHomeSync] bloc_initial_fetched blocHash=$hashCode '
-              'fetched_spaces=${fetchedSpaces.length} '
-              'fetched_names=${fetchedSpaces.map((s) => s.name).toList()} '
-              'public_views=${publicViews.length} '
-              'private_views=${privateViews.length}',
-            );
 
             // Merge: keep any local spaces that backend hasn't returned yet
             // (newly created via `create` event but not yet propagated to
             // backend cache). Without this merge, every `initial` would
             // wipe out freshly-created spaces.
-            Log.info(
-              '[SpaceHomeSync] before_merge blocHash=$hashCode '
-              'pending_ids=${SpaceChangeNotifier.instance.pendingNewSpaceIds} '
-              'pending_count=${SpaceChangeNotifier.instance.pendingNewSpaceIds.length} '
-              'current_state_spaces=${state.spaces.length}',
-            );
             final mergedSpaces = _mergeWithLocalPendingSpaces(fetchedSpaces);
 
             final currentSpace = await _getLastOpenedSpace(mergedSpaces);
@@ -116,12 +100,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 shouldShowUpgradeDialog: false,
                 isInitialized: true,
               ),
-            );
-
-            Log.info(
-              '[SpaceHomeSync] bloc_initial_emitted blocHash=$hashCode '
-              'emitted_spaces=${state.spaces.length} '
-              'emitted_names=${state.spaces.map((s) => s.name).toList()}',
             );
 
             if (openFirstPage) {
@@ -214,22 +192,11 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               // 回调通知 home 屏。
               SpaceChangeNotifier.instance
                   .markPendingNewSpace(space.id);
-              Log.info(
-                '[SpaceHomeSync] bloc_create_emitted blocHash=$hashCode '
-                'new_space=${space.name}(${space.id}) '
-                'spaces_now=${[...state.spaces, space].length}',
-              );
               emit(
                 state.copyWith(
                   spaces: [...state.spaces, space],
                   currentSpace: space,
                 ),
-              );
-              Log.info(
-                '[SpaceHomeSync] bloc_create_after_emit '
-                'blocHash=$hashCode '
-                'state_spaces=${state.spaces.length} '
-                'state_names=${state.spaces.map((s) => s.name).toList()}',
               );
               add(SpaceEvent.open(space: space));
               Log.info('open space: ${space.name}(${space.id})');
@@ -628,13 +595,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 currentSpace: currentSpace,
               ),
             );
-
-            Log.info(
-              '[SpaceHomeSync] bloc_didReceiveSpaceUpdate_emitted '
-              'fetched=${fetchedSpaces.length} '
-              'merged=${mergedSpaces.length} '
-              'names=${mergedSpaces.map((s) => s.name).toList()}',
-            );
           },
           didUpdateCurrentSpaceChildViews: () async {
             // 当前空间的子视图发生变化时（如删除、导入），重新加载子视图列表
@@ -900,19 +860,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             final existingIds = state.spaces.map((s) => s.id).toSet();
             final newOnes =
                 incoming.where((s) => !existingIds.contains(s.id)).toList();
-            if (newOnes.isEmpty) {
-              Log.info(
-                '[SpaceHomeSync] bloc_upsertSpaces no_new blocHash=$hashCode',
-              );
-              return;
-            }
+            if (newOnes.isEmpty) return;
             final merged = [...state.spaces, ...newOnes];
-            Log.info(
-              '[SpaceHomeSync] bloc_upsertSpaces merged '
-              'blocHash=$hashCode new_count=${newOnes.length} '
-              'new_names=${newOnes.map((s) => s.name).toList()} '
-              'spaces_after=${merged.length}',
-            );
             emit(state.copyWith(spaces: merged));
           },
         );
@@ -940,7 +889,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   Future<(List<ViewPB>, List<ViewPB>, List<ViewPB>)> _getSpaces() async {
     final sectionViews = await _getSectionViews();
     if (sectionViews == null || sectionViews.views.isEmpty) {
-      Log.info('[SpacePersist] _getSpaces: empty section');
       return (<ViewPB>[], <ViewPB>[], <ViewPB>[]);
     }
 
@@ -949,20 +897,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
     final publicSpaces = publicViews.where((e) => e.isSpace);
     final privateSpaces = privateViews.where((e) => e.isSpace);
-
-    // 诊断日志：每个 view 的 extra 完整打印，统一 tag
-    for (final v in publicViews) {
-      Log.info('[SpacePersist] _getSpaces_public_view '
-          'name=${v.name} id=${v.id} '
-          'extra="${v.extra}" isSpace=${v.isSpace}',
-      );
-    }
-    for (final v in privateViews) {
-      Log.info('[SpacePersist] _getSpaces_private_view '
-          'name=${v.name} id=${v.id} '
-          'extra="${v.extra}" isSpace=${v.isSpace}',
-      );
-    }
 
     return ([...publicSpaces, ...privateSpaces], publicViews, privateViews);
   }
@@ -1011,13 +945,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       extra: jsonEncode(extra),
     );
     return await result.fold((space) async {
-      // 诊断：统一 tag，方便日志搜索
-      Log.info('[SpacePersist] _createSpace_result '
-          'name=${space.name} id=${space.id} '
-          'extra="${space.extra}" '
-          'isSpace=${space.isSpace} '
-          'spacePermission=${space.spacePermission}',
-      );
       return space;
     }, (error) {
       Log.error('Failed to create space: $error');
@@ -1099,14 +1026,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     // 最终顺序：fetched（backend 权威顺序）+ pending（追加在末尾），
     // 与 `create` handler 里 `[...state.spaces, space]` 的追加策略一致。
     final merged = <ViewPB>[...fetched, ...dedupedPending];
-    Log.info(
-      '[SpaceHomeSync] merge_with_pending '
-      'fetched=${fetched.length} '
-      'pending_added=${dedupedPending.length} '
-      'pending_names=${dedupedPending.map((s) => s.name).toList()} '
-      'resolved=$resolved '
-      'still_pending=${stillPending.length}',
-    );
     return merged;
   }
 

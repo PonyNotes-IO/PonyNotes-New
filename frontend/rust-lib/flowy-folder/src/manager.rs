@@ -706,7 +706,9 @@ impl FolderManager {
 
     let view = create_view(self.user.user_id()?, params.clone(), view_layout);
 
-    if let Some(lock) = self.mutex_folder.load_full() {
+    let folder_lock = self.mutex_folder.load_full();
+
+    if let Some(lock) = folder_lock {
       let mut folder = lock.write().await;
       folder.insert_view(view.clone(), index);
 

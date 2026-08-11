@@ -64,29 +64,43 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
     profileRes.fold(
       (profile) async {
         _userProfile = profile;
-        final workspacesRes = await UserBackendService(userId: profile.id).getWorkspaces();
-        workspacesRes.fold(
-          (workspaces) async {
-            if (workspaces.isEmpty) {
-              _done();
-              return;
-            }
-            final ws = workspaces.firstWhere(
-              (w) => w.workspaceId.isNotEmpty,
-              orElse: () => workspaces.first,
-            );
-            _currentWorkspace = WorkspacePB.create()
-              ..id = ws.workspaceId
-              ..name = ws.name;
-            _spaceBloc = SpaceBloc(
-              userProfile: profile,
-              workspaceId: ws.workspaceId,
-            )..add(const SpaceEvent.initial(openFirstPage: false));
-            _currentWorkspaceRole = ws.role;
-            await _loadWorkspaceSetting();
-          },
-          (_) => _done(),
+
+        // 必须用 getCurrentWorkspace()（而不是 getWorkspaces().first）
+        // 来获取真正的当前 workspace。
+        // Bug 复现证据：SpaceBloc 用错的 workspaceId 构造 → _createSpace
+        // 时 Rust 端的 View.parentViewId 被设成错误 workspace 的 ID，
+        // 导致 getPublicViews 永远读不到这个新 view。
+        final currentWsRes = await UserBackendService.getCurrentWorkspace();
+        final currentWorkspace = currentWsRes.fold(
+          (w) => w,
+          (_) => null,
         );
+        if (currentWorkspace == null || currentWorkspace.id.isEmpty) {
+          _done();
+          return;
+        }
+
+        // 仍调用 getWorkspaces 来拿到 role（用于权限显示）。
+        final workspacesRes = await UserBackendService(userId: profile.id).getWorkspaces();
+        final wsList = workspacesRes.fold(
+          (ws) => ws,
+          (_) => <UserWorkspacePB>[],
+        );
+        final role = wsList
+            .firstWhere(
+              (w) => w.workspaceId == currentWorkspace.id,
+              orElse: () => UserWorkspacePB.create()
+                ..workspaceId = currentWorkspace.id,
+            )
+            .role;
+
+        _currentWorkspace = currentWorkspace;
+        _spaceBloc = SpaceBloc(
+          userProfile: profile,
+          workspaceId: currentWorkspace.id,
+        )..add(const SpaceEvent.initial(openFirstPage: false));
+        _currentWorkspaceRole = role;
+        await _loadWorkspaceSetting();
       },
       (_) => _done(),
     );
@@ -224,15 +238,9 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
           // 通知 home 屏的 `SpaceBloc`（不同实例）刷新 spaces 列表。
           // 同时把刚刚创建的 `ViewPB` 通过 notifier 携带过去，让 home
           // 端能立即 merge 进自己的 state.spaces（不等 backend
-          // `getPublicViews` 缓存同步 —— log 显示这个缓存滞后可能是
-          // 秒级，且 `DidUpdateSectionViews` 也不一定每次都触发）。
+          // `getPublicViews` 缓存同步 — 该缓存滞后可能是秒级，且
+          // `DidUpdateSectionViews` 也不一定每次都触发）。
           final allSpaces = _spaceBloc!.state.spaces;
-          Log.info(
-            '[SpaceHomeSync] mng_onCreated_called '
-            'spaces_count=${allSpaces.length} '
-            'last_name=${allSpaces.isNotEmpty ? allSpaces.last.name : "<empty>"} '
-            'last_id=${allSpaces.isNotEmpty ? allSpaces.last.id : "<empty>"}',
-          );
           if (allSpaces.isNotEmpty) {
             SpaceChangeNotifier.instance.notifySpaceCreated(
               allSpaces.last,
@@ -392,14 +400,6 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
         // `createView` RPC returns. This mirrors the desktop sidebar's
         // rendering source.
         final spaces = widget.spaceBloc!.publicSpaces;
-        Log.debug(
-          '[SpaceCreate] _SpaceManagementContent.build: '
-          'embedMode=${widget.embedMode}, '
-          'blocHash=${widget.spaceBloc.hashCode}, '
-          'spaceBloc.state.spaces.count=${widget.spaceBloc!.state.spaces.length}, '
-          'publicSpaces.count=${spaces.length}, '
-          'publicSpaces=${spaces.map((s) => "${s.name}(${s.id}, isSpace=${s.isSpace}, perm=${s.spacePermission})").toList()}',
-        );
 
         if (spaces.isEmpty) {
           return SizedBox(
@@ -428,11 +428,6 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
             ),
           );
         }
-
-        Log.debug(
-          '[SpaceCreate] _SpaceManagementContent: rendering ${spaces.length} spaces '
-          'in embedMode=${widget.embedMode}',
-        );
 
         return Column(
           mainAxisSize: widget.embedMode ? MainAxisSize.min : MainAxisSize.max,
@@ -559,14 +554,8 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
           // also pass the freshly-created `ViewPB` along so the home
           // page can merge it into its state.spaces immediately,
           // instead of waiting for backend `getPublicViews` cache to
-          // sync (which can lag several seconds, per the diagnostic
-          // log).
+          // sync (which can lag several seconds).
           final allSpaces = widget.spaceBloc!.state.spaces;
-          Log.info(
-            '[SpaceHomeSync] mng2_onCreated_called '
-            'spaces_count=${allSpaces.length} '
-            'last_name=${allSpaces.isNotEmpty ? allSpaces.last.name : "<empty>"}',
-          );
           if (allSpaces.isNotEmpty) {
             SpaceChangeNotifier.instance.notifySpaceCreated(
               allSpaces.last,
