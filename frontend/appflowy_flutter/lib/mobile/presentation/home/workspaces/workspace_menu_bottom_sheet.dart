@@ -18,6 +18,35 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'create_workspace_menu.dart';
 import 'workspace_more_options.dart';
 
+void showCreateWorkspaceBottomSheet(BuildContext context) {
+  showMobileBottomSheet(
+    context,
+    showHeader: true,
+    title: LocaleKeys.workspace_create.tr(),
+    showCloseButton: true,
+    showDragHandle: true,
+    showDivider: false,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    builder: (bottomSheetContext) {
+      return EditWorkspaceNameBottomSheet(
+        type: EditWorkspaceNameType.create,
+        workspaceName: LocaleKeys.workspace_defaultName.tr(),
+        onSubmitted: (name) {
+          Log.info('create a new workspace: $name');
+          bottomSheetContext.popToHome();
+
+          context.read<UserWorkspaceBloc>().add(
+                UserWorkspaceEvent.createWorkspace(
+                  name: name,
+                  workspaceType: WorkspaceTypePB.ServerW,
+                ),
+              );
+        },
+      );
+    },
+  );
+}
+
 // Only works on mobile.
 class MobileWorkspaceMenu extends StatelessWidget {
   const MobileWorkspaceMenu({
@@ -88,7 +117,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
         showTopBorder: false,
         showBottomBorder: false,
         leftIcon: _buildLeftIcon(context),
-        onTap: () => _showCreateWorkspaceBottomSheet(context),
+        onTap: () => showCreateWorkspaceBottomSheet(context),
         content: Expanded(
           child: Padding(
             padding: const EdgeInsets.only(left: 16.0),
@@ -99,36 +128,6 @@ class _CreateWorkspaceButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  void _showCreateWorkspaceBottomSheet(BuildContext context) {
-    showMobileBottomSheet(
-      context,
-      showHeader: true,
-      title: LocaleKeys.workspace_create.tr(),
-      showCloseButton: true,
-      showDragHandle: true,
-      showDivider: false,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      builder: (bottomSheetContext) {
-        return EditWorkspaceNameBottomSheet(
-          type: EditWorkspaceNameType.create,
-          workspaceName: LocaleKeys.workspace_defaultName.tr(),
-          onSubmitted: (name) {
-            // create a new workspace
-            Log.info('create a new workspace: $name');
-            bottomSheetContext.popToHome();
-
-            context.read<UserWorkspaceBloc>().add(
-                  UserWorkspaceEvent.createWorkspace(
-                    name: name,
-                    workspaceType: WorkspaceTypePB.ServerW,
-                  ),
-                );
-          },
-        );
-      },
     );
   }
 

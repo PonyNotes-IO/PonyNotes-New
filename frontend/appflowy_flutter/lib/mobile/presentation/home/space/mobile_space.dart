@@ -6,6 +6,7 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
 import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
+import 'package:appflowy/mobile/presentation/home/workspaces/workspace_menu_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/shared/list_extension.dart';
@@ -200,14 +201,7 @@ class _MobileSpaceState extends State<MobileSpace> {
                 title: LocaleKeys.space_privateSpace.tr(),
                 spaces: privateSpaces,
                 spaceType: FolderSpaceType.private,
-                onAddPressed: () => _showCreatePageMenu(
-                  context,
-                  privateSpaces.isNotEmpty
-                      ? privateSpaces.first
-                      : publicSpaces.isNotEmpty
-                          ? publicSpaces.first
-                          : state.currentSpace ?? state.spaces.first,
-                ),
+                onAddPressed: () => showCreateWorkspaceBottomSheet(context),
                 favoriteBloc: widget.favoriteBloc,
               ),
               const VSpace(4.0),
