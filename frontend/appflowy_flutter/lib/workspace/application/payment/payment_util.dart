@@ -102,27 +102,44 @@ class PaymentUtil {
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
   /// 根据 planCode 和 billingType 获取 App Store Connect 内购产品 ID
-  /// App Store Connect 配置的数字产品 ID（消耗型项目）：
-  /// 000001=月付-标准版, 000002=月付-专业版, 000003=月付-高级版
-  /// 000004=年付-标准版, 000005=年付-专业版, 000006=年付-高级版
+  /// App Store Connect 实际配置的产品 ID（消耗型项目）：
+  ///   标准版：com.ponynotes.standard.{monthly,yearly}
+  ///   专业版：com.ponynotes.professional.{monthly,yearly}
+  ///   高级版：com.ponynotes.premium.{monthly,yearly}
+  ///
+  /// 后端 plan_code 与 App Store Connect 产品名称的对应关系：
+  ///   standard/stand → standard
+  ///   pro/professor/profersor → professional
+  ///   hiclass/premium/team → premium
   static String? getAppleProductId(String planCode, String billingType) {
-    final productIds = <String, String>{
-      'student_monthly': '000001',
-      'student_yearly': '000004',
-      'standard_monthly': '000001',
-      'standard_yearly': '000004',
-      'pro_monthly': '000002',
-      'pro_yearly': '000005',
-      'premium_monthly': '000003',
-      'premium_yearly': '000006',
-      'stand_monthly': '000001',
-      'stand_yearly': '000004',
-      'profersor_monthly': '000002',
-      'profersor_yearly': '000005',
-      'hiclass_monthly': '000003',
-      'hiclass_yearly': '000006',
-    };
-    return productIds['${planCode}_$billingType'];
+    final applePlanName = _toApplePlanName(planCode);
+    if (applePlanName == null) {
+      Log.error('Apple Pay: 未知的套餐代码: $planCode');
+      return null;
+    }
+    return 'com.ponynotes.$applePlanName.$billingType';
+  }
+
+  /// 将后端 plan_code 转换为 App Store Connect 产品 ID 中的套餐名称
+  /// 返回值：standard / professional / premium
+  static String? _toApplePlanName(String planCode) {
+    final lower = planCode.toLowerCase();
+    switch (lower) {
+      case 'standard':
+      case 'stand':
+        return 'standard';
+      case 'pro':
+      case 'professor':
+      case 'profersor':
+      case 'professional':
+        return 'professional';
+      case 'hiclass':
+      case 'premium':
+      case 'team':
+        return 'premium';
+      default:
+        return null;
+    }
   }
 
   static Future<PaymentResult> pay({
@@ -301,49 +318,54 @@ class PaymentUtil {
   }
 
   static Map<String, String>? _parseProductId(String productId) {
-    // 先尝试解析 App Store Connect 配置的数字产品 ID
-    // 000001=月付-标准版(planId=2), 000002=月付-专业版(planId=3), 000003=月付-高级版(planId=4)
-    // 000004=年付-标准版(planId=2), 000005=年付-专业版(planId=3), 000006=年付-高级版(planId=4)
+    // 解析 App Store Connect 产品 ID 格式：com.ponynotes.{planName}.{billingType}
+    // 实际产品 ID 中的 planName：standard / professional / premium
+    // 需要反向映射回后端可识别的 planName：standard / pro / hiclass
+    if (productId.startsWith('com.ponynotes.')) {
+      final parts = productId.split('.');
+      // com.ponynotes.xxx.yyy → 至少 4 段
+      if (parts.length >= 4) {
+        final billingType = parts.last; // monthly / yearly
+        final applePlanName = parts[parts.length - 2]; // standard / professional / premium
+
+        // Apple 产品 ID 名称 → 后端 planId + planName
+        // 后端 planName 需要被 SubscriptionSuccessListenable 识别
+        const applePlanToBackend = <String, Map<String, String>>{
+          'standard': {'planId': '2', 'planName': 'standard'},
+          'professional': {'planId': '3', 'planName': 'pro'},
+          'premium': {'planId': '4', 'planName': 'hiclass'},
+        };
+
+        final backendInfo = applePlanToBackend[applePlanName];
+        if (backendInfo != null) {
+          return {
+            'planId': backendInfo['planId']!,
+            'billingType': billingType,
+            'planName': backendInfo['planName']!,
+          };
+        }
+
+        Log.error('Apple Pay: 无法从 productId 中识别套餐: $productId, planName=$applePlanName');
+        return null;
+      }
+    }
+
+    // 兼容旧格式：数字产品 ID（000001-000006）
     const numericIdMap = <String, Map<String, String>>{
       '000001': {'planId': '2', 'billingType': 'monthly', 'planName': 'standard'},
       '000002': {'planId': '3', 'billingType': 'monthly', 'planName': 'pro'},
-      '000003': {'planId': '4', 'billingType': 'monthly', 'planName': 'premium'},
+      '000003': {'planId': '4', 'billingType': 'monthly', 'planName': 'hiclass'},
       '000004': {'planId': '2', 'billingType': 'yearly', 'planName': 'standard'},
       '000005': {'planId': '3', 'billingType': 'yearly', 'planName': 'pro'},
-      '000006': {'planId': '4', 'billingType': 'yearly', 'planName': 'premium'},
+      '000006': {'planId': '4', 'billingType': 'yearly', 'planName': 'hiclass'},
     };
 
     if (numericIdMap.containsKey(productId)) {
       return numericIdMap[productId];
     }
 
-    // 兼容旧格式：com.ponynotes.{planName}.{billingType}
-    final parts = productId.split('.');
-    if (parts.length < 3) {
-      return null;
-    }
-
-    final planName = parts[parts.length - 2];
-    final billingType = parts[parts.length - 1];
-
-    const planIdMap = {
-      'student': '1',
-      'standard': '2',
-      'pro': '3',
-      'premium': '4',
-    };
-
-    final planId = planIdMap[planName];
-    if (planId == null) {
-      Log.error('Apple Pay: 未知的套餐名称: $planName');
-      return null;
-    }
-
-    return {
-      'planId': planId,
-      'billingType': billingType,
-      'planName': planName,
-    };
+    Log.error('Apple Pay: 无法解析 productId 格式: $productId');
+    return null;
   }
 
   static Future<void> _updateSubscription(String planId, String billingType, String planName, String? transactionId) async {

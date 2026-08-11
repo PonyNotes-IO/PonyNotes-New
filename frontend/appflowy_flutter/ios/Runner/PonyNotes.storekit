@@ -1,0 +1,167 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "zh_CN",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "PONY001",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "18.00",
+      "familyShareable" : false,
+      "internalID" : "PNS001",
+      "localizations" : [
+        {
+          "description" : "标准版月付会员",
+          "displayName" : "标准版月付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.standard.monthly",
+      "referenceName" : "StandardMonthly",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "188.00",
+      "familyShareable" : false,
+      "internalID" : "PNS002",
+      "localizations" : [
+        {
+          "description" : "标准版年付会员",
+          "displayName" : "标准版年付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.standard.yearly",
+      "referenceName" : "StandardYearly",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "30.00",
+      "familyShareable" : false,
+      "internalID" : "PNP001",
+      "localizations" : [
+        {
+          "description" : "专业版月付会员",
+          "displayName" : "专业版月付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.professional.monthly",
+      "referenceName" : "ProfessionalMonthly",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "298.00",
+      "familyShareable" : false,
+      "internalID" : "PNP002",
+      "localizations" : [
+        {
+          "description" : "专业版年付会员",
+          "displayName" : "专业版年付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.professional.yearly",
+      "referenceName" : "ProfessionalYearly",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "48.00",
+      "familyShareable" : false,
+      "internalID" : "PNM001",
+      "localizations" : [
+        {
+          "description" : "高级版月付会员",
+          "displayName" : "高级版月付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.premium.monthly",
+      "referenceName" : "PremiumMonthly",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "498.00",
+      "familyShareable" : false,
+      "internalID" : "PNM002",
+      "localizations" : [
+        {
+          "description" : "高级版年付会员",
+          "displayName" : "高级版年付",
+          "locale" : "zh_CN"
+        }
+      ],
+      "productID" : "com.ponynotes.premium.yearly",
+      "referenceName" : "PremiumYearly",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "zh_CN",
+    "_storefront" : "CHN",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}
