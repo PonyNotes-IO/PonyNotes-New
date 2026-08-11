@@ -488,7 +488,6 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
         );
 
         Navigator.pop(bottomSheetContext);
-        Navigator.pop(context);
       },
       padding: const EdgeInsets.symmetric(horizontal: 16),
       builder: (bottomSheetContext) => ManageSpaceWidget(
