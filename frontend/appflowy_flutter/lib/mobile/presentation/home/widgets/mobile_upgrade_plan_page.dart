@@ -1302,11 +1302,8 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
   String _initStorage(int? cloudStorageGb) {
     if (cloudStorageGb != null) {
-      if (cloudStorageGb >= 1024) {
-        return "每月${(cloudStorageGb / 1024).toStringAsFixed(1)}TB空间";
-      } else {
-        return "每月${cloudStorageGb}GB空间";
-      }
+      final storageGb = NumberFormat('#.##').format(cloudStorageGb / 1024);
+      return "每月${storageGb}GB空间";
     }
     return "";
   }

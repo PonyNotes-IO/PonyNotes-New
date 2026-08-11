@@ -1737,7 +1737,7 @@
       "optionAlreadyExist": "选项已存在",
       "wrap": "自动换行",
       "mediaFieldName": "Files & media",
-      "openRowDocument": "Open as a page",
+      "openRowDocument": "作为页面打开",
       "relationFieldName": "Relation",
       "switchPrimaryFieldTooltip": "Cannot change field type of primary field",
       "translateFieldName": "AI Translate",

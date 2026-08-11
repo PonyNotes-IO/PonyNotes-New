@@ -1345,7 +1345,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     for (final view in space.childViews) {
       await ViewBackendService.duplicate(
         view: view,
-        openAfterDuplicate: true,
+        openAfterDuplicate: false,
         syncAfterDuplicate: true,
         includeChildren: true,
         parentViewId: newSpace.id,

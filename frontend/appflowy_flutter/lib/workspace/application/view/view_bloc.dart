@@ -496,7 +496,9 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
           updateIcon: (value) async {
             await ViewBackendService.updateViewIcon(
               view: view,
-              viewIcon: view.icon.toEmojiIconData(),
+              viewIcon: value.icon == null
+                  ? EmojiIconData.none()
+                  : EmojiIconData.emoji(value.icon!),
             );
           },
           collapseAllPages: (value) async {
