@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emo
 import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_icon_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/page_style/_page_style_util.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
+import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
@@ -73,9 +74,8 @@ class _PageStyleIconState extends State<PageStyleIcon> {
   }
 
   void _showIconSelector(BuildContext context, EmojiIconData icon) {
+    final viewBloc = context.read<ViewBloc>();
     Navigator.pop(context);
-    final pageStyleIconBloc = PageStyleIconBloc(view: widget.view)
-      ..add(const PageStyleIconEvent.initial());
     showMobileBottomSheet(
       context,
       showDragHandle: true,
@@ -87,20 +87,15 @@ class _PageStyleIconState extends State<PageStyleIcon> {
       minChildSize: 0.6,
       initialChildSize: 0.61,
       scrollableWidgetBuilder: (ctx, controller) {
-        return BlocProvider.value(
-          value: pageStyleIconBloc,
-          child: Expanded(
-            child: FlowyIconEmojiPicker(
-              initialType: icon.type.toPickerTabType(),
-              documentId: widget.view.id,
-              tabs: widget.tabs,
-              onSelectedEmoji: (r) {
-                pageStyleIconBloc.add(
-                  PageStyleIconEvent.updateIcon(r.data, true),
-                );
-                if (!r.keepOpen) Navigator.pop(ctx);
-              },
-            ),
+        return Expanded(
+          child: FlowyIconEmojiPicker(
+            initialType: icon.type.toPickerTabType(),
+            documentId: widget.view.id,
+            tabs: widget.tabs,
+            onSelectedEmoji: (r) {
+              viewBloc.add(ViewEvent.updateIcon(r.data));
+              if (!r.keepOpen) Navigator.pop(ctx);
+            },
           ),
         );
       },
