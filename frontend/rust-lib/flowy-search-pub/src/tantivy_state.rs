@@ -2,6 +2,7 @@ use collab_folder::ViewIcon;
 use std::fs;
 use std::path::PathBuf;
 use tantivy::directory::MmapDirectory;
+use tantivy::query::{BooleanQuery, BoostQuery, Occur, Query, RegexQuery};
 use tantivy::schema::Value;
 use tantivy::{Index, IndexReader, IndexWriter, TantivyDocument, Term};
 use tracing::{error, trace, warn};
@@ -338,7 +339,14 @@ impl DocumentTantivyState {
     // Enable fuzzy matching for name field (better user experience for typos)
     qp.set_field_fuzzy(self.field_name, true, 2, true);
 
-    let query = qp.parse_query(query)?;
+    let parsed_query = qp.parse_query(query)?;
+    let substring_pattern = format!(".*{}.*", regex::escape(&query.to_lowercase()));
+    let substring_query = RegexQuery::from_pattern(&substring_pattern, self.field_name)?;
+    let subqueries: Vec<(Occur, Box<dyn Query>)> = vec![
+      (Occur::Should, Box::new(BoostQuery::new(parsed_query, 2.0))),
+      (Occur::Should, Box::new(substring_query)),
+    ];
+    let query = BooleanQuery::new(subqueries);
     let top_docs = searcher.search(&query, &tantivy::collector::TopDocs::with_limit(limit))?;
 
     let mut results = Vec::with_capacity(top_docs.len());
@@ -446,5 +454,67 @@ impl DocumentTantivyState {
     }
 
     Ok(results)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::DocumentTantivyState;
+  use uuid::Uuid;
+
+  fn state_with_chinese_title() -> (tempfile::TempDir, Uuid, DocumentTantivyState) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_id = Uuid::new_v4();
+    let mut state =
+      DocumentTantivyState::new(&workspace_id, temp_dir.path().to_path_buf()).unwrap();
+    for index in 0..20 {
+      state
+        .add_document(
+          &format!("distractor-{index}"),
+          Some("unrelated body content".to_string()),
+          Some(format!("干扰文档{index}")),
+          None,
+        )
+        .unwrap();
+    }
+    state
+      .add_document(
+        "doc-1",
+        Some("unrelated body content".to_string()),
+        Some("可乐本地文档".to_string()),
+        None,
+      )
+      .unwrap();
+    state.reader.reload().unwrap();
+    (temp_dir, workspace_id, state)
+  }
+
+  #[test]
+  fn title_search_ranks_chinese_middle_substring_within_result_limit() {
+    let (_temp_dir, workspace_id, state) = state_with_chinese_title();
+
+    let results = state.search(&workspace_id, "本地", None, 10, 0.4).unwrap();
+
+    assert_eq!(results.first().map(|item| item.id.as_str()), Some("doc-1"));
+  }
+
+  #[test]
+  fn title_search_ranks_chinese_prefix_substring_first() {
+    let (_temp_dir, workspace_id, state) = state_with_chinese_title();
+
+    let results = state.search(&workspace_id, "可乐", None, 10, 0.4).unwrap();
+
+    assert_eq!(results.first().map(|item| item.id.as_str()), Some("doc-1"));
+  }
+
+  #[test]
+  fn title_search_does_not_match_unrelated_long_text() {
+    let (_temp_dir, workspace_id, state) = state_with_chinese_title();
+
+    let results = state
+      .search(&workspace_id, "完全无关", None, 10, 0.4)
+      .unwrap();
+
+    assert!(results.is_empty());
   }
 }
