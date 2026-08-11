@@ -63,6 +63,29 @@ void main() {
     expect(result.canProceed, isTrue);
   });
 
+  test(
+    'app-level record-not-found permits first-share fallback',
+    () async {
+      final resolver = _resolver(
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'code': -2,
+              'message': 'No invite template for view_id: view-1',
+            }),
+            200,
+          ),
+        ),
+      );
+
+      final result = await resolver.resolve(viewId: 'view-1');
+
+      expect(result.status, CollabWorkspaceResolutionStatus.notShared);
+      expect(result.workspaceId, 'workspace-w2');
+      expect(result.canProceed, isTrue);
+    },
+  );
+
   test('server and network failures fail closed', () async {
     final serverFailure = _resolver(
       client: MockClient((_) async => http.Response('', 500)),
