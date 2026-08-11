@@ -3066,16 +3066,16 @@
     "switchSpace": "切换空间",
     "spaceNameCannotBeEmpty": "空间名称不能为空",
     "success": {
-      "deleteSpace": "空間刪除成功",
-      "renameSpace": "已成功重新命名空間",
-      "duplicateSpace": "已成功複製空間",
-      "updateSpace": "已成功更新空間"
+      "deleteSpace": "空间删除成功",
+      "renameSpace": "已成功重新命名空间",
+      "duplicateSpace": "已成功复制空间",
+      "updateSpace": "已成功更新空间"
     },
     "error": {
-      "deleteSpace": "刪除空間失敗",
-      "renameSpace": "重新命名空間失敗",
-      "duplicateSpace": "複製空間失敗",
-      "updateSpace": "更新空間失敗"
+      "deleteSpace": "删除空间失败",
+      "renameSpace": "重新命名空间失败",
+      "duplicateSpace": "复制空间失败",
+      "updateSpace": "更新空间失败"
     },
     "createSpace": "创建空间",
     "manageSpace": "管理空间",
