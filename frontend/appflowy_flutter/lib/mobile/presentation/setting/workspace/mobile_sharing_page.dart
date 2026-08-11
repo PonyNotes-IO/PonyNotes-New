@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/collab_view_mapper.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
@@ -8,12 +7,9 @@ import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/share_tab.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
-import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
-import 'package:appflowy/workspace/application/view/view_publish_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
-import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -38,38 +34,21 @@ class MobileSharingPage extends StatefulWidget {
 }
 
 class _MobileSharingPageState extends State<MobileSharingPage> {
-  final List<String> _tabs = ['共享', '发布'];
-  int _currentTab = 0;
-
   // 共享内容状态
   List<SharedCollabView> _sharedNotes = const [];
   bool _isLoadingShared = true;
   String? _sharedError;
 
-  // 发布内容状态
-  List<PublishInfoViewPB> _publishedViews = const [];
-  bool _isLoadingPublished = true;
-  String? _loadError;
-
-  // 工作区 ID 和类型
-  String _workspaceId = '';
+  // 工作区类型
   WorkspaceTypePB _workspaceType = WorkspaceTypePB.LocalW;
 
   @override
   void initState() {
     super.initState();
-    PublishRefresh.notifier.addListener(_onPublishPing);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadWorkspace();
       _loadSharedNotes();
-      _loadPublishedViews();
     });
-  }
-
-  @override
-  void dispose() {
-    PublishRefresh.notifier.removeListener(_onPublishPing);
-    super.dispose();
   }
 
   Future<void> _loadWorkspace() async {
@@ -95,93 +74,18 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
 
     if (mounted) {
       setState(() {
-        _workspaceId = wsId;
         _workspaceType = wsType;
       });
     }
-  }
-
-  void _onPublishPing() {
-    if (_isLoadingPublished) return;
-    _loadPublishedViews();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: MobileAppBar(
-        title: '共享发布',
+        title: '笔记共享',
       ),
-      body: Column(
-        children: [
-          _buildTabSection(),
-          Expanded(
-            child: _buildTabContent(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabSection() {
-    final theme = AppFlowyTheme.of(context);
-    final isLightMode = Theme.of(context).brightness == Brightness.light;
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: _tabs.asMap().entries.map((entry) {
-          int index = entry.key;
-          String tab = entry.value;
-          bool isSelected = _currentTab == index;
-
-          return Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (_currentTab != index) {
-                  setState(() => _currentTab = index);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color:
-                      isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: isSelected
-                      ? null
-                      : Border.all(
-                          color: theme.borderColorScheme.primary
-                              .withValues(alpha: isLightMode ? 0.3 : 0.5),
-                        ),
-                ),
-                alignment: Alignment.center,
-                child: FlowyText(
-                  tab,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color:
-                      isSelected ? Colors.white : theme.textColorScheme.primary,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildTabContent() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: _currentTab == 0
-          ? KeyedSubtree(
-              key: const ValueKey('shared_tab'),
-              child: _buildSharedContent(),
-            )
-          : KeyedSubtree(
-              key: const ValueKey('publish_tab'),
-              child: _buildPublishedContent(),
-            ),
+      body: _buildSharedContent(),
     );
   }
 
@@ -232,75 +136,6 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         for (int index = 0; index < _sharedNotes.length; index++) ...[
           _buildSharedListItem(_sharedNotes[index]),
           if (index != _sharedNotes.length - 1)
-            Divider(
-              height: 1,
-              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPublishedContent() {
-    final theme = AppFlowyTheme.of(context);
-    // 非 Server 用户不支持发布站点
-    if (_workspaceType == WorkspaceTypePB.LocalW) {
-      return SizedBox(
-        height: 320,
-        child: Center(
-          child: FlowyText(
-            '当前账户类型不支持发布功能',
-            color: theme.textColorScheme.secondary,
-          ),
-        ),
-      );
-    }
-
-    if (_isLoadingPublished) {
-      return SizedBox(
-        height: 320,
-        child: const Center(child: CircularProgressIndicator.adaptive()),
-      );
-    }
-    if (_loadError != null && _publishedViews.isEmpty) {
-      return SizedBox(
-        height: 320,
-        child: Center(
-          child: FlowyText(
-            '加载失败：$_loadError',
-            color: theme.textColorScheme.tertiary,
-          ),
-        ),
-      );
-    }
-    if (_publishedViews.isEmpty) {
-      return SizedBox(
-        height: 320,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FlowySvg(
-                FlowySvgs.m_publish_s,
-                size: const Size(48, 48),
-                color: theme.iconColorScheme.tertiary,
-              ),
-              const VSpace(12),
-              FlowyText(
-                '暂无发布内容',
-                color: theme.textColorScheme.secondary,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        for (int index = 0; index < _publishedViews.length; index++) ...[
-          _buildPublishListItem(_publishedViews[index]),
-          if (index != _publishedViews.length - 1)
             Divider(
               height: 1,
               color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
@@ -374,93 +209,6 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     );
   }
 
-  Widget _buildPublishListItem(PublishInfoViewPB item) {
-    final String title =
-        item.view.name.isNotEmpty ? item.view.name : item.info.publishName;
-    final String publishTime = _formatPublishTime(
-      item.info.publishTimestampSec.toInt(),
-    );
-    final String publishUrl = ShareConstants.buildPublishUrl(
-      workspaceId: _workspaceId,
-      viewId: item.info.viewId,
-    );
-    final theme = AppFlowyTheme.of(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF0E2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Center(
-                  child: FlowySvg(
-                    FlowySvgs.share_publish_s,
-                    size: const Size.square(20),
-                    color: const Color(0xFFFF6B35),
-                  ),
-                ),
-              ),
-              const HSpace(12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FlowyText(
-                      title.isEmpty ? '无标题' : title,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: theme.textColorScheme.primary,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const VSpace(4),
-                    FlowyText(
-                      publishTime,
-                      fontSize: 12,
-                      color: theme.textColorScheme.secondary,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const VSpace(8),
-          GestureDetector(
-            onTap: () => _openPublishUrl(publishUrl),
-            child: FlowyText.small(
-              publishUrl,
-              color: const Color(0xFF2563EB),
-              overflow: TextOverflow.ellipsis,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-          const VSpace(6),
-          SizedBox(
-            height: 32,
-            child: TextButton(
-              onPressed: () => _openPublishUrl(publishUrl),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFFF6B35),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-              ),
-              child: const Text(
-                '打开网址',
-                style: TextStyle(fontSize: 13),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   String _formatTimestamp(int timestamp) {
     final dt = DateTime.fromMillisecondsSinceEpoch(
       timestamp * 1000,
@@ -468,19 +216,6 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     ).toLocal();
     final two = (int v) => v.toString().padLeft(2, '0');
     return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
-  }
-
-  String _formatPublishTime(int secondsSinceEpoch) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(
-      secondsSinceEpoch * 1000,
-      isUtc: true,
-    ).toLocal();
-    final two = (int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
-  }
-
-  Future<void> _openPublishUrl(String url) async {
-    await afLaunchUrlString(url);
   }
 
   Future<void> _showInviteMembersDialog(SharedCollabView entry) async {
@@ -589,43 +324,6 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
         _sharedNotes = const [];
         _isLoadingShared = false;
         _sharedError = null;
-      });
-    }
-  }
-
-  Future<void> _loadPublishedViews() async {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoadingPublished = true;
-      _loadError = null;
-    });
-    try {
-      await ViewPublishService().refreshPublishedViews();
-      final result = await FolderEventListPublishedViews().send();
-      final items = result.fold((s) {
-        final views = List<PublishInfoViewPB>.from(s.items);
-        views.sort((a, b) =>
-            b.info.publishTimestampSec.toInt() -
-            a.info.publishTimestampSec.toInt());
-        return views;
-      }, (f) {
-        Log.error('load published views failed: $f');
-        _loadError = f.msg;
-        return <PublishInfoViewPB>[];
-      });
-      if (!mounted) return;
-      setState(() {
-        _publishedViews = items;
-        _isLoadingPublished = false;
-      });
-    } catch (e) {
-      Log.error('load published views exception: $e');
-      if (!mounted) return;
-      setState(() {
-        _publishedViews = const [];
-        _isLoadingPublished = false;
-        _loadError = null;
       });
     }
   }

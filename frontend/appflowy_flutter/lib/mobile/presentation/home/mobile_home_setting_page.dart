@@ -220,7 +220,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       case MobileSettingsSection.member:
         return '人员管理';
       case MobileSettingsSection.sharing:
-        return '共享发布';
+        return '笔记共享';
       case MobileSettingsSection.notifications:
         return '通知设置';
       case MobileSettingsSection.storage:
@@ -463,7 +463,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                   },
                 ),
                 _SettingsItem(
-                  label: '共享发布',
+                  label: '笔记共享',
                   onTap: () {
                     UserWorkspaceState? workspaceState;
                     try {
