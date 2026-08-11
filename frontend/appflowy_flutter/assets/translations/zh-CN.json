@@ -3077,8 +3077,8 @@
       "duplicateSpace": "複製空間失敗",
       "updateSpace": "更新空間失敗"
     },
-    "createSpace": "創造空間",
-    "manageSpace": "管理空間",
+    "createSpace": "创建空间",
+    "manageSpace": "管理空间",
     "renameSpace": "重新命名空间",
     "mSpaceIconColor": "空间图标颜色",
     "mSpaceIcon": "空间图标"

@@ -454,7 +454,7 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
       context,
       showHeader: true,
       title: LocaleKeys.space_manageSpace.tr(),
-      showCloseButton: true,
+      showCloseButton: false,
       showDivider: false,
       showDoneButton: true,
       enableScrollable: true,
