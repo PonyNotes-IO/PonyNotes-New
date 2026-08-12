@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy_backend/log.dart';
@@ -59,6 +60,8 @@ enum PasswordEndpoint {
 }
 
 class PasswordHttpService {
+  static const _requestTimeout = Duration(seconds: 20);
+
   PasswordHttpService({
     required this.baseUrl,
     required this.authToken,
@@ -262,14 +265,14 @@ class PasswordHttpService {
       'type': 'recovery',
       'token': token,
     };
-    
+
     // 如果提供了 phone，使用 phone；否则使用 email（GoTrue 会自动检测手机号）
     if (phone != null && phone.isNotEmpty) {
       body['phone'] = phone;
     } else {
       body['email'] = email;
     }
-    
+
     final result = await _makeRequest(
       endpoint: PasswordEndpoint.verifyResetPasswordToken,
       body: body,
@@ -324,7 +327,7 @@ class PasswordHttpService {
           FlowyError(msg: 'Invalid request method: ${endpoint.method}'),
         );
       }
-      
+
       if (response.statusCode == 200) {
         if (response.body.isNotEmpty) {
           try {
@@ -344,7 +347,7 @@ class PasswordHttpService {
         Log.error(
           '🦋[PasswordHttpService] Request failed with status ${response.statusCode}, body: ${response.body}',
         );
-        
+
         // 尝试解析错误响应体
         Map<String, dynamic> errorBody = {};
         if (response.body.isNotEmpty) {
@@ -591,13 +594,15 @@ class PasswordHttpService {
         if (platformType != null) 'platform_type': platformType,
       };
 
-      final response = await client.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
+      final response = await client
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_requestTimeout);
 
       if (response.statusCode == 200) {
         try {
@@ -633,13 +638,19 @@ class PasswordHttpService {
 
         if (response.statusCode == 400) {
           errorCode = ErrorCode.UserUnauthorized;
-          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Invalid credentials or authorization code';
+          errorMsg = errorBody['msg'] ??
+              errorBody['error_description'] ??
+              'Invalid credentials or authorization code';
         } else if (response.statusCode == 422) {
           errorCode = ErrorCode.InvalidParams;
-          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Invalid parameters';
+          errorMsg = errorBody['msg'] ??
+              errorBody['error_description'] ??
+              'Invalid parameters';
         } else if (response.statusCode == 500) {
           errorCode = ErrorCode.Internal;
-          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Server error, please try again later';
+          errorMsg = errorBody['msg'] ??
+              errorBody['error_description'] ??
+              'Server error, please try again later';
         }
 
         return FlowyResult.failure(
@@ -649,6 +660,16 @@ class PasswordHttpService {
           ),
         );
       }
+    } on TimeoutException catch (e) {
+      Log.error(
+        '🦋[PasswordHttpService] Third party login request timed out: $e',
+      );
+      return FlowyResult.failure(
+        FlowyError(
+          code: ErrorCode.Internal,
+          msg: '网络请求超时，请检查网络后重试',
+        ),
+      );
     } catch (e) {
       Log.error('🦋[PasswordHttpService] Third party login request failed: error: $e');
 
