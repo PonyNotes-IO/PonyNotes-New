@@ -19,11 +19,13 @@ import 'professional_html_parser.dart';
 class EnhancedHtmlImportDialog extends StatefulWidget {
   final String parentViewId;
   final VoidCallback? onImportSuccess;
+  final bool isMobile;
 
   const EnhancedHtmlImportDialog({
     super.key,
     required this.parentViewId,
     this.onImportSuccess,
+    this.isMobile = false,
   });
 
   @override
@@ -62,7 +64,7 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       child: Container(
         width: dialogWidth,
         height: dialogHeight,
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(widget.isMobile ? 16 : 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -86,15 +88,39 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
   }
 
   Widget _buildHeader() {
+    if (!widget.isMobile) {
+      return Row(
+        children: [
+          const Icon(Icons.language, size: 32, color: Colors.blue),
+          const SizedBox(width: 12),
+          const Text(
+            '智能HTML导入',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () {
+              _cancelProcessing();
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      );
+    }
+
     return Row(
       children: [
-        const Icon(Icons.language, size: 32, color: Colors.blue),
-        const SizedBox(width: 12),
-        const Text(
-          '智能HTML导入',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        const Icon(Icons.language, size: 24, color: Colors.blue),
+        const SizedBox(width: 8),
+        Expanded(
+          child: const Text(
+            '智能HTML导入',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
         ),
-        const Spacer(),
         IconButton(
           onPressed: () {
             _cancelProcessing();
@@ -117,22 +143,43 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.insert_drive_file, color: Colors.blue),
-              const SizedBox(width: 8),
-              const Text(
-                '选择HTML文件',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              ElevatedButton.icon(
+          if (widget.isMobile) ...[
+            const Row(
+              children: [
+                Icon(Icons.insert_drive_file, color: Colors.blue),
+                SizedBox(width: 8),
+                Text(
+                  '选择HTML文件',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
                 onPressed: _isProcessing ? null : _selectFile,
                 icon: const Icon(Icons.folder_open),
                 label: const Text('选择文件'),
               ),
-            ],
-          ),
+            ),
+          ] else
+            Row(
+              children: [
+                const Icon(Icons.insert_drive_file, color: Colors.blue),
+                const SizedBox(width: 8),
+                const Text(
+                  '选择HTML文件',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _isProcessing ? null : _selectFile,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('选择文件'),
+                ),
+              ],
+            ),
           if (_selectedFile != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -402,7 +449,7 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
 
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
-        
+
         // 检查文件大小（本地解析限制：50MB）
         final fileSize = await file.length();
         if (!_isFileSizeValid(fileSize)) {
@@ -414,7 +461,7 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
           );
           return;
         }
-        
+
         setState(() {
           _selectedFile = file;
           _extractedContent = null;
@@ -429,7 +476,7 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       );
     }
   }
-  
+
   String _formatFileSize(int bytes) {
     if (bytes < 1024) {
       return '${bytes}B';
@@ -458,7 +505,7 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
 
     try {
       String content;
-      
+
       // 本地解析HTML -> Markdown（不经过阿里云）
       content = await _processLocalHtml(_selectedFile!, _cancellationToken);
 
@@ -555,10 +602,10 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
               await ViewBackendService.moveViewV2(
                 viewId: view.id,
                 newParentId: widget.parentViewId,
-                prevViewId: null,  // null 表示移动到列表开头
+                prevViewId: null, // null 表示移动到列表开头
               );
             }
-            
+
             if (mounted) {
               Navigator.of(context).pop();
               if (widget.onImportSuccess != null) {
@@ -594,4 +641,3 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
     }
   }
 }
-

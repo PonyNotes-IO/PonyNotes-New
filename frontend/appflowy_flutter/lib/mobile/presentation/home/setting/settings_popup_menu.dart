@@ -121,6 +121,7 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
               );
             }
           },
+          isMobile: true,
         );
       }
     } catch (e) {

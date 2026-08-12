@@ -29,18 +29,35 @@ typedef ImportCallback = void Function(
 Future<void> showImportPanel(
   String parentViewId,
   BuildContext context,
-  ImportCallback callback,
-) async {
+  ImportCallback callback, {
+  bool isMobile = false,
+}) async {
   await FlowyOverlay.show(
     context: context,
     builder: (context) => FlowyDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
       expandHeight: false,
-      title: FlowyText.semibold(
-        LocaleKeys.moreAction_import.tr(),
-        fontSize: 20,
-        color: Theme.of(context).colorScheme.tertiary,
-      ),
+      showCloseButton: !isMobile,
+      title: isMobile
+          ? Row(
+              children: [
+                FlowyText.semibold(
+                  LocaleKeys.moreAction_import.tr(),
+                  fontSize: 20,
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => FlowyOverlay.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            )
+          : FlowyText.semibold(
+              LocaleKeys.moreAction_import.tr(),
+              fontSize: 20,
+              color: Theme.of(context).colorScheme.tertiary,
+            ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           vertical: 10.0,
@@ -49,6 +66,7 @@ Future<void> showImportPanel(
         child: ImportPanel(
           parentViewId: parentViewId,
           importCallback: callback,
+          isMobile: isMobile,
         ),
       ),
     ),
@@ -60,10 +78,12 @@ class ImportPanel extends StatefulWidget {
     super.key,
     required this.parentViewId,
     required this.importCallback,
+    this.isMobile = false,
   });
 
   final String parentViewId;
   final ImportCallback importCallback;
+  final bool isMobile;
 
   @override
   State<ImportPanel> createState() => _ImportPanelState();
@@ -158,7 +178,10 @@ class _ImportPanelState extends State<ImportPanel> {
         context: context,
         builder: (context) => importType == ImportType.pdf
             ? EnhancedPdfImportDialog(parentViewId: parentViewId)
-            : EnhancedHtmlImportDialog(parentViewId: parentViewId),
+            : EnhancedHtmlImportDialog(
+                parentViewId: parentViewId,
+                isMobile: widget.isMobile,
+              ),
       );
       return;
     }
