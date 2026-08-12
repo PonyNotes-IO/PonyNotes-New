@@ -9,7 +9,9 @@ import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_menu_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_dialog.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_action_type.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
@@ -450,6 +452,8 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
               onPermissionChanged: (newPerm) =>
                   _updateSpacePermission(s, newPerm),
               onManageMembers: () => _showMemberManagementSheet(s),
+              onRename: () => _showRenameSpaceSheet(context, s),
+              onDuplicate: () => _duplicateSpace(s),
             );
           },
         );
@@ -584,6 +588,12 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
     SpaceChangeNotifier.instance.notifySpacesChanged();
   }
 
+  void _duplicateSpace(ViewPB space) {
+    widget.spaceBloc?.add(SpaceEvent.duplicate(space: space));
+    showToastNotification(message: '已复制「${space.name}」');
+    SpaceChangeNotifier.instance.notifySpacesChanged();
+  }
+
   void _showMemberManagementSheet(ViewPB space) {
     showMobileBottomSheet(
       context,
@@ -602,6 +612,54 @@ class _SpaceManagementContentState extends State<_SpaceManagementContent> {
       ),
     );
   }
+
+  void _showRenameSpaceSheet(BuildContext context, ViewPB space) {
+    final controller = TextEditingController(text: space.name);
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showHeader: true,
+      title: '重命名空间',
+      showCloseButton: true,
+      showDivider: false,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      builder: (bottomSheetContext) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FlowyTextField(
+                controller: controller,
+                hintText: '请输入空间名称',
+                autoFocus: true,
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: AFFilledTextButton.primary(
+                  text: '保存',
+                  onTap: () {
+                    final newName = controller.text.trim();
+                    if (newName.isNotEmpty && newName != space.name) {
+                      widget.spaceBloc?.add(
+                        SpaceEvent.update(space: space, name: newName),
+                      );
+                      showToastNotification(message: '空间已重命名');
+                      SpaceChangeNotifier.instance.notifySpacesChanged();
+                    }
+                    Navigator.pop(bottomSheetContext);
+                  },
+                  size: AFButtonSize.m,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _SpaceListItem extends StatelessWidget {
@@ -613,6 +671,8 @@ class _SpaceListItem extends StatelessWidget {
     required this.onDelete,
     required this.onPermissionChanged,
     required this.onManageMembers,
+    required this.onRename,
+    required this.onDuplicate,
   });
 
   final ViewPB space;
@@ -622,6 +682,8 @@ class _SpaceListItem extends StatelessWidget {
   final VoidCallback onDelete;
   final void Function(SpacePermission) onPermissionChanged;
   final VoidCallback onManageMembers;
+  final VoidCallback onRename;
+  final VoidCallback onDuplicate;
 
   String _permissionLabel(ViewPB s) {
     switch (s.spacePermission) {
@@ -702,42 +764,16 @@ class _SpaceListItem extends StatelessWidget {
               ),
             ),
             if (_canDelete || _canModifyPermission)
-              PopupMenuButton<String>(
-                icon: FlowySvg(
-                  FlowySvgs.three_dots_s,
-                  color: theme.iconColorScheme.secondary,
-                  size: const Size.square(20),
+              GestureDetector(
+                onTap: () => _showMoreOptions(context),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: FlowySvg(
+                    FlowySvgs.three_dots_s,
+                    color: theme.iconColorScheme.secondary,
+                    size: const Size.square(20),
+                  ),
                 ),
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    onDelete();
-                  } else if (value == 'permission') {
-                    _showPermissionSheet(context);
-                  } else if (value == 'members') {
-                    onManageMembers();
-                  }
-                },
-                itemBuilder: (context) => [
-                  if (_canModifyPermission) ...[
-                    PopupMenuItem(
-                      value: 'permission',
-                      child: const FlowyText('修改权限'),
-                    ),
-                    PopupMenuItem(
-                      value: 'members',
-                      child: const FlowyText('管理成员'),
-                    ),
-                    const PopupMenuDivider(),
-                  ],
-                  if (_canDelete)
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: FlowyText(
-                        LocaleKeys.button_delete.tr(),
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                ],
               ),
           ],
         ),
@@ -840,6 +876,59 @@ class _SpaceListItem extends StatelessWidget {
         },
       ),
     );
+  }
+
+  void _showMoreOptions(BuildContext context) {
+    final actions = <SpaceMoreActionType>[];
+    if (_canModifyPermission) {
+      actions.add(SpaceMoreActionType.rename);
+      actions.add(SpaceMoreActionType.manage);
+      actions.add(SpaceMoreActionType.duplicate);
+    }
+    if (_canDelete) {
+      actions.add(SpaceMoreActionType.delete);
+    }
+
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showDivider: false,
+      useRootNavigator: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (bottomSheetContext) {
+        return SpaceMenuMoreOptions(
+          actions: actions,
+          onAction: (action) => _onActions(context, bottomSheetContext, action),
+        );
+      },
+    );
+  }
+
+  void _onActions(
+    BuildContext context,
+    BuildContext bottomSheetContext,
+    SpaceMoreActionType action,
+  ) {
+    switch (action) {
+      case SpaceMoreActionType.rename:
+        Navigator.of(bottomSheetContext).pop();
+        onRename();
+        break;
+      case SpaceMoreActionType.manage:
+        Navigator.of(bottomSheetContext).pop();
+        onManageMembers();
+        break;
+      case SpaceMoreActionType.duplicate:
+        Navigator.of(bottomSheetContext).pop();
+        onDuplicate();
+        break;
+      case SpaceMoreActionType.delete:
+        Navigator.of(bottomSheetContext).pop();
+        onDelete();
+        break;
+      default:
+        break;
+    }
   }
 }
 
