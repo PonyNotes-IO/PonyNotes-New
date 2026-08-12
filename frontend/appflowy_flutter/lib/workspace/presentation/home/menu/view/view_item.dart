@@ -132,6 +132,7 @@ class ViewItem extends StatelessWidget {
     this.isTablet = false,
     /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
     this.isExternallySelected,
+    this.externallySelectedViewId,
     this.onExpandedChanged,
     this.style,
   });
@@ -217,6 +218,9 @@ class ViewItem extends StatelessWidget {
   /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
   final bool? isExternallySelected;
 
+  /// 递归列表使用同一个 ID 判断选中项，避免子项回退到全局选中状态。
+  final String? externallySelectedViewId;
+
   final VoidCallback? onExpandedChanged;
 
   final ViewItemStyle? style;
@@ -289,6 +293,7 @@ class ViewItem extends StatelessWidget {
             engagedInExpanding: engagedInExpanding,
             isTablet: isTablet,
             isExternallySelected: isExternallySelected,
+            externallySelectedViewId: externallySelectedViewId,
             onExpandedChanged: onExpandedChanged,
             style: style,
           );
@@ -348,6 +353,7 @@ class InnerViewItem extends StatefulWidget {
     required this.shouldIgnoreView,
     this.isTablet = false,
     this.isExternallySelected,
+    this.externallySelectedViewId,
     this.onExpandedChanged,
     this.style,
   });
@@ -394,6 +400,8 @@ class InnerViewItem extends StatefulWidget {
   /// 当此参数不为 null 时，将使用此值作为选中状态，而不是监听 MenuSharedState
   final bool? isExternallySelected;
 
+  final String? externallySelectedViewId;
+
   final VoidCallback? onExpandedChanged;
 
   final ViewItemStyle? style;
@@ -405,9 +413,13 @@ class InnerViewItem extends StatefulWidget {
 class _InnerViewItemState extends State<InnerViewItem> {
   @override
   Widget build(BuildContext context) {
+    final externallySelected = widget.externallySelectedViewId != null
+        ? widget.externallySelectedViewId == widget.view.id
+        : widget.isExternallySelected;
+
     // 如果外部传入了选中状态，则直接使用，不监听全局状态
     Widget child;
-    if (widget.isExternallySelected != null) {
+    if (externallySelected != null) {
       child = SingleInnerViewItem(
         view: widget.view,
         parentView: widget.parentView,
@@ -429,7 +441,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
         extendBuilder: widget.extendBuilder,
         disableSelectedStatus: widget.disableSelectedStatus,
         shouldIgnoreView: widget.shouldIgnoreView,
-        isSelected: widget.isExternallySelected!,
+        isSelected: externallySelected,
         isTablet: widget.isTablet,
         onExpandedChanged: widget.onExpandedChanged,
         style: widget.style,
@@ -501,6 +513,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           shouldIgnoreView: widget.shouldIgnoreView,
           engagedInExpanding: widget.engagedInExpanding,
           isTablet: widget.isTablet,
+          externallySelectedViewId: widget.externallySelectedViewId,
           onExpandedChanged: widget.onExpandedChanged,
           style: widget.style,
         );

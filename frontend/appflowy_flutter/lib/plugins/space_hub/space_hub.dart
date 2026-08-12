@@ -17,6 +17,7 @@ import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/plugins/space_hub/space_hub_selection.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -562,20 +563,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return;
     }
 
+    if (!spaceHubShouldUpdateSelection(_selectedView?.id, view.id)) {
+      return;
+    }
+
     setState(() {
-      // 如果点击的是当前选中的笔记，则取消选中
-      if (_selectedView?.id == view.id) {
-        _selectedView = null;
-        widget.selectedViewNotifier.value = null;
-        // ✅ 同步更新全局 notifier，通知侧边栏分割线
-        spaceHubSelectedViewLayoutNotifier.value = null;
-      } else {
-        // 否则选中新笔记
-        _selectedView = view;
-        widget.selectedViewNotifier.value = view;
-        // ✅ 同步更新全局 notifier，通知侧边栏分割线
-        spaceHubSelectedViewLayoutNotifier.value = view.layout;
-      }
+      _selectedView = view;
+      widget.selectedViewNotifier.value = view;
+      spaceHubSelectedViewLayoutNotifier.value = view.layout;
     });
 
     if (_selectedView != null) {
@@ -1120,34 +1115,17 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
 
     final childViews = currentSpace?.childViews ?? const <ViewPB>[];
-    if (childViews.isEmpty) {
-      if (_selectedView != null) {
-        setState(() {
-          _selectedView = null;
-        });
-        widget.selectedViewNotifier.value = null;
-        // ✅ 同步更新全局 notifier，通知侧边栏分割线
-        spaceHubSelectedViewLayoutNotifier.value = null;
-      }
+    // SpaceBloc 只维护一级文档，刷新期间可能暂时拿不到完整列表。
+    // 已从中间栏选中的文档仍属于当前 SpaceHub，不能因一级列表刷新而回退。
+    if (_selectedView != null) {
       return;
     }
 
-    // 空间切换时强制选中第一条笔记，或当前选中的笔记不存在于列表中时
-    if (_selectedView == null ||
-        !childViews.any((v) => v.id == _selectedView!.id)) {
+    if (childViews.isNotEmpty) {
       // 与 _trySelectFirstDocument 同一条规则：database 不参与自动打开，
       // 否则一次空间切换就会为它的每一行建一条同步通道（详见该方法注释）。
       final firstView = _firstAutoOpenableView(childViews);
       if (firstView == null) {
-        // 全是 database，不自动打开。但当前选中项此时已经失效（不在列表里），
-        // 必须清掉，否则右侧会继续渲染一个已不属于本空间的文档。
-        if (_selectedView != null) {
-          setState(() {
-            _selectedView = null;
-          });
-          widget.selectedViewNotifier.value = null;
-          spaceHubSelectedViewLayoutNotifier.value = null;
-        }
         return;
       }
       setState(() {
@@ -1211,14 +1189,25 @@ class _SpaceDocumentList extends StatefulWidget {
 
 class _SpaceDocumentListState extends State<_SpaceDocumentList> {
   final _showAddNoteButton = ValueNotifier(false);
+  late final SpaceHubDocumentListLoader<List<ViewPB>> _documentListLoader;
 
   @override
   void initState() {
     super.initState();
+    _documentListLoader = SpaceHubDocumentListLoader<List<ViewPB>>(
+      spaceId: widget.spaceView.id,
+      load: _loadChildViews,
+    );
     widget.scrollController.addListener(_checkScrollable);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkScrollable();
     });
+  }
+
+  @override
+  void didUpdateWidget(_SpaceDocumentList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _documentListLoader.updateSpace(widget.spaceView.id);
   }
 
   @override
@@ -1239,6 +1228,15 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     // 文件夹展开/收起后，延迟一帧检查滚动状态
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkScrollable();
+    });
+  }
+
+  void _reloadBackendDocumentList() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _documentListLoader.reload();
     });
   }
 
@@ -1320,7 +1318,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
               enabled: !isRestrictedMember,
               onImportCompleted: (importedViews) async {
                 // 导入完成后，将导入的文件移动到列表第一位（参考新建文档使用 index: 0 的逻辑）
-                for (final view in importedViews) {
+                for (final view in importedViews.reversed) {
                   await ViewBackendService.moveViewV2(
                     viewId: view.id,
                     newParentId: widget.spaceView.id,
@@ -1331,6 +1329,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                 // 刷新列表并选中第一个导入的文件
                 if (spaceBloc != null) {
                   spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                } else {
+                  _reloadBackendDocumentList();
                 }
                 if (importedViews.isNotEmpty) {
                   widget.onViewCreated(importedViews.first);
@@ -1400,6 +1400,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                     layoutType: layout,
                     parentViewId: widget.spaceView.id,
                     name: finalName,
+                    index: 0,
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
                   );
@@ -1422,6 +1423,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                       }
                     }
                     // Fallback create success
+                    _reloadBackendDocumentList();
                     widget.onViewCreated(view);
                   }, (error) {
                     Log.error('Failed to create view (fallback): $error');
@@ -1511,10 +1513,11 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
             return true;
           }
 
-          // 检查子视图ID列表是否变化（使用 Set 比较，忽略顺序）
-          final prevIds = prevSpace?.childViews.map((v) => v.id).toSet();
-          final currIds = currSpace?.childViews.map((v) => v.id).toSet();
-          if (prevIds != currIds) {
+          // 检查子视图 ID 列表是否变化，并保留当前顺序。
+          if (spaceHubChildViewIdsChanged(
+            prevSpace?.childViews.map((view) => view.id) ?? const <String>[],
+            currSpace?.childViews.map((view) => view.id) ?? const <String>[],
+          )) {
             return true;
           }
 
@@ -1559,6 +1562,10 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
           return ListView.builder(
             controller: widget.scrollController,
             itemCount: childViews.length + 1,
+            findChildIndexCallback: (key) => spaceHubDocumentListChildIndex(
+              key,
+              childViews.map((view) => view.id),
+            ),
             itemBuilder: (context, index) {
               if (index == childViews.length) {
                 return ValueListenableBuilder<bool>(
@@ -1596,9 +1603,9 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
               }
               final childView = childViews[index];
               return Padding(
+                key: ValueKey('space_hub_${childView.id}'),
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: ViewItem(
-                  key: ValueKey('space_hub_${childView.id}'),
                   view: childView,
                   // 拖拽排序必须知道谁是首项：DraggableViewItem 的 top 落点
                   // （插到该项之前）仅对 isFirstChild 生效，不传就永远只能
@@ -1630,8 +1637,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
                   isHoverEnabled: true,
                   disableSelectedStatus: false,
                   isTablet: PlatformInfo.isTablet,
-                  // 使用外部传入的选中状态，避免监听全局状态
-                  isExternallySelected: widget.selectedView?.id == childView.id,
+                  // 空字符串表示当前没有选中项，递归子项也不监听全局状态
+                  externallySelectedViewId: widget.selectedView?.id ?? '',
                   onExpandedChanged: _onExpandedChanged,
                 ),
               );
@@ -1645,7 +1652,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
   Widget _buildListFromBackend(BuildContext context, bool isRestrictedMember) {
     final theme = AppFlowyTheme.of(context);
     return FutureBuilder<List<ViewPB>>(
-      future: _loadChildViews(widget.spaceView.id),
+      future: _documentListLoader.future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator.adaptive());
@@ -1661,6 +1668,10 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
         return ListView.builder(
           controller: widget.scrollController,
           itemCount: childViews.length + 1,
+          findChildIndexCallback: (key) => spaceHubDocumentListChildIndex(
+            key,
+            childViews.map((view) => view.id),
+          ),
           itemBuilder: (context, index) {
             if (index == childViews.length) {
               return ValueListenableBuilder<bool>(
@@ -1721,8 +1732,8 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
               isHoverEnabled: true,
               disableSelectedStatus: false,
               isTablet: PlatformInfo.isTablet,
-              // 使用外部传入的选中状态，避免监听全局状态
-              isExternallySelected: widget.selectedView?.id == childView.id,
+              // 空字符串表示当前没有选中项，递归子项也不监听全局状态
+              externallySelectedViewId: widget.selectedView?.id ?? '',
               onExpandedChanged: _onExpandedChanged,
             );
           },
@@ -1758,11 +1769,7 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
 
   Future<List<ViewPB>> _loadChildViews(String spaceId) async {
     final result = await ViewBackendService.getChildViews(viewId: spaceId);
-    return result.fold((views) {
-      // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
-      views.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
-      return views;
-    }, (_) => const <ViewPB>[]);
+    return result.fold((views) => views, (_) => const <ViewPB>[]);
   }
 
   /// 新建笔记页
@@ -1777,9 +1784,13 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     result.fold(
       (view) {
         // 刷新空间文档列表
-        context
-            .read<SpaceBloc>()
-            .add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+        try {
+          context
+              .read<SpaceBloc>()
+              .add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+        } catch (_) {
+          _reloadBackendDocumentList();
+        }
         // 通知父组件新文档已创建，以便自动选中并显示
         widget.onViewCreated(view);
       },

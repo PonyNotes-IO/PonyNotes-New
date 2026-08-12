@@ -6,6 +6,7 @@ import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_space_list_refresh.dart';
 import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
@@ -26,6 +27,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 
 class MobileSpace extends StatefulWidget {
   const MobileSpace({super.key, required this.favoriteBloc});
@@ -616,7 +618,12 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
               create: (context) =>
                   ViewBloc(view: widget.space)..add(const ViewEvent.initial()),
               child: BlocListener<SpaceBloc, SpaceState>(
+                // Android keeps the 1.13 sequence list resident. Its ViewBloc
+                // listener still applies create/delete/move/restore updates.
                 listenWhen: (previous, current) =>
+                    !mobileSpaceKeepsDocumentListCached(
+                      isAndroid: Platform.isAndroid,
+                    ) &&
                     previous.lastCreatedPage?.id !=
                         current.lastCreatedPage?.id &&
                     (current.lastCreatedPage?.parentViewId == widget.space.id ||

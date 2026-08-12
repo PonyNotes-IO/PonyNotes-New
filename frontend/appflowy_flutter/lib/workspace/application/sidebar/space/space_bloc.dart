@@ -349,9 +349,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             );
             final currentSpace = views.fold(
               (views) {
-                // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
-                views.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
-
                 space.freeze();
                 return space.rebuild((b) {
                   b.childViews.clear();
@@ -637,9 +634,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                       '[SpaceBloc] didUpdateCurrentSpaceChildViews: space changed during fetch, ignoring update');
                   return;
                 }
-
-                // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
-                childViews.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
 
                 // 创建新的 ViewPB 对象，确保引用变化
                 currentSpace.freeze();
