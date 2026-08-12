@@ -10,19 +10,11 @@ import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/database/grid/application/filter/filter_editor_bloc.dart';
 import 'package:appflowy/plugins/database/grid/application/sort/sort_editor_bloc.dart';
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
-import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
-import 'package:appflowy/startup/plugin/plugin.dart';
-import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
-import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
-import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
-import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
@@ -35,125 +27,18 @@ class MobileTabBarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final afTheme = AppFlowyTheme.of(context);
-
     return Padding(
-      padding: EdgeInsets.only(
-        left: 4.0,
+      padding: const EdgeInsets.only(
+        left: 16.0,
         right: 16.0,
         top: 14.0,
         bottom: 8.0,
       ),
-      child: Row(
-        children: [
-          _buildBackButton(context, afTheme),
-          const HSpace(8),
-          const Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _DatabaseViewSelectorButton(),
-            ),
-          ),
-          const HSpace(8),
-          _buildTrailingActions(context),
-        ],
+      child: const Align(
+        alignment: Alignment.centerLeft,
+        child: _DatabaseViewSelectorButton(),
       ),
     );
-  }
-
-  Widget _buildBackButton(BuildContext context, AppFlowyThemeData afTheme) {
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        visualDensity: VisualDensity.compact,
-        onPressed: () {
-          EditorNotification.exitEditing().post();
-          if (Navigator.canPop(context)) {
-            Navigator.maybePop(context);
-          } else {
-            context.read<TabsBloc>().add(
-                  TabsEvent.openPlugin(
-                    plugin: makePlugin(pluginType: PluginType.homepage),
-                  ),
-                );
-          }
-        },
-        icon: FlowySvg(
-          FlowySvgs.mobile_return_s,
-          size: const Size(7, 12),
-          color: afTheme.iconColorScheme.primary,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrailingActions(BuildContext context) {
-    return BlocBuilder<DatabaseTabBarBloc, DatabaseTabBarState>(
-      builder: (context, state) {
-        final currentView = state.tabBars.firstWhereIndexedOrNull(
-          (index, tabBar) => index == state.selectedIndex,
-        );
-
-        if (currentView == null) {
-          return const SizedBox.shrink();
-        }
-
-        final databaseController =
-            state.tabBarControllerByViewId[currentView.viewId]?.controller;
-        final viewInfoBloc = context.read<ViewInfoBloc>();
-
-        return Row(
-          children: [
-            ViewFavoriteButton(
-              key: ValueKey('favorite_button_${currentView.viewId}'),
-              view: currentView.view,
-            ),
-            const SizedBox(width: 4),
-            MoreViewActions(
-              view: currentView.view,
-              viewInfoBloc: viewInfoBloc,
-              customActions: databaseController == null
-                  ? const []
-                  : _buildDatabaseControlActions(
-                      context,
-                      databaseController,
-                      currentView.layout,
-                    ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  List<Widget> _buildDatabaseControlActions(
-    BuildContext context,
-    DatabaseController databaseController,
-    ViewLayoutPB layout,
-  ) {
-    return [
-      if (layout == ViewLayoutPB.Grid)
-        _DatabaseToolbarAction(
-          icon: FlowySvgs.sort_ascending_s,
-          label: LocaleKeys.grid_settings_sort.tr(),
-          onTap: () => _showSortPanel(context, databaseController),
-        ),
-      if (layout == ViewLayoutPB.Grid ||
-          layout == ViewLayoutPB.Board ||
-          layout == ViewLayoutPB.Calendar)
-        _DatabaseToolbarAction(
-          icon: FlowySvgs.filter_s,
-          label: LocaleKeys.grid_settings_filter.tr(),
-          onTap: () => _showFilterPanel(context, databaseController),
-        ),
-      _DatabaseToolbarAction(
-        icon: FlowySvgs.m_field_hide_s,
-        label: LocaleKeys.grid_settings_properties.tr(),
-        onTap: () => _showFieldList(context, databaseController),
-      ),
-    ];
   }
 }
 
@@ -246,27 +131,6 @@ class _DatabaseViewSelectorButton extends StatelessWidget {
     return RawEmojiIconWidget(
       emoji: iconData,
       emojiSize: 16,
-    );
-  }
-}
-
-class _DatabaseToolbarAction extends StatelessWidget {
-  const _DatabaseToolbarAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final FlowySvgData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return FlowyButton(
-      text: FlowyText.medium(label),
-      leftIcon: FlowySvg(icon, size: const Size.square(20)),
-      onTap: onTap,
     );
   }
 }

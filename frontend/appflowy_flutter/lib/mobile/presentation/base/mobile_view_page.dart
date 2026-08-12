@@ -15,6 +15,7 @@ import 'package:appflowy/plugins/document/application/document_sync_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
@@ -25,11 +26,12 @@ import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -168,7 +170,17 @@ class _MobileViewPageState extends State<MobileViewPage> {
     final isGrid = view?.layout == ViewLayoutPB.Grid;
     final isHandwritingSaber =
         view?.pluginType == PluginType.handwritingSaber;
+    final showAppBar = !isDocument && view != null;
+    final appBarHeight = MediaQuery.paddingOf(context).top + kToolbarHeight;
     return Scaffold(
+      appBar: showAppBar
+          ? MobileViewPageImmersiveAppBar(
+              preferredSize: Size(double.infinity, appBarHeight),
+              appBarOpacity: const AlwaysStoppedAnimation(1.0),
+              actions: _buildAppBarActions(view),
+              view: view,
+            )
+          : null,
       body: (isDocument && !isHandwritingSaber)
           ? child
           : SafeArea(
@@ -183,6 +195,27 @@ class _MobileViewPageState extends State<MobileViewPage> {
                   : child,
             ),
     );
+  }
+
+  List<Widget> _buildAppBarActions(ViewPB view) {
+    return [
+      if (FeatureFlag.syncDocument.isOn)
+        DocumentCollaborators(
+          key: ValueKey('collaborators_${view.id}'),
+          width: 60,
+          height: 32,
+          view: view,
+        ),
+      ViewFavoriteButton(
+        key: ValueKey('favorite_button_${view.id}'),
+        view: view,
+      ),
+      ShareButton(
+        key: ValueKey('share_button_${view.id}'),
+        view: view,
+      ),
+      if (widget.showMoreButton) MoreViewActions(view: view),
+    ];
   }
 
   Widget _buildBody(BuildContext context, MobileViewPageState state) {

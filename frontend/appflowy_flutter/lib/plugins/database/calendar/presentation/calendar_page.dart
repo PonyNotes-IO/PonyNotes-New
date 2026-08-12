@@ -234,7 +234,9 @@ class _CalendarPageState extends State<CalendarPage> {
         if (horizontalPadding == 0) {
           padding = padding.copyWith(left: 0, right: 0);
         }
-        padding = padding.copyWith(left: paddingLeft + padding.left);
+        if (!PlatformInfo.isMobile) {
+          padding = padding.copyWith(left: paddingLeft + padding.left);
+        }
         return Padding(
           padding: padding,
           child: ScrollConfiguration(
@@ -243,7 +245,7 @@ class _CalendarPageState extends State<CalendarPage> {
             child: MonthView(
               key: _calendarState,
               controller: _eventController,
-              width: constraints.maxWidth,
+              width: constraints.maxWidth - padding.horizontal,
               cellAspectRatio: PlatformInfo.isMobile ? 0.9 : 0.6,
               startDay: _weekdayFromInt(firstDayOfWeek),
               showBorder: false,
