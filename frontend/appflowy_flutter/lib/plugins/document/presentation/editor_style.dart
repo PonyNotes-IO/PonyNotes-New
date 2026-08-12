@@ -143,7 +143,7 @@ class EditorStyleCustomizer {
     final afThemeExtension = AFThemeExtension.of(context);
     final pageStyle = context.read<DocumentPageStyleBloc>().state;
     final theme = Theme.of(context);
-    final fontSize = pageStyle.fontLayout.fontSize;
+    final fontSize = context.watch<DocumentAppearanceCubit>().state.fontSize;
     final lineHeight = pageStyle.lineHeightLayout.lineHeight;
     final fontFamily = pageStyle.fontFamily ??
         context.read<AppearanceSettingsCubit>().state.font;
