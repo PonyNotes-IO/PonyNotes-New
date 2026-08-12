@@ -45,6 +45,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     required this.view,
     this.shouldLoadChildViews = true,
     this.engagedInExpanding = false,
+    this.useNotificationViewUpdates = false,
     EmojiViewIconUpdater? updateViewIcon,
   })  : viewBackendSvc = ViewBackendService(),
         _viewIconUpdateExecutor = ViewIconUpdateExecutor(
@@ -74,6 +75,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
   final FavoriteListener favoriteListener;
   final bool shouldLoadChildViews;
   final bool engagedInExpanding;
+  final bool useNotificationViewUpdates;
   late ViewExpander expander;
 
   Future<void> reloadChildViews() async {
@@ -165,18 +167,24 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             await _setViewIsExpanded(view, e.isExpanded);
           },
           viewDidUpdate: (e) async {
-            final result = await ViewBackendService.getView(view.id);
-            final view_ = result.fold((l) => l, (r) => null);
+            final result = useNotificationViewUpdates
+                ? null
+                : await ViewBackendService.getView(view.id);
+            final view_ = result?.fold((l) => l, (r) => null);
             e.result.fold(
-              (view) async {
-                // ignore child view changes because it only contains one level
-                // children data.
-                if (_isSameViewIgnoreChildren(view, state.view)) {
-                  // do nothing.
-                }
+              (notifiedView) async {
+                final updatedView = view_ ??
+                    (notifiedView.childViews.isEmpty &&
+                            state.view.childViews.isNotEmpty
+                        ? notifiedView.rebuild((builder) {
+                            builder.childViews
+                              ..clear()
+                              ..addAll(state.view.childViews);
+                          })
+                        : notifiedView);
                 emit(
                   state.copyWith(
-                    view: view_ ?? view,
+                    view: updatedView,
                     successOrFailure: FlowyResult.success(null),
                   ),
                 );
@@ -652,11 +660,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     }
 
     if (update.updateChildViews.isNotEmpty && update.parentViewId.isNotEmpty) {
-      // Child metadata updates (for example, a renamed title) are not
-      // included in the notification. Reload the parent so its list gets the
-      // latest child view data.
-      final fetchedView = await ViewBackendService.getView(update.parentViewId);
-      return fetchedView.fold((l) => l, (r) => null);
+      final updatedById = {
+        for (final child in update.updateChildViews) child.id: child,
+      };
+      return currentView.rebuild((builder) {
+        builder.childViews
+          ..clear()
+          ..addAll(
+            childViews.map((child) => updatedById[child.id] ?? child),
+          );
+      });
     }
 
     return null;

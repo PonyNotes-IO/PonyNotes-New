@@ -74,13 +74,19 @@ class MobileViewItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => ViewBloc(view: view)..add(const ViewEvent.initial()),
+      create: (_) => ViewBloc(
+        view: view,
+        useNotificationViewUpdates: Platform.isIOS,
+      )..add(const ViewEvent.initial()),
       child: BlocConsumer<ViewBloc, ViewState>(
         listenWhen: (p, c) =>
             c.lastCreatedView != null &&
             p.lastCreatedView?.id != c.lastCreatedView!.id,
         listener: (context, state) => context.pushView(state.lastCreatedView!),
         builder: (context, state) {
+          if (state.isDeleted) {
+            return const SizedBox.shrink();
+          }
           return InnerMobileViewItem(
             view: state.view,
             parentView: parentView,
