@@ -28,10 +28,16 @@ class MobileCreateSpaceSheet extends StatefulWidget {
     super.key,
     required this.spaceBloc,
     required this.onCreated,
+    this.initialPermission = SpacePermission.publicToAll,
+    this.nameHint = '团队协作区名称',
+    this.spaceLabel = '团队协作区',
   });
 
   final SpaceBloc spaceBloc;
   final VoidCallback onCreated;
+  final SpacePermission initialPermission;
+  final String nameHint;
+  final String spaceLabel;
 
   @override
   State<MobileCreateSpaceSheet> createState() => _MobileCreateSpaceSheetState();
@@ -39,10 +45,16 @@ class MobileCreateSpaceSheet extends StatefulWidget {
 
 class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
   final _nameController = TextEditingController();
-  SpacePermission _permission = SpacePermission.publicToAll;
+  late SpacePermission _permission;
   bool _isCreating = false;
   String _selectedIconId = builtInSpaceIcons.first;
   String _selectedColor = builtInSpaceColors.first;
+
+  @override
+  void initState() {
+    super.initState();
+    _permission = widget.initialPermission;
+  }
 
   @override
   void dispose() {
@@ -98,7 +110,7 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
           onCreated();
         } catch (_) {}
       });
-      showToastNotification(message: '团队协作区「$name」已创建');
+      showToastNotification(message: '${widget.spaceLabel}「$name」已创建');
     }
   }
 
@@ -155,7 +167,7 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
         const SizedBox(height: 20),
         FlowyTextField(
           controller: _nameController,
-          hintText: '团队协作区名称',
+          hintText: widget.nameHint,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 20),
