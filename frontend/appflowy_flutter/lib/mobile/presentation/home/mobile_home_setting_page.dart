@@ -1012,10 +1012,18 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     if (usage.storageBytesLimit.toInt() == 0) {
       return '0GB / 0GB';
     }
-    final total = usage.storageBytesLimit.toInt() / (1024 * 1024 * 1024);
-    final remaining = usage.storageBytesLimit.toInt() - usage.storageBytes.toInt();
-    return '${total.toStringAsFixed(1)}GB / '
-        '${(remaining <= 0 ? 0 : remaining / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB';
+    final planCode = currentSubscription?.subscription?.planCode?.toLowerCase();
+    final isProPlan = subscriptionInfo.plan == WorkspacePlanPB.ProPlan ||
+        planCode == 'profersor' ||
+        planCode == 'professor' ||
+        planCode == 'pro';
+    if (isProPlan) {
+      const totalGb = 50;
+      final usedGb = usage.storageBytes.toInt() / (1024 * 1024 * 1024);
+      final remainingGb = (totalGb - usedGb).clamp(0, totalGb);
+      return '${NumberFormat('#.##').format(remainingGb)}GB / ${totalGb}GB';
+    }
+    return '${usage.remainingBlobInGb}GB / ${usage.totalBlobInGb}GB';
   }
 
   Widget _buildAIUsageRow(AppFlowyThemeData theme) {
