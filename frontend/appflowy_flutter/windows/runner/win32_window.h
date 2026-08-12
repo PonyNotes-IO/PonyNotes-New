@@ -6,7 +6,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <vector>
 
 // A class abstraction for a high DPI-aware Win32 Window. Intended to be
 // inherited from by classes that wish to specialize with custom
@@ -24,14 +23,6 @@ class Win32Window {
     unsigned int height;
     Size(unsigned int width, unsigned int height)
         : width(width), height(height) {}
-  };
-
-  // The client and hosted-content dimensions after a synchronization.
-  struct SurfaceMetrics {
-    LONG client_width;
-    LONG client_height;
-    LONG child_width;
-    LONG child_height;
   };
 
   Win32Window();
@@ -68,39 +59,7 @@ class Win32Window {
   // This method enables our app to be with a single instance too.
   bool SendAppLinkToInstance(const std::wstring &title);
 
-  // Returns the geometry events recorded since startup (see |RecordEvent|) and
-  // clears the buffer. Used to give the Dart side visibility into the window
-  // messages that happen before the Rust logger exists.
-  std::vector<std::string> TakeGeometryEvents();
-
-  // Returns a one line description of the current top-level/child geometry and
-  // DPI. Purely diagnostic.
-  std::string DescribeGeometry();
-
-  // Resizes the *top-level* window by one pixel and back.
-  //
-  // This is the programmatic equivalent of the user dragging the window border,
-  // which is empirically the only action that recovers the startup rendering
-  // defect where the frame ends up squeezed against the bottom of the window.
-  // Nudging only the hosted child window is NOT equivalent: it does not make
-  // Windows rebuild the top-level window's presentation surface.
-  //
-  // Must not be called from a platform message channel handler: each resize
-  // makes the engine wait for the raster thread to present a frame, which
-  // cannot happen while the Dart isolate is blocked awaiting a channel reply.
-  bool ResyncTopLevelSurface();
-
  protected:
-  // Sizes the hosted content to the current client area.
-  //
-  // When |force_resync| is true the child is additionally moved to a height
-  // one pixel taller than the client area and back, so that the engine sees a
-  // real WM_SIZE (a same-size MoveWindow produces none).
-  SurfaceMetrics SynchronizeChildContent(bool force_resync = false);
-
-  // Appends one line to the geometry event buffer (capped, oldest dropped).
-  void RecordEvent(const std::string& event);
-
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that
   // inheriting classes can handle.
@@ -143,8 +102,6 @@ class Win32Window {
   // window handle for hosted content.
   HWND child_content_ = nullptr;
 
-  // Startup geometry trace, drained by the Dart side after the first frame.
-  std::vector<std::string> geometry_events_;
 };
 
 #endif  // RUNNER_WIN32_WINDOW_H_

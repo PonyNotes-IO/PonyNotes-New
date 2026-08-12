@@ -342,24 +342,78 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             onResult?.call(result);
           },
           open: (space, afterOpen) async {
-            await _openSpace(space);
-            final isExpanded = await _getSpaceExpandStatus(space);
-            final views = await ViewBackendService.getChildViews(
-              viewId: space.id,
-            );
-            final currentSpace = views.fold(
-              (views) {
-                // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
-                views.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
+            // 【2026-08-11 加固：中间栏无限转圈】
+            //
+            // 下面 emit(currentSpace) 之前有三个 await。原实现里它们都不带超时，
+            // 任何一个不返回，currentSpace 就永远设不上；而中间栏的渲染条件是
+            // `currentSpace?.id != widget.spaceView.id → 显示 CircularProgressIndicator`
+            // （space_hub.dart），于是表现为**无限转圈**。又因为 Bloc 事件是串行
+            // 处理的，这个 open 卡住后，用户再点其它空间只会排队，整个 SpaceBloc
+            // 一起死掉。
+            //
+            // 用户实测：出现该现象后断网也无法恢复 —— 因为这三步等的是本地 KV 与
+            // FFI，压根不是网络请求，断网绕不过去。
+            //
+            // 这里的处理不是修根因（根因需要 sample 采样确认 Rust 侧卡在哪），
+            // 而是把「永久卡死」降级为「可见的结果 + 明确日志」：
+            //   · 每一步单独超时，失败不再向外抛；
+            //   · 无论如何都会走到 emit，中间栏至少能渲染出来；
+            //   · 日志明确指出卡在三步中的哪一步，下次复现即可直接定位。
+            //
+            // 10 秒对这三步都极宽松（正常都是毫秒级），不会误伤慢设备。
+            //
+            // 注意：这里【不再】对 views 按 lastEdited 排序 —— 06308cd8d
+            //（fix(space): 修复移动端文档列表状态错乱）已有意移除该排序，
+            // 本次加固只加超时，不恢复它。
+            const stepTimeout = Duration(seconds: 10);
 
-                space.freeze();
-                return space.rebuild((b) {
-                  b.childViews.clear();
-                  b.childViews.addAll(views);
-                });
-              },
-              (_) => space,
-            );
+            // ① 记录最近打开的空间（本地 KV 写入）
+            try {
+              await _openSpace(space).timeout(stepTimeout);
+            } catch (e) {
+              Log.error(
+                '[SpaceBloc] open 卡在第①步 _openSpace（本地 KV 写入）: '
+                'space=${space.name}(${space.id}), err=$e',
+              );
+            }
+
+            // ② 读取展开状态（内部有 ExpandedViewsCache.initialize，可能触发 IO）
+            bool isExpanded = true; // 取不到时默认展开，避免看起来"内容消失了"
+            try {
+              isExpanded =
+                  await _getSpaceExpandStatus(space).timeout(stepTimeout);
+            } catch (e) {
+              Log.error(
+                '[SpaceBloc] open 卡在第②步 _getSpaceExpandStatus: '
+                'space=${space.name}(${space.id}), err=$e',
+              );
+            }
+
+            // ③ 拉取子视图（FFI → Rust flowy-folder），三步中最可疑的一步
+            ViewPB currentSpace = space;
+            try {
+              final views = await ViewBackendService.getChildViews(
+                viewId: space.id,
+              ).timeout(stepTimeout);
+              currentSpace = views.fold(
+                (views) {
+                  space.freeze();
+                  return space.rebuild((b) {
+                    b.childViews.clear();
+                    b.childViews.addAll(views);
+                  });
+                },
+                (_) => space,
+              );
+            } catch (e) {
+              // 降级为「不带子视图的空间」：中间栏会渲染成空列表而不是一直转圈。
+              // 随后 ViewListener 收到变更、或用户重新点击空间，都能自愈。
+              Log.error(
+                '[SpaceBloc] open 卡在第③步 getChildViews（FFI→Rust folder）: '
+                'space=${space.name}(${space.id}), err=$e —— '
+                '本次以空子视图列表降级渲染，避免中间栏无限转圈',
+              );
+            }
             emit(
               state.copyWith(
                 currentSpace: currentSpace,
@@ -637,9 +691,6 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                       '[SpaceBloc] didUpdateCurrentSpaceChildViews: space changed during fetch, ignoring update');
                   return;
                 }
-
-                // 按最后编辑时间降序排序，使最新导入/修改的文件显示在首位
-                childViews.sort((a, b) => b.lastEdited.compareTo(a.lastEdited));
 
                 // 创建新的 ViewPB 对象，确保引用变化
                 currentSpace.freeze();

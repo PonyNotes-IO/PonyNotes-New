@@ -6,6 +6,7 @@ set(BINARY_NAME "PonyNotes")
 # 抑制 flutter_inappwebview_windows、media_kit_libs_windows_video 等插件的 CMP0175 警告
 if(POLICY CMP0175)
   cmake_policy(SET CMP0175 OLD)
+  set(CMAKE_POLICY_DEFAULT_CMP0175 OLD)
 endif()
 cmake_policy(SET CMP0063 NEW)
 
@@ -33,6 +34,9 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
+if(MSVC)
+  add_compile_options(/utf-8)
+endif()
 
 # MSVC 14.51+ (VS 2026) turns the <experimental/coroutine> deprecation into a
 # hard static_assert (STL1011). Plugins such as flutter_inappwebview_windows and
@@ -127,6 +131,13 @@ endif()
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# The plugin and WebView2 SDK emit noisy third-party warnings under MSVC's /W4.
+# Keep the app's own warnings visible while limiting suppression to this target.
+if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
+  target_compile_options(flutter_inappwebview_windows_plugin PRIVATE
+    /wd4244 /wd4458)
+endif()
+
 # === Installation ===
 # Support files are copied into place next to the executable, so that it can
 # run in place. This is done instead of making a separate bundle (as on Linux)
@@ -136,9 +147,9 @@ set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
 # Make the "install" step default, as it's required to run.
 set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD 1)
 
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-  set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
-endif()
+# Keep Flutter run/build output beside the executable instead of installing to
+# the protected system-wide C:/Program Files directory.
+set(CMAKE_INSTALL_PREFIX "${BUILD_BUNDLE_DIR}" CACHE PATH "..." FORCE)
 
 set(DART_FFI_DIR "${CMAKE_INSTALL_PREFIX}")
 set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")

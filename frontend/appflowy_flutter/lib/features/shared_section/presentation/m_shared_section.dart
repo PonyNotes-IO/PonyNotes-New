@@ -3,7 +3,6 @@ import 'package:appflowy/features/shared_section/logic/shared_section_bloc.dart'
 import 'package:appflowy/features/shared_section/presentation/widgets/m_shared_page_list.dart';
 import 'package:appflowy/features/shared_section/presentation/widgets/m_shared_section_header.dart';
 import 'package:appflowy/features/shared_section/presentation/widgets/refresh_button.dart';
-import 'package:appflowy/features/shared_section/presentation/widgets/shared_section_empty.dart';
 import 'package:appflowy/features/shared_section/presentation/widgets/shared_section_error.dart';
 import 'package:appflowy/features/shared_section/presentation/widgets/shared_section_loading.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
@@ -34,47 +33,33 @@ class MSharedSection extends StatelessWidget {
       )..add(const SharedSectionInitEvent()),
       child: BlocBuilder<SharedSectionBloc, SharedSectionState>(
         builder: (context, state) {
-          if (state.isLoading) {
-            return const SharedSectionLoading();
-          }
-
-          if (state.errorMessage.isNotEmpty) {
-            return SharedSectionError(errorMessage: state.errorMessage);
-          }
-
-          // hide the shared section if there are no shared pages
-          if (state.sharedPages.isEmpty) {
-            return const SharedSectionEmpty();
-          }
-
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const VSpace(HomeSpaceViewSizes.mVerticalPadding),
-
-              // Shared header
               MSharedSectionHeader(),
-
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: HomeSpaceViewSizes.mHorizontalPadding,
+              if (state.isLoading)
+                const SharedSectionLoading()
+              else if (state.errorMessage.isNotEmpty)
+                SharedSectionError(errorMessage: state.errorMessage)
+              else if (state.sharedPages.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: HomeSpaceViewSizes.mHorizontalPadding,
+                  ),
+                  child: MSharedPageList(
+                    sharedPages: state.sharedPages,
+                    onSelected: (view) {
+                      context.pushView(
+                        view,
+                        tabs: [
+                          PickerTabType.emoji,
+                          PickerTabType.icon,
+                          PickerTabType.custom,
+                        ].map((e) => e.name).toList(),
+                      );
+                    },
+                  ),
                 ),
-                child: MSharedPageList(
-                  sharedPages: state.sharedPages,
-                  onSelected: (view) {
-                    context.pushView(
-                      view,
-                      tabs: [
-                        PickerTabType.emoji,
-                        PickerTabType.icon,
-                        PickerTabType.custom,
-                      ].map((e) => e.name).toList(),
-                    );
-                  },
-                ),
-              ),
-
-              // Refresh button, for debugging only
               if (kDebugMode)
                 RefreshSharedSectionButton(
                   onTap: () {

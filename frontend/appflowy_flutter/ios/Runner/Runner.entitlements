@@ -18,6 +18,5 @@
 	<key>com.apple.developer.in-app-payments</key>
 	<array/>
 	<key>com.apple.developer.in-app-purchase</key>
-	<true/>
 </dict>
 </plist>

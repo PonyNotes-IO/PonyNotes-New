@@ -9,6 +9,8 @@ enum ImportType {
   historyDatabase,
   markdownOrText,
   csv,
+  pdf,
+  html,
   afDatabase;
 
   @override
@@ -22,6 +24,10 @@ enum ImportType {
         return LocaleKeys.importPanel_textAndMarkdown.tr();
       case ImportType.csv:
         return LocaleKeys.importPanel_csv.tr();
+      case ImportType.pdf:
+        return 'PDF';
+      case ImportType.html:
+        return 'HTML';
       case ImportType.afDatabase:
         return LocaleKeys.importPanel_database.tr();
     }
@@ -36,6 +42,9 @@ enum ImportType {
           case ImportType.csv:
           case ImportType.afDatabase:
             svg = FlowySvgs.board_s;
+          case ImportType.pdf:
+            svg = FlowySvgs.document_s;
+          case ImportType.html:
           case ImportType.markdownOrText:
             svg = FlowySvgs.text_s;
         }
@@ -52,6 +61,8 @@ enum ImportType {
       case ImportType.historyDocument:
       case ImportType.afDatabase:
         return kDebugMode;
+      case ImportType.pdf:
+      case ImportType.html:
       default:
         return true;
     }
@@ -68,6 +79,10 @@ enum ImportType {
         return ['md', 'txt'];
       case ImportType.csv:
         return ['csv'];
+      case ImportType.pdf:
+        return ['pdf'];
+      case ImportType.html:
+        return ['html', 'htm'];
     }
   }
 
@@ -78,6 +93,8 @@ enum ImportType {
       case ImportType.csv:
       case ImportType.afDatabase:
       case ImportType.markdownOrText:
+      case ImportType.pdf:
+      case ImportType.html:
         return true;
     }
   }

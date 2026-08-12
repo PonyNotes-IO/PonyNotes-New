@@ -1,12 +1,13 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/features/shared_section/presentation/m_shared_section.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_space_menu.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_space_list_refresh.dart';
 import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
-import 'package:appflowy/mobile/presentation/home/workspaces/workspace_menu_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/shared/list_extension.dart';
@@ -26,6 +27,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'dart:io' show Platform;
 
 class MobileSpace extends StatefulWidget {
   const MobileSpace({super.key, required this.favoriteBloc});
@@ -192,6 +194,12 @@ class _MobileSpaceState extends State<MobileSpace> {
         final publicSpaces = spaceBloc.publicSpaces;
         final isCollaborativeWorkspace =
             context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+        final workspaceId = context
+                .read<UserWorkspaceBloc>()
+                .state
+                .currentWorkspace
+                ?.workspaceId ??
+            '';
 
         return Column(
           children: [
@@ -201,8 +209,17 @@ class _MobileSpaceState extends State<MobileSpace> {
                 title: LocaleKeys.space_privateSpace.tr(),
                 spaces: privateSpaces,
                 spaceType: FolderSpaceType.private,
-                onAddPressed: () => showCreateWorkspaceBottomSheet(context),
+                onAddPressed: () => _showCreateSpaceBottomSheet(
+                  context,
+                  permission: SpacePermission.private,
+                  title: '新建私有空间',
+                ),
                 favoriteBloc: widget.favoriteBloc,
+              ),
+              const VSpace(4.0),
+              MSharedSection(
+                key: ValueKey(workspaceId),
+                workspaceId: workspaceId,
               ),
               const VSpace(4.0),
               // 协作区 / 公共空间（仅 Space）
@@ -277,7 +294,11 @@ class _MobileSpaceState extends State<MobileSpace> {
     );
   }
 
-  void _showCreateSpaceBottomSheet(BuildContext context) {
+  void _showCreateSpaceBottomSheet(
+    BuildContext context, {
+    SpacePermission permission = SpacePermission.publicToAll,
+    String title = '新建团队协作区',
+  }) {
     // 与桌面端 sidebar 的 "+" 行为对齐：调 `SpaceBloc.create` 让新 space
     // 进入 home 的 SpaceBloc.state.spaces (而不是创建新的工作空间)。
     // 新 space 由 SpaceBloc 内部 `_onCreate` 触发 emit，本页
@@ -287,13 +308,18 @@ class _MobileSpaceState extends State<MobileSpace> {
       context,
       showDragHandle: true,
       showHeader: true,
-      title: '新建团队协作区',
+      title: title,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       // 让外层 sheet 用 Flexible(SingleChildScrollView) 包住我们，
       // 避免键盘弹起时外层 Column overflow。
       enableScrollable: true,
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: spaceBloc,
+        initialPermission: permission,
+        nameHint:
+            permission == SpacePermission.private ? '私有空间名称' : '团队协作区名称',
+        spaceLabel:
+            permission == SpacePermission.private ? '私有空间' : '团队协作区',
         onCreated: () {
           // Sheet 内部已经 pop 过了；这里只做 toast（如需要）。
         },
@@ -320,10 +346,6 @@ class MobileSpaceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (spaces.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
     return BlocProvider<FolderBloc>(
       create: (context) => FolderBloc(type: spaceType)
         ..add(const FolderEvent.initial()),
@@ -596,7 +618,12 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
               create: (context) =>
                   ViewBloc(view: widget.space)..add(const ViewEvent.initial()),
               child: BlocListener<SpaceBloc, SpaceState>(
+                // Android keeps the 1.13 sequence list resident. Its ViewBloc
+                // listener still applies create/delete/move/restore updates.
                 listenWhen: (previous, current) =>
+                    !mobileSpaceKeepsDocumentListCached(
+                      isAndroid: Platform.isAndroid,
+                    ) &&
                     previous.lastCreatedPage?.id !=
                         current.lastCreatedPage?.id &&
                     (current.lastCreatedPage?.parentViewId == widget.space.id ||

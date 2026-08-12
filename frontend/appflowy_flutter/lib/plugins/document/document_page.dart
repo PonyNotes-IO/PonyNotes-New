@@ -381,20 +381,31 @@ class _DocumentPageState extends State<DocumentPage>
 
     final Widget child;
     if (PlatformInfo.isMobile) {
-      child = BlocBuilder<DocumentPageStyleBloc, DocumentPageStyleState>(
-        builder: (context, styleState) => AppFlowyEditorPage(
-          editorState: editorState,
-          editable: canEditDocument,
-          // if the view's name is empty, focus on the title
-          autoFocus: widget.view.name.isEmpty ? false : null,
-          styleCustomizer: EditorStyleCustomizer(
-            context: context,
-            width: width,
-            padding: EditorStyleCustomizer.documentPadding,
+      child = BlocListener<DocumentAppearanceCubit, DocumentAppearance>(
+        listenWhen: (previous, current) =>
+            previous.fontSize != current.fontSize,
+        listener: (context, state) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              editorState.reload();
+            }
+          });
+        },
+        child: BlocBuilder<DocumentPageStyleBloc, DocumentPageStyleState>(
+          builder: (context, styleState) => AppFlowyEditorPage(
             editorState: editorState,
+            editable: canEditDocument,
+            // if the view's name is empty, focus on the title
+            autoFocus: widget.view.name.isEmpty ? false : null,
+            styleCustomizer: EditorStyleCustomizer(
+              context: context,
+              width: width,
+              padding: EditorStyleCustomizer.documentPadding,
+              editorState: editorState,
+            ),
+            header: buildCoverAndIcon(context, state),
+            initialSelection: initialSelection,
           ),
-          header: buildCoverAndIcon(context, state),
-          initialSelection: initialSelection,
         ),
       );
     } else {

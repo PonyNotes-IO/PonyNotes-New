@@ -1,16 +1,13 @@
-import 'dart:io';
-import 'package:flowy_infra/platform_extension.dart';
-
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/third_party_sign_in_button/third_party_sign_in_button.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 typedef _SignInCallback = void Function(ThirdPartySignInButtonType signInType);
 
@@ -101,9 +98,7 @@ class ThirdPartySignInButtons extends StatelessWidget {
     final signInBloc = context.read<SignInBloc>();
 
     if (type == ThirdPartySignInButtonType.wechat) {
-      if (UniversalPlatform.isWindows ||
-          UniversalPlatform.isMacOS ||
-          UniversalPlatform.isLinux) {
+      if (PlatformInfo.isDesktopOrTabletOrWeb) {
         final code = await showWeChatWebViewDialog(context);
         if (code != null && context.mounted) {
           signInBloc.add(SignInEvent.wechatCodeReceived(code));
@@ -112,9 +107,7 @@ class ThirdPartySignInButtons extends StatelessWidget {
         signInBloc.add(const SignInEvent.signInWithWeChat());
       }
     } else if (type == ThirdPartySignInButtonType.douyin) {
-      if (UniversalPlatform.isWindows ||
-          UniversalPlatform.isMacOS ||
-          UniversalPlatform.isLinux) {
+      if (PlatformInfo.isDesktopOrTabletOrWeb) {
         final code = await showDouYinWebViewDialog(context);
         if (code != null && context.mounted) {
           signInBloc.add(SignInEvent.douyinCodeReceived(code));

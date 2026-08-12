@@ -151,11 +151,42 @@ script = [
   mkdir -p ${output_path}
 
   product=${PRODUCT_NAME}-arm64-v8a-release.${PRODUCT_EXT}
-  cp -R ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+  artifact=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+  if [ ! -s "${artifact}" ]; then
+    echo "Android release artifact is missing or empty: ${artifact}"
+    exit 1
+  fi
+  cp -R "${artifact}" \
   ${output_path}/${product}
+  if [ ! -s "${output_path}/${product}" ]; then
+    echo "Android product artifact copy failed: ${output_path}/${product}"
+    exit 1
+  fi
   """,
 ]
-script_runner = "@shell"
+script_runner = "bash"
+
+[tasks.copy-to-product-android.windows]
+script = [
+  """
+  product_path = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/product/${APP_VERSION}
+  output_path = set ${product_path}/${TARGET_OS}/${FLUTTER_OUTPUT_DIR}
+  artifact = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+  product = set ${output_path}/${PRODUCT_NAME}-arm64-v8a-release.${PRODUCT_EXT}
+
+  if is_path_exists ${output_path}
+    rm -r ${output_path}
+  end
+  mkdir ${output_path}
+
+  artifact_exists = is_path_exists ${artifact}
+  assert ${artifact_exists}
+  cp ${artifact} ${product}
+  product_exists = is_path_exists ${product}
+  assert ${product_exists}
+  """,
+]
+script_runner = "@duckscript"
 
 [tasks.copy-to-product-macos]
 script = [
@@ -265,18 +296,60 @@ script_runner = "@shell"
 [tasks.flutter-build-android]
 script = ["""
   cd appflowy_flutter/
-  flutter pub get
-  flutter build apk --split-per-abi --split-debug-info=./ --obfuscate --verbose
+  if ! flutter pub get --enforce-lockfile; then
+    exit 1
+  fi
+  if ! flutter build apk --release --target-platform android-arm64 --split-per-abi --split-debug-info=./ --obfuscate --verbose; then
+    exit 1
+  fi
+  if [ ! -s build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ]; then
+    echo "Android release artifact is missing or empty."
+    exit 1
+  fi
   """]
-script_runner = "@shell"
+script_runner = "bash"
 
 [tasks.flutter-build-android-ci]
 script = ["""
   cd appflowy_flutter/
-  flutter pub get
-  flutter build apk --debug
-  """]
-script_runner = "@shell"
+  if ! flutter pub get --enforce-lockfile; then
+    exit 1
+  fi
+  if ! flutter build apk --debug --target-platform android-arm64; then
+    exit 1
+  fi
+"""]
+script_runner = "bash"
+
+[tasks.flutter-build-android.windows]
+script = [
+  """
+  cd appflowy_flutter
+  result = exec cmd.exe /c flutter pub get --enforce-lockfile
+  assert_eq ${result.code} 0 "flutter pub get failed"
+  result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot .
+  assert_eq ${result.code} 0 "Android plugin registration preflight failed"
+  result = exec cmd.exe /c flutter build apk --release --target-platform android-arm64 --split-per-abi --split-debug-info=./ --obfuscate --verbose
+  assert_eq ${result.code} 0 "Android release build failed"
+  result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot . -ArtifactPath build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+  assert_eq ${result.code} 0 "Android release artifact validation failed"
+  """,
+]
+script_runner = "@duckscript"
+
+[tasks.flutter-build-android-ci.windows]
+script = [
+  """
+  cd appflowy_flutter
+  result = exec cmd.exe /c flutter pub get --enforce-lockfile
+  assert_eq ${result.code} 0 "flutter pub get failed"
+  result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot .
+  assert_eq ${result.code} 0 "Android plugin registration preflight failed"
+  result = exec cmd.exe /c flutter build apk --debug --target-platform android-arm64
+  assert_eq ${result.code} 0 "Android debug build failed"
+  """,
+]
+script_runner = "@duckscript"
 
 [tasks.flutter-build.windows]
 script = [

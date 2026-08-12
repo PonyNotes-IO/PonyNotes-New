@@ -1411,28 +1411,26 @@ class AccountManagementBloc
             return;
           }
 
-          // todo 选择支付方式（默认支付宝）
-          // final method = methods.first;
-          // final paymentType = switch (method) {
-          //   PaymentMethod.applePay => PaymentType.applePay,
-          //   PaymentMethod.wechatPay => PaymentType.wechatPay,
-          //   PaymentMethod.alipay => PaymentType.alipay,
-          // };
-          final method = PaymentMethod.alipay;
-          final paymentType = PaymentMethod.alipay.name;
-          // 创建支付订单
-          // 将 userInfo 转换为 JSON 字符串（接口要求 String 类型）
-          // final userInfoJson = jsonEncode({
-          //   'userId': userProfile.id.toString(),
-          //   'name': userProfile.name,
-          //   'email': userProfile.email,
-          // });
+          // 根据平台自动选择支付方式
+          // 优先级：Apple Pay (iOS/macOS) > 其他平台默认支付方式
+          final PaymentMethod method;
+          final String paymentType;
+          if (PaymentPlatformSupport.isApplePayAvailable) {
+            method = PaymentMethod.applePay;
+            paymentType = PaymentType.applePay;
+          } else if (PaymentPlatformSupport.isWeChatPayAvailable) {
+            method = PaymentMethod.wechatPay;
+            paymentType = PaymentType.wechatPay;
+          } else {
+            method = PaymentMethod.alipay;
+            paymentType = PaymentType.alipay;
+          }
 
           // 设置会员升级参数
           String? planIdValue = '$planId';
 
-          // iPad（iOS 平台）直接调用 Apple Pay 内购，不走 H5 网页支付
-          if (Platform.isIOS && !PaymentDevConfig.enableTestMode) {
+          // iOS / macOS 平台直接调用 Apple Pay 内购，不走 H5 网页支付
+          if (PaymentPlatformSupport.isApplePayAvailable && !PaymentDevConfig.enableTestMode) {
             final billingTypeStr = selectedDuration == PurchaseDurationOption.monthly
                 ? 'monthly'
                 : 'yearly';
@@ -1466,13 +1464,32 @@ class AccountManagementBloc
               'userInfo': userUuid,
             };
 
-            await PaymentUtil.pay(
+            final payResult = await PaymentUtil.pay(
               method: PaymentMethod.applePay,
               amount: (selectedPrice * 100).toInt(),
               currency: 'CNY',
               orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
               extra: extra,
             );
+
+            if (!payResult.success) {
+              emit(
+                AccountManagementState.ready(
+                  subscriptionInfo: subscriptionInfo,
+                  planConfigs: planConfigs,
+                  selectedPlan: selectedPlan,
+                  selectedDuration: selectedDuration,
+                  selectedTab: selectedTab,
+                  agreedProtocols: agreedProtocols,
+                  isLoadingSubscription: isLoadingSubscription,
+                  isLoadingPlans: isLoadingPlans,
+                  isProcessingPayment: false,
+                  error: payResult.message,
+                  paymentResult: paymentResult,
+                ),
+              );
+              return;
+            }
 
             state.maybeWhen(
               orElse: () {},

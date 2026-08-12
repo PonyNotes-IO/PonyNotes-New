@@ -114,11 +114,15 @@ target_include_directories(flutter_wrapper_app PUBLIC
 add_dependencies(flutter_wrapper_app flutter_assemble)
 
 # === Flutter tool backend ===
-# _phony_ is a non-existent file to force this command to run every time,
-# since currently there's no way to get a full input/output list from the
-# flutter tool.
-set(PHONY_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/_phony_")
-set_source_files_properties("${PHONY_OUTPUT}" PROPERTIES SYMBOLIC TRUE)
+# Visual Studio keeps custom-build state per configuration. Keep the sentinel
+# configuration-specific so switching Release -> Debug cannot reuse the
+# previous mode's shared flutter_assets directory.
+set(PHONY_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/_phony_$<CONFIG>")
+foreach(PHONY_CONFIG Debug Profile Release)
+  set_source_files_properties(
+    "${CMAKE_CURRENT_BINARY_DIR}/_phony_${PHONY_CONFIG}"
+    PROPERTIES SYMBOLIC TRUE)
+endforeach()
 add_custom_command(
   OUTPUT ${FLUTTER_LIBRARY} ${FLUTTER_LIBRARY_HEADERS}
     ${CPP_WRAPPER_SOURCES_CORE} ${CPP_WRAPPER_SOURCES_PLUGIN}
