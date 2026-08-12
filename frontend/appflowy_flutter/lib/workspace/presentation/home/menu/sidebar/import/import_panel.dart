@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/import_page/enhanced_html_import_dialog.dart';
+import 'package:appflowy/plugins/import_page/enhanced_pdf_import_dialog.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/migration/editor_migration.dart';
 import 'package:appflowy/shared/markdown_to_document.dart';
@@ -33,6 +35,7 @@ Future<void> showImportPanel(
     context: context,
     builder: (context) => FlowyDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      expandHeight: false,
       title: FlowyText.semibold(
         LocaleKeys.moreAction_import.tr(),
         fontSize: 20,
@@ -80,7 +83,17 @@ class _ImportPanelState extends State<ImportPanel> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width * 0.7;
-    final height = width * 0.5;
+    final isNarrow = width < 360;
+    final height = isNarrow ? 240.0 : width * 0.5;
+    final importTypes = [
+      ImportType.csv,
+      ImportType.pdf,
+      ImportType.markdownOrText,
+      ImportType.html,
+      ImportType.historyDocument,
+      ImportType.historyDatabase,
+      ImportType.afDatabase,
+    ].where((type) => type.enableOnRelease);
     return KeyboardListener(
       autofocus: true,
       focusNode: flowyContainerFocusNode,
@@ -97,10 +110,9 @@ class _ImportPanelState extends State<ImportPanel> {
             height: height,
             width: width,
             child: GridView.count(
-              childAspectRatio: 1 / .2,
-              crossAxisCount: 2,
-              children: ImportType.values
-                  .where((element) => element.enableOnRelease)
+              childAspectRatio: isNarrow ? 4 : 3,
+              crossAxisCount: isNarrow ? 1 : 3,
+              children: importTypes
                   .map(
                     (e) => Card(
                       child: FlowyButton(
@@ -141,6 +153,16 @@ class _ImportPanelState extends State<ImportPanel> {
   }
 
   Future<void> _importFile(String parentViewId, ImportType importType) async {
+    if (importType == ImportType.pdf || importType == ImportType.html) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => importType == ImportType.pdf
+            ? EnhancedPdfImportDialog(parentViewId: parentViewId)
+            : EnhancedHtmlImportDialog(parentViewId: parentViewId),
+      );
+      return;
+    }
+
     final result = await getIt<FilePickerService>().pickFiles(
       type: FileType.custom,
       allowMultiple: importType.allowMultiSelect,
@@ -205,6 +227,9 @@ class _ImportPanelState extends State<ImportPanel> {
               ..importType = ImportTypePB.AFDatabase,
           );
           break;
+        case ImportType.pdf:
+        case ImportType.html:
+          break;
       }
     }
 
@@ -233,6 +258,8 @@ Uint8List? _documentDataFrom(ImportType importType, String data) {
     case ImportType.markdownOrText:
       final document = customMarkdownToDocument(data);
       return DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
+    case ImportType.pdf:
+    case ImportType.html:
     default:
       assert(false, 'Unsupported Type $importType');
       return null;
