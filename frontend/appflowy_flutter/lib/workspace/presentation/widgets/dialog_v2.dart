@@ -28,7 +28,7 @@ Future<void> showSimpleAFDialog({
     context: context,
     barrierColor: theme.surfaceColorScheme.overlay,
     barrierDismissible: barrierDismissible,
-    builder: (_) {
+    builder: (dialogContext) {
       return AFModal(
         constraints: BoxConstraints(
           maxWidth: AFModalDimension.S,
@@ -42,7 +42,7 @@ Future<void> showSimpleAFDialog({
               ),
               trailing: [
                 AFGhostButton.normal(
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () => Navigator.of(dialogContext).pop(),
                   padding: EdgeInsets.all(theme.spacing.xs),
                   builder: (context, isHovering, disabled) {
                     return FlowySvg(
@@ -73,7 +73,7 @@ Future<void> showSimpleAFDialog({
                   AFOutlinedTextButton.normal(
                     text: secondaryAction.$1,
                     onTap: () {
-                      Navigator.of(context).pop();
+                      Navigator.of(dialogContext).pop();
                       secondaryAction.$2?.call(context);
                     },
                   ),
@@ -81,14 +81,14 @@ Future<void> showSimpleAFDialog({
                     ? AFFilledTextButton.destructive(
                         text: primaryAction.$1,
                         onTap: () {
-                          Navigator.of(context).pop();
+                          Navigator.of(dialogContext).pop();
                           primaryAction.$2?.call(context);
                         },
                       )
                     : AFFilledTextButton.primary(
                         text: primaryAction.$1,
                         onTap: () {
-                          Navigator.of(context).pop();
+                          Navigator.of(dialogContext).pop();
                           primaryAction.$2?.call(context);
                         },
                       ),
