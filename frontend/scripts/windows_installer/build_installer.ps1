@@ -213,6 +213,12 @@ Write-Host "[1/3] Building Flutter Release..."
 Push-Location $FlutterDir
 
 try {
+    Write-Host "Resetting previous Flutter Windows build..."
+    $cleanCode = Invoke-Step -File "flutter" -Args @("clean")
+    if ($cleanCode -ne 0) {
+        throw "flutter clean failed with exit code $cleanCode"
+    }
+
     Write-Host "Getting dependencies..."
     $pubCode = Invoke-Step -File "flutter" -Args @("pub", "get")
     Write-Host "Done getting dependencies (exit code: $pubCode)"

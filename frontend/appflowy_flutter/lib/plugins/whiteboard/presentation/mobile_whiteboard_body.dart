@@ -60,6 +60,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
       Log.info('[MobileWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
     }
     
+    if (!mounted) return;
     setState(() {
       _userNickname = nickname;
     });
@@ -77,10 +78,16 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
       
       if (room != null) {
         Log.debug('🟢 [MobileWhiteboard] Found room in local storage: roomId=${room.roomId}');
+        // 本地 room 已足够构造远程白板 URL。不要在每次打开时再读取完整
+        // collab 场景：该调用会先 openWhiteboard 再拉取整块 JSON，移动端会被
+        // 网络和大白板数据拖住；白板页面会自行从 room 恢复场景。
+        if (!mounted) return;
         setState(() {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
         });
+        Log.debug('⚡ [MobileWhiteboard] Local room fast path, skip collab preload');
+        return;
       }
 
       final whiteboardData = await WhiteboardDataService().loadWhiteboardData(widget.view.id);
@@ -100,6 +107,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
           Log.debug('✅ [MobileWhiteboard] Synced server room to local storage: roomId=$roomIdStr');
         }
         
+        if (!mounted) return;
         setState(() {
           _roomId = roomIdStr;
           _roomKey = roomKeyStr;
@@ -137,6 +145,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         Log.error('❌ [MobileWhiteboard] FAILED to save room info to server');
       }
       
+      if (!mounted) return;
       setState(() {
         _roomId = newRoomId;
         _roomKey = newRoomKey;
@@ -144,7 +153,9 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
     } catch (e) {
       Log.error('❌ [MobileWhiteboard] Error fetching/generating room: $e');
     } finally {
-      setState(() => _isFetchingRoom = false);
+      if (mounted) {
+        setState(() => _isFetchingRoom = false);
+      }
     }
   }
 

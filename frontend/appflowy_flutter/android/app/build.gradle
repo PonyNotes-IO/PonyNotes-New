@@ -108,6 +108,68 @@ flutter {
     source '../..'
 }
 
+// Release builds must keep Flutter's generated plugin registration. This guard
+// also protects direct Gradle builds that bypass the cargo-make preflight.
+def verifyFlutterPluginRegistration = tasks.register('verifyFlutterPluginRegistration') {
+    doLast {
+        def mainActivityFile = file('src/main/kotlin/com/xiaomabiji/app/note/MainActivity.kt')
+        if (!mainActivityFile.exists()) {
+            throw new GradleException("Missing MainActivity.kt: ${mainActivityFile}")
+        }
+
+        def mainActivity = mainActivityFile.getText('UTF-8')
+        if (!mainActivity.contains('super.configureFlutterEngine(flutterEngine)')) {
+            throw new GradleException(
+                    'MainActivity must call super.configureFlutterEngine(flutterEngine) to keep Flutter automatic plugin registration.'
+            )
+        }
+        if (mainActivity ==~ /(?s).*flutterEngine(?:\.getPlugins\(\)|\.plugins)\.add\s*\(.*/) {
+            throw new GradleException(
+                    'MainActivity contains manual plugin registration. Keep plugin registration in GeneratedPluginRegistrant.java.'
+            )
+        }
+
+        def registrantFile = file('src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java')
+        if (!registrantFile.exists()) {
+            throw new GradleException(
+                    "Missing GeneratedPluginRegistrant.java. Run flutter pub get before the release build: ${registrantFile}"
+            )
+        }
+
+        def proguardFile = file('proguard-rules.pro')
+        if (!proguardFile.exists()) {
+            throw new GradleException("Missing Android release keep rules: ${proguardFile}")
+        }
+
+        def registrant = registrantFile.getText('UTF-8')
+        def proguard = proguardFile.getText('UTF-8')
+        def requiredRegistrations = [
+                'com.pichillilorenzo.flutter_inappwebview_android.InAppWebViewFlutterPlugin',
+                'com.postliu.douyin_login.DouyinPlugin',
+                'com.jarvan.fluwx.FluwxPlugin',
+                'dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin',
+                'io.flutter.plugins.imagepicker.ImagePickerPlugin',
+                'com.baseflow.permissionhandler.PermissionHandlerPlugin',
+        ]
+        requiredRegistrations.each { registration ->
+            if (!registrant.contains(registration)) {
+                throw new GradleException(
+                        "GeneratedPluginRegistrant.java is missing required Android plugin registration: ${registration}"
+                )
+            }
+            if (!proguard.contains("-keep class ${registration} {")) {
+                throw new GradleException(
+                        "Android release keep rules are missing required plugin entry point: ${registration}"
+                )
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    dependsOn(verifyFlutterPluginRegistration)
+}
+
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
     // 微信 SDK：6.8.38（最新稳定版）

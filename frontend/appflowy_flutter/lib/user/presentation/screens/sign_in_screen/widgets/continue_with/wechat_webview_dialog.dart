@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:appflowy_backend/log.dart';
@@ -13,7 +14,7 @@ Future<String?> showWeChatWebViewDialog(BuildContext context) {
   final state = DateTime.now().microsecondsSinceEpoch.toString() +
       Random().nextInt(100000).toString();
   const appId = 'wxf2bf9058a11e9e14';
-  const redirectUri = 'https://www.xiaomabiji.com/wechat/callback';
+  const redirectUri = 'https://www.xiaomabiji.com/wechat/callback/';
 
   final url = Uri.https(
     'open.weixin.qq.com',
@@ -25,7 +26,7 @@ Future<String?> showWeChatWebViewDialog(BuildContext context) {
       'scope': 'snsapi_login',
       'state': state,
     },
-  ).toString();
+  ).replace(fragment: 'wechat_redirect').toString();
 
   return showDialog<String>(
     context: context,
@@ -51,13 +52,23 @@ class _WeChatWebViewDialog extends StatefulWidget {
 }
 
 class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
+  static const _loadTimeout = Duration(seconds: 20);
+
   InAppWebViewController? _controller;
+  Timer? _loadTimer;
   bool _isLoading = true;
   bool _isDisposed = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _armLoadTimer();
+  }
+
+  @override
   void dispose() {
+    _loadTimer?.cancel();
     // 修复：原实现无 dispose 方法，Dialog 关闭后原生 WebView 实例不被释放，
     // 在 macOS 上可能因 MethodChannel 残留消息 + webView weak 引用变 nil
     // 触发空指针崩溃。先解除引用，再延迟一帧销毁原生实例。
@@ -76,11 +87,58 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
     super.dispose();
   }
 
+  void _armLoadTimer() {
+    _loadTimer?.cancel();
+    _loadTimer = Timer(_loadTimeout, () {
+      if (!mounted || _isDisposed || !_isLoading) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _error = '二维码页面加载超时，请检查网络后重试';
+      });
+    });
+  }
+
+  void _finishLoading() {
+    _loadTimer?.cancel();
+    if (mounted && !_isDisposed && _isLoading) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    _loadTimer?.cancel();
+    if (mounted && !_isDisposed) {
+      setState(() {
+        _isLoading = false;
+        _error = message;
+      });
+    }
+  }
+
+  void _retry() {
+    if (!mounted || _isDisposed) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _armLoadTimer();
+    _controller?.loadUrl(
+      urlRequest: URLRequest(url: WebUri(widget.authUrl)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark ? const Color(0xFF191919) : Colors.white;
+    final viewport = MediaQuery.sizeOf(context);
+    final webViewWidth = min(520.0, max(220.0, viewport.width - 80));
+    final webViewHeight = min(600.0, max(240.0, viewport.height - 180));
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: backgroundColor,
@@ -93,8 +151,8 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: SizedBox(
-          width: 520,
-          height: 600,
+            width: webViewWidth,
+            height: webViewHeight,
             child: Column(
               children: [
                 _buildHeader(theme),
@@ -109,6 +167,11 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                           mediaPlaybackRequiresUserGesture: false,
                           javaScriptEnabled: true,
                           supportZoom: false,
+                          useShouldOverrideUrlLoading: true,
+                          useOnLoadResource: true,
+                          domStorageEnabled: true,
+                          databaseEnabled: true,
+                          thirdPartyCookiesEnabled: true,
                         ),
                         webViewEnvironment: sharedWebViewEnvironment,
                         onWebViewCreated: (c) {
@@ -117,11 +180,10 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                           }
                         },
                         onLoadStop: (_, __) {
-                          if (mounted && !_isDisposed) {
-                            setState(() => _isLoading = false);
-                          }
+                          _finishLoading();
                         },
                         onLoadStart: (_, __) {
+                          _armLoadTimer();
                           if (mounted && !_isDisposed) {
                             setState(() {
                               _isLoading = true;
@@ -129,13 +191,34 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                             });
                           }
                         },
-                        onLoadError: (controller, url, code, message) {
-                          Log.error('WeChat WebView load error: $code $message');
-                          if (mounted && !_isDisposed) {
-                            setState(() {
-                              _isLoading = false;
-                              _error = '加载页面失败 ($code)';
-                            });
+                        onProgressChanged: (_, progress) {
+                          if (progress >= 80) {
+                            _finishLoading();
+                          }
+                        },
+                        onLoadResource: (_, resource) {
+                          final resourceUrl = resource.url?.toString() ?? '';
+                          if (resourceUrl.contains('/connect/qrcode/')) {
+                            _finishLoading();
+                          }
+                        },
+                        onReceivedError: (controller, request, error) {
+                          Log.error(
+                            'WeChat WebView received error: ${error.description}, url: ${request.url}',
+                          );
+                          if (request.isForMainFrame != false) {
+                            _showError('网络连接失败，请检查网络后重试');
+                          }
+                        },
+                        onReceivedHttpError:
+                            (controller, request, errorResponse) {
+                          final statusCode = errorResponse.statusCode ?? 0;
+                          Log.error(
+                            'WeChat WebView HTTP error: $statusCode ${errorResponse.reasonPhrase}',
+                          );
+                          if (request.isForMainFrame != false &&
+                              statusCode >= 400) {
+                            _showError('页面加载失败 (HTTP $statusCode)');
                           }
                         },
                         shouldOverrideUrlLoading: (controller, action) async {
@@ -185,15 +268,7 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                                 style: TextButton.styleFrom(
                                   foregroundColor: theme.textColorScheme.primary,
                                 ),
-                                onPressed: () {
-                                  setState(() {
-                                    _isLoading = true;
-                                    _error = null;
-                                  });
-                                  _controller?.loadUrl(
-                                    urlRequest: URLRequest(url: WebUri(widget.authUrl)),
-                                  );
-                                },
+                                onPressed: _retry,
                                 child: const Text('重试'),
                               )
                             ],
@@ -251,4 +326,3 @@ class _LoadingMask extends StatelessWidget {
     );
   }
 }
-

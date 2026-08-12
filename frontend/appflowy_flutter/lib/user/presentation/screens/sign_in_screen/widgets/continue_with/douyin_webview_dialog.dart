@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:appflowy_backend/log.dart';
@@ -57,13 +58,23 @@ class _DouYinWebViewDialog extends StatefulWidget {
 }
 
 class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
+  static const _loadTimeout = Duration(seconds: 20);
+
   InAppWebViewController? _controller;
+  Timer? _loadTimer;
   bool _isLoading = true;
   bool _isDisposed = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _armLoadTimer();
+  }
+
+  @override
   void dispose() {
+    _loadTimer?.cancel();
     // 修复：原实现无 dispose 方法，Dialog 关闭后原生 WebView 实例不被释放，
     // 在 macOS 上可能因 MethodChannel 残留消息 + webView weak 引用变 nil
     // 触发空指针崩溃。先解除引用，再延迟一帧销毁原生实例。
@@ -82,9 +93,56 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
     super.dispose();
   }
 
+  void _armLoadTimer() {
+    _loadTimer?.cancel();
+    _loadTimer = Timer(_loadTimeout, () {
+      if (!mounted || _isDisposed || !_isLoading) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _error = '二维码页面加载超时，请检查网络后重试';
+      });
+    });
+  }
+
+  void _finishLoading() {
+    _loadTimer?.cancel();
+    if (mounted && !_isDisposed && _isLoading) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String message) {
+    _loadTimer?.cancel();
+    if (mounted && !_isDisposed) {
+      setState(() {
+        _isLoading = false;
+        _error = message;
+      });
+    }
+  }
+
+  void _retry() {
+    if (!mounted || _isDisposed) {
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    _armLoadTimer();
+    _controller?.loadUrl(
+      urlRequest: URLRequest(url: WebUri(widget.authUrl)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final viewport = MediaQuery.sizeOf(context);
+    final webViewWidth = min(520.0, max(220.0, viewport.width - 80));
+    final webViewHeight = min(600.0, max(240.0, viewport.height - 180));
     return AlertDialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       backgroundColor: theme.surfaceColorScheme.layer01,
@@ -97,8 +155,8 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: SizedBox(
-            width: 520,
-            height: 600,
+            width: webViewWidth,
+            height: webViewHeight,
             child: Column(
               children: [
                 _buildHeader(theme),
@@ -118,7 +176,10 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                 javaScriptEnabled: true,
                                 supportZoom: false,
                                 useShouldOverrideUrlLoading: true,
-                                useOnLoadResource: false,
+                                useOnLoadResource: true,
+                                domStorageEnabled: true,
+                                databaseEnabled: true,
+                                thirdPartyCookiesEnabled: true,
                                 cacheEnabled: true,
                                 clearCache: false,
                                 // Windows 特定设置
@@ -129,9 +190,6 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                 isInspectable: false,
                                 allowsLinkPreview: false,
                                 allowsBackForwardNavigationGestures: false,
-                                // 设置 User-Agent，模拟真实浏览器
-                                userAgent:
-                                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                               ),
                               webViewEnvironment: sharedWebViewEnvironment,
                               onWebViewCreated: (c) {
@@ -140,38 +198,29 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                 }
                               },
                               onLoadStop: (_, __) {
-                                if (mounted) {
-                                  setState(() => _isLoading = false);
-                                }
+                                _finishLoading();
                               },
                               onLoadStart: (_, __) {
-                                if (mounted) {
+                                _armLoadTimer();
+                                if (mounted && !_isDisposed) {
                                   setState(() {
                                     _isLoading = true;
                                     _error = null;
                                   });
                                 }
                               },
-                              onLoadError: (controller, url, code, message) {
-                                Log.error(
-                                  'DouYin WebView load error: code=$code, message=$message, url=$url',
-                                );
-                                // 某些错误可能是正常的（如网络延迟），只在严重错误时显示
-                                if (mounted && code != -999) {
-                                  // -999 通常是用户取消
-                                  setState(() {
-                                    _isLoading = false;
-                                    // 简化错误信息，避免显示技术细节
-                                    if (message.contains('connection') ||
-                                        message.contains('网络')) {
-                                      _error = '网络连接失败，请检查网络后重试';
-                                    } else if (message.contains('SSL') ||
-                                        message.contains('证书')) {
-                                      _error = 'SSL 证书验证失败';
-                                    } else {
-                                      _error = '页面加载失败，请重试';
-                                    }
-                                  });
+                              onProgressChanged: (_, progress) {
+                                if (progress >= 80) {
+                                  _finishLoading();
+                                }
+                              },
+                              onLoadResource: (_, resource) {
+                                final resourceUrl =
+                                    resource.url?.toString().toLowerCase() ??
+                                        '';
+                                if (resourceUrl.contains('qrcode') ||
+                                    resourceUrl.contains('/qr')) {
+                                  _finishLoading();
                                 }
                               },
                               onConsoleMessage: (controller, message) {
@@ -181,8 +230,18 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                 Log.error(
                                   'DouYin WebView received error: ${error.description}, type: ${error.type}, url: ${request.url}',
                                 );
-                                // 不立即显示错误，因为可能是临时网络问题
-                                // 只在 onLoadError 中显示最终错误
+                                if (request.isForMainFrame != false) {
+                                  final message = error.description;
+                                  _showError(
+                                    message.contains('connection') ||
+                                            message.contains('网络')
+                                        ? '网络连接失败，请检查网络后重试'
+                                        : message.contains('SSL') ||
+                                                message.contains('证书')
+                                            ? 'SSL 证书验证失败'
+                                            : '页面加载失败，请重试',
+                                  );
+                                }
                               },
                               // 必须提供 onUpdateVisitedHistory 回调，即使为空，否则 Windows WebView2 可能崩溃
                               onUpdateVisitedHistory:
@@ -197,17 +256,16 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                   );
                                 }
                               },
-                              onLoadHttpError:
-                                  (controller, url, statusCode, description) {
+                              onReceivedHttpError:
+                                  (controller, request, errorResponse) {
+                                final statusCode =
+                                    errorResponse.statusCode ?? 0;
                                 Log.error(
-                                  'DouYin WebView HTTP error: $statusCode $description',
+                                  'DouYin WebView HTTP error: $statusCode ${errorResponse.reasonPhrase}',
                                 );
-                                if (mounted) {
-                                  setState(() {
-                                    _isLoading = false;
-                                    _error =
-                                        'HTTP错误 ($statusCode): $description';
-                                  });
+                                if (request.isForMainFrame != false &&
+                                    statusCode >= 400) {
+                                  _showError('页面加载失败 (HTTP $statusCode)');
                                 }
                               },
                               onPermissionRequest: (controller, request) async {
@@ -242,11 +300,9 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                   }
 
                                   final uriString = uri.toString();
-                                  final scheme = uri.scheme;
                                   final isCallback =
                                       uriString.contains('douyin/callback') ||
-                                          (scheme != null &&
-                                              scheme.startsWith('ponynotes'));
+                                          uri.scheme.startsWith('ponynotes');
                                   if (isCallback) {
                                     final code = uri.queryParameters['code'];
                                     final state = uri.queryParameters['state'];
@@ -295,17 +351,7 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                                     const SizedBox(height: 12),
                                     FlowyButton(
                                       text: const Text('重试'),
-                                      onTap: () {
-                                        setState(() {
-                                          _isLoading = true;
-                                          _error = null;
-                                        });
-                                        _controller?.loadUrl(
-                                          urlRequest: URLRequest(
-                                            url: WebUri(widget.authUrl),
-                                          ),
-                                        );
-                                      },
+                                      onTap: _retry,
                                     ),
                                   ],
                                 ),
