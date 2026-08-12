@@ -177,17 +177,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
 
-  // Intentionally not calling window.Show() here.
-  //
-  // The runner creates the window at a fixed 1280x720 logical size, and the
-  // Dart side (InitAppWindowTask) then resizes it to the stored size before
-  // showing it. Showing the window at the runner's size means Windows builds a
-  // presentation surface for geometry that is about to change, and the resize
-  // lands while the engine still has no frame to hand back - which is how the
-  // first frame ended up squeezed against the bottom of the window. Letting
-  // window_manager perform the one and only show, after the geometry is final,
-  // removes that window entirely. FlutterWindow's first-frame callback shows
-  // the window as a safety net in case the Dart side never gets there.
+  // FlutterWindow owns the one-time Show call and performs it from Flutter's
+  // first-frame callback. Dart only applies saved geometry after that frame.
   window.SetQuitOnClose(true);
 
   ::MSG msg;

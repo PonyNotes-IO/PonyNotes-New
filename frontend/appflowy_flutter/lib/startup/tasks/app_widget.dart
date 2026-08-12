@@ -155,10 +155,9 @@ class InitAppWidgetTask extends LaunchTask {
       ),
     );
 
-    final surfaceGeneration = nextWindowsSurfaceGeneration();
-    await synchronizeWindowsSurfaceAfterFirstFrame(
-      generation: surfaceGeneration,
-    );
+    if (UniversalPlatform.isWindows) {
+      await applyWindowsWindowStateAfterFirstFrame();
+    }
 
     return;
   }
