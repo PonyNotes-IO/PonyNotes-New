@@ -1767,9 +1767,31 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
     return addBtn;
   }
 
+  /// 中间栏 FutureBuilder 的数据源。
+  ///
+  /// 【2026-08-11 加固：中间栏无限转圈】
+  /// 这里调的 getChildViews 是 FFI → Rust flowy-folder。原实现不带超时，一旦
+  /// Rust 侧不返回，FutureBuilder 会永远停在 ConnectionState.waiting，中间栏
+  /// 一直转圈；而且它等的是 FFI 不是网络，断网也绕不过去。
+  ///
+  /// 与 SpaceBloc 的 SpaceEvent.open 是同一个调用、同一个失效模式，两处都要兜。
+  /// 超时后返回空列表，让中间栏渲染成「空」而不是「一直转」，并留下日志指明
+  /// 卡在这里，便于下次复现时直接定位。
   Future<List<ViewPB>> _loadChildViews(String spaceId) async {
-    final result = await ViewBackendService.getChildViews(viewId: spaceId);
-    return result.fold((views) => views, (_) => const <ViewPB>[]);
+    // 注意：这里【不再】对 views 按 lastEdited 排序 —— 06308cd8d
+    //（fix(space): 修复移动端文档列表状态错乱）已有意移除该排序，
+    // 本次加固只加超时，不恢复它。
+    try {
+      final result = await ViewBackendService.getChildViews(viewId: spaceId)
+          .timeout(const Duration(seconds: 10));
+      return result.fold((views) => views, (_) => const <ViewPB>[]);
+    } catch (e) {
+      Log.error(
+        '[SpaceHub] _loadChildViews 超时/失败（FFI→Rust folder）: '
+        'spaceId=$spaceId, err=$e —— 以空列表降级渲染，避免中间栏无限转圈',
+      );
+      return const <ViewPB>[];
+    }
   }
 
   /// 新建笔记页
