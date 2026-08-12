@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
@@ -6,6 +8,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_configuration.dart';
 import 'package:appflowy/plugins/trash/application/prelude.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/trash.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -485,6 +488,7 @@ class _TrashActionAllButton extends StatelessWidget {
                   trashBloc.add(
                     const TrashEvent.restoreAll(),
                   );
+                  _notifyIosSpaceRefresh();
                 }
               },
             );
@@ -589,6 +593,7 @@ class _TrashItemActions extends StatelessWidget {
                 context
                     .read<TrashBloc>()
                     .add(TrashEvent.putback(deletedFile.id));
+                _notifyIosSpaceRefresh();
                 Fluttertoast.showToast(
                   msg:
                       '${deletedFile.name} ${LocaleKeys.trash_mobile_isRestored.tr()}',
@@ -629,6 +634,14 @@ class _TrashItemActions extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+void _notifyIosSpaceRefresh() {
+  if (Platform.isIOS) {
+    Future<void>.delayed(const Duration(milliseconds: 500), () {
+      SpaceChangeNotifier.instance.notifySpacesChanged();
+    });
   }
 }
 
