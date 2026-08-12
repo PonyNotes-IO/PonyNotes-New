@@ -500,10 +500,11 @@ class _ExportActionState extends State<ExportAction> {
   Future<void> _exportAsCsv(BuildContext context) async {
     // 关闭弹出菜单
     _popoverController.close();
-    
+
     try {
       final documentService = DocumentService();
-      final result = await documentService.openDocument(documentId: widget.view.id);
+      final result =
+          await documentService.openDocument(documentId: widget.view.id);
 
       await result.fold(
         (documentData) async {

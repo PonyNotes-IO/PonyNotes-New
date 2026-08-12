@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/application/settings/share/export_service.dart';
@@ -48,9 +49,9 @@ class DatabaseExportAction extends StatelessWidget {
   Future<void> _exportAsCsv(BuildContext context) async {
     try {
       Log.info('开始导出数据库视图为CSV: ${view.id}');
-      
+
       final result = await BackendExportService.exportDatabaseAsCSV(view.id);
-      
+
       await result.fold(
         (exportData) async {
           if (exportData.data.isEmpty) {
@@ -63,21 +64,27 @@ class DatabaseExportAction extends StatelessWidget {
 
           final fileName = '${view.nameOrDefault}.csv';
           final filePicker = GetIt.instance<FilePickerService>();
+          final bytes =
+              Uint8List.fromList(utf8.encode('\uFEFF${exportData.data}'));
           final savePath = await filePicker.saveFile(
             dialogTitle: '保存 CSV 文件',
             fileName: fileName,
             type: FileType.custom,
             allowedExtensions: ['csv'],
+            bytes: Platform.isAndroid || Platform.isIOS ? bytes : null,
           );
 
-          if (savePath != null) {
+          if (savePath != null && !Platform.isAndroid && !Platform.isIOS) {
             final file = File(savePath);
-            // 使用 UTF-8 BOM 以确保 Excel 能正确识别中文
-            final bytes = utf8.encode('\uFEFF${exportData.data}');
             await file.writeAsBytes(bytes);
+          }
+          if (savePath != null) {
             Log.info('CSV 文件已保存到: $savePath');
             if (context.mounted) {
-              showToastNotification(message: 'CSV 文件已保存', type: ToastificationType.success);
+              showToastNotification(
+                message: 'CSV 文件已保存',
+                type: ToastificationType.success,
+              );
             }
           }
         },
