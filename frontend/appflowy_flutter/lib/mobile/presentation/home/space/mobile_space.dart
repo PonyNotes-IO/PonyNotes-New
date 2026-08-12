@@ -17,6 +17,7 @@ import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy_backend/log.dart';
@@ -493,11 +494,45 @@ class MobileSpaceItem extends StatefulWidget {
 class _MobileSpaceItemState extends State<MobileSpaceItem> {
   late bool _isExpanded;
   double _turns = 0;
+  late final ViewListener _spaceListener;
+  int _documentListRevision = 0;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = true;
+    if (Platform.isIOS) {
+      SpaceChangeNotifier.instance.addListener(_onTrashRestore);
+    }
+    if (Platform.isIOS) {
+      _spaceListener = ViewListener(viewId: widget.space.id)
+        ..start(
+          onViewDeleted: (result) {
+            result.fold(
+              (_) {
+                if (mounted) setState(() => _documentListRevision++);
+              },
+              (_) {},
+            );
+          },
+          onViewMoveToTrash: (_) {
+            if (mounted) setState(() => _documentListRevision++);
+          },
+        );
+    }
+  }
+
+  @override
+  void dispose() {
+    if (Platform.isIOS) {
+      SpaceChangeNotifier.instance.removeListener(_onTrashRestore);
+    }
+    if (Platform.isIOS) _spaceListener.stop();
+    super.dispose();
+  }
+
+  void _onTrashRestore() {
+    if (mounted) setState(() => _documentListRevision++);
   }
 
   void _toggleExpand() {
@@ -615,8 +650,11 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: BlocProvider(
-              create: (context) =>
-                  ViewBloc(view: widget.space)..add(const ViewEvent.initial()),
+              key: ValueKey('${widget.space.id} $_documentListRevision'),
+              create: (context) => ViewBloc(
+                view: widget.space,
+                useNotificationViewUpdates: Platform.isIOS,
+              )..add(const ViewEvent.initial()),
               child: BlocListener<SpaceBloc, SpaceState>(
                 // Android keeps the 1.13 sequence list resident. Its ViewBloc
                 // listener still applies create/delete/move/restore updates.

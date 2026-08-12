@@ -24,13 +24,46 @@ if [[ `git status --porcelain` ]]; then
   exit 1
 fi
 
+# ── flutter analyze 门禁 ──────────────────────────────────────────────
 #
-#printMessage "Running the Flutter analyzer"
-#flutter analyze
+# 起因：2026-08-12 有一次提交只改了调用方、没同步改抽象类签名
+#   （database_export_action.dart 传了 saveFile 的 bytes 参数，而
+#    FilePickerService.saveFile 当时还没有这个参数），
+# 使 dev_mobile_new 处于「编译不过」状态约 1 小时。期间触发的 macOS 构建
+# 白跑了 1 小时 4 分才失败。这类错误 flutter analyze 十几秒就能发现。
 #
-#if [ $? -ne 0 ]; then
-#  printError "Flutter analyzer error"
-#  exit 1
-#fi
-#
-#printMessage "Finished running the Flutter analyzer"
+# 说明：
+#   · 只拦 error，不拦 warning / info —— 项目现有 2000+ 条 info，
+#     全拦会让所有人无法推送。
+#   · 生成物（*.freezed.dart、lib/generated/、pb.dart）被 .gitignore 排除、
+#     需本地生成。刚 clone 或刚清理过的仓库没有它们，此时 analyze 会报出
+#     成百上千条「找不到符号」，那不是真问题，故检测到缺失就跳过。
+#   · 实测全量 analyze 约 14 秒。
+#   · 确需跳过：git push --no-verify
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ANALYZE_DIR="$REPO_ROOT/frontend/appflowy_flutter"
+
+if ! command -v flutter >/dev/null 2>&1; then
+  printMessage "跳过 flutter analyze：未找到 flutter 命令"
+elif [ ! -d "$ANALYZE_DIR" ]; then
+  printMessage "跳过 flutter analyze：未找到 frontend/appflowy_flutter"
+elif [ ! -f "$ANALYZE_DIR/lib/generated/locale_keys.g.dart" ]; then
+  printMessage "跳过 flutter analyze：本地缺少生成物（生成后可获得完整检查）"
+else
+  printMessage "Running the Flutter analyzer"
+
+  ANALYZE_OUTPUT="$(cd "$ANALYZE_DIR" && flutter analyze --no-pub 2>&1)"
+  ERROR_LINES="$(printf '%s\n' "$ANALYZE_OUTPUT" | grep -E 'error •' || true)"
+
+  if [ -n "$ERROR_LINES" ]; then
+    ERROR_COUNT="$(printf '%s\n' "$ERROR_LINES" | wc -l | tr -d ' ')"
+    printError "flutter analyze 发现 ${ERROR_COUNT} 个 error，已阻止推送："
+    printf '%s\n' "$ERROR_LINES"
+    printError "若这些 error 不是你引入的，先 git pull --rebase 取最新代码再试。"
+    printError "确需跳过：git push --no-verify"
+    exit 1
+  fi
+
+  printSuccess "flutter analyze 通过（0 error）"
+fi
