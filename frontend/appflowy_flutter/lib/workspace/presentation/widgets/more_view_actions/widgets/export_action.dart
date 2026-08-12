@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -176,16 +177,19 @@ class _ExportActionState extends State<ExportAction> {
 
           final fileName = '${widget.view.nameOrDefault}.md';
           final filePicker = GetIt.instance<FilePickerService>();
+          final bytes = Uint8List.fromList(utf8.encode(markdown));
           final savePath = await filePicker.saveFile(
             dialogTitle: '保存 Markdown 文件',
             fileName: fileName,
             type: FileType.custom,
             allowedExtensions: ['md'],
+            bytes: Platform.isAndroid || Platform.isIOS ? bytes : null,
           );
 
           if (savePath != null) {
-            final file = File(savePath);
-            await file.writeAsString(markdown, encoding: utf8);
+            if (!Platform.isAndroid && !Platform.isIOS) {
+              await File(savePath).writeAsBytes(bytes);
+            }
             Log.info('Markdown 文件已保存到: $savePath');
             if (context.mounted) {
               showToastNotification(message: 'Markdown 文件已保存', type: ToastificationType.success);
@@ -210,35 +214,34 @@ class _ExportActionState extends State<ExportAction> {
   Future<void> _exportAsPdf(BuildContext context) async {
     // 关闭弹出菜单
     _popoverController.close();
-    
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var isLoadingVisible = false;
+
+    void hideLoading() {
+      if (isLoadingVisible && navigator.mounted) {
+        isLoadingVisible = false;
+        navigator.pop();
+      }
+    }
+
     try {
-      // 先获取文件名和保存路径，减少用户等待时间
       final fileName = '${widget.view.nameOrDefault}.pdf';
       final filePicker = GetIt.instance<FilePickerService>();
       
-      // 先显示文件选择对话框
-      final savePath = await filePicker.saveFile(
-        dialogTitle: '保存 PDF 文件',
-        fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-      );
-      
-      // 如果用户取消了保存，直接返回
-      if (savePath == null) {
-        Log.info('用户取消了 PDF 文件保存');
-        return;
-      }
-      
       // 显示加载指示器
       if (context.mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
+        unawaited(
+          showDialog<void>(
+            context: navigator.context,
+            useRootNavigator: false,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: CircularProgressIndicator(),
+            ),
+          ).whenComplete(() => isLoadingVisible = false),
         );
+        isLoadingVisible = true;
       }
       
       // 开始生成 PDF
@@ -250,8 +253,8 @@ class _ExportActionState extends State<ExportAction> {
           final document = documentData.toDocument();
           if (document == null) {
             Log.error('导出 PDF 失败：无法获取文档');
+            hideLoading();
             if (context.mounted) {
-              Navigator.of(context).pop(); // 关闭加载指示器
               showToastNotification(message: '导出失败：无法获取文档内容');
             }
             return;
@@ -280,11 +283,11 @@ class _ExportActionState extends State<ExportAction> {
               Log.info('  第 $i 行: ${lines[i]}');
             }
           }
-          
+
           if (markdown.isEmpty) {
             Log.error('导出 PDF 失败：Markdown 内容为空');
+            hideLoading();
             if (context.mounted) {
-              Navigator.of(context).pop(); // 关闭加载指示器
               showToastNotification(message: '导出失败：文档内容为空');
             }
             return;
@@ -409,30 +412,30 @@ class _ExportActionState extends State<ExportAction> {
             Log.info('开始保存 PDF 字节...');
             final pdfBytes = await pdf.save();
             Log.info('PDF 保存完成，大小: ${pdfBytes.length} 字节');
-            
+
             // 关闭加载指示器
-            if (context.mounted) {
-              Navigator.of(context).pop();
-            }
-            
-            // 写入文件
+            hideLoading();
+
             try {
-              final file = File(savePath);
-              await file.writeAsBytes(pdfBytes);
+              final savePath = await filePicker.saveFile(
+                dialogTitle: '保存 PDF 文件',
+                fileName: fileName,
+                type: FileType.custom,
+                allowedExtensions: ['pdf'],
+                bytes: Platform.isAndroid || Platform.isIOS ? pdfBytes : null,
+              );
+              if (savePath == null) {
+                Log.info('用户取消了 PDF 文件保存');
+                return;
+              }
+
+              if (!Platform.isAndroid && !Platform.isIOS) {
+                await File(savePath).writeAsBytes(pdfBytes);
+              }
               Log.info('PDF 文件已保存到: $savePath');
-              
-              // 验证文件是否真的保存成功
-              if (await file.exists()) {
-                final fileSize = await file.length();
-                Log.info('PDF 文件验证成功，文件大小: $fileSize 字节');
-                if (context.mounted) {
-                  showToastNotification(message: 'PDF 文件已保存', type: ToastificationType.success);
-                }
-              } else {
-                Log.error('PDF 文件保存失败：文件不存在');
-                if (context.mounted) {
-                  showToastNotification(message: 'PDF 文件保存失败：文件不存在');
-                }
+
+              if (context.mounted) {
+                showToastNotification(message: 'PDF 文件已保存', type: ToastificationType.success);
               }
             } catch (e) {
               Log.error('写入 PDF 文件失败: $e');
@@ -442,24 +445,24 @@ class _ExportActionState extends State<ExportAction> {
             }
           } catch (e) {
             Log.error('生成 PDF 时出错: $e');
+            hideLoading();
             if (context.mounted) {
-              Navigator.of(context).pop(); // 关闭加载指示器
               showToastNotification(message: 'PDF 生成失败：$e');
             }
           }
         },
         (error) {
           Log.error('导出 PDF 失败: ${error.msg}');
+          hideLoading();
           if (context.mounted) {
-            Navigator.of(context).pop(); // 关闭加载指示器
             showToastNotification(message: '导出失败：${error.msg}');
           }
         },
       );
     } catch (e) {
       Log.error('导出 PDF 异常: $e');
+      hideLoading();
       if (context.mounted) {
-        Navigator.of(context).pop(); // 关闭加载指示器
         showToastNotification(message: '导出失败：$e');
       }
     }

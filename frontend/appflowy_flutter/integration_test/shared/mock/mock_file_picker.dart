@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:appflowy/startup/startup.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 
@@ -21,6 +23,7 @@ class MockFilePicker implements FilePickerService {
     FileType type = FileType.any,
     List<String>? allowedExtensions,
     bool lockParentWindow = false,
+    Uint8List? bytes,
   }) =>
       Future.value(mockPath);
 
