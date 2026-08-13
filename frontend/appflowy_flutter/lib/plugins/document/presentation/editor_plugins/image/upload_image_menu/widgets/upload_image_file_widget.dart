@@ -27,6 +27,8 @@ class UploadImageFileWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget child = FlowyButton(
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      hoverColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
       showDefaultBoxDecorationOnMobile: true,
       radius: PlatformInfo.isMobile ? BorderRadius.circular(8.0) : null,
       text: Container(
@@ -34,6 +36,7 @@ class UploadImageFileWidget extends StatelessWidget {
         alignment: Alignment.center,
         child: FlowyText(
           LocaleKeys.document_imageBlock_upload_placeholder.tr(),
+          color: Theme.of(context).colorScheme.onPrimary,
         ),
       ),
       onTap: () => _uploadImage(context),
@@ -52,17 +55,19 @@ class UploadImageFileWidget extends StatelessWidget {
   }
 
   Future<void> _uploadImage(BuildContext context) async {
-    // Pad 端和手机端：从相册选择
-    // 桌面端：从文件选择
-    if (PlatformInfo.isDesktop) {
-      final result = await getIt<FilePickerService>().pickFiles(
-        dialogTitle: '',
-        type: FileType.custom,
-        allowedExtensions: allowedExtensions,
-        allowMultiple: allowMultipleImages,
-      );
-      onPickFiles(result?.files.map((f) => f.xFile).toList() ?? const []);
-    } else {
+    try {
+      // Pad 端和手机端：从相册选择；桌面端：从文件选择。
+      if (PlatformInfo.isDesktop) {
+        final result = await getIt<FilePickerService>().pickFiles(
+          dialogTitle: '',
+          type: FileType.custom,
+          allowedExtensions: allowedExtensions,
+          allowMultiple: allowMultipleImages,
+        );
+        onPickFiles(result?.files.map((f) => f.xFile).toList() ?? const []);
+        return;
+      }
+
       final photoPermission =
           await PermissionChecker.checkPhotoPermission(context);
       if (!photoPermission) {
@@ -70,13 +75,16 @@ class UploadImageFileWidget extends StatelessWidget {
         return;
       }
       if (allowMultipleImages) {
-        final result = await ImagePicker().pickMultiImage();
-        onPickFiles(result);
+        onPickFiles(await ImagePicker().pickMultiImage());
       } else {
         final result =
             await ImagePicker().pickImage(source: ImageSource.gallery);
         onPickFiles(result == null ? const [] : [result]);
       }
+    } catch (error, stackTrace) {
+      // 原生权限/选择器异常不能冒泡到 Flutter 框架，避免移动端退出进程。
+      Log.error('Failed to pick image: $error\n$stackTrace');
+      onPickFiles(const []);
     }
   }
 }
