@@ -26,9 +26,13 @@ class HandwritingExportAction extends StatelessWidget {
   const HandwritingExportAction({
     super.key,
     required this.view,
+    this.mobile = false,
+    this.beforeExport,
   });
 
   final ViewPB view;
+  final bool mobile;
+  final Future<void> Function()? beforeExport;
 
   /// .ponynhw 文件扩展名
   static const String ponynhwExtension = '.ponynhw';
@@ -38,6 +42,14 @@ class HandwritingExportAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (mobile) {
+      return IconButton(
+        tooltip: '导出',
+        icon: const Icon(Icons.file_download_outlined),
+        onPressed: () => _showMobileExportSheet(context),
+      );
+    }
+
     return AppFlowyPopover(
       direction: PopoverDirection.leftWithTopAligned,
       constraints: const BoxConstraints(
@@ -67,6 +79,34 @@ class HandwritingExportAction extends StatelessWidget {
             lineHeight: 1.0,
             figmaLineHeight: 18.0,
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMobileExportSheet(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.picture_as_pdf),
+              title: const Text('导出为 PDF'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _exportAsPdf(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.save_alt),
+              title: const Text('导出为源文件(.ponynhw)'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _exportAsPonynhw(context);
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -125,6 +165,8 @@ class HandwritingExportAction extends StatelessWidget {
   Future<void> _exportAsPonynhw(BuildContext context) async {
     try {
       Log.info('[HandwritingExport] 开始导出为 .ponynhw 格式...');
+      await beforeExport?.call();
+      if (!context.mounted) return;
 
       final dataService = HandwritingSaberDataService();
       final sbnData = await dataService.loadHandwritingSaberData(view.id);
@@ -252,6 +294,9 @@ class HandwritingExportAction extends StatelessWidget {
         dialogTitle: '保存手写笔记源文件',
         fileName: fileName,
         type: FileType.any,
+        bytes: Platform.isAndroid || Platform.isIOS
+            ? Uint8List.fromList(ponynhwBytes)
+            : null,
       );
 
       if (savePath == null) {
@@ -263,8 +308,9 @@ class HandwritingExportAction extends StatelessWidget {
           ? savePath
           : '$savePath$ponynhwExtension';
 
-      final file = File(finalPath);
-      await file.writeAsBytes(ponynhwBytes);
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(finalPath).writeAsBytes(ponynhwBytes);
+      }
 
       Log.info('[HandwritingExport] .ponynhw 文件保存成功: $finalPath');
 
@@ -359,6 +405,8 @@ class HandwritingExportAction extends StatelessWidget {
   Future<void> _exportAsPdf(BuildContext context) async {
     try {
       Log.info('[HandwritingExport] 开始导出为 PDF...');
+      await beforeExport?.call();
+      if (!context.mounted) return;
 
       // 加载手写笔记数据
       final dataService = HandwritingSaberDataService();
@@ -444,6 +492,7 @@ class HandwritingExportAction extends StatelessWidget {
         fileName: fileName,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
+        bytes: Platform.isAndroid || Platform.isIOS ? pdfBytes : null,
       );
 
       if (savePath == null) {
@@ -452,8 +501,9 @@ class HandwritingExportAction extends StatelessWidget {
       }
 
       final finalPath = savePath.endsWith('.pdf') ? savePath : '$savePath.pdf';
-      final file = File(finalPath);
-      await file.writeAsBytes(pdfBytes);
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(finalPath).writeAsBytes(pdfBytes);
+      }
 
       Log.info('[HandwritingExport] PDF 文件保存成功: $finalPath');
 

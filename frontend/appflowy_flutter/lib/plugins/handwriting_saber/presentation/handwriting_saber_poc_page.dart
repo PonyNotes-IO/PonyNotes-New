@@ -38,6 +38,7 @@ import 'widgets/editor_page_manager.dart'; // ✅ 导入页面管理器组件
 import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
 import 'widgets/canvas_webview_widget.dart';
 import 'dialogs/insert_webview_dialog.dart';
+import 'handwriting_export_action.dart';
 import '../widgets/pdf_text_selection_dialog.dart';
 import '../services/pdf_text_extraction_service.dart';
 import '../services/editor_exporter.dart'; // ✅ PDF导出器
@@ -246,6 +247,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 移动端当前按下的手指，用于把画布滚动限制为双指操作
   final Set<int> _mobileTouchPointers = <int>{};
+  final Map<int, Offset> _mobileTouchPositions = <int, Offset>{};
+  final GlobalKey _mobileCanvasKey = GlobalKey();
+  Offset? _previousMultiTouchFocalPoint;
+  double? _previousMultiTouchSpan;
 
   /// ✅ 页面之间的间距
   static const double _gapBetweenPages = 16;
@@ -256,38 +261,73 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   bool get _isMobileMultiTouchActive =>
       _isMobilePlatform && _mobileTouchPointers.length >= 2;
 
-  void _handleMobilePointerDown(PointerDownEvent event) {
+  void _handleMobilePointer(PointerEvent event) {
     if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
       return;
     }
 
-    _mobileTouchPointers.add(event.pointer);
-    if (_mobileTouchPointers.length == 2) {
+    if (event is PointerDownEvent) {
+      if (_mobileTouchPointers.length >= 2) return;
+      final renderBox =
+          _mobileCanvasKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox == null ||
+          !renderBox.paintBounds.contains(renderBox.globalToLocal(event.position))) {
+        return;
+      }
+      _mobileTouchPointers.add(event.pointer);
+      _mobileTouchPositions[event.pointer] = event.position;
+    } else if (event is PointerMoveEvent &&
+        _mobileTouchPointers.contains(event.pointer)) {
+      _mobileTouchPositions[event.pointer] = event.position;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _mobileTouchPointers.remove(event.pointer);
+      _mobileTouchPositions.remove(event.pointer);
+      if (_mobileTouchPointers.length < 2) {
+        _previousMultiTouchFocalPoint = null;
+        _previousMultiTouchSpan = null;
+      }
+      return;
+    } else {
+      return;
+    }
+
+    if (_mobileTouchPointers.length == 2 &&
+        _previousMultiTouchSpan == null) {
       // 第二根手指用于滚动，不提交第一根手指留下的临时笔迹。
       _currentStrokeNotifier.value = null;
       _currentPageIndexNotifier.value = null;
       _shapeStartPoint = null;
-    }
-  }
-
-  void _handleMobilePointerMove(PointerMoveEvent event) {
-    if (!_isMobileMultiTouchActive ||
-        !_mobileTouchPointers.contains(event.pointer)) {
+      final positions = _currentMobileTouchPositions();
+      _previousMultiTouchFocalPoint = (positions[0] + positions[1]) / 2;
+      _previousMultiTouchSpan = (positions[0] - positions[1]).distance;
       return;
     }
 
-    final pointerDelta =
-        event.delta / _mobileTouchPointers.length.toDouble();
-    _jumpScroll(_pageScrollController, -pointerDelta.dy);
-    _jumpScroll(_canvasHorizontalScrollController, -pointerDelta.dx);
-  }
-
-  void _handleMobilePointerEnd(PointerEvent event) {
-    if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
+    if (!_isMobileMultiTouchActive) {
       return;
     }
-    _mobileTouchPointers.remove(event.pointer);
+
+    final positions = _currentMobileTouchPositions();
+    final focalPoint = (positions[0] + positions[1]) / 2;
+    final span = (positions[0] - positions[1]).distance;
+    final previousFocalPoint = _previousMultiTouchFocalPoint!;
+    final previousSpan = _previousMultiTouchSpan!;
+
+    final delta = focalPoint - previousFocalPoint;
+    _jumpScroll(_pageScrollController, -delta.dy);
+    _jumpScroll(_canvasHorizontalScrollController, -delta.dx);
+    if (previousSpan > 0 && span > 0) {
+      _setZoomLevel(_zoomLevelNotifier.value * span / previousSpan);
+    }
+
+    _previousMultiTouchFocalPoint = focalPoint;
+    _previousMultiTouchSpan = span;
   }
+
+  List<Offset> _currentMobileTouchPositions() => _mobileTouchPointers
+      .map((pointer) => _mobileTouchPositions[pointer]!)
+      .take(2)
+      .toList();
 
   void _jumpScroll(ScrollController controller, double delta) {
     if (!controller.hasClients || delta == 0) {
@@ -310,6 +350,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   @override
   void initState() {
     super.initState();
+    if (_isMobilePlatform) {
+      GestureBinding.instance.pointerRouter.addGlobalRoute(_handleMobilePointer);
+    }
     debugPrint('🚀🚀🚀 [HandwritingSaber] ===== initState =====');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewID: ${widget.view.id}');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewName: ${widget.view.name}');
@@ -5313,6 +5356,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _pageScrollController.dispose();
     _canvasHorizontalScrollController.dispose();
     _mobileTouchPointers.clear();
+    _mobileTouchPositions.clear();
+    if (_isMobilePlatform) {
+      GestureBinding.instance.pointerRouter
+          .removeGlobalRoute(_handleMobilePointer);
+    }
 
     // ✅ 清理当前页面索引 notifier
     _currentPageIndexNotifier.dispose();
@@ -5536,10 +5584,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                               children: [
                                 // ✅ 主内容区域（支持鼠标滚轮缩放）
                                 Listener(
-                                  onPointerDown: _handleMobilePointerDown,
-                                  onPointerMove: _handleMobilePointerMove,
-                                  onPointerUp: _handleMobilePointerEnd,
-                                  onPointerCancel: _handleMobilePointerEnd,
+                                  key: _mobileCanvasKey,
                                   onPointerSignal: (PointerSignalEvent event) {
                                     // 监听鼠标滚轮事件
                                     if (event is PointerScrollEvent) {
@@ -5724,6 +5769,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               },
             ),
           ),
+          if (_isMobilePlatform)
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(4),
+                color: Theme.of(context).colorScheme.surface,
+                child: HandwritingExportAction(
+                  view: widget.view,
+                  mobile: true,
+                  beforeExport: () =>
+                      _saveToStorage(suppressStatusUpdate: true),
+                ),
+              ),
+            ),
           // 导入时的加载遮罩
           if (_isImporting)
             Container(
