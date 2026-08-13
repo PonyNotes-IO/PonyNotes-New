@@ -170,15 +170,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 720);
+  const Win32Window::Size size =
+      Win32Window::GetStartupSize(Win32Window::Size(1280, 720));
 
   if (!window.Create(L"PonyNotes", origin, size)) {
     ReleaseMutex(h_mutex_instance);
     return EXIT_FAILURE;
   }
 
-  // FlutterWindow owns the one-time Show call and performs it from Flutter's
-  // first-frame callback. Dart only applies saved geometry after that frame.
+  // The top-level window and Flutter engine are created at the same final size.
+  // FlutterWindow performs the only cold-start Show call after the first frame.
   window.SetQuitOnClose(true);
 
   ::MSG msg;

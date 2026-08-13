@@ -1,6 +1,9 @@
 ; 版本号优先取命令行 /DAppVersion=xxx(CI 传入),此处仅为本地调试兜底
 #ifndef AppVersion
-#define AppVersion "0.9.9"
+#define AppVersion "1.1.15+41"
+#endif
+#ifndef VersionInfoVersion
+#define VersionInfoVersion "1.1.15.41"
 #endif
 
 [Setup]
@@ -16,7 +19,7 @@ DefaultGroupName=PonyNotes
 SetupIconFile=app_icon.ico
 UninstallDisplayIcon={app}\PonyNotes.exe
 UninstallDisplayName=PonyNotes
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#VersionInfoVersion}
 UsePreviousAppDir=no
 OutputBaseFilename=PonyNotesSetup
 OutputDir=Output

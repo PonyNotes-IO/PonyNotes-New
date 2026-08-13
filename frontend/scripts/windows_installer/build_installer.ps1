@@ -189,7 +189,17 @@ $FlutterDir  = Join-Path $FrontendDir "appflowy_flutter"
 $InstallDir  = Join-Path $ScriptDir "AppFlowy"
 $OutputDir   = Join-Path $ScriptDir "Output"
 
-$Version = "0.9.9"
+$pubspecPath = Join-Path $FlutterDir "pubspec.yaml"
+$versionLine = Get-Content -LiteralPath $pubspecPath | Where-Object { $_ -match '^version:\s*(\S+)' } | Select-Object -First 1
+if (-not $versionLine -or $versionLine -notmatch '^version:\s*(\S+)') {
+    throw "Unable to read version from $pubspecPath"
+}
+$Version = $Matches[1]
+$VersionInfoVersion = $Version -replace '\+', '.'
+if ($VersionInfoVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+    throw "Unsupported Windows version format: $Version"
+}
+Write-Host "[OK] App version: $Version (Windows file version: $VersionInfoVersion)"
 
 # Detect Inno Setup compiler
 $IsccPath = "D:\Inno Setup 6\ISCC.exe"
@@ -420,8 +430,12 @@ if (-not (Test-Path $issFile)) {
     throw "Inno Setup config not found: $issFile"
 }
 
-Write-Host "Running: $IsccPath $issFile"
-$issCode = Invoke-Step -File $IsccPath -Args @($issFile)
+Write-Host "Running: $IsccPath /DAppVersion=$Version /DVersionInfoVersion=$VersionInfoVersion $issFile"
+$issCode = Invoke-Step -File $IsccPath -Args @(
+    "/DAppVersion=$Version",
+    "/DVersionInfoVersion=$VersionInfoVersion",
+    $issFile
+)
 if ($issCode -ne 0) {
     throw "Inno Setup compilation failed with exit code $issCode"
 }

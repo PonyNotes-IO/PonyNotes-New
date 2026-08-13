@@ -9,6 +9,7 @@ import 'package:app_links/app_links.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/expire_login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/invitation_deeplink_handler.dart';
@@ -80,9 +81,9 @@ class AppFlowyCloudDeepLink {
   Timer? _pollingTimer;
 
   String get _pipeFilePath {
-    final appData = Platform.environment['APPDATA'] ?? 
-                    Platform.environment['LOCALAPPDATA'] ?? 
-                    '.';
+    final appData = Platform.environment['APPDATA'] ??
+        Platform.environment['LOCALAPPDATA'] ??
+        '.';
     return '$appData\\PonyNotes\\deep_link.txt';
   }
 
@@ -122,7 +123,8 @@ class AppFlowyCloudDeepLink {
   // 保存从命令行参数传入的 URL
   void _saveInitialUrl() {
     final initialUrl = getInitialDeepLink();
-    if (initialUrl != null && initialUrl.startsWith('$appflowyDeepLinkSchema://')) {
+    if (initialUrl != null &&
+        initialUrl.startsWith('$appflowyDeepLinkSchema://')) {
       Log.info('DeepLink: Saved initial URL from function: $initialUrl');
       _pendingInitialUrl = initialUrl;
     } else {
@@ -133,7 +135,8 @@ class AppFlowyCloudDeepLink {
         _pendingInitialUrl = envArgs;
       } else {
         // Windows 上尝试从其他环境变量获取
-        Log.info('DeepLink: No initial URL found. Available env vars: ${Platform.environment.keys.where((k) => k.toLowerCase().contains('url') || k.toLowerCase().contains('link') || k.toLowerCase().contains('arg')).join(', ')}');
+        Log.info(
+            'DeepLink: No initial URL found. Available env vars: ${Platform.environment.keys.where((k) => k.toLowerCase().contains('url') || k.toLowerCase().contains('link') || k.toLowerCase().contains('arg')).join(', ')}');
       }
     }
   }
@@ -168,7 +171,7 @@ class AppFlowyCloudDeepLink {
   Future<void> dispose() async {
     // 停止轮询
     _stopDeepLinkPolling();
-    
+
     // debug log removed
     await _deepLinkSubscription.cancel();
 
@@ -212,7 +215,8 @@ class AppFlowyCloudDeepLink {
     _stateNotifier?.value = DeepLinkResult(state: DeepLinkState.none);
 
     if (uri == null) {
-      Log.error('🔵 [DeepLink] onDeepLinkError: Unexpected empty deep link callback');
+      Log.error(
+          '🔵 [DeepLink] onDeepLinkError: Unexpected empty deep link callback');
       _completer?.complete(FlowyResult.failure(AuthError.emptyDeepLink));
       completer = null;
       return;
@@ -234,12 +238,11 @@ class AppFlowyCloudDeepLink {
             state: DeepLinkState.finish,
             result: result,
           );
-          
+
           // If there is no completer, runAppFlowy() will be called.
           if (_completer == null) {
             await result.fold(
               (userProfile) async {
-                
                 try {
                   // 检查用户是否设置了密码
                   // 从 URI 中提取 access_token
@@ -275,30 +278,33 @@ class AppFlowyCloudDeepLink {
                         isEmail = true;
                       }
                     }
-                    
+
                     // 创建无需认证的 PasswordHttpService 实例（checkPasswordStatus 是公开接口）
                     final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
                     final passwordService = PasswordHttpService(
                       baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
                       authToken: '', // 公开接口不需要认证
                     );
-                    
+
                     // 使用手机号或邮箱检查密码状态
                     final passwordStatusResult = isEmail
-                        ? await passwordService.checkPasswordStatus(email: phoneOrEmail)
-                        : await passwordService.checkPasswordStatus(phone: phoneOrEmail);
-                    
+                        ? await passwordService.checkPasswordStatus(
+                            email: phoneOrEmail)
+                        : await passwordService.checkPasswordStatus(
+                            phone: phoneOrEmail);
+
                     // 处理密码状态检查结果
                     passwordStatusResult.fold(
                       (passwordIsSet) {
                         // 检查是否需要绑定手机号
                         final needBindPhone = _needBindPhone(userProfile.phone);
-                        
+
                         if (!passwordIsSet) {
                           // 用户未设置密码，跳转到设置密码页面
                           // 使用 Future.microtask 确保在下一个事件循环中执行导航
                           Future.microtask(() {
-                            final context = AppGlobals.rootNavKey.currentState?.context;
+                            final context =
+                                AppGlobals.rootNavKey.currentState?.context;
                             if (context != null && context.mounted) {
                               Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
@@ -312,13 +318,15 @@ class AppFlowyCloudDeepLink {
                             } else {
                               // Context 不可用，记录错误但不调用 runAppFlowy
                               // 让正常的导航流程处理（SignInBloc 会触发）
-                              Log.error('🔵 [DeepLink] Context not available for SetPasswordPage navigation');
+                              Log.error(
+                                  '🔵 [DeepLink] Context not available for SetPasswordPage navigation');
                             }
                           });
                         } else if (needBindPhone) {
                           // 用户已设置密码但未绑定手机号，跳转到绑定手机号页面
                           Future.microtask(() {
-                            final context = AppGlobals.rootNavKey.currentState?.context;
+                            final context =
+                                AppGlobals.rootNavKey.currentState?.context;
                             if (context != null && context.mounted) {
                               Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
@@ -331,7 +339,8 @@ class AppFlowyCloudDeepLink {
                                 ),
                               );
                             } else {
-                              Log.error('🔵 [DeepLink] Context not available for PhoneBindScreen navigation');
+                              Log.error(
+                                  '🔵 [DeepLink] Context not available for PhoneBindScreen navigation');
                             }
                           });
                         } else {
@@ -346,14 +355,16 @@ class AppFlowyCloudDeepLink {
                         }
                       },
                       (error) {
-                        Log.error('[DeepLink] Failed to check password status: ${error.msg}');
+                        Log.error(
+                            '[DeepLink] Failed to check password status: ${error.msg}');
                         // 检查密码状态失败，不做任何操作
                         // 让 SignInBloc 的状态变化触发正常的导航流程
                       },
                     );
                   }
                 } catch (e, stackTrace) {
-                  Log.error('[DeepLink] Exception during password check: $e', stackTrace);
+                  Log.error('[DeepLink] Exception during password check: $e',
+                      stackTrace);
                   // 发生异常，让正常的导航流程处理
                 }
               },
@@ -409,14 +420,25 @@ class AppFlowyCloudDeepLink {
       },
     );
 
-    // 处理完 DeepLink 后，在桌面端确保窗口显示并获得焦点（例如应用被最小化时）。
+    // 处理完 DeepLink 后，在桌面端恢复已有窗口。Windows 冷启动时窗口由
+    // runner 在首帧后显示，这里不能提前争抢 Show，否则会重新引入启动竞态。
     if (!Platform.isAndroid && !Platform.isIOS && !Platform.isFuchsia) {
       try {
-        if (await windowManager.isMinimized()) {
+        final isMinimized = await windowManager.isMinimized();
+        final isVisible = await windowManager.isVisible();
+        if (isMinimized) {
           await windowManager.restore();
         }
-        await windowManager.show();
-        await windowManager.focus();
+        if (!Platform.isWindows ||
+            shouldActivateWindowsWindow(
+              isVisible: isVisible,
+              isMinimized: isMinimized,
+            )) {
+          if (!Platform.isWindows && !isVisible && !isMinimized) {
+            await windowManager.show();
+          }
+          await windowManager.focus();
+        }
       } catch (e, stackTrace) {
         Log.error('🔵 [DeepLink] 恢复并聚焦窗口失败: $e', stackTrace);
       }
@@ -477,14 +499,13 @@ class AppFlowyCloudDeepLink {
   /// 从 URI 中提取 access_token
   String? _extractAccessTokenFromUri(Uri? uri) {
     if (uri == null) return null;
-    
+
     final fragment = uri.fragment;
     if (fragment.isEmpty) return null;
-    
+
     final params = Uri.splitQueryString(fragment);
     return params['access_token'];
   }
-
 }
 
 class InitAppFlowyCloudTask extends LaunchTask {
@@ -553,7 +574,6 @@ String? _nonEmptyStringClaim(Map<String, dynamic>? claims, String key) {
   final t = v.trim();
   return t.isEmpty ? null : t;
 }
-
 
 // wrapper for AppLinks to support multiple listeners
 class _AppLinkWrapper {

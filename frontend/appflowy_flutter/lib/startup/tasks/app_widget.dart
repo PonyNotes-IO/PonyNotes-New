@@ -155,10 +155,6 @@ class InitAppWidgetTask extends LaunchTask {
       ),
     );
 
-    if (UniversalPlatform.isWindows) {
-      await applyWindowsWindowStateAfterFirstFrame();
-    }
-
     return;
   }
 }

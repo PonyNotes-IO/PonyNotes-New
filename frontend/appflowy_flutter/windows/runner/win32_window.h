@@ -28,6 +28,12 @@ class Win32Window {
   Win32Window();
   virtual ~Win32Window();
 
+  // Loads the last normal window size before the Flutter engine is created.
+  static Size GetStartupSize(const Size& fallback);
+
+  // Caches a logical size for the next process start without resizing now.
+  static bool CacheStartupSize(const Size& size);
+
   // Creates a win32 window with |title| that is positioned and sized using
   // |origin| and |size|. New windows are created on the default monitor. Window
   // sizes are specified to the OS in physical pixels, hence to ensure a
@@ -94,7 +100,11 @@ class Win32Window {
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
 
+  void SaveWindowSize() const;
+
   bool quit_on_close_ = false;
+  bool has_been_shown_ = false;
+  bool normal_size_changed_since_show_ = false;
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;

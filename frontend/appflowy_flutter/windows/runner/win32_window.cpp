@@ -28,6 +28,13 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
+constexpr const wchar_t kPonyNotesWindowRegKey[] = L"Software\\PonyNotes";
+constexpr const wchar_t kWindowWidthRegValue[] = L"WindowWidth";
+constexpr const wchar_t kWindowHeightRegValue[] = L"WindowHeight";
+constexpr DWORD kMinWindowWidth = 1200;
+constexpr DWORD kMinWindowHeight = 720;
+constexpr DWORD kMaxWindowDimension = 8192;
+
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
@@ -38,6 +45,14 @@ using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
+
+constexpr bool IsValidWindowSize(DWORD width, DWORD height) {
+  return width >= kMinWindowWidth && width <= kMaxWindowDimension &&
+         height >= kMinWindowHeight && height <= kMaxWindowDimension;
+}
+static_assert(IsValidWindowSize(1200, 720));
+static_assert(!IsValidWindowSize(1199, 720));
+static_assert(!IsValidWindowSize(1200, 8193));
 // Dynamically loads the |EnableNonClientDpiScaling| from the User32 module.
 // This API is only needed for PerMonitor V1 awareness mode.
 void EnableFullDpiSupportIfAvailable(HWND hwnd) {
@@ -121,6 +136,49 @@ Win32Window::~Win32Window() {
   Destroy();
 }
 
+Win32Window::Size Win32Window::GetStartupSize(const Size& fallback) {
+  DWORD width = 0;
+  DWORD height = 0;
+  DWORD value_size = sizeof(DWORD);
+  const LSTATUS width_result =
+      RegGetValue(HKEY_CURRENT_USER, kPonyNotesWindowRegKey,
+                  kWindowWidthRegValue, RRF_RT_REG_DWORD, nullptr, &width,
+                  &value_size);
+  value_size = sizeof(DWORD);
+  const LSTATUS height_result =
+      RegGetValue(HKEY_CURRENT_USER, kPonyNotesWindowRegKey,
+                  kWindowHeightRegValue, RRF_RT_REG_DWORD, nullptr, &height,
+                  &value_size);
+
+  if (width_result != ERROR_SUCCESS || height_result != ERROR_SUCCESS ||
+      !IsValidWindowSize(width, height)) {
+    return fallback;
+  }
+  return Size(width, height);
+}
+
+bool Win32Window::CacheStartupSize(const Size& size) {
+  const DWORD width = size.width;
+  const DWORD height = size.height;
+  if (!IsValidWindowSize(width, height)) {
+    return false;
+  }
+
+  HKEY key = nullptr;
+  if (RegCreateKeyEx(HKEY_CURRENT_USER, kPonyNotesWindowRegKey, 0, nullptr, 0,
+                     KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+    return false;
+  }
+  const LSTATUS width_result =
+      RegSetValueEx(key, kWindowWidthRegValue, 0, REG_DWORD,
+                    reinterpret_cast<const BYTE*>(&width), sizeof(width));
+  const LSTATUS height_result =
+      RegSetValueEx(key, kWindowHeightRegValue, 0, REG_DWORD,
+                    reinterpret_cast<const BYTE*>(&height), sizeof(height));
+  RegCloseKey(key);
+  return width_result == ERROR_SUCCESS && height_result == ERROR_SUCCESS;
+}
+
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
                          const Size& size) {
@@ -156,7 +214,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  const bool was_visible = ShowWindow(window_handle_, SW_SHOWNORMAL);
+  has_been_shown_ = true;
+  return was_visible;
 }
 
 // static
@@ -186,6 +246,9 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
+      if (normal_size_changed_since_show_) {
+        SaveWindowSize();
+      }
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {
@@ -209,8 +272,16 @@ Win32Window::MessageHandler(HWND hwnd,
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
                    rect.bottom - rect.top, TRUE);
       }
+      if (has_been_shown_ && wparam == SIZE_RESTORED) {
+        normal_size_changed_since_show_ = true;
+      }
       return 0;
     }
+
+    case WM_EXITSIZEMOVE:
+      SaveWindowSize();
+      normal_size_changed_since_show_ = false;
+      return 0;
 
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {
@@ -262,6 +333,33 @@ RECT Win32Window::GetClientArea() {
 
 HWND Win32Window::GetHandle() {
   return window_handle_;
+}
+
+void Win32Window::SaveWindowSize() const {
+  if (window_handle_ == nullptr) {
+    return;
+  }
+
+  WINDOWPLACEMENT placement{sizeof(WINDOWPLACEMENT)};
+  if (!GetWindowPlacement(window_handle_, &placement)) {
+    return;
+  }
+
+  const UINT dpi = FlutterDesktopGetDpiForHWND(window_handle_);
+  if (dpi == 0) {
+    return;
+  }
+
+  const RECT& rect = placement.rcNormalPosition;
+  const DWORD width = static_cast<DWORD>(
+      MulDiv(rect.right - rect.left, 96, static_cast<int>(dpi)));
+  const DWORD height = static_cast<DWORD>(
+      MulDiv(rect.bottom - rect.top, 96, static_cast<int>(dpi)));
+  if (!IsValidWindowSize(width, height)) {
+    return;
+  }
+
+  CacheStartupSize(Size(width, height));
 }
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {

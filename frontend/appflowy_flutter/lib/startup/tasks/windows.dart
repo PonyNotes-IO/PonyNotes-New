@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
@@ -10,87 +9,11 @@ import 'package:scaled_app/scaled_app.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:universal_platform/universal_platform.dart';
 
-const Size _windowsSafeStartupSize = Size(1280, 720);
-
-Size clampWindowsStartupSize(Size storedSize) => Size(
-      math.min(storedSize.width, _windowsSafeStartupSize.width),
-      math.min(storedSize.height, _windowsSafeStartupSize.height),
-    );
-
-class WindowsStartupWindowState {
-  const WindowsStartupWindowState({required this.size});
-
-  final Size size;
-}
-
-/// Owns the Dart-side Windows startup transition.
-///
-/// The native Flutter runner owns window creation and the one-time Show call.
-/// Dart only applies persisted geometry after Flutter has rasterized its first
-/// frame, so the engine never creates its initial backing surface while the
-/// top-level window is being reframed or shown by a second owner.
-class WindowsWindowStartupCoordinator {
-  WindowsWindowStartupCoordinator({
-    required bool Function() isWindows,
-    required Future<void> Function() waitForFirstFrame,
-    required Future<void> Function(WindowsStartupWindowState) applyState,
-  })  : _isWindows = isWindows,
-        _waitForFirstFrame = waitForFirstFrame,
-        _applyState = applyState;
-
-  final bool Function() _isWindows;
-  final Future<void> Function() _waitForFirstFrame;
-  final Future<void> Function(WindowsStartupWindowState) _applyState;
-
-  WindowsStartupWindowState? _preparedState;
-  Future<void>? _application;
-
-  void prepare(WindowsStartupWindowState state) {
-    if (_application == null) {
-      _preparedState = state;
-    }
-  }
-
-  Future<void> applyAfterFirstFrame() {
-    if (!_isWindows() || _preparedState == null) {
-      return Future<void>.value();
-    }
-    return _application ??= _apply(_preparedState!);
-  }
-
-  Future<void> _apply(WindowsStartupWindowState state) async {
-    await _waitForFirstFrame();
-    await _applyState(state);
-  }
-}
-
-final WindowsWindowStartupCoordinator _windowsWindowStartupCoordinator =
-    WindowsWindowStartupCoordinator(
-  isWindows: () => Platform.isWindows,
-  waitForFirstFrame: () =>
-      WidgetsBinding.instance.waitUntilFirstFrameRasterized,
-  applyState: (state) async {
-    await windowManager.setMinimumSize(
-      const Size(
-        WindowSizeManager.minWindowWidth,
-        WindowSizeManager.minWindowHeight,
-      ),
-    );
-    await windowManager.setMaximumSize(
-      const Size(
-        WindowSizeManager.maxWindowWidth,
-        WindowSizeManager.maxWindowHeight,
-      ),
-    );
-    await windowManager.setSize(state.size);
-    await WindowSizeManager().setWindowMaximized(false);
-    await windowManager.center();
-    await windowManager.focus();
-  },
-);
-
-Future<void> applyWindowsWindowStateAfterFirstFrame() =>
-    _windowsWindowStartupCoordinator.applyAfterFirstFrame();
+bool shouldActivateWindowsWindow({
+  required bool isVisible,
+  required bool isMinimized,
+}) =>
+    isVisible || isMinimized;
 
 class InitAppWindowTask extends LaunchTask with WindowListener {
   InitAppWindowTask({this.title = 'PonyNotes'});
@@ -129,29 +52,36 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
       return;
     }
 
-    final storedWindowSize = await windowSizeManager.getSize();
-    final windowSize = UniversalPlatform.isWindows
-        ? clampWindowsStartupSize(storedWindowSize)
-        : storedWindowSize;
-    final windowOptions = WindowOptions(
-      size: windowSize,
-      minimumSize: const Size(
-        WindowSizeManager.minWindowWidth,
-        WindowSizeManager.minWindowHeight,
-      ),
-      maximumSize: const Size(
-        WindowSizeManager.maxWindowWidth,
-        WindowSizeManager.maxWindowHeight,
-      ),
-      title: title,
-    );
-
     if (UniversalPlatform.isWindows) {
-      _windowsWindowStartupCoordinator.prepare(
-        WindowsStartupWindowState(size: windowSize),
+      // The native runner creates the window and Flutter engine at the final
+      // persisted size. Startup must not mutate geometry after the first frame.
+      await windowManager.setMinimumSize(
+        const Size(
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.minWindowHeight,
+        ),
+      );
+      await windowManager.setMaximumSize(
+        const Size(
+          WindowSizeManager.maxWindowWidth,
+          WindowSizeManager.maxWindowHeight,
+        ),
       );
       _hasInitializedWindowsWindow = true;
     } else {
+      final storedWindowSize = await windowSizeManager.getSize();
+      final windowOptions = WindowOptions(
+        size: storedWindowSize,
+        minimumSize: const Size(
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.minWindowHeight,
+        ),
+        maximumSize: const Size(
+          WindowSizeManager.maxWindowWidth,
+          WindowSizeManager.maxWindowHeight,
+        ),
+        title: title,
+      );
       final position = await windowSizeManager.getPosition();
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
