@@ -50,7 +50,7 @@ class PaymentResult {
 class PaymentPlatformSupport {
   static List<PaymentMethod> getAvailableMethods() {
     if (Platform.isMacOS) {
-      return [PaymentMethod.applePay];
+      return [PaymentMethod.wechatPay, PaymentMethod.alipay];
     }
 
     if (Platform.isWindows) {
@@ -65,10 +65,7 @@ class PaymentPlatformSupport {
     }
 
     if (Platform.isAndroid) {
-      return [
-        PaymentMethod.wechatPay,
-        PaymentMethod.alipay,
-      ];
+      return [PaymentMethod.alipay];
     }
 
     if (PlatformInfo.isDesktopOrTablet) {
@@ -82,10 +79,10 @@ class PaymentPlatformSupport {
   }
 
   static bool get isApplePayAvailable =>
-      (Platform.isMacOS || Platform.isIOS) && getAvailableMethods().contains(PaymentMethod.applePay);
+      Platform.isIOS && getAvailableMethods().contains(PaymentMethod.applePay);
 
   static bool get isWeChatPayAvailable =>
-      (Platform.isWindows || Platform.isAndroid) &&
+      Platform.isWindows &&
       getAvailableMethods().contains(PaymentMethod.wechatPay);
 
   static bool get isAlipayAvailable =>
@@ -469,19 +466,6 @@ class PaymentUtil {
             : PaymentResult.failure(
                 message: message.isEmpty ? '支付失败' : message,
               );
-      } catch (e, s) {
-        Log.error('微信支付异常: $e\n$s');
-        return PaymentResult.failure(message: '微信支付异常');
-      }
-    }
-
-    if (Platform.isAndroid) {
-      try {
-        final payUrl = extra?['payUrl'] as String?;
-        if (payUrl != null && payUrl.isNotEmpty) {
-          return _launchWeChatApp(payUrl, orderId);
-        }
-        return PaymentResult.failure(message: '缺少支付链接');
       } catch (e, s) {
         Log.error('微信支付异常: $e\n$s');
         return PaymentResult.failure(message: '微信支付异常');

@@ -480,22 +480,27 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         height: tabHeight,
+        width: double.infinity,
         child: Stack(
           children: [
             if (selected)
-              SvgPicture.asset(
-                'assets/images/setting/bg_setting_left_tab.svg',
-                width: double.infinity,
-                height: tabHeight,
-                fit: BoxFit.fill,
+              Positioned.fill(
+                child: SvgPicture.asset(
+                  'assets/images/setting/bg_setting_left_tab.svg',
+                  fit: BoxFit.fill,
+                ),
               ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            SizedBox(
+              height: tabHeight,
+              width: double.infinity,
               child: Center(
                 child: Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -523,22 +528,27 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         height: tabHeight,
+        width: double.infinity,
         child: Stack(
           children: [
             if (selected)
-              SvgPicture.asset(
-                'assets/images/setting/bg_setting_right_tab.svg',
-                width: double.infinity,
-                height: tabHeight,
-                fit: BoxFit.fill,
+              Positioned.fill(
+                child: SvgPicture.asset(
+                  'assets/images/setting/bg_setting_right_tab.svg',
+                  fit: BoxFit.fill,
+                ),
               ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            SizedBox(
+              height: tabHeight,
+              width: double.infinity,
               child: Center(
                 child: Text(
                   label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -937,6 +947,45 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
   }
 
+  /// 从用户 token 中解析出 GoTrue 的用户 UUID（JWT 的 sub 字段），
+  /// 如果解析失败，则回退为内部自增 ID（userProfile.id）。
+  /// 与 AccountManagementBloc._getUserUuid() 逻辑保持一致。
+  String _extractUserId(UserProfilePB profile) {
+    final rawToken = profile.token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      String? accessToken;
+      try {
+        final decoded = jsonDecode(rawToken);
+        if (decoded is Map<String, dynamic>) {
+          accessToken = decoded['access_token'] as String?;
+        }
+      } catch (_) {
+        // 不是 JSON，直接当作 access_token
+        accessToken = rawToken;
+      }
+      if (accessToken != null && accessToken.isNotEmpty) {
+        try {
+          final parts = accessToken.split('.');
+          if (parts.length >= 2) {
+            var normalized =
+                parts[1].replaceAll('-', '+').replaceAll('_', '/');
+            while (normalized.length % 4 != 0) {
+              normalized += '=';
+            }
+            final decoded = utf8.decode(base64.decode(normalized));
+            final payload = jsonDecode(decoded);
+            if (payload is Map && payload['sub'] is String) {
+              return payload['sub'] as String;
+            }
+          }
+        } catch (_) {
+          // JWT 解析失败，回退到内部 ID
+        }
+      }
+    }
+    return profile.id.toString();
+  }
+
   Future<void> _confirmAndPay(
     WorkspaceSubscriptionInfoPB? subscriptionInfo,
     Map<WorkspacePlanPB, RemotePlan> planConfigs,
@@ -960,7 +1009,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     try {
       final userProfile = await UserBackendService.getCurrentUserProfile();
-      final userUuid = userProfile.fold((p) => p.id.toString(), (_) => '');
+      final userUuid = userProfile.fold((p) => _extractUserId(p), (_) => '');
 
       if (Platform.isIOS) {
         // iPhone/iPad 直接调用 Apple Pay 内购
@@ -968,15 +1017,10 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
         await _handleIOSPayment(
             PaymentMethod.applePay, config, price, billingType, userUuid);
       } else {
-        // Android 弹出支付方式选择弹框
-        final paymentMethod = await _showAndroidPaymentSelector();
-        if (paymentMethod == null) {
-          // 用户取消了选择
-          return;
-        }
-        Log.info('[MobileUpgradePlan] Android 选择支付方式: $paymentMethod');
+        // Android 手机直接走支付宝应用支付，无需选择支付方式
+        Log.info('[MobileUpgradePlan] Android 直接调用支付宝支付');
         await _handleAndroidPayment(
-            paymentMethod, config, price, billingType, userUuid);
+            PaymentMethod.alipay, config, price, billingType, userUuid);
       }
     } catch (e) {
       Log.error('[MobileUpgradePlan] 支付异常: $e');
