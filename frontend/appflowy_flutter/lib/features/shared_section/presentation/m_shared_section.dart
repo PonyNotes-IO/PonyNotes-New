@@ -36,12 +36,19 @@ class MSharedSection extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              MSharedSectionHeader(),
+              MSharedSectionHeader(
+                isExpanded: state.isExpanded,
+                onTap: () {
+                  context.read<SharedSectionBloc>().add(
+                        const SharedSectionToggleExpandedEvent(),
+                      );
+                },
+              ),
               if (state.isLoading)
                 const SharedSectionLoading()
               else if (state.errorMessage.isNotEmpty)
                 SharedSectionError(errorMessage: state.errorMessage)
-              else if (state.sharedPages.isNotEmpty)
+              else if (state.sharedPages.isNotEmpty && state.isExpanded)
                 Padding(
                   padding: const EdgeInsets.only(
                     left: HomeSpaceViewSizes.mHorizontalPadding,
