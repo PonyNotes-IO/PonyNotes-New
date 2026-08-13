@@ -28,6 +28,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
@@ -173,54 +174,11 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     required PageAccessLevelBloc pageAccessLevelBloc,
     required Widget child,
   }) {
-    final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
-    return Builder(
-      builder: (context) {
-        // ✅ Mobile 上避免右上角操作栏被状态栏遮挡
-        //
-        // desktop 上 MediaQuery.padding 为 0, 因此 top/right 取 0, 与原来
-        // `Positioned(top: 0, right: 0, ...)` 完全等价, 桌面端零影响。
-        // mobile 上 padding.top 是 status bar 高度, padding.right 在有
-        // notch 的设备 (例如 iPhone 14 Pro) 上也会被算进去。
-        final padding = MediaQuery.paddingOf(context);
-        final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
-        return Stack(
-          children: [
-            child,
-            // ✅ Mobile 端在白板左上角添加返回按钮
-            //
-            // 桌面端不需要：白板在桌面端通过 home_stack / tab_bar 提供关闭 / 切
-            // 换 tab 的入口, 不会再加一个返回按钮。这里用 isMobile 守卫后, 桌面端
-            // 不会有任何变化。位置同样用 padding.left / padding.top 避开 status
-            // bar / notch, 桌面端 padding=0 因此等价于 left:0, top:0。
-            if (isMobile)
-              Positioned(
-                left: padding.left,
-                top: padding.top,
-                child: _WhiteboardBackButton(
-                  iconColor: isWhiteboard
-                      ? const Color(0xFF111111)
-                      : null,
-                ),
-              ),
-            Positioned(
-              top: padding.top,
-              right: padding.right,
-              child: UnifiedViewTopRightActions(
-                view: view,
-                viewInfoBloc: viewInfoBloc,
-                pageAccessLevelBloc: pageAccessLevelBloc,
-                showCollaborators: false,
-                useFloatingSurface: true,
-                showShareButton: false,
-                showFullWindowButton: !isMobile,
-                iconColorOverride:
-                    isWhiteboard ? const Color(0xFF111111) : null,
-              ),
-            ),
-          ],
-        );
-      },
+    return _WhiteboardContentWithToolbar(
+      view: view,
+      viewInfoBloc: viewInfoBloc,
+      pageAccessLevelBloc: pageAccessLevelBloc,
+      child: child,
     );
   }
 
@@ -251,6 +209,89 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
+}
+
+class _WhiteboardContentWithToolbar extends StatefulWidget {
+  const _WhiteboardContentWithToolbar({
+    required this.view,
+    required this.viewInfoBloc,
+    required this.pageAccessLevelBloc,
+    required this.child,
+  });
+
+  final ViewPB view;
+  final ViewInfoBloc viewInfoBloc;
+  final PageAccessLevelBloc pageAccessLevelBloc;
+  final Widget child;
+
+  @override
+  State<_WhiteboardContentWithToolbar> createState() =>
+      _WhiteboardContentWithToolbarState();
+}
+
+class _WhiteboardContentWithToolbarState
+    extends State<_WhiteboardContentWithToolbar> {
+  late Future<bool> _isPrivateSpace;
+
+  @override
+  void initState() {
+    super.initState();
+    _isPrivateSpace = _resolvePrivateSpace();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WhiteboardContentWithToolbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.view.id != widget.view.id) {
+      _isPrivateSpace = _resolvePrivateSpace();
+    }
+  }
+
+  Future<bool> _resolvePrivateSpace() {
+    final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
+    return isMobile ? isViewInPrivateSpace(widget.view) : Future.value(false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
+    return FutureBuilder<bool>(
+      future: _isPrivateSpace,
+      builder: (context, snapshot) {
+        final padding = MediaQuery.paddingOf(context);
+        // 移动端私有白板外层已有导航与页面操作。判定完成前也不绘制插件
+        // 操作，避免页面打开时短暂出现一帧重复按钮。
+        final showPluginActions = !isMobile || snapshot.data == false;
+        return Stack(
+          children: [
+            widget.child,
+            if (isMobile && showPluginActions)
+              Positioned(
+                left: padding.left,
+                top: padding.top,
+                child: const _WhiteboardBackButton(
+                  iconColor: Color(0xFF111111),
+                ),
+              ),
+            if (showPluginActions)
+              Positioned(
+                top: padding.top,
+                right: padding.right,
+                child: UnifiedViewTopRightActions(
+                  view: widget.view,
+                  viewInfoBloc: widget.viewInfoBloc,
+                  pageAccessLevelBloc: widget.pageAccessLevelBloc,
+                  useFloatingSurface: true,
+                  showShareButton: false,
+                  showFullWindowButton: !isMobile,
+                  iconColorOverride: const Color(0xFF111111),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class WhiteboardPage extends StatefulWidget {
@@ -1481,8 +1522,7 @@ class _WhiteboardBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final effectiveColor =
-        iconColor ?? theme.iconTheme.color ?? Colors.black;
+    final effectiveColor = iconColor ?? theme.iconTheme.color ?? Colors.black;
     return Material(
       color: Colors.transparent,
       child: InkWell(
