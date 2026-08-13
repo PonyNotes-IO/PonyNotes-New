@@ -14,9 +14,9 @@ import '../../../startup/startup.dart';
 
 /// 支付方式类型（用于后端接口的 paymentType 字段）
 class PaymentType {
-  static const String applePay = 'APPLE_PAY';
-  static const String wechatPay = 'WECHAT_PAY';
-  static const String alipay = 'ALIPAY';
+  static const String applePay = 'apple_pay';
+  static const String wechatPay = 'wechat_pay';
+  static const String alipay = 'alipay';
 }
 
 /// 支付开发测试模式配置
