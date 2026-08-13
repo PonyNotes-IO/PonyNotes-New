@@ -1,5 +1,6 @@
 package com.xiaomabiji.app.note
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -14,8 +15,14 @@ import com.xiaomabiji.app.note.wechat.WeChatBridge
 class MainActivity : FlutterActivity() {
     private val channelName = "com.xiaomabiji.app.note/open_url"
     private var weChatBridge: WeChatBridge? = null
+    private var handwritingExportResult: MethodChannel.Result? = null
+    private var handwritingExportBytes: ByteArray? = null
 
     companion object {
+        private const val HANDWRITING_EXPORT_CHANNEL =
+            "com.xiaomabiji.app.note/handwriting_export"
+        private const val HANDWRITING_EXPORT_REQUEST_CODE = 42871
+
         /**
          * 当前活动的 [WeChatBridge] 实例，由 [WXEntryActivity] 在另一个独立 task
          * 拉起时通过这个静态引用把回调结果直接送回 [WeChatBridge.deliverResult]，
@@ -72,6 +79,41 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HANDWRITING_EXPORT_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method != "saveFile") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                if (handwritingExportResult != null) {
+                    result.error("ALREADY_ACTIVE", "A handwriting export is already active", null)
+                    return@setMethodCallHandler
+                }
+
+                val fileName = call.argument<String>("fileName")
+                val bytes = call.argument<ByteArray>("bytes")
+                if (fileName.isNullOrBlank() || bytes == null) {
+                    result.error("INVALID_ARGUMENT", "fileName and bytes are required", null)
+                    return@setMethodCallHandler
+                }
+
+                handwritingExportResult = result
+                handwritingExportBytes = bytes
+                try {
+                    startActivityForResult(
+                        Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "application/x-ponynhw"
+                            putExtra(Intent.EXTRA_TITLE, fileName)
+                        },
+                        HANDWRITING_EXPORT_REQUEST_CODE,
+                    )
+                } catch (e: Throwable) {
+                    clearHandwritingExport()
+                    result.error("SAVE_FILE_FAILED", e.message, null)
+                }
+            }
+
         // 微信登录 MethodChannel
         // 修复 Android 14/15 上腾讯 SDK 6.8.34 自带的 PendingIntent bug：
         // 不用腾讯 SDK 自带的 sendReq，自己构造 PendingIntent。
@@ -83,10 +125,50 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        handwritingExportResult?.error("ACTIVITY_DESTROYED", "Export was interrupted", null)
+        clearHandwritingExport()
         weChatBridge?.dispose()
         weChatBridge = null
         activeWeChatBridge = null
         super.onDestroy()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode != HANDWRITING_EXPORT_REQUEST_CODE) {
+            super.onActivityResult(requestCode, resultCode, data)
+            return
+        }
+
+        val result = handwritingExportResult
+        val bytes = handwritingExportBytes
+        if (resultCode == Activity.RESULT_CANCELED) {
+            clearHandwritingExport()
+            result?.success(null)
+            return
+        }
+
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null || bytes == null) {
+            clearHandwritingExport()
+            result?.error("SAVE_FILE_FAILED", "No writable destination was returned", null)
+            return
+        }
+
+        try {
+            contentResolver.openOutputStream(uri, "wt")?.use { output ->
+                output.write(bytes)
+            } ?: error("Unable to open the selected destination")
+            clearHandwritingExport()
+            result?.success(uri.toString())
+        } catch (e: Throwable) {
+            clearHandwritingExport()
+            result?.error("SAVE_FILE_FAILED", e.message, null)
+        }
+    }
+
+    private fun clearHandwritingExport() {
+        handwritingExportResult = null
+        handwritingExportBytes = null
     }
 
     /**

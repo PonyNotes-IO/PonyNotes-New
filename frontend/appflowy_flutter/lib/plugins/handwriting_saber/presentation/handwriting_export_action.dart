@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:appflowy/plugins/handwriting_saber/application/handwriting_saber_data_service.dart';
 import 'package:appflowy/plugins/handwriting_saber/services/editor_exporter.dart';
@@ -15,6 +14,7 @@ import 'package:archive/archive_io.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
@@ -39,6 +39,9 @@ class HandwritingExportAction extends StatelessWidget {
 
   /// .ponynhw 文件格式版本
   static const int ponynhwVersion = 1;
+
+  static const _androidExportChannel =
+      MethodChannel('com.xiaomabiji.app.note/handwriting_export');
 
   @override
   Widget build(BuildContext context) {
@@ -288,15 +291,33 @@ class HandwritingExportAction extends StatelessWidget {
       // 保存文件
       final fileName =
           '${view.name.isNotEmpty ? view.name : "手写笔记"}$ponynhwExtension';
+
+      if (Platform.isAndroid) {
+        final savedUri = await _androidExportChannel.invokeMethod<String>(
+          'saveFile',
+          {
+            'fileName': fileName,
+            'bytes': Uint8List.fromList(ponynhwBytes),
+          },
+        );
+        if (savedUri == null) {
+          Log.info('[HandwritingExport] 用户取消保存');
+          return;
+        }
+        Log.info('[HandwritingExport] .ponynhw 文件保存成功: $savedUri');
+        if (context.mounted) {
+          _showSuccess(context, '手写笔记源文件已保存');
+        }
+        return;
+      }
+
       final filePicker = GetIt.instance<FilePickerService>();
 
       final savePath = await filePicker.saveFile(
         dialogTitle: '保存手写笔记源文件',
         fileName: fileName,
         type: FileType.any,
-        bytes: Platform.isAndroid || Platform.isIOS
-            ? Uint8List.fromList(ponynhwBytes)
-            : null,
+        bytes: Platform.isIOS ? Uint8List.fromList(ponynhwBytes) : null,
       );
 
       if (savePath == null) {
@@ -308,7 +329,7 @@ class HandwritingExportAction extends StatelessWidget {
           ? savePath
           : '$savePath$ponynhwExtension';
 
-      if (!Platform.isAndroid && !Platform.isIOS) {
+      if (!Platform.isIOS) {
         await File(finalPath).writeAsBytes(ponynhwBytes);
       }
 
