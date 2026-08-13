@@ -181,6 +181,9 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
       builder: (innerContext, state) {
         final layout = state.tabBars[state.selectedIndex].layout;
         final isCalendar = layout == ViewLayoutPB.Calendar;
+        final isStandaloneMobileGrid = PlatformInfo.isMobile &&
+            layout == ViewLayoutPB.Grid &&
+            widget.node == null;
         final databseBuilderSize =
             context.read<DatabasePluginWidgetBuilderSize>();
         final horizontalPadding =
@@ -192,7 +195,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            VSpace(12),
+            if (!isStandaloneMobileGrid) const VSpace(12),
             ValueListenableBuilder<bool>(
               valueListenable: state
                   .tabBarControllerByViewId[state.parentView.id]!
@@ -205,7 +208,9 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
 
                 Widget child = PlatformInfo.isDesktopOrTablet
                     ? const TabBarHeader()
-                    : const MobileTabBarHeader();
+                    : MobileTabBarHeader(
+                        compactTopSpacing: isStandaloneMobileGrid,
+                      );
 
                 if (innerContext
                     .watch<ViewBloc>()

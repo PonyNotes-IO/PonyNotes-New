@@ -23,15 +23,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileTabBarHeader extends StatelessWidget {
-  const MobileTabBarHeader({super.key});
+  const MobileTabBarHeader({
+    super.key,
+    this.compactTopSpacing = false,
+  });
+
+  final bool compactTopSpacing;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(
+      padding: EdgeInsets.only(
         left: 16.0,
         right: 16.0,
-        top: 14.0,
+        top: compactTopSpacing ? 4.0 : 14.0,
         bottom: 8.0,
       ),
       child: const Align(
