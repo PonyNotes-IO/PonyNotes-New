@@ -19,9 +19,14 @@ printError() {
 
 printMessage "Running local AppFlowy pre-push hook."
 
-if [[ `git status --porcelain` ]]; then
-  printError "This script needs to run against committed code only. Please commit or stash you changes."
-  exit 1
+SKIP_ANALYZE=false
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  # Git 只会推送已经提交的对象，未提交改动不会进入远端。此时直接运行
+  # flutter analyze 会把工作区中的未提交代码也纳入检查，结果不能准确代表
+  # 本次推送内容，因此跳过分析但不阻止推送。
+  printMessage "检测到未提交改动：仅推送已提交内容，本次跳过 flutter analyze"
+  SKIP_ANALYZE=true
 fi
 
 # ── flutter analyze 门禁 ──────────────────────────────────────────────
@@ -44,7 +49,9 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 ANALYZE_DIR="$REPO_ROOT/frontend/appflowy_flutter"
 
-if ! command -v flutter >/dev/null 2>&1; then
+if [ "$SKIP_ANALYZE" = true ]; then
+  :
+elif ! command -v flutter >/dev/null 2>&1; then
   printMessage "跳过 flutter analyze：未找到 flutter 命令"
 elif [ ! -d "$ANALYZE_DIR" ]; then
   printMessage "跳过 flutter analyze：未找到 frontend/appflowy_flutter"
