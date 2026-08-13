@@ -425,7 +425,7 @@ class _WorkspaceMenuItemTrailing extends StatelessWidget {
                 name: name,
               ),
             );
-            bottomSheetContext.popToHome();
+            Navigator.of(bottomSheetContext).pop();
           },
         );
       },

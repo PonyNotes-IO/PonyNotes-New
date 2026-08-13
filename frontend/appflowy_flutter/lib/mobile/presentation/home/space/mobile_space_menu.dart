@@ -440,7 +440,7 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
             spaceBloc.add(
               SpaceEvent.rename(space: widget.space, name: name),
             );
-            bottomSheetContext.popToHome();
+            Navigator.of(bottomSheetContext).pop();
 
             showToastNotification(
               message: LocaleKeys.space_success_renameSpace.tr(),
