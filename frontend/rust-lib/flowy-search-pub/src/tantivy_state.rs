@@ -517,4 +517,37 @@ mod tests {
 
     assert!(results.is_empty());
   }
+
+  #[test]
+  fn title_search_finds_pages_without_indexable_content() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_id = Uuid::new_v4();
+    let mut state =
+      DocumentTantivyState::new(&workspace_id, temp_dir.path().to_path_buf()).unwrap();
+
+    for (id, title) in [
+      ("grid-1", "客户跟进表格"),
+      ("board-1", "研发任务看板"),
+      ("calendar-1", "产品发布日历"),
+      ("chat-1", "产品讨论聊天"),
+    ] {
+      state
+        .add_document(id, None, Some(title.to_string()), None)
+        .unwrap();
+    }
+    state.reader.reload().unwrap();
+
+    for (query, expected_id) in [
+      ("表格", "grid-1"),
+      ("看板", "board-1"),
+      ("日历", "calendar-1"),
+      ("聊天", "chat-1"),
+    ] {
+      let results = state.search(&workspace_id, query, None, 10, 0.4).unwrap();
+      assert_eq!(
+        results.first().map(|item| item.id.as_str()),
+        Some(expected_id)
+      );
+    }
+  }
 }

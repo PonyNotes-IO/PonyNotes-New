@@ -330,16 +330,11 @@ impl InstantIndexedDataConsumer for SearchInstantIndexImpl {
     };
 
     if let Some(entry) = self.consume_history.get(object_id) {
-      if entry.value() == &content_hash {
+      if entry.value() == &combined_hash {
         trace!(
           "[Indexing] {} instant search already indexed, hash:{}, skipping",
-          object_id,
-          content_hash,
+          object_id, combined_hash,
         );
-        return Ok(false);
-      }
-
-      if entry.value() == &combined_hash {
         return Ok(false);
       }
     }
@@ -382,7 +377,38 @@ pub(crate) async fn index_views_from_folder(
       .get_all_views()
       .await?
       .into_iter()
-      .filter(|v| v.space_info().is_none() && v.layout.is_document())
+      .filter(|v| is_searchable_view(v))
       .collect::<Vec<_>>(),
   )
+}
+
+fn is_searchable_view(view: &View) -> bool {
+  view.space_info().is_none()
+}
+
+#[cfg(test)]
+mod tests {
+  use super::is_searchable_view;
+  use collab_folder::{View, ViewLayout};
+
+  #[test]
+  fn all_page_layouts_are_searchable() {
+    for layout in [
+      ViewLayout::Document,
+      ViewLayout::Grid,
+      ViewLayout::Board,
+      ViewLayout::Calendar,
+      ViewLayout::Chat,
+    ] {
+      let view = View::new(
+        format!("view-{}", layout.clone() as u8),
+        "parent".to_string(),
+        "searchable page".to_string(),
+        layout,
+        Some(1),
+      );
+
+      assert!(is_searchable_view(&view));
+    }
+  }
 }

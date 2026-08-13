@@ -256,11 +256,11 @@ impl FullIndexedDataWriter {
         // We know the view exists because of the pre-filtering
         let view = &view_by_id[&object_str];
 
-        // Skip Chat views immediately
+        // Every page layout must contribute at least its title metadata.
         let collab_type = match view.layout {
           ViewLayout::Document => CollabType::Document,
           ViewLayout::Grid | ViewLayout::Board | ViewLayout::Calendar => CollabType::Database,
-          ViewLayout::Chat => continue,
+          ViewLayout::Chat => CollabType::Unknown,
         };
 
         // Parse UUID once, outside the match
@@ -317,9 +317,14 @@ impl FullIndexedDataWriter {
               metadata,
             });
           },
-          _ => {
-            // do nothing for other types
-          },
+          CollabType::Unknown => results.push(UnindexedCollab {
+            workspace_id,
+            object_id,
+            collab_type: CollabType::Unknown,
+            data: None,
+            metadata,
+          }),
+          _ => {},
         }
       }
 
