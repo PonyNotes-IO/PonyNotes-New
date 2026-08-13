@@ -378,7 +378,7 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
 
     switch (action) {
       case SpaceMoreActionType.rename:
-        _showRenameSpaceBottomSheet(context);
+        _showRenameSpaceBottomSheet(context, bottomSheetContext);
         break;
       case SpaceMoreActionType.duplicate:
         _duplicateSpace(context, bottomSheetContext);
@@ -409,11 +409,19 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
     Navigator.of(bottomSheetContext).pop();
   }
 
-  void _showRenameSpaceBottomSheet(BuildContext context) {
-    Navigator.of(context).pop();
+  void _showRenameSpaceBottomSheet(
+    BuildContext context,
+    BuildContext moreOptionsContext,
+  ) {
+    final spaceBloc = context.read<SpaceBloc>();
+
+    // The more-options sheet is on the root navigator, so dismiss it with
+    // its own context before presenting the rename sheet on that navigator.
+    Navigator.of(moreOptionsContext).pop();
 
     showMobileBottomSheet(
       context,
+      useRootNavigator: true,
       showHeader: true,
       title: LocaleKeys.space_renameSpace.tr(),
       showCloseButton: true,
@@ -429,11 +437,10 @@ class _SpaceMenuItemTrailingState extends State<SpaceMenuItemTrailing> {
           onSubmitted: (name) {
             // rename the workspace
             Log.info('rename the space, from: ${widget.space.name}, to: $name');
+            spaceBloc.add(
+              SpaceEvent.rename(space: widget.space, name: name),
+            );
             bottomSheetContext.popToHome();
-
-            context
-                .read<SpaceBloc>()
-                .add(SpaceEvent.rename(space: widget.space, name: name));
 
             showToastNotification(
               message: LocaleKeys.space_success_renameSpace.tr(),
