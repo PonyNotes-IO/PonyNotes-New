@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/data/models/share_access_level.dart';
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
@@ -30,10 +32,13 @@ import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class MobileViewPage extends StatefulWidget {
   const MobileViewPage({
@@ -67,16 +72,39 @@ class MobileViewPage extends StatefulWidget {
 }
 
 class _MobileViewPageState extends State<MobileViewPage> {
+  static const String _folderObservableSource = 'Workspace';
+  StreamSubscription? _sharedAccessRevocationSubscription;
+  bool _isLeavingRevokedView = false;
+
   @override
   void initState() {
     super.initState();
 
     getIt<ReminderBloc>().add(const ReminderEvent.started());
+    _listenForSharedAccessRevocation();
   }
 
   @override
   void dispose() {
+    _sharedAccessRevocationSubscription?.cancel();
     super.dispose();
+  }
+
+  void _listenForSharedAccessRevocation() {
+    _sharedAccessRevocationSubscription =
+        RustStreamReceiver.listen((observable) {
+      if (!mounted || _isLeavingRevokedView) {
+        return;
+      }
+      if (observable.source != _folderObservableSource ||
+          observable.ty != FolderNotification.DidRemoveMySharedView.value ||
+          observable.id != widget.id) {
+        return;
+      }
+
+      _isLeavingRevokedView = true;
+      context.go(MobileHomeScreen.routeName);
+    });
   }
 
   @override
