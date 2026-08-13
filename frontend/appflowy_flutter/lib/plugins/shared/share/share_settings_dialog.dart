@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/shared/share/share_menu.dart';
 import 'package:flutter/material.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class ShareSettingsDialog extends StatelessWidget {
   const ShareSettingsDialog({
@@ -15,9 +16,12 @@ class ShareSettingsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveTabs = tabs.isEmpty ? [ShareMenuTab.share] : tabs;
     final maxHeight = MediaQuery.of(context).size.height * 0.65;
+    final insetPadding = UniversalPlatform.isAndroid
+        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 24)
+        : const EdgeInsets.all(24);
 
     return Dialog(
-      insetPadding: const EdgeInsets.all(24),
+      insetPadding: insetPadding,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -94,4 +98,3 @@ class _DialogHeader extends StatelessWidget {
     );
   }
 }
-
