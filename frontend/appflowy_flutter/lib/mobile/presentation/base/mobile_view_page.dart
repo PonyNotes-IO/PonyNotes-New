@@ -168,9 +168,12 @@ class _MobileViewPageState extends State<MobileViewPage> {
     // behaviour unchanged.
     final isDocument = view?.layout.isDocumentView ?? false;
     final isGrid = view?.layout == ViewLayoutPB.Grid;
+    final isAIChat = view?.layout == ViewLayoutPB.Chat;
     final isHandwritingSaber =
         view?.pluginType == PluginType.handwritingSaber;
-    final showAppBar = !isDocument && view != null;
+    // MobileChatScreen already provides the AI conversation's navigation bar.
+    // Do not render the generic view actions underneath it.
+    final showAppBar = !isDocument && !isAIChat && view != null;
     final appBarHeight = MediaQuery.paddingOf(context).top + kToolbarHeight;
     return Scaffold(
       appBar: showAppBar
