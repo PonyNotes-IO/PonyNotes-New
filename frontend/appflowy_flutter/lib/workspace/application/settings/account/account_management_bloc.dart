@@ -1430,7 +1430,7 @@ class AccountManagementBloc
           String? planIdValue = '$planId';
 
           // iOS / macOS 平台直接调用 Apple Pay 内购，不走 H5 网页支付
-          if (PaymentPlatformSupport.isApplePayAvailable && !PaymentDevConfig.enableTestMode) {
+          if (PaymentPlatformSupport.isApplePayAvailable && !PaymentDevConfig.enableTestMode && Platform.isIOS) {
             final billingTypeStr = selectedDuration == PurchaseDurationOption.monthly
                 ? 'monthly'
                 : 'yearly';
