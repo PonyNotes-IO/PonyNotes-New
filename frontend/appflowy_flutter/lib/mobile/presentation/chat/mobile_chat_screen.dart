@@ -9,6 +9,7 @@ import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/mobile_view_page.dart';
 import 'package:appflowy/mobile/presentation/chat/mobile_chat_history_screen.dart';
 import 'package:appflowy/mobile/presentation/mobile_bottom_navigation_bar.dart';
+import 'package:appflowy/mobile/presentation/search/mobile_search_ai_policy.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -56,6 +57,8 @@ class MobileChatScreen extends StatefulWidget {
 class _MobileChatScreenState extends State<MobileChatScreen> {
   // Parsed from extra — only used in the welcome (no-id) path
   String? _initialMessage;
+  bool _autoSendRequested = false;
+  bool _autoSendHandled = false;
   String? _preferredModelId;
   bool _enableDeepThinking = false;
   bool _enableWebSearch = false;
@@ -76,6 +79,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     try {
       final data = json.decode(widget.extra!) as Map<String, dynamic>;
       _initialMessage = data['initial_message'] as String?;
+      _autoSendRequested = data['auto_send'] == true;
       _preferredModelId = data['preferred_model'] as String?;
       _enableDeepThinking = data['enable_deep_thinking'] == 'true';
       _enableWebSearch = data['enable_web_search'] == 'true';
@@ -85,7 +89,21 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   Future<void> _loadProfile() async {
     final profileResult = await UserBackendService.getCurrentUserProfile();
     _userProfile = profileResult.fold((p) => p, (_) => null);
-    if (mounted) setState(() => _isLoading = false);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isLoading = false);
+    final initialMessage = _initialMessage ?? '';
+    if (_userProfile != null &&
+        shouldAutoSendMobileSearchMessage(
+          isAndroid: Platform.isAndroid,
+          requested: _autoSendRequested,
+          alreadyHandled: _autoSendHandled,
+          message: initialMessage,
+        )) {
+      _autoSendHandled = true;
+      await _sendMessage(initialMessage.trim());
+    }
   }
 
   bool get _hasChat => widget.id != null;

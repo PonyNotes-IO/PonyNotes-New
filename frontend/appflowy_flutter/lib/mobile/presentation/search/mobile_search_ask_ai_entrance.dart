@@ -8,7 +8,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
+import 'mobile_search_ai_policy.dart';
 import 'mobile_search_summary_cell.dart';
 
 class MobileSearchAskAiEntrance extends StatelessWidget {
@@ -18,6 +20,11 @@ class MobileSearchAskAiEntrance extends StatelessWidget {
   Widget build(BuildContext context) {
     final bloc = context.read<CommandPaletteBloc?>(), state = bloc?.state;
     if (bloc == null || state == null) return _AskAIFor();
+    if (shouldUseMobileSearchAskAction(
+      isAndroid: UniversalPlatform.isAndroid,
+    )) {
+      return _AskAIFor();
+    }
 
     final generatingAIOverview = state.generatingAIOverview;
     if (generatingAIOverview) return _AISearching();

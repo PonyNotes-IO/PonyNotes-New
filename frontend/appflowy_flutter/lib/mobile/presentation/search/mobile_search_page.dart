@@ -16,8 +16,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'mobile_search_ask_ai_entrance.dart';
+import 'mobile_search_ai_policy.dart';
 import 'mobile_search_result.dart';
 import 'mobile_search_textfield.dart';
 
@@ -106,9 +108,17 @@ class _MobileSearchPageState extends State<MobileSearchPage> {
           final query = state.query;
           // Pass the search query as initial_message via extra parameter.
           // This makes MobileChatScreen show the welcome layout with the query pre-filled.
-          final extra = json.encode({
-            'initial_message': query ?? '',
-          });
+          final extra = json.encode(
+            buildMobileSearchChatExtra(
+              isAndroid: UniversalPlatform.isAndroid,
+              query: query ?? '',
+            ),
+          );
+          if (UniversalPlatform.isAndroid) {
+            context
+                .read<CommandPaletteBloc>()
+                .add(const CommandPaletteEvent.askedAI());
+          }
           GoRouter.of(context).push(
             '${MobileChatScreen.routeName}?extra=${Uri.encodeComponent(extra)}',
           );
@@ -153,10 +163,14 @@ class _MobileSearchPageState extends State<MobileSearchPage> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Column(
                             children: [
-                              if (enableShowAISearch &&
-                                  state.query?.isNotEmpty == true &&
-                                  state.combinedResponseItems.isEmpty &&
-                                  !state.searching)
+                              if (shouldShowMobileSearchAiEntrance(
+                                isAndroid: UniversalPlatform.isAndroid,
+                                aiEnabled: enableShowAISearch,
+                                query: state.query ?? '',
+                                hasResults:
+                                    state.combinedResponseItems.isNotEmpty,
+                                searching: state.searching,
+                              ))
                                 MobileSearchAskAiEntrance(),
                               MobileSearchResult(),
                             ],
