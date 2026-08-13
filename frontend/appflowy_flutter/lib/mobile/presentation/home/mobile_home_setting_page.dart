@@ -434,7 +434,10 @@ class _MobileSettingsMenuContent extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           children: [
-            _UserProfileHeader(userProfile: userProfile),
+            _UserProfileHeader(
+              userProfile: userProfile,
+              onTap: () => onNavigate(MobileSettingsSection.account),
+            ),
             const SizedBox(height: 16),
             if (subscriptionInfo != null && _isBillingVisible(userProfile)) ...[
               _MobileUpgradePlanCard(
@@ -711,9 +714,13 @@ class _SettingsItemRow extends StatelessWidget {
 }
 
 class _UserProfileHeader extends StatelessWidget {
-  const _UserProfileHeader({required this.userProfile});
+  const _UserProfileHeader({
+    required this.userProfile,
+    required this.onTap,
+  });
 
   final UserProfilePB userProfile;
+  final VoidCallback onTap;
 
   String get _displayName {
     if (userProfile.name.isNotEmpty) return userProfile.name;
@@ -767,26 +774,30 @@ class _UserProfileHeader extends StatelessWidget {
     const double avatarSize = 48;
     const double horizontalPadding = 16.0;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        horizontalPadding,
-        16,
-        horizontalPadding,
-        16,
-      ),
-      child: Row(
-        children: [
-          _buildAvatar(avatarSize),
-          const HSpace(16),
-          Text(
-            _displayName,
-            style: theme.textStyle.heading4.standard(
-              color: theme.textColorScheme.primary,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(
+          horizontalPadding,
+          16,
+          horizontalPadding,
+          16,
+        ),
+        child: Row(
+          children: [
+            _buildAvatar(avatarSize),
+            const HSpace(16),
+            Text(
+              _displayName,
+              style: theme.textStyle.heading4.standard(
+                color: theme.textColorScheme.primary,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
