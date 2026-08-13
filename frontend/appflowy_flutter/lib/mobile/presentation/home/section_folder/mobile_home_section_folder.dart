@@ -2,7 +2,6 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
-import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
 import 'package:appflowy/mobile/presentation/home/section_folder/mobile_home_section_folder_header.dart';
 import 'package:appflowy/mobile/presentation/home/space/mobile_create_space_sheet.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item.dart';
@@ -50,13 +49,7 @@ class MobileSectionFolder extends StatelessWidget {
                   onPressed: () => context
                       .read<FolderBloc>()
                       .add(const FolderEvent.expandOrUnExpand()),
-                  onAdded: () => spaceType == FolderSpaceType.public &&
-                          context
-                              .read<UserWorkspaceBloc>()
-                              .state
-                              .isCollabWorkspaceOn
-                      ? _showCreateSpaceBottomSheet(context)
-                      : _createNewPage(context),
+                  onAdded: () => _onAddPressed(context),
                 ),
               ),
               if (state.isExpanded)
@@ -74,6 +67,19 @@ class MobileSectionFolder extends StatelessWidget {
         },
       ),
     );
+  }
+
+  void _onAddPressed(BuildContext context) {
+    final workspaceState = context.read<UserWorkspaceBloc>().state;
+    final isQuickStartUser =
+        workspaceState.userProfile.userAuthType != AuthTypePB.Server;
+    if (isQuickStartUser ||
+        (spaceType == FolderSpaceType.public &&
+            workspaceState.isCollabWorkspaceOn)) {
+      _showCreateSpaceBottomSheet(context);
+      return;
+    }
+    _createNewPage(context);
   }
 
   void _createNewPage(BuildContext context) {
@@ -117,13 +123,14 @@ class MobileSectionFolder extends StatelessWidget {
       context,
       showDragHandle: true,
       showHeader: true,
-      title: '新建团队协作区',
+      title: LocaleKeys.space_createSpace.tr(),
       padding: const EdgeInsets.symmetric(horizontal: 4),
       // 让外层 sheet 用 Flexible(SingleChildScrollView) 包住我们，
       // 避免键盘弹起时外层 Column overflow。
       enableScrollable: true,
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: spaceBloc,
+        nameHint: LocaleKeys.space_spaceName.tr(),
         onCreated: () {},
       ),
     );

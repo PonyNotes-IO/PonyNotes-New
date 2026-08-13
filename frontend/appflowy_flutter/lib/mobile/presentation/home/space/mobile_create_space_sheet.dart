@@ -30,14 +30,12 @@ class MobileCreateSpaceSheet extends StatefulWidget {
     required this.onCreated,
     this.initialPermission = SpacePermission.publicToAll,
     this.nameHint = '团队协作区名称',
-    this.spaceLabel = '团队协作区',
   });
 
   final SpaceBloc spaceBloc;
   final VoidCallback onCreated;
   final SpacePermission initialPermission;
   final String nameHint;
-  final String spaceLabel;
 
   @override
   State<MobileCreateSpaceSheet> createState() => _MobileCreateSpaceSheetState();
@@ -105,12 +103,17 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
       final navigator = Navigator.of(context);
       final onCreated = widget.onCreated;
       navigator.pop();
-      Future.microtask(() {
-        try {
-          onCreated();
-        } catch (_) {}
-      });
-      showToastNotification(message: '${widget.spaceLabel}「$name」已创建');
+      unawaited(
+        Future.microtask(() {
+          try {
+            onCreated();
+          } catch (_) {}
+        }),
+      );
+      final permissionLabel = _permission == SpacePermission.private
+          ? LocaleKeys.space_privatePermission.tr()
+          : LocaleKeys.space_publicPermission.tr();
+      showToastNotification(message: '$permissionLabel「$name」已创建');
     }
   }
 
@@ -179,15 +182,15 @@ class _MobileCreateSpaceSheetState extends State<MobileCreateSpaceSheet> {
         const SizedBox(height: 8),
         _buildPermissionOption(
           SpacePermission.publicToAll,
-          '开放式',
-          '所有工作空间成员可见并可访问',
+          LocaleKeys.space_publicPermission.tr(),
+          LocaleKeys.space_publicPermissionDescription.tr(),
           theme,
         ),
         const SizedBox(height: 8),
         _buildPermissionOption(
           SpacePermission.private,
-          '私人',
-          '仅被邀请的成员可见',
+          LocaleKeys.space_privatePermission.tr(),
+          LocaleKeys.space_privatePermissionDescription.tr(),
           theme,
         ),
         const SizedBox(height: 24),

@@ -237,11 +237,9 @@ class _MobileSpaceState extends State<MobileSpace> {
                 title: LocaleKeys.space_mySpace.tr(),
                 spaces: publicSpaces,
                 spaceType: FolderSpaceType.public,
-                onAddPressed: () => _showCreatePageMenu(
+                onAddPressed: () => _showCreateSpaceBottomSheet(
                   context,
-                  publicSpaces.isNotEmpty
-                      ? publicSpaces.first
-                      : state.currentSpace ?? state.spaces.first,
+                  title: LocaleKeys.space_createSpace.tr(),
                 ),
                 favoriteBloc: widget.favoriteBloc,
               ),
@@ -298,7 +296,7 @@ class _MobileSpaceState extends State<MobileSpace> {
   void _showCreateSpaceBottomSheet(
     BuildContext context, {
     SpacePermission permission = SpacePermission.publicToAll,
-    String title = '新建团队协作区',
+    String? title,
   }) {
     // 与桌面端 sidebar 的 "+" 行为对齐：调 `SpaceBloc.create` 让新 space
     // 进入 home 的 SpaceBloc.state.spaces (而不是创建新的工作空间)。
@@ -309,7 +307,7 @@ class _MobileSpaceState extends State<MobileSpace> {
       context,
       showDragHandle: true,
       showHeader: true,
-      title: title,
+      title: title ?? LocaleKeys.space_createSpace.tr(),
       padding: const EdgeInsets.symmetric(horizontal: 4),
       // 让外层 sheet 用 Flexible(SingleChildScrollView) 包住我们，
       // 避免键盘弹起时外层 Column overflow。
@@ -317,10 +315,7 @@ class _MobileSpaceState extends State<MobileSpace> {
       builder: (_) => MobileCreateSpaceSheet(
         spaceBloc: spaceBloc,
         initialPermission: permission,
-        nameHint:
-            permission == SpacePermission.private ? '私有空间名称' : '团队协作区名称',
-        spaceLabel:
-            permission == SpacePermission.private ? '私有空间' : '团队协作区',
+        nameHint: LocaleKeys.space_spaceName.tr(),
         onCreated: () {
           // Sheet 内部已经 pop 过了；这里只做 toast（如需要）。
         },
