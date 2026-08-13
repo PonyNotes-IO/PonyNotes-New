@@ -19,6 +19,9 @@ import 'create_workspace_menu.dart';
 import 'workspace_more_options.dart';
 
 void showCreateWorkspaceBottomSheet(BuildContext context) {
+  final workspaceBloc = context.read<UserWorkspaceBloc>();
+  final parentNavigator = Navigator.of(context);
+
   showMobileBottomSheet(
     context,
     showHeader: true,
@@ -33,14 +36,17 @@ void showCreateWorkspaceBottomSheet(BuildContext context) {
         workspaceName: LocaleKeys.workspace_defaultName.tr(),
         onSubmitted: (name) {
           Log.info('create a new workspace: $name');
-          bottomSheetContext.popToHome();
+          workspaceBloc.add(
+            UserWorkspaceEvent.createWorkspace(
+              name: name,
+              workspaceType: WorkspaceTypePB.ServerW,
+            ),
+          );
 
-          context.read<UserWorkspaceBloc>().add(
-                UserWorkspaceEvent.createWorkspace(
-                  name: name,
-                  workspaceType: WorkspaceTypePB.ServerW,
-                ),
-              );
+          Navigator.of(bottomSheetContext).pop();
+          if (parentNavigator.canPop()) {
+            parentNavigator.pop();
+          }
         },
       );
     },
@@ -367,7 +373,7 @@ class _WorkspaceMenuItemTrailing extends StatelessWidget {
 
     switch (action) {
       case WorkspaceMenuMoreOption.rename:
-        _showRenameWorkspaceBottomSheet(context);
+        _showRenameWorkspaceBottomSheet(context, bottomSheetContext);
         break;
       case WorkspaceMenuMoreOption.invite:
         _pushToInviteMembersPage(context);
@@ -386,9 +392,20 @@ class _WorkspaceMenuItemTrailing extends StatelessWidget {
     // we don't support invite members in workspace menu
   }
 
-  void _showRenameWorkspaceBottomSheet(BuildContext context) {
+  void _showRenameWorkspaceBottomSheet(
+    BuildContext context,
+    BuildContext moreOptionsContext,
+  ) {
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
+
+    // The more-options sheet uses the root navigator. Dismiss it before
+    // presenting the rename sheet on the same navigator to avoid stacked
+    // modal barriers on iOS.
+    Navigator.of(moreOptionsContext).pop();
+
     showMobileBottomSheet(
       context,
+      useRootNavigator: true,
       showHeader: true,
       title: LocaleKeys.workspace_renameWorkspace.tr(),
       showCloseButton: true,
@@ -402,14 +419,13 @@ class _WorkspaceMenuItemTrailing extends StatelessWidget {
           onSubmitted: (name) {
             // rename the workspace
             Log.info('rename the workspace: $name');
+            workspaceBloc.add(
+              UserWorkspaceEvent.renameWorkspace(
+                workspaceId: workspace.workspaceId,
+                name: name,
+              ),
+            );
             bottomSheetContext.popToHome();
-
-            context.read<UserWorkspaceBloc>().add(
-                  UserWorkspaceEvent.renameWorkspace(
-                    workspaceId: workspace.workspaceId,
-                    name: name,
-                  ),
-                );
           },
         );
       },
