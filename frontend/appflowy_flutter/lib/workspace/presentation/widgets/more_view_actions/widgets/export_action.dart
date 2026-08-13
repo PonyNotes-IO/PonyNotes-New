@@ -296,6 +296,7 @@ class _ExportActionState extends State<ExportAction> {
           // 加载支持中文的字体
           Log.info('开始加载中文字体...');
           pw.Font? chineseFont;
+          pw.Font? mobileLatinFont;
           List<pw.Font> fontFallbackList = [];
           try {
             // 尝试从系统字体路径加载中文字体
@@ -365,15 +366,18 @@ class _ExportActionState extends State<ExportAction> {
             Log.error('❌ 加载系统字体失败: $e');
           }
           
-          // 如果系统字体加载失败，尝试使用 Flutter 资源
-          if (chineseFont == null) {
+          // 移动端使用应用内字体，避免依赖 Android/iOS 不同的系统字体格式。
+          if (chineseFont == null && (Platform.isAndroid || Platform.isIOS)) {
             try {
-              // 尝试从 assets 加载字体（如果项目中有中文字体资源）
               final fontData = await rootBundle.load('assets/fonts/chinese.ttf');
               chineseFont = pw.Font.ttf(fontData);
-              Log.info('✅ 成功从 assets 加载中文字体');
+              final latinFontData = await rootBundle.load(
+                'assets/google_fonts/Poppins/Poppins-Regular.ttf',
+              );
+              mobileLatinFont = pw.Font.ttf(latinFontData);
+              Log.info('✅ 成功加载移动端 PDF 字体');
             } catch (e) {
-              Log.warn('⚠️ 从 assets 加载字体失败: $e');
+              Log.warn('⚠️ 加载移动端 PDF 字体失败: $e');
             }
           }
           
@@ -394,7 +398,7 @@ class _ExportActionState extends State<ExportAction> {
           try {
             // 创建 PdfHTMLEncoderWrapper 实例
             final pdfEncoder = PdfHTMLEncoderWrapper(
-              font: chineseFont,
+              font: mobileLatinFont ?? chineseFont,
               fontFallback: fontFallbackList.isNotEmpty ? fontFallbackList : (chineseFont != null ? [chineseFont] : []),
             );
             
