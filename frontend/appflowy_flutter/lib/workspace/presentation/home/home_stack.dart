@@ -1022,7 +1022,32 @@ class PageNotifier extends ChangeNotifier {
     required bool setLatest,
     bool disposeExisting = true,
   }) {
-    if (newPlugin.id != plugin.id && disposeExisting) {
+    // 【2026-08-13 修复：Plugin 实例泄漏导致定时器累积、最终拖垮整个客户端】
+    //
+    // 原条件是 `newPlugin.id != plugin.id && disposeExisting`。当新旧 plugin 的
+    // id 相同时（反复点击同一个空间就会如此，日志中 `opening new SpaceHub` 连续
+    // 出现即是），旧实例【不会】被 dispose，但下面仍然执行 `_plugin = newPlugin`
+    // 把它替换掉 —— 旧实例就此失去引用，却仍在后台存活。
+    //
+    // 对 SpaceHubPlugin 而言，泄漏的不只是对象：它在构造时创建了
+    // PageAccessLevelBloc，而后者带一个【10 秒轮询】定时器（page_access_level_bloc
+    // 第 179 行）。dispose 是取消该定时器的唯一途径，跳过 dispose 就等于每点一次
+    // 空间泄漏一个永久轮询。
+    //
+    // 后果链（2026-08-13 日志实测）：泄漏累积到约 28 个实例后，权限查询达到
+    // 约 2.8 次/秒（13 分钟内 getAccessLevel 失败 2666 次）；每次查询都要
+    // getCurrentUserProfile → Rust UserDB::get_connection 取一个 SQLite 连接，
+    // 于是 max_size=10 的连接池被打满，随后所有取连接的操作卡在
+    // r2d2::Pool::get_timeout，而 FFI 跑在 LocalSet 单线程上，整个 Dart↔Rust
+    // 通道随之停摆 —— 表现为中间栏一直转圈、断网无效、本地内容也打不开。
+    //
+    // 正确条件：只要「确实换了实例」且允许 dispose，就必须释放旧的。
+    // 用 identical 判断对象本身，而不是比较 id：id 相同但对象不同，正是泄漏点；
+    // 而同一个对象重复 setPlugin 时不能 dispose（那会把正在用的实例销毁）。
+    //
+    // disposeExisting=false 的场景（expandSecondaryPlugin）是把 plugin 移交给
+    // 主面板、所有权转移，仍需保留该开关。
+    if (!identical(newPlugin, _plugin) && disposeExisting) {
       _plugin.dispose();
     }
 

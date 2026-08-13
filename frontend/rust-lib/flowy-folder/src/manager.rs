@@ -2786,19 +2786,32 @@ impl FolderManager {
       .mutex_folder
       .load_full()
       .ok_or_else(folder_not_init_error)?;
-    let folder = lock.read().await;
-    let trash_ids = Self::get_all_trash_ids(&folder);
+    // 【2026-08-13 修复：folder 读锁与 SQLite 连接必须错开，不能重叠持有】
+    //
+    // folder 读锁在这里只用于算出 trash_ids，算完就不再需要，因此立刻 drop。
+    //
+    // 这一步是必须的：下面的 `sqlite_connection()` 底层是 r2d2 的
+    // `Pool::get_timeout`，它是【同步阻塞】的（最长阻塞 connection_timeout，
+    // 当前配置为 10 秒），且 FFI 请求跑在 lib_dispatch 的 LocalSet 单线程上。
+    // 若在持有 folder 读锁时去取连接，一旦连接池被占满，就会：
+    //   1. 持着 folder 读锁同步阻塞最多 10 秒；
+    //   2. 期间任何 folder 写锁申请都会排队，而 tokio RwLock 是写优先的，
+    //      于是后续所有 folder 读操作（get_view_pb 等）一并被挡住；
+    //   3. 同时堵死 LocalSet 线程，整个 Dart↔Rust 通道停摆。
+    //
+    // 注：本函数上一版曾把取连接的位置从函数开头移到此处，本意是缩短连接占用
+    // 时间，却恰好把它挪进了读锁的作用域内，反而制造了上述叠加阻塞。现在改为
+    // 「先释放锁，再取连接」，两者不再重叠 —— 既不长时间占用连接，也不会持锁阻塞。
+    let trash_ids = {
+      let folder = lock.read().await;
+      Self::get_all_trash_ids(&folder)
+    };
+
     let all_views = all_views
       .into_iter()
       .filter(|view| !trash_ids.contains(&view.id))
       .collect::<Vec<Arc<View>>>();
 
-    // 【2026-08-13 修复：缩短 SQLite 连接的持有时间】
-    // 原实现在函数开头就取连接，却要等到这里才用，中间跨了
-    // `get_all_views().await` 与 `lock.read().await` 两个 await。在 async 环境下
-    // 这意味着连接在整段等待期间都被占着；本函数由共享区 30 秒轮询驱动
-    // （enablePolling 挂在三处），并发几次就能吃掉 max_size=10 的连接池里的
-    // 好几个名额。改为用之前才取，用完随 select 调用结束立即归还。
     let conn = self.user.sqlite_connection(uid)?;
 
     // 1. Get ALL shared views for this uid from local DB (not filtered by workspace_id,

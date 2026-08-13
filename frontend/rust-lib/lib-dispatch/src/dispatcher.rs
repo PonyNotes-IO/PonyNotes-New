@@ -109,18 +109,65 @@ impl AFPluginDispatcher {
     let plugins = dispatch.plugins.clone();
     let service = Box::new(DispatchService { plugins });
     tracing::trace!("[dispatch]: Async event: {:?}", &request.event);
+    // 事件名先留一份，超时诊断时要用（request 会被 move 进 service_ctx）。
+    let event_for_diagnostics = format!("{:?}", &request.event);
     let service_ctx = DispatchContext {
       request,
       callback: Some(Box::new(callback)),
     };
 
-    let result = tokio::task::spawn_local(async move {
+    let handle = tokio::task::spawn_local(async move {
       service.call(service_ctx).await.unwrap_or_else(|e| {
         tracing::error!("Dispatch runtime error: {:?}", e);
         InternalError::Other(format!("{:?}", e)).as_response()
       })
-    })
-    .await;
+    });
+
+    // 【2026-08-13 修复：FFI 请求永久挂起导致客户端整体卡死】
+    //
+    // 这里原本直接 `.await` 上面的 JoinHandle。只要 handler 内部有任何一个
+    // Future 永久 pending（例如某处长期持有 folder 的 tokio RwLock 写锁，
+    // 使 get_view_pb 的 `lock.read().await` 再也拿不到锁），这个 await 就
+    // 永不返回：
+    //   · Rust 侧：pending 的任务不占线程、没有调用栈，sample 采样里完全
+    //     看不到，进程表现为「完全空闲」；
+    //   · Dart 侧：dispatch.dart 用 `singleCompletePort(completer)` 等回调，
+    //     Rust 不回，Completer 就永远悬着 —— 日志里表现为
+    //     `TimeoutException: Future not completed`（见 2026-08-13 日志：
+    //     getChildViews 连续超时，mac / Windows 均复现）。
+    //   · 后果：中间栏一直转圈、断网也无法恢复、连本地私有空间都打不开。
+    //
+    // 与其逐个排查「究竟是哪一处持锁不放」（folder 锁在 manager.rs 里就有
+    // 50 处获取点，手工核对既不可靠也挡不住以后新引入的），不如在 FFI 这一层
+    // 兜住：任何 handler 都不允许无限期占用一次 FFI 调用。
+    //
+    // 超时后：
+    //   · 立刻给 Dart 返回一个明确的错误响应，UI 能走失败分支而不是永久等待；
+    //   · 打印事件名，下次复现时可直接定位是哪个 event 卡住；
+    //   · abort 掉该任务，避免泄漏的任务继续持有资源。
+    //
+    // 60 秒是一个「正常绝不会触及、异常必然触及」的阈值：本地 FFI 调用正常在
+    // 毫秒级，最慢的全量同步类操作也远低于此。Dart 侧多数调用点自身还有更短的
+    // 超时（如 SpaceBloc 为 10 秒），此处只作为最后一道防线。
+    const FFI_HANDLER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+    let result = match tokio::time::timeout(FFI_HANDLER_TIMEOUT, handle).await {
+      Ok(joined) => joined,
+      Err(_) => {
+        tracing::error!(
+          "[dispatch]: 事件 {} 超过 {:?} 未完成，判定为挂起并中止本次调用。\
+           这通常意味着 handler 内部有 Future 永久 pending（例如 folder 读写锁\
+           拿不到）。已向 Dart 返回错误，避免整个 FFI 通道被拖住。",
+          event_for_diagnostics,
+          FFI_HANDLER_TIMEOUT,
+        );
+        let error = InternalError::Other(format!(
+          "handler timeout after {:?}: {}",
+          FFI_HANDLER_TIMEOUT, event_for_diagnostics
+        ));
+        return error.as_response();
+      },
+    };
 
     result.unwrap_or_else(|e| {
       let msg = format!("EVENT_DISPATCH join error: {:?}", e);
