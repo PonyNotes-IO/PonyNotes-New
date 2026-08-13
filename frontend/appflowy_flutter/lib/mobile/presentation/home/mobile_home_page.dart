@@ -320,6 +320,18 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
     final String? message;
     ToastificationType toastType = ToastificationType.success;
     switch (actionType) {
+      case WorkspaceActionType.create:
+        message = result.fold(
+          (s) {
+            toastType = ToastificationType.success;
+            return LocaleKeys.workspace_createSuccess.tr();
+          },
+          (e) {
+            toastType = ToastificationType.error;
+            return '${LocaleKeys.workspace_createFailed.tr()}: ${e.msg}';
+          },
+        );
+        break;
       case WorkspaceActionType.open:
         message = result.onFailure((e) {
           toastType = ToastificationType.error;
