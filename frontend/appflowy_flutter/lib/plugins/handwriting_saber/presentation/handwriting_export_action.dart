@@ -47,9 +47,9 @@ class HandwritingExportAction extends StatelessWidget {
   Widget build(BuildContext context) {
     if (mobile) {
       return IconButton(
-        tooltip: '导出',
-        icon: const Icon(Icons.file_download_outlined),
-        onPressed: () => _showMobileExportSheet(context),
+        tooltip: '更多',
+        icon: const Icon(Icons.more_horiz),
+        onPressed: () => _showMobileActionSheet(context),
       );
     }
 
@@ -87,12 +87,13 @@ class HandwritingExportAction extends StatelessWidget {
     );
   }
 
-  Future<void> _showMobileExportSheet(BuildContext context) {
+  Future<void> _showMobileActionSheet(BuildContext context) {
     return showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Wrap(
           children: [
+            const _MobileMenuSectionTitle('导出'),
             ListTile(
               leading: const Icon(Icons.picture_as_pdf),
               title: const Text('导出为 PDF'),
@@ -107,6 +108,16 @@ class HandwritingExportAction extends StatelessWidget {
               onTap: () {
                 Navigator.pop(sheetContext);
                 _exportAsPonynhw(context);
+              },
+            ),
+            const Divider(height: 1),
+            const _MobileMenuSectionTitle('导入'),
+            ListTile(
+              leading: const Icon(Icons.file_upload_outlined),
+              title: const Text('导入源文件(.ponynhw)'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                HandwritingImportAction(view: view)._importPonynhw(context);
               },
             ),
           ],
@@ -626,8 +637,7 @@ class HandwritingImportAction extends StatelessWidget {
       final filePicker = GetIt.instance<FilePickerService>();
       final result = await filePicker.pickFiles(
         dialogTitle: '选择手写笔记源文件',
-        type: FileType.any,
-        allowMultiple: false,
+        withData: Platform.isAndroid || Platform.isIOS,
       );
 
       if (result == null || result.files.isEmpty) {
@@ -635,32 +645,37 @@ class HandwritingImportAction extends StatelessWidget {
         return;
       }
 
-      final filePath = result.files.first.path;
-      if (filePath == null) {
-        if (context.mounted) {
-          _showError(context, '导入失败：无法获取文件路径');
-        }
-        return;
-      }
+      final selectedFile = result.files.first;
 
       // 检查文件扩展名
-      if (!filePath.toLowerCase().endsWith('.ponynhw')) {
+      if (!selectedFile.name.toLowerCase().endsWith('.ponynhw')) {
         if (context.mounted) {
           _showError(context, '导入失败：请选择 .ponynhw 格式的文件');
         }
         return;
       }
 
-      // 读取文件
-      final file = File(filePath);
-      if (!await file.exists()) {
-        if (context.mounted) {
-          _showError(context, '导入失败：文件不存在');
+      // 移动端文件选择器优先返回字节；桌面端继续使用原有路径读取。
+      var fileBytes = selectedFile.bytes;
+      if (fileBytes == null) {
+        final filePath = selectedFile.path;
+        if (filePath == null) {
+          if (context.mounted) {
+            _showError(context, '导入失败：无法读取所选文件');
+          }
+          return;
         }
-        return;
+
+        final file = File(filePath);
+        if (!await file.exists()) {
+          if (context.mounted) {
+            _showError(context, '导入失败：文件不存在');
+          }
+          return;
+        }
+        fileBytes = await file.readAsBytes();
       }
 
-      final fileBytes = await file.readAsBytes();
       Log.info('[HandwritingImport] 读取文件成功，大小: ${fileBytes.length} 字节');
 
       // 解压 .ponynhw 文件
@@ -819,6 +834,23 @@ class HandwritingImportAction extends StatelessWidget {
     showToastNotification(
       message: message,
       type: ToastificationType.error,
+    );
+  }
+}
+
+class _MobileMenuSectionTitle extends StatelessWidget {
+  const _MobileMenuSectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
     );
   }
 }
