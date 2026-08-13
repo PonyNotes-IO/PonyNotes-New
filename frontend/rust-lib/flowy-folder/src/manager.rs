@@ -2778,7 +2778,6 @@ impl FolderManager {
   /// views, this function will not return the child views.
   pub async fn get_shared_pages(&self) -> FlowyResult<RepeatedSharedViewResponsePB> {
     let uid = self.user.user_id()?;
-    let conn = self.user.sqlite_connection(uid)?;
     let workspace_id = self.user.workspace_id()?;
     let mut local_shared_views = vec![];
 
@@ -2793,6 +2792,14 @@ impl FolderManager {
       .into_iter()
       .filter(|view| !trash_ids.contains(&view.id))
       .collect::<Vec<Arc<View>>>();
+
+    // 【2026-08-13 修复：缩短 SQLite 连接的持有时间】
+    // 原实现在函数开头就取连接，却要等到这里才用，中间跨了
+    // `get_all_views().await` 与 `lock.read().await` 两个 await。在 async 环境下
+    // 这意味着连接在整段等待期间都被占着；本函数由共享区 30 秒轮询驱动
+    // （enablePolling 挂在三处），并发几次就能吃掉 max_size=10 的连接池里的
+    // 好几个名额。改为用之前才取，用完随 select 调用结束立即归还。
+    let conn = self.user.sqlite_connection(uid)?;
 
     // 1. Get ALL shared views for this uid from local DB (not filtered by workspace_id,
     //    because cross-workspace shared views are stored with the source workspace's ID)

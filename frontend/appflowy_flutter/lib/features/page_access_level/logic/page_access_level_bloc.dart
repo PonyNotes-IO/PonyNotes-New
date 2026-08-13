@@ -273,8 +273,37 @@ class PageAccessLevelBloc
 
     _isRefreshingAccessLevel = true;
     try {
+      // 【2026-08-13 修复：本地 SQLite 连接池被打满导致整个客户端卡死】
+      //
+      // 这个 do/while 的本意是「合并并发刷新请求」：刷新期间又来请求就置位
+      // _refreshAccessLevelAgain，本轮结束后补跑一轮。问题是它没有任何上限 ——
+      // 只要刷新事件到达的频率不低于单轮耗时，标志位就会一直被重新置位，循环
+      // 永不退出。
+      //
+      // 而 getAccessLevel 每一轮开头都会 getCurrentUserProfile()（走 GET_PROFILE
+      // 事件 → Rust 侧 UserDB::get_connection 取一个 SQLite 连接）。断网或后端
+      // 不可用时，getAccessLevel 是【快速失败】返回的，单轮耗时极短，于是这里
+      // 变成高频空转：实测 2026-08-13 日志中 ws 断开的 13 分钟里空转 2170 次
+      // （约 2.8 次/秒），把 max_size=10 的连接池打满。
+      //
+      // 后果远不止本模块：连接池耗尽后所有取连接的操作都卡在
+      // r2d2::Pool::get_timeout（10 秒），而 FFI 请求跑在 lib_dispatch 的
+      // LocalSet【单线程】执行器上，一旦阻塞，整个 Dart↔Rust 通道全部排队 ——
+      // 表现为中间栏一直转圈、断网也无法恢复、连本地私有空间都打不开。
+      // sample 采样已确认卡点：
+      //   get_view_pb → get_active_user_workspace → UserDB::get_connection
+      //   → r2d2::Pool::get_timeout → __psynch_cvwait
+      //
+      // 修复：给补跑加上限，且失败时直接结束本次刷新。
+      // 失败说明网络/后端此刻不可用，立刻重试没有意义，只会空转；等下一次
+      // 刷新事件（外部有轮询与通知驱动）再来即可，不会漏掉权限变更。
+      const maxCoalescedRounds = 3;
+      var rounds = 0;
+      var lastRoundFailed = false;
+
       do {
         _refreshAccessLevelAgain = false;
+        rounds++;
         final accessLevel = await repository.getAccessLevel(
       view.id,
       workspaceId: view.hasWorkspaceId() ? view.workspaceId : null,
@@ -283,10 +312,12 @@ class PageAccessLevelBloc
           return;
         }
 
+        lastRoundFailed = false;
         final newAccessLevel = accessLevel.fold(
           (accessLevel) => accessLevel,
           (error) {
             Log.warn('[PageAccessLevel] getAccessLevel failed: $error');
+            lastRoundFailed = true;
             return ShareAccessLevel.readOnly;
           },
         );
@@ -308,6 +339,26 @@ class PageAccessLevelBloc
               accessLevel: newAccessLevel,
             ),
           );
+        }
+        if (lastRoundFailed) {
+          // 本轮失败：不再补跑。丢弃已排队的合并标记，等下一次刷新事件。
+          if (_refreshAccessLevelAgain) {
+            Log.warn(
+              '[PageAccessLevel] 本轮获取失败，放弃本次合并补跑，'
+              '等待下一次刷新事件（避免离线时高频空转耗尽数据库连接池）',
+            );
+          }
+          break;
+        }
+
+        if (rounds >= maxCoalescedRounds && _refreshAccessLevelAgain) {
+          // 达到补跑上限仍有新请求积压：说明刷新事件到达频率高于处理速度，
+          // 继续补跑只会无限循环。留到下一次事件处理。
+          Log.warn(
+            '[PageAccessLevel] 合并补跑达到上限($maxCoalescedRounds)，'
+            '本次结束，剩余请求留待下一次刷新事件',
+          );
+          break;
         }
       } while (_refreshAccessLevelAgain && !isClosed);
     } finally {
