@@ -25,11 +25,11 @@ OutputBaseFilename=PonyNotesSetup
 OutputDir=Output
 
 [Files]
-; 本地与 CI 安装载荷目录均为 AppFlowy;
+; 本地与 CI 安装载荷目录均为 PonyNotes;
 ; vc_redist_x64.exe 与本 .iss 同目录(由 windows_installer/* 一起拷贝)
-Source: "AppFlowy\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
+Source: "PonyNotes\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
 Source: "vc_redist_x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion deleteafterinstall
-Source: "AppFlowy\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "PonyNotes\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{userdesktop}\PonyNotes"; Filename: "{app}\PonyNotes.exe"

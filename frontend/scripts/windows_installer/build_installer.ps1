@@ -186,7 +186,7 @@ $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $FrontendDir = Join-Path $ScriptDir "..\.."
 $RustLibDir  = Join-Path $FrontendDir "rust-lib"
 $FlutterDir  = Join-Path $FrontendDir "appflowy_flutter"
-$InstallDir  = Join-Path $ScriptDir "AppFlowy"
+$InstallDir  = Join-Path $ScriptDir "PonyNotes"
 $OutputDir   = Join-Path $ScriptDir "Output"
 
 $pubspecPath = Join-Path $FlutterDir "pubspec.yaml"
