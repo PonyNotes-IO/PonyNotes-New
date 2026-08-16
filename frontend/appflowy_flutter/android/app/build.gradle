@@ -150,6 +150,7 @@ def verifyFlutterPluginRegistration = tasks.register('verifyFlutterPluginRegistr
                 'dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin',
                 'io.flutter.plugins.imagepicker.ImagePickerPlugin',
                 'com.baseflow.permissionhandler.PermissionHandlerPlugin',
+                'com.jarvan.tobias.TobiasPlugin',
         ]
         requiredRegistrations.each { registration ->
             if (!registrant.contains(registration)) {

@@ -6,3 +6,4 @@
 -keep class dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin { *; }
 -keep class io.flutter.plugins.imagepicker.ImagePickerPlugin { *; }
 -keep class com.baseflow.permissionhandler.PermissionHandlerPlugin { *; }
+-keep class com.jarvan.tobias.TobiasPlugin { *; }
