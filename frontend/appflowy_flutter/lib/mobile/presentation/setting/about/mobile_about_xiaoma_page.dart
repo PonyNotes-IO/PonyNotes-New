@@ -60,6 +60,9 @@ class MobileAboutXiaomaPage extends StatelessWidget {
               // 功能列表
               MobileSettingGroup(
                 groupTitle: '',
+                wrapInCard: true,
+                showDivider: false,
+                showItemDivider: false,
                 settingItemList: [
                   MobileSettingItem(
                     name: '订阅详情',

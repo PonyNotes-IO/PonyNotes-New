@@ -82,6 +82,9 @@ class PersonalInfoSettingGroup extends StatelessWidget {
               // Settings list
               MobileSettingGroup(
                 groupTitle: '',
+                wrapInCard: true,
+                showDivider: false,
+                showItemDivider: false,
                 settingItemList: [
                   // 昵称设置
                   MobileSettingItem(

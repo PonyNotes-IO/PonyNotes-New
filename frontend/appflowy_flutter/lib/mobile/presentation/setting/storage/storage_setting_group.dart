@@ -35,6 +35,9 @@ class StorageSettingGroup extends StatelessWidget {
           final path = state.userDataLocation?.path;
           return MobileSettingGroup(
             groupTitle: '存储设置',
+            wrapInCard: true,
+            showDivider: false,
+            showItemDivider: false,
             settingItemList: [
               MobileSettingItem(
                 name: '存储路径',
