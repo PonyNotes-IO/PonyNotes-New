@@ -28,7 +28,29 @@ pub(crate) fn subscribe_folder_view_changed(
   user: Weak<dyn FolderUser>,
 ) {
   tokio::spawn(async move {
-    while let Ok(value) = rx.recv().await {
+    loop {
+      // 【2026-08-17 修复：Lagged 会让监听器永久退出】
+      // rx 是容量 100 的 broadcast。原写法 `while let Ok(value) = rx.recv().await`
+      // 在 Err 上一律退出循环，而 broadcast 在接收方落后于发送方时返回的是
+      // Err(Lagged(n)) —— 它的含义只是「你漏掉了 n 条」，通道本身完全正常。
+      // 断线重连后批量应用远端 folder 更新（例如休眠十几小时后唤醒）很容易一次
+      // 产生超过 100 条 ViewChange，于是监听器被永久杀掉：此后视图的
+      // 创建/删除/重命名再也不会通知到 Dart，侧边栏与中间栏静默停止更新。
+      // 现在改为：Lagged 只记日志并继续接收，仅在 Closed（发送端已全部释放）时退出。
+      let value = match rx.recv().await {
+        Ok(value) => value,
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+          tracing::warn!(
+            "[Folder] view change 监听落后，跳过 {} 条事件，继续接收（不退出监听）",
+            skipped
+          );
+          continue;
+        },
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+          trace!("[Folder] view change 通道已关闭，退出监听");
+          break;
+        },
+      };
       if let Some(user) = user.upgrade() {
         if let Ok(actual_workspace_id) = user.workspace_id() {
           if actual_workspace_id != workspace_id {
@@ -137,7 +159,23 @@ pub(crate) fn subscribe_folder_trash_changed(
   user: Weak<dyn FolderUser>,
 ) {
   tokio::spawn(async move {
-    while let Ok(value) = rx.recv().await {
+    loop {
+      // 【2026-08-17 修复】同 subscribe_folder_view_changed：Lagged 只表示漏收，
+      // 不能据此退出监听，否则回收站变更此后永久不再通知前端。
+      let value = match rx.recv().await {
+        Ok(value) => value,
+        Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+          tracing::warn!(
+            "[Folder] trash change 监听落后，跳过 {} 条事件，继续接收（不退出监听）",
+            skipped
+          );
+          continue;
+        },
+        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+          trace!("[Folder] trash change 通道已关闭，退出监听");
+          break;
+        },
+      };
       if let Some(user) = user.upgrade() {
         if let Ok(actual_workspace_id) = user.workspace_id() {
           if actual_workspace_id != workspace_id {

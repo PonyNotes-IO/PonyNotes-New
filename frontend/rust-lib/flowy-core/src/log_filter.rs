@@ -83,7 +83,17 @@ pub fn create_log_filter(
 
   // Most of the time, we don't need to see the logs from the following crates
   // filters.push(format!("flowy_sqlite={}", "info"));
-  // filters.push(format!("lib_dispatch={}", level));
+
+  // 【放开 lib_dispatch 的 warn 及以上 2026-08-17】
+  // 此前这一行被注释掉，而过滤器字符串里【没有】任何全局默认级别指令，
+  // EnvFilter 对未匹配到指令的 target 一律丢弃 —— 结果 lib_dispatch 的
+  // error!/warn! 永远进不了日志文件。
+  // 2026-08-13 我在 FFI 层加的「事件超过 60s 未完成」兜底诊断就是打在这个
+  // target 上的，因此那句「若仍卡死，日志里必然出现 ...」根本不可能成立，
+  // 8-17 复现时也确实一条都没有，白白丢掉了唯一能直接点名卡住事件的线索。
+  // 用 warn 而不是 level：lib_dispatch 对每个事件都有 trace!/debug! 埋点，
+  // 跟随 level 会把日志刷爆；warn 只放行异常，量极小又保证兜底可见。
+  filters.push(format!("lib_dispatch={}", "warn"));
 
   filters.push(format!("client_api={}", level));
   filters.push(format!("infra={}", level));

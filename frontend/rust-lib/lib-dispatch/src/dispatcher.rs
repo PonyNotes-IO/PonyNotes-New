@@ -111,12 +111,41 @@ impl AFPluginDispatcher {
     tracing::trace!("[dispatch]: Async event: {:?}", &request.event);
     // 事件名先留一份，超时诊断时要用（request 会被 move 进 service_ctx）。
     let event_for_diagnostics = format!("{:?}", &request.event);
+
+    // 【2026-08-17 修复：上一轮的 60s 兜底其实救不了 Dart】
+    //
+    // 回调（post_to_flutter）是【唯一】把响应投递回 Dart 的途径，而它被 move 进
+    // 了下面 spawn_local 的任务里，只有在 handler 正常跑完后才会被调用。
+    // 上一轮超时分支只是 `return error.as_response()` —— 这个返回值交给
+    // dart-ffi 的 Runner，而 FFI 路径调用 dispatch 时传的是 `ret: None`，
+    // 于是这个错误响应被直接丢弃，Dart 侧的 Completer 依旧永远悬着。
+    // 也就是说：兜底日志（还因为 lib_dispatch 未纳入日志过滤器而不可见）打了，
+    // 但客户端该卡还是卡。
+    //
+    // 现在把回调放进一个「只允许取走一次」的格子里：handler 正常完成时由它取走，
+    // 超时时由兜底分支取走。谁先取到谁负责投递，保证 Dart 侧恰好收到一次响应
+    // ——正常响应或超时错误——绝不会一直悬着。
+    // 本函数是 local_set 版本（单线程 LocalSet），故用 Rc<RefCell<_>> 即可，
+    // BoxFutureCallback 在该 cfg 下也没有 Send 约束。
+    let shared_callback: std::rc::Rc<std::cell::RefCell<Option<BoxFutureCallback>>> =
+      std::rc::Rc::new(std::cell::RefCell::new(Some(Box::new(callback))));
+
+    let handler_callback = shared_callback.clone();
+    let once_callback: BoxFutureCallback = Box::new(move |resp: AFPluginEventResponse| {
+      let taken = handler_callback.borrow_mut().take();
+      Box::pin(async move {
+        if let Some(cb) = taken {
+          cb(resp).await;
+        }
+      })
+    });
+
     let service_ctx = DispatchContext {
       request,
-      callback: Some(Box::new(callback)),
+      callback: Some(once_callback),
     };
 
-    let handle = tokio::task::spawn_local(async move {
+    let mut handle = tokio::task::spawn_local(async move {
       service.call(service_ctx).await.unwrap_or_else(|e| {
         tracing::error!("Dispatch runtime error: {:?}", e);
         InternalError::Other(format!("{:?}", e)).as_response()
@@ -151,7 +180,7 @@ impl AFPluginDispatcher {
     // 超时（如 SpaceBloc 为 10 秒），此处只作为最后一道防线。
     const FFI_HANDLER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
-    let result = match tokio::time::timeout(FFI_HANDLER_TIMEOUT, handle).await {
+    let result = match tokio::time::timeout(FFI_HANDLER_TIMEOUT, &mut handle).await {
       Ok(joined) => joined,
       Err(_) => {
         tracing::error!(
@@ -165,7 +194,32 @@ impl AFPluginDispatcher {
           "handler timeout after {:?}: {}",
           FFI_HANDLER_TIMEOUT, event_for_diagnostics
         ));
-        return error.as_response();
+        let error_response = error.as_response();
+
+        // 必须由这里主动把错误响应投递给 Dart：仅仅 return 是不够的，
+        // FFI 路径的返回值会被丢弃（Runner 侧 ret 为 None）。
+        let taken = shared_callback.borrow_mut().take();
+        match taken {
+          Some(callback) => {
+            // 回调还没被 handler 取走 → handler 确实卡住了。
+            // 先 abort：drop 掉挂起的 Future 会顺带释放它持有的锁 / DB 连接等
+            // 资源（仅 drop，不会打断已完成的同步写入），避免一个永久 pending
+            // 的任务把 folder 锁之类的公共资源一直扣着，拖垮后续所有请求。
+            // 注意：只 drop JoinHandle 是「分离」而非取消，必须显式 abort。
+            handle.abort();
+            callback(error_response.clone()).await;
+          },
+          None => {
+            // 回调已被 handler 取走，说明它正在投递响应（只是慢过了 60 秒）。
+            // 此时不要 abort，否则会打断投递、反而让 Dart 收不到任何响应。
+            tracing::warn!(
+              "[dispatch]: 事件 {} 超时，但 handler 已在投递响应，交由其自行完成",
+              event_for_diagnostics,
+            );
+          },
+        }
+
+        return error_response;
       },
     };
 

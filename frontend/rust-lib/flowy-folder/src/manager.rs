@@ -1435,8 +1435,14 @@ impl FolderManager {
     }
 
     // notify the update here
-    let folder = lock.read().await;
-    notify_parent_view_did_change(workspace_id, &folder, vec![parent_view_id]);
+    // 【2026-08-17 修复：folder 读锁重入】读锁只用于发通知，用块作用域限定，
+    // 必须在调用 get_view_pb() 之前释放 —— 后者内部会再取同一把 folder 读锁，
+    // 一旦期间有写者排队（tokio RwLock 写优先）就会三方互等、永久死锁。
+    // 详见 get_shared_view_section 处的完整说明。
+    {
+      let folder = lock.read().await;
+      notify_parent_view_did_change(workspace_id, &folder, vec![parent_view_id]);
+    }
     let duplicated_view = self.get_view_pb(&new_view_id).await?;
 
     Ok(duplicated_view)
@@ -3002,17 +3008,38 @@ impl FolderManager {
     let mut loop_count = 0;
     let mut current_view_id = view_id.to_string();
 
-    let lock = self
-      .mutex_folder
-      .load_full()
-      .ok_or_else(folder_not_init_error)?;
-    let folder = lock.read().await;
-
+    // 【2026-08-17 修复：folder 读锁重入导致整个 folder RwLock 永久死锁】
+    //
+    // 原实现先取 folder 读锁，再在【持锁期间】调用 get_flatten_shared_pages()，
+    // 而后者内部会对同一把 mutex_folder 再取两次读锁
+    // （get_all_views() 里一次，算 trash_ids 时又一次）。
+    //
+    // tokio 的 RwLock 是【写优先】的：只要期间有任何一个写者来排队
+    // （folder 同步在断线重连后批量应用远端更新，必然产生写者），就会形成
+    //
+    //     外层读锁(本函数持有) ← 写者排队 ← 内层读锁(本函数正在等)
+    //
+    // 的环：外层读锁要等内层拿到才会释放，内层要等写者过去，写者要等外层释放。
+    // 三者互等，mutex_folder 从此永久死锁，之后【所有】folder 事件
+    // （get_view_pb / getChildViews 等）全部无限期 pending。
+    //
+    // 这正是长时间运行后"中间栏一直转圈、断网无效、连本地私有空间也打不开"的
+    // 根因；且因为是 async pending 而非线程阻塞，sample 采样里进程表现为完全
+    // 空闲，前两轮排查因此都没定位到。
+    //
+    // 修复：把「取共享页列表」挪到取锁之前完成，锁只在后面纯内存的循环里持有，
+    // 两者不再重叠，彻底消除重入。语义不变（循环只读 folder，不依赖二者顺序）。
     let flattened_shared_views = self.get_flatten_shared_pages().await?;
 
     if flattened_shared_views.iter().any(|view| view.id == view_id) {
       return Ok(SharedViewSectionPB::SharedSection);
     }
+
+    let lock = self
+      .mutex_folder
+      .load_full()
+      .ok_or_else(folder_not_init_error)?;
+    let folder = lock.read().await;
 
     loop {
       if loop_count >= MAX_LOOP_COUNT {
