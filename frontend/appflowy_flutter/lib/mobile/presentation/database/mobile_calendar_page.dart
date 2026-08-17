@@ -152,21 +152,27 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
 
           if (mounted) {
-            _notesForDate = notesForDate;
-            _isLoadingNotes = false;
+            setState(() {
+              _notesForDate = notesForDate;
+              _isLoadingNotes = false;
+            });
           }
         },
         (error) {
           if (mounted) {
-            _notesForDate = [];
-            _isLoadingNotes = false;
+            setState(() {
+              _notesForDate = [];
+              _isLoadingNotes = false;
+            });
           }
         },
       );
     } catch (_) {
       if (mounted) {
-        _notesForDate = [];
-        _isLoadingNotes = false;
+        setState(() {
+          _notesForDate = [];
+          _isLoadingNotes = false;
+        });
       }
     }
   }
