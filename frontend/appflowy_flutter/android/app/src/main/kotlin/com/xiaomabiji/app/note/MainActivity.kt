@@ -5,9 +5,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodChannel
 import com.xiaomabiji.app.note.wechat.WeChatApi
 import com.xiaomabiji.app.note.wechat.WeChatBridge
@@ -48,6 +50,22 @@ class MainActivity : FlutterActivity() {
         // Keep Flutter's generated plugin registration. In particular, the
         // QR login dialogs use flutter_inappwebview's platform view on Android.
         super.configureFlutterEngine(flutterEngine)
+        // ═══════════════════════════════════════════════════════════════════
+        // 兜底二次注册：Tobias 支付宝插件在部分国内定制 ROM 上可能因为
+        // MultiDex / ClassLoader 时序导致 GeneratedPluginRegistrant 中的
+        // "new com.jarvan.tobias.TobiasPlugin()" 虽然 class 已入 dex，但
+        // 仍然抛出 NoClassDefFoundError / ClassNotFoundException，或者
+        // 注册 try-catch 吞掉了异常。这里我们直接在 MainActivity 侧兜底：
+        //   - 用反射解析出当前 engine 中已注册的所有插件
+        //   - 若 TobiasPlugin 不在列表里，手动实例化并 attach
+        //   - 每一步打印日志，方便通过 logcat 精确定位
+        // ═══════════════════════════════════════════════════════════════════
+        ensurePluginRegistered(
+            engine = flutterEngine,
+            tag = "TobiasPluginGuard",
+            pluginClassName = "com.jarvan.tobias.TobiasPlugin",
+            channelName = "com.jarvanmo/tobias",
+        )
         // Bypass url_launcher_android 6.x Pigeon channel (which fails to register
         // on this project due to AGP/plugin compileSdk mismatches) by providing
         // our own MethodChannel that opens URLs via ACTION_VIEW.
@@ -169,6 +187,98 @@ class MainActivity : FlutterActivity() {
     private fun clearHandwritingExport() {
         handwritingExportResult = null
         handwritingExportBytes = null
+    }
+
+    /**
+     * 确保指定 Flutter 插件已经被 attach 到当前 [FlutterEngine] 上。
+     *
+     * 典型故障： GeneratedPluginRegistrant.java 里每一个插件注册都包了一层
+     * `try/catch(Exception)`，catch 里只打 `Log.e("GeneratedPluginRegistrant", …)`。
+     * 这意味着：
+     *   - ClassNotFoundException / NoClassDefFoundError (MultiDex 时序)
+     *   - ExceptionInInitializerError
+     *   - onAttachedToEngine 内部抛异常
+     *  都会被悄悄吞掉，Dart 侧只能看到 MissingPluginException，完全看不到
+     *  Android 端真正的堆栈。
+     *
+     *  本函数显式做三件事并把详细日志打出来：
+     *   1) 尝试 Class.forName(pluginClassName)，失败打印 ClassLoader 与多 dex 诊断
+     *   2) 通过反射读取 flutterEngine.plugins 中已注册插件的类名集合
+     *   3) 如果目标插件不在集合里，手动实例化 + onAttachedToEngine + add 到 plugins
+     *
+     * @param pluginClassName 完全限定名，例如 "com.jarvan.tobias.TobiasPlugin"
+     * @param channelName     Dart 侧 invokeMethod 时使用的 channel 名，仅用于日志
+     */
+    private fun ensurePluginRegistered(
+        engine: FlutterEngine,
+        tag: String,
+        pluginClassName: String,
+        channelName: String,
+    ) {
+        val loader = Thread.currentThread().contextClassLoader ?: this@MainActivity.classLoader
+        Log.i(
+            tag,
+            "ensurePluginRegistered: class=$pluginClassName channel=$channelName " +
+                "classLoader=$loader"
+        )
+
+        // 1) 确认插件类能被 ClassLoader 找到
+        val pluginClass: Class<*> = try {
+            Class.forName(pluginClassName, false, loader)
+        } catch (t: Throwable) {
+            Log.e(tag, "ClassLoader 找不到插件类 $pluginClassName (dex 中是否存在？)", t)
+            val classLoaderDexes = runCatching {
+                loader.javaClass.getMethod("getDex").invoke(loader)?.toString()
+                    ?: "<no-dex>"
+            }.getOrDefault("<read-failed>")
+            Log.e(
+                tag,
+                "ClassLoader hint: dex field=$classLoaderDexes; " +
+                    "MultiDex.install 仅发生在 Application.attachBaseContext。" +
+                    "若 minSdk<21 请在自定义 Application 中显式调用 MultiDex.install(base)。"
+            )
+            return
+        }
+        Log.i(tag, "Class.forName 成功：${pluginClass.name}")
+
+        // 2) 检查 engine.plugins 中是否已经注册了该类的实例
+        val pluginsContainer = engine.plugins
+        val alreadyRegistered: Boolean = try {
+            val pluginsField = pluginsContainer.javaClass.getDeclaredField("plugins")
+            pluginsField.isAccessible = true
+            val pluginsList = pluginsField.get(pluginsContainer) as? List<*> ?: emptyList<Any>()
+            pluginsList.any { plugin ->
+                plugin != null && pluginClassName == plugin.javaClass.name
+            }
+        } catch (t: Throwable) {
+            Log.w(tag, "反射检查 plugins 集合失败，跳过已注册检测，直接走 attach。", t)
+            false
+        }
+        if (alreadyRegistered) {
+            Log.i(tag, "插件 $pluginClassName 已在 engine.plugins 中，无需重复注册。")
+            return
+        }
+        Log.w(
+            tag,
+            "插件 $pluginClassName 未出现在 engine.plugins 中！GeneratedPluginRegistrant " +
+                "很可能通过 catch 吞掉了注册异常。立即执行手动 attach..."
+        )
+
+        // 3) 手动实例化 + attach（不带 try/catch — 任何异常都要让开发者看见）
+        val instance: FlutterPlugin = try {
+            @Suppress("UNCHECKED_CAST")
+            pluginClass.getDeclaredConstructor().newInstance() as FlutterPlugin
+        } catch (t: Throwable) {
+            Log.e(tag, "实例化插件 $pluginClassName 失败（构造函数/初始化异常）", t)
+            return
+        }
+        Log.i(tag, "手动实例化成功: $instance")
+        try {
+            pluginsContainer.add(instance)
+            Log.i(tag, "手动 register 成功: 插件 $pluginClassName → channel $channelName 已就绪")
+        } catch (t: Throwable) {
+            Log.e(tag, "engine.plugins.add(instance) 失败: onAttachedToEngine 内部抛异常？", t)
+        }
     }
 
     /**

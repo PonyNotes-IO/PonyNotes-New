@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:tobias/tobias.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
@@ -512,19 +513,287 @@ class PaymentUtil {
     }
 
     if (Platform.isAndroid) {
-      try {
-        final payUrl = extra?['payUrl'] as String?;
-        if (payUrl != null && payUrl.isNotEmpty) {
-          return _launchAlipayApp(payUrl, orderId);
-        }
+      // ═══════════════════════════════════════════════════════════════════
+      // 严格模式：Android 手机端只允许走 Tobias，不允许任何降级。
+      //
+      // 旧代码存在的多级降级路径（已全部删除）：
+      //   1) Tobias 抛异常 → fall-through alipays:// scheme (_launchAlipayApp)
+      //   2) scheme 失败 → 降级 WebView
+      //   3) HTML/HTTP URL → WebView 打开 H5 支付
+      //
+      // 用户明确要求：「Android 手机必须走 Tobias，不要降级」。
+      //   - H5 支付和 App 支付是两套不同的支付宝产品（需分别开通权限）；
+      //   - H5 支付体验差，且前端无法同步拿到 resultStatus；
+      //   - 降级路径会把"插件没注册"（MissingPluginException）错误给掩盖掉。
+      //
+      // 新策略：
+      //   a) 缺少 payUrl / payUrl 不是 orderInfo 格式 → 直接 failure
+      //   b) 前置 isAliPayInstalled，MissingPlugin 直接 return（不要"继续支付"）
+      //   c) Tobias 异常按 MissingPlugin/PlatformException/其他 分三类日志
+      //   d) Tobias 返回 9000 成功时通知 SubscriptionSuccessListenable
+      // ═══════════════════════════════════════════════════════════════════
+      final payPayload = extra?['payUrl'] as String?;
+      if (payPayload == null || payPayload.isEmpty) {
+        Log.error('[PaymentUtil][Alipay] Android 缺少 payUrl（orderId=$orderId）');
         return PaymentResult.failure(message: '缺少支付链接');
+      }
+
+      final trimmed = payPayload.trim();
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 先做排除性检测（HTML / HTTP URL / scheme）——这些格式即使内部碰巧
+      // 包含 app_id= / sign= / biz_content 子串（例如 HTML 表单的
+      // <form action="https://...?app_id=xxx&sign=xxx"> 和
+      // <input name="biz_content" value="..."> 就会 3 个 contains 全 true），
+      // 也必须优先识别为降级格式并拒绝。
+      // ═══════════════════════════════════════════════════════════════════════
+      final looksLikeHtml = trimmed.toLowerCase().startsWith('<') ||
+          trimmed.toLowerCase().contains('<form') ||
+          trimmed.toLowerCase().startsWith('<!doctype');
+      final looksLikeHttpUrl = trimmed.startsWith('http://') || trimmed.startsWith('https://');
+      final looksLikeAlipayScheme =
+          trimmed.startsWith('alipays://') || trimmed.startsWith('alipay://');
+
+      // App 支付 orderInfo 是纯 key=value&key=value 拼接串，第一个字符一定是
+      // 字母或数字（'a' in app_id=... 或 '_'/'_' 下划线前缀等），绝不是 '<'。
+      final startsWithAlphaNum = trimmed.isNotEmpty &&
+          (trimmed.codeUnitAt(0) >= 0x30 /*0*/ && trimmed.codeUnitAt(0) <= 0x39 /*9*/ ||
+              trimmed.codeUnitAt(0) >= 0x41 /*A*/ && trimmed.codeUnitAt(0) <= 0x5A /*Z*/ ||
+              trimmed.codeUnitAt(0) >= 0x61 /*a*/ && trimmed.codeUnitAt(0) <= 0x7A /*z*/ ||
+              trimmed.codeUnitAt(0) == 0x5F /*_*/);
+      final hasAppId = trimmed.contains('app_id=');
+      final hasSign = trimmed.contains('sign=');
+      final hasBiz = trimmed.contains('biz_content');
+      final looksLikeOrderInfo =
+          !looksLikeHtml && !looksLikeHttpUrl && !looksLikeAlipayScheme &&
+          startsWithAlphaNum && hasAppId && hasSign && hasBiz;
+
+      final String detectedType = looksLikeHtml
+          ? 'HTML_FORM'
+          : looksLikeHttpUrl
+              ? 'HTTP_URL'
+              : looksLikeAlipayScheme
+                  ? 'ALIPAY_SCHEME'
+                  : looksLikeOrderInfo
+                      ? 'ORDER_INFO'
+                      : 'UNKNOWN';
+
+      Log.info('[PaymentUtil][Alipay] Android 端收到支付凭证 (orderId=$orderId): '
+          'type=$detectedType '
+          'startsWithAlphaNum=$startsWithAlphaNum '
+          'hasAppId=$hasAppId hasSign=$hasSign hasBiz=$hasBiz '
+          'preview=${_ellipsis(trimmed, 60)}');
+
+      // 先拦截所有降级格式，给出明确错误
+      if (looksLikeHtml) {
+        Log.error('[PaymentUtil][Alipay] 后端返回了 HTML 表单（网页支付产品），'
+            'Android 端只支持 App 支付 orderInfo，拒绝降级 (orderId=$orderId)');
+        return PaymentResult.failure(
+          message: '后端返回的是网页支付表单，请联系后端使用 alipay.trade.app.pay 接口'
+              '生成 App 支付 orderInfo（请求 product_code=QUICK_MSECURITY_PAY）',
+        );
+      }
+      if (looksLikeHttpUrl) {
+        Log.error('[PaymentUtil][Alipay] 后端返回了 HTTP H5 URL，'
+            'Android 端只支持 Tobias App 支付，拒绝降级 WebView (orderId=$orderId)');
+        return PaymentResult.failure(
+          message: '后端返回的是 H5 网页支付链接，请联系后端改为 App 支付 orderInfo'
+              '（product_code=QUICK_MSECURITY_PAY）',
+        );
+      }
+      if (looksLikeAlipayScheme) {
+        Log.error('[PaymentUtil][Alipay] 后端返回了 alipays:// scheme，'
+            '请改为返回 orderInfo 字符串，通过 Tobias 统一唤起支付宝 App 并同步拿到结果'
+            ' (orderId=$orderId)');
+        return PaymentResult.failure(
+          message: '请后端返回 App 支付 orderInfo（product_code=QUICK_MSECURITY_PAY），'
+              '不要直接返回 alipays:// 跳转链接',
+        );
+      }
+      if (!looksLikeOrderInfo) {
+        Log.error('[PaymentUtil][Alipay] 无法识别的支付凭证格式，拒绝降级：'
+            '${_ellipsis(trimmed, 80)} (orderId=$orderId)');
+        return PaymentResult.failure(message: '支付凭证格式错误，请联系客服');
+      }
+
+      // ===== 前置检查：Tobias 插件注册 + 是否安装支付宝 App =====
+      // 真机出现 MissingPluginException(isAliPayInstalled) 的常见根因：
+      //   1) 用户设备上仍是旧版签名 APK（tobias 依赖加入之前的旧构建，
+      //      GeneratedPluginRegistrant 中根本没有 TobiasPlugin）—— 必须卸载重装
+      //   2) flutter run 增量构建 dex 没合并进 TobiasPlugin
+      //   3) 冷启动时 ActivityAware.onAttachedToActivity 尚未回调：此时
+      //      isAliPayInstalled 内部 activity==null 静默返回 false（误报未安装）
+      //
+      // MissingPlugin 与 activity==null 能清晰区分：
+      //   - invokeMethod 尚未进入原生端前就抛 MissingPluginException → 插件未注册
+      //   - 成功执行原生逻辑但返回 false → 可能是真未安装或 activity==null
+      final tobias = Tobias();
+      bool installed = false;
+      for (int attempt = 0; attempt < 2; attempt++) {
+        try {
+          installed = await tobias.isAliPayInstalled;
+          if (installed) break;
+          // 第一次返回 false：再等 500ms 后重试一次（冷启动 Activity attach 间隙）
+          if (attempt == 0) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          }
+        } on MissingPluginException catch (e, s) {
+          // ══════════════════════════════════════════════════════════════
+          // MethodChannel "com.jarvanmo/tobias" 在 FlutterEngine 侧不存在
+          // → 这是** APK 构建问题**，不是运行时/网络问题。"退出 App 重新打开"
+          // 永远修不好 MissingPluginException，必须提示卸载重装。
+          // ══════════════════════════════════════════════════════════════
+          Log.error('[PaymentUtil][Alipay] ❌ MissingPluginException(isAliPayInstalled): '
+              'Tobias 插件未注册到 FlutterEngine，本机安装的 APK 极可能是 tobias 依赖'
+              '加入之前的旧构建。Troubleshoot 清单（开发者）：\n'
+              '  1) flutter clean 彻底清理 build / .dart_tool 增量产物\n'
+              '  2) flutter pub get 重新生成 GeneratedPluginRegistrant.java\n'
+              '  3) 确认 GeneratedPluginRegistrant.java 中包含：\n'
+              '     flutterEngine.getPlugins().add(new com.jarvan.tobias.TobiasPlugin())\n'
+              '  4) 确认 MainActivity.configureFlutterEngine 第一行就是 super.configureFlutterEngine\n'
+              '  5) 卸载真机旧 App → 重新安装新构建的 APK（禁止覆盖安装！）\n'
+              '  channel=com.jarvanmo/tobias, error=$e\n$s');
+          return PaymentResult.failure(
+            message: '支付宝支付启动失败：检测到您当前使用的是旧版 App，请先卸载本机 App，'
+                '重新安装最新版本后再使用支付宝支付；如仍有问题请联系客服',
+          );
+        } catch (e, s) {
+          // 其他异常（ROM 包可见性查询失败等）：不阻塞支付，仅打 WARN。
+          // PayTask(activity) 本身在未安装时会给出支付宝官方的未安装提示。
+          Log.warn('[PaymentUtil][Alipay] 查询支付宝是否安装时发生非 MissingPlugin 异常，'
+              '允许继续唤起支付（PayTask 会自行处理未安装场景）: $e\n$s');
+          installed = true; // 放行
+          break;
+        }
+      }
+      Log.info('[PaymentUtil][Alipay] 支付宝是否安装: $installed (orderId=$orderId)');
+      if (!installed) {
+        // 两次检测均为 false → 可信地提示未安装
+        return PaymentResult.failure(message: '请先安装支付宝 App 后再完成支付');
+      }
+
+      // ===== 唯一允许路径：Tobias().pay(orderInfo) =====
+      final plan = extra?['plan'] as String?;
+      try {
+        Log.info('[PaymentUtil][Alipay] 调用 Tobias().pay(orderInfo) 唤起支付宝 App'
+            ' (orderId=$orderId)');
+        final payResult = await tobias.pay(trimmed);
+        Log.info('[PaymentUtil][Alipay] Tobias 返回支付结果 (orderId=$orderId): $payResult');
+
+        final result = _parseTobiasResult(payResult, orderId);
+        if (result.success) {
+          // 支付成功 → 通知 UI 刷新订阅状态，对齐 Apple Pay
+          try {
+            if (plan != null && plan.isNotEmpty) {
+              Log.info('[PaymentUtil][Alipay] 支付成功，通知订阅刷新，plan=$plan');
+              getIt<SubscriptionSuccessListenable>().onPaymentSuccess(plan);
+            } else {
+              Log.warn('[PaymentUtil][Alipay] 支付成功，但 extra.plan 为空，'
+                  '无法通知 SubscriptionSuccessListenable，请调用方确认 planCode 是否传入');
+            }
+          } catch (e) {
+            Log.error('[PaymentUtil][Alipay] 通知 SubscriptionSuccessListenable 失败: $e');
+          }
+        }
+        return result;
+      } on MissingPluginException catch (e, s) {
+        Log.error('[PaymentUtil][Alipay] ❌ MissingPluginException(pay): Tobias 插件未注册。'
+            'Troubleshoot 清单：\n'
+            '  1) 执行 flutter clean 删除所有 build 产物（当前极大概率是旧增量 dex 仍在用！）\n'
+            '  2) 再 flutter pub get → flutter run/android 重新构建\n'
+            '  3) 确认 MainActivity.configureFlutterEngine 先 super.configureFlutterEngine\n'
+            '     再 GeneratedPluginRegistrant.registerWith(flutterEngine) 兜底\n'
+            '  4) 确认 GeneratedPluginRegistrant.java 中有 TobiasPlugin 注册\n'
+            '  channel=com.jarvanmo/tobias, error=$e\n$s');
+        return PaymentResult.failure(
+          message: '支付宝支付启动失败：支付插件未加载，请退出 App 重新打开后重试；'
+              '如仍有问题请联系客服',
+        );
+      } on PlatformException catch (e, s) {
+        Log.error('[PaymentUtil][Alipay] ❌ PlatformException(Tobias 原生错误): '
+            'code=${e.code}, message=${e.message}, details=${e.details}\n$s');
+        return PaymentResult.failure(
+          message: '支付宝支付失败：${e.message ?? '原生侧调用异常'}',
+        );
       } catch (e, s) {
-        Log.error('支付宝支付异常: $e\n$s');
-        return PaymentResult.failure(message: '支付宝支付异常');
+        Log.error('[PaymentUtil][Alipay] ❌ 未知异常(Tobias 调用失败): $e\n$s');
+        return PaymentResult.failure(message: '支付宝支付失败: ${e.toString()}');
       }
     }
 
     return PaymentResult.failure(message: '当前平台不支持支付宝支付');
+  }
+
+  /// 截断字符串并添加省略号，用于日志中预览支付凭证
+  static String _ellipsis(String text, int maxLength) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
+  }
+
+  /// 解析 Tobias.pay() 返回的支付结果 Map 为 PaymentResult
+  /// 支付宝官方 resultStatus 码：
+  ///   9000 订单支付成功
+  ///   8000 正在处理中（需查询订单状态）
+  ///   4000 订单支付失败
+  ///   5000 重复请求
+  ///   6001 用户中途取消
+  ///   6002 网络连接出错
+  static PaymentResult _parseTobiasResult(Map payResult, String orderId) {
+    // Tobias 3.x Android 上一般返回 Map；
+    // 少数场景下是 "resultStatus=xx&result=xx&memo=xx" 字符串形式，这里做兼容。
+    String? resultStatus;
+    String? memo;
+
+    resultStatus = payResult['resultStatus']?.toString() ??
+        payResult['result_status']?.toString();
+    memo = payResult['memo']?.toString() ?? payResult['result']?.toString();
+
+    if (resultStatus == null || resultStatus.isEmpty) {
+      final raw = payResult.values.firstWhere(
+        (v) => v != null && v.toString().contains('resultStatus'),
+        orElse: () => null,
+      );
+      if (raw != null) {
+        final str = raw.toString();
+        resultStatus = RegExp(r'resultStatus=([^&]+)').firstMatch(str)?.group(1);
+        memo = RegExp(r'memo=([^&]+)').firstMatch(str)?.group(1);
+      }
+    }
+
+    Log.info('[PaymentUtil][Alipay] Tobias 解析结果: resultStatus=$resultStatus, memo=$memo');
+
+    switch (resultStatus) {
+      case '9000':
+        return PaymentResult.success(
+          message: (memo != null && memo.isNotEmpty) ? memo : '支付成功',
+          orderId: orderId,
+        );
+      case '8000':
+        return PaymentResult.success(
+          message: (memo != null && memo.isNotEmpty)
+              ? memo
+              : '支付处理中，请稍后查看订单状态确认是否成功',
+          orderId: orderId,
+        );
+      case '6001':
+        return PaymentResult.failure(message: '已取消支付');
+      case '4000':
+        return PaymentResult.failure(
+          message: (memo != null && memo.isNotEmpty) ? memo : '订单支付失败',
+        );
+      case '6002':
+        return PaymentResult.failure(
+          message: (memo != null && memo.isNotEmpty) ? memo : '网络连接出错，请重试',
+        );
+      case '5000':
+        return PaymentResult.failure(message: '重复请求，请稍后重试');
+      default:
+        return PaymentResult.failure(
+          message: (memo != null && memo.isNotEmpty)
+              ? memo
+              : '支付失败 (code: ${resultStatus ?? 'unknown'})',
+        );
+    }
   }
 
   static Future<PaymentResult> _launchWeChatApp(String payUrl, String orderId) async {

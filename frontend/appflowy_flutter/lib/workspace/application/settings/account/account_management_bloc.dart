@@ -1413,6 +1413,11 @@ class AccountManagementBloc
 
           // 根据平台自动选择支付方式
           // 优先级：Apple Pay (iOS/macOS) > 其他平台默认支付方式
+          // ⚠️ Android 手机必须选 alipay_app：后端会返回
+          //   alipay.trade.app.pay 的 orderInfo（app_id=&sign=&biz_content=...），
+          //   供 Tobias.pay(orderInfo) 直接唤起支付宝 App 并同步拿到 9000/6001 等结果；
+          //   若误传 alipay_h5，后端会返回 HTML form / H5 URL，
+          //   PaymentUtil._payWithAlipay Android 分支会严格拒绝降级。
           final PaymentMethod method;
           final String paymentType;
           if (PaymentPlatformSupport.isApplePayAvailable) {
@@ -1423,7 +1428,9 @@ class AccountManagementBloc
             paymentType = PaymentType.wechatPay;
           } else {
             method = PaymentMethod.alipay;
-            paymentType = PaymentType.alipay;
+            paymentType = Platform.isAndroid
+                ? PaymentType.alipayApp
+                : PaymentType.alipayH5;
           }
 
           // 设置会员升级参数
@@ -1526,15 +1533,207 @@ class AccountManagementBloc
             return;
           }
 
+          if (Platform.isAndroid) {
+            // ══════════════════════════════════════════════════════════════════
+            // Android 手机端：必须走「创建订单(paymentType=alipay_app) +
+            // Tobias App 支付」的链路，不能走 H5 webPay。
+            //   - 调用 /api/payment/create 拿 orderInfo
+            //   - 用 Tobias.pay(orderInfo) 唤起支付宝 App，同步拿到 9000 等结果
+            //   - 成功时 Tobias 分支会通知 SubscriptionSuccessListenable 刷新订阅
+            // ══════════════════════════════════════════════════════════════════
+            final planConfig = planConfigs[selectedPlan];
+            if (planConfig == null || selectedPrice == null) {
+              state.maybeWhen(
+                orElse: () {},
+                ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                ) {
+                  emit(
+                    AccountManagementState.ready(
+                      subscriptionInfo: subscriptionInfo,
+                      planConfigs: planConfigs,
+                      selectedPlan: selectedPlan,
+                      selectedDuration: selectedDuration,
+                      selectedTab: selectedTab,
+                      agreedProtocols: agreedProtocols,
+                      isLoadingSubscription: isLoadingSubscription,
+                      isLoadingPlans: isLoadingPlans,
+                      isProcessingPayment: false,
+                      error: '无法获取套餐配置或价格',
+                      paymentResult: paymentResult,
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+            final userUuid = _getUserUuid();
+            final billingTypeStr =
+                selectedDuration == PurchaseDurationOption.monthly
+                    ? 'monthly'
+                    : 'yearly';
+            final productName = planConfig.planNameCn?.isNotEmpty == true
+                ? planConfig.planNameCn!
+                : planConfig.planName ?? '会员升级';
+
+            final createRequest = PaymentCreateRequest(
+              amount: selectedPrice.toStringAsFixed(2),
+              paymentType: paymentType, // Android 上应为 alipay_app
+              userInfo: userUuid,
+              productName: productName,
+              planId: planIdValue,
+              billingType: billingTypeStr,
+            );
+
+            final orderResult =
+                await PaymentApi.createPaymentOrder(createRequest);
+
+            if (orderResult.isFailure) {
+              final e = orderResult.fold((_) => null, (err) => err);
+              state.maybeWhen(
+                orElse: () {},
+                ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                ) {
+                  emit(
+                    AccountManagementState.ready(
+                      subscriptionInfo: subscriptionInfo,
+                      planConfigs: planConfigs,
+                      selectedPlan: selectedPlan,
+                      selectedDuration: selectedDuration,
+                      selectedTab: selectedTab,
+                      agreedProtocols: agreedProtocols,
+                      isLoadingSubscription: isLoadingSubscription,
+                      isLoadingPlans: isLoadingPlans,
+                      isProcessingPayment: false,
+                      error: e?.msg ?? '创建订单失败',
+                      paymentResult: paymentResult,
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+            final order = orderResult.fold((o) => o, (_) => null);
+            final orderNo = order?.orderNo ?? '';
+            final payUrl = order?.payUrl;
+            final planCode = planConfig.planCode;
+
+            if (orderNo.isEmpty) {
+              state.maybeWhen(
+                orElse: () {},
+                ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                ) {
+                  emit(
+                    AccountManagementState.ready(
+                      subscriptionInfo: subscriptionInfo,
+                      planConfigs: planConfigs,
+                      selectedPlan: selectedPlan,
+                      selectedDuration: selectedDuration,
+                      selectedTab: selectedTab,
+                      agreedProtocols: agreedProtocols,
+                      isLoadingSubscription: isLoadingSubscription,
+                      isLoadingPlans: isLoadingPlans,
+                      isProcessingPayment: false,
+                      error: '订单号为空',
+                      paymentResult: paymentResult,
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+            final payExtra = <String, dynamic>{
+              'payUrl': payUrl,
+              'plan': planCode,
+            };
+
+            final payResult = await PaymentUtil.pay(
+              method: method, // Android 上应为 PaymentMethod.alipay
+              amount: (selectedPrice * 100).toInt(),
+              currency: 'CNY',
+              orderId: orderNo,
+              extra: payExtra,
+            );
+
+            state.maybeWhen(
+              orElse: () {},
+              ready: (
+                subscriptionInfo,
+                planConfigs,
+                selectedPlan,
+                selectedDuration,
+                selectedTab,
+                agreedProtocols,
+                isLoadingSubscription,
+                isLoadingPlans,
+                isProcessingPayment,
+                error,
+                paymentResult,
+              ) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isProcessingPayment: false,
+                    error: payResult.success ? null : payResult.message,
+                    paymentResult: payResult.success
+                        ? 'PAYMENT_INITIATED'
+                        : paymentResult,
+                  ),
+                );
+              },
+            );
+            return;
+          }
+
           if (!PaymentDevConfig.enableTestMode) {
-            // 1. 获取当前云端配置（拿到 serverUrl）
+            // 桌面端（macOS / Windows / Linux）：走网页 H5 支付
             final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
             final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
-            // final baseUrl = "https://www.xiaomabiji.com";
-            //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
             final userUuid = _getUserUuid();
-            String payUrl =
-                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=$userUuid";
+            final payUrl =
+                "$baseUrl/price?planId=$planIdValue&billingType=$billingType&userInfo=$userUuid";
 
             String? planCode;
             if (selectedPlan != null && planConfigs.containsKey(selectedPlan)) {
@@ -1543,8 +1742,7 @@ class AccountManagementBloc
 
             await PaymentUtil.webPay(payUrl, plan: planCode);
 
-            // 移除支付弹框显示，直接等待H5支付链接调用appScheme处理
-            // 支付成功后会通过 PaymentDeepLinkHandler 处理
+            // 等待 H5 支付完成后通过 DeepLink Scheme 回调处理
             state.maybeWhen(
               orElse: () {},
               ready: (
@@ -1572,13 +1770,13 @@ class AccountManagementBloc
                     isLoadingPlans: isLoadingPlans,
                     isProcessingPayment: false,
                     error: null,
-                    paymentResult: 'PAYMENT_INITIATED', // 标记支付已初始化
+                    paymentResult: 'PAYMENT_INITIATED',
                   ),
                 );
               },
             );
           } else {
-            // 创建支付订单 --- todo 后续需要根据实际情况进行调整
+            // 开发测试模式：走 createPaymentOrder 模拟流程
             await createPaymentOrder(
               emit: emit,
               selectedPrice: selectedPrice,
@@ -1624,20 +1822,15 @@ class AccountManagementBloc
     final userUuid = _getUserUuid();
 
     final createRequest = PaymentCreateRequest(
-        amount: Decimal.parse(selectedPrice.toString()).toString(),
-        paymentType: paymentType,
-        userInfo: userUuid,
-        // 必传：JSON 字符串格式
-        // productName: planConfig.planNameCn.isNotEmpty
-        //     ? planConfig.planNameCn
-        //     : planConfig.planName, // 可选
-        productName: "QR_CODE_OFFLINE",
-        openid:
-            paymentType == PaymentMethod.wechatPay.name ? workspaceId : null,
-        // 可选：微信支付场景必传
-        planId: planIdValue,
-        // 会员升级时设置
-        billingType: billingType == 0 ? 'monthly' : 'yearly');
+      amount: Decimal.parse(selectedPrice.toString()).toString(),
+      paymentType: paymentType,
+      userInfo: userUuid,
+      productName: 'QR_CODE_OFFLINE',
+      // openid 仅在 wechat_pay 场景必传；其余（apple_pay / alipay_app / alipay_h5）传空
+      openid: paymentType == PaymentType.wechatPay ? workspaceId : null,
+      planId: planIdValue,
+      billingType: billingType == 0 ? 'monthly' : 'yearly',
+    );
 
     final orderResult = await PaymentApi.createPaymentOrder(createRequest);
 

@@ -12,6 +12,36 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(':app')
+
+    // tobias 5.3.4 只含 Kotlin 源文件，没有 .java 文件，导致 AGP 的
+    // compileDebugJavaWithJavac 被标记为 NO-SOURCE 并跳过。这会打断
+    // 库类打包链路：bundleLibCompileToJarDebug / bundleLibRuntimeToDirDebug
+    // 拿不到处理后的 classes，最终 com.jarvan.tobias.* 不会进入 APK，
+    // 运行时抛出 MissingPluginException(isAliPayInstalled)。
+    // fluwx 不受影响是因为它附带了 WXApiUtils.java。这里为 tobias 生成一个
+    // 占位 Java 源文件，让 Java 编译任务保持激活，从而正确处理 Kotlin 产物。
+    if (project.name == 'tobias') {
+        // buildDir 已在上方设置，直接生成占位 Java 源文件
+        def placeholderDir = new File("${project.buildDir}/generated/tobias-placeholder/com/jarvan/tobias")
+        def placeholderFile = new File(placeholderDir, 'TobiasJavaPlaceholder.java')
+        if (!placeholderFile.exists()) {
+            placeholderDir.mkdirs()
+            placeholderFile.text = [
+                    'package com.jarvan.tobias;',
+                    '',
+                    '/** Placeholder Java source to keep compileDebugJavaWithJavac active. */',
+                    'final class TobiasJavaPlaceholder {',
+                    '    private TobiasJavaPlaceholder() {',
+                    '    }',
+                    '}',
+                    ''
+            ].join('\n')
+        }
+        // sourceSets 需在 AGP 插件应用后设置
+        project.plugins.withId('com.android.library') {
+            project.android.sourceSets.main.java.srcDir new File("${project.buildDir}/generated/tobias-placeholder")
+        }
+    }
 }
 
 tasks.register("clean", Delete) {

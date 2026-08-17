@@ -1165,10 +1165,14 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   ) async {
     Log.info('[MobileUpgradePlan] Android 使用 $paymentMethod 支付');
 
+    // MobileUpgradePlanPage 只在移动端使用，Android 必须走 alipay_app
+    // （后端返回 orderInfo 供 Tobias 唤起支付宝 App）。
+    // 未来扩展 Android 微信支付时同样应保持 wechat_pay / alipay_app
+    // 与 App 原生支付相匹配，不要退化为 H5。
     final paymentType = switch (paymentMethod) {
       PaymentMethod.wechatPay => PaymentType.wechatPay,
-      PaymentMethod.alipay => PaymentType.alipay,
-      _ => PaymentType.alipay,
+      PaymentMethod.alipay => PaymentType.alipayApp,
+      _ => PaymentType.alipayApp,
     };
 
     final createRequest = PaymentCreateRequest(
@@ -1204,6 +1208,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     final extra = <String, dynamic>{
       'payUrl': orderData.data?.payUrl,
+      'plan': config.planName,
     };
 
     final paymentResult = await PaymentUtil.pay(

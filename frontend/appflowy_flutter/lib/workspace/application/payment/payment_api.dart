@@ -13,10 +13,26 @@ import '../../../env/cloud_env.dart';
 import '../../../startup/startup.dart';
 
 /// 支付方式类型（用于后端接口的 paymentType 字段）
+///
+/// 注意：常量名使用小驼峰（与 PaymentMethod 枚举风格一致），
+/// 常量值使用 snake_case / 自定义，对应后端 /api/payment/create 接口
+/// 要求的 `paymentType` 字段取值：
+///   - apple_pay       : iOS/macOS App Store 内购
+///   - wechat_pay      : 微信支付（桌面端 H5 / 未来 Android）
+///   - alipay_app      : Android 手机 App 支付（alipay.trade.app.pay → QUICK_MSECURITY_PAY）
+///   - alipay_h5       : 桌面端 H5 网页支付（后端返回 HTML form）
+///
+/// 移动端 Android 必须传 alipay_app 才能拿到 orderInfo（app_id=&sign=&biz_content=...）
+/// 供 Tobias.pay(orderInfo) 唤起支付宝 App；传其他值只会拿到 HTML/H5 URL，
+/// PaymentUtil._payWithAlipay Android 分支会严格拒绝并提示错误。
 class PaymentType {
   static const String applePay = 'apple_pay';
   static const String wechatPay = 'wechat_pay';
-  static const String alipay = 'alipay';
+  static const String alipayApp = 'alipay_app';
+  static const String alipayH5 = 'alipay_h5';
+
+  @Deprecated('Use PaymentType.alipayApp or PaymentType.alipayH5 instead')
+  static const String alipay = alipayApp;
 }
 
 /// 支付开发测试模式配置
