@@ -302,11 +302,10 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _showAddMenu() {
-    showMobileBottomSheet(
-      context,
-      showDragHandle: false,
-      showHeader: false,
-      backgroundColor: Theme.of(context).colorScheme.surface,
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
