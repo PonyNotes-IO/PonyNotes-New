@@ -2,6 +2,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // 添加其他仓库，例如 JitPack
+        maven { url 'https://jitpack.io' }
         maven { url 'https://artifact.bytedance.com/repository/AwemeOpenSDK' }
     }
 }
