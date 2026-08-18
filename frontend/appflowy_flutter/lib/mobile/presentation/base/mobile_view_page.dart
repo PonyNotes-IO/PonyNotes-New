@@ -235,7 +235,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
       ),
       if (view.layout == ViewLayoutPB.Whiteboard)
         _MobileWhiteboardShareButton(view: view)
-      else
+      else if (view.layout != ViewLayoutPB.Grid)
         ShareButton(
           key: ValueKey('share_button_${view.id}'),
           view: view,

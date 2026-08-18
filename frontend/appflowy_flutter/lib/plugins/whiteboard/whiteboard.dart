@@ -28,7 +28,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
-import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
@@ -41,7 +40,6 @@ import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_actio
 import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:universal_platform/universal_platform.dart';
 import 'package:flowy_infra/platform_extension.dart';
 
 const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
@@ -211,7 +209,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
 }
 
-class _WhiteboardContentWithToolbar extends StatefulWidget {
+class _WhiteboardContentWithToolbar extends StatelessWidget {
   const _WhiteboardContentWithToolbar({
     required this.view,
     required this.viewInfoBloc,
@@ -225,71 +223,29 @@ class _WhiteboardContentWithToolbar extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_WhiteboardContentWithToolbar> createState() =>
-      _WhiteboardContentWithToolbarState();
-}
-
-class _WhiteboardContentWithToolbarState
-    extends State<_WhiteboardContentWithToolbar> {
-  late Future<bool> _isPrivateSpace;
-
-  @override
-  void initState() {
-    super.initState();
-    _isPrivateSpace = _resolvePrivateSpace();
-  }
-
-  @override
-  void didUpdateWidget(covariant _WhiteboardContentWithToolbar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.view.id != widget.view.id) {
-      _isPrivateSpace = _resolvePrivateSpace();
-    }
-  }
-
-  Future<bool> _resolvePrivateSpace() {
-    final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
-    return isMobile ? isViewInPrivateSpace(widget.view) : Future.value(false);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
-    return FutureBuilder<bool>(
-      future: _isPrivateSpace,
-      builder: (context, snapshot) {
-        final padding = MediaQuery.paddingOf(context);
-        // 移动端私有白板外层已有导航与页面操作。判定完成前也不绘制插件
-        // 操作，避免页面打开时短暂出现一帧重复按钮。
-        final showPluginActions = !isMobile || snapshot.data == false;
-        return Stack(
-          children: [
-            widget.child,
-            if (isMobile && showPluginActions)
-              Positioned(
-                left: padding.left,
-                top: padding.top,
-                child: const _WhiteboardBackButton(
-                  iconColor: Color(0xFF111111),
-                ),
-              ),
-            if (showPluginActions)
-              Positioned(
-                top: padding.top,
-                right: padding.right,
-                child: UnifiedViewTopRightActions(
-                  view: widget.view,
-                  viewInfoBloc: widget.viewInfoBloc,
-                  pageAccessLevelBloc: widget.pageAccessLevelBloc,
-                  useFloatingSurface: true,
-                  showShareButton: false,
-                  showFullWindowButton: !isMobile,
-                  iconColorOverride: const Color(0xFF111111),
-                ),
-              ),
-          ],
-        );
-      },
+    final padding = MediaQuery.paddingOf(context);
+    // 移动端外层页面栏已提供返回、收藏、分享和更多操作，白板插件不再
+    // 叠加第二层按钮；桌面端继续使用插件原有的右上角操作。
+    final showPluginActions = !PlatformInfo.isMobile;
+    return Stack(
+      children: [
+        child,
+        if (showPluginActions)
+          Positioned(
+            top: padding.top,
+            right: padding.right,
+            child: UnifiedViewTopRightActions(
+              view: view,
+              viewInfoBloc: viewInfoBloc,
+              pageAccessLevelBloc: pageAccessLevelBloc,
+              useFloatingSurface: true,
+              showShareButton: false,
+              showFullWindowButton: !PlatformInfo.isMobile,
+              iconColorOverride: const Color(0xFF111111),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1505,41 +1461,5 @@ class _MeasureSizeRenderObject extends RenderProxyBox {
 
     _lastSize = nextSize;
     WidgetsBinding.instance.addPostFrameCallback((_) => onChange(nextSize));
-  }
-}
-
-/// ✅ Mobile-only：白板左上角浮层返回按钮
-///
-/// 仅在 mobile 上由 [_buildContentWithToolbar] 添加到 Stack 的左上角。
-/// 桌面端完全不会渲染该 widget。点击时直接 `Navigator.maybePop` 回退。
-class _WhiteboardBackButton extends StatelessWidget {
-  const _WhiteboardBackButton({
-    this.iconColor,
-  });
-
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final effectiveColor = iconColor ?? theme.iconTheme.color ?? Colors.black;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => Navigator.maybePop(context),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Center(
-            child: Icon(
-              Icons.arrow_back_ios_new,
-              size: 18,
-              color: effectiveColor,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
