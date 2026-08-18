@@ -18,6 +18,7 @@ import 'package:appflowy/plugins/document/presentation/document_collaborators.da
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_space_util.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
@@ -196,8 +197,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
     // behaviour unchanged.
     final isDocument = view?.layout.isDocumentView ?? false;
     final isAIChat = view?.layout == ViewLayoutPB.Chat;
-    final isHandwritingSaber =
-        view?.pluginType == PluginType.handwritingSaber;
+    final isHandwritingSaber = view?.pluginType == PluginType.handwritingSaber;
     // MobileChatScreen already provides the AI conversation's navigation bar.
     // Do not render the generic view actions underneath it.
     final showAppBar = !isDocument && !isAIChat && view != null;
@@ -233,10 +233,13 @@ class _MobileViewPageState extends State<MobileViewPage> {
         key: ValueKey('favorite_button_${view.id}'),
         view: view,
       ),
-      ShareButton(
-        key: ValueKey('share_button_${view.id}'),
-        view: view,
-      ),
+      if (view.layout == ViewLayoutPB.Whiteboard)
+        _MobileWhiteboardShareButton(view: view)
+      else
+        ShareButton(
+          key: ValueKey('share_button_${view.id}'),
+          view: view,
+        ),
       if (widget.showMoreButton) MoreViewActions(view: view),
     ];
   }
@@ -278,6 +281,54 @@ class _MobileViewPageState extends State<MobileViewPage> {
           title: LocaleKeys.error_weAreSorry.tr(),
           description: LocaleKeys.error_loadingViewError.tr(),
           errorMsg: error.toString(),
+        );
+      },
+    );
+  }
+}
+
+/// 移动端私有白板不支持分享，协作白板仍保留原有分享入口。
+class _MobileWhiteboardShareButton extends StatefulWidget {
+  const _MobileWhiteboardShareButton({required this.view});
+
+  final ViewPB view;
+
+  @override
+  State<_MobileWhiteboardShareButton> createState() =>
+      _MobileWhiteboardShareButtonState();
+}
+
+class _MobileWhiteboardShareButtonState
+    extends State<_MobileWhiteboardShareButton> {
+  late Future<bool> _isPrivateSpace;
+
+  @override
+  void initState() {
+    super.initState();
+    _isPrivateSpace = isViewInPrivateSpace(widget.view);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileWhiteboardShareButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.view.id != widget.view.id) {
+      _isPrivateSpace = isViewInPrivateSpace(widget.view);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _isPrivateSpace,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            snapshot.data == true) {
+          return const SizedBox.shrink();
+        }
+
+        return ShareButton(
+          key: ValueKey('share_button_${widget.view.id}'),
+          view: widget.view,
         );
       },
     );
