@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/plugins/import_page/enhanced_html_import_dialog.dart';
 import 'package:appflowy/plugins/import_page/enhanced_pdf_import_dialog.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
@@ -32,32 +34,34 @@ Future<void> showImportPanel(
   ImportCallback callback, {
   bool isMobile = false,
 }) async {
+  if (isMobile) {
+    await showMobileBottomSheet<void>(
+      context,
+      showHeader: true,
+      showCloseButton: true,
+      showDivider: false,
+      useRootNavigator: true,
+      title: LocaleKeys.moreAction_import.tr(),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      builder: (_) => ImportPanel(
+        parentViewId: parentViewId,
+        importCallback: callback,
+        isMobile: true,
+      ),
+    );
+    return;
+  }
+
   await FlowyOverlay.show(
     context: context,
     builder: (context) => FlowyDialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
       expandHeight: false,
-      showCloseButton: !isMobile,
-      title: isMobile
-          ? Row(
-              children: [
-                FlowyText.semibold(
-                  LocaleKeys.moreAction_import.tr(),
-                  fontSize: 20,
-                  color: Theme.of(context).colorScheme.tertiary,
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => FlowyOverlay.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            )
-          : FlowyText.semibold(
-              LocaleKeys.moreAction_import.tr(),
-              fontSize: 20,
-              color: Theme.of(context).colorScheme.tertiary,
-            ),
+      title: FlowyText.semibold(
+        LocaleKeys.moreAction_import.tr(),
+        fontSize: 20,
+        color: Theme.of(context).colorScheme.tertiary,
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           vertical: 10.0,
@@ -102,6 +106,10 @@ class _ImportPanelState extends State<ImportPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isMobile) {
+      return _buildMobilePanel(context);
+    }
+
     final width = MediaQuery.of(context).size.width * 0.7;
     final isNarrow = width < 360;
     final height = isNarrow ? 240.0 : width * 0.5;
@@ -120,7 +128,7 @@ class _ImportPanelState extends State<ImportPanel> {
       onKeyEvent: (event) {
         if (event is KeyDownEvent &&
             event.physicalKey == PhysicalKeyboardKey.escape) {
-          FlowyOverlay.pop(context);
+          _dismissPanel();
         }
       },
       child: Stack(
@@ -147,7 +155,7 @@ class _ImportPanelState extends State<ImportPanel> {
                         onTap: () async {
                           await _importFile(widget.parentViewId, e);
                           if (context.mounted) {
-                            FlowyOverlay.pop(context);
+                            _dismissPanel();
                           }
                         },
                       ),
@@ -170,6 +178,62 @@ class _ImportPanelState extends State<ImportPanel> {
         ],
       ),
     );
+  }
+
+  Widget _buildMobilePanel(BuildContext context) {
+    const importTypes = [
+      ImportType.csv,
+      ImportType.pdf,
+      ImportType.markdownOrText,
+      ImportType.html,
+    ];
+
+    return Stack(
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < importTypes.length; index++) ...[
+              _MobileImportOption(
+                key: ValueKey(
+                  'mobile-import-option-${importTypes[index].name}',
+                ),
+                type: importTypes[index],
+                onTap: () async {
+                  await _importFile(widget.parentViewId, importTypes[index]);
+                  if (context.mounted) {
+                    _dismissPanel();
+                  }
+                },
+              ),
+              if (index != importTypes.length - 1) const SizedBox(height: 8),
+            ],
+          ],
+        ),
+        ValueListenableBuilder(
+          valueListenable: showLoading,
+          builder: (context, isLoading, child) {
+            if (!isLoading) {
+              return const SizedBox.shrink();
+            }
+            return const Positioned.fill(
+              child: ColoredBox(
+                color: Color(0x33000000),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  void _dismissPanel() {
+    if (widget.isMobile) {
+      Navigator.of(context).pop();
+    } else {
+      FlowyOverlay.pop(context);
+    }
   }
 
   Future<void> _importFile(String parentViewId, ImportType importType) async {
@@ -270,6 +334,58 @@ class _ImportPanelState extends State<ImportPanel> {
 
     showLoading.value = false;
     widget.importCallback(importType, '', null, importedViews);
+  }
+}
+
+class _MobileImportOption extends StatelessWidget {
+  const _MobileImportOption({
+    super.key,
+    required this.type,
+    required this.onTap,
+  });
+
+  final ImportType type;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    const radius = BorderRadius.all(Radius.circular(8));
+
+    return Material(
+      color: colorScheme.surface,
+      borderRadius: radius,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 64,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                SizedBox.square(
+                  dimension: 20,
+                  child: FlowySvg(
+                    FlowySvgs.board_s,
+                    color: colorScheme.tertiary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FlowyText.medium(
+                    type.toString(),
+                    fontSize: 16,
+                    overflow: TextOverflow.ellipsis,
+                    color: colorScheme.tertiary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

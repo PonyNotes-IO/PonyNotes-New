@@ -1,4 +1,6 @@
+import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_buttons.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/import/import_panel.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,7 +14,7 @@ void main() {
     await EasyLocalization.ensureInitialized();
   });
 
-  testWidgets('mobile import close button stays above the first option', (
+  testWidgets('mobile import uses a bottom sheet with four ordered options', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 800);
@@ -21,15 +23,18 @@ void main() {
 
     await tester.pumpWidget(
       WidgetTestApp(
-        child: Builder(
-          builder: (context) => TextButton(
-            onPressed: () => showImportPanel(
-              'workspace-id',
-              context,
-              (_, __, ___, ____) {},
-              isMobile: true,
+        child: AppFlowyTheme(
+          data: AppFlowyDefaultTheme().light(),
+          child: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showImportPanel(
+                'workspace-id',
+                context,
+                (_, __, ___, ____) {},
+                isMobile: true,
+              ),
+              child: const Text('open'),
             ),
-            child: const Text('open'),
           ),
         ),
       ),
@@ -39,9 +44,41 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
+    final closeButton = find.byType(BottomSheetCloseButton);
+    final csv = find.byKey(const ValueKey('mobile-import-option-csv'));
+    final pdf = find.byKey(const ValueKey('mobile-import-option-pdf'));
+    final markdown =
+        find.byKey(const ValueKey('mobile-import-option-markdownOrText'));
+    final html = find.byKey(const ValueKey('mobile-import-option-html'));
+
+    expect(closeButton, findsOneWidget);
+    expect(csv, findsOneWidget);
+    expect(pdf, findsOneWidget);
+    expect(markdown, findsOneWidget);
+    expect(html, findsOneWidget);
     expect(
-      tester.getCenter(find.byIcon(Icons.close)).dy,
-      lessThan(tester.getCenter(find.text('CSV')).dy),
+      find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey<String> &&
+            (widget.key! as ValueKey<String>)
+                .value
+                .startsWith('mobile-import-option-'),
+      ),
+      findsNWidgets(4),
     );
+
+    expect(
+      tester.getCenter(closeButton).dy,
+      lessThan(tester.getCenter(csv).dy),
+    );
+    expect(tester.getCenter(csv).dy, lessThan(tester.getCenter(pdf).dy));
+    expect(tester.getCenter(pdf).dy, lessThan(tester.getCenter(markdown).dy));
+    expect(tester.getCenter(markdown).dy, lessThan(tester.getCenter(html).dy));
+    expect(tester.getSize(csv).height, 64);
+    expect(tester.getBottomRight(html).dy, lessThanOrEqualTo(800));
+
+    await tester.tap(closeButton);
+    await tester.pumpAndSettle();
+    expect(csv, findsNothing);
   });
 }
