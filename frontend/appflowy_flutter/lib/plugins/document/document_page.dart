@@ -85,6 +85,7 @@ class _DocumentPageState extends State<DocumentPage>
   bool _handledForceCloseNavigation = false;
   bool? _lastEditable;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
+  late final Future<bool> _isPrivateSpace;
   // 父级 view 是不是协作空间。null 表示尚未查询完成。
   // 用于决定"返回上一级文档"按钮是否显示：
   //   - parentIsSpace == true 时，按钮不应该显示（父级是协作空间，
@@ -100,6 +101,9 @@ class _DocumentPageState extends State<DocumentPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isPrivateSpace = PlatformInfo.isMobile
+        ? _isDocumentInPrivateSpace()
+        : Future.value(false);
   }
 
   @override
@@ -602,11 +606,12 @@ class _DocumentPageState extends State<DocumentPage>
             ),
           ),
           const Spacer(),
-          // Share and favorite actions. On mobile the outer
+          // Favorite, share and more actions. On mobile the outer
           // MobileViewPageImmersiveAppBar / UnifiedViewTopRightActions
           // overlays are intentionally not rendered (see document.dart's
-          // _buildContentWithToolbar), so we always render this row here to
-          // keep parity with the legacy mobile toolbar.
+          // _buildContentWithToolbar). Private-space documents do not expose
+          // the share action; collaborative-space documents keep the legacy
+          // mobile toolbar behavior.
           Row(
             children: [
               if (FeatureFlag.syncDocument.isOn) ...[
@@ -623,12 +628,7 @@ class _DocumentPageState extends State<DocumentPage>
                 key: ValueKey('favorite_button_${widget.view.id}'),
                 view: widget.view,
               ),
-              const SizedBox(width: 10),
-              ShareButton(
-                key: ValueKey('share_button_${widget.view.id}'),
-                view: widget.view,
-              ),
-              const SizedBox(width: 4),
+              _buildDocumentShareAction(),
               if (effectiveViewInfoBloc != null)
                 MoreViewActions(
                     view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
@@ -639,6 +639,60 @@ class _DocumentPageState extends State<DocumentPage>
         ],
       ),
     );
+  }
+
+  Widget _buildDocumentShareAction() {
+    return FutureBuilder<bool>(
+      future: _isPrivateSpace,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            snapshot.data == true) {
+          return const SizedBox(width: 4);
+        }
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 10),
+            ShareButton(
+              key: ValueKey('share_button_${widget.view.id}'),
+              view: widget.view,
+            ),
+            const SizedBox(width: 4),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _isDocumentInPrivateSpace() async {
+    try {
+      final ancestorsResult =
+          await ViewBackendService.getViewAncestors(widget.view.id);
+      return ancestorsResult.fold(
+        (ancestors) {
+          for (final ancestor in ancestors.items) {
+            if (ancestor.isSpace) {
+              return ancestor.spacePermission == SpacePermission.private;
+            }
+          }
+          return false;
+        },
+        (error) {
+          Log.warn(
+            '[DocumentPage] Failed to resolve space permission for '
+            '${widget.view.id}: ${error.msg}',
+          );
+          return false;
+        },
+      );
+    } catch (error) {
+      Log.warn(
+        '[DocumentPage] Failed to resolve space permission for '
+        '${widget.view.id}: $error',
+      );
+      return false;
+    }
   }
 
   Widget _buildTopActionsBar(BuildContext context) {
@@ -664,12 +718,7 @@ class _DocumentPageState extends State<DocumentPage>
             key: ValueKey('favorite_button_${widget.view.id}'),
             view: widget.view,
           ),
-          const SizedBox(width: 10),
-          ShareButton(
-            key: ValueKey('share_button_${widget.view.id}'),
-            view: widget.view,
-          ),
-          const SizedBox(width: 4),
+          _buildDocumentShareAction(),
           if (effectiveViewInfoBloc != null)
             MoreViewActions(
                 view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
