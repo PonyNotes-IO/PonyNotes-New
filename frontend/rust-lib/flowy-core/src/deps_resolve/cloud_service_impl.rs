@@ -306,7 +306,7 @@ impl FolderCloudService for ServerProvider {
     new_parent_view_id: String,
     prev_view_id: Option<String>,
     to_private: bool,
-  ) -> Result<(), FlowyError> {
+  ) -> Result<Option<Vec<u8>>, FlowyError> {
     self
       .get_server()?
       .folder_service()

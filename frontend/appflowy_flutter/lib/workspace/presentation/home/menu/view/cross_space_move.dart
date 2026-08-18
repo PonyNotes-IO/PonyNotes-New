@@ -199,6 +199,36 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
     if (outcome != CrossSpaceMoveOutcome.proceed) {
       return outcome;
     }
+
+    beforeSubmit?.call();
+    final result = await ViewBackendService.moveViewV2(
+      viewId: view.id,
+      newParentId: targetParentId,
+      prevViewId: prevViewId,
+      fromSection: fromSection,
+      toSection: toSection,
+    );
+    String? errorMessage;
+    result.fold((_) {}, (error) => errorMessage = error.msg);
+    if (errorMessage != null) {
+      Log.error(
+        '[CrossSpaceMove] 跨区移动提交失败，原归属与 room 绑定保持不变：'
+        'view=${view.id}, error=$errorMessage',
+      );
+      showToastNotification(
+        message: errorMessage!,
+        type: ToastificationType.error,
+      );
+      return CrossSpaceMoveOutcome.aborted;
+    }
+
+    if (view.layout == ViewLayoutPB.Whiteboard) {
+      WhiteboardRouter.invalidateSpaceTypeCache(view.id);
+      if (toSection == ViewSectionPB.Private) {
+        await WhiteboardMigrationService.completePublicToPrivate(view.id);
+      }
+    }
+    return CrossSpaceMoveOutcome.moved;
   }
 
   beforeSubmit?.call();
@@ -272,8 +302,7 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     return CrossSpaceMoveOutcome.aborted;
   }
 
-  // 内容已到达目标存储，归属随即改变 —— 必须让路由的空间归属缓存失效。
-  WhiteboardRouter.invalidateSpaceTypeCache(view.id);
+  // 这里只准备本地内容。room 绑定与空间归属缓存必须等 folder move 成功后处理。
   return CrossSpaceMoveOutcome.proceed;
 }
 
@@ -282,7 +311,6 @@ void refreshSidebarMoveState(BuildContext context) {
     final spaceBloc = context.read<SpaceBloc>();
     if (!spaceBloc.isClosed) {
       spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
-      spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
     }
   } catch (_) {
     // SpaceBloc may be absent in isolated menu contexts.

@@ -106,7 +106,7 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
     _new_parent_view_id: String,
     _prev_view_id: Option<String>,
     _to_private: bool,
-  ) -> Result<(), FlowyError> {
+  ) -> Result<Option<Vec<u8>>, FlowyError> {
     Err(FlowyError::local_version_not_support())
   }
 

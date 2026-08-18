@@ -13,6 +13,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:protobuf/protobuf.dart';
 
 part 'sidebar_sections_bloc.freezed.dart';
 
@@ -127,6 +128,7 @@ class SidebarSectionsBloc
           },
           receiveSectionViewsUpdate: (sectionViews) async {
             final section = sectionViews.section;
+            final updatedViewIds = _collectViewIds(sectionViews.views);
             switch (section) {
               case ViewSectionPB.Public:
                 emit(
@@ -135,6 +137,10 @@ class SidebarSectionsBloc
                         sectionViews.views.any((view) => view.isSpace),
                     section: state.section.copyWith(
                       publicViews: sectionViews.views,
+                      privateViews: _removeViewsById(
+                        state.section.privateViews,
+                        updatedViewIds,
+                      ),
                     ),
                   ),
                 );
@@ -144,6 +150,10 @@ class SidebarSectionsBloc
                     containsSpace: state.containsSpace ||
                         sectionViews.views.any((view) => view.isSpace),
                     section: state.section.copyWith(
+                      publicViews: _removeViewsById(
+                        state.section.publicViews,
+                        updatedViewIds,
+                      ),
                       privateViews: sectionViews.views,
                     ),
                   ),
@@ -271,6 +281,34 @@ class SidebarSectionsBloc
   bool _containsSpace(SidebarSection section) {
     return section.publicViews.any((view) => view.isSpace) ||
         section.privateViews.any((view) => view.isSpace);
+  }
+
+  Set<String> _collectViewIds(Iterable<ViewPB> views) {
+    final ids = <String>{};
+    void collect(Iterable<ViewPB> items) {
+      for (final view in items) {
+        ids.add(view.id);
+        collect(view.childViews);
+      }
+    }
+
+    collect(views);
+    return ids;
+  }
+
+  List<ViewPB> _removeViewsById(
+    Iterable<ViewPB> views,
+    Set<String> removedIds,
+  ) {
+    return views.where((view) => !removedIds.contains(view.id)).map((view) {
+      final children = _removeViewsById(view.childViews, removedIds);
+      if (children.length == view.childViews.length) {
+        return view;
+      }
+      return view.deepCopy()
+        ..childViews.clear()
+        ..childViews.addAll(children);
+    }).toList();
   }
 
   void _initial(UserProfilePB userProfile, String workspaceId) {

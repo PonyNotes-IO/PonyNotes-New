@@ -119,7 +119,7 @@ where
     new_parent_view_id: String,
     prev_view_id: Option<String>,
     to_private: bool,
-  ) -> Result<(), FlowyError> {
+  ) -> Result<Option<Vec<u8>>, FlowyError> {
     check_request_workspace_id_is_match(
       workspace_id,
       &self.logged_user,
@@ -135,6 +135,7 @@ where
           new_parent_view_id,
           prev_view_id,
           to_private,
+          return_update: true,
         },
       )
       .await

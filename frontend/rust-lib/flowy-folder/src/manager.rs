@@ -8,8 +8,8 @@ use crate::entities::{
   view_pb_without_child_views, view_pb_without_child_views_from_arc,
 };
 use crate::manager_observer::{
-  ChildViewChangeReason, notify_child_views_changed, notify_did_update_workspace,
-  notify_parent_view_did_change,
+  ChildViewChangeReason, notify_child_views_changed, notify_did_update_section_views,
+  notify_did_update_workspace, notify_parent_view_did_change,
 };
 use crate::notification::{FolderNotification, folder_notification_builder};
 use crate::publish_util::{generate_publish_name, view_pb_to_publish_view};
@@ -26,12 +26,14 @@ use client_api::entity::workspace_dto::PublishInfoView;
 use client_api::entity::{AFAccessLevel, AFRole, PublishInfo};
 use collab::core::collab::{DataSource, IndexContentReceiver};
 use collab::lock::RwLock;
+use collab::preclude::updates::decoder::Decode;
+use collab::preclude::{ReadTxn, Transact, Update};
 use collab_entity::{CollabType, EncodedCollab};
 use collab_folder::folder_diff::FolderViewChange;
 use collab_folder::hierarchy_builder::{ParentChildViews, ViewExtraBuilder};
 use collab_folder::{
-  Folder, FolderData, FolderNotify, Section, SectionItem, SpacePermission, TrashInfo, View,
-  ViewLayout, ViewUpdate, Workspace,
+  Folder, FolderBody, FolderData, FolderNotify, Section, SectionItem, SpacePermission, TrashInfo,
+  View, ViewLayout, ViewUpdate, Workspace,
 };
 use collab_integrate::CollabKVDB;
 use collab_integrate::collab_builder::{
@@ -66,6 +68,122 @@ use std::sync::{Arc, Weak};
 use tokio::sync::RwLockWriteGuard;
 use tracing::{error, info, instrument};
 use uuid::Uuid;
+
+fn relation_parent_ids_for_view<T: ReadTxn>(
+  body: &FolderBody,
+  txn: &T,
+  view_id: &str,
+) -> Vec<String> {
+  body
+    .views
+    .get_all_views(txn)
+    .into_iter()
+    .flat_map(|parent| {
+      let occurrence_count = parent
+        .children
+        .iter()
+        .filter(|child| child.id == view_id)
+        .count();
+      std::iter::repeat_n(parent.id.clone(), occurrence_count)
+    })
+    .collect()
+}
+
+fn redundant_relation_parent_ids(
+  canonical_parent_id: &str,
+  parent_ids: Vec<String>,
+) -> Vec<String> {
+  let keep_index = parent_ids
+    .iter()
+    .position(|parent_id| parent_id == canonical_parent_id);
+  parent_ids
+    .into_iter()
+    .enumerate()
+    .filter_map(|(index, parent_id)| (Some(index) != keep_index).then_some(parent_id))
+    .collect()
+}
+
+fn apply_cloud_folder_update(
+  folder: &mut Folder,
+  view_id: &str,
+  encoded_update: &[u8],
+) -> FlowyResult<Vec<String>> {
+  let mut parent_ids = {
+    let txn = folder.collab.transact();
+    let mut ids = relation_parent_ids_for_view(&folder.body, &txn, view_id);
+    if let Some(view) = folder.body.views.get_view(&txn, view_id) {
+      ids.push(view.parent_view_id.clone());
+    }
+    ids
+  };
+
+  let update = Update::decode_v1(encoded_update).map_err(internal_error)?;
+  let mut txn = folder.collab.doc().transact_mut();
+  txn.apply_update(update).map_err(internal_error)?;
+  drop(txn);
+
+  let view = folder
+    .get_view(view_id)
+    .ok_or_else(|| FlowyError::record_not_found().with_context(view_id))?;
+  parent_ids.push(view.parent_view_id.clone());
+  parent_ids.sort_unstable();
+  parent_ids.dedup();
+
+  // Remote updates bypass ViewsMap's mutation helpers, which normally invalidate
+  // the cached parent views after relation changes. An out-of-range move only
+  // clears those caches; it does not write a CRDT operation.
+  let mut txn = folder.collab.doc().transact_mut();
+  for parent_id in &parent_ids {
+    folder
+      .body
+      .views
+      .move_child(&mut txn, parent_id, u32::MAX, u32::MAX);
+  }
+  drop(txn);
+
+  Ok(parent_ids)
+}
+
+pub(crate) fn cleanup_duplicate_view_relations(folder: &mut Folder) -> usize {
+  let (collab, body) = (&mut folder.collab, &folder.body);
+  let mut txn = collab.transact_mut();
+  let views = body.views.get_all_views(&txn);
+  let canonical_parents = views
+    .iter()
+    .map(|view| (view.id.clone(), view.parent_view_id.clone()))
+    .collect::<HashMap<_, _>>();
+  let mut relations = HashMap::<String, Vec<String>>::new();
+  let parent_ids = views.iter().map(|view| view.id.clone()).collect::<Vec<_>>();
+
+  for parent_id in parent_ids {
+    for child in body.views.get_views_belong_to(&txn, &parent_id) {
+      relations
+        .entry(child.id.clone())
+        .or_default()
+        .push(parent_id.clone());
+    }
+  }
+
+  let mut removed = 0;
+  for (view_id, parent_ids) in relations {
+    if parent_ids.len() < 2 {
+      continue;
+    }
+    let Some(canonical_parent_id) = canonical_parents.get(&view_id) else {
+      continue;
+    };
+    if !parent_ids.contains(canonical_parent_id) {
+      continue;
+    }
+    for parent_id in redundant_relation_parent_ids(canonical_parent_id, parent_ids) {
+      body
+        .views
+        .dissociate_parent_child_with_txn(&mut txn, &parent_id, &view_id);
+      removed += 1;
+    }
+  }
+  removed
+}
 
 pub trait FolderUser: Send + Sync {
   fn user_id(&self) -> Result<i64, FlowyError>;
@@ -1061,7 +1179,7 @@ impl FolderManager {
         .workspace_type
         .is_local()
     {
-      self
+      let folder_update = self
         .cloud_service()?
         .move_view_cross_space(
           &workspace_id,
@@ -1071,6 +1189,26 @@ impl FolderManager {
           to_section == Some(ViewSectionPB::Private),
         )
         .await?;
+
+      let Some(folder_update) = folder_update else {
+        // Older cloud versions return no update; their WebSocket sync remains the fallback.
+        return Ok(());
+      };
+      let lock = self
+        .mutex_folder
+        .load_full()
+        .ok_or_else(folder_not_init_error)?;
+      let mut folder = lock.write().await;
+      let parent_view_ids =
+        apply_cloud_folder_update(&mut folder, &view_id.to_string(), &folder_update)?
+          .into_iter()
+          .filter_map(|id| Uuid::parse_str(&id).ok())
+          .collect();
+      notify_parent_view_did_change(workspace_id, &folder, parent_view_ids);
+      notify_did_update_workspace(&workspace_id, &folder);
+      notify_did_update_section_views(&workspace_id, &folder);
+      drop(folder);
+      self.publish_private_views().await;
       return Ok(());
     }
 
@@ -1083,14 +1221,8 @@ impl FolderManager {
         let folder = &mut *folder;
         let (collab, body) = (&mut folder.collab, &folder.body);
         let mut txn = collab.transact_mut();
-        let duplicate_parent_ids = body
-          .views
-          .get_all_views(&txn)
-          .into_iter()
-          .filter(|candidate| candidate.children.iter().any(|child| child.id == view_id))
-          .map(|candidate| candidate.id.clone())
-          .collect::<Vec<_>>();
-        for parent_id in duplicate_parent_ids {
+        let relation_parent_ids = relation_parent_ids_for_view(body, &txn, &view_id);
+        for parent_id in redundant_relation_parent_ids(&view.parent_view_id, relation_parent_ids) {
           body
             .views
             .dissociate_parent_child_with_txn(&mut txn, &parent_id, &view_id);
@@ -3318,5 +3450,173 @@ impl Display for FolderInitDataSource {
       FolderInitDataSource::LocalDisk { .. } => f.write_fmt(format_args!("LocalDisk")),
       FolderInitDataSource::Cloud(_) => f.write_fmt(format_args!("Cloud")),
     }
+  }
+}
+
+#[cfg(test)]
+mod duplicate_relation_tests {
+  use super::{apply_cloud_folder_update, cleanup_duplicate_view_relations};
+  use collab::core::collab::DataSource;
+  use collab::core::collab_plugin::{CollabPlugin, CollabPluginType};
+  use collab::core::origin::{CollabClient, CollabOrigin};
+  use collab::preclude::Collab;
+  use collab_folder::{Folder, FolderData, FolderNotify, View, ViewLayout, Workspace};
+  use std::sync::atomic::{AtomicUsize, Ordering};
+  use std::sync::Arc;
+
+  struct LocalUpdateCounter(Arc<AtomicUsize>);
+
+  impl CollabPlugin for LocalUpdateCounter {
+    fn receive_local_update(&self, _origin: &CollabOrigin, _object_id: &str, _update: &[u8]) {
+      self.0.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn plugin_type(&self) -> CollabPluginType {
+      CollabPluginType::Other("local-update-counter".to_string())
+    }
+  }
+
+  fn folder_with_movable_view(uid: i64, workspace_id: &str) -> Folder {
+    let collab = Collab::new_with_origin(CollabOrigin::Server, workspace_id, vec![], false);
+    let workspace = Workspace::new(workspace_id.to_string(), "Workspace".to_string(), uid);
+    let mut folder = Folder::create(uid, collab, None, FolderData::new(workspace));
+    for (id, parent_id, name) in [
+      ("old-parent", workspace_id, "Old"),
+      ("new-parent", workspace_id, "New"),
+      ("moved", "old-parent", "Moved"),
+    ] {
+      folder.insert_view(
+        View::new(
+          id.to_string(),
+          parent_id.to_string(),
+          name.to_string(),
+          ViewLayout::Document,
+          Some(uid),
+        ),
+        None,
+      );
+    }
+    folder
+  }
+
+  #[test]
+  fn repairs_duplicate_and_stale_parent_relations() {
+    let uid = 1;
+    let workspace_id = "workspace";
+    let collab = Collab::new_with_origin(CollabOrigin::Empty, workspace_id, vec![], false);
+    let workspace = Workspace::new(workspace_id.to_string(), "Workspace".to_string(), uid);
+    let mut folder = Folder::create(uid, collab, None, FolderData::new(workspace));
+
+    folder.insert_view(
+      View::new(
+        "old-parent".to_string(),
+        workspace_id.to_string(),
+        "Old".to_string(),
+        ViewLayout::Document,
+        Some(uid),
+      ),
+      None,
+    );
+    folder.insert_view(
+      View::new(
+        "new-parent".to_string(),
+        workspace_id.to_string(),
+        "New".to_string(),
+        ViewLayout::Document,
+        Some(uid),
+      ),
+      None,
+    );
+    folder.insert_view(
+      View::new(
+        "moved".to_string(),
+        "new-parent".to_string(),
+        "Moved".to_string(),
+        ViewLayout::Document,
+        Some(uid),
+      ),
+      None,
+    );
+
+    {
+      let (collab, body) = (&mut folder.collab, &folder.body);
+      let mut txn = collab.transact_mut();
+      body
+        .views
+        .associate_parent_child_with_txn(&mut txn, "new-parent", "moved", None);
+      body
+        .views
+        .associate_parent_child_with_txn(&mut txn, "old-parent", "moved", None);
+    }
+
+    assert_eq!(folder.get_views_belong_to("old-parent").len(), 1);
+    assert_eq!(folder.get_views_belong_to("new-parent").len(), 2);
+    assert_eq!(cleanup_duplicate_view_relations(&mut folder), 2);
+    assert!(folder.get_views_belong_to("old-parent").is_empty());
+    assert_eq!(folder.get_views_belong_to("new-parent").len(), 1);
+    assert_eq!(cleanup_duplicate_view_relations(&mut folder), 0);
+  }
+
+  #[test]
+  fn applies_cloud_move_idempotently_without_local_upload() {
+    let uid = 1;
+    let workspace_id = "workspace";
+    let mut cloud_folder = folder_with_movable_view(uid, workspace_id);
+    let initial_state = cloud_folder.encode_collab().unwrap().doc_state.to_vec();
+    let local_updates = Arc::new(AtomicUsize::new(0));
+    let collab = Collab::new_with_source(
+      CollabOrigin::Client(CollabClient::new(uid, "test-device")),
+      workspace_id,
+      DataSource::DocStateV1(initial_state),
+      vec![Box::new(LocalUpdateCounter(local_updates.clone()))],
+      false,
+    )
+    .unwrap();
+    let (view_change_tx, _view_change_rx) = tokio::sync::broadcast::channel(100);
+    let (section_change_tx, _section_change_rx) = tokio::sync::broadcast::channel(100);
+    let mut local_folder = Folder::open(
+      uid,
+      collab,
+      Some(FolderNotify {
+        view_change_tx,
+        section_change_tx,
+      }),
+    )
+    .unwrap();
+    local_folder.collab.initialize();
+
+    let folder_update = {
+      let (collab, body) = (&mut cloud_folder.collab, &cloud_folder.body);
+      let mut txn = collab.transact_mut();
+      assert!(body
+        .move_nested_view(&mut txn, "moved", "new-parent", None)
+        .is_some());
+      body
+        .views
+        .update_view(&mut txn, "moved", |update| update.set_private(true).done());
+      txn.encode_update_v1()
+    };
+
+    let notified_parents =
+      apply_cloud_folder_update(&mut local_folder, "moved", &folder_update).unwrap();
+    assert_eq!(
+      notified_parents,
+      vec!["new-parent".to_string(), "old-parent".to_string()]
+    );
+    assert!(local_folder.get_views_belong_to("old-parent").is_empty());
+    assert_eq!(local_folder.get_views_belong_to("new-parent").len(), 1);
+    assert_eq!(
+      local_folder.get_view("moved").unwrap().parent_view_id,
+      "new-parent"
+    );
+    assert!(local_folder
+      .get_my_private_sections()
+      .iter()
+      .any(|item| item.id == "moved"));
+    assert_eq!(local_updates.load(Ordering::SeqCst), 0);
+
+    apply_cloud_folder_update(&mut local_folder, "moved", &folder_update).unwrap();
+    assert_eq!(local_folder.get_views_belong_to("new-parent").len(), 1);
+    assert_eq!(local_updates.load(Ordering::SeqCst), 0);
   }
 }

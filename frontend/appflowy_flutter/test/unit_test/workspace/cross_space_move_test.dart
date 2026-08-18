@@ -93,4 +93,43 @@ void main() {
     expect(bloc.getViewSection(child), ViewSectionPB.Public);
     await bloc.close();
   });
+
+  test('a section update removes the same view from the stale section',
+      () async {
+    final moved = ViewPB()..id = 'moved';
+    final privateRoot = ViewPB()
+      ..id = 'private-root'
+      ..childViews.add(moved);
+    final publicRoot = ViewPB()
+      ..id = 'public-root'
+      ..childViews.add(moved);
+    final bloc = SidebarSectionsBloc();
+
+    bloc.add(
+      SidebarSectionsEvent.receiveSectionViewsUpdate(
+        SectionViewsPB()
+          ..section = ViewSectionPB.Private
+          ..views.add(privateRoot),
+      ),
+    );
+    await bloc.stream.firstWhere(
+      (state) => state.section.privateViews.isNotEmpty,
+    );
+
+    bloc.add(
+      SidebarSectionsEvent.receiveSectionViewsUpdate(
+        SectionViewsPB()
+          ..section = ViewSectionPB.Public
+          ..views.add(publicRoot),
+      ),
+    );
+    final state = await bloc.stream.firstWhere(
+      (state) => state.section.publicViews.isNotEmpty,
+    );
+
+    expect(state.section.publicViews.single.childViews.single.id, 'moved');
+    expect(state.section.privateViews.single.childViews, isEmpty);
+    expect(bloc.getViewSection(moved), ViewSectionPB.Public);
+    await bloc.close();
+  });
 }

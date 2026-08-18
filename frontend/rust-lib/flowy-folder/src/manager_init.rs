@@ -1,4 +1,4 @@
-use crate::manager::{FolderInitDataSource, FolderManager};
+use crate::manager::{FolderInitDataSource, FolderManager, cleanup_duplicate_view_relations};
 use crate::manager_observer::*;
 use crate::user_default::DefaultFolderBuilder;
 use collab::core::collab::DataSource;
@@ -8,7 +8,7 @@ use collab_folder::{Folder, FolderNotify};
 use collab_integrate::CollabKVDB;
 use flowy_error::{FlowyError, FlowyResult};
 use std::sync::{Arc, Weak};
-use tracing::{Level, error, event, info, warn};
+use tracing::{Level, error, event, warn};
 use uuid::Uuid;
 
 impl FolderManager {
@@ -113,7 +113,14 @@ impl FolderManager {
     };
 
     let folder_state_rx = {
-      let folder = folder.read().await;
+      let mut folder = folder.write().await;
+      let removed = cleanup_duplicate_view_relations(&mut folder);
+      if removed > 0 {
+        warn!(
+          "Repaired {} duplicate folder parent-child relations while opening workspace {}",
+          removed, workspace_id
+        );
+      }
       folder.subscribe_sync_state()
     };
 

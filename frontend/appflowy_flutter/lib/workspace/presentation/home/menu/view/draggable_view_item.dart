@@ -1,13 +1,8 @@
-import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/draggable_item/draggable_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:appflowy_backend/log.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
-import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -264,64 +259,12 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
         if (outcome == CrossSpaceMoveOutcome.aborted) {
           return;
         }
-
-        // 延迟执行刷新操作，确保后端操作完成
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (context.mounted) {
-            _refreshViews(from, to);
-          }
-        });
+        if (mounted) {
+          refreshSidebarMoveState(context);
+        }
         break;
       case DraggableHoverPosition.none:
         break;
-    }
-  }
-
-  // 刷新视图，确保移动操作后UI能正确更新
-  void _refreshViews(ViewPB from, ViewPB to) {
-    try {
-      refreshSidebarMoveState(context);
-
-      // 1. 尝试刷新 SpaceBloc（管理空间相关视图）
-      try {
-        final spaceBloc = context.read<SpaceBloc>();
-        if (!spaceBloc.isClosed) {
-          // 触发 SpaceBloc 刷新当前空间的子视图
-          spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
-          Log.info('Refreshing SpaceBloc with didUpdateCurrentSpaceChildViews');
-        }
-      } catch (_) {
-        // 忽略错误，SpaceBloc 可能不存在
-      }
-
-      // 2. 尝试刷新 SidebarSectionsBloc（管理根级别视图）
-      try {
-        final sidebarSectionsBloc = context.read<SidebarSectionsBloc>();
-        if (!sidebarSectionsBloc.isClosed) {
-          // 触发 SidebarSectionsBloc 刷新
-          // 注意：SidebarSectionsBloc 没有直接的刷新事件，这里使用间接方式
-          // 实际项目中可能需要添加专门的刷新事件
-          Log.info('Refreshing SidebarSectionsBloc');
-        }
-      } catch (_) {
-        // 忽略错误，SidebarSectionsBloc 可能不存在
-      }
-
-      // 3. 刷新当前 ViewBloc
-      try {
-        final currentViewBloc = context.read<ViewBloc>();
-        if (!currentViewBloc.isClosed) {
-          // 触发当前视图的刷新
-          currentViewBloc
-              .add(ViewEvent.viewDidUpdate(FlowyResult.success(widget.view)));
-          Log.info('Refreshing current ViewBloc');
-        }
-      } catch (_) {
-        // 忽略错误，ViewBloc 可能不存在
-      }
-    } catch (e) {
-      // 忽略所有错误，确保刷新操作不会影响主流程
-      Log.error('Error refreshing views: $e');
     }
   }
 

@@ -36,6 +36,7 @@ const String whiteboardMigrationScript = r'''
     // 只有 PUSH 方向在调用 loadAndSave 时才临时放开。
     allowPost: false,
     blockedPostCount: 0,
+    sceneProbeStarted: false,
   };
 
   var origFetch = window.fetch.bind(window);
@@ -93,6 +94,30 @@ const String whiteboardMigrationScript = r'''
 
   function log(msg) { try { console.log('[XMMig] ' + msg); } catch (e) {} }
 
+  // xm-arts 部分版本通过 XHR/socket 拉场景，fetch 钩子观察不到 GET。主动做一次
+  // 同源只读探测，只记录服务端 sceneVersion，不参与解密或修改 room。
+  function probeScene() {
+    if (state.sceneProbeStarted) return;
+    state.sceneProbeStarted = true;
+    var match = location.hash.match(/^#room=([^,]+)/);
+    if (!match || !match[1]) return;
+    origFetch('/api/scenes/' + encodeURIComponent(match[1]), { method: 'GET' })
+      .then(function (resp) {
+        state.lastGetStatus = resp && resp.status;
+        if (!resp || !resp.ok) {
+          state.lastGetSceneVersion = 0;
+          return;
+        }
+        return resp.clone().json().then(function (data) {
+          var v = Number(data && data.sceneVersion);
+          state.lastGetSceneVersion = isNaN(v) ? 0 : v;
+        }).catch(function () { state.lastGetSceneVersion = 0; });
+      })
+      .catch(function () { state.lastGetStatus = -1; });
+  }
+
+  probeScene();
+
   // 通过 React fiber 定位页面内部的 Collab 实例（与 XMGuard 同法，独立实现避免耦合）。
   var collab = null;
   function findCollab() {
@@ -143,14 +168,18 @@ const String whiteboardMigrationScript = r'''
     pullReady: function () {
       var c = findCollab();
       if (!c || !c.excalidrawAPI) return false;
-      // 首选信号：确实观察到了场景 GET（200 有内容 / 404 空房）。
-      if (state.lastGetStatus !== null) return true;
-      // 兜底：GET 可能因 URL 形态变化而没被钩子记到（线上出现过 lastGetStatus
-      // 恒为 null 导致 60s 超时）。此时只要画布上已经渲染出元素，就说明内容
-      // 已解密就绪，可以读取 —— 不再把「钩子有没有抓到」当作唯一依据。
       try {
         var all = c.excalidrawAPI.getSceneElementsIncludingDeleted();
+        var localVersion = sceneVersion(all);
         if (liveElements(all).length > 0) return true;
+        // 404 或 sceneVersion=0 都是合法空 room；确认 socket 已连接后即可读取空场景。
+        if (c.portal && c.portal.socket && c.portal.socket.connected &&
+            (state.lastGetStatus === 404 ||
+             (state.lastGetStatus >= 200 && state.lastGetStatus < 300 &&
+              state.lastGetSceneVersion === 0))) return true;
+        // 全部元素均已删除时 liveCount=0，但本地总版本追上服务端即可确认已加载。
+        if (state.lastGetSceneVersion > 0 &&
+            localVersion >= state.lastGetSceneVersion) return true;
       } catch (e) {}
       return false;
     },

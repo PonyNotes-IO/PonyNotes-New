@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io';
-
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_migration_webview.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/widgets.dart';
 
@@ -21,8 +21,6 @@ import 'package:flutter/widgets.dart';
 ///   目标存储；返回 false 调用方必须放弃 moveViewV2。
 class WhiteboardMigrationService {
   WhiteboardMigrationService._();
-
-  static const String _roomHost = 'https://xm-arts.xiaomabiji.com';
 
   /// 私有空间白板 → 协作区：**在协作区新建一块白板，复制内容，再删除源白板**。
   ///
@@ -57,9 +55,8 @@ class WhiteboardMigrationService {
         source: 'migration-private-to-public',
       );
       final elements = _asList(data['elements']);
-      final liveElements = elements
-          .where((e) => !(e is Map && e['isDeleted'] == true))
-          .toList();
+      final liveElements =
+          elements.where((e) => !(e is Map && e['isDeleted'] == true)).toList();
 
       // 2. room 凭据必须进入新白板的初始 collab。创建后再补写会与后台首次
       // 上传竞态，后到的空白初始数据可能覆盖 room，其他成员便无法进入同一房间。
@@ -112,14 +109,38 @@ class WhiteboardMigrationService {
 
       // 6. 内容已确认到达新 room，此时才删源白板。
       final deleted = await ViewBackendService.deleteView(viewId: viewId);
+      var sourceDeleteFailed = false;
       deleted.fold(
         (_) => Log.info('[WBMigration] 私有→协作：源白板已删除 $viewId'),
-        // 删除失败不回滚：内容已经安全落在新白板里，回滚反而会把它删掉。
-        // 留下一份重复的私有白板，比丢内容好得多，用户可自行删除。
-        (e) => Log.error(
-          '[WBMigration] 私有→协作：源白板删除失败，请手动删除 $viewId: ${e.msg}',
-        ),
+        (e) {
+          sourceDeleteFailed = true;
+          Log.error(
+            '[WBMigration] 私有→协作：源白板删除失败，正在确认源是否仍存在 $viewId: ${e.msg}',
+          );
+        },
       );
+
+      if (sourceDeleteFailed) {
+        bool? sourceStillExists;
+        final sourceCheck = await ViewBackendService.getView(viewId);
+        sourceCheck.fold(
+          (_) => sourceStillExists = true,
+          (error) => sourceStillExists =
+              error.code == ErrorCode.RecordNotFound ? false : null,
+        );
+        if (sourceStillExists == true) {
+          await _rollbackCreated(created.id);
+          Log.error(
+            '[WBMigration] 私有→协作：源仍存在，已回滚新白板避免重复：$viewId',
+          );
+          return null;
+        }
+        if (sourceStillExists == null) {
+          Log.warn(
+            '[WBMigration] 私有→协作：无法确认源删除结果，保留新白板以保证内容不丢：$viewId',
+          );
+        }
+      }
 
       Log.info(
         '[WBMigration] 私有→协作 完成 源=$viewId 新=${created.id} roomId=$roomId',
@@ -138,6 +159,7 @@ class WhiteboardMigrationService {
   static Future<void> _rollbackCreated(String createdViewId) async {
     try {
       await ViewBackendService.deleteView(viewId: createdViewId);
+      await WhiteboardRoomService.deleteRoom(createdViewId);
       Log.info('[WBMigration] 已回滚新建的空白板 $createdViewId');
     } catch (e) {
       Log.warn('[WBMigration] 回滚新建白板失败（残留一块空白板）: $createdViewId, $e');
@@ -162,9 +184,8 @@ class WhiteboardMigrationService {
       );
 
       final elements = _asList(data['elements']);
-      final liveElements = elements
-          .where((e) => !(e is Map && e['isDeleted'] == true))
-          .toList();
+      final liveElements =
+          elements.where((e) => !(e is Map && e['isDeleted'] == true)).toList();
 
       final roomId = WhiteboardRoomService.generateRoomId();
       final roomKey = WhiteboardRoomService.generateRoomKey();
@@ -213,7 +234,8 @@ class WhiteboardMigrationService {
   /// 协作空间白板 → 私有空间：拉取 room 明文内容写入本地 B 套 collab。
   ///
   /// 步骤：隐藏 webview 让页面 GET+解密+渲染 → 读回明文场景 → **写 B 套 collab 并校验
-  /// 写成功** → 清本地 roomId/roomKey → best-effort 删若依残留。**不做 section 切换**，
+  /// 写成功** → folder 移动成功后清本地 roomId/roomKey，远端 Room 保留为恢复副本。
+  /// **不做 section 切换**，
   /// 成功返回 true 由调用方切 section。任一步失败返回 false（room 原内容原封不动）。
   static Future<bool> migratePublicToPrivate({
     required BuildContext context,
@@ -221,11 +243,13 @@ class WhiteboardMigrationService {
   }) async {
     final viewId = view.id;
     try {
-      final room = await WhiteboardRoomService.getRoom(viewId);
+      final dataService = WhiteboardDataService();
+      final room = await _resolveRoomForMigration(viewId, dataService);
       if (room == null) {
-        // 无 room 绑定：本就无协作内容，直接允许切区（不丢内容）。
-        Log.info('[WBMigration] 协作→私有：无 room 绑定，直接切区 view=$viewId');
-        return true;
+        Log.error(
+          '[WBMigration] 协作→私有：本地与 collab 均无 room 绑定，已中止 view=$viewId',
+        );
+        return false;
       }
 
       if (!context.mounted) return false;
@@ -245,55 +269,86 @@ class WhiteboardMigrationService {
       final scene = result.scene!;
       final liveElements = _asList(scene['elements']);
 
-      // 有内容才写 B 套；空白板（合法空房）不写、直接切区。
-      if (liveElements.isNotEmpty) {
-        final dataService = WhiteboardDataService();
-        final payload = <String, dynamic>{
-          'type': 'excalidraw',
-          'version': 2,
-          'elements': liveElements,
-          'files': scene['files'] ?? const {},
-          'appState': scene['appState'] ?? const {},
-        };
-        final saved = await dataService.saveWhiteboardData(
-          viewId,
-          payload,
-          source: 'migration-public-to-private',
+      final payload = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'elements': liveElements,
+        'files': scene['files'] ?? const {},
+        'appState': scene['appState'] ?? const {},
+      };
+      final saved = await dataService.saveWhiteboardData(
+        viewId,
+        payload,
+        source: 'migration-public-to-private',
+        replace: true,
+      );
+      if (!saved) {
+        Log.error(
+          '[WBMigration] 协作→私有 写本地 collab 失败，已中止（room 内容保留）',
         );
-        if (!saved) {
-          Log.error(
-            '[WBMigration] 协作→私有 写本地 collab 失败，已中止（room 内容保留）',
-          );
-          return false;
-        }
-
-        // 【校验写成功】回读本地 collab，确认元素已落地，才继续解除 room 绑定。
-        final verify = await dataService.loadWhiteboardData(
-          viewId,
-          source: 'migration-verify',
-        );
-        final verifyElements = _asList(verify['elements'])
-            .where((e) => !(e is Map && e['isDeleted'] == true))
-            .toList();
-        if (verifyElements.isEmpty) {
-          Log.error(
-            '[WBMigration] 协作→私有 写后校验为空，已中止（room 内容保留）',
-          );
-          return false;
-        }
+        return false;
       }
 
-      // 本地已是权威副本，解除 room 绑定（本地）。
-      await WhiteboardRoomService.deleteRoom(viewId);
-      // best-effort 删除若依残留（删不掉不影响：本地已存权威副本，残留仅服务端垃圾）。
-      await _bestEffortDeleteRoomScene(room.roomId);
+      // 回读并按元素 id 校验替换结果。空白 room 也必须写入并验证，否则本地残留
+      // 元素会在切到私有区后重新出现。
+      final verify = await dataService.loadWhiteboardData(
+        viewId,
+        source: 'migration-verify',
+      );
+      final verifyElements = _asList(verify['elements'])
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
+      if (!_sameElementIds(liveElements, verifyElements)) {
+        Log.error(
+          '[WBMigration] 协作→私有 写后校验不一致，已中止（room 内容保留）',
+        );
+        return false;
+      }
 
-      Log.info('[WBMigration] 协作→私有 成功 view=$viewId');
+      // 此处只完成内容准备。room 要等 folder 跨区移动成功后再解除；否则移动失败
+      // 时协作白板会失去原绑定，无法继续在原位置编辑。
+      Log.info('[WBMigration] 协作→私有 内容准备完成 view=$viewId');
       return true;
     } catch (e, s) {
       Log.error('[WBMigration] 协作→私有 异常，已中止: $e\n$s');
       return false;
     }
+  }
+
+  static Future<void> completePublicToPrivate(String viewId) async {
+    await WhiteboardRoomService.deleteRoom(viewId);
+    Log.info('[WBMigration] 协作→私有 已解除本地 room，远端副本保留 view=$viewId');
+  }
+
+  static Future<WhiteboardRoom?> _resolveRoomForMigration(
+    String viewId,
+    WhiteboardDataService dataService,
+  ) async {
+    final localRoom = await WhiteboardRoomService.getRoom(viewId);
+    final data = await dataService.loadWhiteboardData(
+      viewId,
+      source: 'migration-room-lookup',
+    );
+    final roomId = data['roomId']?.toString() ?? '';
+    final roomKey = data['roomKey']?.toString() ?? '';
+    if (roomId.isEmpty || roomKey.isEmpty) {
+      return localRoom;
+    }
+    if (localRoom?.roomId != roomId || localRoom?.roomKey != roomKey) {
+      await WhiteboardRoomService.saveRoom(viewId, roomId, roomKey);
+    }
+    return WhiteboardRoom(roomId: roomId, roomKey: roomKey);
+  }
+
+  static bool _sameElementIds(List<dynamic> expected, List<dynamic> actual) {
+    String? idOf(dynamic element) =>
+        element is Map ? element['id']?.toString() : null;
+    final expectedIds = expected.map(idOf).whereType<String>().toSet();
+    final actualIds = actual.map(idOf).whereType<String>().toSet();
+    return expectedIds.length == expected.length &&
+        actualIds.length == actual.length &&
+        expectedIds.length == actualIds.length &&
+        expectedIds.containsAll(actualIds);
   }
 
   /// 把 B 套 files（可能只带云 url、无 dataURL）整理成 excalidraw 可加载的文件对象。
@@ -318,29 +373,6 @@ class WhiteboardMigrationService {
       };
     });
     return result;
-  }
-
-  /// best-effort 删除若依上的 room 场景残留。若依是否支持 DELETE 未确认——
-  /// 任何失败（含 404/405/超时）只记日志、绝不抛出、绝不阻断迁移。
-  static Future<void> _bestEffortDeleteRoomScene(String roomId) async {
-    HttpClient? client;
-    try {
-      client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-      final request = await client
-          .deleteUrl(Uri.parse('$_roomHost/api/scenes/$roomId'))
-          .timeout(const Duration(seconds: 5));
-      final response = await request.close().timeout(const Duration(seconds: 5));
-      await response.drain<void>();
-      Log.info(
-        '[WBMigration] best-effort 删若依残留 roomId=$roomId status=${response.statusCode}',
-      );
-    } catch (e) {
-      Log.warn(
-        '[WBMigration] best-effort 删若依残留失败(已忽略) roomId=$roomId: $e',
-      );
-    } finally {
-      client?.close(force: true);
-    }
   }
 
   static List<dynamic> _asList(dynamic value) =>

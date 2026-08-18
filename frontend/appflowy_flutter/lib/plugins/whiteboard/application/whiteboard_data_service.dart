@@ -91,7 +91,9 @@ class WhiteboardDataService {
     try {
       final payload = CreateWhiteboardPayloadPB()..viewId = viewId;
 
-      final data = initialData != null ? Map<String, dynamic>.from(initialData) : <String, dynamic>{};
+      final data = initialData != null
+          ? Map<String, dynamic>.from(initialData)
+          : <String, dynamic>{};
       if (roomId != null && roomId.isNotEmpty) {
         data['roomId'] = roomId;
       }
@@ -136,6 +138,7 @@ class WhiteboardDataService {
     String? traceId,
     String? sessionId,
     String source = 'collab-adapter',
+    bool replace = false,
   }) async {
     final stopwatch = Stopwatch()..start();
     logDiagnosticEvent(
@@ -175,11 +178,12 @@ class WhiteboardDataService {
     Log.debug(
       '[WBCollab][WhiteboardDataService] Saving whiteboard to collab: $viewId',
     );
-    Log.debug('[WBCollab][WhiteboardDataService] collabData keys: ${collabData.keys}');
+    Log.debug(
+        '[WBCollab][WhiteboardDataService] collabData keys: ${collabData.keys}');
     Log.debug('[WBCollab][WhiteboardDataService] collabData: $collabData');
 
     final payload = {
-      'type': 'update',
+      'type': replace ? 'replace' : 'update',
       'data': jsonEncode({
         ...collabData,
         'revision': effectiveRevision,
@@ -270,7 +274,8 @@ class WhiteboardDataService {
     String viewId,
     Map<String, dynamic> data,
   ) async {
-    Log.debug('[WBCollab][WhiteboardDataService] deleteWhiteboardData() called, ViewID: $viewId');
+    Log.debug(
+        '[WBCollab][WhiteboardDataService] deleteWhiteboardData() called, ViewID: $viewId');
 
     final collabSuccess = await _saveToCollab(
       viewId,
@@ -432,11 +437,11 @@ class WhiteboardDataService {
         'viewId': viewId,
         'source': source,
         'revision': _readRevision(fileData),
-      'storage': 'file_fallback',
-      'durationMs': stopwatch.elapsedMilliseconds,
-      'elementsCount': _countElements(fileData),
-      'filesCount': _countFiles(fileData),
-      'payloadBytes': _estimatePayloadBytes(fileData),
+        'storage': 'file_fallback',
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'elementsCount': _countElements(fileData),
+        'filesCount': _countFiles(fileData),
+        'payloadBytes': _estimatePayloadBytes(fileData),
       },
       warning: true,
     );
@@ -451,21 +456,27 @@ class WhiteboardDataService {
       return result.fold(
         (data) {
           if (data.jsonData.isEmpty) {
-            Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: empty jsonData');
+            Log.debug(
+                '[WBCollab][WhiteboardDataService] _loadFromCollab: empty jsonData');
             return const _CollabLoadResult.empty();
           }
-          Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData length=${data.jsonData.length}');
-          Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData=$data.jsonData');
+          Log.debug(
+              '[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData length=${data.jsonData.length}');
+          Log.debug(
+              '[WBCollab][WhiteboardDataService] _loadFromCollab: raw jsonData=$data.jsonData');
           try {
             final decoded = jsonDecode(data.jsonData);
-            Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: decoded type=${decoded.runtimeType}');
+            Log.debug(
+                '[WBCollab][WhiteboardDataService] _loadFromCollab: decoded type=${decoded.runtimeType}');
             if (decoded is Map<String, dynamic>) {
-              Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: decoded keys=${decoded.keys}');
+              Log.debug(
+                  '[WBCollab][WhiteboardDataService] _loadFromCollab: decoded keys=${decoded.keys}');
               return _CollabLoadResult.found(decoded);
             }
             if (decoded is Map) {
               final result = Map<String, dynamic>.from(decoded);
-              Log.debug('[WBCollab][WhiteboardDataService] _loadFromCollab: converted keys=${result.keys}');
+              Log.debug(
+                  '[WBCollab][WhiteboardDataService] _loadFromCollab: converted keys=${result.keys}');
               return _CollabLoadResult.found(result);
             }
             return _CollabLoadResult.failed(
