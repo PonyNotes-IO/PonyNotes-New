@@ -405,8 +405,15 @@
     "defaultNewWhiteboardName": "未命名白板",
     "defaultNewFolderName": "未命名文件夹",
     "defaultNewNotebookName": "未命名笔记本",
+    "defaultNewHandwritingName": "未命名手写笔记",
     "renameDialog": "重命名",
     "pageNameSuffix": "复制"
+  },
+  "mobileAddNewPage": {
+    "grid": "多维表",
+    "folder": "文件夹",
+    "whiteboard": "白板",
+    "handwriting": "手写笔记"
   },
   "noPagesInside": "里面没有页面",
   "toolbar": {

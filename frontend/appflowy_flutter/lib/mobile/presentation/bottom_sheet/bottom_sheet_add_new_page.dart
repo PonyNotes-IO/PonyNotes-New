@@ -35,7 +35,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           onTap: () => onAction(ViewLayoutPB.Document),
         ),
         FlowyOptionTile.text(
-          text: LocaleKeys.grid_menuName.tr(),
+          text: LocaleKeys.mobileAddNewPage_grid.tr(),
           height: 52.0,
           leftIcon: const FlowySvg(
             FlowySvgs.icon_grid_s,
@@ -79,12 +79,15 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           onTap: () => onAction(ViewLayoutPB.Chat),
         ),
         FlowyOptionTile.text(
-          text: LocaleKeys.menuAppHeader_defaultNewFolderName.tr(),
+          text: LocaleKeys.mobileAddNewPage_folder.tr(),
           height: 52.0,
           leftIcon: const Text('\u{1F4C2}', style: TextStyle(fontSize: 20)),
           showTopBorder: false,
           showBottomBorder: false,
-          onTap: () => onAction(ViewLayoutPB.Folder),
+          onTap: () => onAction(
+            ViewLayoutPB.Folder,
+            name: LocaleKeys.mobileAddNewPage_folder.tr(),
+          ),
         ),
         FlowyOptionTile.text(
           text: LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
@@ -95,7 +98,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           onTap: () => onAction(ViewLayoutPB.Notebook),
         ),
         FlowyOptionTile.text(
-          text: LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
+          text: LocaleKeys.mobileAddNewPage_whiteboard.tr(),
           height: 52.0,
           leftIcon: const FlowySvg(
             FlowySvgs.icon_board_s,
@@ -103,10 +106,13 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           ),
           showTopBorder: false,
           showBottomBorder: false,
-          onTap: () => onAction(ViewLayoutPB.Whiteboard),
+          onTap: () => onAction(
+            ViewLayoutPB.Whiteboard,
+            name: LocaleKeys.mobileAddNewPage_whiteboard.tr(),
+          ),
         ),
         FlowyOptionTile.text(
-          text: '手记',
+          text: LocaleKeys.mobileAddNewPage_handwriting.tr(),
           height: 52.0,
           leftIcon: const FlowySvg(
             FlowySvgs.icon_document_s,
@@ -116,7 +122,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           showBottomBorder: false,
           onTap: () => onAction(
             ViewLayoutPB.Document,
-            name: '未命名手记',
+            name: LocaleKeys.menuAppHeader_defaultNewHandwritingName.tr(),
             extra: '{"view_type": "handwriting_saber"}',
           ),
         ),

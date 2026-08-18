@@ -404,8 +404,15 @@
     "defaultNewWhiteboardName": "Untitled Whiteboard",
     "defaultNewFolderName": "Untitled Folder",
     "defaultNewNotebookName": "Untitled Notebook",
+    "defaultNewHandwritingName": "Untitled Handwriting Note",
     "renameDialog": "Rename",
     "pageNameSuffix": "Copy"
+  },
+  "mobileAddNewPage": {
+    "grid": "Database",
+    "folder": "Folder",
+    "whiteboard": "Whiteboard",
+    "handwriting": "Handwriting Note"
   },
   "noPagesInside": "No pages inside",
   "toolbar": {
