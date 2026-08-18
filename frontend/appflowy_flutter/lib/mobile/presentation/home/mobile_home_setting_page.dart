@@ -265,7 +265,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: isLightMode ? Colors.white : null,
+      backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
