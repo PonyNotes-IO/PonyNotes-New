@@ -284,7 +284,7 @@ impl Whiteboard {
     // 更新，排序完全交由逐元素 version 合并处理。revision 字段仍随更新写入，仅留作调试/审计。
     let incoming_is_blank = Self::is_blank_update_payload(&data_map);
 
-    if wrapper.r#type != "delete"
+    if matches!(wrapper.r#type.as_str(), "update" | "")
       && incoming_is_blank
       && (data_map.contains_key(Self::ELEMENTS_KEY) || data_map.contains_key(Self::FILES_KEY))
       && !self.is_blank_scene()
@@ -332,6 +332,31 @@ impl Whiteboard {
           }
         }
         tracing::trace!("[WBCollab] Stored {} fields from update", data_map.len());
+      },
+      "replace" => {
+        let existing_keys = self
+          .data
+          .iter(&txn)
+          .map(|(key, _)| key.to_string())
+          .collect::<Vec<_>>();
+        for key in existing_keys {
+          self.data.remove(&mut txn, &key);
+        }
+        for (key, value) in data_map.iter() {
+          if key == Self::ELEMENTS_KEY {
+            Self::update_elements_map(&self.data, &mut txn, value)?;
+          } else if key == Self::FILES_KEY {
+            Self::merge_files_map(&self.data, &mut txn, value)?;
+          } else {
+            let json = serde_json::to_string(value)
+              .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
+            self.data.insert(&mut txn, key.as_str(), json.as_str());
+          }
+        }
+        tracing::debug!(
+          "[WBCollab] Replaced whiteboard with {} fields",
+          data_map.len()
+        );
       },
       "delete" => {
         for (key, _) in data_map.iter() {
@@ -815,6 +840,42 @@ mod tests {
     let files = data.0["files"].as_object().unwrap();
     assert!(files.contains_key("imgA"));
     assert!(files.contains_key("imgB"));
+  }
+
+  #[test]
+  fn test_replace_removes_stale_scene_data() {
+    let collab = test_collab("wb-replace");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    whiteboard
+      .update_from_json(
+        r#"{"type":"update","data":{"roomId":"old-room","elements":[{"id":"old","version":9}],"files":{"old-file":{"id":"old-file"}}}}"#,
+      )
+      .unwrap();
+    whiteboard
+      .update_from_json(
+        r#"{"type":"replace","data":{"elements":[{"id":"new","version":1}],"files":{},"appState":{}}}"#,
+      )
+      .unwrap();
+
+    let data = whiteboard.get_data().unwrap();
+    let elements = data.0["elements"].as_array().unwrap();
+    assert_eq!(elements.len(), 1);
+    assert_eq!(elements[0]["id"], "new");
+    assert!(data.0.get("roomId").is_none());
+    assert!(data
+      .0
+      .get("files")
+      .and_then(|files| files.as_object())
+      .is_none_or(|files| files.is_empty()));
+
+    whiteboard
+      .update_from_json(r#"{"type":"replace","data":{"elements":[],"files":{}}}"#)
+      .unwrap();
+    assert!(whiteboard.get_data().unwrap().0["elements"]
+      .as_array()
+      .unwrap()
+      .is_empty());
   }
 
   #[test]

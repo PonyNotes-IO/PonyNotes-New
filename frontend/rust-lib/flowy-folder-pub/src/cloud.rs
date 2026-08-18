@@ -86,7 +86,7 @@ pub trait FolderCloudService: Send + Sync + 'static {
     new_parent_view_id: String,
     prev_view_id: Option<String>,
     to_private: bool,
-  ) -> Result<(), FlowyError>;
+  ) -> Result<Option<Vec<u8>>, FlowyError>;
 
   fn service_name(&self) -> String;
 
