@@ -480,9 +480,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               section: e.section,
               index: 0,
               extra: e.extra,
+              initialDataBytes: roomId != null && roomKey != null
+                  ? WhiteboardRoomService.encodeInitialData(roomId, roomKey)
+                  : null,
             );
             await result.fold((createdView) async {
-              if (createdView.layout == ViewLayoutPB.Whiteboard && roomId != null && roomKey != null) {
+              if (createdView.layout == ViewLayoutPB.Whiteboard &&
+                  roomId != null &&
+                  roomKey != null) {
                 await WhiteboardRoomService.saveRoom(createdView.id, roomId, roomKey);
                 Log.debug('✅ [Whiteboard] Saved room to local storage: viewId=${createdView.id}, roomId=$roomId');
               }

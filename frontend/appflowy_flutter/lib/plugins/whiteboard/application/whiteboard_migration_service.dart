@@ -61,13 +61,20 @@ class WhiteboardMigrationService {
           .where((e) => !(e is Map && e['isDeleted'] == true))
           .toList();
 
-      // 2. 在协作区建一块新白板，名称与源一致。
+      // 2. room 凭据必须进入新白板的初始 collab。创建后再补写会与后台首次
+      // 上传竞态，后到的空白初始数据可能覆盖 room，其他成员便无法进入同一房间。
+      final roomId = WhiteboardRoomService.generateRoomId();
+      final roomKey = WhiteboardRoomService.generateRoomKey();
+
+      // 3. 在协作区建一块新白板，名称与源一致。
       if (!context.mounted) return null;
       final createResult = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Whiteboard,
         parentViewId: targetSpaceId,
         name: view.name,
         openAfterCreate: false,
+        initialDataBytes:
+            WhiteboardRoomService.encodeInitialData(roomId, roomKey),
       );
       created = createResult.fold((v) => v, (e) {
         Log.error('[WBMigration] 私有→协作：新建协作白板失败，已中止: ${e.msg}');
@@ -75,25 +82,10 @@ class WhiteboardMigrationService {
       });
       if (created == null) return null;
 
-      // 3. 为新白板建 room 并落到服务端 —— 服务端那份是其他协作者唯一的来源，
-      //    必须确认写入成功，否则别人取不到 room，会各自开出新房间。
-      final roomId = WhiteboardRoomService.generateRoomId();
-      final roomKey = WhiteboardRoomService.generateRoomKey();
+      // 4. 本机保存同一份 room 凭据；服务端初始 collab 已由 createView 携带。
       await WhiteboardRoomService.saveRoom(created.id, roomId, roomKey);
-      final roomSaved = await dataService.saveWhiteboardData(
-        created.id,
-        {'roomId': roomId, 'roomKey': roomKey},
-        source: 'migration-room-init',
-      );
-      if (!roomSaved) {
-        Log.error(
-          '[WBMigration] 私有→协作：room 未能写入服务端，已回滚（源白板保留）: ${created.id}',
-        );
-        await _rollbackCreated(created.id);
-        return null;
-      }
 
-      // 4. 灌内容。空白板无内容可传，直接算成功。
+      // 5. 灌内容。空白板无内容可传，直接算成功。
       if (liveElements.isNotEmpty) {
         if (!context.mounted) {
           await _rollbackCreated(created.id);
@@ -118,7 +110,7 @@ class WhiteboardMigrationService {
         Log.info('[WBMigration] 私有→协作：源白板为空，跳过内容上传 view=$viewId');
       }
 
-      // 5. 内容已确认到达新 room，此时才删源白板。
+      // 6. 内容已确认到达新 room，此时才删源白板。
       final deleted = await ViewBackendService.deleteView(viewId: viewId);
       deleted.fold(
         (_) => Log.info('[WBMigration] 私有→协作：源白板已删除 $viewId'),

@@ -299,6 +299,27 @@ impl FolderCloudService for ServerProvider {
       .await
   }
 
+  async fn move_view_cross_space(
+    &self,
+    workspace_id: &Uuid,
+    view_id: &Uuid,
+    new_parent_view_id: String,
+    prev_view_id: Option<String>,
+    to_private: bool,
+  ) -> Result<(), FlowyError> {
+    self
+      .get_server()?
+      .folder_service()
+      .move_view_cross_space(
+        workspace_id,
+        view_id,
+        new_parent_view_id,
+        prev_view_id,
+        to_private,
+      )
+      .await
+  }
+
   fn service_name(&self) -> String {
     self
       .get_server()

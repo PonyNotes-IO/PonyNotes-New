@@ -99,6 +99,17 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
     Ok(())
   }
 
+  async fn move_view_cross_space(
+    &self,
+    _workspace_id: &Uuid,
+    _view_id: &Uuid,
+    _new_parent_view_id: String,
+    _prev_view_id: Option<String>,
+    _to_private: bool,
+  ) -> Result<(), FlowyError> {
+    Err(FlowyError::local_version_not_support())
+  }
+
   fn service_name(&self) -> String {
     "Local".to_string()
   }

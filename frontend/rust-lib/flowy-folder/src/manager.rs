@@ -1054,20 +1054,72 @@ impl FolderManager {
       return Err(FlowyError::view_is_locked());
     }
 
+    if from_section != to_section
+      && !self
+        .user
+        .get_active_user_workspace()?
+        .workspace_type
+        .is_local()
+    {
+      self
+        .cloud_service()?
+        .move_view_cross_space(
+          &workspace_id,
+          &view_id,
+          new_parent_id.to_string(),
+          prev_view_id.map(|id| id.to_string()),
+          to_section == Some(ViewSectionPB::Private),
+        )
+        .await?;
+      return Ok(());
+    }
+
     let old_parent_id = Uuid::from_str(&view.parent_view_id)?;
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
-      folder.move_nested_view(
-        &view_id.to_string(),
-        &new_parent_id.to_string(),
-        prev_view_id.map(|s| s.to_string()),
-      );
-      if from_section != to_section {
-        if to_section == Some(ViewSectionPB::Private) {
-          folder.add_private_view_ids(vec![view_id.to_string()]);
-        } else {
-          folder.delete_private_view_ids(vec![view_id.to_string()]);
+      let view_id = view_id.to_string();
+      let new_parent_id_string = new_parent_id.to_string();
+      let moved = {
+        let folder = &mut *folder;
+        let (collab, body) = (&mut folder.collab, &folder.body);
+        let mut txn = collab.transact_mut();
+        let duplicate_parent_ids = body
+          .views
+          .get_all_views(&txn)
+          .into_iter()
+          .filter(|candidate| candidate.children.iter().any(|child| child.id == view_id))
+          .map(|candidate| candidate.id.clone())
+          .collect::<Vec<_>>();
+        for parent_id in duplicate_parent_ids {
+          body
+            .views
+            .dissociate_parent_child_with_txn(&mut txn, &parent_id, &view_id);
         }
+
+        let moved = body.move_nested_view(
+          &mut txn,
+          &view_id,
+          &new_parent_id_string,
+          prev_view_id.map(|id| id.to_string()),
+        );
+        if moved.is_some() {
+          body.views.update_view(&mut txn, &view_id, |update| {
+            let update = update.set_trash(false);
+            if from_section != to_section {
+              update
+                .set_private(to_section == Some(ViewSectionPB::Private))
+                .done()
+            } else {
+              update.done()
+            }
+          });
+        }
+        moved
+      };
+      if moved.is_none() {
+        return Err(
+          FlowyError::record_not_found().with_context(format!("Can't move view({})", view_id)),
+        );
       }
       notify_parent_view_did_change(workspace_id, &folder, vec![new_parent_id, old_parent_id]);
     }

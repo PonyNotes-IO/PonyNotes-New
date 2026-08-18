@@ -238,15 +238,19 @@ class SidebarSectionsBloc
   }
 
   ViewSectionPB? getViewSection(ViewPB view) {
-    final publicViews = state.section.publicViews.map((e) => e.id);
-    final privateViews = state.section.privateViews.map((e) => e.id);
-    if (publicViews.contains(view.id)) {
+    if (_containsView(state.section.publicViews, view.id)) {
       return ViewSectionPB.Public;
-    } else if (privateViews.contains(view.id)) {
+    } else if (_containsView(state.section.privateViews, view.id)) {
       return ViewSectionPB.Private;
     } else {
       return null;
     }
+  }
+
+  bool _containsView(Iterable<ViewPB> views, String viewId) {
+    return views.any(
+      (view) => view.id == viewId || _containsView(view.childViews, viewId),
+    );
   }
 
   Future<SidebarSection?> _getSectionViews() async {

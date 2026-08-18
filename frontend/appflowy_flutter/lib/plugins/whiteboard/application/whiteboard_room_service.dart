@@ -18,6 +18,10 @@ class WhiteboardRoomService {
   static const String _roomIdPrefix = 'whiteboard_room_id_';
   static const String _roomKeyPrefix = 'whiteboard_room_key_';
 
+  static List<int> encodeInitialData(String roomId, String roomKey) {
+    return utf8.encode(jsonEncode({'roomId': roomId, 'roomKey': roomKey}));
+  }
+
   static Future<WhiteboardRoom?> getRoom(String viewId) async {
     try {
       final prefs = await SharedPreferences.getInstance();

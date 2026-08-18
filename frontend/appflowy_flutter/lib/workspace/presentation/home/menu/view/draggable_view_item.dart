@@ -234,72 +234,36 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
       return;
     }
 
-    final fromSection = getViewSection(from);
-    final toSection = getViewSection(to);
+    final fromSection = await resolveViewSection(context, from);
+    if (!mounted) return;
+    final toSection = await resolveViewSection(context, to);
+    if (!mounted) return;
 
-    // 与 moveViewCrossSpace 同一道门禁：把文档拖到协作区里的另一篇文档上
-    // （或反向拖回私有空间）同样会改变文档归属，是最常用的一条跨区路径。
-    //
-    // 两端 section 有一个取不到时不拦：无法判定是否真的跨区，宁可漏拦也不
-    // 误伤同区内的正常拖动。
-    final isCrossSectionMove =
-        fromSection != null && toSection != null && fromSection != toSection;
-
-    if (isCrossSectionMove) {
-      final denyReason = crossSpaceMoveDenyReason(context, toSection);
-      if (denyReason != null) {
-        showToastNotification(
-          message: denyReason,
-          type: ToastificationType.error,
-        );
-        return;
-      }
-    }
-
-    // await 前先捕获 bloc，避免 await 之后再用 context.read。
     final viewBloc = context.read<ViewBloc>();
-
-    // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
-    if (isCrossSectionMove) {
-      final outcome = await ensureWhiteboardContentMigrated(
-        context,
-        view: from,
-        toSection: toSection,
-        targetParentId: position == DraggableHoverPosition.center
-            ? to.id
-            : to.parentViewId,
-      );
-      if (outcome != CrossSpaceMoveOutcome.proceed) {
-        if (outcome == CrossSpaceMoveOutcome.alreadyMoved && context.mounted) {
-          refreshSidebarMoveState(context);
-        }
-        return;
-      }
-    }
 
     switch (position) {
       case DraggableHoverPosition.top:
       case DraggableHoverPosition.bottom:
       case DraggableHoverPosition.center:
-        // 执行移动操作
-        viewBloc.add(
-          ViewEvent.move(
-            from,
-            position == DraggableHoverPosition.center
-                ? to.id
-                : to.parentViewId,
-            // 插入位置（prevViewId）：
-            //   bottom → 排在 to 之后
-            //   top    → 排在 to 之前，即「前一项之后」；首项则为 null（置顶）
-            position == DraggableHoverPosition.bottom
-                ? to.id
-                : position == DraggableHoverPosition.top
-                    ? widget.previousViewId
-                    : null,
-            fromSection,
-            toSection,
-          ),
+        final outcome = await coordinateViewMove(
+          context,
+          viewBloc: viewBloc,
+          view: from,
+          targetParentId: position == DraggableHoverPosition.center
+              ? to.id
+              : to.parentViewId,
+          // bottom 排在 to 之后；top 排在前一项之后，首项则置顶。
+          prevViewId: position == DraggableHoverPosition.bottom
+              ? to.id
+              : position == DraggableHoverPosition.top
+                  ? widget.previousViewId
+                  : null,
+          fromSection: fromSection,
+          toSection: toSection,
         );
+        if (outcome == CrossSpaceMoveOutcome.aborted) {
+          return;
+        }
 
         // 延迟执行刷新操作，确保后端操作完成
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -396,16 +360,6 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     }
 
     return true;
-  }
-
-  ViewSectionPB? getViewSection(ViewPB view) {
-    try {
-      return context.read<SidebarSectionsBloc>().getViewSection(view);
-    } catch (_) {
-      // 如果找不到 SidebarSectionsBloc，返回 null
-      // 这通常发生在文件夹内部使用 DraggableViewItem 时
-      return null;
-    }
   }
 }
 

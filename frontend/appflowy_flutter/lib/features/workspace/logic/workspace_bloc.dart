@@ -61,7 +61,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       }
       // 支付成功后刷新订阅信息
       _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
-      
+
       // 检查云同步状态，如果关闭则开启
       if (!state.isCloudSyncEnabled) {
         Log.info('Cloud sync is disabled, enabling it after payment success');
@@ -69,7 +69,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       }
     };
     _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
-    
+
     on<WorkspaceEventInitialize>(_onInitialize);
     on<WorkspaceEventFetchWorkspaces>(_onFetchWorkspaces);
     on<WorkspaceEventCreateWorkspace>(_onCreateWorkspace);
@@ -106,7 +106,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   static const Duration _storageCheckInterval = Duration(minutes: 5); // 存储检查间隔
 
   /// 判断是否应该检查存储
-  /// 
+  ///
   /// 如果上次检查时间为null，或者与当前时间的间隔大于5分钟，则返回true
   bool _shouldCheckStorage() {
     if (_lastStorageCheckTime == null) {
@@ -135,7 +135,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     // 如果用户是非免费版会员，根据 AppFlowy 的 sync 开关状态设置云同步开关
     await _initializeCloudSyncFromAppFlowySync(emit);
-    
+
     await _setupListeners();
     await _initializeWorkspaces(emit);
   }
@@ -148,7 +148,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     try {
       // 1. 先获取 Rust 数据库中的值
       final cloudConfigResult = await UserEventGetCloudConfig().send();
-      
+
       await cloudConfigResult.fold(
         (cloudConfig) async {
           final rustEnabled = cloudConfig.enableSync;
@@ -158,7 +158,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           // 导致 SidebarCloudSyncButton 一直停留在“同步中”。
           final config = UpdateCloudConfigPB.create()..enableSync = rustEnabled;
           await UserEventSetCloudConfig(config).send();
-          
+
           // 直接使用 Rust 层的值，不需要判断会员信息
           if (state.isCloudSyncEnabled != rustEnabled) {
             emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
@@ -251,7 +251,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     // 始终创建 ServerW 类型的工作区（服务类型），与用户需求一致
     // 云同步开关只控制是否启用 sync 功能，不影响工作区类型
     final workspaceType = WorkspaceTypePB.ServerW;
-    
+
     final result = await repository.createWorkspace(
       name: event.name,
       workspaceType: workspaceType,
@@ -415,6 +415,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       state.copyWith(
         currentWorkspace: currentWorkspace,
         currentUserRole: currentUserRole,
+        clearCurrentUserRole: currentUserRole == null,
         actionResult: WorkspaceActionResult(
           actionType: WorkspaceActionType.open,
           isLoading: false,
@@ -593,7 +594,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     Emitter<UserWorkspaceState> emit,
   ) async {
     final enabled = await repository.isBillingEnabled();
-    
+
     // If billing is not enabled, we don't need to fetch the workspace subscription info
     if (!enabled) {
       return;
@@ -938,7 +939,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     Emitter<UserWorkspaceState> emit,
   ) async {
     emit(state.copyWith(isCloudSyncEnabled: event.enabled));
-    
+
     // 保存到 Rust 层的 enable_sync 设置
     try {
       final config = UpdateCloudConfigPB.create()..enableSync = event.enabled;
@@ -959,7 +960,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     // 停止之前的监听器
     _folderSyncStateListener?.stop();
     _folderSyncWorkspaceId = null;
-    
+
     // 创建新的监听器
     _folderSyncStateListener = FolderSyncStateListener(workspaceId: workspaceId);
     _folderSyncWorkspaceId = workspaceId;
@@ -979,7 +980,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final oldSyncState = state.folderSyncState;
     final newSyncState = event.syncState;
-    
+
     Log.info('[WorkspaceBloc] 更新同步状态: old=${oldSyncState?.isSyncing}/${oldSyncState?.isFinish}, new=${newSyncState.isSyncing}/${newSyncState.isFinish}');
     
     if (oldSyncState != null && 
@@ -988,9 +989,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       // 状态未改变，跳过更新
       return;
     }
-    
+
     emit(state.copyWith(folderSyncState: newSyncState));
-    
+
     // 当同步完成时，更新订阅信息并检查存储限制
     if (newSyncState.isFinish && !newSyncState.isSyncing) {
       // 同步完成，更新订阅信息
@@ -1063,7 +1064,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           '[WorkspaceBloc] role poll for workspace=$workspaceId: '
           'fetched=$role, current=${state.currentUserRole}',
         );
-        if (!isClosed && role != null && role != state.currentUserRole) {
+        if (!isClosed && role != state.currentUserRole) {
           _safeAdd(UserWorkspaceEvent.emitCurrentUserRole(role: role));
         }
       },

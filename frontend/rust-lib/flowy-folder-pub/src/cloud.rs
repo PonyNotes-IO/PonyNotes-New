@@ -79,6 +79,15 @@ pub trait FolderCloudService: Send + Sync + 'static {
     objects: Vec<FolderCollabParams>,
   ) -> Result<(), FlowyError>;
 
+  async fn move_view_cross_space(
+    &self,
+    workspace_id: &Uuid,
+    view_id: &Uuid,
+    new_parent_view_id: String,
+    prev_view_id: Option<String>,
+    to_private: bool,
+  ) -> Result<(), FlowyError>;
+
   fn service_name(&self) -> String;
 
   async fn publish_view(

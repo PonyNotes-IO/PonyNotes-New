@@ -3,7 +3,10 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
+import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -13,12 +16,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-/// 文档在「私有空间」与「协作区」之间移动的权限门禁。
+/// 文档在「私有空间」与「协作区」之间移动的权限门禁和内容迁移协调器。
 ///
-/// 跨区移动**不搬运内容** —— view_id 不变，内容所在的 collab 也不变，改变的
-/// 只是它在 folder 里归属哪个 section（见 flowy-folder `move_nested_view`：
-/// 只挪树节点 + 增删 private_view_ids）。所以这里要管的不是数据安全，而是
-/// 「谁有资格改变文档的归属」：
+/// 普通文档只改变 folder 归属；白板还必须先完成本地 collab 与协作 Room 的
+/// 内容迁移，再提交 folder move。所以这里要管的是「谁有资格改变归属」和
+/// 「所有入口是否遵守同一条迁移顺序」：
 ///
 /// - **移入协作区** == 在协作区新增一篇文档 → 需要 Member 及以上；
 /// - **移出协作区** == 把文档从协作区拿走 → 需要 Owner。
@@ -36,21 +38,35 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// 角色取自 [UserWorkspaceBloc] 的内存态，**不发网络请求**：跨区移动可由拖拽
 /// 触发，是高频交互，不能为此每次去拉一遍工作区成员列表。
 ///
-/// 取不到角色时**放行**，与 `space_bloc.dart` 里 `_checkCreatePermission` 的
-/// 降级策略保持一致 —— 宁可漏拦也不误伤正常成员。
+/// 取不到角色时默认拒绝。跨区移动会改变共享边界，不能使用普通 UI 操作的
+/// fail-open 降级策略；服务端仍会重复校验，客户端这里只负责尽早阻止错误操作。
 String? crossSpaceMoveDenyReason(
   BuildContext context,
   ViewSectionPB toSection,
 ) {
-  final AFRolePB? role;
+  AFRolePB? role;
   try {
-    role = context.read<UserWorkspaceBloc>().state.currentUserRole;
+    final state = context.read<UserWorkspaceBloc>().state;
+    role = state.currentUserRole;
+    final workspace = state.currentWorkspace;
+    if (role == null && workspace != null && workspace.hasRole()) {
+      role = workspace.role;
+    }
   } catch (_) {
-    return null;
+    role = null;
   }
 
+  return crossSpaceMoveDenyReasonForRole(role, toSection);
+}
+
+String? crossSpaceMoveDenyReasonForRole(
+  AFRolePB? role,
+  ViewSectionPB toSection,
+) {
   if (role == null) {
-    return null;
+    return toSection == ViewSectionPB.Public
+        ? LocaleKeys.space_noPermissionToMoveIntoSharedSpace.tr()
+        : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
   }
 
   // 移入协作区：Member 及以上即可，只拦受限成员。
@@ -68,6 +84,9 @@ String? crossSpaceMoveDenyReason(
 
 /// 跨区移动中白板的处理结果。
 enum CrossSpaceMoveOutcome {
+  /// 移动事件已经由统一协调器提交。
+  moved,
+
   /// 调用方按原有方式继续移动（切 section）。非白板、以及协作→私有走这条。
   proceed,
 
@@ -77,6 +96,122 @@ enum CrossSpaceMoveOutcome {
 
   /// 已中止并提示过用户，调用方不要移动。
   aborted,
+}
+
+bool canCurrentUserMoveWhiteboard(ViewPB view, int currentUserId) {
+  return view.layout != ViewLayoutPB.Whiteboard ||
+      (view.hasCreatedBy() && view.createdBy.toInt() == currentUserId);
+}
+
+Future<ViewSectionPB?> resolveViewSection(
+  BuildContext context,
+  ViewPB view, {
+  ViewSectionPB? fallback,
+}) async {
+  if (fallback != null) {
+    return fallback;
+  }
+
+  SidebarSectionsBloc sectionsBloc;
+  try {
+    sectionsBloc = context.read<SidebarSectionsBloc>();
+  } catch (_) {
+    return null;
+  }
+
+  var current = view;
+  final visited = <String>{};
+  while (visited.add(current.id)) {
+    final section = sectionsBloc.getViewSection(current);
+    if (section != null) {
+      return section;
+    }
+    if (current.parentViewId.isEmpty) {
+      return null;
+    }
+    final parent = await ViewBackendService.getView(current.parentViewId);
+    final next = parent.fold<ViewPB?>((view) => view, (_) => null);
+    if (next == null) {
+      return null;
+    }
+    current = next;
+  }
+  return null;
+}
+
+/// 菜单移动、拖拽到页面、拖拽到空分区统一经过这里。
+///
+/// section 或角色信息缺失时拒绝敏感移动；确认跨区后先迁移白板内容，最后才提交
+/// Folder move。这样任何入口都无法绕过权限或内容迁移。
+Future<CrossSpaceMoveOutcome> coordinateViewMove(
+  BuildContext context, {
+  required ViewBloc viewBloc,
+  required ViewPB view,
+  required String targetParentId,
+  required String? prevViewId,
+  required ViewSectionPB? fromSection,
+  required ViewSectionPB? toSection,
+  VoidCallback? beforeSubmit,
+}) async {
+  if (fromSection == null || toSection == null) {
+    showToastNotification(
+      message: crossSpaceMoveDenyReasonForRole(
+        null,
+        toSection ?? ViewSectionPB.Public,
+      ),
+      type: ToastificationType.error,
+    );
+    return CrossSpaceMoveOutcome.aborted;
+  }
+
+  if (fromSection != toSection) {
+    final denyReason = crossSpaceMoveDenyReason(context, toSection);
+    if (denyReason != null) {
+      showToastNotification(
+        message: denyReason,
+        type: ToastificationType.error,
+      );
+      return CrossSpaceMoveOutcome.aborted;
+    }
+
+    int? currentUserId;
+    try {
+      currentUserId =
+          context.read<UserWorkspaceBloc>().state.userProfile.id.toInt();
+    } catch (_) {
+      currentUserId = null;
+    }
+    if (currentUserId == null ||
+        !canCurrentUserMoveWhiteboard(view, currentUserId)) {
+      showToastNotification(
+        message: LocaleKeys.space_onlyWhiteboardCreatorCanMove.tr(),
+        type: ToastificationType.error,
+      );
+      return CrossSpaceMoveOutcome.aborted;
+    }
+
+    final outcome = await ensureWhiteboardContentMigrated(
+      context,
+      view: view,
+      toSection: toSection,
+      targetParentId: targetParentId,
+    );
+    if (outcome != CrossSpaceMoveOutcome.proceed) {
+      return outcome;
+    }
+  }
+
+  beforeSubmit?.call();
+  viewBloc.add(
+    ViewEvent.move(
+      view,
+      targetParentId,
+      prevViewId,
+      fromSection,
+      toSection,
+    ),
+  );
+  return CrossSpaceMoveOutcome.moved;
 }
 
 Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(

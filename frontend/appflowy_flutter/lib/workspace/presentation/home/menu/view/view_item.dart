@@ -29,14 +29,15 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
-import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart' hide AFRolePB;
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart'
+    hide AFRolePB;
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -75,13 +76,17 @@ class ViewItemStyle {
   static ViewItemStyle defaultStyle(BuildContext context) {
     return ViewItemStyle(
       selectedTextColor: Theme.of(context).brightness == Brightness.light
-          ? Theme.of(context).colorScheme.primary : const Color(0xFFFFFFFF),
+          ? Theme.of(context).colorScheme.primary
+          : const Color(0xFFFFFFFF),
       selectedBackgroundColor: Theme.of(context).brightness == Brightness.light
-          ? Theme.of(context).colorScheme.secondary : const Color(0xFF383838),
+          ? Theme.of(context).colorScheme.secondary
+          : const Color(0xFF383838),
       hoverColor: Theme.of(context).brightness == Brightness.light
-          ? const Color(0xFFF1F0EF) : const Color(0xFF383838),
+          ? const Color(0xFFF1F0EF)
+          : const Color(0xFF383838),
       focusColor: Theme.of(context).brightness == Brightness.light
-          ? Color(0xFFF1F0EF) : Color(0xFF2C2C2C),
+          ? Color(0xFFF1F0EF)
+          : Color(0xFF2C2C2C),
     );
   }
 
@@ -130,6 +135,7 @@ class ViewItem extends StatelessWidget {
     this.engagedInExpanding = false,
     this.enableRightClickContext = false,
     this.isTablet = false,
+
     /// 外部传入的选中状态，用于在局部列表中独立管理选中状态，避免监听全局状态
     this.isExternallySelected,
     this.externallySelectedViewId,
@@ -494,8 +500,7 @@ class _InnerViewItemState extends State<InnerViewItem> {
           parentView: widget.view,
           spaceType: widget.spaceType,
           isFirstChild: index == 0,
-          previousViewId:
-              index > 0 ? widget.childViews[index - 1].id : null,
+          previousViewId: index > 0 ? widget.childViews[index - 1].id : null,
           view: childView,
           level: widget.level + 1,
           enableRightClickContext: widget.enableRightClickContext,
@@ -692,7 +697,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   Widget build(BuildContext context) {
     // context.watch 确保 role 变化时 widget 重建，实时更新权限状态
     try {
-      _isRestrictedMember = context.watch<UserWorkspaceBloc>().state.currentUserRole == AFRolePB.Guest;
+      _isRestrictedMember =
+          context.watch<UserWorkspaceBloc>().state.currentUserRole ==
+              AFRolePB.Guest;
     } catch (_) {
       _isRestrictedMember = false;
     }
@@ -717,7 +724,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     final style = widget.style ?? ViewItemStyle.defaultStyle(context);
     return FlowyHover(
       style: HoverStyle(
-        hoverColor: isSelected ? style.selectedBackgroundColor : style.hoverColor,
+        hoverColor:
+            isSelected ? style.selectedBackgroundColor : style.hoverColor,
         foregroundColorOnHover: isSelected ? style.selectedTextColor : null,
       ),
       resetHoverOnRebuild: widget.showActions || !isIconPickerOpened,
@@ -845,8 +853,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     Widget child = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: () => widget.onSelected(context, _view),
-      onTertiaryTapDown: (_) =>
-          widget.onTertiarySelected?.call(context, _view),
+      onTertiaryTapDown: (_) => widget.onTertiarySelected?.call(context, _view),
       child: rowWithDragHandle,
     );
 
@@ -934,8 +941,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
     final style = widget.style ?? ViewItemStyle.defaultStyle(context);
     final textStyle = sidebarEntryTextStyle(context).copyWith(
-          color: isSelected ? style.selectedTextColor : null,
-        );
+      color: isSelected ? style.selectedTextColor : null,
+    );
 
     return GestureDetector(
       onDoubleTap: () {
@@ -1326,9 +1333,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           switch (action) {
             case ViewMoreActionType.favorite:
             case ViewMoreActionType.unFavorite:
-              context
-                  .read<FavoriteBloc>()
-                  .add(FavoriteEvent.toggle(_view));
+              context.read<FavoriteBloc>().add(FavoriteEvent.toggle(_view));
               break;
             case ViewMoreActionType.rename:
               // 如果是 Space 类型，显示弹框重命名
@@ -1502,7 +1507,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               }
               final space = value.$1;
               final target = value.$2;
-              moveViewCrossSpace(
+              await moveViewCrossSpace(
                 context,
                 space,
                 _view,
@@ -1511,8 +1516,6 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 _view,
                 target.id,
               );
-              // 移动后刷新列表
-              _refreshSpaceBlocIfNeeded(context);
               break;
             default:
               throw UnsupportedError('$action is not supported');
@@ -1560,7 +1563,7 @@ bool isReferencedDatabaseView(ViewPB view, ViewPB? parentView) {
   return view.layout.isDatabaseView && parentView.layout.isDatabaseView;
 }
 
-void moveViewCrossSpace(
+Future<void> moveViewCrossSpace(
   BuildContext context,
   ViewPB? toSpace,
   ViewPB view,
@@ -1568,7 +1571,7 @@ void moveViewCrossSpace(
   FolderSpaceType spaceType,
   ViewPB from,
   String toId,
-) {
+) async {
   if (isReferencedDatabaseView(view, parentView)) {
     return;
   }
@@ -1586,6 +1589,12 @@ void moveViewCrossSpace(
   } else if (spaceType == FolderSpaceType.public) {
     fromSection = ViewSectionPB.Public;
   }
+  fromSection = await resolveViewSection(
+    context,
+    from,
+    fallback: fromSection,
+  );
+  if (!context.mounted) return;
 
   ViewSectionPB? toSection;
   if (toSpace != null && toSpace.isSpace) {
@@ -1594,108 +1603,43 @@ void moveViewCrossSpace(
         : ViewSectionPB.Public;
   }
 
-  // 白板跨空间移动：内容绑定在协作 room（若依，加密）或本地 collab（私有）上，
-  // 仅切 section 不会搬运内容。阶段4起，跨私有↔协作时先做「内容迁移」（加解密委托
-  // xm-arts webview 完成），迁移成功后才切 section；失败则中止、绝不切区（白板不会变空）。
-  // 仅 section 真正变化（跨私有/协作）时触发迁移，同空间内移动不受影响。
-  final isCrossSectionMove = fromSection != null &&
-      toSection != null &&
-      fromSection != toSection;
-
-  // 跨私有↔协作移动的权限门禁。移入协作区等同于在协作区新增一篇文档，需要
-  // 「创建」权限；移出协作区等同于把文档从协作区拿走，需要「移除」权限。
-  // 受限成员（Guest）两者皆无 —— 直接阻断，不做任何搬运。
-  //
-  // 刻意放在白板迁移分支之前：无权限时连迁移都不该启动，否则会先把内容搬到
-  // 目标存储、再卡在切 section，留下两份内容。
-  if (isCrossSectionMove) {
-    final denyReason = crossSpaceMoveDenyReason(context, toSection);
-    if (denyReason != null) {
-      showToastNotification(
-        message: denyReason,
-        type: ToastificationType.error,
-      );
-      return;
-    }
-  }
-
-  if (view.layout == ViewLayoutPB.Whiteboard && isCrossSectionMove) {
-    _migrateWhiteboardThenMove(
-      context,
-      toSpace,
-      view,
-      fromSection,
-      toSection,
-      from,
-      toId,
-    );
-    return;
-  }
-
-  final currentSpace = context.read<SpaceBloc>().state.currentSpace;
-  if (currentSpace != null &&
-      toSpace != null &&
-      currentSpace.id != toSpace.id) {
-    Log.info(
-      'Move view(${from.name}) to another space(${toSpace.name}), unpublish the view',
-    );
-    context.read<ViewBloc>().add(const ViewEvent.unpublish(sync: false));
-
-    switchToSpaceNotifier.value = toSpace;
-  }
-
-  context
-      .read<ViewBloc>()
-      .add(ViewEvent.move(from, toId, null, fromSection, toSection));
-}
-
-/// 白板跨空间移动：先做内容迁移（加解密委托 xm-arts webview），成功后再切 section。
-///
-/// 数据安全红线：迁移失败绝不切 section。两个方向的源内容在迁移期间均保留，
-/// 因此即便迁移或切区失败，白板也不会变空。
-Future<void> _migrateWhiteboardThenMove(
-  BuildContext context,
-  ViewPB? toSpace,
-  ViewPB view,
-  ViewSectionPB fromSection,
-  ViewSectionPB toSection,
-  ViewPB from,
-  String toId,
-) async {
-  // 在任何 await 前捕获 bloc，避免 await 后再用 context.read。
   final viewBloc = context.read<ViewBloc>();
   final spaceBloc = context.read<SpaceBloc>();
+  final currentSpace = spaceBloc.state.currentSpace;
+  final movesToAnotherSpace =
+      currentSpace != null && toSpace != null && currentSpace.id != toSpace.id;
 
-  if (!context.mounted) return;
-  // 与另外两条跨区路径共用同一道守卫，避免各自演化出不一致的行为。
-  final outcome = await ensureWhiteboardContentMigrated(
+  final outcome = await coordinateViewMove(
     context,
-    view: view,
-    toSection: toSection,
+    viewBloc: viewBloc,
+    view: from,
     targetParentId: toId,
+    prevViewId: null,
+    fromSection: fromSection,
+    toSection: toSection,
+    beforeSubmit: movesToAnotherSpace
+        ? () {
+            Log.info(
+              'Move view(${from.name}) to another space(${toSpace.name}), unpublish the view',
+            );
+            viewBloc.add(const ViewEvent.unpublish(sync: false));
+          }
+        : null,
   );
-  // alreadyMoved：迁移已在目标区新建白板并删除了源白板，再走下面的 move
-  // 会去动一个已不存在的 view。
-  if (outcome != CrossSpaceMoveOutcome.proceed) {
+  if (outcome == CrossSpaceMoveOutcome.aborted || !context.mounted) {
     return;
   }
 
-  // 迁移成功（内容已安全到达目标存储）后才切 section。
-  final currentSpace = spaceBloc.state.currentSpace;
-  if (currentSpace != null && toSpace != null && currentSpace.id != toSpace.id) {
-    Log.info(
-      'Move whiteboard(${from.name}) to another space(${toSpace.name}), unpublish the view',
-    );
-    viewBloc.add(const ViewEvent.unpublish(sync: false));
+  if (movesToAnotherSpace) {
     switchToSpaceNotifier.value = toSpace;
   }
-
-  viewBloc.add(ViewEvent.move(from, toId, null, fromSection, toSection));
-
-  showToastNotification(
-    message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),
-    type: ToastificationType.success,
-  );
+  if (view.layout == ViewLayoutPB.Whiteboard && fromSection != toSection) {
+    showToastNotification(
+      message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),
+      type: ToastificationType.success,
+    );
+  }
+  refreshSidebarMoveState(context);
 }
 
 Future<void> moveViewToSectionPlaceholder(
@@ -1710,63 +1654,22 @@ Future<void> moveViewToSectionPlaceholder(
     return;
   }
 
-  ViewSectionPB? fromSection;
-  try {
-    fromSection = context.read<SidebarSectionsBloc>().getViewSection(from);
-  } catch (_) {
-    fromSection = null;
-  }
+  final fromSection = await resolveViewSection(context, from);
+  if (!context.mounted) return;
 
   final toSection = spaceType.toViewSectionPB;
 
-  // 与 moveViewCrossSpace 同一道门禁：拖到空分区占位符同样会跨私有↔协作，
-  // 是第二条能改变文档归属的路径，必须一并拦截，否则受限成员绕开菜单直接
-  // 拖拽就能把文档搬进/搬出协作区。
-  //
-  // fromSection 取不到时不拦：无法判定是否真的跨区，宁可漏拦也不误伤
-  // 同区内的正常拖动（与本文件其它降级策略一致）。
-  final isCrossSectionMove = fromSection != null && fromSection != toSection;
-
-  if (isCrossSectionMove) {
-    final denyReason = crossSpaceMoveDenyReason(context, toSection);
-    if (denyReason != null) {
-      showToastNotification(
-        message: denyReason,
-        type: ToastificationType.error,
-      );
-      return;
-    }
-  }
-
-  // await 前先捕获 bloc，避免 await 之后再用 context.read。
   final viewBloc = context.read<ViewBloc>();
-
-  // 白板必须先搬内容再切区，否则到了新空间是空的（详见守卫内注释）。
-  if (isCrossSectionMove) {
-    final outcome = await ensureWhiteboardContentMigrated(
-      context,
-      view: from,
-      toSection: toSection,
-      targetParentId: newParentId,
-    );
-    if (outcome != CrossSpaceMoveOutcome.proceed) {
-      if (outcome == CrossSpaceMoveOutcome.alreadyMoved && context.mounted) {
-        refreshSidebarMoveState(context);
-      }
-      return;
-    }
-  }
-
-  viewBloc.add(
-    ViewEvent.move(
-      from,
-      newParentId,
-      null,
-      fromSection,
-      toSection,
-    ),
+  final outcome = await coordinateViewMove(
+    context,
+    viewBloc: viewBloc,
+    view: from,
+    targetParentId: newParentId,
+    prevViewId: null,
+    fromSection: fromSection,
+    toSection: toSection,
   );
-  if (!context.mounted) return;
+  if (outcome == CrossSpaceMoveOutcome.aborted || !context.mounted) return;
   refreshSidebarMoveState(context);
 }
 

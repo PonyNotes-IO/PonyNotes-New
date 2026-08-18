@@ -74,6 +74,7 @@ class UserWorkspaceState {
     bool? isCloudSyncEnabled,
     FolderSyncStatePB? folderSyncState,
     AFRolePB? currentUserRole,
+    bool clearCurrentUserRole = false,
   }) {
     return UserWorkspaceState(
       currentWorkspace: currentWorkspace ?? this.currentWorkspace,
@@ -85,7 +86,7 @@ class UserWorkspaceState {
       currentSubscription: currentSubscription ?? this.currentSubscription,
       isCloudSyncEnabled: isCloudSyncEnabled ?? this.isCloudSyncEnabled,
       folderSyncState: folderSyncState ?? this.folderSyncState,
-      currentUserRole: currentUserRole ?? this.currentUserRole,
+      currentUserRole: clearCurrentUserRole ? null : currentUserRole ?? this.currentUserRole,
     );
   }
 

@@ -1,4 +1,4 @@
-use client_api::entity::workspace_dto::PublishInfoView;
+use client_api::entity::workspace_dto::{MovePageCrossSpaceParams, PublishInfoView};
 use client_api::entity::{
   CollabParams, PublishCollabItem, PublishCollabMetadata, QueryCollab, QueryCollabParams,
 };
@@ -110,6 +110,35 @@ where
       .create_collab_list(workspace_id, params)
       .await?;
     Ok(())
+  }
+
+  async fn move_view_cross_space(
+    &self,
+    workspace_id: &Uuid,
+    view_id: &Uuid,
+    new_parent_view_id: String,
+    prev_view_id: Option<String>,
+    to_private: bool,
+  ) -> Result<(), FlowyError> {
+    check_request_workspace_id_is_match(
+      workspace_id,
+      &self.logged_user,
+      "move view across workspace sections",
+    )?;
+    self
+      .inner
+      .try_get_client()?
+      .move_workspace_page_view_cross_space(
+        *workspace_id,
+        view_id,
+        &MovePageCrossSpaceParams {
+          new_parent_view_id,
+          prev_view_id,
+          to_private,
+        },
+      )
+      .await
+      .map_err(FlowyError::from)
   }
 
   fn service_name(&self) -> String {
