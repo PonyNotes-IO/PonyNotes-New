@@ -121,8 +121,14 @@ class StorageSettingGroup extends StatelessWidget {
                   Expanded(
                     child: GestureDetector(
                       onTap: path != null
-                          ? () {
-                              afLaunchUri(Uri.file(path));
+                          ? () async {
+                              // Close the sheet before handing the directory to
+                              // the platform so a failure toast is visible.
+                              Navigator.of(ctx).pop();
+                              await afLaunchUri(
+                                Uri.file(path),
+                                context: context,
+                              );
                             }
                           : null,
                       child: Container(

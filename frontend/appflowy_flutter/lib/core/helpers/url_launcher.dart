@@ -129,13 +129,32 @@ Future<bool> _afLaunchLocalUri(
   BuildContext? context,
   OnFailureCallback? onFailure,
 }) async {
-  final decodedUrl = Uri.decodeComponent(uri.toString());
-  // open the file with the OpenfileX
-  var result = await OpenFilex.open(decodedUrl);
-  if (result.type != ResultType.done) {
-    // For the file cant be opened, fallback to open the folder
-    final parentFolder = Directory(decodedUrl).parent.path;
-    result = await OpenFilex.open(parentFolder);
+  // `Uri.file(path).toString()` produces a `file://` URI, not a filesystem
+  // path. OpenFilex expects the latter, so strip the URI wrapper first.
+  final decodedUrl = uri.scheme == 'file'
+      ? uri.toFilePath()
+      : Uri.decodeComponent(uri.toString());
+  late OpenResult result;
+  final isDirectory =
+      FileSystemEntity.typeSync(decodedUrl) == FileSystemEntityType.directory;
+
+  try {
+    // open the file or directory with OpenFilex
+    result = await OpenFilex.open(
+      decodedUrl,
+      type: isDirectory ? 'resource/folder' : null,
+    );
+    if (result.type != ResultType.done && !isDirectory) {
+      // For a file that cannot be opened, fall back to its parent folder.
+      final parentFolder = Directory(decodedUrl).parent.path;
+      result = await OpenFilex.open(parentFolder);
+    }
+  } catch (e, stackTrace) {
+    Log.error('Failed to open local path: $decodedUrl, error: $e\n$stackTrace');
+    result = OpenResult(
+      type: ResultType.error,
+      message: e.toString(),
+    );
   }
   // show the toast if the file is not found
   final message = switch (result.type) {
@@ -145,7 +164,6 @@ Future<bool> _afLaunchLocalUri(
     ResultType.permissionDenied =>
       LocaleKeys.openFileMessage_permissionDenied.tr(),
     ResultType.error => LocaleKeys.failedToOpenUrl.tr(),
-    _ => LocaleKeys.failedToOpenUrl.tr(),
   };
   if (context != null && context.mounted) {
     showToastNotification(
