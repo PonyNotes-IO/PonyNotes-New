@@ -54,106 +54,111 @@ class PersonalInfoSettingGroup extends StatelessWidget {
             ..add(PasswordEvent.checkHasPassword()),
         ),
       ],
-      child: BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
-        builder: (context, state) {
-          final profile = state.userProfile;
-          final isServerUser = profile.userAuthType == AuthTypePB.Server;
+      child: BlocListener<SettingsUserViewBloc, SettingsUserState>(
+        listenWhen: (previous, current) =>
+            previous.userProfile.iconUrl != current.userProfile.iconUrl ||
+            previous.userProfile.name != current.userProfile.name,
+        listener: (_, __) => onUserProfileUpdated?.call(),
+        child: BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
+          builder: (context, state) {
+            final profile = state.userProfile;
+            final isServerUser = profile.userAuthType == AuthTypePB.Server;
 
-          return Column(
-            children: [
-              const SizedBox(height: 24),
-              // Avatar section
-              BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
-                buildWhen: (prev, curr) =>
-                    prev.userProfile.iconUrl != curr.userProfile.iconUrl,
-                builder: (ctx, state) => _AvatarSection(
-                  iconUrl: state.userProfile.iconUrl,
-                  name: state.userProfile.name,
-                  onAvatarChanged: (url) {
-                    ctx.read<SettingsUserViewBloc>().add(
-                      SettingsUserEvent.updateUserIcon(iconUrl: url),
-                    );
-                    // Notify parent to refresh user profile cache
-                    onUserProfileUpdated?.call();
-                  },
-                ),
-              ),
-              const SizedBox(height: 32),
-              // Settings list
-              MobileSettingGroup(
-                groupTitle: '',
-                wrapInCard: true,
-                showDivider: false,
-                showItemDivider: false,
-                settingItemList: [
-                  // 昵称设置
-                  MobileSettingItem(
-                    name: '昵称设置',
-                    trailing: MobileSettingTrailing(
-                      text: profile.name,
-                    ),
-                    onTap: () {
-                      showMobileBottomSheet(
-                        context,
-                        showHeader: true,
-                        title: LocaleKeys.settings_mobile_username.tr(),
-                        showCloseButton: true,
-                        showDragHandle: true,
-                        showDivider: false,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        builder: (_) {
-                          return EditUsernameBottomSheet(
-                            context,
-                            userName: profile.name,
-                            onSubmitted: (value) {
-                              context
-                                  .read<SettingsUserViewBloc>()
-                                  .add(SettingsUserEvent.updateUserName(name: value));
-                              // Notify parent to refresh user profile cache
-                              onUserProfileUpdated?.call();
-                            },
+            return Column(
+              children: [
+                const SizedBox(height: 24),
+                // Avatar section
+                BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
+                  buildWhen: (prev, curr) =>
+                      prev.userProfile.iconUrl != curr.userProfile.iconUrl,
+                  builder: (ctx, state) => _AvatarSection(
+                    iconUrl: state.userProfile.iconUrl,
+                    name: state.userProfile.name,
+                    userProfile: state.userProfile,
+                    onAvatarChanged: (url) {
+                      ctx.read<SettingsUserViewBloc>().add(
+                            SettingsUserEvent.updateUserIcon(iconUrl: url),
                           );
-                        },
-                      );
                     },
                   ),
-                  // 绑定手机
-                  if (isServerUser && profile.phone.isNotEmpty)
+                ),
+                const SizedBox(height: 32),
+                // Settings list
+                MobileSettingGroup(
+                  groupTitle: '',
+                  wrapInCard: true,
+                  showDivider: false,
+                  showItemDivider: false,
+                  settingItemList: [
+                    // 昵称设置
                     MobileSettingItem(
-                      name: '绑定手机',
+                      name: '昵称设置',
                       trailing: MobileSettingTrailing(
-                        text: _maskPhone(profile.phone),
+                        text: profile.name,
                       ),
                       onTap: () {
-                        _showPhoneChangeFlow(context, profile);
-                      },
-                    )
-                  else if (isServerUser)
-                    MobileSettingItem(
-                      name: '绑定手机',
-                      trailing: MobileSettingTrailing(
-                        text: '未绑定',
-                      ),
-                      onTap: () {
-                        context.push(MobilePhoneBindPage.routeName);
+                        showMobileBottomSheet(
+                          context,
+                          showHeader: true,
+                          title: LocaleKeys.settings_mobile_username.tr(),
+                          showCloseButton: true,
+                          showDragHandle: true,
+                          showDivider: false,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          builder: (_) {
+                            return EditUsernameBottomSheet(
+                              context,
+                              userName: profile.name,
+                              onSubmitted: (value) {
+                                context.read<SettingsUserViewBloc>().add(
+                                      SettingsUserEvent.updateUserName(
+                                        name: value,
+                                      ),
+                                    );
+                              },
+                            );
+                          },
+                        );
                       },
                     ),
-                  // 绑定邮箱
-                  if (isServerUser)
-                    MobileSettingItem(
-                      name: '绑定邮箱',
-                      trailing: MobileSettingTrailing(
-                        text: _maskEmail(profile.email),
+                    // 绑定手机
+                    if (isServerUser && profile.phone.isNotEmpty)
+                      MobileSettingItem(
+                        name: '绑定手机',
+                        trailing: MobileSettingTrailing(
+                          text: _maskPhone(profile.phone),
+                        ),
+                        onTap: () {
+                          _showPhoneChangeFlow(context, profile);
+                        },
+                      )
+                    else if (isServerUser)
+                      MobileSettingItem(
+                        name: '绑定手机',
+                        trailing: MobileSettingTrailing(
+                          text: '未绑定',
+                        ),
+                        onTap: () {
+                          context.push(MobilePhoneBindPage.routeName);
+                        },
                       ),
-                      onTap: () {
-                        _showEmailChangeFlow(context, profile);
-                      },
-                    ),
-                ],
-              ),
-            ],
-          );
-        },
+                    // 绑定邮箱
+                    if (isServerUser)
+                      MobileSettingItem(
+                        name: '绑定邮箱',
+                        trailing: MobileSettingTrailing(
+                          text: _maskEmail(profile.email),
+                        ),
+                        onTap: () {
+                          _showEmailChangeFlow(context, profile);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -174,7 +179,8 @@ class PersonalInfoSettingGroup extends StatelessWidget {
 
   void _showPhoneChangeFlow(BuildContext context, UserProfilePB profile) {
     // 已有手机号 → 先身份验证，再换绑
-    final phoneNumber = profile.phone.isNotEmpty ? profile.phone : profile.email;
+    final phoneNumber =
+        profile.phone.isNotEmpty ? profile.phone : profile.email;
     context.push(
       MobileIdentityVerificationPage.routeName,
       extra: {
@@ -214,11 +220,13 @@ class _AvatarSection extends StatelessWidget {
   const _AvatarSection({
     required this.iconUrl,
     required this.name,
+    required this.userProfile,
     required this.onAvatarChanged,
   });
 
   final String iconUrl;
   final String name;
+  final UserProfilePB userProfile;
   final ValueChanged<String> onAvatarChanged;
 
   @override
@@ -254,7 +262,8 @@ class _AvatarSection extends StatelessWidget {
                 Positioned(
                   bottom: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFF3800),
                       borderRadius: BorderRadius.circular(16),
@@ -297,10 +306,13 @@ class _AvatarSection extends StatelessWidget {
         url: iconUrl,
         width: 80,
         height: 80,
+        userProfilePB: userProfile,
       );
     }
     // Short string without path separators -> treat as emoji character
-    if (iconUrl.length <= 10 && !iconUrl.contains('/') && !iconUrl.contains('\\')) {
+    if (iconUrl.length <= 10 &&
+        !iconUrl.contains('/') &&
+        !iconUrl.contains('\\')) {
       return Center(
         child: Container(
           width: 80,
@@ -395,7 +407,8 @@ class _AvatarSection extends StatelessWidget {
 
       if (image != null) {
         // For local mode, save to local storage
-        final userProfileResult = await UserBackendService.getCurrentUserProfile();
+        final userProfileResult =
+            await UserBackendService.getCurrentUserProfile();
         final userProfile = userProfileResult.fold(
           (p) => p,
           (_) => null,

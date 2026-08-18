@@ -7,6 +7,7 @@ import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
+import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/about/mobile_about_xiaoma_page.dart';
 import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
@@ -739,12 +740,13 @@ class _UserProfileHeader extends StatelessWidget {
     if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
-        child: Image.network(
-          iconUrl,
+        child: FlowyNetworkImage(
+          url: iconUrl,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+          userProfilePB: userProfile,
+          errorWidgetBuilder: (_, __, ___) => _buildDefaultAvatar(size),
         ),
       );
     }

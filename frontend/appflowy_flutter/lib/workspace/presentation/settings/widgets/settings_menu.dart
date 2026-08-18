@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
@@ -151,7 +152,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
         ),
         physics: const ClampingScrollPhysics(),
         child: Column(
-          spacing: 2,//theme.spacing.xs,
+          spacing: 2, //theme.spacing.xs,
           children: [
             // 账号标题 + 用户信息卡片
             Container(
@@ -302,12 +303,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
     Widget _buildAvatarImage(String url, double size) {
       // 判断是本地路径还是网络 URL
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        return Image.network(
-          url,
+        return FlowyNetworkImage(
+          url: url,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+          userProfilePB: widget.userProfile,
+          errorWidgetBuilder: (_, __, ___) => _buildDefaultAvatar(size),
         );
       } else {
         // 本地文件路径

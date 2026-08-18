@@ -32,35 +32,36 @@ class SettingsUserViewBloc extends Bloc<SettingsUserEvent, SettingsUserState> {
       (event, emit) async {
         await event.when(
           initial: () async {
-            _loadUserProfile();
+            await _reloadUserProfile();
             _userListener.start(onProfileUpdated: _profileUpdated);
           },
           didReceiveUserProfile: (UserProfilePB newUserProfile) {
             emit(state.copyWith(userProfile: newUserProfile));
           },
-          updateUserName: (String name) {
-            _userService.updateUserProfile(name: name).then((result) {
-              result.fold(
-                (l) => null,
-                (err) => Log.error(err),
-              );
-            });
+          updateUserName: (String name) async {
+            final result = await _userService.updateUserProfile(name: name);
+            if (result.isSuccess) {
+              await _reloadUserProfile();
+            } else {
+              result.fold((_) {}, Log.error);
+            }
           },
-          updateUserIcon: (String iconUrl) {
-            _userService.updateUserProfile(iconUrl: iconUrl).then((result) {
-              result.fold(
-                (l) => _loadUserProfile(),
-                (err) => Log.error(err),
-              );
-            });
+          updateUserIcon: (String iconUrl) async {
+            final result =
+                await _userService.updateUserProfile(iconUrl: iconUrl);
+            if (result.isSuccess) {
+              await _reloadUserProfile();
+            } else {
+              result.fold((_) {}, Log.error);
+            }
           },
-          updateUserEmail: (String email) {
-            _userService.updateUserProfile(email: email).then((result) {
-              result.fold(
-                (l) => null,
-                (err) => Log.error(err),
-              );
-            });
+          updateUserEmail: (String email) async {
+            final result = await _userService.updateUserProfile(email: email);
+            if (result.isSuccess) {
+              await _reloadUserProfile();
+            } else {
+              result.fold((_) {}, Log.error);
+            }
           },
           updateUserPassword: (String oldPassword, String newPassword) {
             _userService
@@ -72,33 +73,35 @@ class SettingsUserViewBloc extends Bloc<SettingsUserEvent, SettingsUserState> {
               );
             });
           },
-          removeUserIcon: () {
+          removeUserIcon: () async {
             // Empty Icon URL = No icon
-            _userService.updateUserProfile(iconUrl: "").then((result) {
-              result.fold(
-                (l) => null,
-                (err) => Log.error(err),
-              );
-            });
+            final result = await _userService.updateUserProfile(iconUrl: "");
+            if (result.isSuccess) {
+              await _reloadUserProfile();
+            } else {
+              result.fold((_) {}, Log.error);
+            }
           },
         );
       },
     );
   }
 
-  void _loadUserProfile() {
-    UserBackendService.getCurrentUserProfile().then((result) {
-      if (isClosed) {
-        return;
-      }
+  Future<void> _reloadUserProfile() async {
+    // The profile service caches reads briefly. Invalidate it after a successful
+    // write so the state cannot be rebuilt with the previous avatar URL.
+    UserBackendService.clearCurrentUserProfileCache();
+    final result = await UserBackendService.getCurrentUserProfile();
+    if (isClosed) {
+      return;
+    }
 
-      result.fold(
-        (userProfile) => add(
-          SettingsUserEvent.didReceiveUserProfile(userProfile),
-        ),
-        (err) => Log.error(err),
-      );
-    });
+    result.fold(
+      (userProfile) => add(
+        SettingsUserEvent.didReceiveUserProfile(userProfile),
+      ),
+      (err) => Log.error(err),
+    );
   }
 
   void _profileUpdated(

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
+import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_profile_event.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -29,7 +30,8 @@ class SettingsUserProfileView extends StatefulWidget {
   final UserProfilePB userProfile;
 
   @override
-  State<SettingsUserProfileView> createState() => _SettingsUserProfileViewState();
+  State<SettingsUserProfileView> createState() =>
+      _SettingsUserProfileViewState();
 }
 
 class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
@@ -107,7 +109,8 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   }
 
   // 构建编辑字段 - 同一行显示标签和内容
-  Widget _buildEditField(BuildContext context, {required String label, required Widget child}) {
+  Widget _buildEditField(BuildContext context,
+      {required String label, required Widget child}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -173,12 +176,14 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   Widget _buildAvatar(String url) {
     // 判断是本地路径还是网络 URL
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
+      return FlowyNetworkImage(
+        url: url,
+        width: 80,
+        height: 80,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return _buildDefaultAvatar();
-        },
+        userProfilePB: widget.userProfile,
+        errorWidgetBuilder: (context, error, stackTrace) =>
+            _buildDefaultAvatar(),
       );
     } else if (File(url).existsSync()) {
       return Image.file(
@@ -210,7 +215,7 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   // 构建保存按钮
   Widget _buildSaveButton() {
     final hasChanges = _hasChanges();
-    
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -244,9 +249,9 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
 
   // 检查是否有变化
   bool _hasChanges() {
-    return _name != _originalName || 
-           _avatarUrl != _originalAvatarUrl || 
-           _pendingAvatarPath != null;
+    return _name != _originalName ||
+        _avatarUrl != _originalAvatarUrl ||
+        _pendingAvatarPath != null;
   }
 
   // 选择头像
@@ -268,8 +273,7 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
       final hasPermission =
           await PermissionChecker.checkPhotoPermission(context);
       if (!hasPermission) return;
-      final image =
-          await ImagePicker().pickImage(source: ImageSource.gallery);
+      final image = await ImagePicker().pickImage(source: ImageSource.gallery);
       localImagePath = image?.path;
     }
 
@@ -287,11 +291,14 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   Future<void> _saveChanges() async {
     if (_isSaving) return;
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+      _isUploading = _pendingAvatarPath != null;
+    });
 
     try {
       final userService = UserBackendService(userId: widget.userProfile.id);
-      
+
       // 1. 如果有待上传的头像，先上传头像
       String? finalAvatarUrl = _avatarUrl;
       if (_pendingAvatarPath != null) {
@@ -324,15 +331,15 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
               _avatarUrl = finalAvatarUrl;
               _pendingAvatarPath = null;
             });
-            
+
             // 刷新用户配置并通知 SettingsDialogBloc，让整个应用立即更新
             await _refreshUserProfile();
-            
-      if (mounted) {
-        showToastNotification(
-          message: '保存成功',
-        );
-      }
+
+            if (mounted) {
+              showToastNotification(
+                message: '保存成功',
+              );
+            }
           }
         },
         (error) {
@@ -345,15 +352,18 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
         },
       );
     } catch (e) {
-    Log.error('Save changes exception: $e');
-    if (mounted) {
-      showToastNotification(
-        message: '保存异常: $e',
-      );
-    }
+      Log.error('Save changes exception: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '保存异常: $e',
+        );
+      }
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+          _isUploading = false;
+        });
       }
     }
   }
@@ -361,18 +371,19 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   // 刷新用户配置并通知所有监听者
   Future<void> _refreshUserProfile() async {
     try {
+      UserBackendService.clearCurrentUserProfileCache();
       final result = await UserBackendService.getCurrentUserProfile();
       result.fold(
         (newProfile) {
           if (mounted) {
             // 通知 SettingsDialogBloc 更新用户配置
             context.read<SettingsDialogBloc>().add(
-              SettingsDialogEvent.didReceiveUserProfile(newProfile),
-            );
-            
+                  SettingsDialogEvent.didReceiveUserProfile(newProfile),
+                );
+
             // 发送全局事件，通知侧边栏等其他组件更新
             userProfileEventBus.fire(UserProfileUpdatedEvent(newProfile));
-            
+
             Log.info('User profile refreshed and notified globally');
           }
         },
@@ -387,7 +398,8 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   Future<String?> _uploadAvatarFile(String localImagePath) async {
     try {
       // 获取当前用户配置，判断是本地模式还是云端模式
-      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfileResult =
+          await UserBackendService.getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
         (profile) => profile,
         (error) => null,
@@ -424,8 +436,4 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
       return null;
     }
   }
-
 }
-
-
-
