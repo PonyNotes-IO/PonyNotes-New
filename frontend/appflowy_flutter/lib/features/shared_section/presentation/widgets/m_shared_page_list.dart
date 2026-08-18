@@ -28,6 +28,7 @@ class MSharedPageList extends StatelessWidget {
           view: view,
           level: 0,
           isDraggable: false, // disable draggable for shared pages
+          showActions: false,
           leftPadding: HomeSpaceViewSizes.leftPadding,
           isFeedback: false,
           onSelected: onSelected,

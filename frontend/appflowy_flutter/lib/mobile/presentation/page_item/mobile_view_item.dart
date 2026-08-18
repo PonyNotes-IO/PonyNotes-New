@@ -34,6 +34,7 @@ class MobileViewItem extends StatelessWidget {
     required this.onSelected,
     this.isFirstChild = false,
     this.isDraggable = true,
+    this.showActions = true,
     required this.isFeedback,
     this.startActionPane,
     this.endActionPane,
@@ -62,6 +63,9 @@ class MobileViewItem extends StatelessWidget {
 
   // it should be false when it's rendered as feedback widget inside DraggableItem
   final bool isDraggable;
+
+  // Shared pages are read-only entries and do not expose row actions.
+  final bool showActions;
 
   // identify if the view item is rendered as feedback widget inside DraggableItem
   final bool isFeedback;
@@ -94,7 +98,7 @@ class MobileViewItem extends StatelessWidget {
             spaceType: spaceType,
             level: level,
             leftPadding: leftPadding,
-            showActions: true,
+            showActions: showActions,
             isExpanded: state.isExpanded,
             onSelected: onSelected,
             isFirstChild: isFirstChild,
@@ -183,6 +187,7 @@ class InnerMobileViewItem extends StatelessWidget {
             level: level + 1,
             onSelected: onSelected,
             isDraggable: isDraggable,
+            showActions: showActions,
             leftPadding: leftPadding,
             isFeedback: isFeedback,
             startActionPane: startActionPane,
@@ -217,6 +222,7 @@ class InnerMobileViewItem extends StatelessWidget {
             level: level,
             onSelected: onSelected,
             isDraggable: false,
+            showActions: showActions,
             leftPadding: leftPadding,
             isFeedback: true,
             startActionPane: startActionPane,
@@ -291,17 +297,19 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      // ··· more action button
-      MobileViewMoreButton(
-        onPressed: () => _showMoreActionSheet(context),
-      ),
-      // + button (only for document, folder, and notebook)
-      if (widget.view.layout == ViewLayoutPB.Document ||
-          widget.view.layout == ViewLayoutPB.Folder ||
-          widget.view.layout == ViewLayoutPB.Notebook)
-        MobileViewAddButton(
-          onPressed: () => _showAddPageSheet(context),
+      if (widget.showActions) ...[
+        // ··· more action button
+        MobileViewMoreButton(
+          onPressed: () => _showMoreActionSheet(context),
         ),
+        // + button (only for document, folder, and notebook)
+        if (widget.view.layout == ViewLayoutPB.Document ||
+            widget.view.layout == ViewLayoutPB.Folder ||
+            widget.view.layout == ViewLayoutPB.Notebook)
+          MobileViewAddButton(
+            onPressed: () => _showAddPageSheet(context),
+          ),
+      ],
     ];
 
     Widget child = GestureDetector(
