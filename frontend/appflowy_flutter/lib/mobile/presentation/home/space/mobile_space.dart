@@ -218,11 +218,6 @@ class _MobileSpaceState extends State<MobileSpace> {
                 favoriteBloc: widget.favoriteBloc,
               ),
               const VSpace(4.0),
-              MSharedSection(
-                key: ValueKey(workspaceId),
-                workspaceId: workspaceId,
-              ),
-              const VSpace(4.0),
               // 协作区 / 公共空间（仅 Space）
               MobileSpaceSection(
                 title: LocaleKeys.sideBar_workspace.tr(),
@@ -230,6 +225,11 @@ class _MobileSpaceState extends State<MobileSpace> {
                 spaceType: FolderSpaceType.public,
                 onAddPressed: () => _showCreateSpaceBottomSheet(context),
                 favoriteBloc: widget.favoriteBloc,
+              ),
+              const VSpace(4.0),
+              MSharedSection(
+                key: ValueKey(workspaceId),
+                workspaceId: workspaceId,
               ),
             ] else ...[
               // 非协作工作区：个人空间仅使用公共空间中的 Space
