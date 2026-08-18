@@ -250,16 +250,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       backgroundColor: isDark ? const Color(0xFF2C2C2C) : Colors.white,
       body: SafeArea(
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: isDark
-                  ? const [Color(0xFF3A211D), Color(0xFF2C2C2C)]
-                  : const [Color(0xFFFFEAE4), Colors.white],
-              stops: const [0.0, 0.28],
-            ),
-          ),
+          color: isDark ? const Color(0xFF2C2C2C) : Colors.white,
           child: Column(
             children: [
               _buildHeader(context),
