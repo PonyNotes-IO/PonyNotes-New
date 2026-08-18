@@ -197,6 +197,10 @@ dependencies:
   # 支付宝 App 支付（Android：alipaysdk-android 15.8.40；iOS：AlipaySDK）
   tobias: ^5.3.4
 
+# Tobias iOS 回调复用应用现有的 ponynotes URL Scheme。
+tobias:
+  url_scheme: ponynotes
+
 dev_dependencies:
   # Introduce talker to log the bloc events, and only log the events in the development mode
 

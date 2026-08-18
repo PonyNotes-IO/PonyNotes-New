@@ -168,14 +168,15 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
 
     try {
       // 分别等待每个 Future，避免 Future.wait 可能的问题
-      final subscriptionResult = await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+      final subscriptionResult =
+          await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
       if (!mounted) return;
 
       final usageResult = await service.getWorkspaceUsage();
       if (!mounted) return;
 
-      final currentSubscription = await SubscriptionService()
-          .getCurrentSubscription(
+      final currentSubscription =
+          await SubscriptionService().getCurrentSubscription(
         userProfile: _userProfile!,
         caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
       );
@@ -245,19 +246,19 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     final isMenu = _currentSection == MobileSettingsSection.menu;
 
     return IconButton(
-              onPressed: () {
-                if (isMenu) {
-                  Navigator.pop(context);
-                } else {
-                  setState(() => _currentSection = MobileSettingsSection.menu);
-                }
-              },
-              icon: FlowySvg(
-                FlowySvgs.mobile_return_s,
-                size: const Size(7, 12),
-                color: afTheme.iconColorScheme.primary,
-              ),
-            );
+      onPressed: () {
+        if (isMenu) {
+          Navigator.pop(context);
+        } else {
+          setState(() => _currentSection = MobileSettingsSection.menu);
+        }
+      },
+      icon: FlowySvg(
+        FlowySvgs.mobile_return_s,
+        size: const Size(7, 12),
+        color: afTheme.iconColorScheme.primary,
+      ),
+    );
   }
 
   @override
@@ -271,7 +272,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 25.0,left: 8),
+            padding: const EdgeInsets.only(top: 25.0, left: 8),
             child: _buildAppBar(context),
           ),
           Expanded(
@@ -359,8 +360,10 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
               MobileSettingsSection.workspaceManagement =>
                 const MobileSpaceManagementPage(showAppBar: false),
               MobileSettingsSection.member => WorkspaceSettingGroup(
-                memberCount: widget.workspaceState?.currentWorkspace?.memberCount.toInt(),
-              ),
+                  memberCount: widget
+                      .workspaceState?.currentWorkspace?.memberCount
+                      .toInt(),
+                ),
               MobileSettingsSection.sharing => const SizedBox.shrink(),
               MobileSettingsSection.notifications =>
                 NotificationsSettingGroup(),
@@ -478,7 +481,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                     try {
                       workspaceState = context.read<UserWorkspaceBloc>().state;
                     } catch (_) {}
-                    context.push(MobileSharingPage.routeName, extra: workspaceState);
+                    context.push(MobileSharingPage.routeName,
+                        extra: workspaceState);
                   },
                 ),
                 _SettingsItem(
@@ -648,7 +652,6 @@ class _SettingsGroupCard extends StatelessWidget {
                 endIndent: 16,
               ),
           ],
-
         ],
       ),
     );
@@ -865,8 +868,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
 
     if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
         subscriptionInfo.plan.value != 0) {
-      return _formatDateRange(
-          subscriptionInfo.planSubscription.endDate.toInt(),
+      return _formatDateRange(subscriptionInfo.planSubscription.endDate.toInt(),
           subscriptionInfo.planSubscription.interval);
     }
 
@@ -880,139 +882,142 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     final validityText = _getValidityText();
 
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
-          width: 1,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
+            width: 1,
+          ),
         ),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/navigation/m_setting_profile.png'),
-                fit: BoxFit.fill,
-              ),
-              borderRadius: BorderRadius.all(Radius.circular(16)),
-            ),
-            padding: const EdgeInsets.only(top: 18,bottom: 13,left: 22,right: 16),
-            child: AspectRatio(
-              aspectRatio: 353 / 134,
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  planName,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/navigation/m_setting_profile.png'),
+                  fit: BoxFit.fill,
                 ),
-                const SizedBox(height: 2),
-                if (validityText != null)
-                  Text(
-                    validityText,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 12,
-                    ),
-                  ),
-                const SizedBox(height: 2),
-                if (subscriptionInfo.plan.value == 0 && validityText == null)
-                  Text(
-                    subscriptionInfo.info,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 12,
-                    ),
-                    maxLines: 2,
-                  ),
-                Spacer(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ),
+              padding: const EdgeInsets.only(
+                  top: 18, bottom: 13, left: 22, right: 16),
+              child: AspectRatio(
+                aspectRatio: 353 / 134,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          _buildStorageText(workspaceUsage),
-                          style: TextStyle(
-                            color: const Color(0xFF4B1B03),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600
-                          ),
+                    Text(
+                      planName,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    if (validityText != null)
+                      Text(
+                        validityText,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
                         ),
-                        const SizedBox(width: 4),
+                      ),
+                    const SizedBox(height: 2),
+                    if (subscriptionInfo.plan.value == 0 &&
+                        validityText == null)
+                      Text(
+                        subscriptionInfo.info,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                        ),
+                        maxLines: 2,
+                      ),
+                    Spacer(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              _buildStorageText(workspaceUsage),
+                              style: TextStyle(
+                                  color: const Color(0xFF4B1B03),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  border: Border.all(
+                                    color: const Color(0xFFB57E5E),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  '剩余空间',
+                                  style: theme.textStyle.heading4
+                                      .standard(
+                                        color: const Color(0xFF4B1B03),
+                                      )
+                                      .copyWith(fontSize: 10),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         GestureDetector(
-                          onTap: null,
+                          onTap: onUpgrade,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                              horizontal: 18,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.transparent,
-                              border: Border.all(
-                                color: const Color(0xFFB57E5E),
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(5),
+                              color: const Color(0xFFFADECA),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              '剩余空间',
+                              '会员升级',
                               style: theme.textStyle.heading4
                                   .standard(
-                                color: const Color(0xFF4B1B03),
-                              )
-                                  .copyWith(fontSize: 10),
+                                    color: const Color(0xFF4B1B03),
+                                  )
+                                  .copyWith(
+                                      fontSize: 12.0,
+                                      fontWeight: FontWeight.w600),
                             ),
                           ),
                         ),
                       ],
                     ),
-                    GestureDetector(
-                      onTap: onUpgrade,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFADECA),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '会员升级',
-                          style: theme.textStyle.heading4
-                              .standard(
-                            color: const Color(0xFF4B1B03),
-                          ).copyWith(fontSize: 12.0,fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
-              ],
+              ),
             ),
-            ),
-          ),
-          if (workspaceUsage != null) ...[
-            Divider(
-              color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
-              height: 0.5,
-              indent: 16,
-              endIndent: 16,
-            ),
-            _buildAIUsageRow(theme),
+            if (workspaceUsage != null) ...[
+              Divider(
+                color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+                height: 0.5,
+                indent: 16,
+                endIndent: 16,
+              ),
+              _buildAIUsageRow(theme),
+            ],
           ],
-        ],
-      )
-    );
+        ));
   }
 
   String _buildStorageText(WorkspaceUsagePB? usage) {
@@ -1074,12 +1079,12 @@ class _MobileUpgradePlanCard extends StatelessWidget {
             usageText,
             style: theme.textStyle.heading4
                 .standard(
-              color: usageColor,
-            )
+                  color: usageColor,
+                )
                 .copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-            ),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
           ),
           const SizedBox(width: 4),
           Text(

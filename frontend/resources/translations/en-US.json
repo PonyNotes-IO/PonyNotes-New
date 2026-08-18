@@ -3006,6 +3006,7 @@
     "whiteboardMigrationSuccess": "Whiteboard moved",
     "noPermissionToMoveIntoSharedSpace": "No permission: restricted members cannot add pages to a shared space",
     "noPermissionToMoveOutOfSharedSpace": "No permission: only the workspace owner can move pages out of a shared space",
+    "onlyWhiteboardCreatorCanMove": "Only the whiteboard creator can move a whiteboard between private and shared spaces",
     "switchSpace": "Switch space",
     "spaceNameCannotBeEmpty": "Space name cannot be empty",
     "success": {

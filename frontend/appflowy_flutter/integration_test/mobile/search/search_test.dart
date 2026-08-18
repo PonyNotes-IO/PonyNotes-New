@@ -32,6 +32,15 @@ void main() {
         of: find.byType(MobileSearchTextfield),
         matching: find.byType(TextFormField),
       );
+      final searchPage = find.descendant(
+        of: find.byType(MobileSearchScreen),
+        matching: find.byType(Scaffold),
+      );
+      final searchFieldRect = tester.getRect(searchTextField);
+      final searchPageRect = tester.getRect(searchPage);
+      expect(searchFieldRect.left - searchPageRect.left, 16);
+      expect(searchPageRect.right - searchFieldRect.right, 16);
+
       final query = '$gettingStarted searching';
       await tester.enterText(searchTextField, query);
       await tester.pumpAndSettle();
