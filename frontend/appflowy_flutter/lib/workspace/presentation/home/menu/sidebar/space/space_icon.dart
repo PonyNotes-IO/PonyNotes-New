@@ -1,5 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/string_extension.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
+import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
@@ -42,6 +44,19 @@ class SpaceIcon extends StatelessWidget {
   }
 
   (Widget, Color?) _buildSpaceIcon(BuildContext context) {
+    // Space 曾经把图标写在 extra.space_icon，统一图标字段后由
+    // ViewPB.icon 作为权威来源；旧字段仅用于兼容尚未迁移的空间。
+    final viewIcon = space.icon.toEmojiIconData();
+    if (viewIcon.isNotEmpty) {
+      return (
+        RawEmojiIconWidget(
+          emoji: viewIcon,
+          emojiSize: svgSize ?? textDimension ?? dimension * 0.7,
+        ),
+        null,
+      );
+    }
+
     final spaceIcon = space.spaceIcon;
     if (spaceIcon == null || spaceIcon.isEmpty == true) {
       // if space icon is null, use the first character of space name as icon

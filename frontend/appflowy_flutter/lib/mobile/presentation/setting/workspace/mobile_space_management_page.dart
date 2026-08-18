@@ -14,7 +14,7 @@ import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_d
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_action_type.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -30,7 +30,6 @@ import 'package:flutter/material.dart' hide Icon;
 import 'package:flutter/material.dart' as material;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
-import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 
 class MobileSpaceManagementPage extends StatefulWidget {
   const MobileSpaceManagementPage({
@@ -782,83 +781,11 @@ class _SpaceListItem extends StatelessWidget {
   }
 
   Widget _buildSpaceIcon(AppFlowyThemeData theme) {
-    final icon = space.spaceIcon;
-    final iconColor = space.spaceIconColor;
-
-    if (icon == null || icon.isEmpty) {
-      return Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: const Color(0x1AFF9500),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const material.Icon(Icons.groups, size: 20, color: Colors.orange),
-      );
-    }
-
-    Color color;
-    try {
-      color = Color(int.parse(iconColor ?? '0xFFA34AFD'));
-    } catch (_) {
-      color = const Color(0xFFA34AFD);
-    }
-
-    // Handle old format: space_icon_1, space_icon_2, etc.
-    if (icon.startsWith('space_icon')) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 40,
-          height: 40,
-          color: color,
-          child: Center(
-            child: FlowySvg(
-              FlowySvgData('assets/flowy_icons/16x/$icon.svg'),
-              size: const Size.square(20),
-              color: Colors.white,
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Handle new format: groupName/iconName (e.g., computer_devices/amazon)
-    if (icon.contains('/')) {
-      final svgContent = kIconGroups?.findSvgContent(icon);
-      if (svgContent != null) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            width: 40,
-            height: 40,
-            color: color,
-            child: Center(
-              child: FlowySvg.string(
-                svgContent,
-                size: const Size.square(20),
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-      }
-    }
-
-    // Fallback: display as emoji/text
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(
-          icon,
-          style: const TextStyle(fontSize: 20),
-        ),
-      ),
+    return SpaceIcon(
+      dimension: 40,
+      space: space,
+      svgSize: 20,
+      cornerRadius: 8,
     );
   }
 
