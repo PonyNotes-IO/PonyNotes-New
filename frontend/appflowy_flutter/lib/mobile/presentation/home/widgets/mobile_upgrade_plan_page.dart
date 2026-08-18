@@ -338,7 +338,9 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
                 child: Text(
                   _displayName,
                   style: theme.textStyle.heading2.standard(
-                    color: theme.textColorScheme.primary,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.black
+                        : theme.textColorScheme.primary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
