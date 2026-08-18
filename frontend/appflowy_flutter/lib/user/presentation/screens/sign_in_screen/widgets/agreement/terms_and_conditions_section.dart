@@ -11,6 +11,7 @@ import '../../../legal_document_screen.dart';
 
 class TermsAndConditionsSection extends StatelessWidget {
   const TermsAndConditionsSection({
+    super.key,
     required this.agreedToTerms,
     required this.onAgreedToTermsChanged,
   });
@@ -31,9 +32,10 @@ class TermsAndConditionsSection extends StatelessWidget {
             onAgreedToTermsChanged(!agreedToTerms);
           },
           child: SizedBox(
-            width: 44,
+            width: 30,
             height: 44,
-            child: Center(
+            child: Align(
+              alignment: Alignment.centerRight,
               child: Builder(
                 builder: (context) {
                   final primaryColor = Theme.of(context).colorScheme.primary;
@@ -43,7 +45,9 @@ class TermsAndConditionsSection extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(7),
                       border: Border.all(
-                        color: agreedToTerms ? primaryColor : const Color(0xFFD0D0D0),
+                        color: agreedToTerms
+                            ? primaryColor
+                            : const Color(0xFFD0D0D0),
                         width: 2,
                       ),
                       color: agreedToTerms ? primaryColor : Colors.transparent,
@@ -66,10 +70,10 @@ class TermsAndConditionsSection extends StatelessWidget {
           child: RichText(
             text: TextSpan(
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 11,
-              ),
+                    fontSize: 11,
+                  ),
               children: [
-                const TextSpan(text: "我已阅读并同意 "),
+                TextSpan(text: LocaleKeys.signIn_agreeToThe.tr()),
                 TextSpan(
                   text: "《${LocaleKeys.legal_userAgreement.tr()}》",
                   style: TextStyle(
@@ -78,7 +82,6 @@ class TermsAndConditionsSection extends StatelessWidget {
                   mouseCursor: SystemMouseCursors.click,
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
-
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => LegalDocumentScreen(

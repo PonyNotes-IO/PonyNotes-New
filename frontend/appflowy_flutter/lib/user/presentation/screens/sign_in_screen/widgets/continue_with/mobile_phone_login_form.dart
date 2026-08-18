@@ -13,6 +13,8 @@ import '../../../../../../generated/locale_keys.g.dart';
 import '../../../../../../startup/startup.dart';
 import '../../../legal_document_screen.dart';
 
+const _mobileAuthButtonHeight = 44.0;
+
 class MobilePhoneLoginForm extends StatefulWidget {
   const MobilePhoneLoginForm({
     super.key,
@@ -69,28 +71,29 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
         DecoratedBox(
           decoration: BoxDecoration(
             color: Theme.of(context).brightness == Brightness.light
-                ? const Color(0xFFF5F5F5)
+                ? const Color(0xFFF2F2F2)
                 : const Color(0xFF2C2C2C),
             borderRadius: BorderRadius.circular(18),
           ),
           child: TextField(
             controller: controller,
             decoration: InputDecoration(
-              hintText: "输入邮箱或者手机号",
+              hintText: LocaleKeys.signIn_mobilePhoneHint.tr(),
               hintStyle: TextStyle(
                 color: Theme.of(context).brightness == Brightness.light
                     ? const Color(0xFF999999)
                     : const Color(0xFF888888),
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
               color: Theme.of(context).brightness == Brightness.light
                   ? Colors.black
@@ -100,8 +103,8 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             onSubmitted: (value) => _handleSubmit(context, value),
           ),
         ),
-        const SizedBox(height: 16),
-        
+        const SizedBox(height: 10),
+
         // Login/Register button
         GestureDetector(
           onTap: _isLoading
@@ -110,25 +113,26 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                   final phone = controller.text.trim();
                   _handleSubmit(context, phone);
                 },
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: primaryColor,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                _isLoading
-                    ? "登录中..."
-                    : "登录/注册",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+          child: Container(
+            width: double.infinity,
+            height: _mobileAuthButtonHeight,
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _isLoading
+                  ? LocaleKeys.signIn_signingIn.tr()
+                  : LocaleKeys.signIn_mobileLoginRegister.tr(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
             ),
+          ),
         ),
       ],
     );
@@ -141,7 +145,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
       // 显示错误提示
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('请输入有效的邮箱或手机号'),
+          content: Text(LocaleKeys.signIn_invalidEmailOrPhoneFormat.tr()),
           duration: Duration(seconds: 2),
         ),
       );
@@ -167,7 +171,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
     final signInBloc = context.read<SignInBloc>();
     signInBloc.add(const SignInEvent.cancel());
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -179,7 +183,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
           email: email,
         ),
       );
-      
+
       // 等待密码状态检查完成
       final passwordIsSet = await _waitForPasswordStatus(signInBloc);
       if (!mounted) return;
@@ -208,11 +212,11 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
 
   Future<void> _signInWithPhone(BuildContext context, String phone) async {
     if (_isLoading) return;
-    
+
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
     final signInBloc = context.read<SignInBloc>();
     signInBloc.add(const SignInEvent.cancel());
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -224,7 +228,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
           phone: phone,
         ),
       );
-      
+
       // 等待密码状态检查完成
       final passwordIsSet = await _waitForPasswordStatus(signInBloc);
       if (!mounted) return;
@@ -282,7 +286,8 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        settings: const RouteSettings(name: '/continue-with-email-verification'),
+        settings:
+            const RouteSettings(name: '/continue-with-email-verification'),
         builder: (context) => BlocProvider.value(
           value: signInBloc,
           child: ContinueWithMagicLinkOrPasscodePage(
@@ -302,7 +307,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             onEnterPasscode: (passcode) {
               // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
               signInBloc.add(const SignInEvent.cancel());
-              
+
               // 给一点时间让cancel事件处理完成
               Future.delayed(const Duration(milliseconds: 100), () {
                 signInBloc.add(
@@ -497,9 +502,10 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                     fontSize: 12,
                   ),
                   children: [
-                    TextSpan(text:LocaleKeys.appName.tr()),
+                    TextSpan(text: LocaleKeys.appName.tr()),
                     TextSpan(
-                      text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
+                      text:
+                          '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
                       style: TextStyle(
                         color: primaryColor,
                       ),
@@ -511,7 +517,8 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                     ),
                     TextSpan(text: LocaleKeys.web_and.tr()),
                     TextSpan(
-                      text: '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
+                      text:
+                          '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
                       style: TextStyle(
                         color: primaryColor,
                       ),
@@ -588,4 +595,4 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
       ),
     );
   }
-} 
+}

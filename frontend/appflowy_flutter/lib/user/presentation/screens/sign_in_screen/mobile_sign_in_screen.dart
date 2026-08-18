@@ -10,7 +10,6 @@ import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
-import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/third_party_sign_in_button/third_party_sign_in_buttons.dart';
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -49,100 +48,88 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
           final theme = AppFlowyTheme.of(context);
           return Scaffold(
             resizeToAvoidBottomInset: false,
-            body: Stack(
-              children: [
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.4,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Theme.of(context).scaffoldBackgroundColor,
-                            Theme.of(context).scaffoldBackgroundColor,
-                            Theme.of(context).scaffoldBackgroundColor,
-                          ],
-                          stops: const [0.0, 0.5, 1.0],
+            body: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFFFFF8F6),
+                    Colors.white,
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 36,
+                    vertical: 10,
+                  ),
+                  child: Column(
+                    children: [
+                      const VSpace(45),
+                      // Logo and welcome text
+                      FlowyLogoTitle(
+                        title: LocaleKeys.welcomeToPonyNotes.tr(),
+                        logoSize: const Size.square(48),
+                        titleStyle: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: theme.textColorScheme.primary,
                         ),
                       ),
-                    ),
+                      // 标题字号放大后保持输入框的垂直位置不变。
+                      const VSpace(29),
+
+                      // Phone input and login button
+                      MobilePhoneLoginForm(
+                        onAgreeChanged: (value) {
+                          setState(() {
+                            _agreedToTerms = value;
+                          });
+                        },
+                        initialAgreed: _agreedToTerms,
+                      ),
+                      const SizedBox(height: 10),
+
+                      QuickStartButton(
+                        onTap: () {
+                          context
+                              .read<SignInBloc>()
+                              .add(const SignInEvent.signInAsGuest());
+                        },
+                        checkTermsAgreement: () {
+                          if (!_agreedToTerms) {
+                            showToastNotification(
+                              message:
+                                  LocaleKeys.signIn_pleaseAgreeToTerms.tr(),
+                              type: ToastificationType.error,
+                            );
+                            return false;
+                          }
+                          return true;
+                        },
+                      ),
+
+                      const Spacer(),
+
+                      // 第三方登录按钮
+                      _buildThirdPartyButtons(context),
+
+                      // Agreement checkbox
+                      TermsAndConditionsSection(
+                        agreedToTerms: _agreedToTerms,
+                        onAgreedToTermsChanged: (value) {
+                          setState(() {
+                            _agreedToTerms = value;
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 30),
-                    child: Column(
-                      children: [
-                        VSpace(45),
-                        // Logo and welcome text
-                        FlowyLogoTitle(
-                          title: LocaleKeys.welcomeToPonyNotes.tr(),
-                          logoSize: Size.square(56),
-                          titleStyle: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: theme.textColorScheme.primary,
-                          ),
-                        ),
-                        VSpace(16),
-
-                        // Phone input and login button
-                        MobilePhoneLoginForm(
-                          onAgreeChanged: (value) {
-                            setState(() {
-                              _agreedToTerms = value;
-                            });
-                          },
-                          initialAgreed: _agreedToTerms,
-                        ),
-                        const SizedBox(height: 8),
-
-                        QuickStartButton(
-                          onTap: () {
-                            context
-                                .read<SignInBloc>()
-                                .add(const SignInEvent.signInAsGuest());
-                          },
-                          checkTermsAgreement: () {
-                            if (!_agreedToTerms) {
-                              showToastNotification(
-                                message: "请先同意用户协议和隐私政策",
-                                type: ToastificationType.error,
-                              );
-                              return false;
-                            }
-                            return true;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        const Spacer(),
-
-                        // 第三方登录按钮
-                        _buildThirdPartyButtons(context),
-
-                        const SizedBox(height: 24),
-
-                        // Agreement checkbox
-                        TermsAndConditionsSection(
-                          agreedToTerms: _agreedToTerms,
-                          onAgreedToTermsChanged: (value) {
-                            setState(() {
-                              _agreedToTerms = value;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            )
+              ),
+            ),
           );
         },
       ),
@@ -176,7 +163,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
-                  '其他登录方式',
+                  LocaleKeys.signIn_otherLoginMethods.tr(),
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.textColorScheme.secondary,
@@ -201,27 +188,22 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         // 第三方登录按钮
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             IconButton(
-              icon: FlowySvg(
-                FlowySvgs.icon_login_wx_xl, blendMode:null
-              ),
-              iconSize: 40,
+              icon: FlowySvg(FlowySvgs.icon_login_wx_xl, blendMode: null),
+              iconSize: 28,
               onPressed: () {
                 _signInWithWeChat(context);
               },
             ),
-            const SizedBox(width: 30),
+            const SizedBox(width: 20),
             IconButton(
-              icon: FlowySvg(
-                FlowySvgs.icon_login_dy_xl,
-                  blendMode:null
-              ),
-              iconSize: 40,
+              icon: FlowySvg(FlowySvgs.icon_login_dy_xl, blendMode: null),
+              iconSize: 28,
               onPressed: () => _signInWithDouYin(context),
             ),
           ],
@@ -233,7 +215,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
   Future<void> _signInWithWeChat(BuildContext context) async {
     if (!_agreedToTerms) {
       showToastNotification(
-        message: "请先同意用户协议和隐私政策",
+        message: LocaleKeys.signIn_pleaseAgreeToTerms.tr(),
         type: ToastificationType.error,
       );
       return;
@@ -244,7 +226,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
   Future<void> _signInWithDouYin(BuildContext context) async {
     if (!_agreedToTerms) {
       showToastNotification(
-        message: "请先同意用户协议和隐私政策",
+        message: LocaleKeys.signIn_pleaseAgreeToTerms.tr(),
         type: ToastificationType.error,
       );
       return;
@@ -254,7 +236,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
     final isInstalled = await DouYinLoginService.instance.isDouYinInstalled();
     if (!isInstalled) {
       showToastNotification(
-        message: '请先安装抖音App',
+        message: LocaleKeys.signIn_douYinNotInstalledMessage.tr(),
         type: ToastificationType.error,
       );
       return;
@@ -263,7 +245,8 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
     context.read<SignInBloc>().add(const SignInEvent.signInWithDouYin());
   }
 
-  Future<void> _handleSignInStateChange(BuildContext context, SignInState state) async {
+  Future<void> _handleSignInStateChange(
+      BuildContext context, SignInState state) async {
     // 检查是否需要绑定手机号（第三方登录但未绑定手机号）
     final dynamic dynState = state;
     final needBind = (dynState.requiresPhoneBinding == true) ||
@@ -312,13 +295,17 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
           type: ToastificationType.info,
         );
         if (context.mounted) {
-          context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+          context
+              .read<SignInBloc>()
+              .add(SignInEvent.clearPhoneBindingRequirement());
           context.read<SignInBloc>().add(const SignInEvent.reset());
         }
       }
 
       if (context.mounted) {
-        context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+        context
+            .read<SignInBloc>()
+            .add(SignInEvent.clearPhoneBindingRequirement());
       }
       return;
     }
@@ -350,7 +337,9 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
           }
 
           final needBind = (state.requiresPhoneBinding == true);
-          if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+          if (needBind &&
+              _needBindPhone(userProfile.phone) &&
+              !_phoneDialogOpen) {
             _phoneDialogOpen = true;
             _phoneBindingCancelled = false;
             final signInBloc = context.read<SignInBloc>();
@@ -381,7 +370,9 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 type: ToastificationType.info,
               );
               if (context.mounted) {
-                context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+                context
+                    .read<SignInBloc>()
+                    .add(SignInEvent.clearPhoneBindingRequirement());
                 context.read<SignInBloc>().add(const SignInEvent.reset());
               }
             }
@@ -410,7 +401,8 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 if (!context.mounted) {
                   return;
                 }
-                final rootNavigator = Navigator.of(context, rootNavigator: true);
+                final rootNavigator =
+                    Navigator.of(context, rootNavigator: true);
                 if (rootNavigator != null) {
                   final rootContext = rootNavigator.context;
                   if (rootContext.mounted) {
@@ -424,7 +416,9 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                   type: ToastificationType.info,
                 );
                 if (context.mounted) {
-                  context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+                  context
+                      .read<SignInBloc>()
+                      .add(SignInEvent.clearPhoneBindingRequirement());
                   context.read<SignInBloc>().add(const SignInEvent.reset());
                 }
               }

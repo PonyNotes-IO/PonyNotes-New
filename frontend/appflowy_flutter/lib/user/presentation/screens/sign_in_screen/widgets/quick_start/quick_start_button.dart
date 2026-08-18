@@ -1,9 +1,17 @@
 // 快速开始按钮组件
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
+const _mobileAuthButtonHeight = 44.0;
+
 class QuickStartButton extends StatelessWidget {
-  const QuickStartButton({required this.onTap, this.checkTermsAgreement});
+  const QuickStartButton({
+    super.key,
+    required this.onTap,
+    this.checkTermsAgreement,
+  });
 
   final VoidCallback onTap;
   final bool Function()? checkTermsAgreement;
@@ -21,7 +29,6 @@ class QuickStartButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final materialTheme = Theme.of(context);
     return GestureDetector(
       onTap: () {
         // 检查协议同意
@@ -34,18 +41,19 @@ class QuickStartButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.surfaceColorScheme.layer01,
           border: Border.all(color: theme.borderColorScheme.primary),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14),
         ),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        "快速开始",
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: theme.textColorScheme.primary,
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
+        height: _mobileAuthButtonHeight,
+        alignment: Alignment.center,
+        child: Text(
+          LocaleKeys.signIn_quickStart.tr(),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: theme.textColorScheme.primary,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
-      ),
       ),
     );
   }
