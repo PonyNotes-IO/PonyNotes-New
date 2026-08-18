@@ -51,6 +51,7 @@ class _ContinueWithEmailAndPasswordState
               fontSize: 12,
               fontFamily: 'PingFangSC-Regular',
             );
+    final theme = AppFlowyTheme.of(context);
 
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
@@ -76,8 +77,8 @@ class _ContinueWithEmailAndPasswordState
         children: [
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFFDBDBDB)),
+              color: theme.surfaceColorScheme.layer02,
+              border: Border.all(color: theme.borderColorScheme.primary),
               borderRadius: BorderRadius.circular(8),
             ),
             child: TextField(
@@ -86,7 +87,7 @@ class _ContinueWithEmailAndPasswordState
               decoration: InputDecoration(
                 hintText: "输入邮箱或者手机号",
                 hintStyle: TextStyle(
-                  color: const Color(0xFF999999),
+                  color: theme.textColorScheme.tertiary,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
@@ -97,12 +98,13 @@ class _ContinueWithEmailAndPasswordState
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
+                color: theme.textColorScheme.primary,
               ),
               onChanged: (_) => _resetSliderCaptcha(),
               onSubmitted: (value) {
                 if (!_sliderVerified) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('请先完成滑动验证'),
                       duration: Duration(seconds: 2),
                     ),
@@ -138,131 +140,146 @@ class _ContinueWithEmailAndPasswordState
                       showDialog(
                         context: parentContext,
                         barrierDismissible: false,
-                        builder: (dialogContext) => Container(
-                          alignment: Alignment.center,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 40),
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '为了更好的使用服务\n登录前请阅读并同意以下协议',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                RichText(
-                                  textAlign: TextAlign.center,
-                                  text: TextSpan(
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 14,
+                        builder: (dialogContext) {
+                          final dialogTheme = AppFlowyTheme.of(dialogContext);
+                          return Container(
+                            alignment: Alignment.center,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 40),
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: dialogTheme.surfaceColorScheme.layer01,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    '为了更好的使用服务\n登录前请阅读并同意以下协议',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      color: dialogTheme.textColorScheme.primary,
                                     ),
-                                    children: [
-                                      TextSpan(text: '小马AI笔记 '),
-                                      TextSpan(
-                                        text:
-                                            '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
-                                        style: TextStyle(
-                                          color: const Color(0xFFFF4D4F),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Builder(
+                                    builder: (context) {
+                                      final linkColor =
+                                          Theme.of(context).colorScheme.primary;
+                                      return RichText(
+                                        textAlign: TextAlign.center,
+                                        text: TextSpan(
+                                          style: TextStyle(
+                                            color: dialogTheme
+                                                .textColorScheme.primary,
+                                            fontSize: 14,
+                                          ),
+                                          children: [
+                                            TextSpan(text: '小马AI笔记 '),
+                                            TextSpan(
+                                              text:
+                                                  '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
+                                              style: TextStyle(color: linkColor),
+                                              recognizer: TapGestureRecognizer()
+                                                ..onTap = () {
+                                                  Navigator.of(dialogContext).pop();
+                                                  _navigateToUserAgreement(
+                                                      parentContext);
+                                                },
+                                            ),
+                                            TextSpan(text: ' 和 '),
+                                            TextSpan(
+                                              text:
+                                                  '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
+                                              style: TextStyle(color: linkColor),
+                                              recognizer: TapGestureRecognizer()
+                                                ..onTap = () {
+                                                  Navigator.of(dialogContext).pop();
+                                                  _navigateToPrivacyPolicy(
+                                                      parentContext);
+                                                },
+                                            ),
+                                          ],
                                         ),
-                                        recognizer: TapGestureRecognizer()
-                                          ..onTap = () {
-                                            Navigator.of(dialogContext).pop();
-                                            _navigateToUserAgreement(
-                                                parentContext);
-                                          },
-                                      ),
-                                      TextSpan(text: ' 和 '),
-                                      TextSpan(
-                                        text:
-                                            '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
-                                        style: TextStyle(
-                                          color: const Color(0xFFFF4D4F),
+                                        softWrap: true,
+                                        overflow: TextOverflow.visible,
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 30),
+                                  // 同意并继续按钮
+                                  Builder(
+                                    builder: (context) {
+                                      final primaryColor =
+                                          Theme.of(context).colorScheme.primary;
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _agreed = true;
+                                          });
+                                          Navigator.of(dialogContext).pop();
+                                        },
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
+                                          decoration: BoxDecoration(
+                                            color: primaryColor,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            '同意并继续',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
                                         ),
-                                        recognizer: TapGestureRecognizer()
-                                          ..onTap = () {
-                                            Navigator.of(dialogContext).pop();
-                                            _navigateToPrivacyPolicy(
-                                                parentContext);
-                                          },
-                                      ),
-                                    ],
+                                      );
+                                    },
                                   ),
-                                  softWrap: true,
-                                  overflow: TextOverflow.visible,
-                                ),
-                                const SizedBox(height: 30),
-                                // 同意并继续按钮
-                                GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _agreed = true;
-                                    });
-                                    Navigator.of(dialogContext).pop();
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFF4D4F),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      '同意并继续',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                                  const SizedBox(height: 12),
+                                  // 不同意按钮
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.of(dialogContext).pop();
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: dialogTheme
+                                            .fillColorScheme.contentHover,
+                                        border: Border.all(
+                                          color: dialogTheme
+                                              .borderColorScheme.primary,
+                                          width: 1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '不同意',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: dialogTheme
+                                              .textColorScheme.primary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: 12),
-                                // 不同意按钮
-                                GestureDetector(
-                                  onTap: () {
-                                    Navigator.of(dialogContext).pop();
-                                  },
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      border: Border.all(
-                                        color: const Color(0xFFD0D0D0),
-                                        width: 1,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      '不同意',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.black,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       );
                       return;
                     }
@@ -318,30 +335,28 @@ class _ContinueWithEmailAndPasswordState
                     _agreed = !_agreed;
                   });
                 },
-                child: Builder(
-                  builder: (context) {
-                    final primaryColor = Theme.of(context).colorScheme.primary;
-                    return Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color:
-                              _agreed ? primaryColor : const Color(0xFF979797),
-                          width: 2,
-                        ),
-                        color: _agreed ? primaryColor : Colors.transparent,
-                      ),
-                      child: _agreed
-                          ? Icon(
-                              Icons.check,
-                              size: 12,
-                              color: Colors.white,
-                            )
-                          : null,
-                    );
-                  },
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _agreed
+                          ? Theme.of(context).colorScheme.primary
+                          : theme.borderColorScheme.primary,
+                      width: 2,
+                    ),
+                    color: _agreed
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.transparent,
+                  ),
+                  child: _agreed
+                      ? Icon(
+                          Icons.check,
+                          size: 12,
+                          color: theme.textColorScheme.onFill,
+                        )
+                      : null,
                 ),
               ),
               const HSpace(4.0),

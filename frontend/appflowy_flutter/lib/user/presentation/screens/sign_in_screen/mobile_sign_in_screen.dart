@@ -46,17 +46,26 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
       child: BlocBuilder<SignInBloc, SignInState>(
         builder: (context, state) {
           final theme = AppFlowyTheme.of(context);
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          // 浅色：保留原浅粉渐变；深色：与 Material scaffoldBackgroundColor (#121212) 一致
+          final gradientColors = isDark
+              ? [
+                  Theme.of(context).scaffoldBackgroundColor,
+                  Theme.of(context).scaffoldBackgroundColor,
+                ]
+              : const [
+                  Color(0xFFFFF8F6),
+                  Colors.white,
+                ];
           return Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             resizeToAvoidBottomInset: false,
             body: DecoratedBox(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFFFF8F6),
-                    Colors.white,
-                  ],
+                  colors: gradientColors,
                 ),
               ),
               child: SafeArea(

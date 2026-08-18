@@ -13,15 +13,16 @@ class BackToLoginButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: Color(0xFFF2F2F2),
+          color: theme.fillColorScheme.contentHover,
           border: Border.all(
-            color: const Color(0xFFF2F2F2),
+            color: theme.borderColorScheme.primary,
             width: 1,
           ),
           borderRadius: BorderRadius.circular(18),
@@ -30,7 +31,7 @@ class BackToLoginButton extends StatelessWidget {
           LocaleKeys.signIn_backToLogin.tr(),
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.black,
+            color: theme.textColorScheme.primary,
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
