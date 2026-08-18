@@ -878,12 +878,13 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
     final planName = _getPlanDisplayName();
     final validityText = _getValidityText();
 
     return DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isLightMode ? Colors.white : const Color(0xFF28262E),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
@@ -1071,7 +1072,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
           Text(
             '剩余',
             style: theme.textStyle.heading4.standard(
-              color: const Color(0xFF141B28),
+              color: theme.textColorScheme.primary,
             ),
           ),
           const SizedBox(width: 4),
@@ -1090,7 +1091,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
           Text(
             'AI对话次数',
             style: theme.textStyle.heading4.standard(
-              color: const Color(0xFF141B28),
+              color: theme.textColorScheme.primary,
             ),
           ),
         ],
