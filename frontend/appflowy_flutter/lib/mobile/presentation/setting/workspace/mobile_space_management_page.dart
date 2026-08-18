@@ -727,7 +727,8 @@ class _SpaceListItem extends StatelessWidget {
     final updateTime = _formatTime(createdAt);
 
     return InkWell(
-      onTap: onManageMembers,
+      // 所有者点击列表项进入已有的删除确认；成员管理仍保留在右侧更多菜单中。
+      onTap: _canDelete ? onDelete : onManageMembers,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(

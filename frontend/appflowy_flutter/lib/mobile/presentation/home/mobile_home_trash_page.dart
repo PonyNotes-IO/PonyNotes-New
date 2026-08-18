@@ -191,6 +191,9 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
                               showCloseButton: true,
                               showDragHandle: true,
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                              backgroundColor: isLightMode
+                                  ? _lightBackgroundColor
+                                  : null,
                               title: LocaleKeys.trash_mobile_actions.tr(),
                               builder: (_) => Column(
                                 children: [

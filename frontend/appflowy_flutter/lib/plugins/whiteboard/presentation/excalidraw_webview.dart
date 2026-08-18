@@ -236,10 +236,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final baseUrl = await _assetServer.start();
 
       // 使用带 viewId 的URL（用于调试和日志追踪）
-      // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
+      // macOS 的 WKWebView 对 localStorage 有固定的来源配额。
+      // macOS 使用内存兼容层，白板权威数据仍由 Flutter/collab 持久化；
+      // Windows 保持现有 localStorage 行为，避免本次修复扩大平台影响范围。
       final viewId = Uri.encodeQueryComponent(widget.viewId);
+      final storageMode = defaultTargetPlatform == TargetPlatform.macOS
+          ? 'memory'
+          : 'persistent';
       const cacheVersion = 'ponynotes-whiteboard-v4';
-      final url = '$baseUrl/index.html?viewId=$viewId&v=$cacheVersion';
+      final url =
+          '$baseUrl/index.html?viewId=$viewId&storageMode=$storageMode&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
       // debug logs removed

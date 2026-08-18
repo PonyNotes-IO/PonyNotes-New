@@ -176,6 +176,23 @@ void main() {
         )));
   });
 
+  test('whiteboard uses memory storage only on macOS', () {
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(webViewSource, contains('TargetPlatform.macOS'));
+    expect(webViewSource, contains("'memory'"));
+    expect(webViewSource, contains("'persistent'"));
+    expect(webViewSource, contains('storageMode=\$storageMode'));
+    expect(bridgeSource, contains("urlParams.get('storageMode') === 'memory'"));
+    expect(bridgeSource, contains('const memoryStorage = new Map();'));
+    expect(bridgeSource, contains('memoryStorage.set(key, String(value));'));
+    expect(bridgeSource, contains('window.flutter_inappwebview.callHandler'));
+  });
+
   test('whiteboard collab adapter does not save on every pen frame', () {
     final source = File(
       'lib/plugins/whiteboard/application/whiteboard_collab_adapter.dart',

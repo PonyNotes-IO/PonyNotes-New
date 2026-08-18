@@ -15,6 +15,7 @@
     const originalLocalStorage = window.localStorage;
     const urlParams = new URLSearchParams(window.location.search || '');
     const whiteboardViewId = urlParams.get('viewId') || 'default';
+    const useMemoryStorage = urlParams.get('storageMode') === 'memory';
     const storagePrefix = `ponynotes:whiteboard:${encodeURIComponent(whiteboardViewId)}:`;
     const rawWhiteboardKeys = new Set([
         'excalidraw',
@@ -24,6 +25,10 @@
     ]);
 
     const scopedStorageKey = (key) => `${storagePrefix}${key}`;
+    // macOS WKWebView 的 localStorage 配额固定且按来源共享。
+    // macOS 模式下，白板场景只放在当前 WebView 内存中；Flutter/collab
+    // 仍通过 localStorageOnSet 接收并持久化变更，因此切换/重启不依赖该镜像。
+    const memoryStorage = new Map();
 
     const scopedStorageKeys = () => {
         const keys = [];
@@ -250,11 +255,21 @@
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
+            if (useMemoryStorage && memoryStorage.has(key)) {
+                return memoryStorage.get(key);
+            }
+            if (useMemoryStorage) {
+                return null;
+            }
             return originalLocalStorage.getItem(scopedStorageKey(key));
         },
 
         setItem: function (key, value) {
-            originalLocalStorage.setItem(scopedStorageKey(key), value);
+            if (useMemoryStorage) {
+                memoryStorage.set(key, String(value));
+            } else {
+                originalLocalStorage.setItem(scopedStorageKey(key), value);
+            }
             if (init) {
                 scheduleFlutterStorageSync(
                     key,
@@ -270,27 +285,41 @@
         },
 
         removeItem: function (key) {
-            originalLocalStorage.removeItem(scopedStorageKey(key));
-            originalLocalStorage.removeItem(key);
+            if (useMemoryStorage) {
+                memoryStorage.delete(key);
+            } else {
+                originalLocalStorage.removeItem(scopedStorageKey(key));
+                originalLocalStorage.removeItem(key);
+            }
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnRemove', { key: key });
             }
         },
 
         clear: function () {
-            clearCurrentWhiteboardStorage();
+            if (useMemoryStorage) {
+                memoryStorage.clear();
+            } else {
+                clearCurrentWhiteboardStorage();
+            }
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnClear');
             }
         },
 
         key: function (index) {
+            if (useMemoryStorage) {
+                return Array.from(memoryStorage.keys())[index] || null;
+            }
             const key = scopedStorageKeys()[index];
             return key ? key.substring(storagePrefix.length) : null;
         },
 
         // ✅ 修复：返回正确的 length 值
         get length() {
+            if (useMemoryStorage) {
+                return memoryStorage.size;
+            }
             return scopedStorageKeys().length;
         }
     };
@@ -303,7 +332,9 @@
             },
             configurable: false
         });
-        console.log('[PonyNotes] ✅ localStorage isolation installed successfully!');
+        console.log(
+            `[PonyNotes] ✅ localStorage bridge installed (${useMemoryStorage ? 'memory' : 'persistent'} mode)`,
+        );
     } catch (e) {
         console.error('[PonyNotes] ❌ Failed to install localStorage isolation:', e);
     }
