@@ -150,6 +150,8 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
+  static const _lightBackgroundColor = Color(0xFFF9F9F9);
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -167,7 +169,10 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
             return obj.name.toLowerCase().contains(_searchQuery.toLowerCase());
           }).toList();
 
+          final isLightMode = Theme.of(context).brightness == Brightness.light;
+
           return Scaffold(
+            backgroundColor: isLightMode ? _lightBackgroundColor : null,
             body: Column(
               children: [
                 SafeArea(
@@ -326,7 +331,9 @@ class _TrashAppBar extends StatelessWidget {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
+        color: theme.brightness == Brightness.light
+            ? _MobileHomeTrashPageState._lightBackgroundColor
+            : theme.scaffoldBackgroundColor,
         border: Border(
           bottom: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.5),
