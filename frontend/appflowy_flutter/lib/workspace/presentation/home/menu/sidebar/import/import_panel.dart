@@ -349,11 +349,10 @@ class _MobileImportOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     const radius = BorderRadius.all(Radius.circular(8));
 
     return Material(
-      color: colorScheme.surface,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: radius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -366,10 +365,7 @@ class _MobileImportOption extends StatelessWidget {
               children: [
                 SizedBox.square(
                   dimension: 20,
-                  child: FlowySvg(
-                    FlowySvgs.board_s,
-                    color: colorScheme.tertiary,
-                  ),
+                  child: type.icon(context),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -377,7 +373,7 @@ class _MobileImportOption extends StatelessWidget {
                     type.toString(),
                     fontSize: 16,
                     overflow: TextOverflow.ellipsis,
-                    color: colorScheme.tertiary,
+                    color: Theme.of(context).colorScheme.tertiary,
                   ),
                 ),
               ],
