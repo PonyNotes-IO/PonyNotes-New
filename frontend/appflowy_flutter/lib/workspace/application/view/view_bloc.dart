@@ -101,6 +101,31 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     );
   }
 
+  Future<FlowyResult<void, FlowyError>?> moveView({
+    required ViewPB from,
+    required String newParentId,
+    required String? prevId,
+    required ViewSectionPB? fromSection,
+    required ViewSectionPB? toSection,
+  }) async {
+    final canMove = await _checkMovePermission();
+    if (!canMove) {
+      showToastNotification(
+        message: '受限成员无法移动文档',
+        type: ToastificationType.error,
+      );
+      return null;
+    }
+
+    return ViewBackendService.moveViewV2(
+      viewId: from.id,
+      newParentId: newParentId,
+      prevViewId: prevId,
+      fromSection: fromSection,
+      toSection: toSection,
+    );
+  }
+
   @override
   Future<void> close() async {
     await listener.stop();
@@ -408,23 +433,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           move: (value) async {
-            // 检查用户是否有移动权限（Guest 角色无法移动）
-            final canMove = await _checkMovePermission();
-            if (!canMove) {
-              showToastNotification(
-                message: '受限成员无法移动文档',
-                type: ToastificationType.error,
-              );
-              return;
-            }
-
-            final result = await ViewBackendService.moveViewV2(
-              viewId: value.from.id,
+            final result = await moveView(
+              from: value.from,
               newParentId: value.newParentId,
-              prevViewId: value.prevId,
+              prevId: value.prevId,
               fromSection: value.fromSection,
               toSection: value.toSection,
             );
+            if (result == null) {
+              return;
+            }
             emit(
               result.fold(
                 (l) {

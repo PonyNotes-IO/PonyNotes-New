@@ -17,6 +17,27 @@ enum DraggableHoverPosition {
   bottom,
 }
 
+({String targetParentId, String? prevViewId})? draggableViewMoveTarget({
+  required DraggableHoverPosition position,
+  required ViewPB target,
+  required String? previousViewId,
+}) =>
+    switch (position) {
+      DraggableHoverPosition.top => (
+          targetParentId: target.parentViewId,
+          prevViewId: previousViewId,
+        ),
+      DraggableHoverPosition.center => (
+          targetParentId: target.id,
+          prevViewId: null,
+        ),
+      DraggableHoverPosition.bottom => (
+          targetParentId: target.parentViewId,
+          prevViewId: target.id,
+        ),
+      DraggableHoverPosition.none => null,
+    };
+
 const kDraggableViewItemDividerHeight = 1.0;
 
 class DraggableViewItem extends StatefulWidget {
@@ -92,10 +113,10 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
         // 确保离开时清理位置状态
         _updatePosition(DraggableHoverPosition.none);
       },
-      onAcceptWithDetails: (details) {
-        final data = details.data;
-        _move(data, widget.view);
+      onAcceptWithDetails: (details) async {
+        final dropPosition = position;
         _updatePosition(DraggableHoverPosition.none);
+        await _move(details.data, widget.view, dropPosition);
       },
       feedback: IntrinsicWidth(
         child: Opacity(
@@ -218,14 +239,28 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     setState(() => this.position = position);
   }
 
-  Future<void> _move(ViewPB from, ViewPB to) async {
-    if (position == DraggableHoverPosition.center && to.layout.isDatabaseView) {
+  Future<void> _move(
+    ViewPB from,
+    ViewPB to,
+    DraggableHoverPosition dropPosition,
+  ) async {
+    if (dropPosition == DraggableHoverPosition.center &&
+        to.layout.isDatabaseView) {
       // not support moving into a database view (Grid/Board/Calendar)
       return;
     }
 
     if (widget.onMove != null) {
       widget.onMove?.call(from, to);
+      return;
+    }
+
+    final target = draggableViewMoveTarget(
+      position: dropPosition,
+      target: to,
+      previousViewId: widget.previousViewId,
+    );
+    if (target == null) {
       return;
     }
 
@@ -236,35 +271,20 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
 
     final viewBloc = context.read<ViewBloc>();
 
-    switch (position) {
-      case DraggableHoverPosition.top:
-      case DraggableHoverPosition.bottom:
-      case DraggableHoverPosition.center:
-        final outcome = await coordinateViewMove(
-          context,
-          viewBloc: viewBloc,
-          view: from,
-          targetParentId: position == DraggableHoverPosition.center
-              ? to.id
-              : to.parentViewId,
-          // bottom 排在 to 之后；top 排在前一项之后，首项则置顶。
-          prevViewId: position == DraggableHoverPosition.bottom
-              ? to.id
-              : position == DraggableHoverPosition.top
-                  ? widget.previousViewId
-                  : null,
-          fromSection: fromSection,
-          toSection: toSection,
-        );
-        if (outcome == CrossSpaceMoveOutcome.aborted) {
-          return;
-        }
-        if (mounted) {
-          refreshSidebarMoveState(context);
-        }
-        break;
-      case DraggableHoverPosition.none:
-        break;
+    final outcome = await coordinateViewMove(
+      context,
+      viewBloc: viewBloc,
+      view: from,
+      targetParentId: target.targetParentId,
+      prevViewId: target.prevViewId,
+      fromSection: fromSection,
+      toSection: toSection,
+    );
+    if (outcome == CrossSpaceMoveOutcome.aborted) {
+      return;
+    }
+    if (mounted) {
+      refreshSidebarMoveState(context);
     }
   }
 

@@ -1,13 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/features/workspace/logic/workspace_state.dart';
+import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_item.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:fixnum/fixnum.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -132,4 +138,146 @@ void main() {
     expect(bloc.getViewSection(moved), ViewSectionPB.Public);
     await bloc.close();
   });
+
+  test('private-to-private moves use the offline folder path', () {
+    expect(
+      isOfflinePrivateMove(ViewSectionPB.Private, ViewSectionPB.Private),
+      isTrue,
+    );
+    expect(
+      isOfflinePrivateMove(ViewSectionPB.Private, ViewSectionPB.Public),
+      isFalse,
+    );
+  });
+
+  test('drop positions preserve sibling, nesting, and parent-lift semantics',
+      () {
+    final target = ViewPB()
+      ..id = 'target'
+      ..parentViewId = 'target-parent';
+
+    expect(
+      draggableViewMoveTarget(
+        position: DraggableHoverPosition.top,
+        target: target,
+        previousViewId: 'previous-sibling',
+      ),
+      (targetParentId: 'target-parent', prevViewId: 'previous-sibling'),
+    );
+    expect(
+      draggableViewMoveTarget(
+        position: DraggableHoverPosition.center,
+        target: target,
+        previousViewId: 'previous-sibling',
+      ),
+      (targetParentId: 'target', prevViewId: null),
+    );
+    expect(
+      draggableViewMoveTarget(
+        position: DraggableHoverPosition.bottom,
+        target: target,
+        previousViewId: 'previous-sibling',
+      ),
+      (targetParentId: 'target-parent', prevViewId: 'target'),
+    );
+  });
+
+  testWidgets('same-section moves wait for the folder result', (tester) async {
+    late BuildContext context;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Builder(
+          builder: (builderContext) {
+            context = builderContext;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final view = ViewPB()
+      ..id = 'child'
+      ..parentViewId = 'old-parent';
+    final viewBloc = _RecordingViewBloc();
+    var completed = false;
+    final move = coordinateViewMove(
+      context,
+      viewBloc: viewBloc,
+      view: view,
+      targetParentId: 'new-parent',
+      prevViewId: 'previous-sibling',
+      fromSection: ViewSectionPB.Public,
+      toSection: ViewSectionPB.Public,
+    ).then((outcome) {
+      completed = true;
+      return outcome;
+    });
+
+    await tester.pump();
+    expect(completed, isFalse);
+    expect(viewBloc.newParentId, 'new-parent');
+    expect(viewBloc.prevId, 'previous-sibling');
+    expect(viewBloc.fromSection, ViewSectionPB.Public);
+    expect(viewBloc.toSection, ViewSectionPB.Public);
+
+    viewBloc.moveCompleter.complete(FlowyResult.success(null));
+    await tester.pump();
+
+    expect(await move, CrossSpaceMoveOutcome.moved);
+    await viewBloc.close();
+  });
+
+  testWidgets('private space section resolves from local metadata',
+      (tester) async {
+    late BuildContext context;
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Builder(
+          builder: (builderContext) {
+            context = builderContext;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+    final privateSpace = ViewPB()
+      ..id = 'private-space'
+      ..extra = jsonEncode({'is_space': true, 'space_permission': 1});
+
+    expect(
+      await resolveViewSection(context, privateSpace),
+      ViewSectionPB.Private,
+    );
+  });
+}
+
+class _RecordingViewBloc extends ViewBloc {
+  _RecordingViewBloc() : super(view: ViewPB()..id = 'recording-view');
+
+  final moveCompleter = Completer<FlowyResult<void, FlowyError>?>();
+  String? newParentId;
+  String? prevId;
+  ViewSectionPB? fromSection;
+  ViewSectionPB? toSection;
+
+  @override
+  Future<FlowyResult<void, FlowyError>?> moveView({
+    required ViewPB from,
+    required String newParentId,
+    required String? prevId,
+    required ViewSectionPB? fromSection,
+    required ViewSectionPB? toSection,
+  }) {
+    this.newParentId = newParentId;
+    this.prevId = prevId;
+    this.fromSection = fromSection;
+    this.toSection = toSection;
+    return moveCompleter.future;
+  }
+
+  @override
+  // ignore: must_call_super
+  Future<void> close() async {}
 }

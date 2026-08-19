@@ -6,6 +6,7 @@ import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
@@ -103,6 +104,12 @@ bool canCurrentUserMoveWhiteboard(ViewPB view, int currentUserId) {
       (view.hasCreatedBy() && view.createdBy.toInt() == currentUserId);
 }
 
+bool isOfflinePrivateMove(
+  ViewSectionPB? fromSection,
+  ViewSectionPB? toSection,
+) =>
+    fromSection == ViewSectionPB.Private && toSection == ViewSectionPB.Private;
+
 Future<ViewSectionPB?> resolveViewSection(
   BuildContext context,
   ViewPB view, {
@@ -112,19 +119,22 @@ Future<ViewSectionPB?> resolveViewSection(
     return fallback;
   }
 
-  SidebarSectionsBloc sectionsBloc;
+  SidebarSectionsBloc? sectionsBloc;
   try {
     sectionsBloc = context.read<SidebarSectionsBloc>();
-  } catch (_) {
-    return null;
-  }
+  } catch (_) {}
 
   var current = view;
   final visited = <String>{};
   while (visited.add(current.id)) {
-    final section = sectionsBloc.getViewSection(current);
+    final section = sectionsBloc?.getViewSection(current);
     if (section != null) {
       return section;
+    }
+    if (current.isSpace) {
+      return current.spacePermission == SpacePermission.private
+          ? ViewSectionPB.Private
+          : ViewSectionPB.Public;
     }
     if (current.parentViewId.isEmpty) {
       return null;
@@ -232,15 +242,38 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
   }
 
   beforeSubmit?.call();
-  viewBloc.add(
-    ViewEvent.move(
-      view,
-      targetParentId,
-      prevViewId,
-      fromSection,
-      toSection,
-    ),
-  );
+  final result = isOfflinePrivateMove(fromSection, toSection)
+      ? await ViewBackendService.moveViewV2(
+          viewId: view.id,
+          newParentId: targetParentId,
+          prevViewId: prevViewId,
+          fromSection: fromSection,
+          toSection: toSection,
+        )
+      : await viewBloc.moveView(
+          from: view,
+          newParentId: targetParentId,
+          prevId: prevViewId,
+          fromSection: fromSection,
+          toSection: toSection,
+        );
+  if (result == null) {
+    return CrossSpaceMoveOutcome.aborted;
+  }
+
+  String? errorMessage;
+  result.fold((_) {}, (error) => errorMessage = error.msg);
+  if (errorMessage != null) {
+    Log.error(
+      '[CrossSpaceMove] 同区移动提交失败，原位置保持不变：'
+      'view=${view.id}, error=$errorMessage',
+    );
+    showToastNotification(
+      message: errorMessage!,
+      type: ToastificationType.error,
+    );
+    return CrossSpaceMoveOutcome.aborted;
+  }
   return CrossSpaceMoveOutcome.moved;
 }
 
