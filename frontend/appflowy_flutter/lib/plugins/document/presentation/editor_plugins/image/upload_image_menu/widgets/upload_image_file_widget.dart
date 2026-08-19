@@ -29,8 +29,13 @@ class UploadImageFileWidget extends StatelessWidget {
     Widget child = FlowyButton(
       backgroundColor: Theme.of(context).colorScheme.primary,
       hoverColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
-      showDefaultBoxDecorationOnMobile: true,
-      radius: PlatformInfo.isMobile ? BorderRadius.circular(8.0) : null,
+      decoration: PlatformInfo.isMobile
+          ? BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              borderRadius:
+                  const BorderRadius.all(Radius.circular(100)),
+            )
+          : null,
       text: Container(
         margin: const EdgeInsets.all(4.0),
         alignment: Alignment.center,

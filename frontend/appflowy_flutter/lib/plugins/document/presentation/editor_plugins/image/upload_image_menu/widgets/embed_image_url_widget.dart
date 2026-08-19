@@ -53,25 +53,26 @@ class _EmbedImageUrlWidgetState extends State<EmbedImageUrlWidget> {
           ),
         ],
         const VSpace(20),
-        SizedBox(
-          height: PlatformInfo.isMobile ? 36 : 32,
-          width: 300,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           child: FlowyButton(
             backgroundColor: Theme.of(context).colorScheme.primary,
             hoverColor:
                 Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
-            showDefaultBoxDecorationOnMobile: true,
-            radius:
-                PlatformInfo.isMobile ? BorderRadius.circular(8) : null,
-            margin: const EdgeInsets.all(5),
-            text: FlowyText(
-              LocaleKeys.document_imageBlock_embedLink_label.tr(),
-              lineHeight: 1,
-              textAlign: TextAlign.center,
-              color: PlatformInfo.isMobile
-                  ? null
-                  : Theme.of(context).colorScheme.onPrimary,
-              fontSize: PlatformInfo.isMobile ? 14 : null,
+            decoration: PlatformInfo.isMobile
+                ? BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius:
+                        const BorderRadius.all(Radius.circular(100)),
+                  )
+                : null,
+            text: Container(
+              margin: const EdgeInsets.all(4.0),
+              alignment: Alignment.center,
+              child: FlowyText(
+                LocaleKeys.document_imageBlock_embedLink_label.tr(),
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
             onTap: submit,
           ),
