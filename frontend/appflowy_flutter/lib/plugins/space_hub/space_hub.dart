@@ -18,6 +18,7 @@ import 'package:appflowy/workspace/application/recent/cached_recent_service.dart
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/plugins/space_hub/space_hub_selection.dart';
+import 'package:appflowy/plugins/space_hub/space_hub_plugin_view.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -789,6 +790,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             // 左侧：空间文档列表
             Visibility(
               visible: _isDocumentListVisible && !isFullWindow,
+              maintainState: true,
               child: documentListPanel,
             ),
             Visibility(
@@ -833,12 +835,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   }
 
   Widget _buildSelectedViewContent(ViewPB view) {
-    // 根据 view 的类型创建对应的插件并展示
     try {
-      final plugin = view.plugin();
-      // 确保插件已初始化
-      plugin.init();
-
       // 获取 userProfile - AI Chat 等插件需要用户信息
       UserProfilePB? userProfile;
       try {
@@ -876,50 +873,51 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
       final parentView = _getParentView(view);
 
-      // 为文档、文件夹和笔记本类型的视图创建 DocumentPage
-      try {
-        final plugin = view.plugin();
-        if (plugin.pluginType == PluginType.document ||
-            plugin.pluginType == PluginType.folder ||
-            plugin.pluginType == PluginType.notebook) {
-          // 将 viewInfoBloc 作为参数传给 DocumentPage。
-          //
-          // ⚠️ 关键修复：必须为“当前选中的子文档”单独提供一个绑定到它自己的
-          // PageAccessLevelBloc，遮蔽掉祖先（_SpaceHubBlocProvider）提供的
-          // “SpaceHub 主视图”的那个 bloc。
-          //
-          // 否则 DocumentPage / editor_page 会通过 context 读到 SpaceHub 主视图
-          // 的权限（通常是 space，creator=自己 → fullAccess），导致无论子文档
-          // 实际权限是不是只读，editorState.editable 都是 true：只读用户仍能输入，
-          // 这些本地编辑被服务端拒绝（他人看不见），却残留在本地 CRDT，重新授权
-          // 为可编辑时一次性回放到其他协作者页面。
-          //
-          // 用 create 形式让 BlocProvider 自动管理生命周期：ValueKey(view.id)
-          // 保证切换子文档时旧 bloc 被 close、为新文档重建，零泄漏。
-          return BlocProvider<PageAccessLevelBloc>(
-            key: ValueKey('page_access_${view.id}'),
-            create: (_) => PageAccessLevelBloc(view: view)
-              ..add(const PageAccessLevelEvent.initial()),
-            child: _buildContentWithToolbar(
+      final isDocumentLike = switch (view.layout) {
+        ViewLayoutPB.Document ||
+        ViewLayoutPB.Folder ||
+        ViewLayoutPB.Notebook =>
+          true,
+        _ => false,
+      };
+
+      // 文档直接使用 SpaceHub 管理的 Bloc，不创建临时 DocumentPlugin。
+      if (isDocumentLike) {
+        // 将 viewInfoBloc 作为参数传给 DocumentPage。
+        //
+        // ⚠️ 关键修复：必须为“当前选中的子文档”单独提供一个绑定到它自己的
+        // PageAccessLevelBloc，遮蔽掉祖先（_SpaceHubBlocProvider）提供的
+        // “SpaceHub 主视图”的那个 bloc。
+        //
+        // 否则 DocumentPage / editor_page 会通过 context 读到 SpaceHub 主视图
+        // 的权限（通常是 space，creator=自己 → fullAccess），导致无论子文档
+        // 实际权限是不是只读，editorState.editable 都是 true：只读用户仍能输入，
+        // 这些本地编辑被服务端拒绝（他人看不见），却残留在本地 CRDT，重新授权
+        // 为可编辑时一次性回放到其他协作者页面。
+        //
+        // 用 create 形式让 BlocProvider 自动管理生命周期：ValueKey(view.id)
+        // 保证切换子文档时旧 bloc 被 close、为新文档重建，零泄漏。
+        return BlocProvider<PageAccessLevelBloc>(
+          key: ValueKey('page_access_${view.id}'),
+          create: (_) => PageAccessLevelBloc(view: view)
+            ..add(const PageAccessLevelEvent.initial()),
+          child: _buildContentWithToolbar(
+            view: view,
+            viewInfoBloc: viewInfoBloc,
+            child: DocumentPage(
+              key: ValueKey(view.id),
               view: view,
+              onDeleted: () => _onChildViewDeleted(view, null),
+              tabs: const [
+                PickerTabType.emoji,
+                PickerTabType.icon,
+                PickerTabType.custom,
+              ],
               viewInfoBloc: viewInfoBloc,
-              child: DocumentPage(
-                key: ValueKey(view.id),
-                view: view,
-                onDeleted: () => _onChildViewDeleted(view, null),
-                tabs: const [
-                  PickerTabType.emoji,
-                  PickerTabType.icon,
-                  PickerTabType.custom,
-                ],
-                viewInfoBloc: viewInfoBloc,
-              ),
-              parentView: parentView,
             ),
-          );
-        }
-      } catch (e) {
-        // 静默处理错误
+            parentView: parentView,
+          ),
+        );
       }
 
       // 其他类型的视图（如 AI Chat、白板等）
@@ -938,12 +936,16 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         //   · 同时 WebView 也被反复重建。
         // 加稳定 key 后，同一 view 在 SpaceHub 重建期间复用同一个 State（didUpdateWidget
         // 而非 dispose 重建），同步流保持单条、稳定。
-        child: KeyedSubtree(
-          key: ValueKey('space_hub_view_${view.id}'),
-          child: plugin.widgetBuilder.buildWidget(
+        child: SpaceHubPluginView(
+          key: ValueKey(
+            'space_hub_plugin_${view.id}_${view.layout.value}',
+          ),
+          view: view,
+          createPlugin: () => view.plugin(),
+          builder: (context, plugin) => plugin.widgetBuilder.buildWidget(
             context: PluginContext(
               onDeleted: _onChildViewDeleted,
-              userProfile: userProfile, // 传入用户配置
+              userProfile: userProfile,
             ),
             shrinkWrap: false,
             data: view.layout == ViewLayoutPB.Whiteboard
