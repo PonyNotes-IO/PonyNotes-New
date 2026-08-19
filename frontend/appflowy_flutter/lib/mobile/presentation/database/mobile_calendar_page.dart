@@ -45,9 +45,9 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   DateTime? _selectedDay;
   final ScheduleModel _scheduleModel = ScheduleModel();
   String? _currentViewId;
-  bool _isLoadingNotes = false;
-  List<ViewPB> _notesForDate = [];
-  Map<String, ViewPB> _viewById = {};
+  // 用于主动触发 [MobileCalendarDayContent] 重新加载
+  final GlobalKey<_MobileCalendarDayContentState> _dayContentKey =
+      GlobalKey<_MobileCalendarDayContentState>();
 
   @override
   void initState() {
@@ -57,15 +57,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     // 延迟初始化数据库，避免阻塞 UI
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeCalendarView();
-      _loadNotesForDate();
     });
-    _scheduleModel.addListener(_onSchedulesChanged);
-  }
-
-  void _onSchedulesChanged() {
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   Future<void> _initializeCalendarView() async {
@@ -102,102 +94,17 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   @override
   void dispose() {
-    _scheduleModel.removeListener(_onSchedulesChanged);
     _scheduleModel.dispose();
     super.dispose();
   }
 
   void _onDaySelected(DateTime selected, DateTime focused) {
+    // 只更新日期状态，触发子 widget [MobileCalendarDayContent] 重新加载数据，
+    // 避免父级整页刷新带来的视觉抖动。
     setState(() {
       _selectedDay = selected;
       _focusedDay = focused;
     });
-    _loadNotesForDate();
-  }
-
-  Future<void> _loadNotesForDate() async {
-    if (_selectedDay == null) return;
-
-    setState(() => _isLoadingNotes = true);
-
-    try {
-      final allViewsResult = await ViewBackendService.getAllViews();
-
-      await allViewsResult.fold(
-        (allViews) async {
-          _viewById = {for (final v in allViews.items) v.id: v};
-
-          final documentViews = allViews.items.where((view) {
-            return view.layout == ViewLayoutPB.Document &&
-                view.name.isNotEmpty &&
-                !_isSystemView(view.name) &&
-                !_isChildOfDatabaseView(view);
-          }).toList();
-
-          final selectedDateStart = DateTime(
-            _selectedDay!.year,
-            _selectedDay!.month,
-            _selectedDay!.day,
-          );
-          final selectedDateEnd = selectedDateStart.add(const Duration(days: 1));
-
-          final notesForDate = documentViews.where((view) {
-            final createTime = DateTime.fromMillisecondsSinceEpoch(
-              view.createTime.toInt() * 1000,
-            );
-            return createTime.isAfter(selectedDateStart) &&
-                createTime.isBefore(selectedDateEnd);
-          }).toList();
-
-          notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
-
-          if (mounted) {
-            setState(() {
-              _notesForDate = notesForDate;
-              _isLoadingNotes = false;
-            });
-          }
-        },
-        (error) {
-          if (mounted) {
-            setState(() {
-              _notesForDate = [];
-              _isLoadingNotes = false;
-            });
-          }
-        },
-      );
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _notesForDate = [];
-          _isLoadingNotes = false;
-        });
-      }
-    }
-  }
-
-  bool _isSystemView(String viewName) {
-    const systemViewNames = [
-      'Workspace', 'workspace', 'Workspace Settings',
-      'Getting Started', 'Welcome', 'Home', 'Inbox',
-      'Favorites', 'Trash', 'Settings', 'Preferences',
-      'Help', 'About',
-    ];
-    return systemViewNames.contains(viewName) ||
-        viewName.toLowerCase().contains('workspace') ||
-        viewName.toLowerCase().contains('system') ||
-        viewName.toLowerCase().contains('setting');
-  }
-
-  bool _isChildOfDatabaseView(ViewPB view) {
-    final pid = view.parentViewId;
-    if (pid.isEmpty) return false;
-    final parent = _viewById[pid];
-    if (parent == null) return false;
-    return parent.layout == ViewLayoutPB.Grid ||
-        parent.layout == ViewLayoutPB.Board ||
-        parent.layout == ViewLayoutPB.Calendar;
   }
 
   void _onNoteTap(ViewPB note) {
@@ -211,25 +118,14 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           schedule: schedule,
           scheduleModel: _scheduleModel,
           onEventUpdated: () {
-            // 刷新数据
-            setState(() {});
+            // 数据由 ScheduleModel 的 notifyListeners 通知本卡片刷新
           },
           onEventDeleted: () {
-            // 刷新数据
-            setState(() {});
+            // 数据由 ScheduleModel 的 notifyListeners 通知本卡片刷新
           },
         ),
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
-
-  List<ScheduleItem> _getSchedulesForDate() {
-    if (_currentViewId == null || _selectedDay == null) return [];
-    return _scheduleModel.getSchedulesForDate(_selectedDay!);
   }
 
   @override
@@ -251,11 +147,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   Widget _buildScrollableContent() {
-    if (_isLoadingNotes) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final schedules = _getSchedulesForDate();
+    final selectedDate = _selectedDay ?? _focusedDay;
 
     return SingleChildScrollView(
       child: Column(
@@ -264,36 +156,16 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           _buildMonthHeader(),
           // 日期选择器
           _buildCalendar(),
-          // 笔记和日程列表
+          // 笔记和日程列表（独立 State，切换日期仅本卡片刷新）
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDateTitle(),
-                  if (_notesForDate.isEmpty && schedules.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: _buildEmptyState(),
-                    )
-                  else ...[
-                    if (_notesForDate.isNotEmpty) ...[
-                      ..._notesForDate.map((note) => _buildNoteItem(note)),
-                      if (schedules.isNotEmpty) const Divider(height: 1),
-                    ],
-                    ...schedules.map((schedule) => _buildScheduleItem(schedule)),
-                  ],
-                ],
-              ),
+            child: MobileCalendarDayContent(
+              key: _dayContentKey,
+              selectedDate: selectedDate,
+              scheduleModel: _scheduleModel,
+              onNoteTap: _onNoteTap,
+              onScheduleTap: _onScheduleTap,
+              onCreateSchedule: () => _showCreateScheduleDialog(selectedDate),
             ),
           ),
         ],
@@ -571,7 +443,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           // 延迟刷新日历内容以显示新创建的日记
           Future.delayed(const Duration(milliseconds: 500), () {
             if (mounted) {
-              _loadNotesForDate();
+              _dayContentKey.currentState?.refreshData();
             }
           });
         },
@@ -715,29 +587,15 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     );
   }
 
-  Widget _buildDateTitle() {
-    if (_selectedDay == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Text(
-        '${_selectedDay!.year}年${_selectedDay!.month}月${_selectedDay!.day}日',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-      ),
-    );
-  }
-
-  void _showCreateScheduleDialog() {
-    final selectedDate = _selectedDay ?? DateTime.now();
+  void _showCreateScheduleDialog([DateTime? date]) {
+    final selectedDate = date ?? _selectedDay ?? DateTime.now();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => MobileNewEventPage(
           selectedDate: selectedDate,
           scheduleModel: _scheduleModel,
           onEventCreated: () {
-            // 刷新列表
-            _loadNotesForDate();
+            // 数据由 ScheduleModel 的 notifyListeners 通知本卡片刷新
           },
         ),
       ),
@@ -776,10 +634,241 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
       ),
     );
   }
+}
+
+/// 当日笔记 + 日程列表（独立 State，自管加载/缓存）
+///
+/// 设计目标：
+/// 1. 选择日期时只有本 widget 内部重建并加载数据；
+/// 2. 父级 [MobileCalendarPage] 只需要切换 [selectedDate]，不再触发整页刷新。
+/// 3. 通过 [ListenableBuilder] 监听 [ScheduleModel]，日程变更时局部刷新。
+class MobileCalendarDayContent extends StatefulWidget {
+  const MobileCalendarDayContent({
+    super.key,
+    required this.selectedDate,
+    required this.scheduleModel,
+    required this.onNoteTap,
+    required this.onScheduleTap,
+    required this.onCreateSchedule,
+  });
+
+  final DateTime selectedDate;
+  final ScheduleModel scheduleModel;
+  final ValueChanged<ViewPB> onNoteTap;
+  final ValueChanged<ScheduleItem> onScheduleTap;
+  final VoidCallback onCreateSchedule;
+
+  @override
+  State<MobileCalendarDayContent> createState() =>
+      _MobileCalendarDayContentState();
+}
+
+class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
+  bool _isLoading = false;
+  List<ViewPB> _notesForDate = [];
+  Map<String, ViewPB> _viewById = {};
+
+  /// 公共方法：外部可主动触发重新加载（如新建日记后）
+  void refreshData() {
+    _loadNotesForDate(widget.selectedDate);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 初始加载
+    _loadNotesForDate(widget.selectedDate);
+    // 监听日程变化（仅本 widget 重建）
+    widget.scheduleModel.addListener(_onSchedulesChanged);
+  }
+
+  @override
+  void didUpdateWidget(MobileCalendarDayContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      // 日期切换：重新加载笔记
+      _loadNotesForDate(widget.selectedDate);
+    }
+    if (oldWidget.scheduleModel != widget.scheduleModel) {
+      oldWidget.scheduleModel.removeListener(_onSchedulesChanged);
+      widget.scheduleModel.addListener(_onSchedulesChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.scheduleModel.removeListener(_onSchedulesChanged);
+    super.dispose();
+  }
+
+  void _onSchedulesChanged() {
+    if (mounted) setState(() {});
+  }
+
+  bool _isSystemView(String viewName) {
+    const systemViewNames = [
+      'Workspace', 'workspace', 'Workspace Settings',
+      'Getting Started', 'Welcome', 'Home', 'Inbox',
+      'Favorites', 'Trash', 'Settings', 'Preferences',
+      'Help', 'About',
+    ];
+    return systemViewNames.contains(viewName) ||
+        viewName.toLowerCase().contains('workspace') ||
+        viewName.toLowerCase().contains('system') ||
+        viewName.toLowerCase().contains('setting');
+  }
+
+  bool _isChildOfDatabaseView(ViewPB view) {
+    final pid = view.parentViewId;
+    if (pid.isEmpty) return false;
+    final parent = _viewById[pid];
+    if (parent == null) return false;
+    return parent.layout == ViewLayoutPB.Grid ||
+        parent.layout == ViewLayoutPB.Board ||
+        parent.layout == ViewLayoutPB.Calendar;
+  }
+
+  Future<void> _loadNotesForDate(DateTime selectedDate) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final allViewsResult = await ViewBackendService.getAllViews();
+      if (!mounted) return;
+
+      await allViewsResult.fold(
+        (allViews) async {
+          if (!mounted) return;
+          _viewById = {for (final v in allViews.items) v.id: v};
+
+          final documentViews = allViews.items.where((view) {
+            return view.layout == ViewLayoutPB.Document &&
+                view.name.isNotEmpty &&
+                !_isSystemView(view.name) &&
+                !_isChildOfDatabaseView(view);
+          }).toList();
+
+          final selectedDateStart = DateTime(
+            selectedDate.year,
+            selectedDate.month,
+            selectedDate.day,
+          );
+          final selectedDateEnd =
+              selectedDateStart.add(const Duration(days: 1));
+
+          final notesForDate = documentViews.where((view) {
+            final createTime = DateTime.fromMillisecondsSinceEpoch(
+              view.createTime.toInt() * 1000,
+            );
+            return createTime.isAfter(selectedDateStart) &&
+                createTime.isBefore(selectedDateEnd);
+          }).toList();
+
+          notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
+
+          if (!mounted) return;
+          setState(() {
+            _notesForDate = notesForDate;
+            _isLoading = false;
+          });
+        },
+        (error) {
+          if (!mounted) return;
+          setState(() {
+            _notesForDate = [];
+            _isLoading = false;
+          });
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _notesForDate = [];
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _formatCreateTime(int timestamp) {
+    final createTime = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+    return '${createTime.hour.toString().padLeft(2, '0')}:${createTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 通过 ListenableBuilder 监听 scheduleModel，schedules 变化时只重建本卡片
+    return ListenableBuilder(
+      listenable: widget.scheduleModel,
+      builder: (context, _) {
+        final schedules = widget.scheduleModel.getSchedulesForDate(
+          widget.selectedDate,
+        );
+        final notesEmpty = _notesForDate.isEmpty;
+        final schedulesEmpty = schedules.isEmpty;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  Theme.of(context).dividerColor.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDateTitle(),
+              if (_isLoading && notesEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (notesEmpty && schedulesEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: _buildEmptyState(),
+                )
+              else ...[
+                if (_notesForDate.isNotEmpty) ...[
+                  ..._notesForDate.map((note) => _buildNoteItem(note)),
+                  if (schedules.isNotEmpty) const Divider(height: 1),
+                ],
+                ...schedules.map((schedule) => _buildScheduleItem(schedule)),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDateTitle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Text(
+        '${widget.selectedDate.year}年${widget.selectedDate.month}月${widget.selectedDate.day}日',
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+    );
+  }
 
   Widget _buildNoteItem(ViewPB note) {
     return InkWell(
-      onTap: () => _onNoteTap(note),
+      onTap: () => widget.onNoteTap(note),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         child: Row(
@@ -796,7 +885,10 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
             Text(
               _formatCreateTime(note.createTime.toInt()),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
                   ),
             ),
             const SizedBox(width: 8),
@@ -809,7 +901,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   Widget _buildScheduleItem(ScheduleItem schedule) {
     return InkWell(
-      onTap: () => _onScheduleTap(schedule),
+      onTap: () => widget.onScheduleTap(schedule),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         child: Row(
@@ -828,19 +920,25 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    schedule.title.isNotEmpty ? schedule.title : schedule.description,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          decoration: schedule.isCompleted
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
+                    schedule.title.isNotEmpty
+                        ? schedule.title
+                        : schedule.description,
+                    style:
+                        Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              decoration: schedule.isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                            ),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${_formatTime(schedule.startTime)} - ${_formatTime(schedule.endTime)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.6),
                         ),
                   ),
                 ],
@@ -853,11 +951,6 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     );
   }
 
-  String _formatCreateTime(int timestamp) {
-    final createTime = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
-    return '${createTime.hour.toString().padLeft(2, '0')}:${createTime.minute.toString().padLeft(2, '0')}';
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -866,13 +959,19 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           FlowySvg(
             FlowySvgs.m_empty_page_xl,
             size: const Size(80, 80),
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
             '当天暂无笔记和日程',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                 ),
           ),
         ],
