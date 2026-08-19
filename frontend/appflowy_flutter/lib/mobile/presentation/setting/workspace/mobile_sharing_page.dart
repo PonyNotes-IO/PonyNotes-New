@@ -367,7 +367,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     }
 
     views.sort(
-      (a, b) => b.view.createTime.toInt() - a.view.createTime.toInt(),
+      (a, b) => a.view.createTime.toInt() - b.view.createTime.toInt(),
     );
     return views;
   }
