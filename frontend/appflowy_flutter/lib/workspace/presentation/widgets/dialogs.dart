@@ -760,6 +760,9 @@ Future<void> showCancelAndConfirmDialog({
     context: context,
     builder: (_) {
       return Dialog(
+        // ConfirmPopup draws the dialog surface. Keep the outer Material
+        // transparent so its default background cannot show through corners.
+        backgroundColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.0),
         ),
@@ -1155,4 +1158,3 @@ Future<bool> showSimpleConfirmDialogAsync({
   );
   return result ?? false;
 }
-
