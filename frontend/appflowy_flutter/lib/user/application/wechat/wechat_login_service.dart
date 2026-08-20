@@ -8,8 +8,7 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:universal_platform/universal_platform.dart';
-// fluwx 仅在 iOS 端使用 (Android 端因腾讯 SDK 6.8.34 的 PendingIntent bug,
-// 改用 MainActivity.kt 内自写的 WeChatBridge 通过 MethodChannel 调用)
+// fluwx 用于保留 iOS 微信安装状态检查；iOS 登录授权由 Runner 原生桥接处理。
 import 'package:fluwx/fluwx.dart' as fluwx;
 
 /// Service for handling WeChat login
@@ -17,14 +16,17 @@ import 'package:fluwx/fluwx.dart' as fluwx;
 /// Platform routing:
 /// - **Android**: 通过 MethodChannel `com.xiaomabiji.app.note/wechat` 调用原生
 ///   WeChatBridge.kt。绕开腾讯 SDK 6.8.34 的 PendingIntent bug。
-/// - **iOS**: 继续使用 fluwx (iOS 上没有这个 bug)。
+/// - **iOS**: 通过 Runner 原生桥接调用微信 SDK 的 sendAuthReq。
 /// - **Desktop**: Web-based authorization (qrconnect + deep link 回调)。
 class WeChatLoginService {
-  WeChatLoginService._();
+  WeChatLoginService._() {
+    _iosSDKChannel.setMethodCallHandler(_handleIOSSDKCallback);
+  }
 
   static final WeChatLoginService instance = WeChatLoginService._();
 
   static const _channel = MethodChannel('com.xiaomabiji.app.note/wechat');
+  static const _iosSDKChannel = MethodChannel('ponynotes/wechat_sdk');
 
   /// Sentinel prefix used by [getAuthorizationCode] when the user dismisses the
   /// WeChat auth dialog without granting access. Callers (e.g. SignInBloc) use
@@ -41,6 +43,8 @@ class WeChatLoginService {
 
   Completer<String>? _codeWaiter;
   String? _expectedState;
+  Completer<String>? _iosCodeWaiter;
+  String? _iosExpectedState;
 
   /// Gets the authorization code from WeChat
   ///
@@ -65,19 +69,20 @@ class WeChatLoginService {
   /// Gets authorization code from mobile SDK
   ///
   /// Android: MethodChannel → WeChatBridge → 自构造 PendingIntent 绕开腾讯 SDK bug
-  /// iOS: fluwx
+  /// iOS: Runner 原生微信授权桥接
   Future<FlowyResult<String, String>> _getCodeFromMobileSDK() async {
     try {
       // Android 走自写桥接 (绕过腾讯 SDK 6.8.34 的 PendingIntent bug)
       if (UniversalPlatform.isAndroid) {
         return await _getCodeFromAndroidBridge();
       }
-      // iOS 继续用 fluwx
+      // iOS 使用原生微信授权桥接。
       if (UniversalPlatform.isIOS) {
-        return await _getCodeFromIOSFluwx();
+        return await _getCodeFromIOSNativeSDK();
       }
       return FlowyResult.failure(
-          'WeChat login is only supported on Android/iOS');
+        'WeChat login is only supported on Android/iOS',
+      );
     } on TimeoutException catch (e) {
       Log.error('🟢[WeChatLoginService] WeChat login timed out: $e');
       return FlowyResult.failure('WeChat login timed out');
@@ -123,116 +128,135 @@ class WeChatLoginService {
       // dismissed the auth dialog. Treat it as a benign cancel rather than an error.
       if (errCode == -2) {
         Log.info(
-            '🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
+          '🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)',
+        );
         return FlowyResult.failure('${cancelledPrefix}WeChat auth cancelled');
       }
       return FlowyResult.failure('WeChat login failed: errCode=$errCode');
     } on PlatformException catch (e) {
       Log.error(
-          '🟢[WeChatLoginService] WeChat PlatformException: ${e.code} ${e.message}');
+        '🟢[WeChatLoginService] WeChat PlatformException: ${e.code} ${e.message}',
+      );
       // The native WeChatBridge raises a PlatformException with code "CANCELLED"
       // when the user backs out of the WeChat auth flow without confirming.
       if (e.code == 'CANCELLED') {
         Log.info(
-            '🟢[WeChatLoginService] WeChat auth cancelled by user (PlatformException CANCELLED)');
+          '🟢[WeChatLoginService] WeChat auth cancelled by user (PlatformException CANCELLED)',
+        );
         return FlowyResult.failure('${cancelledPrefix}WeChat auth cancelled');
       }
       return FlowyResult.failure('WeChat login failed: ${e.message ?? e.code}');
     }
   }
 
-  /// iOS 端：继续用 fluwx (iOS 没有 Android 14 PendingIntent 问题)
-  Future<FlowyResult<String, String>> _getCodeFromIOSFluwx() async {
-    // Initialize WeChat SDK
-    await _initializeWeChatSDK();
-
-    // Check if WeChat is installed
-    final isInstalled = await isWeChatInstalled();
-    if (!isInstalled) {
-      return FlowyResult.failure(notInstalledError);
-    }
-
-    // Create a completer to wait for the authorization code
+  /// iOS 端：通过应用原生桥接调用 WXApi.sendAuthReq。
+  ///
+  /// fluwx 5.7.5 的 NormalAuth 最终调用 WXApi.sendReq。在当前真机上该
+  /// 调用被 SDK 拒绝；而微信 SDK 为登录单独提供了需要当前页面控制器的
+  /// sendAuthReq。由原生 AppDelegate 持有这个控制器并接收回调，避免插件
+  /// 使用已废弃 keyWindow 的兼容性问题。
+  Future<FlowyResult<String, String>> _getCodeFromIOSNativeSDK() async {
+    final state = DateTime.now().microsecondsSinceEpoch.toString();
     final codeCompleter = Completer<String>();
-
-    // Set up event handler for WeChat response
-    final subscription = fluwx.Fluwx().addSubscriber((event) {
-      if (event is fluwx.WeChatAuthResponse) {
-        final errCode = event.errCode;
-        final errStr = event.errStr ?? '<null>';
-        final codePreview = (event.code != null && event.code!.isNotEmpty)
-            ? '${event.code!.substring(0, event.code!.length.clamp(0, 8))}...'
-            : 'null';
-        Log.info(
-          '🟢[WeChatLoginService] WeChat response: '
-          'errCode=$errCode, errStr=$errStr, code=$codePreview',
-        );
-        if (errCode == 0) {
-          final code = event.code;
-          if (code != null && code.isNotEmpty) {
-            codeCompleter.complete(code);
-          } else {
-            codeCompleter.completeError(
-              'Invalid authorization code (errCode=0 but code is empty, errStr=$errStr)',
-            );
-          }
-        } else if (errCode == -2) {
-          // WeChat SDK ERR_USER_CANCEL: user dismissed the auth dialog.
-          Log.info(
-              '🟢[WeChatLoginService] WeChat auth cancelled by user (errCode=-2)');
-          codeCompleter
-              .completeError('${cancelledPrefix}WeChat auth cancelled');
-        } else {
-          codeCompleter.completeError(
-            'WeChat login failed: errCode=$errCode, errStr=$errStr',
-          );
-        }
-      }
-    });
-
-    await fluwx.Fluwx().authBy(
-      which: fluwx.PhoneLogin(
-        scope: 'snsapi_userinfo',
-        state: DateTime.now().microsecondsSinceEpoch.toString(),
-      ),
-    );
-
+    _iosCodeWaiter = codeCompleter;
+    _iosExpectedState = state;
     try {
+      final response = await _iosSDKChannel.invokeMapMethod<String, dynamic>(
+        'requestAuth',
+        <String, String>{
+          'scope': 'snsapi_userinfo',
+          'state': state,
+        },
+      );
+      final registered = response?['registered'] == true;
+      final installed = response?['installed'] == true;
+      final canOpenWeChatScheme = response?['canOpenWeChatScheme'] == true;
+      final requestSent = response?['requestSent'] == true;
+      Log.info(
+        '🟢[WeChatLoginService] iOS native WeChat auth result: '
+        'registered=$registered, installed=$installed, requestSent=$requestSent, '
+        'canOpenWeChatScheme=$canOpenWeChatScheme, '
+        'sdkVersion=${response?['sdkVersion']}, '
+        'supportsOpenApi=${response?['supportsOpenApi']}',
+      );
+      if (!installed) {
+        return FlowyResult.failure(notInstalledError);
+      }
+      if (!requestSent) {
+        return FlowyResult.failure(
+          'WeChat native SDK rejected the authorization request '
+          '(registered=$registered)',
+        );
+      }
+
       final code = await codeCompleter.future.timeout(
         const Duration(minutes: 2),
         onTimeout: () => throw TimeoutException('WeChat login timed out'),
       );
-      subscription.cancel();
       return FlowyResult.success(code);
     } on TimeoutException {
-      subscription.cancel();
       rethrow;
     } catch (e) {
-      subscription.cancel();
-      // Preserve the cancellation sentinel from the WeChatAuthResponse handler
-      // so SignInBloc can recognise user-initiated cancels.
+      // 保留取消标记，以便 SignInBloc 将用户取消识别为正常流程。
       if (e is String && e.startsWith(cancelledPrefix)) {
         return FlowyResult.failure(e);
       }
       rethrow;
+    } finally {
+      if (identical(_iosCodeWaiter, codeCompleter)) {
+        _iosCodeWaiter = null;
+        _iosExpectedState = null;
+      }
     }
   }
 
-  /// Initializes WeChat SDK (iOS only)
-  Future<void> _initializeWeChatSDK() async {
-    try {
-      const appId = 'wx3b1a7737f52a004b';
-      const universalLink = 'https://www.xiaomabiji.com/ponynotes/';
+  Future<void> _handleIOSSDKCallback(MethodCall call) async {
+    if (call.method == 'onSDKDiagnostic') {
+      final arguments = call.arguments as Map<dynamic, dynamic>?;
+      if (arguments != null) {
+        Log.info(
+          '🟢[WeChatLoginService] iOS SDK diagnostic: '
+          '${Map<String, dynamic>.from(arguments)}',
+        );
+      }
+      return;
+    }
 
-      await fluwx.Fluwx().registerApi(
-        appId: appId,
-        universalLink: universalLink,
+    if (call.method != 'onAuthResponse') {
+      return;
+    }
+    final arguments = call.arguments as Map<dynamic, dynamic>?;
+    final waiter = _iosCodeWaiter;
+    if (arguments == null || waiter == null || waiter.isCompleted) {
+      return;
+    }
+
+    final errCode = arguments['errCode'] as int? ?? -1;
+    final errStr = arguments['errStr'] as String? ?? '<null>';
+    final code = arguments['code'] as String?;
+    final state = arguments['state'] as String?;
+    final codePreview = (code != null && code.isNotEmpty)
+        ? '${code.substring(0, code.length.clamp(0, 8))}...'
+        : 'null';
+    Log.info(
+      '🟢[WeChatLoginService] iOS native WeChat response: '
+      'errCode=$errCode, errStr=$errStr, code=$codePreview, state=$state',
+    );
+
+    if (state != _iosExpectedState) {
+      Log.warn(
+        '🟢[WeChatLoginService] Ignored iOS WeChat response with unexpected state',
       );
-
-      Log.info('🟢[WeChatLoginService] WeChat SDK initialized successfully');
-    } catch (e) {
-      Log.error('🟢[WeChatLoginService] Failed to initialize WeChat SDK: $e');
-      throw Exception('Failed to initialize WeChat SDK: $e');
+      return;
+    }
+    if (errCode == 0 && code != null && code.isNotEmpty) {
+      waiter.complete(code);
+    } else if (errCode == -2) {
+      waiter.completeError('${cancelledPrefix}WeChat auth cancelled');
+    } else {
+      waiter.completeError(
+        'WeChat login failed: errCode=$errCode, errStr=$errStr',
+      );
     }
   }
 
@@ -288,17 +312,20 @@ class WeChatLoginService {
       if (UniversalPlatform.isAndroid) {
         final isInstalled = await _channel.invokeMethod<bool>('isInstalled');
         Log.info(
-            '🟢[WeChatLoginService] WeChat installed (android bridge): $isInstalled');
+          '🟢[WeChatLoginService] WeChat installed (android bridge): $isInstalled',
+        );
         return isInstalled ?? false;
       }
       // iOS: fluwx
       final isInstalled = await fluwx.Fluwx().isWeChatInstalled;
       Log.info(
-          '🟢[WeChatLoginService] WeChat installed (ios fluwx): $isInstalled');
+        '🟢[WeChatLoginService] WeChat installed (ios fluwx): $isInstalled',
+      );
       return isInstalled;
     } catch (e) {
       Log.error(
-          '🟢[WeChatLoginService] Error checking if WeChat is installed: $e');
+        '🟢[WeChatLoginService] Error checking if WeChat is installed: $e',
+      );
       return false;
     }
   }

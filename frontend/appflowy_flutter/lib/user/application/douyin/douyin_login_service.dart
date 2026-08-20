@@ -6,18 +6,18 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:douyin_login/douyin.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:installed_apps/installed_apps.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:universal_platform/universal_platform.dart';
 
-
 /// Service for handling DouYin (TikTok) login
-/// 
+///
 /// This service provides a unified interface for DouYin login across different platforms.
 /// For mobile platforms (Android/iOS), it should use the DouYin SDK.
 /// For desktop platforms (Windows/macOS/Linux), it may use web-based authorization.
 class DouYinLoginService {
   DouYinLoginService._();
-  
+
   static final DouYinLoginService instance = DouYinLoginService._();
 
   Completer<String>? _codeWaiter;
@@ -31,18 +31,18 @@ class DouYinLoginService {
   /// have the Douyin app installed. Callers (e.g. SignInBloc) match this
   /// exact string to display a friendly installation hint instead of the
   /// generic error toast.
-  static const String notInstalledError = 'Douyin is not installed on this device';
+  static const String notInstalledError =
+      'Douyin is not installed on this device';
 
   /// Gets the authorization code from DouYin
-  /// 
+  ///
   /// Returns the authorization code that can be used to exchange for access token
-  /// 
+  ///
   /// Note: This is a placeholder implementation. For production use:
   /// - Android/iOS: Integrate DouYin SDK
   /// - Desktop: Use web-based OAuth flow or QR code scanning
   Future<FlowyResult<String, String>> getAuthorizationCode() async {
     try {
-      
       if (PlatformInfo.isDesktopOrTablet) {
         // Desktop platform - use web-based authorization or QR code
         return await _getCodeFromDesktop();
@@ -61,13 +61,13 @@ class DouYinLoginService {
   }
 
   /// Gets authorization code from mobile SDK
-  /// 
+  ///
   /// For Android/iOS: Uses douyin_login plugin to integrate DouYin SDK
   Future<FlowyResult<String, String>> _getCodeFromMobileSDK() async {
     try {
       // 1. Initialize DouYin SDK
       await initPlatformState();
-      
+
       // 2. Check if DouYin is installed
       final isInstalled = await isDouYinInstalled();
       if (!isInstalled) {
@@ -83,13 +83,13 @@ class DouYinLoginService {
       await _douyinPlugin.authorLogin(
         scopeKey: 'trial.whitelist,user_info',
       );
-      
+
       // 5. Wait for the authorization code with timeout
       final code = await codeCompleter.future.timeout(
         const Duration(minutes: 2),
         onTimeout: () => throw TimeoutException('DouYin login timed out'),
       );
-      
+
       return FlowyResult.success(code);
     } on TimeoutException catch (e) {
       Log.error('🟢[DouYinLoginService] DouYin login timed out: $e');
@@ -101,13 +101,13 @@ class DouYinLoginService {
   }
 
   /// Gets authorization code from desktop
-  /// 
+  ///
   /// For desktop platforms, we can:
   /// 1. Use web-based OAuth flow (open browser)
   /// 2. Show QR code for scanning with mobile DouYin
-  /// 
+  ///
   /// Opens the DouYin OAuth URL in the system browser and waits for deep link callback.
-  /// 
+  ///
   /// Note: AppID (Client Key) can be hardcoded here as it's public in OAuth flow.
   /// AppSecret (Client Secret) must NEVER be in frontend code - it's only configured
   /// in backend environment variables (GOTRUE_EXTERNAL_THIRD_PARTY_DOU_YIN_CLIENT_SECRET).
@@ -186,14 +186,16 @@ class DouYinLoginService {
         }
       } else {
         // Login failed
-        codeCompleter.completeError('DouYin login failed: ${response.toJson()}');
+        codeCompleter
+            .completeError('DouYin login failed: ${response.toJson()}');
       }
     });
   }
 
   Future<void> initPlatformState() async {
     try {
-      // Initialize DouYin SDK with app key
+      // iOS SDK 生命周期已在 AppDelegate 的应用启动阶段完成初始化。
+      // 此处仅通过插件注册同一个公开 ClientKey 后再发送授权请求。
       await _douyinPlugin.registerDouyinApp(
         apiKey: 'aws8ujfhmwybxv72',
       );
@@ -211,32 +213,54 @@ class DouYinLoginService {
     if (!UniversalPlatform.isAndroid && !UniversalPlatform.isIOS) {
       return false;
     }
-    
+
     try {
-      // First try using douyin plugin's isInstalled method
-      try {
-        bool? isInstalled = false;
-        // Use installed_apps plugin to check if DouYin is installed
-        if (UniversalPlatform.isAndroid) {
-          // Android package name for DouYin
-          const douyinPackageName = 'com.ss.android.ugc.aweme';
-          isInstalled = await InstalledApps.isAppInstalled(douyinPackageName);
-          Log.info('🟢[DouYinLoginService] DouYin installed (Android): $isInstalled');
-        } else if (UniversalPlatform.isIOS) {
-          // iOS bundle ID for DouYin
-          const douyinBundleId = 'com.ss.iphone.ugc.Aweme';
-          isInstalled = await InstalledApps.isAppInstalled(douyinBundleId);
-          Log.info('🟢[DouYinLoginService] DouYin installed (iOS): $isInstalled');
-        }
-        return isInstalled ?? false;
-      } catch (e) {
-        Log.warn('🟢[DouYinLoginService] Using installed_apps plugin: $e');
-        return false;
+      if (UniversalPlatform.isAndroid) {
+        const douyinPackageName = 'com.ss.android.ugc.aweme';
+        final isInstalled =
+            await InstalledApps.isAppInstalled(douyinPackageName) ?? false;
+        Log.info(
+          '🟢[DouYinLoginService] DouYin installed (Android): $isInstalled',
+        );
+        return isInstalled;
       }
+
+      // installed_apps only implements Android. On iOS, query the URL schemes
+      // declared in Info.plist; package/bundle enumeration is not available.
+      const douyinSchemes = [
+        'douyinopensdk',
+        'douyinv1opensdk',
+        'douyinliteopensdk',
+        'douyinHTSOpenSDK',
+        'douyinDSOpenSDK',
+        'douyinSelectOpenSDK',
+        'douyinSearchOpenSDK',
+        'douyinsharesdk',
+        'douyinsharesdkLite',
+        'douyinsharesdkHTS',
+        'douyinsharesdkDS',
+        'douyinshareSelect',
+        'douyinshareSearch',
+        'snssdk1128',
+      ];
+      for (final scheme in douyinSchemes) {
+        if (await canLaunchUrl(Uri.parse('$scheme://'))) {
+          Log.info(
+            '🟢[DouYinLoginService] DouYin installed (iOS): true, scheme: $scheme',
+          );
+          return true;
+        }
+      }
+
+      Log.info(
+        '🟢[DouYinLoginService] DouYin installed (iOS): false',
+      );
+      return false;
     } catch (e) {
-      Log.error('🟢[DouYinLoginService] Error checking if DouYin is installed: $e');
+      Log.error(
+        '🟢[DouYinLoginService] Error checking if DouYin is installed: $e',
+      );
       return false;
     }
   }
 }
-

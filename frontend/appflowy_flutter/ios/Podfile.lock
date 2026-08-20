@@ -42,7 +42,7 @@ PODS:
   - douyin_login (0.0.1):
     - DouyinOpenSDK
     - Flutter
-  - DouyinOpenSDK (4.2.4)
+  - DouyinOpenSDK (4.2.5)
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
@@ -257,7 +257,7 @@ SPEC CHECKSUMS:
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
   douyin_login: e814fcfaa552f5a151b9f0c176ab18536bf2a87c
-  DouyinOpenSDK: a153567ba06ee0fdae56955c34482b2f2768c75d
+  DouyinOpenSDK: f7ef5783f185e612dd957d8e231cc4972f965190
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   flowy_infra_ui: 931b73a18b54a392ab6152eebe29a63a30751f53
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
@@ -294,6 +294,6 @@ SPEC CHECKSUMS:
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
   WechatOpenSDK-XCFramework: ff342ae616bb86df3d236aca38059dfd4bc4a949
 
-PODFILE CHECKSUM: 5a6f50c4caa5c1fe206eb3f15a557cf52a379436
+PODFILE CHECKSUM: 6eed22306ed6e713547984d480a7e1c94cea7ee3
 
 COCOAPODS: 1.16.2
