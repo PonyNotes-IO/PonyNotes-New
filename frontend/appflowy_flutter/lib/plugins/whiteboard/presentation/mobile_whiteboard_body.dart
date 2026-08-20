@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
@@ -10,6 +11,8 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -437,8 +440,28 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
       }
       
       final String finalFilename = _ensureFilenameExtension(filename, ext);
+      if (Platform.isAndroid || Platform.isIOS) {
+        final savePath = await GetIt.instance<FilePickerService>().saveFile(
+          dialogTitle: '保存白板图片',
+          fileName: finalFilename,
+          type: FileType.custom,
+          allowedExtensions: [ext],
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (savePath == null) {
+          Log.info('[MobileWhiteboard] 用户取消保存图片');
+          return;
+        }
+        Log.info('[MobileWhiteboard] 图片已保存: $savePath');
+        showToastNotification(
+          message: '图片已保存',
+          type: ToastificationType.success,
+        );
+        return;
+      }
       
       final Directory downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      await downloadsDir.create(recursive: true);
       final File file = File('${downloadsDir.path}/$finalFilename');
       
       await file.writeAsBytes(bytes);

@@ -2,6 +2,7 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -795,18 +796,21 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       };
 
       final filePicker = getIt<FilePickerService>();
+      final bytes = Uint8List.fromList(
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(ponyNotesData)),
+      );
       final savePath = await filePicker.saveFile(
         dialogTitle: '保存PonyNotes白板文件',
         fileName: '${widget.view.name}.ponynotes',
         type: FileType.custom,
         allowedExtensions: ['ponynotes', 'json'],
+        bytes: Platform.isAndroid || Platform.isIOS ? bytes : null,
       );
       if (savePath == null) return;
 
-      final file = File(savePath);
-      await file.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(ponyNotesData),
-      );
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(savePath).writeAsBytes(bytes);
+      }
 
       if (mounted) {
         showToastNotification(
@@ -827,23 +831,27 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   Future<void> _savePngDataUrl(String dataUrl) async {
     try {
-      final filePicker = getIt<FilePickerService>();
-      final savePath = await filePicker.saveFile(
-        dialogTitle: '保存PNG图片',
-        fileName: '${widget.view.name}.png',
-        type: FileType.custom,
-        allowedExtensions: ['png'],
-      );
-      if (savePath == null) return;
-
       final uri = Uri.parse(dataUrl);
       final data = uri.data;
       if (data == null) {
         throw Exception('PNG 数据为空');
       }
       final bytes = data.contentAsBytes();
-      final file = File(savePath);
-      await file.writeAsBytes(bytes);
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存PNG图片',
+        fileName: '${widget.view.name}.png',
+        type: FileType.custom,
+        allowedExtensions: ['png'],
+        bytes: Platform.isAndroid || Platform.isIOS
+            ? Uint8List.fromList(bytes)
+            : null,
+      );
+      if (savePath == null) return;
+
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(savePath).writeAsBytes(bytes);
+      }
 
       if (mounted) {
         showToastNotification(
@@ -870,11 +878,15 @@ class _WhiteboardPageState extends State<WhiteboardPage>
         fileName: '${widget.view.name}.svg',
         type: FileType.custom,
         allowedExtensions: ['svg'],
+        bytes: Platform.isAndroid || Platform.isIOS
+            ? Uint8List.fromList(utf8.encode(svgContent))
+            : null,
       );
       if (savePath == null) return;
 
-      final file = File(savePath);
-      await file.writeAsString(svgContent);
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(savePath).writeAsString(svgContent);
+      }
 
       if (mounted) {
         showToastNotification(

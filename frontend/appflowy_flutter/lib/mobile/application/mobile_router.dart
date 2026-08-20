@@ -6,11 +6,11 @@ import 'package:appflowy/mobile/presentation/database/board/mobile_board_screen.
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_grid_screen.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
-import 'package:appflowy/mobile/presentation/whiteboard/mobile_whiteboard_screen.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -59,6 +59,35 @@ extension MobileRouter on BuildContext {
   }
 }
 
+/// 将当前仍停留在旧白板页面的移动端路由替换为迁移后新建的协作白板。
+///
+/// 跨区迁移会创建新 view 并删除旧 view。侧栏刷新不会自动更新已经打开的
+/// MobileViewPage，因此必须替换路由；如果用户已经切走或当前页面不是源白板，
+/// 则不做任何导航，避免打断用户正在查看的其他页面。
+Future<void> replaceCurrentMobileView(
+  BuildContext context, {
+  required ViewPB oldView,
+  required ViewPB newView,
+}) async {
+  if (!PlatformInfo.isMobile || !context.mounted) return;
+
+  final router = GoRouter.of(context);
+  final currentUri = router.routerDelegate.currentConfiguration.uri;
+  final currentId = currentUri.queryParameters[MobileDocumentScreen.viewId];
+  if (currentId != oldView.id) return;
+
+  final queryParameters = <String, String>{
+    ...currentUri.queryParameters,
+    MobileDocumentScreen.viewId: newView.id,
+    MobileDocumentScreen.viewTitle: newView.name,
+  };
+  final newUri = Uri(
+    path: MobileDocumentScreen.routeName,
+    queryParameters: queryParameters,
+  );
+  await router.replace(newUri.toString());
+}
+
 extension on ViewPB {
   String get routeName {
     switch (layout) {
@@ -78,8 +107,6 @@ extension on ViewPB {
         return MobileBoardScreen.routeName;
       case ViewLayoutPB.Chat:
         return MobileChatScreen.routeName;
-      case ViewLayoutPB.Whiteboard:
-        return MobileWhiteboardScreen.routeName;
 
       default:
         throw UnimplementedError('routeName for $this is not implemented');
@@ -116,11 +143,6 @@ extension on ViewPB {
         return {
           MobileChatScreen.viewId: id,
           MobileChatScreen.viewTitle: name,
-        };
-      case ViewLayoutPB.Whiteboard:
-        return {
-          MobileWhiteboardScreen.viewId: id,
-          MobileWhiteboardScreen.viewTitle: name,
         };
       default:
         throw UnimplementedError(

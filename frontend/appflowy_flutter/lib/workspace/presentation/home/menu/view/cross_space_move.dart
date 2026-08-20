@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
@@ -181,6 +184,7 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
   required ViewSectionPB? fromSection,
   required ViewSectionPB? toSection,
   VoidCallback? beforeSubmit,
+  FutureOr<void> Function(ViewPB createdView)? onWhiteboardRecreated,
 }) async {
   if (fromSection == null || toSection == null) {
     showToastNotification(
@@ -226,6 +230,12 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
       view: view,
       toSection: toSection,
       targetParentId: targetParentId,
+      onWhiteboardRecreated: onWhiteboardRecreated ??
+          (createdView) => replaceCurrentMobileView(
+                context,
+                oldView: view,
+                newView: createdView,
+              ),
     );
     if (outcome != CrossSpaceMoveOutcome.proceed) {
       return outcome;
@@ -303,6 +313,7 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
   required ViewPB view,
   required ViewSectionPB toSection,
   required String targetParentId,
+  FutureOr<void> Function(ViewPB createdView)? onWhiteboardRecreated,
 }) async {
   if (view.layout != ViewLayoutPB.Whiteboard) {
     return CrossSpaceMoveOutcome.proceed;
@@ -336,6 +347,7 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     }
     // 源 view 已删除，其空间归属缓存必须一并清掉，避免残留影响同 id 的复用。
     WhiteboardRouter.invalidateSpaceTypeCache(view.id);
+    await onWhiteboardRecreated?.call(created);
     return CrossSpaceMoveOutcome.alreadyMoved;
   }
 

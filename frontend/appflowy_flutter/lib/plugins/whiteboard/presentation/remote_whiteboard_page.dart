@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
@@ -10,8 +11,11 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.da
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_mirror_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/webview_async_eval.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
@@ -37,6 +41,8 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   bool _isDisposed = false;
   String? _loadingError;
   String? _userNickname;
+  bool _ownsExportController = false;
+  bool _isExporting = false;
   // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
   final WhiteboardMirrorService _mirrorService = WhiteboardMirrorService();
   // Flutter 侧再做一次按 sceneVersion 去重，避免重复落盘。
@@ -49,6 +55,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     // dispose 本页前 await（保证最后一次保存在 WebView 销毁前完成或超时）。
     // 用本 State 实例作为 key，避免同一 viewId 新旧页面重建时互相误删注册项。
     WhiteboardExitFlush.instance.register(this, _flushSave);
+    _registerExportController();
     _loadUserNickname();
   }
 
@@ -57,6 +64,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     _isDisposed = true;
     // 注销冲刷回调（本页已销毁，不再参与上游冲刷）
     WhiteboardExitFlush.instance.unregister(this);
+    _unregisterExportController();
     // 【白板丢内容修复】销毁 WebView 前再尽力触发一次退出保存作为兜底：
     // 正常切换/关闭标签已由上游 TabsBloc await _flushSave 完成冲刷；此处覆盖
     // 少数不经 TabsBloc 的销毁路径（如应用关闭、路由异常）。dispose 为同步方法、
@@ -82,6 +90,117 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
       });
     }
     super.dispose();
+  }
+
+  /// 协作白板由远程 WebView 承载，仍需注册导出控制器供页面“更多”菜单调用。
+  ///
+  /// 原先只有本地 [WhiteboardPage] 注册此控制器，协作白板画布已可见时，
+  /// 菜单会错误提示“请先打开白板视图”。
+  void _registerExportController() {
+    try {
+      final getIt = GetIt.instance;
+      final instanceName = '${widget.view.id}_export';
+      if (getIt.isRegistered<WhiteboardExportController>(
+        instanceName: instanceName,
+      )) {
+        Log.warn('[RemoteWhiteboard] 导出控制器已存在: ${widget.view.id}');
+        return;
+      }
+
+      getIt.registerSingleton<WhiteboardExportController>(
+        WhiteboardExportController(
+          viewId: widget.view.id,
+          exportCallback: _performExport,
+        ),
+        instanceName: instanceName,
+      );
+      _ownsExportController = true;
+      Log.info('[RemoteWhiteboard] 注册导出控制器: ${widget.view.id}');
+    } catch (e) {
+      Log.warn('[RemoteWhiteboard] 注册导出控制器失败: $e');
+    }
+  }
+
+  void _unregisterExportController() {
+    if (!_ownsExportController) return;
+
+    try {
+      GetIt.instance.unregister<WhiteboardExportController>(
+        instanceName: '${widget.view.id}_export',
+      );
+      Log.info('[RemoteWhiteboard] 注销导出控制器: ${widget.view.id}');
+    } catch (e) {
+      Log.warn('[RemoteWhiteboard] 注销导出控制器失败: $e');
+    } finally {
+      _ownsExportController = false;
+    }
+  }
+
+  void _performExport(String format) {
+    if (format != 'png' && format != 'svg') {
+      showToastNotification(
+        message: '协作白板暂不支持导出此格式',
+        type: ToastificationType.warning,
+      );
+      return;
+    }
+    unawaited(_exportImage(format));
+  }
+
+  /// 打开远程 Excalidraw 的原生导出面板，并自动选择用户请求的图片格式。
+  ///
+  /// 图片二进制仍由远程页面创建 Blob/Data URL，随后复用本页现有下载拦截和
+  /// [saveBase64File] 处理器写入设备，避免读取或修改协作 room 的加密数据。
+  Future<void> _exportImage(String format) async {
+    if (_isDisposed || _controller == null) {
+      showToastNotification(
+        message: '白板正在加载，请稍后再试',
+        type: ToastificationType.warning,
+      );
+      return;
+    }
+    if (_isExporting) return;
+
+    _isExporting = true;
+    try {
+      final controller = _controller!;
+      final result = await evaluateAsyncJavascript(
+        controller,
+        asyncBody: '''
+if (typeof window.__xmExportImage !== 'function') {
+  return { ok: false, reason: 'export-bridge-unavailable' };
+}
+return await window.__xmExportImage('$format');
+''',
+        timeout: const Duration(seconds: 6),
+        isCancelled: () => _isDisposed,
+        debugLabel: ' exportImage view=${widget.view.id} format=$format',
+      );
+
+      if (result is Map && result['ok'] == true) {
+        Log.info('[RemoteWhiteboard] 已触发 $format 图片导出: ${widget.view.id}');
+      } else if (!_isDisposed) {
+        final reason = result is Map ? result['reason'] : 'unknown';
+        Log.warn(
+          '[RemoteWhiteboard] 未能触发 $format 图片导出: '
+          '${widget.view.id}, reason=$reason',
+        );
+        showToastNotification(
+          message: '导出图片失败，请稍后再试',
+          type: ToastificationType.error,
+        );
+      }
+    } catch (e) {
+      Log.error('[RemoteWhiteboard] 导出 $format 图片失败: $e');
+      if (!_isDisposed) {
+        showToastNotification(
+          message: '导出图片失败，请稍后再试',
+          type: ToastificationType.error,
+        );
+      }
+    } finally {
+      _isExporting = false;
+    }
   }
 
   /// 切走白板前的"冲刷保存"：触发退出保存并等待其真正完成，最多等待 2 秒。
@@ -135,12 +254,12 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
         return '';
       },
     );
-    
+
     if (nickname.isEmpty) {
       nickname = '小马笔记用户';
       Log.info('[RemoteWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
     }
-    
+
     setState(() {
       _userNickname = nickname;
     });
@@ -327,10 +446,10 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   String _buildRemoteUrl() {
     Log.info('[RemoteWhiteboard] 🔨 Building remote URL...');
     Log.info('[RemoteWhiteboard] 🔨 _userNickname: "$_userNickname"');
-    
+
     final encodedNickname = Uri.encodeComponent(_userNickname ?? '');
     Log.info('[RemoteWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
-    
+
     final url = 'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname#room=${widget.roomId},${widget.roomKey}';
     Log.info('[RemoteWhiteboard] ✅ Built URL: $url');
     return url;
@@ -364,7 +483,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
           String base64Data = args[0];
           final String filename = args[1];
           String mimeType = args.length > 2 ? args[2] : '';
-          
+
           if (base64Data.startsWith('data:')) {
             final parts = base64Data.split(',');
             if (parts.length >= 2) {
@@ -471,10 +590,10 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
         Log.error('[RemoteWhiteboard] ❌ Invalid data URL format');
         return;
       }
-      
+
       final String mimeType = parts[0].split(':')[1].split(';')[0];
       final String base64Data = parts[1];
-      
+
       await _saveBase64ToFile(base64Data, filename, mimeType);
     } catch (e) {
       Log.error('[RemoteWhiteboard] ❌ _saveDataUrlToFile error: $e');
@@ -485,23 +604,43 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     try {
       final String cleanBase64 = base64Data.replaceAll('\n', '').replaceAll('\r', '');
       final List<int> bytes = base64Decode(cleanBase64);
-      
+
       String ext = '';
       if (mimeType.isNotEmpty) {
         ext = _mapMimeTypeToExtension(mimeType);
       } else {
         ext = _getFileExtensionFromFilename(filename);
       }
-      
+
       if (ext.isEmpty) {
         ext = _detectExtensionFromBytes(bytes);
       }
-      
+
       final String finalFilename = _ensureFilenameExtension(filename, ext);
+      if (Platform.isAndroid || Platform.isIOS) {
+        final savePath = await GetIt.instance<FilePickerService>().saveFile(
+          dialogTitle: '保存白板图片',
+          fileName: finalFilename,
+          type: FileType.custom,
+          allowedExtensions: [ext],
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (savePath == null) {
+          Log.info('[RemoteWhiteboard] 用户取消保存图片');
+          return;
+        }
+        Log.info('[RemoteWhiteboard] 图片已保存: $savePath');
+        showToastNotification(
+          message: '图片已保存',
+          type: ToastificationType.success,
+        );
+        return;
+      }
       
       final Directory downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      await downloadsDir.create(recursive: true);
       final File file = File('${downloadsDir.path}/$finalFilename');
-      
+
       await file.writeAsBytes(bytes);
       Log.info('[RemoteWhiteboard] ✅ File saved: ${file.path}');
       

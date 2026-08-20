@@ -316,6 +316,50 @@ const String whiteboardGuardScript = r'''
   // ---- 第 3 层：暴露给 Flutter 侧的退出保存入口（返回 Promise，保存真正完成后 resolve）----
   window.__xmForceSave = forceSave;
 
+  // ---- 协作白板图片导出桥接 ----
+  // xm-arts 并不稳定地把 excalidrawAPI 暴露到 window。复用上面的 React fiber
+  // 定位逻辑取得真实 API，再打开其原生图片导出面板并触发对应格式按钮。文件下载
+  // 仍由页面自身创建 Blob/Data URL，Flutter 侧既有下载处理器负责保存到设备。
+  window.__xmExportImage = async function (format) {
+    var buttonIndex = format === 'png' ? 0 : format === 'svg' ? 1 : -1;
+    if (buttonIndex < 0) return { ok: false, reason: 'unsupported-format' };
+
+    var deadline = Date.now() + 5000;
+    var c = null;
+    while (Date.now() < deadline) {
+      c = findCollab();
+      if (c && c.excalidrawAPI &&
+          typeof c.excalidrawAPI.updateScene === 'function') {
+        break;
+      }
+      await new Promise(function (resolve) { setTimeout(resolve, 50); });
+    }
+    if (!c || !c.excalidrawAPI) {
+      return { ok: false, reason: 'excalidraw-api-unavailable' };
+    }
+
+    try {
+      c.excalidrawAPI.updateScene({
+        appState: { openDialog: { name: 'imageExport' } },
+      });
+    } catch (e) {
+      return { ok: false, reason: 'open-export-dialog-failed', error: String(e) };
+    }
+
+    while (Date.now() < deadline) {
+      var buttons = document.querySelectorAll(
+        '.ImageExportModal__settings__buttons__button',
+      );
+      if (buttons.length > buttonIndex) {
+        buttons[buttonIndex].click();
+        log('已触发 ' + format + ' 图片导出');
+        return { ok: true };
+      }
+      await new Promise(function (resolve) { setTimeout(resolve, 50); });
+    }
+    return { ok: false, reason: 'export-dialog-unavailable' };
+  };
+
   // 短轮询检测场景版本变化（发现改动即启动/重置 500ms 防抖）
   setInterval(function () {
     var v = currentVersion();
