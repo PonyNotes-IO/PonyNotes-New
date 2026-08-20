@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
-import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet_add_new_page.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item_add_button.dart';
 import 'package:appflowy/mobile/presentation/page_item/mobile_view_item_more_sheet.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
@@ -280,6 +279,8 @@ class SingleMobileInnerViewItem extends StatefulWidget {
 }
 
 class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
+  static const _viewIconSize = 24.0;
+
   @override
   Widget build(BuildContext context) {
     final children = [
@@ -287,7 +288,7 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
       _buildLeftIcon(),
       // icon
       _buildViewIcon(),
-      const HSpace(8),
+      const HSpace(2),
       // title
       Expanded(
         child: FlowyText.regular(
@@ -410,15 +411,15 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
     final icon = iconData.isNotEmpty
         ? EmojiIconWidget(
             emoji: widget.view.icon.toEmojiIconData(),
-            emojiSize: Platform.isAndroid ? 16.0 : 18.0,
+            emojiSize: _viewIconSize,
           )
         : Opacity(
             opacity: 0.7,
             child: widget.view.defaultIcon(size: const Size.square(18)),
           );
     return SizedBox(
-      width: 18.0,
-      child: icon,
+      width: _viewIconSize,
+      child: Center(child: icon),
     );
   }
 
