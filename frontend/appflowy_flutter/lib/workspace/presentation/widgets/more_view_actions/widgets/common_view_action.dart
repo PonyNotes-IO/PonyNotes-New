@@ -84,17 +84,22 @@ class ViewAction extends StatelessWidget {
         final space = value.$1;
         final target = value.$2;
         final result = await ViewBackendService.getView(view.parentViewId);
-        result.fold(
+        await result.fold(
           (parentView) => moveViewCrossSpace(
             context,
             space,
             view,
             parentView,
-            FolderSpaceType.public,
+            // Resolve the source section from the actual view/ancestors, as
+            // the sidebar move action does. The document is not necessarily
+            // in the public section.
+            FolderSpaceType.unknown,
             view,
             target.id,
           ),
-          (f) => Log.error(f),
+          (f) async {
+            Log.error(f);
+          },
         );
 
         // the move action is handled in the button itself
@@ -104,12 +109,10 @@ class ViewAction extends StatelessWidget {
     }
   }
 
-  Future<void> _handleDeleteAction(
-    {
+  Future<void> _handleDeleteAction({
     required BuildContext actionContext,
     required BuildContext dialogContext,
-  }
-  ) async {
+  }) async {
     final (containPublishedPage, _) =
         await ViewBackendService.containPublishedPage(view);
 

@@ -169,6 +169,7 @@ class _MoreViewActionsState extends State<MoreViewActions> {
 
     return _MoreViewActionsPopupContent(
       view: widget.view,
+      userWorkspaceBloc: userWorkspaceBloc,
       userProfile: userProfile,
       workspaceId: workspaceId,
       viewInfoState: viewInfoState,
@@ -182,6 +183,7 @@ class _MoreViewActionsState extends State<MoreViewActions> {
 class _MoreViewActionsPopupContent extends StatelessWidget {
   const _MoreViewActionsPopupContent({
     required this.view,
+    required this.userWorkspaceBloc,
     required this.userProfile,
     required this.workspaceId,
     required this.viewInfoState,
@@ -191,6 +193,7 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
   });
 
   final ViewPB view;
+  final UserWorkspaceBloc userWorkspaceBloc;
   final UserProfilePB userProfile;
   final String workspaceId;
   final ViewInfoState viewInfoState;
@@ -211,6 +214,7 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
 
     return MultiBlocProvider(
       providers: [
+        BlocProvider<UserWorkspaceBloc>.value(value: userWorkspaceBloc),
         BlocProvider(
           create: (_) => ViewBloc(view: view)..add(const ViewEvent.initial()),
         ),

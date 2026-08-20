@@ -65,9 +65,10 @@ String? crossSpaceMoveDenyReasonForRole(
   ViewSectionPB toSection,
 ) {
   if (role == null) {
-    return toSection == ViewSectionPB.Public
-        ? LocaleKeys.space_noPermissionToMoveIntoSharedSpace.tr()
-        : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
+    // The document page can be opened outside the sidebar tree before the
+    // workspace role has finished loading. Do not treat that transient state
+    // as Guest: the move request is still validated by the server.
+    return null;
   }
 
   // 移入协作区：Member 及以上即可，只拦受限成员。
@@ -127,24 +128,42 @@ Future<ViewSectionPB?> resolveViewSection(
   var current = view;
   final visited = <String>{};
   while (visited.add(current.id)) {
-    final section = sectionsBloc?.getViewSection(current);
-    if (section != null) {
-      return section;
-    }
     if (current.isSpace) {
       return current.spacePermission == SpacePermission.private
           ? ViewSectionPB.Private
           : ViewSectionPB.Public;
     }
+    final section = sectionsBloc?.getViewSection(current);
+    if (section != null) {
+      return section;
+    }
+    if (sectionsBloc == null) {
+      break;
+    }
     if (current.parentViewId.isEmpty) {
-      return null;
+      break;
     }
     final parent = await ViewBackendService.getView(current.parentViewId);
     final next = parent.fold<ViewPB?>((view) => view, (_) => null);
     if (next == null) {
-      return null;
+      break;
     }
     current = next;
+  }
+
+  // The document toolbar can run in an overlay without SidebarSectionsBloc.
+  // Resolve from the authoritative ancestor chain in that case.
+  final ancestorsResult = await ViewBackendService.getViewAncestors(view.id);
+  final ancestors =
+      ancestorsResult.fold<List<ViewPB>?>((value) => value.items, (_) => null);
+  if (ancestors != null) {
+    for (final ancestor in ancestors) {
+      if (ancestor.isSpace) {
+        return ancestor.spacePermission == SpacePermission.private
+            ? ViewSectionPB.Private
+            : ViewSectionPB.Public;
+      }
+    }
   }
   return null;
 }
@@ -184,20 +203,22 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
       return CrossSpaceMoveOutcome.aborted;
     }
 
-    int? currentUserId;
-    try {
-      currentUserId =
-          context.read<UserWorkspaceBloc>().state.userProfile.id.toInt();
-    } catch (_) {
-      currentUserId = null;
-    }
-    if (currentUserId == null ||
-        !canCurrentUserMoveWhiteboard(view, currentUserId)) {
-      showToastNotification(
-        message: LocaleKeys.space_onlyWhiteboardCreatorCanMove.tr(),
-        type: ToastificationType.error,
-      );
-      return CrossSpaceMoveOutcome.aborted;
+    if (view.layout == ViewLayoutPB.Whiteboard) {
+      int? currentUserId;
+      try {
+        currentUserId =
+            context.read<UserWorkspaceBloc>().state.userProfile.id.toInt();
+      } catch (_) {
+        currentUserId = null;
+      }
+      if (currentUserId == null ||
+          !canCurrentUserMoveWhiteboard(view, currentUserId)) {
+        showToastNotification(
+          message: LocaleKeys.space_onlyWhiteboardCreatorCanMove.tr(),
+          type: ToastificationType.error,
+        );
+        return CrossSpaceMoveOutcome.aborted;
+      }
     }
 
     final outcome = await ensureWhiteboardContentMigrated(
