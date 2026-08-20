@@ -9,6 +9,11 @@ class AIWelcomeTheme {
       Theme.of(context).brightness == Brightness.light
           ? const Color(0xFFFFFFFF)
           : const Color(0xFF2B2B2B); // match todo plan section surfaceContainerColorScheme.layer01
+  /// 输入区域的背景色。浅色模式按设计要求使用 #F9F9F9，避免影响欢迎页其他区域。
+  static Color inputContainerBackgroundColor(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFF9F9F9)
+          : const Color(0xFF2B2B2B);
   static Color primaryTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
   static Color secondaryTextColor(BuildContext context) =>
@@ -130,7 +135,7 @@ class AIWelcomeTheme {
   /// 输入容器样式
   static BoxDecoration inputContainerDecoration(BuildContext context) =>
       BoxDecoration(
-        color: backgroundColor(context),
+        color: inputContainerBackgroundColor(context),
         borderRadius:
             const BorderRadius.all(Radius.circular(containerBorderRadius)),
         // 暗色模式下与主页「最近访问」方块卡片的外边框统一为同一 token 颜色
