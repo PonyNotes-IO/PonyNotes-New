@@ -95,7 +95,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
           decoration: BoxDecoration(
             color: Theme.of(context).brightness == Brightness.dark
                 ? const Color(0xFF2C2C2C)
-                : Colors.white,
+                : const Color(0xFFF9F9F9),
             borderRadius: BorderRadius.circular(20),
           ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
