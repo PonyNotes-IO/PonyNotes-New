@@ -1051,7 +1051,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
+    final cardColor =
+        isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF9F9F9);
     final cardBorderColor = isDark
         ? const Color(0xFF444444)
         : const Color(0xFFF0F0F0);
