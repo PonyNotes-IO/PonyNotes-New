@@ -6,6 +6,7 @@ import 'package:appflowy/mobile/presentation/favorite/mobile_favorite_folder.dar
 import 'package:appflowy/mobile/presentation/home/mobile_home_page_header.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_screen.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
@@ -67,8 +68,21 @@ class MobileFavoriteScreen extends StatelessWidget {
                     previous.currentWorkspace?.workspaceId !=
                     current.currentWorkspace?.workspaceId,
                 builder: (context, state) {
-                  return MobileFavoritePage(
-                    userProfile: userProfile,
+                  final workspaceId = state.currentWorkspace?.workspaceId;
+                  if (workspaceId == null) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return BlocProvider(
+                    create: (_) => SpaceBloc(
+                      userProfile: userProfile,
+                      workspaceId: workspaceId,
+                    )..add(
+                        const SpaceEvent.initial(openFirstPage: false),
+                      ),
+                    child: MobileFavoritePage(
+                      userProfile: userProfile,
+                    ),
                   );
                 },
               ),

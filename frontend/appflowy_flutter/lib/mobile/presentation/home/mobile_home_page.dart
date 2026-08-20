@@ -231,57 +231,57 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
 
         final workspaceId = state.currentWorkspace!.workspaceId;
 
-        return Column(
-          key: ValueKey('mobile_home_page_$workspaceId'),
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.only(
-                left: HomeSpaceViewSizes.mHorizontalPadding,
-                right: 8.0,
-              ),
-              child: MobileHomePageHeader(
-                userProfile: widget.userProfile,
+        return BlocProvider(
+          create: (_) => SpaceBloc(
+            userProfile: widget.userProfile,
+            workspaceId: workspaceId,
+          )..add(
+              const SpaceEvent.initial(
+                openFirstPage: false,
               ),
             ),
-
-            Expanded(
-              child: MultiBlocProvider(
-                providers: [
-                  BlocProvider(
-                    create: (_) =>
-                        SpaceOrderBloc()..add(const SpaceOrderEvent.initial()),
-                  ),
-                  BlocProvider(
-                    create: (_) => SidebarSectionsBloc()
-                      ..add(
-                        SidebarSectionsEvent.initial(
-                          widget.userProfile,
-                          workspaceId,
-                        ),
-                      ),
-                  ),
-                  BlocProvider(
-                    create: (_) =>
-                        FavoriteBloc()..add(const FavoriteEvent.initial()),
-                  ),
-                  BlocProvider(
-                    create: (_) => SpaceBloc(
-                      userProfile: widget.userProfile,
-                      workspaceId: workspaceId,
-                    )..add(
-                        const SpaceEvent.initial(
-                          openFirstPage: false,
-                        ),
-                      ),
-                  ),
-                ],
-                child: MobileHomePageTab(
+          child: Column(
+            key: ValueKey('mobile_home_page_$workspaceId'),
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: HomeSpaceViewSizes.mHorizontalPadding,
+                  right: 8.0,
+                ),
+                child: MobileHomePageHeader(
                   userProfile: widget.userProfile,
                 ),
               ),
-            ),
-          ],
+
+              Expanded(
+                child: MultiBlocProvider(
+                  providers: [
+                    BlocProvider(
+                      create: (_) => SpaceOrderBloc()
+                        ..add(const SpaceOrderEvent.initial()),
+                    ),
+                    BlocProvider(
+                      create: (_) => SidebarSectionsBloc()
+                        ..add(
+                          SidebarSectionsEvent.initial(
+                            widget.userProfile,
+                            workspaceId,
+                          ),
+                        ),
+                    ),
+                    BlocProvider(
+                      create: (_) =>
+                          FavoriteBloc()..add(const FavoriteEvent.initial()),
+                    ),
+                  ],
+                  child: MobileHomePageTab(
+                    userProfile: widget.userProfile,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
