@@ -4,10 +4,12 @@ import 'package:appflowy_backend/log.dart';
 import 'package:flutter/services.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:synchronized/synchronized.dart';
 
 class LocalAssetServer {
   HttpServer? _server;
   int? _port;
+  final Lock _lifecycleLock = Lock();
 
   static final LocalAssetServer _instance = LocalAssetServer._internal();
   factory LocalAssetServer() => _instance;
@@ -15,11 +17,21 @@ class LocalAssetServer {
 
   final Map<String, Uint8List> _assetCache = {};
 
-  String? get baseUrl => _port != null ? 'http://localhost:$_port' : null;
+  // 服务只绑定 loopbackIPv4，因此 URL 也必须明确使用 IPv4。iOS 可能把
+  // localhost 优先解析为 ::1，连接一个仅监听 127.0.0.1 的服务会偶发失败。
+  String? get baseUrl => _port != null ? 'http://127.0.0.1:$_port' : null;
 
-  Future<String> start() async {
+  Future<String> start() => _lifecycleLock.synchronized(_startUnlocked);
+
+  Future<String> _startUnlocked() async {
     if (_server != null) {
-      return baseUrl!;
+      if (await _isHealthy()) {
+        return baseUrl!;
+      }
+      Log.warn(
+        '[LocalAssetServer] 已记录的本地服务不可达，将重建监听 socket: $baseUrl',
+      );
+      await _stopUnlocked();
     }
 
     try {
@@ -30,6 +42,10 @@ class LocalAssetServer {
           requestPath = 'index.html';
         } else if (requestPath.startsWith('/')) {
           requestPath = requestPath.substring(1);
+        }
+
+        if (requestPath == '__health') {
+          return shelf.Response.ok('ok');
         }
 
         final assetPath = 'assets/excalidraw/$requestPath';
@@ -79,7 +95,7 @@ class LocalAssetServer {
         }
       };
 
-      // ⚡ 固定端口优先：稳定 WebView 的 origin(http://localhost:<port>)。
+      // ⚡ 固定端口优先：稳定 WebView 的 origin(http://127.0.0.1:<port>)。
       // 端口随机(0)会导致每次重启 origin 漂移，WebView 侧 HTTP 缓存/IndexedDB/
       // localStorage 全部孤儿化、无法跨重启复用。固定端口可保持 origin 稳定；
       // 若该端口被占用，则优雅回退到系统随机端口（不影响功能）。
@@ -109,7 +125,36 @@ class LocalAssetServer {
     }
   }
 
-  Future<void> stop() async {
+  Future<bool> _isHealthy() async {
+    final url = baseUrl;
+    if (url == null) return false;
+
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+    try {
+      final request = await client.getUrl(Uri.parse('$url/__health')).timeout(
+            const Duration(seconds: 2),
+          );
+      final response = await request.close().timeout(
+            const Duration(seconds: 2),
+          );
+      await response.drain<void>();
+      return response.statusCode == HttpStatus.ok;
+    } catch (error) {
+      Log.debug('[LocalAssetServer] 健康检查失败: $error');
+      return false;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<String> restart() => _lifecycleLock.synchronized(() async {
+        await _stopUnlocked();
+        return _startUnlocked();
+      });
+
+  Future<void> stop() => _lifecycleLock.synchronized(_stopUnlocked);
+
+  Future<void> _stopUnlocked() async {
     if (_server == null) {
       return;
     }
@@ -147,7 +192,8 @@ class LocalAssetServer {
       _assetCache[assetPath] = data;
       return data;
     } catch (e) {
-      Log.warn('Failed to load asset from rootBundle: $assetPath, trying file system');
+      Log.warn(
+          'Failed to load asset from rootBundle: $assetPath, trying file system');
       final file = File(assetPath);
       if (await file.exists()) {
         final data = await file.readAsBytes();

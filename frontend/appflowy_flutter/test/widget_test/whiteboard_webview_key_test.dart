@@ -24,9 +24,48 @@ void main() {
     expect(
       webViewSource,
       contains(
-        r'inappwebview_${widget.viewId}_r${widget.reloadToken}_global_$_inAppWebViewInstanceId',
+        r'inappwebview_${widget.viewId}_r${widget.reloadToken}_recovery_$_webViewRecoveryNonce',
       ),
     );
+  });
+
+  test(
+    'whiteboard recreates a stale iOS platform view after loadUrl failure',
+    () {
+      final source = File(
+        'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('on MissingPluginException catch'));
+      expect(source, contains('_controller = null'));
+      expect(source, contains('_webViewCreated = false'));
+      expect(source, contains('_webViewRecoveryNonce++'));
+    },
+  );
+
+  test('local whiteboard server URL matches its IPv4 listener', () {
+    final source = File(
+      'lib/plugins/whiteboard/application/local_asset_server.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("'http://127.0.0.1:\$_port'"));
+    expect(source, contains('InternetAddress.loopbackIPv4'));
+    expect(source, contains('_lifecycleLock.synchronized'));
+    expect(source, contains('Future<bool> _isHealthy()'));
+    expect(source, contains("requestPath == '__health'"));
+    expect(source, contains('await _stopUnlocked()'));
+  });
+
+  test('local whiteboard main-frame connection errors restart asset server',
+      () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('onReceivedError:'));
+    expect(source, contains('request.isForMainFrame == false'));
+    expect(source, contains('_recoverLocalAssetServer(message)'));
+    expect(source, contains('await _assetServer.restart()'));
   });
 
   test('whiteboard import uses the full JS restoration path', () {

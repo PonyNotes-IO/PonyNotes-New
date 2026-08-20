@@ -88,6 +88,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   bool _pageLoaded = false;
   bool _initialReadyNotified = false;
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
+  // iOS 在应用重启/引擎切换期间可能留下一个已经失效的平台视图控制器。
+  // 递增该值会强制 Flutter 创建新的 InAppWebView，而不是继续复用旧通道。
+  int _webViewRecoveryNonce = 0;
+  int _localServerRecoveryAttempts = 0;
+  bool _isRecoveringLocalServer = false;
   Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
   final bool _perElementSyncEnabled = kWhiteboardPerElementSync;
   Size? _stableWebViewSize;
@@ -228,12 +233,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     });
   }
 
-  Future<void> _loadExcalidrawHTML() async {
+  Future<void> _loadExcalidrawHTML({bool restartServer = false}) async {
     try {
       // debug log removed
 
       // 启动本地HTTP服务器
-      final baseUrl = await _assetServer.start();
+      final baseUrl = restartServer
+          ? await _assetServer.restart()
+          : await _assetServer.start();
 
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // macOS 的 WKWebView 对 localStorage 有固定的来源配额。
@@ -257,11 +264,28 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         });
       }
 
-      // 如果 controller 已创建，直接加载 URL
+      // 如果 controller 已创建，直接加载 URL。引擎重启或热重启后旧 controller
+      // 可能仍被 Dart 持有，但其 platform channel 已不存在；此时必须重建原生视图。
       if (_controller != null && mounted) {
-        await _controller!.loadUrl(
-          urlRequest: URLRequest(url: WebUri(_whiteboardUrl!)),
-        );
+        try {
+          await _controller!.loadUrl(
+            urlRequest: URLRequest(url: WebUri(_whiteboardUrl!)),
+          );
+        } on MissingPluginException catch (e, stackTrace) {
+          Log.warn(
+            '⚠️ [ExcalidrawWebView] loadUrl 命中失效插件通道，重建 WebView: $e',
+          );
+          Log.debug('[ExcalidrawWebView] stale controller stack: $stackTrace');
+          if (!mounted || _isDisposed) return;
+          setState(() {
+            _controller = null;
+            _webViewCreated = false;
+            _pageLoaded = false;
+            _isLoading = true;
+            _loadingError = null;
+            _webViewRecoveryNonce++;
+          });
+        }
       }
       // 否则在 build 方法中通过 initialUrlRequest 加载
     } catch (e) {
@@ -273,6 +297,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         });
       }
       widget.onError?.call('加载Excalidraw失败: $e');
+    }
+  }
+
+  Future<void> _recoverLocalAssetServer(String error) async {
+    if (_isRecoveringLocalServer ||
+        _isDisposed ||
+        !mounted ||
+        _localServerRecoveryAttempts >= 2) {
+      if (mounted && !_isDisposed && _localServerRecoveryAttempts >= 2) {
+        setState(() {
+          _isLoading = false;
+          _loadingError = error;
+        });
+        widget.onError?.call('WebView加载错误: $error');
+      }
+      return;
+    }
+
+    _isRecoveringLocalServer = true;
+    _localServerRecoveryAttempts++;
+    Log.warn(
+      '[ExcalidrawWebView] 本地资源服务连接失败，执行第 '
+      '$_localServerRecoveryAttempts 次自动恢复: $error',
+    );
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadingError = null;
+      });
+    }
+
+    try {
+      await _loadExcalidrawHTML(restartServer: true);
+    } finally {
+      _isRecoveringLocalServer = false;
     }
   }
 
@@ -2011,7 +2070,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
                       // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
                       key: ValueKey(
-                        'inappwebview_${widget.viewId}_r${widget.reloadToken}_global_$_inAppWebViewInstanceId',
+                        'inappwebview_${widget.viewId}_r${widget.reloadToken}_recovery_$_webViewRecoveryNonce'
+                        '_global_$_inAppWebViewInstanceId',
                       ),
                       initialUrlRequest: URLRequest(
                         url: WebUri(_whiteboardUrl!),
@@ -2081,6 +2141,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                           setState(() {
                             _isLoading = false;
                             _pageLoaded = true;
+                            _localServerRecoveryAttempts = 0;
                           });
 
                           // ✅ 关键：等待 initData 完成后再初始化 UI
@@ -2124,15 +2185,26 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                         // print('📊 [ExcalidrawWebView] Loading progress: $progress%');
                       },
 
-                      onLoadError: (controller, url, code, message) {
+                      onReceivedError: (controller, request, error) {
+                        // 字体、图片等子资源失败不能覆盖整个白板；仅处理主页面失败。
+                        if (request.isForMainFrame == false) return;
+                        final message = error.description;
+                        final failedUrl = request.url.toString();
+                        Log.error(
+                          '❌ [ExcalidrawWebView] Load error: $message '
+                          '(type: ${error.type}, url: $failedUrl)',
+                        );
+                        if (failedUrl.startsWith('http://127.0.0.1:') ||
+                            failedUrl.startsWith('http://localhost:')) {
+                          unawaited(_recoverLocalAssetServer(message));
+                          return;
+                        }
                         if (mounted) {
                           setState(() {
                             _isLoading = false;
                             _loadingError = message;
                           });
                         }
-                        Log.error(
-                            '❌ [ExcalidrawWebView] Load error: $message (code: $code)');
                         widget.onError?.call('WebView加载错误: $message');
                       },
 
