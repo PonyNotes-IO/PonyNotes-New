@@ -109,7 +109,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     }
 
     final meta = <String, String>{
-      ReminderMetaKeys.notificationType: type == 'mention' ? 'mention' : 'system',
+      ReminderMetaKeys.notificationType:
+          type == 'mention' ? 'mention' : 'system',
       _cloudNotificationTypeKey: type,
       _cloudPayloadKey: jsonEncode(payload),
       ReminderMetaKeys.createdAt: createdAtSeconds.toString(),
@@ -122,8 +123,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       scheduledAt: Int64(createdAtSeconds),
       isAck: true,
       isRead: (n['is_read'] as bool?) ?? false,
-      title: (payload['title'] as String?) ??
-          InboxService.defaultTitleFor(type),
+      title:
+          (payload['title'] as String?) ?? InboxService.defaultTitleFor(type),
       message: (payload['message'] as String?) ?? '',
       meta: meta,
     );
@@ -188,6 +189,11 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                     .toList();
                 final reminders = [..._cloudReminders, ...scheduleReminders];
 
+                // 提醒通过协作数据同步到其他设备后，必须在该设备本机注册
+                // 系统定时通知；否则只有创建日程的设备会响。
+                await NotificationService()
+                    .synchronizeReminderNotifications(scheduleReminders);
+
                 final availableReminders =
                     await filterAvailableReminders(reminders);
                 // Separate archived reminders
@@ -233,6 +239,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             result.fold(
               (_) {
                 Log.info('Removed reminder: $reminderId');
+                unawaited(
+                  NotificationService().cancelReminderNotification(reminderId),
+                );
                 final reminders = List.of(state.reminders);
                 final index = reminders
                     .indexWhere((reminder) => reminder.id == reminderId);
@@ -255,6 +264,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
               );
               if (result.isSuccess) {
                 Log.info('Removed reminder: $reminderId');
+                await NotificationService()
+                    .cancelReminderNotification(reminderId);
                 removedIds.add(reminderId);
               } else {
                 Log.error('Failed to remove reminder: $reminderId');
@@ -301,7 +312,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 }
 
                 // Only schedule future unread reminders for system notifications.
-                if (!reminder.isRead) {
+                if (NotificationService.isSchedulableReminder(reminder)) {
                   await NotificationService()
                       .scheduleReminderNotification(reminder);
                 }
@@ -347,7 +358,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 );
               }
               // 归档同时置已读（服务端同语义）；单独标记已读也同步服务端
-              if (updateObject.isRead == true || updateObject.isArchived == true) {
+              if (updateObject.isRead == true ||
+                  updateObject.isArchived == true) {
                 unawaited(InboxService().markAsRead(reminder.id));
               }
               _updateCloudReminderCache(
@@ -366,6 +378,19 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
 
             await failureOrUnit.fold((_) async {
               Log.info('Updated reminder: ${newReminder.id}');
+
+              if (_isCloudNotification(newReminder)) {
+                await NotificationService()
+                    .cancelReminderNotification(newReminder.id);
+              } else if (NotificationService.isSchedulableReminder(
+                newReminder,
+              )) {
+                await NotificationService()
+                    .scheduleReminderNotification(newReminder);
+              } else {
+                await NotificationService()
+                    .cancelReminderNotification(newReminder.id);
+              }
 
               // Synchronously update archivedReminders when isArchived changes
               var archivedReminders = [...state.archivedReminders];
@@ -496,6 +521,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
           markAsRead: (reminderIds) async {
             final updated = await _onMarkAsRead(reminderIds: reminderIds);
 
+            await NotificationService()
+                .synchronizeReminderNotifications(updated);
+
             Log.info('Marked reminders as read: $reminderIds');
 
             emit(state.copyWith(reminders: updated));
@@ -505,6 +533,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
               isArchived: true,
               reminderIds: reminderIds,
             );
+
+            await NotificationService()
+                .synchronizeReminderNotifications(reminders);
 
             Log.info('Archived reminders: $reminderIds');
 
@@ -519,12 +550,18 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
           markAllRead: () async {
             final updated = await _onMarkAsRead();
 
+            await NotificationService()
+                .synchronizeReminderNotifications(updated);
+
             Log.info('Marked all reminders as read');
 
             emit(state.copyWith(reminders: updated));
           },
           archiveAll: () async {
             final reminders = await _onArchived(isArchived: true);
+
+            await NotificationService()
+                .synchronizeReminderNotifications(reminders);
 
             Log.info('Archived all reminders');
 
@@ -538,6 +575,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
           },
           unarchiveAll: () async {
             final reminders = await _onArchived(isArchived: false);
+            await NotificationService()
+                .synchronizeReminderNotifications(reminders);
             emit(
               state.copyWith(
                 reminders: reminders,
@@ -661,7 +700,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
         remindersToUpdate.where(_isCloudNotification).toList();
     if (reminderIds == null && cloudToUpdate.isNotEmpty) {
       unawaited(
-        isArchived ? InboxService().archiveAll() : InboxService().unarchiveAll(),
+        isArchived
+            ? InboxService().archiveAll()
+            : InboxService().unarchiveAll(),
       );
     } else {
       for (final reminder in cloudToUpdate) {
