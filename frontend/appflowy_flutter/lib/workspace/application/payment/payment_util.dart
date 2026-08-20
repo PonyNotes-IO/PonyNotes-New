@@ -513,6 +513,8 @@ class PaymentUtil {
     }
 
     if (Platform.isAndroid) {
+      //支付宝支付需要上线后增加支付功能
+      return PaymentResult.failure(message: '功能开发中');
       // ═══════════════════════════════════════════════════════════════════
       // 严格模式：Android 手机端只允许走 Tobias，不允许任何降级。
       //
