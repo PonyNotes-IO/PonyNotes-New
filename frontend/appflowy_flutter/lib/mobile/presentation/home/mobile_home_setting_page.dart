@@ -248,10 +248,11 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
 
   Widget _buildAppBar(BuildContext context) {
     final afTheme = AppFlowyTheme.of(context);
-    final theme = Theme.of(context);
     final isMenu = _currentSection == MobileSettingsSection.menu;
 
     return IconButton(
+      tooltip: LocaleKeys.button_back.tr(),
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
       onPressed: () {
         if (isMenu) {
           Navigator.pop(context);
@@ -274,17 +275,20 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 25.0, left: 8),
-            child: _buildAppBar(context),
-          ),
-          Expanded(
-            child: _buildContent(),
-          ),
-        ],
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 8),
+              child: _buildAppBar(context),
+            ),
+            Expanded(
+              child: _buildContent(),
+            ),
+          ],
+        ),
       ),
     );
   }
