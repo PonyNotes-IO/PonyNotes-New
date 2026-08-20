@@ -44,13 +44,13 @@ import 'package:appflowy/workspace/application/settings/appearance/appearance_cu
 import 'package:appflowy/util/font_family_extension.dart';
 import 'package:appflowy/util/theme_mode_extension.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
-import 'package:appflowy/workspace/application/settings/plan/workspace_usage_ext.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/settings/plan/settings_plan_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/storage_usage_formatter.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -175,11 +175,17 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       final usageResult = await service.getWorkspaceUsage();
       if (!mounted) return;
 
-      final currentSubscription =
-          await SubscriptionService().getCurrentSubscription(
+      final subscriptionService = SubscriptionService();
+      final cachedCurrentSubscription =
+          subscriptionService.cachedCurrentSubscription;
+      final refreshedCurrentSubscription =
+          await subscriptionService.getCurrentSubscription(
         userProfile: _userProfile!,
         caller: 'MobileHomeSettingPage._loadSubscriptionInfo',
+        forceRefresh: true,
       );
+      final currentSubscription =
+          refreshedCurrentSubscription ?? cachedCurrentSubscription;
 
       subscriptionResult.fold(
         (info) {
@@ -1022,6 +1028,19 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   }
 
   String _buildStorageText(WorkspaceUsagePB? usage) {
+    final subscriptionUsage = currentSubscription?.usage;
+    final usedGb = subscriptionUsage?.storageUsedGb;
+    final totalGb = subscriptionUsage?.storageTotalGb;
+    if (usedGb != null && totalGb != null) {
+      return formatRemainingStorageUsage(
+        usedGb: usedGb,
+        totalGb: totalGb,
+        gbUnit: 'GB',
+        mbUnit: 'MB',
+        separator: ' / ',
+      );
+    }
+
     if (usage == null) {
       return '加载中...';
     }
@@ -1031,18 +1050,14 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     if (usage.storageBytesLimit.toInt() == 0) {
       return '0GB / 0GB';
     }
-    final planCode = currentSubscription?.subscription?.planCode?.toLowerCase();
-    final isProPlan = subscriptionInfo.plan == WorkspacePlanPB.ProPlan ||
-        planCode == 'profersor' ||
-        planCode == 'professor' ||
-        planCode == 'pro';
-    if (isProPlan) {
-      const totalGb = 50;
-      final usedGb = usage.storageBytes.toInt() / (1024 * 1024 * 1024);
-      final remainingGb = (totalGb - usedGb).clamp(0, totalGb);
-      return '${NumberFormat('#.##').format(remainingGb)}GB / ${totalGb}GB';
-    }
-    return '${usage.remainingBlobInGb}GB / ${usage.totalBlobInGb}GB';
+
+    return formatRemainingStorageUsage(
+      usedGb: usage.storageBytes.toInt() / (1024 * 1024 * 1024),
+      totalGb: usage.storageBytesLimit.toInt() / (1024 * 1024 * 1024),
+      gbUnit: 'GB',
+      mbUnit: 'MB',
+      separator: ' / ',
+    );
   }
 
   Widget _buildAIUsageRow(AppFlowyThemeData theme) {

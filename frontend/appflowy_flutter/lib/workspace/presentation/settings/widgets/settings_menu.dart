@@ -5,6 +5,7 @@ import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
+import 'package:appflowy/workspace/application/subscription/storage_usage_formatter.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu_element.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
@@ -261,18 +262,10 @@ class _SettingsMenuState extends State<SettingsMenu> {
       return '';
     }
 
-    double remainingGb = totalGb - usedGb;
-    if (remainingGb < 0) remainingGb = 0;
-
-    String fmt(double gb) {
-      if (gb < 1) {
-        final mb = gb * 1024;
-        return '${mb.toStringAsFixed(0)}M';
-      }
-      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
-    }
-
-    return '剩余空间${fmt(remainingGb)}/${fmt(totalGb)}';
+    return '剩余空间${formatRemainingStorageUsage(
+      usedGb: usedGb,
+      totalGb: totalGb,
+    )}';
   }
 
   Widget _buildUserInfoCard(BuildContext context) {

@@ -8,6 +8,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/storage_usage_formatter.dart';
 import 'package:appflowy/workspace/application/user/settings_user_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/about/app_version.dart';
@@ -334,18 +335,10 @@ class _AccountQuickActionsSection extends StatelessWidget {
       return '--';
     }
 
-    double remainingGb = totalGb - usedGb;
-    if (remainingGb < 0) remainingGb = 0;
-
-    String fmt(double gb) {
-      if (gb < 1) {
-        final mb = gb * 1024;
-        return '${mb.toStringAsFixed(0)}M';
-      }
-      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
-    }
-
-    return '${fmt(remainingGb)}/${fmt(totalGb)}';
+    return formatRemainingStorageUsage(
+      usedGb: usedGb,
+      totalGb: totalGb,
+    );
   }
 
   void _showEmailVerificationDialog(BuildContext context) {
