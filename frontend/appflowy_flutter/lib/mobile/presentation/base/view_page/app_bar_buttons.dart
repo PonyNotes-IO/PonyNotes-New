@@ -43,6 +43,7 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
     final afTheme = AppFlowyTheme.of(context);
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final toolbarHeight = preferredSize.height - statusBarHeight;
+    final isWhiteboard = view?.layout == ViewLayoutPB.Whiteboard;
 
     return ValueListenableBuilder(
       valueListenable: appBarOpacity,
@@ -61,8 +62,11 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
               child: Row(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(left: 12.0),
-                    child: _buildAppBarBackButton(context),
+                    padding: EdgeInsets.only(left: isWhiteboard ? 24.0 : 12.0),
+                    child: _buildAppBarBackButton(
+                      context,
+                      expandTapTarget: isWhiteboard,
+                    ),
                   ),
                   const SizedBox(width: 4),
                   Expanded(
@@ -85,8 +89,27 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
     );
   }
 
-  Widget _buildAppBarBackButton(BuildContext context) {
+  Widget _buildAppBarBackButton(
+    BuildContext context, {
+    bool expandTapTarget = false,
+  }) {
     final afTheme = AppFlowyTheme.of(context);
+    final backIcon = ValueListenableBuilder(
+      valueListenable: appBarOpacity,
+      builder: (_, opacity, __) {
+        final isImmersiveMode =
+            context.read<MobileViewPageBloc>().state.isImmersiveMode;
+        final color = isImmersiveMode && opacity < 0.99
+            ? Colors.white
+            : afTheme.iconColorScheme.primary;
+        return FlowySvg(
+          FlowySvgs.mobile_return_s,
+          size: const Size(7, 12),
+          color: color,
+        );
+      },
+    );
+
     return AppBarButton(
       padding: EdgeInsets.zero,
       onTap: (context) {
@@ -96,21 +119,16 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
           context.go('/home');
         }
       },
-      child: ValueListenableBuilder(
-        valueListenable: appBarOpacity,
-        builder: (_, opacity, __) {
-          final isImmersiveMode =
-              context.read<MobileViewPageBloc>().state.isImmersiveMode;
-          final color = isImmersiveMode && opacity < 0.99
-              ? Colors.white
-              : afTheme.iconColorScheme.primary;
-          return FlowySvg(
-            FlowySvgs.mobile_return_s,
-            size: const Size(7, 12),
-            color: color,
-          );
-        },
-      ),
+      child: expandTapTarget
+          ? SizedBox(
+              width: 32,
+              height: 32,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: backIcon,
+              ),
+            )
+          : backIcon,
     );
   }
 }

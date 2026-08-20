@@ -251,6 +251,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final GlobalKey _mobileCanvasKey = GlobalKey();
   Offset? _previousMultiTouchFocalPoint;
   double? _previousMultiTouchSpan;
+  // 双指手势开始后，直到所有手指抬起前都不恢复单指书写。
+  bool _mobileMultiTouchGestureInProgress = false;
+  bool _mobilePinchZoomActive = false;
+
+  /// 双指滑动时过滤手指自然抖动，达到该间距变化后才触发缩放。
+  static const double _multiTouchZoomThreshold = 6.0;
 
   /// ✅ 页面之间的间距
   static const double _gapBetweenPages = 16;
@@ -259,7 +265,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   bool _isProgrammaticScrolling = false;
 
   bool get _isMobileMultiTouchActive =>
-      _isMobilePlatform && _mobileTouchPointers.length >= 2;
+      _isMobilePlatform &&
+      (_mobileTouchPointers.length >= 2 || _mobileMultiTouchGestureInProgress);
 
   void _handleMobilePointer(PointerEvent event) {
     if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
@@ -286,42 +293,63 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _previousMultiTouchFocalPoint = null;
         _previousMultiTouchSpan = null;
       }
+      if (_mobileTouchPointers.isEmpty) {
+        _mobileMultiTouchGestureInProgress = false;
+        _mobilePinchZoomActive = false;
+      }
       return;
     } else {
       return;
     }
 
     if (_mobileTouchPointers.length == 2 &&
-        _previousMultiTouchSpan == null) {
+        _previousMultiTouchFocalPoint == null) {
       // 第二根手指用于滚动，不提交第一根手指留下的临时笔迹。
       _currentStrokeNotifier.value = null;
       _currentPageIndexNotifier.value = null;
       _shapeStartPoint = null;
+      _mobileMultiTouchGestureInProgress = true;
+      _mobilePinchZoomActive = false;
       final positions = _currentMobileTouchPositions();
       _previousMultiTouchFocalPoint = (positions[0] + positions[1]) / 2;
       _previousMultiTouchSpan = (positions[0] - positions[1]).distance;
       return;
     }
 
-    if (!_isMobileMultiTouchActive) {
+    // 只在两根手指都还按下时滚动。第一根手指提前抬起后，剩余手指
+    // 仍属于同一次多指手势，不能重新触发单指绘制。
+    if (_mobileTouchPointers.length < 2 ||
+        _previousMultiTouchFocalPoint == null) {
       return;
     }
 
     final positions = _currentMobileTouchPositions();
     final focalPoint = (positions[0] + positions[1]) / 2;
-    final span = (positions[0] - positions[1]).distance;
     final previousFocalPoint = _previousMultiTouchFocalPoint!;
-    final previousSpan = _previousMultiTouchSpan!;
+    final span = (positions[0] - positions[1]).distance;
 
     final delta = focalPoint - previousFocalPoint;
     _jumpScroll(_pageScrollController, -delta.dy);
     _jumpScroll(_canvasHorizontalScrollController, -delta.dx);
-    if (previousSpan > 0 && span > 0) {
+
+    // 中心点平移和两指捏合可同时生效。先用阈值过滤下滑过程中的
+    // 细小间距抖动；确认捏合后连续缩放，保证缩放手感自然。
+    final previousSpan = _previousMultiTouchSpan;
+    if (!_mobilePinchZoomActive &&
+        previousSpan != null &&
+        (span - previousSpan).abs() >= _multiTouchZoomThreshold) {
+      _mobilePinchZoomActive = true;
+    }
+    if (_mobilePinchZoomActive && previousSpan != null && previousSpan > 0) {
       _setZoomLevel(_zoomLevelNotifier.value * span / previousSpan);
     }
 
     _previousMultiTouchFocalPoint = focalPoint;
-    _previousMultiTouchSpan = span;
+    // 捏合确认前保留手势初始间距，让多帧的小幅变化可以累计达到阈值；
+    // 捏合确认后逐帧更新基准，保证缩放连续跟手。
+    if (_mobilePinchZoomActive) {
+      _previousMultiTouchSpan = span;
+    }
   }
 
   List<Offset> _currentMobileTouchPositions() => _mobileTouchPointers
@@ -5461,7 +5489,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         },
         child: Column(
           children: [
-            const VSpace(40),
+            // 移动端顶部操作区与系统状态栏保持更舒适的间距，桌面端沿用原布局。
+            VSpace(_isMobilePlatform ? 48 : 40),
             // ✅ 工具栏（移除状态提示区域）
             ValueListenableBuilder<Tool>(
               valueListenable: _currentToolNotifier,

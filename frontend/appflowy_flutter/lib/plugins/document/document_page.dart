@@ -572,7 +572,8 @@ class _DocumentPageState extends State<DocumentPage>
     return Padding(
       padding: EdgeInsets.only(
         top: statusBarHeight,
-        left: 4.0,
+        // Keep the document back button clear of the screen edge on mobile.
+        left: 16.0,
         right: 16.0,
         bottom: 8.0,
       ),
