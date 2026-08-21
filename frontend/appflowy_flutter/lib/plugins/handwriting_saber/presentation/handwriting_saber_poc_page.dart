@@ -52,6 +52,12 @@ enum ReorderAction {
   sendToBack,
 }
 
+enum _MobileTwoFingerGesture {
+  undecided,
+  scroll,
+  zoom,
+}
+
 /// PoC 页面：暂时只展示占位 UI，并在本地创建一个占位的 .sbn2 文件。
 ///
 /// 后续会在此处嵌入从 Saber 抽取的编辑器与画布。
@@ -248,15 +254,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 移动端当前按下的手指，用于把画布滚动限制为双指操作
   final Set<int> _mobileTouchPointers = <int>{};
   final Map<int, Offset> _mobileTouchPositions = <int, Offset>{};
+  final Map<int, Offset> _mobileTouchStartPositions = <int, Offset>{};
   final GlobalKey _mobileCanvasKey = GlobalKey();
   Offset? _previousMultiTouchFocalPoint;
+  Offset? _initialMultiTouchFocalPoint;
   double? _previousMultiTouchSpan;
+  double? _initialMultiTouchSpan;
   // 双指手势开始后，直到所有手指抬起前都不恢复单指书写。
   bool _mobileMultiTouchGestureInProgress = false;
-  bool _mobilePinchZoomActive = false;
+  _MobileTwoFingerGesture _mobileTwoFingerGesture =
+      _MobileTwoFingerGesture.undecided;
 
-  /// 双指滑动时过滤手指自然抖动，达到该间距变化后才触发缩放。
-  static const double _multiTouchZoomThreshold = 6.0;
+  // 缩放优先于滚动锁定，给两根手指的事件依次到达留下判定窗口。
+  static const double _twoFingerScrollLockThreshold = 16.0;
+  static const double _twoFingerPinchThreshold = 6.0;
+  static const double _twoFingerPinchMovementThreshold = 3.0;
 
   /// ✅ 页面之间的间距
   static const double _gapBetweenPages = 16;
@@ -283,19 +295,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
       _mobileTouchPointers.add(event.pointer);
       _mobileTouchPositions[event.pointer] = event.position;
+      _mobileTouchStartPositions[event.pointer] = event.position;
     } else if (event is PointerMoveEvent &&
         _mobileTouchPointers.contains(event.pointer)) {
       _mobileTouchPositions[event.pointer] = event.position;
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
       _mobileTouchPointers.remove(event.pointer);
       _mobileTouchPositions.remove(event.pointer);
+      _mobileTouchStartPositions.remove(event.pointer);
       if (_mobileTouchPointers.length < 2) {
         _previousMultiTouchFocalPoint = null;
+        _initialMultiTouchFocalPoint = null;
         _previousMultiTouchSpan = null;
+        _initialMultiTouchSpan = null;
       }
       if (_mobileTouchPointers.isEmpty) {
         _mobileMultiTouchGestureInProgress = false;
-        _mobilePinchZoomActive = false;
+        _mobileTwoFingerGesture = _MobileTwoFingerGesture.undecided;
       }
       return;
     } else {
@@ -309,10 +325,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _currentPageIndexNotifier.value = null;
       _shapeStartPoint = null;
       _mobileMultiTouchGestureInProgress = true;
-      _mobilePinchZoomActive = false;
+      _mobileTwoFingerGesture = _MobileTwoFingerGesture.undecided;
       final positions = _currentMobileTouchPositions();
-      _previousMultiTouchFocalPoint = (positions[0] + positions[1]) / 2;
-      _previousMultiTouchSpan = (positions[0] - positions[1]).distance;
+      final focalPoint = (positions[0] + positions[1]) / 2;
+      final span = (positions[0] - positions[1]).distance;
+      _previousMultiTouchFocalPoint = focalPoint;
+      _initialMultiTouchFocalPoint = focalPoint;
+      _previousMultiTouchSpan = span;
+      _initialMultiTouchSpan = span;
       return;
     }
 
@@ -332,28 +352,53 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _jumpScroll(_pageScrollController, -delta.dy);
     _jumpScroll(_canvasHorizontalScrollController, -delta.dx);
 
-    // 中心点平移和两指捏合可同时生效。先用阈值过滤下滑过程中的
-    // 细小间距抖动；确认捏合后连续缩放，保证缩放手感自然。
-    final previousSpan = _previousMultiTouchSpan;
-    if (!_mobilePinchZoomActive &&
-        previousSpan != null &&
-        (span - previousSpan).abs() >= _multiTouchZoomThreshold) {
-      _mobilePinchZoomActive = true;
+    // 一次双指手势只允许确定一种主意图。普通平移一旦越过阈值即锁定，
+    // 后续的自然张合不再有机会触发缩放。
+    final initialSpan = _initialMultiTouchSpan;
+    final initialFocalPoint = _initialMultiTouchFocalPoint;
+    final totalSpanDelta = initialSpan == null ? 0.0 : (span - initialSpan).abs();
+    final totalFocalDelta = initialFocalPoint == null
+        ? 0.0
+        : (focalPoint - initialFocalPoint).distance;
+    if (_mobileTwoFingerGesture == _MobileTwoFingerGesture.undecided) {
+      final starts = _currentMobileTouchStartPositions();
+      final firstMovement = positions[0] - starts[0];
+      final secondMovement = positions[1] - starts[1];
+      final movementProduct = firstMovement.distance * secondMovement.distance;
+      final bothPointersMoved =
+          firstMovement.distance >= _twoFingerPinchMovementThreshold &&
+              secondMovement.distance >= _twoFingerPinchMovementThreshold;
+      final areMovingApartOrTogether = bothPointersMoved &&
+          firstMovement.dx * secondMovement.dx +
+                  firstMovement.dy * secondMovement.dy <
+              -movementProduct * 0.2;
+      final isPinching = areMovingApartOrTogether &&
+          totalSpanDelta >= _twoFingerPinchThreshold &&
+          totalSpanDelta >= totalFocalDelta * 1.4;
+
+      if (isPinching) {
+        _mobileTwoFingerGesture = _MobileTwoFingerGesture.zoom;
+      } else if (totalFocalDelta >= _twoFingerScrollLockThreshold) {
+        _mobileTwoFingerGesture = _MobileTwoFingerGesture.scroll;
+      }
     }
-    if (_mobilePinchZoomActive && previousSpan != null && previousSpan > 0) {
-      _setZoomLevel(_zoomLevelNotifier.value * span / previousSpan);
+    if (_mobileTwoFingerGesture == _MobileTwoFingerGesture.zoom &&
+        _previousMultiTouchSpan != null &&
+        _previousMultiTouchSpan! > 0) {
+      _setZoomLevel(_zoomLevelNotifier.value * span / _previousMultiTouchSpan!);
     }
 
     _previousMultiTouchFocalPoint = focalPoint;
-    // 捏合确认前保留手势初始间距，让多帧的小幅变化可以累计达到阈值；
-    // 捏合确认后逐帧更新基准，保证缩放连续跟手。
-    if (_mobilePinchZoomActive) {
-      _previousMultiTouchSpan = span;
-    }
+    _previousMultiTouchSpan = span;
   }
 
   List<Offset> _currentMobileTouchPositions() => _mobileTouchPointers
       .map((pointer) => _mobileTouchPositions[pointer]!)
+      .take(2)
+      .toList();
+
+  List<Offset> _currentMobileTouchStartPositions() => _mobileTouchPointers
+      .map((pointer) => _mobileTouchStartPositions[pointer]!)
       .take(2)
       .toList();
 
@@ -5385,6 +5430,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _canvasHorizontalScrollController.dispose();
     _mobileTouchPointers.clear();
     _mobileTouchPositions.clear();
+    _mobileTouchStartPositions.clear();
     if (_isMobilePlatform) {
       GestureBinding.instance.pointerRouter
           .removeGlobalRoute(_handleMobilePointer);
