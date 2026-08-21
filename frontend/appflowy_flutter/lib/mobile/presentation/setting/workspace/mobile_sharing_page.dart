@@ -85,9 +85,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
       appBar: MobileAppBar(
         title: '笔记共享',
       ),
-      body: Center(
-        child: _buildSharedContent(),
-      ),
+      body: _buildSharedContent(),
     );
   }
 
@@ -124,17 +122,17 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
       );
     }
 
-    return Column(
-      children: [
-        for (int index = 0; index < _sharedNotes.length; index++) ...[
+    return ListView.separated(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.paddingOf(context).bottom + 16,
+      ),
+      itemCount: _sharedNotes.length,
+      itemBuilder: (context, index) =>
           _buildSharedListItem(_sharedNotes[index]),
-          if (index != _sharedNotes.length - 1)
-            Divider(
-              height: 1,
-              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
-            ),
-        ],
-      ],
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+      ),
     );
   }
 
