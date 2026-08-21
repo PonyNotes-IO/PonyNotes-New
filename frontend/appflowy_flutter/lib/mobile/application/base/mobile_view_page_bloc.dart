@@ -22,25 +22,33 @@ class MobileViewPageBloc
         await event.when(
           initial: () async {
             _registerListeners();
-
-            final userProfilePB =
-                await UserBackendService.getCurrentUserProfile()
-                    .fold((s) => s, (f) => null);
-            final result = await ViewBackendService.getView(viewId);
-            final isImmersiveMode =
-                _isImmersiveMode(result.fold((s) => s, (f) => null));
-            emit(
-              state.copyWith(
-                isLoading: false,
-                result: result,
-                isImmersiveMode: isImmersiveMode,
-                userProfilePB: userProfilePB,
-              ),
-            );
+            try {
+              final userProfilePB =
+                  await UserBackendService.getCurrentUserProfile()
+                      .fold((s) => s, (f) => null);
+              final result = await ViewBackendService.getView(viewId);
+              final isImmersiveMode =
+                  _isImmersiveMode(result.fold((s) => s, (f) => null));
+              if (!isClosed) {
+                emit(
+                  state.copyWith(
+                    isLoading: false,
+                    result: result,
+                    isImmersiveMode: isImmersiveMode,
+                    userProfilePB: userProfilePB,
+                  ),
+                );
+              }
+            } catch (_) {
+              if (!isClosed) {
+                emit(state.copyWith(isLoading: false));
+              }
+            }
           },
           updateImmersionMode: (isImmersiveMode) {
             emit(
               state.copyWith(
+                isLoading: false,
                 isImmersiveMode: isImmersiveMode,
               ),
             );

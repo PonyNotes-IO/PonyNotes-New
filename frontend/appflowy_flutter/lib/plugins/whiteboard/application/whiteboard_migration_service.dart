@@ -69,6 +69,8 @@ class WhiteboardMigrationService {
         layoutType: ViewLayoutPB.Whiteboard,
         parentViewId: targetSpaceId,
         name: view.name,
+        // 跨空间迁移创建的新白板与普通新建白板保持一致，插入目标空间顶部。
+        index: 0,
         openAfterCreate: false,
         initialDataBytes:
             WhiteboardRoomService.encodeInitialData(roomId, roomKey),
@@ -243,6 +245,7 @@ class WhiteboardMigrationService {
   }) async {
     final viewId = view.id;
     try {
+      Log.info('[WBMigration] 协作→私有 开始 view=$viewId');
       final dataService = WhiteboardDataService();
       final room = await _resolveRoomForMigration(viewId, dataService);
       if (room == null) {

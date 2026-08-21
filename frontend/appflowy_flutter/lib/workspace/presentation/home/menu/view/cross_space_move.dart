@@ -68,10 +68,11 @@ String? crossSpaceMoveDenyReasonForRole(
   ViewSectionPB toSection,
 ) {
   if (role == null) {
-    // The document page can be opened outside the sidebar tree before the
-    // workspace role has finished loading. Do not treat that transient state
-    // as Guest: the move request is still validated by the server.
-    return null;
+    // 跨空间移动会改变共享边界。角色未加载完成时必须拒绝，避免在权限
+    // 状态未知的瞬间放行敏感操作；调用方可在角色加载后重试。
+    return toSection == ViewSectionPB.Public
+        ? LocaleKeys.space_noPermissionToMoveIntoSharedSpace.tr()
+        : LocaleKeys.space_noPermissionToMoveOutOfSharedSpace.tr();
   }
 
   // 移入协作区：Member 及以上即可，只拦受限成员。
@@ -187,6 +188,12 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
   FutureOr<void> Function(ViewPB createdView)? onWhiteboardRecreated,
 }) async {
   if (fromSection == null || toSection == null) {
+    try {
+      Log.warn(
+        '[CrossSpaceMove] 分区解析失败，终止移动 view=${view.id} '
+        'from=$fromSection to=$toSection',
+      );
+    } catch (_) {}
     showToastNotification(
       message: crossSpaceMoveDenyReasonForRole(
         null,
@@ -200,6 +207,12 @@ Future<CrossSpaceMoveOutcome> coordinateViewMove(
   if (fromSection != toSection) {
     final denyReason = crossSpaceMoveDenyReason(context, toSection);
     if (denyReason != null) {
+      try {
+        Log.warn(
+          '[CrossSpaceMove] 权限校验失败，终止移动 view=${view.id} '
+          'to=$toSection reason=$denyReason',
+        );
+      } catch (_) {}
       showToastNotification(
         message: denyReason,
         type: ToastificationType.error,

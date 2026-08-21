@@ -46,6 +46,7 @@ class ViewAction extends StatelessWidget {
           FocusManager.instance.primaryFocus?.unfocus();
           mutex?.close();
           await Future<void>.delayed(const Duration(milliseconds: 16));
+          if (!context.mounted) return;
           await _handleDeleteAction(
             actionContext: context,
             dialogContext: dialogContext,
@@ -83,23 +84,31 @@ class ViewAction extends StatelessWidget {
         }
         final space = value.$1;
         final target = value.$2;
+        try {
+          Log.info(
+            '[CrossSpaceMove] 更多菜单触发 view=${view.id} '
+            'parent=${view.parentViewId} target=${target.id}',
+          );
+        } catch (_) {}
         final result = await ViewBackendService.getView(view.parentViewId);
-        await result.fold(
-          (parentView) => moveViewCrossSpace(
-            context,
-            space,
-            view,
-            parentView,
-            // Resolve the source section from the actual view/ancestors, as
-            // the sidebar move action does. The document is not necessarily
-            // in the public section.
-            FolderSpaceType.unknown,
-            view,
-            target.id,
-          ),
-          (f) async {
-            Log.error(f);
-          },
+        if (!context.mounted) return;
+        final parentView = result.fold((parent) => parent, (_) => null);
+        if (parentView == null && view.parentViewId.isNotEmpty) {
+          result.fold(
+            (_) {},
+            (f) => Log.warn(
+              '[CrossSpaceMove] 获取源父页面失败，继续按祖先链解析: ${f.msg}',
+            ),
+          );
+        }
+        await moveViewCrossSpace(
+          context,
+          space,
+          view,
+          parentView,
+          FolderSpaceType.unknown,
+          view,
+          target.id,
         );
 
         // the move action is handled in the button itself
@@ -115,6 +124,7 @@ class ViewAction extends StatelessWidget {
   }) async {
     final (containPublishedPage, _) =
         await ViewBackendService.containPublishedPage(view);
+    if (!actionContext.mounted) return;
 
     if (containPublishedPage && dialogContext.mounted) {
       await showConfirmDeletionDialog(
@@ -138,7 +148,7 @@ class ViewAction extends StatelessWidget {
 
   Future<void> _onDeleteConfirmed(BuildContext actionContext) async {
     final didTriggerDelete = await _triggerDelete();
-    if (didTriggerDelete) {
+    if (didTriggerDelete && actionContext.mounted) {
       _refreshSpaceListIfNeeded(actionContext);
     }
   }

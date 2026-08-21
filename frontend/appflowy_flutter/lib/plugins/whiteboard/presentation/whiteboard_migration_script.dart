@@ -37,14 +37,17 @@ const String whiteboardMigrationScript = r'''
     allowPost: false,
     blockedPostCount: 0,
     sceneProbeStarted: false,
+    pullStableCount: 0,
+    lastLocalSceneVersion: null,
+    lastLocalLiveCount: null,
   };
 
   var origFetch = window.fetch.bind(window);
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || '';
     var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
-    var isSceneGet = method === 'GET' && /\/api\/scenes\/[A-Za-z0-9_-]+\/?($|[?#])/.test(url);
-    var isScenePost = method === 'POST' && /\/api\/scenes\/?($|\?)/.test(url);
+    var isSceneGet = method === 'GET' && /\/api\/scenes(?:\/v2)?\/[A-Za-z0-9_-]+\/?($|[?#])/.test(url);
+    var isScenePost = method === 'POST' && /\/api\/scenes(?:\/v2)?\/?($|\?)/.test(url);
 
     // 数据安全红线：未放行时，直接掐掉对 room 的写入，不让请求出去。
     // PULL 方向本页画布是空的，excalidraw 的自动保存一旦 POST 出去，
@@ -96,24 +99,38 @@ const String whiteboardMigrationScript = r'''
 
   // xm-arts 部分版本通过 XHR/socket 拉场景，fetch 钩子观察不到 GET。主动做一次
   // 同源只读探测，只记录服务端 sceneVersion，不参与解密或修改 room。
+  function probeScenePath(path, onDone) {
+    origFetch(path, { method: 'GET' }).then(function (resp) {
+      state.lastGetStatus = resp && resp.status;
+      if (!resp || !resp.ok) {
+        state.lastGetSceneVersion = 0;
+        onDone && onDone(false);
+        return;
+      }
+      return resp.clone().json().then(function (data) {
+        var v = Number(data && data.sceneVersion);
+        state.lastGetSceneVersion = isNaN(v) ? 0 : v;
+        onDone && onDone(true);
+      }).catch(function () {
+        state.lastGetSceneVersion = 0;
+        onDone && onDone(true);
+      });
+    }).catch(function () {
+      state.lastGetStatus = -1;
+      onDone && onDone(false);
+    });
+  }
+
   function probeScene() {
     if (state.sceneProbeStarted) return;
     state.sceneProbeStarted = true;
     var match = location.hash.match(/^#room=([^,]+)/);
     if (!match || !match[1]) return;
-    origFetch('/api/scenes/' + encodeURIComponent(match[1]), { method: 'GET' })
-      .then(function (resp) {
-        state.lastGetStatus = resp && resp.status;
-        if (!resp || !resp.ok) {
-          state.lastGetSceneVersion = 0;
-          return;
-        }
-        return resp.clone().json().then(function (data) {
-          var v = Number(data && data.sceneVersion);
-          state.lastGetSceneVersion = isNaN(v) ? 0 : v;
-        }).catch(function () { state.lastGetSceneVersion = 0; });
-      })
-      .catch(function () { state.lastGetStatus = -1; });
+    var room = encodeURIComponent(match[1]);
+    // 协作页线上版本仍可能使用旧路径；v2 只作为兼容回退。
+    probeScenePath('/api/scenes/' + room, function (ok) {
+      if (!ok) probeScenePath('/api/scenes/v2/' + room);
+    });
   }
 
   probeScene();
@@ -141,7 +158,7 @@ const String whiteboardMigrationScript = r'''
       while (stack.length && steps < 300000) {
         var f = stack.pop(); steps++;
         var sn = f && f.stateNode;
-        if (sn && typeof sn.saveCollabRoomToFirebase === 'function' && sn.portal && sn.excalidrawAPI) {
+        if (sn && typeof sn.saveCollabRoomToFirebase === 'function' && sn.excalidrawAPI) {
           collab = sn; log('已定位 Collab 实例'); return collab;
         }
         if (f.child) stack.push(f.child);
@@ -171,15 +188,25 @@ const String whiteboardMigrationScript = r'''
       try {
         var all = c.excalidrawAPI.getSceneElementsIncludingDeleted();
         var localVersion = sceneVersion(all);
-        if (liveElements(all).length > 0) return true;
-        // 404 或 sceneVersion=0 都是合法空 room；确认 socket 已连接后即可读取空场景。
-        if (c.portal && c.portal.socket && c.portal.socket.connected &&
-            (state.lastGetStatus === 404 ||
-             (state.lastGetStatus >= 200 && state.lastGetStatus < 300 &&
-              state.lastGetSceneVersion === 0))) return true;
-        // 全部元素均已删除时 liveCount=0，但本地总版本追上服务端即可确认已加载。
-        if (state.lastGetSceneVersion > 0 &&
-            localVersion >= state.lastGetSceneVersion) return true;
+        var liveCount = liveElements(all).length;
+        var getDone = state.lastGetStatus === 404 ||
+          (state.lastGetStatus >= 200 && state.lastGetStatus < 300);
+        if (!getDone) return false;
+        if (state.lastLocalSceneVersion === localVersion &&
+            state.lastLocalLiveCount === liveCount) {
+          state.pullStableCount++;
+        } else {
+          state.lastLocalSceneVersion = localVersion;
+          state.lastLocalLiveCount = liveCount;
+          state.pullStableCount = 1;
+        }
+        // GET 完成且画布连续两次保持稳定，才允许 Flutter 读取；不依赖 portal
+        // 或 socket 字段，因为移动端页面可能只暴露 REST + excalidrawAPI。
+        if (state.pullStableCount < 2) return false;
+        if (liveCount > 0) return true;
+        // 404/版本为 0 是合法空房；有服务端版本时允许全是删除墓碑的场景。
+        if (state.lastGetStatus === 404 || state.lastGetSceneVersion === 0) return true;
+        return localVersion >= state.lastGetSceneVersion;
       } catch (e) {}
       return false;
     },
@@ -200,6 +227,10 @@ const String whiteboardMigrationScript = r'''
         lastGetStatus: state.lastGetStatus,
         lastPostStatus: state.lastPostStatus,
         blockedPostCount: state.blockedPostCount,
+        lastGetSceneVersion: state.lastGetSceneVersion,
+        lastLocalSceneVersion: state.lastLocalSceneVersion,
+        lastLocalLiveCount: state.lastLocalLiveCount,
+        pullStableCount: state.pullStableCount,
         allowPost: state.allowPost,
         excalidrawElPresent: !!el,
         readyState: document.readyState,

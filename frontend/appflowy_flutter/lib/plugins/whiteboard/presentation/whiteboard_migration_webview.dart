@@ -53,39 +53,92 @@ Future<WhiteboardMigrationWebResult> runWhiteboardMigrationWebView({
   }
 
   final completer = Completer<WhiteboardMigrationWebResult>();
+  NavigatorState? dialogNavigator;
+  var dialogCloseRequested = false;
+  var dialogAlreadyClosed = false;
+  void closeDialog() {
+    if (dialogCloseRequested || dialogAlreadyClosed) return;
+    dialogCloseRequested = true;
+    final navigator = dialogNavigator;
+    if (navigator == null || !navigator.mounted) return;
+    try {
+      if (navigator.canPop()) {
+        navigator.pop();
+      }
+    } catch (e) {
+      Log.warn('[WBMigrationWebView] 关闭迁移弹窗失败: $e');
+    }
+  }
 
-  await showDialog<void>(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) {
-      return PopScope(
-        canPop: false,
-        child: _WhiteboardMigrationWebView(
-          roomId: roomId,
-          roomKey: roomKey,
-          isPush: isPush,
-          pushPayload: pushPayload,
-          timeout: timeout,
-          onDone: (result) {
-            if (!completer.isCompleted) {
-              completer.complete(result);
-            }
-            if (Navigator.of(dialogContext).canPop()) {
-              Navigator.of(dialogContext).pop();
-            }
-          },
-        ),
+  late final Future<void> dialogFuture;
+  try {
+    dialogFuture = showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        dialogNavigator = Navigator.of(dialogContext);
+        return PopScope(
+          canPop: false,
+          child: _WhiteboardMigrationWebView(
+            roomId: roomId,
+            roomKey: roomKey,
+            isPush: isPush,
+            pushPayload: pushPayload,
+            timeout: timeout,
+            onDone: (result) {
+              if (!completer.isCompleted) {
+                completer.complete(result);
+              }
+              closeDialog();
+            },
+          ),
+        );
+      },
+    );
+  } catch (e) {
+    return WhiteboardMigrationWebResult(ok: false, error: 'dialog-open:$e');
+  }
+
+  // 迁移结果由 onDone 直接完成；不能等待 showDialog Future，否则 Navigator
+  // 关闭失败时会把调用方永远挂在不透明 Loading 层上。
+  unawaited(
+    dialogFuture.then<void>(
+      (_) {
+        dialogAlreadyClosed = true;
+        if (!completer.isCompleted) {
+          completer.complete(
+            const WhiteboardMigrationWebResult(
+              ok: false,
+              error: 'dialog-dismissed',
+            ),
+          );
+        }
+      },
+      onError: (Object error, StackTrace stack) {
+        Log.warn('[WBMigrationWebView] 迁移弹窗异常结束: $error');
+        if (!completer.isCompleted) {
+          completer.complete(
+            WhiteboardMigrationWebResult(
+              ok: false,
+              error: 'dialog-error:$error',
+            ),
+          );
+        }
+      },
+    ),
+  );
+  final result = await completer.future.timeout(
+    timeout + const Duration(seconds: 5),
+    onTimeout: () {
+      Log.error('[WBMigrationWebView] 外层迁移超时，强制结束 Loading');
+      return const WhiteboardMigrationWebResult(
+        ok: false,
+        error: 'outer-timeout',
       );
     },
   );
-
-  if (!completer.isCompleted) {
-    // 弹窗被异常关闭（理论上不会，PopScope 已阻止），按失败处理，绝不误判成功。
-    completer.complete(
-      const WhiteboardMigrationWebResult(ok: false, error: 'dialog-dismissed'),
-    );
-  }
-  return completer.future;
+  closeDialog();
+  return result;
 }
 
 class _WhiteboardMigrationWebView extends StatefulWidget {
@@ -156,7 +209,9 @@ class _WhiteboardMigrationWebViewState
         await _runPull();
       }
     } catch (e) {
-      _finish(WhiteboardMigrationWebResult(ok: false, error: 'flow-exception:$e'));
+      _finish(
+        WhiteboardMigrationWebResult(ok: false, error: 'flow-exception:$e'),
+      );
     }
   }
 
@@ -244,7 +299,12 @@ class _WhiteboardMigrationWebViewState
     }
 
     if (scene == null) {
-      _finish(const WhiteboardMigrationWebResult(ok: false, error: 'pull-read-null'));
+      _finish(
+        const WhiteboardMigrationWebResult(
+          ok: false,
+          error: 'pull-read-null',
+        ),
+      );
       return;
     }
 
@@ -292,7 +352,12 @@ class _WhiteboardMigrationWebViewState
       }
     }
     if (res == null) {
-      _finish(const WhiteboardMigrationWebResult(ok: false, error: 'push-result-null'));
+      _finish(
+        const WhiteboardMigrationWebResult(
+          ok: false,
+          error: 'push-result-null',
+        ),
+      );
       return;
     }
     final ok = res['ok'] == true;
@@ -327,8 +392,7 @@ class _WhiteboardMigrationWebViewState
                   initialUserScripts: UnmodifiableListView([
                     UserScript(
                       source: whiteboardMigrationScript,
-                      injectionTime:
-                          UserScriptInjectionTime.AT_DOCUMENT_START,
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                     ),
                   ]),
                   onWebViewCreated: (controller) => _controller = controller,
