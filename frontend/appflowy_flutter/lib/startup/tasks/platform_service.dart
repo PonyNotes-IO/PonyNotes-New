@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:appflowy/core/network_monitor.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:flutter/widgets.dart';
 import '../startup.dart';
 
 class InitPlatformServiceTask extends LaunchTask {
-  const InitPlatformServiceTask();
+  bool _disposed = false;
+  NetworkListener? _networkListener;
 
   @override
   LaunchTaskType get type => LaunchTaskType.dataProcessing;
@@ -11,13 +16,32 @@ class InitPlatformServiceTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
 
-    return getIt<NetworkListener>().start();
+    if (context.env.isTest) {
+      return _start();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed) {
+        unawaited(_start());
+      }
+    });
+  }
+
+  Future<void> _start() async {
+    try {
+      final listener = getIt<NetworkListener>();
+      _networkListener = listener;
+      await listener.start();
+    } catch (error) {
+      Log.error('Failed to initialize network listener: $error');
+    }
   }
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
     await super.dispose();
 
-    await getIt<NetworkListener>().stop();
+    await _networkListener?.stop();
   }
 }

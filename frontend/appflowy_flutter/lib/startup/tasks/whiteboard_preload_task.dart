@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import '../startup.dart';
 
 /// 白板预热任务
@@ -8,6 +11,7 @@ import '../startup.dart';
 /// 这样可以避免用户首次打开白板视图时的卡顿和首次加载失败问题
 class WhiteboardPreloadTask extends LaunchTask {
   const WhiteboardPreloadTask();
+  bool _disposed = false;
 
   @override
   LaunchTaskType get type => LaunchTaskType.dataProcessing;
@@ -16,6 +20,18 @@ class WhiteboardPreloadTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
 
+    if (context.env.isTest) {
+      return _preload();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed) {
+        unawaited(_preload());
+      }
+    });
+  }
+
+  Future<void> _preload() async {
     Log.info('🎨 [WhiteboardPreload] Starting whiteboard preload task...');
 
     try {
@@ -28,7 +44,9 @@ class WhiteboardPreloadTask extends LaunchTask {
       // 这样可以避免首次加载时的延迟
       await _preloadCriticalAssets(assetServer);
 
-      Log.info('✅ [WhiteboardPreload] Whiteboard preload completed successfully');
+      Log.info(
+        '✅ [WhiteboardPreload] Whiteboard preload completed successfully',
+      );
     } catch (e, stackTrace) {
       // 预热失败不应该阻止应用启动
       // 只记录错误，让应用继续运行
@@ -48,8 +66,7 @@ class WhiteboardPreloadTask extends LaunchTask {
 
       String? indexHtml;
       try {
-        indexHtml =
-            await rootBundle.loadString('assets/excalidraw/index.html');
+        indexHtml = await rootBundle.loadString('assets/excalidraw/index.html');
         Log.info('✅ [WhiteboardPreload] Preloaded: index.html');
       } catch (e) {
         Log.warn('⚠️ [WhiteboardPreload] Failed to preload index.html: $e');
@@ -94,6 +111,7 @@ class WhiteboardPreloadTask extends LaunchTask {
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
     await super.dispose();
     Log.info('🗑️ [WhiteboardPreload] Whiteboard preload task disposed');
     // 注意：不要在这里停止 LocalAssetServer

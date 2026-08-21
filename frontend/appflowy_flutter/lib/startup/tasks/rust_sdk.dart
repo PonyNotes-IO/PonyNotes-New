@@ -5,6 +5,7 @@ import 'package:appflowy/env/backend_env.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/user/application/auth/device_id.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy_backend/appflowy_backend.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:path/path.dart' as path;
@@ -63,6 +64,7 @@ class InitRustSDKTask extends LaunchTask {
       rustEnvs: context.config.rustEnvs,
     );
     await context.getIt<FlowySDK>().init(jsonEncode(env.toJson()));
+    PerformanceTrace.mark('rust_core_ready');
   }
 }
 

@@ -18,6 +18,7 @@ import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_scr
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -163,6 +164,7 @@ class _HomePage extends StatefulWidget {
 class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
   Loading? loadingIndicator;
   DateTime? _lastRefreshTime;
+  bool _homeReadyMarked = false;
   static const Duration _refreshDebounceDuration = Duration(seconds: 1);
 
   @override
@@ -229,6 +231,8 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
           return const SizedBox.shrink();
         }
 
+        _markHomeReady();
+
         final workspaceId = state.currentWorkspace!.workspaceId;
 
         return BlocProvider(
@@ -285,6 +289,19 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
         );
       },
     );
+  }
+
+  void _markHomeReady() {
+    if (_homeReadyMarked || !PerformanceTrace.enabled) {
+      return;
+    }
+
+    _homeReadyMarked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        PerformanceTrace.mark('home_ready');
+      }
+    });
   }
 
   void _showResultDialog(BuildContext context, UserWorkspaceState state) {

@@ -5,6 +5,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/desktop_toolbar/desktop_floating_toolbar.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/desktop_toolbar/link/link_hover_menu.dart';
 import 'package:appflowy/util/expand_views.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy/workspace/application/settings/prelude.dart';
 import 'package:appflowy_backend/appflowy_backend.dart';
 import 'package:appflowy_backend/log.dart';
@@ -41,9 +42,14 @@ final _runAppFlowyLock = Lock();
 Future<void> runAppFlowy({bool isAnon = false}) async {
   // 使用锁确保同一时间只有一个 runAppFlowy 在执行
   return _runAppFlowyLock.synchronized(() async {
+    PerformanceTrace.mark(
+      'run_app_flowy_start',
+      fields: {'isAnon': isAnon},
+    );
     Log.info('🟢 runAppFlowy: isAnon: $isAnon, acquiring lock...');
     await _runAppFlowyImpl(isAnon: isAnon);
     Log.info('🟢 runAppFlowy: completed and releasing lock');
+    PerformanceTrace.mark('run_app_flowy_end');
   });
 }
 
@@ -156,19 +162,16 @@ class FlowyRunner {
         const InitMediaKitTask(),
         // localization - moved after Rust SDK to ensure platform channels are ready
         const InitLocalizationTask(),
-        
+
         // Load Plugins, like document, grid ...
         const PluginLoadTask(),
         const FileStorageTask(),
-        // Preload whiteboard resources (Excalidraw WebView)
-        // This should be after PluginLoadTask to ensure whiteboard plugin is loaded
-        // and before InitAppWidgetTask to preload resources before UI is shown
-        const WhiteboardPreloadTask(),
         // Load Baidu Cloud configuration
         const BaiduCloudConfigTask(),
-
-        // Initialize notification service and check permissions
-        const NotificationServiceTask(),
+        if (mode.isTest) ...[
+          WhiteboardPreloadTask(),
+          NotificationServiceTask(),
+        ],
         // init the app widget
         // ignore in test mode
         if (!mode.isUnitTest) ...[
@@ -184,7 +187,16 @@ class FlowyRunner {
           const HotKeyTask(),
           if (isAppFlowyCloudEnabled) InitAppFlowyCloudTask(),
           const InitAppWidgetTask(),
-          const InitPlatformServiceTask(),
+          if (mode.isTest)
+            InitPlatformServiceTask()
+          else ...[
+            // These tasks are intentionally after runApp so they cannot delay
+            // the first frame. Whiteboard still remains preloaded before it is
+            // opened.
+            WhiteboardPreloadTask(),
+            NotificationServiceTask(),
+            InitPlatformServiceTask(),
+          ],
           const RecentServiceTask(),
         ],
       ],
@@ -309,17 +321,39 @@ class AppLauncher {
       final startTime = Stopwatch()..start();
       Log.info('AppLauncher: start initializing tasks');
 
-      for (final task in tasks) {
+      for (var index = 0; index < tasks.length; index++) {
+        final task = tasks[index];
         final startTaskTime = Stopwatch()..start();
-        await task.initialize(context);
-        final endTaskTime = startTaskTime.elapsed.inMilliseconds;
-        Log.info(
-          'AppLauncher: task ${task.runtimeType} initialized in $endTaskTime ms',
-        );
+        final taskName = task.runtimeType.toString();
+        final taskKey = '$index:$taskName';
+        PerformanceTrace.startupTaskStart(taskKey, taskName);
+        try {
+          await task.initialize(context);
+          PerformanceTrace.startupTaskEnd(taskKey, taskName, success: true);
+          final endTaskTime = startTaskTime.elapsed.inMilliseconds;
+          Log.info(
+            'AppLauncher: task $taskName initialized in $endTaskTime ms',
+          );
+        } catch (error) {
+          PerformanceTrace.startupTaskEnd(
+            taskKey,
+            taskName,
+            success: false,
+            error: error,
+          );
+          rethrow;
+        }
       }
 
       final endTime = startTime.elapsed.inMilliseconds;
       Log.info('AppLauncher: tasks initialized in $endTime ms');
+      PerformanceTrace.mark(
+        'startup_tasks_ready',
+        fields: {
+          'taskCount': tasks.length,
+        },
+        durationMs: endTime,
+      );
     });
   }
 

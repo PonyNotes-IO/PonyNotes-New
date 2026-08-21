@@ -23,6 +23,7 @@ import 'package:appflowy/shared/flowy_error_page.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -85,6 +86,7 @@ class _DocumentPageState extends State<DocumentPage>
   bool _handledForceCloseNavigation = false;
   bool? _lastEditable;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
+  bool _firstEditableMarked = false;
   late final Future<bool> _isPrivateSpace;
   // 父级 view 是不是协作空间。null 表示尚未查询完成。
   // 用于决定"返回上一级文档"按钮是否显示：
@@ -223,6 +225,9 @@ class _DocumentPageState extends State<DocumentPage>
               // 编辑器仍可输入。这里在每次 build 都同步，确保只读真正生效。
               if (editorState != null) {
                 _syncEditorEditable(canEditDocument);
+                if (canEditDocument) {
+                  _markFirstEditable();
+                }
               }
               // editorState 就绪后注册到 ViewInfoBloc（仅首次），触发字数统计服务启动
               if (editorState != null && !_editorStateRegistered) {
@@ -366,6 +371,19 @@ class _DocumentPageState extends State<DocumentPage>
       // 会重新 attach 一个干净的连接。
       editorState?.service.keyboardService?.closeKeyboard();
     }
+  }
+
+  void _markFirstEditable() {
+    if (_firstEditableMarked || !PerformanceTrace.enabled) {
+      return;
+    }
+
+    _firstEditableMarked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        PerformanceTrace.mark('first_editable');
+      }
+    });
   }
 
   Widget buildEditorPage(

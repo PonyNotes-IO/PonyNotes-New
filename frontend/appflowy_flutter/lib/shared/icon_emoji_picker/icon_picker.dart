@@ -24,6 +24,7 @@ import 'icon_color_picker.dart';
 
 // cache the icon groups to avoid loading them multiple times
 List<IconGroup>? kIconGroups;
+Future<List<IconGroup>>? _iconGroupsFuture;
 const _kRecentIconGroupName = 'Recent';
 
 extension IconGroupFilter on List<IconGroup> {
@@ -54,11 +55,15 @@ extension IconGroupFilter on List<IconGroup> {
   }
 }
 
-Future<List<IconGroup>> loadIconGroups() async {
+Future<List<IconGroup>> loadIconGroups() {
   if (kIconGroups != null) {
-    return kIconGroups!;
+    return Future.value(kIconGroups!);
   }
 
+  return _iconGroupsFuture ??= _loadIconGroups();
+}
+
+Future<List<IconGroup>> _loadIconGroups() async {
   final stopwatch = Stopwatch()..start();
   try {
     final jsonString = await rootBundle.loadString('assets/icons/icons.json');

@@ -7,6 +7,7 @@ import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/startup/tasks/rust_sdk.dart';
 import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -28,6 +29,7 @@ class AutoExportDebugLogsTask extends LaunchTask {
   Timer? _exportTimer;
   Directory? _sessionDirectory;
   bool _isExporting = false;
+  bool _disposed = false;
 
   static Future<Directory> exportOnce({String reason = 'manual'}) async {
     final exporter = AutoExportDebugLogsTask();
@@ -51,24 +53,51 @@ class AutoExportDebugLogsTask extends LaunchTask {
       return;
     }
 
-    final sessionRoot = await _resolveSessionDirectory();
-    await sessionRoot.create(recursive: true);
-    _sessionDirectory = sessionRoot;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_initializeAfterFirstFrame());
+    });
+  }
 
-    logDiagnosticMessage(
-      'export.bootstrap',
-      'sessionDir=${sessionRoot.path} label=$ponyNotesDiagnosticBuildLabel',
-    );
+  Future<void> _initializeAfterFirstFrame() async {
+    if (_disposed) {
+      return;
+    }
 
-    await _exportSnapshot(reason: 'startup');
-    _exportTimer = Timer.periodic(
-      _exportInterval,
-      (_) => unawaited(_exportSnapshot(reason: 'periodic')),
-    );
+    try {
+      final sessionRoot = await _resolveSessionDirectory();
+      if (_disposed) {
+        return;
+      }
+
+      await sessionRoot.create(recursive: true);
+      _sessionDirectory = sessionRoot;
+
+      logDiagnosticMessage(
+        'export.bootstrap',
+        'sessionDir=${sessionRoot.path} label=$ponyNotesDiagnosticBuildLabel',
+      );
+
+      await _exportSnapshot(reason: 'startup');
+      if (_disposed) {
+        return;
+      }
+
+      _exportTimer = Timer.periodic(
+        _exportInterval,
+        (_) => unawaited(_exportSnapshot(reason: 'periodic')),
+      );
+    } catch (error, stackTrace) {
+      Log.error(
+        '[PonyNotesDiag][export.bootstrap] failed: $error',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   @override
   Future<void> dispose() async {
+    _disposed = true;
     _exportTimer?.cancel();
     if (ponyNotesDiagnosticBuildEnabled) {
       await _exportSnapshot(reason: 'dispose');

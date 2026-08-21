@@ -12,6 +12,7 @@ import 'package:appflowy/startup/tasks/memory_leak_detector.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/util/log_utils.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -96,8 +97,7 @@ class _SharedAccessRevocationListenerState
       }
       final tabsBloc = getIt<TabsBloc>();
       final pageManagers = tabsBloc.state.pageManagers;
-      final isOpen =
-          pageManagers.any((pm) => pm.plugin.id == revokedViewId);
+      final isOpen = pageManagers.any((pm) => pm.plugin.id == revokedViewId);
       if (!isOpen) {
         return;
       }
@@ -149,6 +149,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   String? _upgradeSuccessMessage;
   late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
   late final VoidCallback _subscriptionSuccessListener;
+  bool _homeReadyMarked = false;
 
   @override
   void initState() {
@@ -207,6 +208,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         if (workspaceLatest == null || userProfile == null) {
           return const WorkspaceFailedScreen();
         }
+
+        _markHomeReady();
 
         return AFFocusManager(
           child: MultiBlocProvider(
@@ -289,8 +292,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                             )
                               ..add(UserWorkspaceEvent.initialize())
                               ..add(UserWorkspaceEvent.fetchWorkspaces()),
-                            child:
-                                BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                            child: BlocListener<UserWorkspaceBloc,
+                                UserWorkspaceState>(
                               listenWhen: (previous, current) =>
                                   previous.currentWorkspace !=
                                       current.currentWorkspace ||
@@ -312,7 +315,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                                 }
 
                                 CommandPalette.maybeOf(context)?.updateBlocs(
-                                  workspaceBloc: context.read<UserWorkspaceBloc?>(),
+                                  workspaceBloc:
+                                      context.read<UserWorkspaceBloc?>(),
                                   spaceBloc: context.read<SpaceBloc?>(),
                                 );
 
@@ -349,6 +353,19 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         );
       },
     );
+  }
+
+  void _markHomeReady() {
+    if (_homeReadyMarked || !PerformanceTrace.enabled) {
+      return;
+    }
+
+    _homeReadyMarked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        PerformanceTrace.mark('home_ready');
+      }
+    });
   }
 
   Widget _buildLoading() =>
@@ -756,8 +773,7 @@ class _WorkspaceLifecycleRefresherState
         return;
       }
 
-      final workspaceId =
-          workspaceBloc.state.currentWorkspace?.workspaceId;
+      final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId;
 
       await context.checkMembershipStatus(workspaceId: workspaceId);
       if (!mounted) {

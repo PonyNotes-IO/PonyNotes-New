@@ -5,13 +5,16 @@ import 'package:appflowy_backend/log.dart';
 import 'package:flutter/widgets.dart';
 
 import 'startup/startup.dart';
+import 'startup/startup_shell.dart';
+import 'util/performance_trace.dart';
 
 // Stores the initial deep link passed from the native runner.
 String? _initialDeepLink;
 
 String get _lockFilePath {
-  final appData =
-      Platform.environment['APPDATA'] ?? Platform.environment['LOCALAPPDATA'] ?? '.';
+  final appData = Platform.environment['APPDATA'] ??
+      Platform.environment['LOCALAPPDATA'] ??
+      '.';
   return '$appData\\PonyNotes\\instance.lock';
 }
 
@@ -28,6 +31,8 @@ Future<void> _cleanupLegacyLockFile() async {
 }
 
 Future<void> main(List<String> args) async {
+  PerformanceTrace.mark('process_start');
+
   if (Platform.isWindows) {
     Log.info('DeepLink: ==== App started with args: $args ====');
 
@@ -47,6 +52,18 @@ Future<void> main(List<String> args) async {
   // 鼠标选工具偏移、绘图轨迹错位、画布整体漂移。改用标准 WidgetsFlutterBinding 彻底修复。
   // 代价：App 全局缩放(Cmd +/-)暂停用（相关调用已在 hotkeys/windows 中安全屏蔽，按键不再生效也不崩溃）。
   WidgetsFlutterBinding.ensureInitialized();
+  PerformanceTrace.mark('flutter_binding_ready');
+
+  if (Platform.isAndroid) {
+    // Render a Flutter frame before the dependency-heavy application startup.
+    // This prevents Android from exposing an empty Flutter surface after its
+    // native splash has been removed.
+    PerformanceTrace.mark('startup_shell_run_app');
+    runApp(const StartupShell());
+    await WidgetsBinding.instance.endOfFrame;
+    PerformanceTrace.mark('first_frame');
+    PerformanceTrace.mark('startup_shell_ready');
+  }
 
   if (args.isNotEmpty) {
     final url = args.first;

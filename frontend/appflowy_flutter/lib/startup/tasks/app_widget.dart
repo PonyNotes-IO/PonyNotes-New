@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy/mobile/application/mobile_router.dart';
@@ -11,6 +12,7 @@ import 'package:appflowy/shared/icon_emoji_picker/icon.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_settings_service.dart';
 import 'package:appflowy/util/font_family_extension.dart';
+import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -78,20 +80,18 @@ class InitAppWidgetTask extends LaunchTask {
     PaintingBinding.instance.imageCache.maximumSize = 500;
     PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
 
-    await NotificationService.initialize();
-
-    // 异步加载图标，不阻塞应用启动
-    await loadIconGroups().catchError((e) {
-      // 图标加载失败不应该阻止应用启动
-      // 错误已在loadIconGroups内部记录
-      return <IconGroup>[];
-    });
+    if (UniversalPlatform.isDesktop) {
+      await NotificationService.initialize();
+    }
 
     final widget = context.getIt<EntryPoint>().create(context.config);
-    final appearanceSetting =
-        await UserSettingsBackendService().getAppearanceSetting();
-    final dateTimeSettings =
-        await UserSettingsBackendService().getDateTimeSettings();
+    final settingsService = const UserSettingsBackendService();
+    final settings = await Future.wait([
+      settingsService.getAppearanceSetting(),
+      settingsService.getDateTimeSettings(),
+    ]);
+    final appearanceSetting = settings[0] as AppearanceSettingsPB;
+    final dateTimeSettings = settings[1] as DateTimeSettingsPB;
 
     // If the passed-in context is not the same as the context of the
     // application widget, the application widget will be rebuilt.
@@ -103,6 +103,7 @@ class InitAppWidgetTask extends LaunchTask {
       child: widget,
     );
 
+    PerformanceTrace.mark('application_run_app');
     runApp(
       EasyLocalization(
         supportedLocales: const [
@@ -154,6 +155,17 @@ class InitAppWidgetTask extends LaunchTask {
         ),
       ),
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PerformanceTrace.mark('shell_ready');
+      PerformanceTrace.mark('application_shell_ready');
+      unawaited(
+        loadIconGroups().catchError((e) {
+          // Icon loading is optional and must never fail the running app.
+          return <IconGroup>[];
+        }),
+      );
+    });
 
     return;
   }
