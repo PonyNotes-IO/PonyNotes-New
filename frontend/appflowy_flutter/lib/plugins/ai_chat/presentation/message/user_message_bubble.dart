@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -217,27 +217,55 @@ class _MessageImageList extends StatelessWidget {
 }
 
 /// 单个图片缩略图组件（支持 base64 和 HTTP URL 两种来源）
-class _MessageImage extends StatelessWidget {
+class _MessageImage extends StatefulWidget {
   const _MessageImage({required this.imageData});
 
   final String imageData;
 
+  @override
+  State<_MessageImage> createState() => _MessageImageState();
+}
+
+class _MessageImageState extends State<_MessageImage> {
+  MemoryImage? _memoryImage;
+
   bool get _isUrl =>
-      imageData.startsWith('http://') || imageData.startsWith('https://');
+      widget.imageData.startsWith('http://') ||
+      widget.imageData.startsWith('https://');
+
+  @override
+  void initState() {
+    super.initState();
+    _decodeImage();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageData != widget.imageData) {
+      _decodeImage();
+    }
+  }
+
+  void _decodeImage() {
+    if (_isUrl) {
+      _memoryImage = null;
+      return;
+    }
+
+    try {
+      _memoryImage = MemoryImage(base64Decode(widget.imageData));
+    } catch (_) {
+      _memoryImage = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_isUrl) {
-      return _buildNetworkImage(context);
-    }
-    // 尝试解码 base64 图片
-    Uint8List? imageBytes;
-    try {
-      imageBytes = base64Decode(imageData);
-    } catch (_) {
-      imageBytes = null;
-    }
-    return _buildMemoryImage(context, imageBytes);
+    // RepaintBoundary 隔离图片重绘，避免输入法动画影响
+    return RepaintBoundary(
+      child: _isUrl ? _buildNetworkImage(context) : _buildMemoryImage(context),
+    );
   }
 
   Widget _buildNetworkImage(BuildContext context) {
@@ -253,7 +281,7 @@ class _MessageImage extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: CachedNetworkImage(
-          imageUrl: imageData,
+          imageUrl: widget.imageData,
           fit: BoxFit.cover,
           placeholder: (_, __) => Container(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -271,13 +299,12 @@ class _MessageImage extends StatelessWidget {
     );
   }
 
-  Widget _buildMemoryImage(BuildContext context, Uint8List? imageBytes) {
+  Widget _buildMemoryImage(BuildContext context) {
+    final memoryImage = _memoryImage;
     return GestureDetector(
-      onTap: () {
-        if (imageBytes != null) {
-          _showFullMemoryImage(context, imageBytes);
-        }
-      },
+      onTap: memoryImage == null
+          ? null
+          : () => _showFullMemoryImage(context, memoryImage),
       child: Container(
         constraints: const BoxConstraints(maxWidth: 120, maxHeight: 120),
         decoration: BoxDecoration(
@@ -287,10 +314,11 @@ class _MessageImage extends StatelessWidget {
           ),
         ),
         clipBehavior: Clip.antiAlias,
-        child: imageBytes != null
-            ? Image.memory(
-                imageBytes,
+        child: memoryImage != null
+            ? Image(
+                image: memoryImage,
                 fit: BoxFit.cover,
+                gaplessPlayback: true,
                 errorBuilder: (_, __, ___) => _buildPlaceholder(context),
               )
             : _buildPlaceholder(context),
@@ -324,7 +352,10 @@ class _MessageImage extends StatelessWidget {
               maxScale: 4.0,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(imageUrl: imageData, fit: BoxFit.contain),
+                child: CachedNetworkImage(
+                  imageUrl: widget.imageData,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
             _closeButton(context),
@@ -334,7 +365,7 @@ class _MessageImage extends StatelessWidget {
     );
   }
 
-  void _showFullMemoryImage(BuildContext context, Uint8List imageBytes) {
+  void _showFullMemoryImage(BuildContext context, MemoryImage image) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -347,7 +378,11 @@ class _MessageImage extends StatelessWidget {
               maxScale: 4.0,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.memory(imageBytes, fit: BoxFit.contain),
+                child: Image(
+                  image: image,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
               ),
             ),
             _closeButton(context),
@@ -387,79 +422,29 @@ class _MessageImageFromPath extends StatefulWidget {
 }
 
 class _MessageImageFromPathState extends State<_MessageImageFromPath> {
-  Uint8List? _imageBytes;
-  bool _isLoading = true;
-  bool _error = false;
+  late FileImage _image;
 
   @override
   void initState() {
     super.initState();
-    _loadImage();
+    _image = FileImage(File(widget.filePath));
   }
 
-  Future<void> _loadImage() async {
-    try {
-      final file = File(widget.filePath);
-      
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        if (mounted) {
-          setState(() {
-            _imageBytes = bytes;
-            _isLoading = false;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _error = true;
-            _isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = true;
-          _isLoading = false;
-        });
-      }
+  @override
+  void didUpdateWidget(covariant _MessageImageFromPath oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filePath != widget.filePath) {
+      _image = FileImage(File(widget.filePath));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Container(
-        width: 80,
-        height: 80,
-        constraints: const BoxConstraints(
-          maxWidth: 120,
-          maxHeight: 120,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          ),
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        ),
-        child: const Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-
-    if (_error || _imageBytes == null) {
-      return GestureDetector(
-        onTap: () {},
+    // RepaintBoundary 隔离图片重绘
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: () => _showFullImage(context),
         child: Container(
-          width: 80,
-          height: 80,
           constraints: const BoxConstraints(
             maxWidth: 120,
             maxHeight: 120,
@@ -469,54 +454,33 @@ class _MessageImageFromPathState extends State<_MessageImageFromPath> {
             border: Border.all(
               color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
             ),
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
           ),
-          child: Icon(
-            Icons.image_not_supported_outlined,
-            color: Theme.of(context).hintColor,
-            size: 32,
+          clipBehavior: Clip.antiAlias,
+          child: Image(
+            image: _image,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => _buildPlaceholder(context),
           ),
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () {
-        _showFullImage(context, _imageBytes!);
-      },
-      child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 120,
-          maxHeight: 120,
-        ),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Image.memory(
-          _imageBytes!,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: 80,
-              height: 80,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: Icon(
-                Icons.image_not_supported_outlined,
-                color: Theme.of(context).hintColor,
-                size: 32,
-              ),
-            );
-          },
         ),
       ),
     );
   }
 
-  void _showFullImage(BuildContext context, Uint8List imageBytes) {
+  Widget _buildPlaceholder(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        color: Theme.of(context).hintColor,
+        size: 32,
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -529,9 +493,10 @@ class _MessageImageFromPathState extends State<_MessageImageFromPath> {
               maxScale: 4.0,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.memory(
-                  imageBytes,
+                child: Image(
+                  image: _image,
                   fit: BoxFit.contain,
+                  gaplessPlayback: true,
                 ),
               ),
             ),

@@ -77,6 +77,10 @@ class _MobileViewPageState extends State<MobileViewPage> {
   StreamSubscription? _sharedAccessRevocationSubscription;
   bool _isLeavingRevokedView = false;
 
+  // 缓存 plugin 实例，避免输入法动画期间反复 init
+  Plugin? _cachedPlugin;
+  String? _cachedViewId;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +91,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
   @override
   void dispose() {
+    _cachedPlugin = null;
     _sharedAccessRevocationSubscription?.cancel();
     super.dispose();
   }
@@ -114,6 +119,10 @@ class _MobileViewPageState extends State<MobileViewPage> {
       create: (_) => MobileViewPageBloc(viewId: widget.id)
         ..add(const MobileViewPageEvent.initial()),
       child: BlocBuilder<MobileViewPageBloc, MobileViewPageState>(
+        // 只在 result 或 isLoading 变化时重建，避免输入法动画期间的无效重建
+        buildWhen: (previous, current) =>
+            previous.result != current.result ||
+            previous.isLoading != current.isLoading,
         builder: (context, state) {
           final view = state.result?.fold((s) => s, (f) => null);
           final body = _buildBody(context, state);
@@ -263,9 +272,15 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
     return result.fold(
       (view) {
-        final plugin = view.plugin(arguments: widget.arguments ?? const {})
-          ..init();
-        return plugin.widgetBuilder.buildWidget(
+        // 缓存 plugin 实例，避免输入法动画期间反复创建和 init
+        // 只有当 view.id 变化时才重新创建
+        if (_cachedPlugin == null || _cachedViewId != view.id) {
+          _cachedPlugin = view.plugin(arguments: widget.arguments ?? const {})
+            ..init();
+          _cachedViewId = view.id;
+        }
+
+        return _cachedPlugin!.widgetBuilder.buildWidget(
           shrinkWrap: false,
           context: PluginContext(userProfile: state.userProfilePB),
           data: {

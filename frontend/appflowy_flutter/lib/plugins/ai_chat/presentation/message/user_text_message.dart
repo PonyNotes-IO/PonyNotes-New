@@ -85,22 +85,15 @@ class ChatUserMessageWidget extends StatelessWidget {
   /// 获取消息中的图片数据（base64编码）
   List<String> _getImages() {
     if (message.metadata == null) {
-      Log.info('📸 UserTextMessage: message.metadata为null');
       return const [];
     }
 
-    Log.info('📸 UserTextMessage: 检查metadata中的图片数据');
-    Log.info('   - metadata键列表: ${message.metadata!.keys.toList()}');
-
     final imagesData = message.metadata!['images'];
-    Log.info('   - images字段类型: ${imagesData.runtimeType}');
-    Log.info('   - images字段值: ${imagesData is List ? "List(${(imagesData as List).length})" : imagesData}');
 
     if (imagesData is List && imagesData.isNotEmpty) {
       Log.info('📸 UserTextMessage: 找到 ${imagesData.length} 张图片(base64)');
       return imagesData.cast<String>();
     }
-    Log.info('📸 UserTextMessage: 没有找到base64图片数据');
     return const [];
   }
 
@@ -112,7 +105,6 @@ class ChatUserMessageWidget extends StatelessWidget {
 
     final pathsData = message.metadata!['image_paths'];
     if (pathsData is List && pathsData.isNotEmpty) {
-      Log.info('📸 UserTextMessage: 找到 ${pathsData.length} 张图片路径');
       return pathsData.cast<String>();
     }
     return const [];

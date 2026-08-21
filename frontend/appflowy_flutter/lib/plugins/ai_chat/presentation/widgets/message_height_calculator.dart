@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -31,6 +32,10 @@ class _MessageHeightCalculatorState extends State<MessageHeightCalculator>
   int measurementAttempts = 0;
   static const int maxMeasurementAttempts = 3;
 
+  // 防抖：避免输入法动画期间过度测量
+  Timer? _measureDebounceTimer;
+  static const Duration _debounceDuration = Duration(milliseconds: 100);
+
   @override
   void initState() {
     super.initState();
@@ -50,14 +55,17 @@ class _MessageHeightCalculatorState extends State<MessageHeightCalculator>
 
   @override
   void dispose() {
+    _measureDebounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeMetrics() {
+    // 使用防抖避免输入法动画期间连续触发
+    // 100ms 内的多次变化只触发最后一次测量
     if (mounted) {
-      _scheduleMeasurement();
+      _scheduleDebounced();
     }
   }
 
@@ -73,6 +81,16 @@ class _MessageHeightCalculatorState extends State<MessageHeightCalculator>
     lastMeasuredHeight = null;
     isMeasuring = false;
     measurementAttempts = 0;
+    _measureDebounceTimer?.cancel();
+  }
+
+  void _scheduleDebounced() {
+    _measureDebounceTimer?.cancel();
+    _measureDebounceTimer = Timer(_debounceDuration, () {
+      if (mounted) {
+        _scheduleMeasurement();
+      }
+    });
   }
 
   void _scheduleMeasurement() {

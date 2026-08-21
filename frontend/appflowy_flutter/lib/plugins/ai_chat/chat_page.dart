@@ -43,53 +43,34 @@ class AIChatPage extends StatelessWidget {
     List<String>? initialImagePaths;
     
     if (viewExtra.isNotEmpty) {
-      Log.info('🔍 AIChatPage: 解析view.extra...');
-      Log.info('   - view.extra: $viewExtra');
-      
       try {
         // view.extra可能是JSON字符串，尝试解析
         final extraData = json.decode(viewExtra) as Map<String, dynamic>;
         initialMessage = extraData['initial_message'] as String?;
         preferredModelId = extraData['preferred_model'] as String?;
-        
+
         // 读取深度思考开关
         final enableDeepThinkingStr = extraData['enable_deep_thinking'] as String?;
         if (enableDeepThinkingStr == 'true') {
           enableDeepThinking = true;
         }
-        
+
         // 读取全网搜索开关
         final enableWebSearchStr = extraData['enable_web_search'] as String?;
         if (enableWebSearchStr == 'true') {
           enableWebSearch = true;
         }
-        
+
         // 读取初始图片路径列表
         if (extraData.containsKey('initial_images')) {
           final imagesList = extraData['initial_images'];
           if (imagesList is List) {
             initialImagePaths = imagesList.cast<String>();
-            Log.info('✅ AIChatPage: 找到 ${initialImagePaths!.length} 张初始图片');
           }
         }
-        
-        if (initialMessage != null) {
-          Log.info('✅ AIChatPage: 找到初始消息: $initialMessage');
-        }
-        if (preferredModelId != null) {
-          Log.info('✅ AIChatPage: 找到首选模型: $preferredModelId');
-        }
-        if (enableDeepThinking) {
-          Log.info('✅ AIChatPage: 深度思考模式已开启');
-        }
-        if (enableWebSearch) {
-          Log.info('✅ AIChatPage: 全网搜索模式已开启');
-        }
       } catch (e) {
-        Log.warn('⚠️  AIChatPage: view.extra不是JSON格式，跳过解析: $e');
+        // 解析失败，静默忽略
       }
-    } else {
-      Log.info('ℹ️  AIChatPage: view.extra为空');
     }
     
     return MultiBlocProvider(

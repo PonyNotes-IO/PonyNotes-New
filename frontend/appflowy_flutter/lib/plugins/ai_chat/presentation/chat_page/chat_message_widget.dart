@@ -22,11 +22,14 @@ class ChatMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSentByMe = context.watch<User>().id == message.author.id;
 
-    return Align(
-      alignment: isSentByMe ? sentMessageAlignment : receivedMessageAlignment,
-      child: Padding(
-        padding: padding,
-        child: child,
+    // RepaintBoundary 隔离重绘，避免输入法动画期间整个列表重绘
+    return RepaintBoundary(
+      child: Align(
+        alignment: isSentByMe ? sentMessageAlignment : receivedMessageAlignment,
+        child: Padding(
+          padding: padding,
+          child: child,
+        ),
       ),
     );
   }

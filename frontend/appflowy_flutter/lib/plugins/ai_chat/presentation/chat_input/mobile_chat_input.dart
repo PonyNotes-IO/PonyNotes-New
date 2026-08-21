@@ -56,9 +56,16 @@ class _MobileChatInputState extends State<MobileChatInput> {
     super.initState();
     textController.addListener(handleTextControllerChanged);
 
+    // 延迟聚焦，给首帧渲染留出时间
+    // 避免输入法动画与页面初始化同时进行导致卡顿
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      focusNode.requestFocus();
-      checkForAskingAI();
+      // 再延迟一帧，确保页面完全渲染完成
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          focusNode.requestFocus();
+          checkForAskingAI();
+        }
+      });
     });
   }
 
@@ -85,19 +92,21 @@ class _MobileChatInputState extends State<MobileChatInput> {
             orElse: () {},
           );
         },
-        child: Container(
-          margin: EdgeInsets.only(
-            left: 12,
-            right: 12,
-            top: 8,
-            bottom: MediaQuery.of(context).padding.bottom + 8,
-          ),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF2C2C2C)
-                : const Color(0xFFF9F9F9),
-            borderRadius: BorderRadius.circular(20),
-          ),
+        // RepaintBoundary 隔离输入区域，避免输入法动画影响上方消息列表
+        child: RepaintBoundary(
+          child: Container(
+            margin: EdgeInsets.only(
+              left: 12,
+              right: 12,
+              top: 8,
+              bottom: MediaQuery.of(context).padding.bottom + 8,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF2C2C2C)
+                  : const Color(0xFFF9F9F9),
+              borderRadius: BorderRadius.circular(20),
+            ),
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
             builder: (context, state) {
@@ -130,6 +139,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -707,50 +717,56 @@ class _MobileChatInputState extends State<MobileChatInput> {
 
   Widget inputTextField(BuildContext context) {
     return BlocBuilder<AIPromptInputBloc, AIPromptInputState>(
+      // 只在 hintText 变化时重建，避免频繁重建输入框
+      buildWhen: (previous, current) =>
+          previous.modelState.hintText != current.modelState.hintText,
       builder: (context, state) {
-        return ExtendedTextField(
-          controller: textController,
-          focusNode: focusNode,
-          textAlignVertical: TextAlignVertical.top,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+        // RepaintBoundary 隔离输入框重绘
+        return RepaintBoundary(
+          child: ExtendedTextField(
+            controller: textController,
+            focusNode: focusNode,
+            textAlignVertical: TextAlignVertical.top,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              hoverColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              hintText: state.modelState.hintText,
+              hintStyle: TextStyle(
+                color: Theme.of(context).hintColor,
+                fontSize: 13,
+              ),
+              filled: false,
+              fillColor: null,
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+            keyboardType: TextInputType.multiline,
+            textCapitalization: TextCapitalization.sentences,
+            minLines: 3,
+            maxLines: 8,
+            style: const TextStyle(fontSize: 13),
+            specialTextSpanBuilder: PromptInputTextSpanBuilder(
+              inputControlCubit: inputControlCubit,
+              mentionedPageTextStyle:
+                  Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-            hoverColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            hintText: state.modelState.hintText,
-            hintStyle: TextStyle(
-              color: Theme.of(context).hintColor,
-              fontSize: 13,
-            ),
-            filled: false,
-            fillColor: null,
+            onTapOutside: (_) => focusNode.unfocus(),
           ),
-          keyboardType: TextInputType.multiline,
-          textCapitalization: TextCapitalization.sentences,
-          minLines: 3,
-          maxLines: 8,
-          style: const TextStyle(fontSize: 13),
-          specialTextSpanBuilder: PromptInputTextSpanBuilder(
-            inputControlCubit: inputControlCubit,
-            mentionedPageTextStyle:
-                Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-          ),
-          onTapOutside: (_) => focusNode.unfocus(),
         );
       },
     );
