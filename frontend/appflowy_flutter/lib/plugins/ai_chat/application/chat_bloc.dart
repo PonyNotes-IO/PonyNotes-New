@@ -98,6 +98,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
+  // 首条消息暂存于 view.extra，移动端在异步清除前可能重建 ChatBloc。
+  // 图片复制和 Base64 转换会放大该窗口，因此同一会话在本进程内只允许一个
+  // ChatBloc 消费 initial_message，避免重复发出完整的图文请求。
+  static final Set<String> _claimedInitialMessageChatIds = <String>{};
+
   final String chatId;
   final String userId;
   final String? initialMessage;
@@ -283,6 +288,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         initialMessage!.isNotEmpty &&
         chatController.messages.isEmpty &&
         !_initialMessageSent) {
+      if (!_claimInitialMessage()) {
+        Log.warn(
+          '⚠️ ChatBloc: 初始消息已由其他会话实例消费，跳过重复自动发送: '
+          'chatId=$chatId, images=${initialImagePaths?.length ?? 0}',
+        );
+        return;
+      }
+
       Log.info('🔄 ChatBloc: 本地无消息记录，这是首次创建，准备自动发送初始消息');
       Log.info('   - 消息: $initialMessage');
       Log.info('   - 首选模型: $preferredModelId');
@@ -311,6 +324,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else if (_initialMessageSent) {
       Log.info('ℹ️ ChatBloc: 初始消息已发送过，跳过重复发送');
     }
+  }
+
+  bool _claimInitialMessage() {
+    if (_claimedInitialMessageChatIds.contains(chatId)) {
+      return false;
+    }
+
+    _claimedInitialMessageChatIds.add(chatId);
+    // 每个新会话都有唯一 ID；控制集合大小，避免客户端长时间运行后持续增长。
+    if (_claimedInitialMessageChatIds.length > 1000) {
+      _claimedInitialMessageChatIds.remove(
+        _claimedInitialMessageChatIds.first,
+      );
+    }
+    Log.info(
+      '✅ ChatBloc: 已声明初始消息消费权: '
+      'chatId=$chatId, images=${initialImagePaths?.length ?? 0}',
+    );
+    return true;
   }
 
   void _handlePreviousMessages(List<Message> messages, bool hasMore) {
