@@ -46,6 +46,7 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
         _buildItem(
           value: _MobileSettingsPopupMenuItem.import,
           svg: FlowySvgs.icon_import_mobile_lg,
+          iconSize: const Size.square(16),
           text: LocaleKeys.moreAction_import.tr(),
         ),
         const PopupMenuDivider(height: 0.5),
@@ -81,12 +82,14 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
     required T value,
     required FlowySvgData svg,
     required String text,
+    Size? iconSize,
   }) {
     return PopupMenuItem<T>(
       value: value,
       padding: EdgeInsets.zero,
       child: _PopupButton(
         svg: svg,
+        iconSize: iconSize,
         text: text,
       ),
     );
@@ -161,9 +164,11 @@ class _PopupButton extends StatelessWidget {
   const _PopupButton({
     required this.svg,
     required this.text,
+    this.iconSize,
   });
 
   final FlowySvgData svg;
+  final Size? iconSize;
   final String text;
 
   @override
@@ -173,7 +178,15 @@ class _PopupButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          FlowySvg(svg, size: const Size.square(20)),
+          SizedBox.square(
+            dimension: 20,
+            child: Center(
+              child: FlowySvg(
+                svg,
+                size: iconSize ?? const Size.square(20),
+              ),
+            ),
+          ),
           const HSpace(12),
           FlowyText.regular(
             text,
