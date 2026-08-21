@@ -186,6 +186,7 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
             SpaceEvent.createPage(
               name: layout.defaultName,
               layout: layout,
+              index: 0,
               openAfterCreate: true,
             ),
           );
