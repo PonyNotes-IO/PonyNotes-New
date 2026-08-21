@@ -10,7 +10,7 @@ import '../startup.dart';
 /// 在应用启动时预先加载 Excalidraw WebView 相关资源
 /// 这样可以避免用户首次打开白板视图时的卡顿和首次加载失败问题
 class WhiteboardPreloadTask extends LaunchTask {
-  const WhiteboardPreloadTask();
+  WhiteboardPreloadTask();
   bool _disposed = false;
 
   @override

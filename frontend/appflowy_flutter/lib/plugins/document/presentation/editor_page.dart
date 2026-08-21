@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flowy_infra/platform_extension.dart';
 
@@ -6,6 +7,7 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/document/presentation/editor_configuration.dart';
+import 'package:appflowy/plugins/document/presentation/tablet_keyboard_avoidance.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/background_color/theme_background_color.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/i18n/editor_i18n.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
@@ -167,6 +169,9 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   AppLifecycleState? lifecycleState = WidgetsBinding.instance.lifecycleState;
   List<Selection?> previousSelections = [];
 
+  Timer? _tabletKeyboardAvoidanceTimer;
+  int _tabletKeyboardAvoidanceRequest = 0;
+
   @override
   void initState() {
     super.initState();
@@ -302,6 +307,101 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     if (previousSelections.length > 2) {
       previousSelections.removeAt(0);
     }
+
+    _scheduleTabletKeyboardAvoidance();
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    _scheduleTabletKeyboardAvoidance();
+  }
+
+  void _scheduleTabletKeyboardAvoidance() {
+    if (!PlatformInfo.isTablet || !mounted || widget.editorState.isDisposed) {
+      return;
+    }
+
+    final request = ++_tabletKeyboardAvoidanceRequest;
+    _tabletKeyboardAvoidanceTimer?.cancel();
+
+    if (widget.editorState.selection == null || _tabletKeyboardInset() <= 0) {
+      return;
+    }
+
+    _tabletKeyboardAvoidanceTimer = Timer(
+      const Duration(milliseconds: 80),
+      () {
+        if (request != _tabletKeyboardAvoidanceRequest) {
+          return;
+        }
+        _tabletKeyboardAvoidanceTimer = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || request != _tabletKeyboardAvoidanceRequest) {
+            return;
+          }
+          _scrollTabletSelectionAboveKeyboard();
+        });
+      },
+    );
+  }
+
+  double _tabletKeyboardInset() {
+    // Tablet pages freeze MediaQuery.viewInsets while the IME animates.
+    final view = View.of(context);
+    return view.viewInsets.bottom / view.devicePixelRatio;
+  }
+
+  void _scrollTabletSelectionAboveKeyboard() {
+    if (!PlatformInfo.isTablet ||
+        !mounted ||
+        widget.editorState.isDisposed ||
+        widget.editorState.selection == null) {
+      return;
+    }
+
+    final keyboardInset = _tabletKeyboardInset();
+    if (keyboardInset <= 0) {
+      return;
+    }
+
+    final selectionRect = widget.editorState.selectionRects().lastOrNull;
+    if (selectionRect == null) {
+      return;
+    }
+
+    final view = View.of(context);
+    final viewportHeight = view.physicalSize.height / view.devicePixelRatio;
+    final scrollDelta = tabletKeyboardScrollDelta(
+      selectionBottom: selectionRect.bottom,
+      viewportHeight: viewportHeight,
+      keyboardInset: keyboardInset,
+    );
+    if (scrollDelta <= 0) {
+      return;
+    }
+
+    final position = widget.editorState.scrollableState?.position;
+    if (position == null ||
+        !position.hasPixels ||
+        !position.hasContentDimensions) {
+      return;
+    }
+
+    final target = (position.pixels + scrollDelta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    if ((target - position.pixels).abs() < 0.5) {
+      return;
+    }
+
+    unawaited(
+      position.animateTo(
+        target,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   @override
@@ -338,6 +438,8 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       forceShowBlockAction = false;
     }
 
+    _tabletKeyboardAvoidanceTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.editorState.selectionNotifier.removeListener(onSelectionChanged);
     widget.editorState.service.keyboardService?.unregisterInterceptor(
       editorKeyboardInterceptor,
