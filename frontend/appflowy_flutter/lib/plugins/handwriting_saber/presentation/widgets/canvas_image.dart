@@ -18,6 +18,7 @@ class CanvasImage extends StatefulWidget {
     required this.image,
     required this.pageSize,
     this.scale = 1.0,
+    this.pageOffset = Offset.zero,
     this.selected = false,
     this.readOnly = false,
     this.shouldActivate = false,
@@ -29,6 +30,7 @@ class CanvasImage extends StatefulWidget {
   final EditorImage image;
   final Size pageSize;
   final double scale;
+  final Offset pageOffset;
   final bool selected;
   final bool readOnly;
   final bool shouldActivate;
@@ -162,8 +164,8 @@ class _CanvasImageState extends State<CanvasImage> {
     final image = widget.image;
     final s = widget.scale;
 
-    final screenLeft = image.dstRect.left * s;
-    final screenTop = image.dstRect.top * s;
+    final screenLeft = widget.pageOffset.dx + image.dstRect.left * s;
+    final screenTop = widget.pageOffset.dy + image.dstRect.top * s;
 
     return Positioned(
       left: screenLeft,
@@ -678,41 +680,43 @@ class _CanvasImageState extends State<CanvasImage> {
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => Container(
-        height: 100,
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildOptionButton(
-              icon: Icons.delete,
-              label: '删除',
-              color: Colors.red,
-              onTap: () {
-                Navigator.pop(ctx);
-                _showDeleteConfirm(context);
-              },
-            ),
-            _buildOptionButton(
-              icon: Icons.rotate_90_degrees_cw_outlined,
-              label: '旋转90°',
-              onTap: () {
-                Navigator.pop(ctx);
-                _quickRotate90();
-              },
-            ),
-            _buildOptionButton(
-              icon: Icons.restart_alt,
-              label: '重置旋转',
-              onTap: () {
-                Navigator.pop(ctx);
-                _panStartRect = widget.image.dstRect;
-                _panStartRotation = widget.image.rotation;
-                widget.image.rotation = 0.0;
-                _notifyChangeIfNeeded();
-              },
-            ),
-          ],
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildOptionButton(
+                icon: Icons.delete,
+                label: '删除',
+                color: Colors.red,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showDeleteConfirm(context);
+                },
+              ),
+              _buildOptionButton(
+                icon: Icons.rotate_90_degrees_cw_outlined,
+                label: '旋转90°',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _quickRotate90();
+                },
+              ),
+              _buildOptionButton(
+                icon: Icons.restart_alt,
+                label: '重置旋转',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _panStartRect = widget.image.dstRect;
+                  _panStartRotation = widget.image.rotation;
+                  widget.image.rotation = 0.0;
+                  _notifyChangeIfNeeded();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

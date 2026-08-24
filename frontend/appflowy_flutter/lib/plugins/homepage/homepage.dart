@@ -605,6 +605,7 @@ class _HomePageState extends State<HomePage> {
         name: '新笔记本',
         layoutType: ViewLayoutPB.Document,
         openAfterCreate: true,
+        index: 0,
       );
 
       result.fold(

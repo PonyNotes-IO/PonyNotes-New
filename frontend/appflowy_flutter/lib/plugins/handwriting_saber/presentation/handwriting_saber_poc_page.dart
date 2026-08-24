@@ -4569,6 +4569,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                     pageDisplayWidth,
                                     pageDisplayHeight,
                                     scale,
+                                    Offset(offsetX, offsetY),
                                   ),
                                 ),
                               // WebView层
@@ -4662,6 +4663,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     double pageDisplayWidth,
     double pageDisplayHeight,
     double scale,
+    Offset pageOffset,
   ) {
     // ✅ 参考 saber 实现：只有选择工具激活时图片才可交互
     // 使用 toolId 判断当前是否为选择工具
@@ -4678,6 +4680,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       image: image,
       pageSize: _coreInfo.pages[pageIndex].size,
       scale: scale,
+      pageOffset: pageOffset,
       selected: _selectedImageIdNotifier.value == image.id,
       readOnly: !isSelectTool,
       shouldActivate: shouldActivate,
