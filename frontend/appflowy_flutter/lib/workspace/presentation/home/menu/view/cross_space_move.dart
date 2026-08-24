@@ -467,12 +467,16 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     return CrossSpaceMoveOutcome.alreadyMoved;
   }
 
-  // 协作 → 私有：维持原有方式（拉取 room 内容写回本地 collab，再由调用方切区）。
-  final ok = await WhiteboardMigrationService.migratePublicToPrivate(
+  // 协作 → 私有也采用与私有 → 协作相同的“目标新建 + 内容复制 + 删除源”流程。
+  // 目标空间由 createChildViews 稳定刷新，且新 view 只绑定本地 collab，避免保留
+  // 原 ID 跨 section 移动造成 Folder 关系索引与可见列表实例之间的竞态。
+  final created =
+      await WhiteboardMigrationService.migratePublicToPrivateAsNewView(
     context: context,
     view: view,
+    targetSpaceId: targetParentId,
   );
-  if (!ok) {
+  if (created == null) {
     Log.error(
       '[CrossSpaceMove] 白板内容迁移失败，已阻止切区（内容保留在原处）：'
       'view=${view.id}',
@@ -484,8 +488,9 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     return CrossSpaceMoveOutcome.aborted;
   }
 
-  // 这里只准备本地内容。room 绑定与空间归属缓存必须等 folder move 成功后处理。
-  return CrossSpaceMoveOutcome.proceed;
+  WhiteboardRouter.invalidateSpaceTypeCache(view.id);
+  await onWhiteboardRecreated?.call(created);
+  return CrossSpaceMoveOutcome.alreadyMoved;
 }
 
 void refreshSidebarMoveState(BuildContext context) {

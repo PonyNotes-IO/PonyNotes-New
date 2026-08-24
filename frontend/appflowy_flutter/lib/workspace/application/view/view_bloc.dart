@@ -40,6 +40,57 @@ typedef EmojiViewIconUpdater = Future<FlowyResult<void, FlowyError>> Function({
   required EmojiIconData viewIcon,
 });
 
+/// Folder 的跨父节点移动通知可能只携带 `updateChildViews`：
+///
+/// - 对目标父节点，移动项尚不在当前列表中；
+/// - 对源父节点，移动项仍在当前列表中，但它的 parentViewId 已经改变。
+///
+/// 这两种情况都不是普通元数据更新，必须直接合并通知中的完整子视图。
+bool childViewUpdateContainsStructuralMove({
+  required String parentViewId,
+  required Iterable<ViewPB> currentChildren,
+  required ChildViewUpdatePB update,
+}) {
+  if (update.updateChildViews.isEmpty) {
+    return false;
+  }
+  final currentIds = currentChildren.map((child) => child.id).toSet();
+  return update.updateChildViews.any(
+    (child) =>
+        !currentIds.contains(child.id) || child.parentViewId != parentViewId,
+  );
+}
+
+/// 直接把跨父节点移动通知合并进当前列表。
+///
+/// Folder 的关系索引与 `updateChildViews` 通知可能在同一个同步批次内短暂不同步，
+/// 此时再次调用 `getChildViews` 仍会拿到旧列表。通知中的 ViewPB 已包含移动后的
+/// 完整父节点信息，因此目标父节点缺少该项时直接插到首位，源父节点仍有该项时
+/// 直接移除；同父节点已有项继续按 ID 替换。
+List<ViewPB> mergeUpdatedChildViews({
+  required String parentViewId,
+  required Iterable<ViewPB> currentChildren,
+  required Iterable<ViewPB> updatedChildren,
+}) {
+  final merged = currentChildren.toList();
+  for (final updatedChild in updatedChildren) {
+    final existingIndex = merged.indexWhere(
+      (child) => child.id == updatedChild.id,
+    );
+    if (updatedChild.parentViewId == parentViewId) {
+      if (existingIndex >= 0) {
+        merged[existingIndex] = updatedChild;
+      } else {
+        // 跨空间移动调用没有 prevViewId，Folder 语义是成为目标父节点首项。
+        merged.insert(0, updatedChild);
+      }
+    } else if (existingIndex >= 0) {
+      merged.removeAt(existingIndex);
+    }
+  }
+  return merged;
+}
+
 class ViewBloc extends Bloc<ViewEvent, ViewState> {
   ViewBloc({
     required this.view,
@@ -146,13 +197,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                 add(ViewEvent.viewDidUpdate(FlowyResult.success(result)));
               },
               onViewChildViewsUpdated: (result) async {
-                Log.info('[ViewBloc] onViewChildViewsUpdated: viewId=${this.view.id}, update=$result');
+                Log.info(
+                    '[ViewBloc] onViewChildViewsUpdated: viewId=${this.view.id}, update=$result');
                 final updatedView = await _updateChildViews(result);
                 if (!isClosed && updatedView != null) {
-                  Log.info('[ViewBloc] Child views updated, emitting new view with ${updatedView.childViews.length} children');
+                  Log.info(
+                      '[ViewBloc] Child views updated, emitting new view with ${updatedView.childViews.length} children');
                   add(ViewEvent.viewUpdateChildView(updatedView));
                 } else {
-                  Log.warn('[ViewBloc] Child views update returned null or bloc is closed');
+                  Log.warn(
+                      '[ViewBloc] Child views update returned null or bloc is closed');
                 }
               },
             );
@@ -357,7 +411,8 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             }
 
             // 获取当前工作区ID
-            final workspaceResult = await UserBackendService.getCurrentWorkspace();
+            final workspaceResult =
+                await UserBackendService.getCurrentWorkspace();
             final workspace = workspaceResult.fold(
               (w) => w,
               (error) => null,
@@ -485,7 +540,8 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               } else {
                 roomId = WhiteboardRoomService.generateRoomId();
                 roomKey = WhiteboardRoomService.generateRoomKey();
-                Log.debug('🔑 [Whiteboard] 协作空间白板，生成 roomId=$roomId (length=${roomId.length}), roomKey=$roomKey (length=${roomKey.length})');
+                Log.debug(
+                    '🔑 [Whiteboard] 协作空间白板，生成 roomId=$roomId (length=${roomId.length}), roomKey=$roomKey (length=${roomKey.length})');
               }
             }
 
@@ -506,8 +562,10 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               if (createdView.layout == ViewLayoutPB.Whiteboard &&
                   roomId != null &&
                   roomKey != null) {
-                await WhiteboardRoomService.saveRoom(createdView.id, roomId, roomKey);
-                Log.debug('✅ [Whiteboard] Saved room to local storage: viewId=${createdView.id}, roomId=$roomId');
+                await WhiteboardRoomService.saveRoom(
+                    createdView.id, roomId, roomKey);
+                Log.debug(
+                    '✅ [Whiteboard] Saved room to local storage: viewId=${createdView.id}, roomId=$roomId');
               }
             }, (_) {});
 
@@ -655,7 +713,8 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
   Future<ViewPB?> _updateChildViews(
     ChildViewUpdatePB update,
   ) async {
-    Log.info('[ViewBloc] _updateChildViews: viewId=${this.view.id}, parentViewId=${update.parentViewId}, createCount=${update.createChildViews.length}, deleteCount=${update.deleteChildViews.length}, updateCount=${update.updateChildViews.length}');
+    Log.info(
+        '[ViewBloc] _updateChildViews: viewId=${this.view.id}, parentViewId=${update.parentViewId}, createCount=${update.createChildViews.length}, deleteCount=${update.deleteChildViews.length}, updateCount=${update.updateChildViews.length}');
 
     if (update.createChildViews.isNotEmpty) {
       // refresh the child views if the update isn't empty
@@ -670,12 +729,15 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     final currentView = state.view;
     currentView.freeze();
     final childViews = [...currentView.childViews];
-    Log.info('[ViewBloc] _updateChildViews: current childViews count=${childViews.length}');
+    Log.info(
+        '[ViewBloc] _updateChildViews: current childViews count=${childViews.length}');
 
     if (update.deleteChildViews.isNotEmpty) {
-      Log.info('[ViewBloc] _updateChildViews: deleting child views: ${update.deleteChildViews}');
+      Log.info(
+          '[ViewBloc] _updateChildViews: deleting child views: ${update.deleteChildViews}');
       childViews.removeWhere((v) => update.deleteChildViews.contains(v.id));
-      Log.info('[ViewBloc] _updateChildViews: after deletion, childViews count=${childViews.length}');
+      Log.info(
+          '[ViewBloc] _updateChildViews: after deletion, childViews count=${childViews.length}');
       return currentView.rebuild((p0) {
         p0.childViews.clear();
         p0.childViews.addAll(childViews);
@@ -683,6 +745,30 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     }
 
     if (update.updateChildViews.isNotEmpty && update.parentViewId.isNotEmpty) {
+      if (childViewUpdateContainsStructuralMove(
+        parentViewId: view.id,
+        currentChildren: childViews,
+        update: update,
+      )) {
+        Log.info(
+          '[ViewBloc] updateChildViews contains a structural move; '
+          'merging notification directly for ${view.id}',
+        );
+        final mergedChildren = mergeUpdatedChildViews(
+          parentViewId: view.id,
+          currentChildren: childViews,
+          updatedChildren: update.updateChildViews,
+        );
+        Log.info(
+          '[ViewBloc] structural move merged: '
+          '${childViews.length} -> ${mergedChildren.length}',
+        );
+        return currentView.rebuild((builder) {
+          builder.childViews
+            ..clear()
+            ..addAll(mergedChildren);
+        });
+      }
       final updatedById = {
         for (final child in update.updateChildViews) child.id: child,
       };
@@ -906,6 +992,7 @@ class ViewEvent with _$ViewEvent {
     /// open the view after created
     @Default(true) bool openAfterCreated,
     ViewSectionPB? section,
+
     /// Optional JSON string to be written into the created view's
     /// `extra` field right after creation. Used by mobile to mark
     /// special view types (e.g. HandwritingSaber uses

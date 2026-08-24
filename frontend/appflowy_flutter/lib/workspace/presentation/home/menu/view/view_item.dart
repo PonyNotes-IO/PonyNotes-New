@@ -7,6 +7,7 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_space_list_refresh.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
@@ -1635,6 +1636,10 @@ Future<void> moveViewCrossSpace(
     // switchToSpaceNotifier 的 Widget 监听器会有丢事件窗口。直接向移动开始前
     // 捕获的 SpaceBloc 打开目标空间，由 open 事件权威拉取目标子文档列表。
     spaceBloc.add(SpaceEvent.open(space: toSpace));
+    MobileSpaceListRefreshNotifier.instance.requestRefresh(toSpace.id);
+    Log.info(
+      '[CrossSpaceMove] 已通知移动端刷新目标空间文档列表: ${toSpace.id}',
+    );
   }
   if (view.layout == ViewLayoutPB.Whiteboard && fromSection != toSection) {
     showToastNotification(

@@ -94,6 +94,106 @@ void main() {
     expect(favoritesRefreshCount, 1);
   });
 
+  group('跨父节点移动的子列表更新', () {
+    test('目标列表缺少通知中的文档时识别为结构移动', () {
+      final existing = ViewPB()
+        ..id = 'existing'
+        ..parentViewId = 'target';
+      final moved = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'target';
+      final update = ChildViewUpdatePB()
+        ..parentViewId = 'target'
+        ..updateChildViews.add(moved);
+
+      expect(
+        childViewUpdateContainsStructuralMove(
+          parentViewId: 'target',
+          currentChildren: [existing],
+          update: update,
+        ),
+        isTrue,
+      );
+    });
+
+    test('现有文档的父节点已改变时识别为结构移动', () {
+      final moved = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'source';
+      final movedUpdate = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'target';
+      final update = ChildViewUpdatePB()
+        ..parentViewId = 'source'
+        ..updateChildViews.add(movedUpdate);
+
+      expect(
+        childViewUpdateContainsStructuralMove(
+          parentViewId: 'source',
+          currentChildren: [moved],
+          update: update,
+        ),
+        isTrue,
+      );
+    });
+
+    test('同一父节点内已有文档的元数据更新无需结构合并', () {
+      final existing = ViewPB()
+        ..id = 'existing'
+        ..parentViewId = 'target';
+      final updated = ViewPB()
+        ..id = 'existing'
+        ..parentViewId = 'target'
+        ..name = 'updated';
+      final update = ChildViewUpdatePB()
+        ..parentViewId = 'target'
+        ..updateChildViews.add(updated);
+
+      expect(
+        childViewUpdateContainsStructuralMove(
+          parentViewId: 'target',
+          currentChildren: [existing],
+          update: update,
+        ),
+        isFalse,
+      );
+    });
+
+    test('目标列表直接插入通知中的移动文档', () {
+      final existing = ViewPB()
+        ..id = 'existing'
+        ..parentViewId = 'target';
+      final moved = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'target';
+
+      final merged = mergeUpdatedChildViews(
+        parentViewId: 'target',
+        currentChildren: [existing],
+        updatedChildren: [moved],
+      );
+
+      expect(merged.map((view) => view.id), ['moved', 'existing']);
+    });
+
+    test('源列表直接移除父节点已经改变的文档', () {
+      final moved = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'source';
+      final movedUpdate = ViewPB()
+        ..id = 'moved'
+        ..parentViewId = 'target';
+
+      final merged = mergeUpdatedChildViews(
+        parentViewId: 'source',
+        currentChildren: [moved],
+        updatedChildren: [movedUpdate],
+      );
+
+      expect(merged, isEmpty);
+    });
+  });
+
   test('clears a stale workspace role explicitly', () {
     final state = UserWorkspaceState.initial(UserProfilePB()).copyWith(
       currentUserRole: AFRolePB.Owner,

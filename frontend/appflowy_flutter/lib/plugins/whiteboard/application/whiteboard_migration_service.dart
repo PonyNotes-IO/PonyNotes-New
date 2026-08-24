@@ -157,6 +157,158 @@ class WhiteboardMigrationService {
     }
   }
 
+  /// 协作区白板 → 私有空间：**在私有空间新建白板，复制内容，再删除源白板**。
+  ///
+  /// 与 [migratePrivateToPublicAsNewView] 使用同一套对称迁移策略。目标空间会收到
+  /// `createChildViews`，不再依赖保留原 viewId 的跨 section Folder 更新时序。
+  /// 只有目标本地 collab 写入并回读校验成功后才删除源协作白板；任何中途失败
+  /// 都会回滚新建白板并保留源 room，避免内容丢失。
+  static Future<ViewPB?> migratePublicToPrivateAsNewView({
+    required BuildContext context,
+    required ViewPB view,
+    required String targetSpaceId,
+  }) async {
+    final sourceViewId = view.id;
+    ViewPB? created;
+    try {
+      Log.info('[WBMigration] 协作→私有（新建）开始 view=$sourceViewId');
+      final dataService = WhiteboardDataService();
+      final room = await _resolveRoomForMigration(sourceViewId, dataService);
+      if (room == null) {
+        Log.error(
+          '[WBMigration] 协作→私有（新建）：本地与 collab 均无 room 绑定，已中止 '
+          'view=$sourceViewId',
+        );
+        return null;
+      }
+
+      if (!context.mounted) return null;
+      final result = await runWhiteboardMigrationWebView(
+        context: context,
+        roomId: room.roomId,
+        roomKey: room.roomKey,
+        isPush: false,
+      );
+      if (!result.ok || result.scene == null) {
+        Log.error(
+          '[WBMigration] 协作→私有（新建）拉取失败，源 room 保留: ${result.error}',
+        );
+        return null;
+      }
+
+      final scene = result.scene!;
+      final liveElements = _asList(scene['elements'])
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
+      final payload = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'elements': liveElements,
+        'files': scene['files'] ?? const {},
+        'appState': scene['appState'] ?? const {},
+      };
+
+      final createResult = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Whiteboard,
+        parentViewId: targetSpaceId,
+        name: view.name,
+        index: 0,
+        openAfterCreate: false,
+      );
+      created = createResult.fold((createdView) => createdView, (error) {
+        Log.error(
+          '[WBMigration] 协作→私有（新建）：创建目标白板失败，已中止: '
+          '${error.msg}',
+        );
+        return null;
+      });
+      if (created == null) return null;
+
+      final current = await dataService.loadWhiteboardData(
+        created.id,
+        source: 'migration-public-to-private-new-base',
+      );
+      final compatiblePayload = buildCompatibleReplacementPayload(
+        current: current,
+        replacement: payload,
+      );
+      final saved = await dataService.saveWhiteboardData(
+        created.id,
+        compatiblePayload,
+        source: 'migration-public-to-private-new',
+      );
+      if (!saved) {
+        Log.error('[WBMigration] 协作→私有（新建）写目标本地 collab 失败，正在回滚');
+        await _rollbackCreated(created.id);
+        return null;
+      }
+
+      final verify = await dataService.loadWhiteboardData(
+        created.id,
+        source: 'migration-public-to-private-new-verify',
+      );
+      final verifyElements = _asList(verify['elements'])
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
+      if (!_sameElementIds(liveElements, verifyElements)) {
+        Log.error('[WBMigration] 协作→私有（新建）目标内容校验失败，正在回滚');
+        await _rollbackCreated(created.id);
+        return null;
+      }
+
+      final deleted = await ViewBackendService.deleteView(viewId: sourceViewId);
+      var sourceDeleteFailed = false;
+      deleted.fold(
+        (_) => Log.info('[WBMigration] 协作→私有（新建）：源白板已删除 $sourceViewId'),
+        (error) {
+          sourceDeleteFailed = true;
+          Log.error(
+            '[WBMigration] 协作→私有（新建）：源白板删除失败，正在确认: '
+            '${error.msg}',
+          );
+        },
+      );
+
+      if (sourceDeleteFailed) {
+        bool? sourceStillExists;
+        final sourceCheck = await ViewBackendService.getView(sourceViewId);
+        sourceCheck.fold(
+          (_) => sourceStillExists = true,
+          (error) => sourceStillExists =
+              error.code == ErrorCode.RecordNotFound ? false : null,
+        );
+        if (sourceStillExists == true) {
+          await _rollbackCreated(created.id);
+          Log.error(
+            '[WBMigration] 协作→私有（新建）：源仍存在，已回滚目标白板',
+          );
+          return null;
+        }
+        if (sourceStillExists == null) {
+          Log.warn(
+            '[WBMigration] 协作→私有（新建）：无法确认源删除结果，'
+            '保留目标白板以保证内容不丢',
+          );
+        }
+      }
+
+      await WhiteboardRoomService.deleteRoom(sourceViewId);
+      Log.info(
+        '[WBMigration] 协作→私有（新建）完成 '
+        '源=$sourceViewId 新=${created.id}',
+      );
+      return created;
+    } catch (error, stackTrace) {
+      Log.error(
+        '[WBMigration] 协作→私有（新建）异常，已中止: $error\n$stackTrace',
+      );
+      if (created != null) {
+        await _rollbackCreated(created.id);
+      }
+      return null;
+    }
+  }
+
   /// 回滚：删掉刚建出来、内容尚未落定的新白板。源白板始终不动。
   static Future<void> _rollbackCreated(String createdViewId) async {
     try {

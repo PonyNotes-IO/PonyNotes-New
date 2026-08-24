@@ -56,8 +56,7 @@ class _MobileSpaceState extends State<MobileSpace> {
 
   void _onNotifierFire() {
     // 把 notifier 当前携带的新创建 space（如果有）传给 refresh。
-    final pending =
-        SpaceChangeNotifier.instance.lastCreatedSpace;
+    final pending = SpaceChangeNotifier.instance.lastCreatedSpace;
     _refreshSpace(newSpaceFromNotifier: pending);
   }
 
@@ -146,17 +145,14 @@ class _MobileSpaceState extends State<MobileSpace> {
 
       // 检测 backend 同步覆盖：state.spaces 数量比上次的观察值少
       // （说明 backend 拉取结果覆盖了之前的合并值）。
-      if (lastSpacesCount != null &&
-          current.spaces.length < lastSpacesCount!) {
+      if (lastSpacesCount != null && current.spaces.length < lastSpacesCount!) {
         backendSyncCount++;
       }
       lastSpacesCount = current.spaces.length;
 
       // 最小保护窗口 + 看到 backend 同步 + 同步后 state 仍包含 newSpace
       // → 关闭
-      if (hasIt &&
-          elapsed >= minProtectWindow &&
-          backendSyncCount > 0) {
+      if (hasIt && elapsed >= minProtectWindow && backendSyncCount > 0) {
         isClosed = true;
         sub.cancel();
         return;
@@ -343,8 +339,8 @@ class MobileSpaceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<FolderBloc>(
-      create: (context) => FolderBloc(type: spaceType)
-        ..add(const FolderEvent.initial()),
+      create: (context) =>
+          FolderBloc(type: spaceType)..add(const FolderEvent.initial()),
       child: BlocBuilder<FolderBloc, FolderState>(
         builder: (context, state) {
           final borderColor = Theme.of(context).isLightMode
@@ -383,6 +379,7 @@ class MobileSpaceSection extends StatelessWidget {
                             endIndent: HomeSpaceViewSizes.mHorizontalPadding,
                           ),
                         MobileSpaceItem(
+                          key: ValueKey(spaces[i].id),
                           space: spaces[i],
                           favoriteBloc: favoriteBloc,
                         ),
@@ -489,41 +486,89 @@ class MobileSpaceItem extends StatefulWidget {
 class _MobileSpaceItemState extends State<MobileSpaceItem> {
   late bool _isExpanded;
   double _turns = 0;
-  late final ViewListener _spaceListener;
+  ViewListener? _spaceListener;
   int _documentListRevision = 0;
+  int _consumedMoveRefreshRevision = 0;
 
   @override
   void initState() {
     super.initState();
     _isExpanded = true;
+    MobileSpaceListRefreshNotifier.instance.addListener(
+      _consumeMoveRefresh,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumeMoveRefresh();
+    });
     if (Platform.isIOS) {
       SpaceChangeNotifier.instance.addListener(_onTrashRestore);
     }
-    if (Platform.isIOS) {
-      _spaceListener = ViewListener(viewId: widget.space.id)
-        ..start(
-          onViewDeleted: (result) {
-            result.fold(
-              (_) {
-                if (mounted) setState(() => _documentListRevision++);
-              },
-              (_) {},
-            );
-          },
-          onViewMoveToTrash: (_) {
-            if (mounted) setState(() => _documentListRevision++);
-          },
-        );
+    _startSpaceListener();
+  }
+
+  @override
+  void didUpdateWidget(covariant MobileSpaceItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.space.id == widget.space.id) {
+      return;
     }
+    _spaceListener?.stop();
+    _spaceListener = null;
+    _consumedMoveRefreshRevision = 0;
+    _startSpaceListener();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consumeMoveRefresh();
+    });
   }
 
   @override
   void dispose() {
+    MobileSpaceListRefreshNotifier.instance.removeListener(
+      _consumeMoveRefresh,
+    );
     if (Platform.isIOS) {
       SpaceChangeNotifier.instance.removeListener(_onTrashRestore);
     }
-    if (Platform.isIOS) _spaceListener.stop();
+    _spaceListener?.stop();
     super.dispose();
+  }
+
+  void _startSpaceListener() {
+    if (!Platform.isIOS) {
+      return;
+    }
+    _spaceListener = ViewListener(viewId: widget.space.id)
+      ..start(
+        onViewDeleted: (result) {
+          result.fold(
+            (_) {
+              if (mounted) setState(() => _documentListRevision++);
+            },
+            (_) {},
+          );
+        },
+        onViewMoveToTrash: (_) {
+          if (mounted) setState(() => _documentListRevision++);
+        },
+      );
+  }
+
+  void _consumeMoveRefresh() {
+    if (!mounted) {
+      return;
+    }
+    final revision = MobileSpaceListRefreshNotifier.instance.revisionFor(
+      widget.space.id,
+    );
+    if (revision <= _consumedMoveRefreshRevision) {
+      return;
+    }
+    _consumedMoveRefreshRevision = revision;
+    Log.info(
+      '[MobileSpace] 重新加载跨空间移动后的目标文档列表: '
+      'space=${widget.space.id}, revision=$revision',
+    );
+    setState(() => _documentListRevision++);
   }
 
   void _onTrashRestore() {
@@ -665,17 +710,18 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
                     context.read<ViewBloc>().reloadChildViews(),
                 child: BlocBuilder<ViewBloc, ViewState>(
                   builder: (context, state) {
-                    final spaceType =
-                        widget.space.spacePermission == SpacePermission.publicToAll
-                            ? FolderSpaceType.public
-                            : FolderSpaceType.private;
+                    final spaceType = widget.space.spacePermission ==
+                            SpacePermission.publicToAll
+                        ? FolderSpaceType.public
+                        : FolderSpaceType.private;
                     final childViews =
                         state.view.childViews.unique((view) => view.id);
                     if (childViews.length != state.view.childViews.length) {
                       final duplicatedViews = state.view.childViews
                           .where((view) => childViews.contains(view))
                           .toList();
-                      Log.error('some view id are duplicated: $duplicatedViews');
+                      Log.error(
+                          'some view id are duplicated: $duplicatedViews');
                     }
                     return Column(
                       children: childViews.asMap().entries.map((entry) {
@@ -694,8 +740,8 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
                                 '${widget.space.id} ${view.id}',
                               ),
                               spaceType: spaceType,
-                              isFirstChild: view.id ==
-                                  state.view.childViews.first.id,
+                              isFirstChild:
+                                  view.id == state.view.childViews.first.id,
                               view: view,
                               level: 0,
                               leftPadding: HomeSpaceViewSizes.leftPadding,

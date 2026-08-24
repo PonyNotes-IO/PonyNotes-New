@@ -138,9 +138,8 @@ where
         },
       )
       .await
-      // 当前 Cloud 接口只确认移动成功，不在 HTTP 响应中返回 folder update。
-      // 上层对 None 已使用 WebSocket 同步作为兼容回退。
-      .map(|_| None)
+      // 新 Cloud 直接返回 folder update，让发起设备在成功返回 Flutter 前
+      // 即时应用；旧 Cloud 没有 data 时仍解析为 None，继续走 WebSocket 兜底。
       .map_err(FlowyError::from)
   }
 
