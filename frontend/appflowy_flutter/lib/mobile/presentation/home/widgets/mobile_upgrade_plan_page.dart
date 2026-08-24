@@ -1128,11 +1128,13 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   ) async {
     Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay 内购');
 
-    final productId = _getProductId(config.planCode ?? '', billingType);
-    if (productId == null) {
+    final planCode = config.planCode;
+    if (planCode == null || planCode.isEmpty) {
       showToastNotification(message: '暂不支持该套餐的 Apple Pay 支付');
       return;
     }
+    // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
+    final productId = 'com.ponynotes.$planCode.$billingType';
 
     final extra = <String, dynamic>{
       'productId': productId,
@@ -1228,10 +1230,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
         showToastNotification(message: '支付失败: ${paymentResult.message}');
       }
     }
-  }
-
-  String? _getProductId(String planId, String billingType) {
-    return PaymentUtil.getAppleProductId(planId, billingType);
   }
 
   Widget _buildBenefitIcons(AppFlowyThemeData theme) {

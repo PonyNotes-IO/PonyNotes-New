@@ -83,5 +83,7 @@
 	<string>小马笔记需要访问照片，以便将照片添加到文档中。</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>
