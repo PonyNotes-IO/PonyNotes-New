@@ -15,29 +15,13 @@ import 'package:appflowy_backend/log.dart';
 class FullWindowController {
   static final ValueNotifier<bool> isFullWindow = ValueNotifier<bool>(false);
 
-  /// 防止状态在短时间内频繁切换的保护标志
-  static bool _isTransitioning = false;
-
-  /// 最小状态切换间隔（毫秒）
-  static const _minTransitionIntervalMs = 300;
-
-  /// 上次状态切换时间
-  static DateTime? _lastTransitionTime;
-
   static void enter() {
-    if (!_canTransition()) {
-      return;
-    }
-
     try {
       if (!isFullWindow.value) {
-        _markTransitionStart();
         isFullWindow.value = true;
-        _markTransitionEnd();
         Log.info('[FullWindowController] entered full window mode');
       }
     } catch (error, stackTrace) {
-      _markTransitionEnd();
       Log.error(
         '[FullWindowController] failed to enter full window: $error',
         error,
@@ -47,19 +31,12 @@ class FullWindowController {
   }
 
   static void exit() {
-    if (!_canTransition()) {
-      return;
-    }
-
     try {
       if (isFullWindow.value) {
-        _markTransitionStart();
         isFullWindow.value = false;
-        _markTransitionEnd();
         Log.info('[FullWindowController] exited full window mode');
       }
     } catch (error, stackTrace) {
-      _markTransitionEnd();
       Log.error(
         '[FullWindowController] failed to exit full window: $error',
         error,
@@ -74,19 +51,12 @@ class FullWindowController {
   }
 
   static void toggle() {
-    if (!_canTransition()) {
-      return;
-    }
-
     try {
-      _markTransitionStart();
       isFullWindow.value = !isFullWindow.value;
-      _markTransitionEnd();
       Log.info(
         '[FullWindowController] toggled full window mode: ${isFullWindow.value}',
       );
     } catch (error, stackTrace) {
-      _markTransitionEnd();
       Log.error(
         '[FullWindowController] failed to toggle full window: $error',
         error,
@@ -131,41 +101,5 @@ class FullWindowController {
       // Some full-window controls can be built outside the home settings scope.
     }
     return false;
-  }
-
-  /// 检查是否可以进行状态切换
-  static bool _canTransition() {
-    // 检查是否正在切换中
-    if (_isTransitioning) {
-      Log.warn(
-        '[FullWindowController] transition in progress, ignoring request',
-      );
-      return false;
-    }
-
-    // 检查时间间隔
-    final now = DateTime.now();
-    if (_lastTransitionTime != null) {
-      final elapsed = now.difference(_lastTransitionTime!).inMilliseconds;
-      if (elapsed < _minTransitionIntervalMs) {
-        Log.warn(
-          '[FullWindowController] transition too frequent, ignoring request',
-        );
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /// 标记状态切换开始
-  static void _markTransitionStart() {
-    _isTransitioning = true;
-  }
-
-  /// 标记状态切换结束
-  static void _markTransitionEnd() {
-    _isTransitioning = false;
-    _lastTransitionTime = DateTime.now();
   }
 }

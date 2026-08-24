@@ -21,6 +21,7 @@ class SpaceHubPluginView extends StatefulWidget {
 
 class _SpaceHubPluginViewState extends State<SpaceHubPluginView> {
   late final Plugin _plugin;
+  Widget? _builtWidget;
 
   @override
   void initState() {
@@ -46,5 +47,10 @@ class _SpaceHubPluginViewState extends State<SpaceHubPluginView> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.builder(context, _plugin);
+  Widget build(BuildContext context) {
+    // Full-window transitions rebuild the parent shell every frame. The
+    // plugin instance is stable, so rebuilding its root widget here only adds
+    // layout work without changing the view.
+    return _builtWidget ??= widget.builder(context, _plugin);
+  }
 }

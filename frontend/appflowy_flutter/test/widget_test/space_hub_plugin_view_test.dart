@@ -8,6 +8,7 @@ void main() {
   testWidgets('keeps one plugin instance across parent rebuilds',
       (tester) async {
     final lifecycle = _PluginLifecycle();
+    var builderCalls = 0;
     final view = ViewPB.create()
       ..id = 'view-a'
       ..layout = ViewLayoutPB.Whiteboard;
@@ -20,7 +21,10 @@ void main() {
           ),
           view: currentView,
           createPlugin: () => _CountingPlugin(currentView.id, lifecycle),
-          builder: (_, __) => const SizedBox(),
+          builder: (_, __) {
+            builderCalls++;
+            return const SizedBox();
+          },
         ),
       );
     }
@@ -31,6 +35,7 @@ void main() {
     expect(lifecycle.created, 1);
     expect(lifecycle.initialized, 1);
     expect(lifecycle.disposed, 0);
+    expect(builderCalls, 1);
 
     final nextView = ViewPB.create()
       ..id = 'view-b'

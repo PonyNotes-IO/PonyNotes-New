@@ -790,7 +790,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             // 左侧：空间文档列表
             Visibility(
               visible: _isDocumentListVisible && !isFullWindow,
-              maintainState: true,
               child: documentListPanel,
             ),
             Visibility(
