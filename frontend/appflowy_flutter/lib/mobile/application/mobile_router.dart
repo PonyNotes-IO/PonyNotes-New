@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:appflowy/mobile/application/mobile_view_migration_handoff.dart';
 import 'package:appflowy/mobile/presentation/chat/mobile_chat_screen.dart';
 import 'package:appflowy/mobile/presentation/database/board/mobile_board_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dart';
@@ -61,7 +62,7 @@ extension MobileRouter on BuildContext {
   }
 }
 
-/// 将当前打开的源白板交接为迁移后新建的协作白板。
+/// 将当前打开的源白板交接为迁移后新建的目标白板。
 ///
 /// 跨区迁移会创建新 view 并删除旧 view。侧栏刷新不会自动更新已经打开的
 /// MobileViewPage，因此必须交接路由；如果用户已经切走或当前页面不是源白板，
@@ -91,8 +92,10 @@ Future<void> replaceCurrentMobileView(
   final latestOpenViewId = menuSharedState.latestOpenView?.id;
   final action = migratedMobileViewNavigationAction(
     currentUri: currentUri,
-    latestOpenViewId: latestOpenViewId,
     oldViewId: oldView.id,
+    latestOpenViewId: latestOpenViewId,
+    hasExpectedHandoff:
+        MobileViewMigrationHandoff.isExpectedRemoval(oldView.id),
   );
   if (action == MigratedMobileViewNavigationAction.none) {
     Log.info(
@@ -121,42 +124,107 @@ Future<void> replaceCurrentMobileView(
   // 同样的状态交接，否则移动端首页和“最近打开”仍会记住已删除的源白板。
   menuSharedState.latestOpenView = newView;
 
-  // 源白板删除通知可能先于迁移 Future 返回，并已经把移动端导航到 /home：
-  // - URI 仍是源 /docs：原子 replace，确保旧 Route 被移除；
-  // - URI 已不是源 /docs、但 latestOpen 仍指向源：说明业务上仍是从源白板发起，
-  //   等当前 frame 完成旧 Route 的退出后 push 新白板，保留 /home 作为返回页。
-  //
-  // replace/push 返回值都代表“新路由以后被 pop 时的结果”，不能 await 该 Future。
-  if (action == MigratedMobileViewNavigationAction.replace) {
-    unawaited(router.replace<void>(newUri.toString()));
-  } else {
-    await WidgetsBinding.instance.endOfFrame;
-    unawaited(router.push<void>(newUri.toString()));
+  switch (action) {
+    case MigratedMobileViewNavigationAction.replace:
+      // 源 /docs 仍在声明式路由栈中时原子替换旧白板。replace 返回值代表
+      // “新路由以后被 pop 时的结果”，不能 await 该 Future。
+      unawaited(router.replace<void>(newUri.toString()));
+      return;
+    case MigratedMobileViewNavigationAction.resetToReplacement:
+      // 移动菜单可能让 GoRouter 配置先显示为 /home，但旧白板及其 WebView 此时
+      // 仍存活。这里用 go 重建为单一的新白板路由，避免 push 把退出中的旧 Route
+      // 留在下面而再次产生“两次关闭”；新页面返回按钮在不可 pop 时会 go('/home')。
+      router.go(newUri.toString());
+      return;
+    case MigratedMobileViewNavigationAction.none:
+      return;
   }
 }
 
 enum MigratedMobileViewNavigationAction {
   replace,
-  push,
+  resetToReplacement,
   none,
 }
 
-/// 源 view 的删除通知可能比迁移 Future 更早到达：移动端旧页面收到
-/// DidRemoveMySharedView 后会先 `go('/home')`，此时 URI 已不再携带源 viewId，但
-/// [MenuSharedState.latestOpenView] 仍记录着发起移动的源白板。
+/// 决定迁移后新白板的路由交接方式。
+///
+/// 正常的源 `/docs` 使用原子 replace。移动菜单造成的 `/home` 过渡态必须同时
+/// 满足“源白板仍是 latestOpen”与“删除门闩已登记”，此时用 go 重建路由；普通
+/// 首页以及用户已切换到其他页面的情况不导航。
 MigratedMobileViewNavigationAction migratedMobileViewNavigationAction({
   required Uri currentUri,
-  required String? latestOpenViewId,
   required String oldViewId,
+  String? latestOpenViewId,
+  bool hasExpectedHandoff = false,
 }) {
   final uriViewId = currentUri.queryParameters[MobileDocumentScreen.viewId];
   if (uriViewId == oldViewId) {
     return MigratedMobileViewNavigationAction.replace;
   }
-  if (latestOpenViewId == oldViewId) {
-    return MigratedMobileViewNavigationAction.push;
+  if (hasExpectedHandoff &&
+      currentUri.path == MobileHomeScreen.routeName &&
+      latestOpenViewId == oldViewId) {
+    return MigratedMobileViewNavigationAction.resetToReplacement;
   }
   return MigratedMobileViewNavigationAction.none;
+}
+
+/// 判断删除源白板前是否应登记迁移交接门闩。
+///
+/// 真机上移动菜单的 Overlay 生命周期会让 GoRouter 配置提前变成 `/home`，但旧
+/// 白板仍在显示，且 [MenuSharedState.latestOpenView] 仍指向源白板。这个组合是本次
+/// 操作的迁移过渡态，不应误判为用户已经离开源白板。
+bool shouldPrepareCurrentMobileViewReplacement({
+  required Uri currentUri,
+  required String oldViewId,
+  required String? latestOpenViewId,
+}) {
+  final currentViewId = currentUri.queryParameters[MobileDocumentScreen.viewId];
+  return currentViewId == oldViewId ||
+      (currentUri.path == MobileHomeScreen.routeName &&
+          latestOpenViewId == oldViewId);
+}
+
+/// 在源白板删除前登记移动端路由交接。
+///
+/// 当前 URI 仍是源白板，或处于“URI 已回首页但源白板仍是 latestOpen”的移动菜单
+/// 过渡态时才登记；其他页面不登记，避免抑制正常删除通知。
+bool prepareCurrentMobileViewReplacement(
+  BuildContext context, {
+  required ViewPB oldView,
+  required ViewPB newView,
+}) {
+  if (!PlatformInfo.isMobile) return false;
+
+  final navigationContext = AppGlobals.rootNavKey.currentContext ?? context;
+  if (!navigationContext.mounted) return false;
+
+  final currentUri =
+      GoRouter.of(navigationContext).routerDelegate.currentConfiguration.uri;
+  final latestOpenViewId = getIt<MenuSharedState>().latestOpenView?.id;
+  if (!shouldPrepareCurrentMobileViewReplacement(
+    currentUri: currentUri,
+    oldViewId: oldView.id,
+    latestOpenViewId: latestOpenViewId,
+  )) {
+    Log.info(
+      '[WhiteboardMigrationUI] 不登记移动端白板交接：源白板不是当前页面 '
+      'old=${oldView.id} uri=$currentUri latestOpen=$latestOpenViewId',
+    );
+    return false;
+  }
+
+  MobileViewMigrationHandoff.begin(
+    oldViewId: oldView.id,
+    newViewId: newView.id,
+  );
+  Log.info(
+    '[WhiteboardMigrationUI] 已登记移动端白板交接：'
+    '${oldView.id} → ${newView.id}, uri=$currentUri, '
+    'latestOpen=$latestOpenViewId',
+  );
+  return true;
 }
 
 Uri buildMigratedMobileViewUri(Uri currentUri, ViewPB newView) {

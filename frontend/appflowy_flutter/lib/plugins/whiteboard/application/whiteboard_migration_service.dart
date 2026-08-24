@@ -44,6 +44,7 @@ class WhiteboardMigrationService {
     required BuildContext context,
     required ViewPB view,
     required String targetSpaceId,
+    void Function(ViewPB createdView)? beforeSourceDelete,
   }) async {
     final viewId = view.id;
     ViewPB? created;
@@ -109,7 +110,9 @@ class WhiteboardMigrationService {
         Log.info('[WBMigration] 私有→协作：源白板为空，跳过内容上传 view=$viewId');
       }
 
-      // 6. 内容已确认到达新 room，此时才删源白板。
+      // 6. 内容已确认到达新 room。删除源白板前先通知移动端登记路由交接门闩，
+      // 避免 DidRemoveMySharedView 抢先把旧页面导航到首页。
+      beforeSourceDelete?.call(created);
       final deleted = await ViewBackendService.deleteView(viewId: viewId);
       var sourceDeleteFailed = false;
       deleted.fold(
@@ -167,6 +170,7 @@ class WhiteboardMigrationService {
     required BuildContext context,
     required ViewPB view,
     required String targetSpaceId,
+    void Function(ViewPB createdView)? beforeSourceDelete,
   }) async {
     final sourceViewId = view.id;
     ViewPB? created;
@@ -256,6 +260,9 @@ class WhiteboardMigrationService {
         return null;
       }
 
+      // 目标本地 collab 已写入并回读校验。删除源白板前登记移动端路由交接，
+      // 与私有→协作方向保持相同的通知时序。
+      beforeSourceDelete?.call(created);
       final deleted = await ViewBackendService.deleteView(viewId: sourceViewId);
       var sourceDeleteFailed = false;
       deleted.fold(

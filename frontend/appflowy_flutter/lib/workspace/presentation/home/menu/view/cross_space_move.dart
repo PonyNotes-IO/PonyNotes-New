@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
+import 'package:appflowy/mobile/application/mobile_view_migration_handoff.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
@@ -445,13 +446,24 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
   // 这次编辑就落进了另一套存储，表现为「有时正常、有时丢内容、有时协作者
   // 互相看不到」，且难以复现。新建的 view 只有 room 一套，二义性从根上消失。
   if (!toPrivate) {
+    var handoffPrepared = false;
     final created =
         await WhiteboardMigrationService.migratePrivateToPublicAsNewView(
       context: context,
       view: view,
       targetSpaceId: targetParentId,
+      beforeSourceDelete: (createdView) {
+        handoffPrepared = prepareCurrentMobileViewReplacement(
+          context,
+          oldView: view,
+          newView: createdView,
+        );
+      },
     );
     if (created == null) {
+      if (handoffPrepared) {
+        MobileViewMigrationHandoff.finish(view.id);
+      }
       Log.error(
         '[CrossSpaceMove] 白板迁移失败，源白板保持原样：view=${view.id}',
       );
@@ -463,20 +475,37 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     }
     // 源 view 已删除，其空间归属缓存必须一并清掉，避免残留影响同 id 的复用。
     WhiteboardRouter.invalidateSpaceTypeCache(view.id);
-    await onWhiteboardRecreated?.call(created);
+    try {
+      await onWhiteboardRecreated?.call(created);
+    } finally {
+      if (handoffPrepared) {
+        MobileViewMigrationHandoff.finish(view.id);
+      }
+    }
     return CrossSpaceMoveOutcome.alreadyMoved;
   }
 
   // 协作 → 私有也采用与私有 → 协作相同的“目标新建 + 内容复制 + 删除源”流程。
   // 目标空间由 createChildViews 稳定刷新，且新 view 只绑定本地 collab，避免保留
   // 原 ID 跨 section 移动造成 Folder 关系索引与可见列表实例之间的竞态。
+  var handoffPrepared = false;
   final created =
       await WhiteboardMigrationService.migratePublicToPrivateAsNewView(
     context: context,
     view: view,
     targetSpaceId: targetParentId,
+    beforeSourceDelete: (createdView) {
+      handoffPrepared = prepareCurrentMobileViewReplacement(
+        context,
+        oldView: view,
+        newView: createdView,
+      );
+    },
   );
   if (created == null) {
+    if (handoffPrepared) {
+      MobileViewMigrationHandoff.finish(view.id);
+    }
     Log.error(
       '[CrossSpaceMove] 白板内容迁移失败，已阻止切区（内容保留在原处）：'
       'view=${view.id}',
@@ -489,7 +518,13 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
   }
 
   WhiteboardRouter.invalidateSpaceTypeCache(view.id);
-  await onWhiteboardRecreated?.call(created);
+  try {
+    await onWhiteboardRecreated?.call(created);
+  } finally {
+    if (handoffPrepared) {
+      MobileViewMigrationHandoff.finish(view.id);
+    }
+  }
   return CrossSpaceMoveOutcome.alreadyMoved;
 }
 
