@@ -121,9 +121,14 @@ class _RawEmojiIconWidgetState extends State<RawEmojiIconWidget> {
             lineHeight: widget.lineHeight,
           );
         case FlowyIconType.icon:
-          IconsData iconData = IconsData.fromJson(
-            jsonDecode(widget.emoji.emoji),
-          );
+          final decoded = jsonDecode(widget.emoji.emoji);
+          if (decoded is! Map<String, dynamic>) {
+            Log.warn(
+              'RawEmojiIconWidget: invalid icon data, expected a JSON object but got ${decoded.runtimeType}: ${widget.emoji.emoji}',
+            );
+            return defaultEmoji;
+          }
+          IconsData iconData = IconsData.fromJson(decoded);
           if (!widget.enableColor) {
             iconData = iconData.noColor();
           }
