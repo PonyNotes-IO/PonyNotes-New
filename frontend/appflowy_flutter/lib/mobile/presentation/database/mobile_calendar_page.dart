@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
@@ -11,6 +13,7 @@ import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/date_picker.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
@@ -277,9 +280,6 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   Future<void> _createNewNote() async {
-    // 先关闭底部菜单
-    Navigator.of(context).pop();
-
     // 显示输入标题对话框
     final theme = AppFlowyTheme.of(context);
     String documentTitle = '';
@@ -475,31 +475,75 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     final privateViewsResult = await workspaceService.getPrivateViews();
     final privateViews = privateViewsResult.fold(
       (views) => views,
-      (error) => <ViewPB>[],
+      (error) => throw Exception('读取私有空间失败: ${error.msg}'),
     );
 
-    // 查找是否已存在"日历"空间
+    // 优先复用桌面端或新版移动端创建的真正日历工作区。
     final calendarSpace = privateViews.firstWhere(
-      (view) => view.name == LocaleKeys.calendar_menuName.tr(),
+      (view) => view.name == LocaleKeys.calendar_menuName.tr() && view.isSpace,
       orElse: () => ViewPB(),
     );
 
     if (calendarSpace.id.isNotEmpty) {
-      // 已存在"日历"空间，使用其ID
       return calendarSpace;
-    } else {
-      // 不存在"日历"空间，创建新的
-      final createSpaceResult = await workspaceService.createView(
-        name: LocaleKeys.calendar_menuName.tr(),
-        viewSection: ViewSectionPB.Private,
-        layout: ViewLayoutPB.Document,
-      );
+    }
 
-      return createSpaceResult.fold(
+    // 旧版移动端创建的同名根节点缺少 Space 元数据，会被侧栏识别为普通文档。
+    // 原地补齐元数据可保留其已有日记子文档，同时避免再生成同名工作区。
+    final legacyCalendarRoot = privateViews.firstWhere(
+      (view) => view.name == LocaleKeys.calendar_menuName.tr(),
+      orElse: () => ViewPB(),
+    );
+    if (legacyCalendarRoot.id.isNotEmpty) {
+      final updateResult = await ViewBackendService.updateView(
+        viewId: legacyCalendarRoot.id,
+        extra: jsonEncode(_calendarSpaceExtra(legacyCalendarRoot.extra)),
+      );
+      return updateResult.fold(
         (view) => view,
-        (error) => throw Exception('创建日历空间失败'),
+        (error) => throw Exception('升级日历工作区失败: ${error.msg}'),
       );
     }
+
+    // 与桌面端保持一致：创建带完整 Space 元数据的私有日历工作区。
+    final createSpaceResult = await workspaceService.createView(
+      name: LocaleKeys.calendar_menuName.tr(),
+      viewSection: ViewSectionPB.Private,
+      layout: ViewLayoutPB.Document,
+      extra: jsonEncode(_calendarSpaceExtra()),
+      setAsCurrent: false,
+    );
+
+    return createSpaceResult.fold(
+      (view) => view,
+      (error) => throw Exception('创建日历工作区失败: ${error.msg}'),
+    );
+  }
+
+  Map<String, dynamic> _calendarSpaceExtra([String existingExtra = '']) {
+    var extra = <String, dynamic>{};
+    if (existingExtra.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(existingExtra);
+        if (decoded is Map<String, dynamic>) {
+          extra = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        // 旧数据损坏时使用标准工作区元数据覆盖，确保日历工作区可被识别。
+      }
+    }
+
+    extra.addAll({
+      ViewExtKeys.isSpaceKey: true,
+      ViewExtKeys.spaceIconKey: '📥',
+      ViewExtKeys.spaceIconColorKey: '#4A90E2',
+      ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+    });
+    extra.putIfAbsent(
+      ViewExtKeys.spaceCreatedAtKey,
+      () => DateTime.now().millisecondsSinceEpoch,
+    );
+    return extra;
   }
 
   Widget _buildAddMenuItem({
