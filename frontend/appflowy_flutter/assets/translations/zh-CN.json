@@ -243,6 +243,7 @@
     "saveAsNewPageDisabled": "没有可用消息"
   },
   "importPanel": {
+    "externalImport": "外部导入",
     "textAndMarkdown": "文本 和 Markdown",
     "documentFromV010": "来自 v0.1.0 的文档",
     "databaseFromV010": "来自 v0.1.0 的数据库",

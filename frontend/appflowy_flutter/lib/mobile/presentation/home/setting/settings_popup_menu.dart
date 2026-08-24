@@ -3,7 +3,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/settings/share/external_import_space_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/import/import_panel.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -109,53 +109,35 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
     );
   }
 
-  void _openImportPanel(BuildContext context) {
+  Future<void> _openImportPanel(BuildContext context) async {
     try {
       final workspaceId =
           context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
-      final parentViewId = _importParentViewId(
-        context.read<SpaceBloc>().state,
-        fallbackParentViewId: workspaceId,
-      );
-      if (parentViewId != null) {
-        showImportPanel(
-          parentViewId,
-          context,
-          (type, name, document, importedViews) {
-            if (importedViews != null && importedViews.isNotEmpty) {
-              showToastNotification(
-                message: '成功导入 ${importedViews.length} 个文件',
-              );
-            }
-          },
-          isMobile: true,
-        );
-      } else {
-        showToastNotification(message: '空间正在加载，请稍后再试');
+      if (workspaceId == null || workspaceId.isEmpty) {
+        showToastNotification(message: '工作区正在加载，请稍后再试');
+        return;
       }
+
+      final externalImportSpace =
+          await ExternalImportSpaceService.getOrCreate(workspaceId);
+      if (!context.mounted) {
+        return;
+      }
+      await showImportPanel(
+        externalImportSpace.id,
+        context,
+        (type, name, document, importedViews) {
+          if (importedViews != null && importedViews.isNotEmpty) {
+            showToastNotification(
+              message: '成功导入 ${importedViews.length} 个文件',
+            );
+          }
+        },
+        isMobile: true,
+      );
     } catch (e) {
       showToastNotification(message: '打开导入页面时发生错误: $e');
     }
-  }
-
-  String? _importParentViewId(
-    SpaceState state, {
-    String? fallbackParentViewId,
-  }) {
-    final currentSpace = state.currentSpace;
-    if (currentSpace != null && currentSpace.id.isNotEmpty) {
-      return currentSpace.id;
-    }
-
-    for (final space in state.spaces) {
-      if (space.id.isNotEmpty) {
-        return space.id;
-      }
-    }
-
-    // 没有空间时，移动端会显示工作区根目录下的普通页面，因此保持原有
-    // 根目录导入行为；加载尚未完成时则不创建不可见页面。
-    return state.isInitialized ? fallbackParentViewId : null;
   }
 }
 

@@ -4,7 +4,6 @@ import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,14 +12,11 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'import_page_widgets.dart';
 import 'package:appflowy/plugins/import_page/import_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
-import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
-import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/settings/share/external_import_space_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:fixnum/fixnum.dart' as fixnum;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -632,64 +628,8 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   }
 
 
-  Future<ViewPB> _getOrCreateExternalImportView(String workspaceId) async {
-    const externalImportName = '外部导入';
-    
-    // 获取工作空间服务
-    final workspaceService = WorkspaceService(
-      workspaceId: workspaceId,
-      userId: fixnum.Int64(1),
-    );
-    
-    // 获取私有空间
-    final privateViewsResult = await workspaceService.getPrivateViews();
-    final privateViews = privateViewsResult.fold(
-      (views) => views,
-      (error) => throw Exception('获取私有空间失败: $error'),
-    );
-    // 查找私有空间中的空间类型视图
-    final allSpaces = privateViews.where((view) => view.isSpace).toList();
-    
-    // 检查是否已存在"外部导入"空间
-    Log.info('检查私有空间中是否已存在"外部导入"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
-    final existingSpace = allSpaces.firstWhere(
-      (space) => space.name == externalImportName,
-      orElse: () => ViewPB(),
-    );
-
-    if (existingSpace.id.isNotEmpty) {
-      Log.info('找到已存在的"外部导入"空间，ID: ${existingSpace.id}，类型: ${existingSpace.spacePermission}');
-      return existingSpace;
-    }
-
-    // 在私有空间中创建"外部导入"空间
-    Log.info('在私有空间中创建新的"外部导入"空间');
-    
-    // 创建空间（使用与AI会话相同的逻辑）
-    final spaceExtra = {
-      ViewExtKeys.isSpaceKey: true,
-      ViewExtKeys.spaceIconKey: '📥',
-      ViewExtKeys.spaceIconColorKey: '#FF6B6B',
-      ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
-      ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
-    };
-    
-    final result = await workspaceService.createView(
-      name: externalImportName,
-      viewSection: ViewSectionPB.Private,
-      layout: ViewLayoutPB.Document,
-      extra: jsonEncode(spaceExtra),
-      setAsCurrent: false,
-    );
-
-    return result.fold(
-      (view) {
-        Log.info('成功创建"外部导入"空间，ID: ${view.id}');
-        return view;
-      },
-      (error) => throw Exception('创建外部导入空间失败: $error'),
-    );
-  }
+  Future<ViewPB> _getOrCreateExternalImportView(String workspaceId) =>
+      ExternalImportSpaceService.getOrCreate(workspaceId);
 
   Future<void> _handlePdfImport() async {
     try {
