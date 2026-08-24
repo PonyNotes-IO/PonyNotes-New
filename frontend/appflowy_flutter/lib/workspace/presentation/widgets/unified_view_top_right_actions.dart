@@ -12,6 +12,7 @@ import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -301,10 +302,11 @@ class _UnifiedViewTopRightActionsContentState
   }
 
   bool get _shouldShowFullWindowButton {
-    final isMobile =
-        UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
+    final isMobile = UniversalPlatform.isAndroid || UniversalPlatform.isIOS;
     return widget.showFullWindowButton &&
-        (!isMobile || widget.view.layout != ViewLayoutPB.Whiteboard);
+        (!isMobile ||
+            widget.view.layout != ViewLayoutPB.Whiteboard ||
+            PlatformInfo.isTablet);
   }
 
   Color _floatingActionIconColor(BuildContext context) {
