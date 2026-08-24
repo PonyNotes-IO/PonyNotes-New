@@ -115,6 +115,22 @@ bool isOfflinePrivateMove(
 ) =>
     fromSection == ViewSectionPB.Private && toSection == ViewSectionPB.Private;
 
+/// 同一白板跨区移动的进程内互斥器。
+///
+/// 移动菜单、侧栏拖拽和分区占位符都能进入统一协调器；若手势/菜单回调在很短
+/// 时间内重复触发，会同时创建多个迁移 WebView，导致重复失败提示、弹窗互相关闭，
+/// 甚至同一份内容被并发写入。不同白板仍可独立迁移，不互相阻塞。
+class CrossSpaceWhiteboardMoveGuard {
+  final Set<String> _inFlight = <String>{};
+
+  bool tryAcquire(String viewId) => _inFlight.add(viewId);
+
+  void release(String viewId) => _inFlight.remove(viewId);
+}
+
+final CrossSpaceWhiteboardMoveGuard _whiteboardMoveGuard =
+    CrossSpaceWhiteboardMoveGuard();
+
 Future<ViewSectionPB?> resolveViewSection(
   BuildContext context,
   ViewPB view, {
@@ -177,6 +193,47 @@ Future<ViewSectionPB?> resolveViewSection(
 /// section 或角色信息缺失时拒绝敏感移动；确认跨区后先迁移白板内容，最后才提交
 /// Folder move。这样任何入口都无法绕过权限或内容迁移。
 Future<CrossSpaceMoveOutcome> coordinateViewMove(
+  BuildContext context, {
+  required ViewBloc viewBloc,
+  required ViewPB view,
+  required String targetParentId,
+  required String? prevViewId,
+  required ViewSectionPB? fromSection,
+  required ViewSectionPB? toSection,
+  VoidCallback? beforeSubmit,
+  FutureOr<void> Function(ViewPB createdView)? onWhiteboardRecreated,
+}) async {
+  final shouldLockWhiteboardMove = view.layout == ViewLayoutPB.Whiteboard &&
+      fromSection != null &&
+      toSection != null &&
+      fromSection != toSection;
+  if (shouldLockWhiteboardMove && !_whiteboardMoveGuard.tryAcquire(view.id)) {
+    Log.warn(
+      '[CrossSpaceMove] 同一白板已有迁移任务，忽略重复触发 view=${view.id}',
+    );
+    return CrossSpaceMoveOutcome.aborted;
+  }
+
+  try {
+    return await _coordinateViewMoveUnlocked(
+      context,
+      viewBloc: viewBloc,
+      view: view,
+      targetParentId: targetParentId,
+      prevViewId: prevViewId,
+      fromSection: fromSection,
+      toSection: toSection,
+      beforeSubmit: beforeSubmit,
+      onWhiteboardRecreated: onWhiteboardRecreated,
+    );
+  } finally {
+    if (shouldLockWhiteboardMove) {
+      _whiteboardMoveGuard.release(view.id);
+    }
+  }
+}
+
+Future<CrossSpaceMoveOutcome> _coordinateViewMoveUnlocked(
   BuildContext context, {
   required ViewBloc viewBloc,
   required ViewPB view,

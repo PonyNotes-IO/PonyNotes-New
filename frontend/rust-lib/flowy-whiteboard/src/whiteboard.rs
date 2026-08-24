@@ -366,8 +366,9 @@ impl Whiteboard {
         }
         tracing::trace!("[WBCollab] Deleted {} fields", data_map.len());
       },
-      _ => {
-        tracing::warn!("[WBCollab] Unknown update type: {}", wrapper.r#type);
+      unsupported => {
+        tracing::error!("[WBCollab] Unknown update type: {}", unsupported);
+        return Err(anyhow!("Unknown whiteboard update type: {}", unsupported));
       },
     }
 
@@ -876,6 +877,20 @@ mod tests {
       .as_array()
       .unwrap()
       .is_empty());
+  }
+
+  #[test]
+  fn test_unknown_update_type_returns_error() {
+    let collab = test_collab("wb-unknown-update");
+    let mut whiteboard = Whiteboard::create(collab).unwrap();
+
+    let error = whiteboard
+      .update_from_json(r#"{"type":"unsupported","data":{"elements":[]}}"#)
+      .unwrap_err();
+
+    assert!(error
+      .to_string()
+      .contains("Unknown whiteboard update type: unsupported"));
   }
 
   #[test]

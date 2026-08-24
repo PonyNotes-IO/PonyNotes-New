@@ -16,6 +16,13 @@
 /// - PUSH 只在 Flutter 明确调用 loadAndSave 时才会写 room；
 /// - 通过 fetch 钩子记录最近一次 GET/POST /api/scenes 的状态与服务器场景版本，
 ///   供 Flutter 侧判定「服务器确有内容却读到空」这类异常并中止迁移，杜绝丢数据。
+/// 迁移页允许识别的场景写入路径。
+///
+/// 线上 xm-arts 同时存在旧版 `/api/scenes`、带 roomId 的变体以及
+/// `/api/scenes/v2/post/`。PULL 页必须拦住这些写入，但不能误伤 files 上传。
+const String whiteboardMigrationScenePostPattern =
+    r'\/api\/scenes(?:\/v2(?:\/post)?|\/[A-Za-z0-9_-]+)?\/?($|[?#])';
+
 const String whiteboardMigrationScript = r'''
 (function () {
   if (window.__xmMigInstalled) return;
@@ -47,7 +54,9 @@ const String whiteboardMigrationScript = r'''
     var url = typeof input === 'string' ? input : (input && input.url) || '';
     var method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
     var isSceneGet = method === 'GET' && /\/api\/scenes(?:\/v2)?\/[A-Za-z0-9_-]+\/?($|[?#])/.test(url);
-    var isScenePost = method === 'POST' && /\/api\/scenes(?:\/v2)?\/?($|\?)/.test(url);
+    var isScenePost = method === 'POST' && /''' +
+    whiteboardMigrationScenePostPattern +
+    r'''/.test(url);
 
     // 数据安全红线：未放行时，直接掐掉对 room 的写入，不让请求出去。
     // PULL 方向本页画布是空的，excalidraw 的自动保存一旦 POST 出去，

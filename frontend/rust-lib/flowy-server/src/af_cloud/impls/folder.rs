@@ -135,10 +135,12 @@ where
           new_parent_view_id,
           prev_view_id,
           to_private,
-          return_update: true,
         },
       )
       .await
+      // 当前 Cloud 接口只确认移动成功，不在 HTTP 响应中返回 folder update。
+      // 上层对 None 已使用 WebSocket 同步作为兼容回退。
+      .map(|_| None)
       .map_err(FlowyError::from)
   }
 

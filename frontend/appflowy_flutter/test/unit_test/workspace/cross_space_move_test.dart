@@ -69,6 +69,17 @@ void main() {
     expect(decoded, {'roomId': 'room-1', 'roomKey': 'key-1'});
   });
 
+  test('同一白板的跨区移动互斥且释放后允许重试', () {
+    final guard = CrossSpaceWhiteboardMoveGuard();
+
+    expect(guard.tryAcquire('whiteboard-1'), isTrue);
+    expect(guard.tryAcquire('whiteboard-1'), isFalse);
+    expect(guard.tryAcquire('whiteboard-2'), isTrue);
+
+    guard.release('whiteboard-1');
+    expect(guard.tryAcquire('whiteboard-1'), isTrue);
+  });
+
   test('clears a stale workspace role explicitly', () {
     final state = UserWorkspaceState.initial(UserProfilePB()).copyWith(
       currentUserRole: AFRolePB.Owner,

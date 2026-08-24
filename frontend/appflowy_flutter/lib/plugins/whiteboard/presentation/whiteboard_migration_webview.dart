@@ -54,18 +54,26 @@ Future<WhiteboardMigrationWebResult> runWhiteboardMigrationWebView({
 
   final completer = Completer<WhiteboardMigrationWebResult>();
   NavigatorState? dialogNavigator;
+  Route<dynamic>? dialogRoute;
   var dialogCloseRequested = false;
   var dialogAlreadyClosed = false;
   void closeDialog() {
     if (dialogCloseRequested || dialogAlreadyClosed) return;
-    dialogCloseRequested = true;
     final navigator = dialogNavigator;
-    if (navigator == null || !navigator.mounted) return;
+    final route = dialogRoute;
+    if (navigator == null || !navigator.mounted || route == null) return;
+    if (!route.isActive) {
+      dialogAlreadyClosed = true;
+      return;
+    }
+    dialogCloseRequested = true;
     try {
-      if (navigator.canPop()) {
-        navigator.pop();
-      }
+      // 只移除本次迁移创建的 DialogRoute。若两个迁移任务发生竞态，普通 pop()
+      // 会关闭 Navigator 顶部的另一个弹窗，留下自己的 Loading；按 Route 精确
+      // 移除可保证异常路径也不会互相干扰。
+      navigator.removeRoute(route);
     } catch (e) {
+      dialogCloseRequested = false;
       Log.warn('[WBMigrationWebView] 关闭迁移弹窗失败: $e');
     }
   }
@@ -77,6 +85,7 @@ Future<WhiteboardMigrationWebResult> runWhiteboardMigrationWebView({
       barrierDismissible: false,
       builder: (dialogContext) {
         dialogNavigator = Navigator.of(dialogContext);
+        dialogRoute = ModalRoute.of(dialogContext);
         return PopScope(
           canPop: false,
           child: _WhiteboardMigrationWebView(

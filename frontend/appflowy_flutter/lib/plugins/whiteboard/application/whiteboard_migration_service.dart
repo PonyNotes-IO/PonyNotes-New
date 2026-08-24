@@ -270,7 +270,9 @@ class WhiteboardMigrationService {
       }
 
       final scene = result.scene!;
-      final liveElements = _asList(scene['elements']);
+      final liveElements = _asList(scene['elements'])
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
 
       final payload = <String, dynamic>{
         'type': 'excalidraw',
@@ -279,11 +281,24 @@ class WhiteboardMigrationService {
         'files': scene['files'] ?? const {},
         'appState': scene['appState'] ?? const {},
       };
+
+      // 兼容仍在运行旧版 Rust 动态库的客户端。旧库只认识 update/delete，收到
+      // replace 会记录 Unknown update type 后仍返回成功，最终造成下面的回读校验失败。
+      // 这里把“完整替换”转换为普通 update：目标场景中缺失的历史元素写入删除墓碑，
+      // 同 id 的目标元素若版本落后则抬高版本，确保逐元素 CRDT 合并后得到目标场景。
+      // room 元数据在 folder 移动真正成功后再删除，迁移中途失败仍可继续打开源 room。
+      final current = await dataService.loadWhiteboardData(
+        viewId,
+        source: 'migration-replacement-base',
+      );
+      final compatiblePayload = buildCompatibleReplacementPayload(
+        current: current,
+        replacement: payload,
+      );
       final saved = await dataService.saveWhiteboardData(
         viewId,
-        payload,
+        compatiblePayload,
         source: 'migration-public-to-private',
-        replace: true,
       );
       if (!saved) {
         Log.error(
@@ -319,8 +334,77 @@ class WhiteboardMigrationService {
   }
 
   static Future<void> completePublicToPrivate(String viewId) async {
+    // folder 已成功切到私有区，此时才清除 collab 中的 room 凭据。即使清理失败，
+    // 私有空间路由也会忽略 room 并使用本地 collab，不影响已迁移内容。
+    final removed = await WhiteboardDataService().deleteWhiteboardData(
+      viewId,
+      const {'roomId': null, 'roomKey': null},
+    );
+    if (!removed) {
+      Log.warn('[WBMigration] 协作→私有 collab room 元数据清理失败，私有内容不受影响');
+    }
     await WhiteboardRoomService.deleteRoom(viewId);
     Log.info('[WBMigration] 协作→私有 已解除本地 room，远端副本保留 view=$viewId');
+  }
+
+  /// 把完整替换转换成旧版 Rust 也能执行的逐元素 update。
+  ///
+  /// Rust 白板 collab 按元素 id + version 合并，且不会物理删除元素。因此：
+  /// - 目标场景仍存在的元素照常写入；若本地旧版本更高，则把目标版本抬到旧版本 + 1；
+  /// - 目标场景已不存在的旧元素写成 `isDeleted: true` 墓碑；
+  /// - 顶层字段以目标场景为准写入，roomId/roomKey 留到移动成功后单独清理。
+  static Map<String, dynamic> buildCompatibleReplacementPayload({
+    required Map<String, dynamic> current,
+    required Map<String, dynamic> replacement,
+  }) {
+    final currentById = <String, Map<String, dynamic>>{};
+    for (final element in _asList(current['elements'])) {
+      if (element is! Map) continue;
+      final copy = Map<String, dynamic>.from(element);
+      final id = copy['id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      currentById[id] = copy;
+    }
+
+    final desiredIds = <String>{};
+    final updates = <dynamic>[];
+    for (final element in _asList(replacement['elements'])) {
+      if (element is! Map) {
+        updates.add(element);
+        continue;
+      }
+      final copy = Map<String, dynamic>.from(element);
+      final id = copy['id']?.toString();
+      if (id == null || id.isEmpty) {
+        updates.add(copy);
+        continue;
+      }
+      desiredIds.add(id);
+      final existingVersion = _elementVersion(currentById[id]);
+      final incomingVersion = _elementVersion(copy);
+      if (incomingVersion < existingVersion) {
+        copy['version'] = existingVersion + 1;
+      }
+      updates.add(copy);
+    }
+
+    for (final entry in currentById.entries) {
+      if (desiredIds.contains(entry.key)) continue;
+      final tombstone = Map<String, dynamic>.from(entry.value)
+        ..['isDeleted'] = true
+        ..['version'] = _elementVersion(entry.value) + 1;
+      updates.add(tombstone);
+    }
+
+    return <String, dynamic>{
+      ...replacement,
+      'elements': updates,
+    };
+  }
+
+  static int _elementVersion(Map<String, dynamic>? element) {
+    final value = element?['version'];
+    return value is num ? value.toInt() : 0;
   }
 
   static Future<WhiteboardRoom?> _resolveRoomForMigration(
