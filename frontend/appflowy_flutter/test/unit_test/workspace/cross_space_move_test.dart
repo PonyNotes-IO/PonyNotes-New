@@ -80,6 +80,20 @@ void main() {
     expect(guard.tryAcquire('whiteboard-1'), isTrue);
   });
 
+  test('移动完成刷新器不依赖原菜单 context 仍可执行', () {
+    var spacesRefreshCount = 0;
+    var favoritesRefreshCount = 0;
+    final refresher = SidebarMoveStateRefresher(
+      refreshSpaces: () => spacesRefreshCount++,
+      refreshFavorites: () => favoritesRefreshCount++,
+    );
+
+    refresher.refresh();
+
+    expect(spacesRefreshCount, 1);
+    expect(favoritesRefreshCount, 1);
+  });
+
   test('clears a stale workspace role explicitly', () {
     final state = UserWorkspaceState.initial(UserProfilePB()).copyWith(
       currentUserRole: AFRolePB.Owner,

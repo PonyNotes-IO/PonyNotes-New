@@ -131,6 +131,52 @@ class CrossSpaceWhiteboardMoveGuard {
 final CrossSpaceWhiteboardMoveGuard _whiteboardMoveGuard =
     CrossSpaceWhiteboardMoveGuard();
 
+/// 跨空间移动开始前捕获侧栏相关 Bloc，移动完成后即使菜单/页面 context 已卸载，
+/// 仍能刷新目标空间的文档列表。
+///
+/// 移出协作区会触发 `DidRemoveMySharedView`，移动端可能因此先关闭当前页面和菜单
+/// Overlay。若完成回调再通过旧 context 查找 Bloc，刷新会被直接跳过，表现为后端
+/// 已移动成功，但目标私有空间列表一直缺少该文档。
+class SidebarMoveStateRefresher {
+  SidebarMoveStateRefresher({
+    required VoidCallback refreshSpaces,
+    required VoidCallback refreshFavorites,
+  })  : _refreshSpaces = refreshSpaces,
+        _refreshFavorites = refreshFavorites;
+
+  factory SidebarMoveStateRefresher.capture(BuildContext context) {
+    SpaceBloc? spaceBloc;
+    FavoriteBloc? favoriteBloc;
+    try {
+      spaceBloc = context.read<SpaceBloc>();
+    } catch (_) {}
+    try {
+      favoriteBloc = context.read<FavoriteBloc>();
+    } catch (_) {}
+
+    return SidebarMoveStateRefresher(
+      refreshSpaces: () {
+        if (spaceBloc != null && !spaceBloc.isClosed) {
+          spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
+        }
+      },
+      refreshFavorites: () {
+        if (favoriteBloc != null && !favoriteBloc.isClosed) {
+          favoriteBloc.add(const FavoriteEvent.fetchFavorites());
+        }
+      },
+    );
+  }
+
+  final VoidCallback _refreshSpaces;
+  final VoidCallback _refreshFavorites;
+
+  void refresh() {
+    _refreshSpaces();
+    _refreshFavorites();
+  }
+}
+
 Future<ViewSectionPB?> resolveViewSection(
   BuildContext context,
   ViewPB view, {
@@ -443,23 +489,5 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
 }
 
 void refreshSidebarMoveState(BuildContext context) {
-  try {
-    final spaceBloc = context.read<SpaceBloc>();
-    if (!spaceBloc.isClosed) {
-      spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
-    }
-  } catch (_) {
-    // SpaceBloc may be absent in isolated menu contexts.
-    // 某些菜单上下文可能没有 SpaceBloc，忽略即可。
-  }
-
-  try {
-    final favoriteBloc = context.read<FavoriteBloc>();
-    if (!favoriteBloc.isClosed) {
-      favoriteBloc.add(const FavoriteEvent.fetchFavorites());
-    }
-  } catch (_) {
-    // FavoriteBloc only exists under favorite/sidebar contexts.
-    // FavoriteBloc 只存在于最爱/侧栏上下文中。
-  }
+  SidebarMoveStateRefresher.capture(context).refresh();
 }

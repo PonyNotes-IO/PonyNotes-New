@@ -19,7 +19,6 @@ import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
-import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_item.dart';
@@ -1605,6 +1604,7 @@ Future<void> moveViewCrossSpace(
 
   final viewBloc = context.read<ViewBloc>();
   final spaceBloc = context.read<SpaceBloc>();
+  final sidebarRefresher = SidebarMoveStateRefresher.capture(context);
   final currentSpace = spaceBloc.state.currentSpace;
   final movesToAnotherSpace =
       currentSpace != null && toSpace != null && currentSpace.id != toSpace.id;
@@ -1626,12 +1626,15 @@ Future<void> moveViewCrossSpace(
           }
         : null,
   );
-  if (outcome == CrossSpaceMoveOutcome.aborted || !context.mounted) {
+  if (outcome == CrossSpaceMoveOutcome.aborted) {
     return;
   }
 
   if (movesToAnotherSpace) {
-    switchToSpaceNotifier.value = toSpace;
+    // 移出协作区时当前文档页和菜单 Overlay 可能先被删除通知卸载，依赖
+    // switchToSpaceNotifier 的 Widget 监听器会有丢事件窗口。直接向移动开始前
+    // 捕获的 SpaceBloc 打开目标空间，由 open 事件权威拉取目标子文档列表。
+    spaceBloc.add(SpaceEvent.open(space: toSpace));
   }
   if (view.layout == ViewLayoutPB.Whiteboard && fromSection != toSection) {
     showToastNotification(
@@ -1639,7 +1642,7 @@ Future<void> moveViewCrossSpace(
       type: ToastificationType.success,
     );
   }
-  refreshSidebarMoveState(context);
+  sidebarRefresher.refresh();
 }
 
 Future<void> moveViewToSectionPlaceholder(
@@ -1660,6 +1663,7 @@ Future<void> moveViewToSectionPlaceholder(
   final toSection = spaceType.toViewSectionPB;
 
   final viewBloc = context.read<ViewBloc>();
+  final sidebarRefresher = SidebarMoveStateRefresher.capture(context);
   final outcome = await coordinateViewMove(
     context,
     viewBloc: viewBloc,
@@ -1669,8 +1673,8 @@ Future<void> moveViewToSectionPlaceholder(
     fromSection: fromSection,
     toSection: toSection,
   );
-  if (outcome == CrossSpaceMoveOutcome.aborted || !context.mounted) return;
-  refreshSidebarMoveState(context);
+  if (outcome == CrossSpaceMoveOutcome.aborted) return;
+  sidebarRefresher.refresh();
 }
 
 class ViewItemDefaultLeftIcon extends StatelessWidget {

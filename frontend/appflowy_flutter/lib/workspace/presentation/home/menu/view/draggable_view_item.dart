@@ -270,6 +270,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     if (!mounted) return;
 
     final viewBloc = context.read<ViewBloc>();
+    final sidebarRefresher = SidebarMoveStateRefresher.capture(context);
 
     final outcome = await coordinateViewMove(
       context,
@@ -283,9 +284,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     if (outcome == CrossSpaceMoveOutcome.aborted) {
       return;
     }
-    if (mounted) {
-      refreshSidebarMoveState(context);
-    }
+    sidebarRefresher.refresh();
   }
 
   DraggableHoverPosition _computeHoverPosition(Offset offset, Size size) {
