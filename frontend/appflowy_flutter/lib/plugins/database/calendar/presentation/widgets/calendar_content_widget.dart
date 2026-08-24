@@ -14,6 +14,7 @@ import '../../../../../workspace/application/view/view_ext.dart';
 import '../../../../../workspace/presentation/home/menu/view/view_item.dart';
 import '../../../../../workspace/presentation/home/home_sizes.dart';
 import '../../application/calendar_content_cubit.dart';
+import '../../application/calendar_note_tree.dart';
 
 class CalendarContent extends StatefulWidget {
   final DateTime selectedDate;
@@ -37,6 +38,7 @@ class CalendarContent extends StatefulWidget {
 
 class _CalendarContentState extends State<CalendarContent> {
   List<ViewPB> _realNotes = [];
+
   /// 全量视图 id→视图，用于拼出笔记的父级路径
   Map<String, ViewPB> _viewById = {};
   bool _isLoading = false;
@@ -116,8 +118,8 @@ class _CalendarContentState extends State<CalendarContent> {
           Text(
             '${widget.selectedDate.year}年${widget.selectedDate.month}月${widget.selectedDate.day}日',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 16),
 
@@ -161,11 +163,11 @@ class _CalendarContentState extends State<CalendarContent> {
             Text(
               '当天暂无笔记',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withOpacity(0.5),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
             ),
           ],
         ),
@@ -249,7 +251,7 @@ class _CalendarContentState extends State<CalendarContent> {
       if (!mounted) return;
 
       await allViewsResult.fold(
-            (allViews) async {
+        (allViews) async {
           // 过滤出文档类型的视图（笔记），包括"我的空间"中的日记
           // 显示所有Document类型的视图，包括孤儿视图和我的空间中的文档
           _viewById = {for (final v in allViews.items) v.id: v};
@@ -296,7 +298,7 @@ class _CalendarContentState extends State<CalendarContent> {
             _isLoading = false;
           });
         },
-            (error) {
+        (error) {
           if (!mounted) return;
           setState(() {
             _realNotes = [];
@@ -315,102 +317,17 @@ class _CalendarContentState extends State<CalendarContent> {
     }
   }
 
-  /// 从笔记沿 parentViewId 追溯到根，得到 [顶层, …, 笔记]
-  List<ViewPB> _pathFromNoteToRoot(ViewPB note) {
-    final path = <ViewPB>[];
-    ViewPB? cur = note;
-    final seen = <String>{};
-    while (cur != null) {
-      if (seen.contains(cur.id)) break;
-      seen.add(cur.id);
-      path.insert(0, cur);
-      final pid = cur.parentViewId;
-      if (pid.isEmpty) break;
-      cur = _viewById[pid];
-    }
-    return path;
-  }
-
-  void _mergePathIntoForest(
-      Map<String, _CalendarNoteTreeNode> forest, List<ViewPB> path) {
-    if (path.isEmpty) return;
-    var level = forest;
-    for (var i = 0; i < path.length; i++) {
-      final v = path[i];
-      level.putIfAbsent(v.id, () => _CalendarNoteTreeNode(v));
-      final node = level[v.id]!;
-      if (i < path.length - 1) {
-        level = node.children;
-      }
-    }
-  }
-
   List<Widget> _buildNoteTree(BuildContext context) {
-    final forest = <String, _CalendarNoteTreeNode>{};
-    for (final note in _realNotes) {
-      _mergePathIntoForest(forest, _pathFromNoteToRoot(note));
-    }
-    final roots = forest.values.toList()
-      ..sort(_CalendarNoteTreeNode.compare);
-    for (final r in roots) {
-      r.sortChildrenRecursively();
-    }
-    final displayRoots = _rootsWithoutLeadingSpace(roots);
-    return displayRoots
-        .map((n) => _buildNoteTreeNode(context, n, depth: 0))
-        .toList();
-  }
-
-  /// 仅剥掉名为 Workspace / 工作区的壳（多为文件夹而非 isSpace）；不按 isSpace 泛剥，避免多空间混排。
-  bool _isWorkspaceShellView(ViewPB v) {
-    final t = v.name.trim();
-    if (t.isEmpty) return false;
-    final lower = t.toLowerCase();
-    return lower == 'workspace' || t == '工作区' || lower == '工作区';
-  }
-
-  /// 不展示 Workspace 壳层，将其子节点与同级合并到顶层展示。
-  List<_CalendarNoteTreeNode> _rootsWithoutLeadingSpace(
-    List<_CalendarNoteTreeNode> roots,
-  ) {
-    var r = List<_CalendarNoteTreeNode>.from(roots);
-
-    while (r.length == 1 &&
-        _isWorkspaceShellView(r.first.view) &&
-        r.first.sortedChildren.isNotEmpty) {
-      r = r.first.sortedChildren.toList()
-        ..sort(_CalendarNoteTreeNode.compare);
-      for (final node in r) {
-        node.sortChildrenRecursively();
-      }
-    }
-
-    var changed = true;
-    while (changed) {
-      changed = false;
-      final next = <_CalendarNoteTreeNode>[];
-      for (final n in r) {
-        if (_isWorkspaceShellView(n.view) && n.sortedChildren.isNotEmpty) {
-          next.addAll(n.sortedChildren);
-          changed = true;
-        } else {
-          next.add(n);
-        }
-      }
-      if (changed) {
-        r = next..sort(_CalendarNoteTreeNode.compare);
-        for (final node in r) {
-          node.sortChildrenRecursively();
-        }
-      }
-    }
-
-    return r;
+    final roots = buildCalendarNoteTree(
+      notes: _realNotes,
+      viewById: _viewById,
+    );
+    return roots.map((n) => _buildNoteTreeNode(context, n, depth: 0)).toList();
   }
 
   Widget _buildNoteTreeNode(
     BuildContext context,
-    _CalendarNoteTreeNode node, {
+    CalendarNoteTreeNode node, {
     required int depth,
   }) {
     // Folder / Notebook / Space / 有子节点的 Document：统一用可折叠 tile 包装
@@ -463,11 +380,17 @@ class _CalendarContentState extends State<CalendarContent> {
           Text(
             _formatCreateTime(view.createTime.toInt()),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.7)
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-              fontSize: 11,
-            ),
+                  color: isSelected
+                      ? Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.7)
+                      : Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.5),
+                  fontSize: 11,
+                ),
           ),
           const HSpace(8),
         ];
@@ -480,7 +403,7 @@ class _CalendarContentState extends State<CalendarContent> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final createDate =
-    DateTime(createTime.year, createTime.month, createTime.day);
+        DateTime(createTime.year, createTime.month, createTime.day);
 
     if (createDate == today) {
       return '${createTime.hour.toString().padLeft(2, '0')}:${createTime.minute.toString().padLeft(2, '0')}';
@@ -504,6 +427,7 @@ class _CalendarNoteFolderTile extends StatefulWidget {
   final ViewPB view;
   final int depth;
   final double indent;
+
   /// 点击标题行（图标+名称）时打开该笔记；仅对含子页面的 Document 等需要。
   final VoidCallback? onTitleTap;
   final List<Widget> childWidgets;
@@ -632,33 +556,5 @@ class _CalendarNoteFolderTileState extends State<_CalendarNoteFolderTile> {
         ),
       ),
     );
-  }
-}
-
-/// 日历当日笔记树节点（合并多条路径）
-class _CalendarNoteTreeNode {
-  _CalendarNoteTreeNode(this.view);
-
-  final ViewPB view;
-  final Map<String, _CalendarNoteTreeNode> children = {};
-  List<_CalendarNoteTreeNode> sortedChildren = [];
-
-  static bool _folderLike(ViewPB v) =>
-      v.layout == ViewLayoutPB.Folder ||
-      v.layout == ViewLayoutPB.Notebook ||
-      v.isSpace;
-
-  static int compare(_CalendarNoteTreeNode a, _CalendarNoteTreeNode b) {
-    final fa = _folderLike(a.view);
-    final fb = _folderLike(b.view);
-    if (fa != fb) return fa ? -1 : 1;
-    return a.view.name.compareTo(b.view.name);
-  }
-
-  void sortChildrenRecursively() {
-    sortedChildren = children.values.toList()..sort(compare);
-    for (final c in sortedChildren) {
-      c.sortChildrenRecursively();
-    }
   }
 }

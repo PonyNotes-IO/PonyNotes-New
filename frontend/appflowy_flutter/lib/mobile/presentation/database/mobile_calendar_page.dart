@@ -7,6 +7,7 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_she
 import 'package:appflowy/mobile/presentation/database/mobile_edit_event_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
 import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_note_tree.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
@@ -111,7 +112,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _onNoteTap(ViewPB note) {
-    context.push('${MobileDocumentScreen.routeName}?${MobileDocumentScreen.viewId}=${note.id}');
+    context.push(
+        '${MobileDocumentScreen.routeName}?${MobileDocumentScreen.viewId}=${note.id}');
   }
 
   void _onScheduleTap(ScheduleItem schedule) {
@@ -325,7 +327,10 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
                     decoration: InputDecoration(
                       hintText: '输入日记标题',
                       filled: true,
-                      fillColor: Theme.of(ctx).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      fillColor: Theme.of(ctx)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.3),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -387,7 +392,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     try {
       // 获取当前用户和工作空间信息
       final userResult = await UserBackendService.getCurrentUserProfile();
-      final workspaceResult = await FolderEventGetCurrentWorkspaceSetting().send();
+      final workspaceResult =
+          await FolderEventGetCurrentWorkspaceSetting().send();
 
       final userProfile = userResult.fold(
         (user) => user,
@@ -666,13 +672,15 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+            Icon(icon,
+                size: 20, color: Theme.of(context).colorScheme.onSurface),
             const SizedBox(width: 12),
             Text(label, style: Theme.of(context).textTheme.bodyMedium),
             const Spacer(),
             Text(value, style: Theme.of(context).textTheme.bodyMedium),
             if (onTap != null)
-              Icon(Icons.chevron_right, size: 20, color: Theme.of(context).colorScheme.onSurface),
+              Icon(Icons.chevron_right,
+                  size: 20, color: Theme.of(context).colorScheme.onSurface),
           ],
         ),
       ),
@@ -751,10 +759,19 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
 
   bool _isSystemView(String viewName) {
     const systemViewNames = [
-      'Workspace', 'workspace', 'Workspace Settings',
-      'Getting Started', 'Welcome', 'Home', 'Inbox',
-      'Favorites', 'Trash', 'Settings', 'Preferences',
-      'Help', 'About',
+      'Workspace',
+      'workspace',
+      'Workspace Settings',
+      'Getting Started',
+      'Welcome',
+      'Home',
+      'Inbox',
+      'Favorites',
+      'Trash',
+      'Settings',
+      'Preferences',
+      'Help',
+      'About',
     ];
     return systemViewNames.contains(viewName) ||
         viewName.toLowerCase().contains('workspace') ||
@@ -770,6 +787,24 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
     return parent.layout == ViewLayoutPB.Grid ||
         parent.layout == ViewLayoutPB.Board ||
         parent.layout == ViewLayoutPB.Calendar;
+  }
+
+  // Rust 层只过滤他人私有空间的根节点，子文档仍可能存在于 allViews 中。
+  // 父节点非空但无法从当前可见视图中找到时，整条祖先链不可达，不能在日历展示。
+  bool _isAncestorChainAccessible(ViewPB view) {
+    final seen = <String>{};
+    var currentId = view.parentViewId;
+    while (currentId.isNotEmpty) {
+      if (!seen.add(currentId)) {
+        break;
+      }
+      final parent = _viewById[currentId];
+      if (parent == null) {
+        return false;
+      }
+      currentId = parent.parentViewId;
+    }
+    return true;
   }
 
   Future<void> _loadNotesForDate(DateTime selectedDate) async {
@@ -789,7 +824,8 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
             return view.layout == ViewLayoutPB.Document &&
                 view.name.isNotEmpty &&
                 !_isSystemView(view.name) &&
-                !_isChildOfDatabaseView(view);
+                !_isChildOfDatabaseView(view) &&
+                _isAncestorChainAccessible(view);
           }).toList();
 
           final selectedDateStart = DateTime(
@@ -820,6 +856,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
           if (!mounted) return;
           setState(() {
             _notesForDate = [];
+            _viewById = {};
             _isLoading = false;
           });
         },
@@ -828,6 +865,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
       if (!mounted) return;
       setState(() {
         _notesForDate = [];
+        _viewById = {};
         _isLoading = false;
       });
     }
@@ -859,8 +897,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color:
-                  Theme.of(context).dividerColor.withValues(alpha: 0.3),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -886,7 +923,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
                 )
               else ...[
                 if (_notesForDate.isNotEmpty) ...[
-                  ..._notesForDate.map((note) => _buildNoteItem(note)),
+                  ..._buildNoteTree(),
                   if (schedules.isNotEmpty) const Divider(height: 1),
                 ],
                 ...schedules.map((schedule) => _buildScheduleItem(schedule)),
@@ -910,11 +947,47 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
     );
   }
 
-  Widget _buildNoteItem(ViewPB note) {
+  List<Widget> _buildNoteTree() {
+    final roots = buildCalendarNoteTree(
+      notes: _notesForDate,
+      viewById: _viewById,
+    );
+    return roots.map((node) => _buildNoteTreeNode(node, depth: 0)).toList();
+  }
+
+  Widget _buildNoteTreeNode(
+    CalendarNoteTreeNode node, {
+    required int depth,
+  }) {
+    final isFolderLike = node.view.layout == ViewLayoutPB.Folder ||
+        node.view.layout == ViewLayoutPB.Notebook ||
+        node.view.isSpace;
+    if (isFolderLike || node.sortedChildren.isNotEmpty) {
+      return _MobileCalendarNoteFolderTile(
+        key: ValueKey('mobile_calendar_folder_${node.view.id}'),
+        view: node.view,
+        depth: depth,
+        onTitleTap: node.view.layout == ViewLayoutPB.Document
+            ? () => widget.onNoteTap(node.view)
+            : null,
+        children: node.sortedChildren
+            .map((child) => _buildNoteTreeNode(child, depth: depth + 1))
+            .toList(),
+      );
+    }
+    return _buildNoteItem(node.view, depth: depth);
+  }
+
+  Widget _buildNoteItem(ViewPB note, {required int depth}) {
     return InkWell(
       onTap: () => widget.onNoteTap(note),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: EdgeInsets.fromLTRB(
+          16 + depth * _calendarNoteIndent,
+          12,
+          16,
+          12,
+        ),
         child: Row(
           children: [
             note.defaultIcon(size: const Size(24, 24)),
@@ -943,6 +1016,8 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
     );
   }
 
+  static const double _calendarNoteIndent = 16;
+
   Widget _buildScheduleItem(ScheduleItem schedule) {
     return InkWell(
       onTap: () => widget.onScheduleTap(schedule),
@@ -967,12 +1042,11 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
                     schedule.title.isNotEmpty
                         ? schedule.title
                         : schedule.description,
-                    style:
-                        Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              decoration: schedule.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          decoration: schedule.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
@@ -1003,10 +1077,8 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
           FlowySvg(
             FlowySvgs.m_empty_page_xl,
             size: const Size(80, 80),
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withValues(alpha: 0.3),
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
           ),
           const SizedBox(height: 16),
           Text(
@@ -1020,6 +1092,95 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 移动端沿用电脑端的默认展开层级：箭头只控制展开，文档标题仍可正常打开。
+class _MobileCalendarNoteFolderTile extends StatefulWidget {
+  const _MobileCalendarNoteFolderTile({
+    super.key,
+    required this.view,
+    required this.depth,
+    required this.children,
+    this.onTitleTap,
+  });
+
+  final ViewPB view;
+  final int depth;
+  final List<Widget> children;
+  final VoidCallback? onTitleTap;
+
+  @override
+  State<_MobileCalendarNoteFolderTile> createState() =>
+      _MobileCalendarNoteFolderTileState();
+}
+
+class _MobileCalendarNoteFolderTileState
+    extends State<_MobileCalendarNoteFolderTile> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(
+            8 +
+                widget.depth *
+                    _MobileCalendarDayContentState._calendarNoteIndent,
+            0,
+            8,
+            0,
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 48,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () => setState(() => _expanded = !_expanded),
+                icon: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: widget.onTitleTap ??
+                      () => setState(() => _expanded = !_expanded),
+                  child: SizedBox(
+                    height: 48,
+                    child: Row(
+                      children: [
+                        widget.view.defaultIcon(size: const Size(24, 24)),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.view.name,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (widget.onTitleTap != null)
+                          const Icon(Icons.chevron_right, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_expanded) ...widget.children,
+      ],
     );
   }
 }
