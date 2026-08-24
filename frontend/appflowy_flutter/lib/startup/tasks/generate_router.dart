@@ -769,6 +769,10 @@ GoRoute _mobileEditorScreenRoute() {
       }
 
       return MaterialExtendedPage(
+        // go_router.replace 会刻意复用 state.pageKey；额外拼入 viewId，才能
+        // 在私有白板迁移生成新 ID 后让 Navigator 判定为不同 Page。同时保留
+        // state.pageKey 可避免同一个 view 被多次 push 时出现重复 Page key。
+        key: mobileDocumentRouteKey(state.pageKey.value, id),
         child: MobileDocumentScreen(
           id: id,
           title: title,

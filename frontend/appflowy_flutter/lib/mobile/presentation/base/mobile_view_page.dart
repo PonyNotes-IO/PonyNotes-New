@@ -28,10 +28,12 @@ import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/rust_stream.dart';
@@ -91,6 +93,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
   @override
   void dispose() {
+    _cachedPlugin?.dispose();
     _cachedPlugin = null;
     _sharedAccessRevocationSubscription?.cancel();
     super.dispose();
@@ -108,6 +111,18 @@ class _MobileViewPageState extends State<MobileViewPage> {
         return;
       }
 
+      // 白板私有→协作迁移会删除旧 view 并立即打开新 view。路由交接会先把
+      // latestOpenView 切到新 ID；旧页面即使在 dispose 前收到延迟的删除通知，
+      // 也不能再执行 go('/home') 把已经打开的新协作白板覆盖掉。
+      final latestOpenViewId = getIt<MenuSharedState>().latestOpenView?.id;
+      if (latestOpenViewId != null && latestOpenViewId != widget.id) {
+        Log.info(
+          '[WhiteboardMigrationUI] 忽略非当前页面的删除通知: '
+          'removed=${widget.id} latestOpen=$latestOpenViewId',
+        );
+        return;
+      }
+
       _isLeavingRevokedView = true;
       context.go(MobileHomeScreen.routeName);
     });
@@ -116,6 +131,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
+      key: ValueKey('mobile_view_page_bloc_${widget.id}'),
       create: (_) => MobileViewPageBloc(viewId: widget.id)
         ..add(const MobileViewPageEvent.initial()),
       child: BlocBuilder<MobileViewPageBloc, MobileViewPageState>(
@@ -243,7 +259,10 @@ class _MobileViewPageState extends State<MobileViewPage> {
         view: view,
       ),
       if (view.layout == ViewLayoutPB.Whiteboard)
-        _MobileWhiteboardShareButton(view: view)
+        _MobileWhiteboardShareButton(
+          key: ValueKey('whiteboard_share_${view.id}'),
+          view: view,
+        )
       else if (view.layout != ViewLayoutPB.Grid)
         ShareButton(
           key: ValueKey('share_button_${view.id}'),
@@ -304,7 +323,10 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
 /// 移动端私有白板不支持分享，协作白板仍保留原有分享入口。
 class _MobileWhiteboardShareButton extends StatefulWidget {
-  const _MobileWhiteboardShareButton({required this.view});
+  const _MobileWhiteboardShareButton({
+    super.key,
+    required this.view,
+  });
 
   final ViewPB view;
 

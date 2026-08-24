@@ -3,6 +3,17 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
 
+/// `/docs` 同时承载文档、文件夹、笔记本和白板。
+///
+/// 路径相同而 viewId 变化时，Page 必须使用不同 key，否则 Navigator 会把新 Page
+/// 当作旧 Page 的配置更新并复用原 Route。白板跨空间迁移会生成新 viewId，路由级
+/// key 是确保旧白板 Route、State 和 PlatformView 真正销毁的边界。
+ValueKey<String> mobileDocumentRouteKey(
+  String routerPageKey,
+  String viewId,
+) =>
+    ValueKey<String>('mobile_document_route_${routerPageKey}_$viewId');
+
 class MobileDocumentScreen extends StatelessWidget {
   const MobileDocumentScreen({
     super.key,
@@ -33,6 +44,7 @@ class MobileDocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MobileViewPage(
+      key: ValueKey('mobile_view_page_$id'),
       id: id,
       title: title,
       viewLayout: ViewLayoutPB.Document,
