@@ -28,6 +28,8 @@ typedef ImportCallback = void Function(
   List<ViewPB>? importedViews,
 );
 
+const _importOptionIconSize = Size.square(20);
+
 Future<void> showImportPanel(
   String parentViewId,
   BuildContext context,
@@ -145,7 +147,7 @@ class _ImportPanelState extends State<ImportPanel> {
                     (e) => Card(
                       child: FlowyButton(
                         leftIcon: e.icon(context),
-                        leftIconSize: const Size.square(20),
+                        leftIconSize: _importOptionIconSize,
                         text: FlowyText.medium(
                           e.toString(),
                           fontSize: 14,
@@ -363,8 +365,8 @@ class _MobileImportOption extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                SizedBox.square(
-                  dimension: 20,
+                SizedBox.fromSize(
+                  size: _importOptionIconSize,
                   child: type.icon(context),
                 ),
                 const SizedBox(width: 12),

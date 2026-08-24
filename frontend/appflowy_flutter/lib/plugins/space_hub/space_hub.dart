@@ -873,16 +873,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
       final parentView = _getParentView(view);
 
-      final isDocumentLike = switch (view.layout) {
-        ViewLayoutPB.Document ||
-        ViewLayoutPB.Folder ||
-        ViewLayoutPB.Notebook =>
-          true,
-        _ => false,
-      };
+      final isHandwriting = isHandwritingNote(view);
+      final usesDocumentPage = spaceHubUsesDocumentPage(
+        view.layout,
+        isHandwriting: isHandwriting,
+      );
 
       // 文档直接使用 SpaceHub 管理的 Bloc，不创建临时 DocumentPlugin。
-      if (isDocumentLike) {
+      if (usesDocumentPage) {
         // 将 viewInfoBloc 作为参数传给 DocumentPage。
         //
         // ⚠️ 关键修复：必须为“当前选中的子文档”单独提供一个绑定到它自己的
@@ -953,7 +951,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                     'preferHostFullWindowMoreItem': true,
                     'preferHostTopRightActions': true,
                   }
-                : isHandwritingNote(view)
+                : isHandwriting
                     ? const {'preferHostTopRightActions': true}
                     : null,
           ),
@@ -1980,16 +1978,5 @@ class _SpaceHubResizableDividerState
         ),
       ),
     );
-  }
-}
-
-/// 检查视图是否为手写笔记类型
-bool isHandwritingNote(ViewPB view) {
-  try {
-    if (view.extra.isEmpty) return false;
-    final extra = jsonDecode(view.extra) as Map<String, dynamic>;
-    return extra['view_type'] == 'handwriting_saber';
-  } catch (e) {
-    return false;
   }
 }

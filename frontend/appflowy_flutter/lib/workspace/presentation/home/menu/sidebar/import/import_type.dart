@@ -39,14 +39,16 @@ enum ImportType {
           case ImportType.historyDatabase:
             svg = FlowySvgs.document_s;
           case ImportType.historyDocument:
-          case ImportType.csv:
           case ImportType.afDatabase:
             svg = FlowySvgs.board_s;
+          case ImportType.csv:
+            svg = FlowySvgs.database_layout_s;
           case ImportType.pdf:
             svg = FlowySvgs.document_s;
-          case ImportType.html:
           case ImportType.markdownOrText:
-            svg = FlowySvgs.text_s;
+            svg = FlowySvgs.export_markdown_s;
+          case ImportType.html:
+            svg = FlowySvgs.export_html_s;
         }
 
         return FlowySvg(
