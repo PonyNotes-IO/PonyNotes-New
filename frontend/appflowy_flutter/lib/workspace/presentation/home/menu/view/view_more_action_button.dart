@@ -9,6 +9,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/pop_up_action.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -291,12 +292,19 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
             direction:
                 moveActionDirection ?? PopoverDirection.rightWithTopAligned,
             offset: moveActionOffset,
-            popupBuilder: (_) {
+            popupBuilder: (movePopoverContext) {
               return BlocProvider.value(
                 value: context.read<SpaceBloc>(),
                 child: MovePageMenu(
                   sourceView: sourceView,
                   onSelected: (space, view) {
+                    // 必须从当前 Overlay 的 PopoverContainer 关闭整组嵌套菜单。
+                    // 不能使用 BlocBuilder 内临时创建的 PopoverController：空间状态
+                    // 重建后新 controller 不会被 PopoverState 重新绑定，close 会失效。
+                    final closed = closeMovePagePopovers(movePopoverContext);
+                    Log.info(
+                      '[CrossSpaceMove] 已请求关闭移动目标弹层: $closed',
+                    );
                     onTap(controller, (space, view));
                   },
                 ),
@@ -369,4 +377,17 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
       ),
     );
   }
+}
+
+/// 关闭“更多”菜单及其“移动到”二级菜单。
+///
+/// [popoverContext] 必须来自二级 [AppFlowyPopover.popupBuilder]，这样取得的
+/// [PopoverContainer] 才是当前实际显示的 Overlay，而不是重建后失效的控制器。
+bool closeMovePagePopovers(BuildContext popoverContext) {
+  final container = PopoverContainer.maybeOf(popoverContext);
+  if (container == null) {
+    return false;
+  }
+  container.closeAll();
+  return true;
 }

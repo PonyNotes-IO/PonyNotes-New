@@ -1,4 +1,5 @@
 import 'package:appflowy/mobile/application/mobile_router.dart';
+import 'package:appflowy/mobile/application/mobile_view_migration_handoff.dart';
 import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
@@ -52,25 +53,58 @@ void main() {
               MobileDocumentScreen.viewId: 'old-private-whiteboard',
             },
           ),
-          latestOpenViewId: null,
           oldViewId: 'old-private-whiteboard',
         ),
         MigratedMobileViewNavigationAction.replace,
       );
     });
 
-    test('删除通知已返回首页、但业务态仍打开源白板时从首页压入新白板', () {
+    test('删除通知已返回首页时不再压入新白板', () {
       expect(
         migratedMobileViewNavigationAction(
           currentUri: Uri(path: '/home'),
-          latestOpenViewId: 'old-private-whiteboard',
           oldViewId: 'old-private-whiteboard',
         ),
-        MigratedMobileViewNavigationAction.push,
+        MigratedMobileViewNavigationAction.none,
       );
     });
 
-    test('URI 和业务态都不是源白板时不打断当前页面', () {
+    test('移动菜单造成首页过渡态且交接已登记时重建为新白板', () {
+      expect(
+        migratedMobileViewNavigationAction(
+          currentUri: Uri(path: '/home'),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'old-private-whiteboard',
+          hasExpectedHandoff: true,
+        ),
+        MigratedMobileViewNavigationAction.resetToReplacement,
+      );
+    });
+
+    test('首页过渡态没有交接门闩时不自动打开白板', () {
+      expect(
+        migratedMobileViewNavigationAction(
+          currentUri: Uri(path: '/home'),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'old-private-whiteboard',
+        ),
+        MigratedMobileViewNavigationAction.none,
+      );
+    });
+
+    test('首页过渡态 latestOpen 已变化时不打断当前页面', () {
+      expect(
+        migratedMobileViewNavigationAction(
+          currentUri: Uri(path: '/home'),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'another-whiteboard',
+          hasExpectedHandoff: true,
+        ),
+        MigratedMobileViewNavigationAction.none,
+      );
+    });
+
+    test('当前 URI 不是源白板时不打断当前页面', () {
       expect(
         migratedMobileViewNavigationAction(
           currentUri: Uri(
@@ -79,10 +113,112 @@ void main() {
               MobileDocumentScreen.viewId: 'another-whiteboard',
             },
           ),
-          latestOpenViewId: 'another-whiteboard',
           oldViewId: 'old-private-whiteboard',
         ),
         MigratedMobileViewNavigationAction.none,
+      );
+    });
+  });
+
+  group('shouldPrepareCurrentMobileViewReplacement', () {
+    test('源白板 URI 可登记交接', () {
+      expect(
+        shouldPrepareCurrentMobileViewReplacement(
+          currentUri: Uri(
+            path: MobileDocumentScreen.routeName,
+            queryParameters: const {
+              MobileDocumentScreen.viewId: 'old-private-whiteboard',
+            },
+          ),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'old-private-whiteboard',
+        ),
+        isTrue,
+      );
+    });
+
+    test('移动菜单造成首页过渡态但源白板仍是 latestOpen 时可登记交接', () {
+      expect(
+        shouldPrepareCurrentMobileViewReplacement(
+          currentUri: Uri(path: '/home'),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'old-private-whiteboard',
+        ),
+        isTrue,
+      );
+    });
+
+    test('普通首页或其他页面不能登记源白板交接', () {
+      expect(
+        shouldPrepareCurrentMobileViewReplacement(
+          currentUri: Uri(path: '/home'),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'another-whiteboard',
+        ),
+        isFalse,
+      );
+      expect(
+        shouldPrepareCurrentMobileViewReplacement(
+          currentUri: Uri(
+            path: MobileDocumentScreen.routeName,
+            queryParameters: const {
+              MobileDocumentScreen.viewId: 'another-whiteboard',
+            },
+          ),
+          oldViewId: 'old-private-whiteboard',
+          latestOpenViewId: 'old-private-whiteboard',
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('MobileViewMigrationHandoff', () {
+    tearDown(MobileViewMigrationHandoff.reset);
+
+    test('登记后只把源视图删除识别为预期迁移', () {
+      MobileViewMigrationHandoff.begin(
+        oldViewId: 'old-private-whiteboard',
+        newViewId: 'new-shared-whiteboard',
+      );
+
+      expect(
+        MobileViewMigrationHandoff.isExpectedRemoval(
+          'old-private-whiteboard',
+        ),
+        isTrue,
+      );
+      expect(
+        MobileViewMigrationHandoff.replacementViewId(
+          'old-private-whiteboard',
+        ),
+        'new-shared-whiteboard',
+      );
+      expect(
+        MobileViewMigrationHandoff.isExpectedRemoval('another-whiteboard'),
+        isFalse,
+      );
+    });
+
+    test('迁移完成或失败后清理门闩', () {
+      MobileViewMigrationHandoff.begin(
+        oldViewId: 'old-private-whiteboard',
+        newViewId: 'new-shared-whiteboard',
+      );
+
+      MobileViewMigrationHandoff.finish('old-private-whiteboard');
+
+      expect(
+        MobileViewMigrationHandoff.isExpectedRemoval(
+          'old-private-whiteboard',
+        ),
+        isFalse,
+      );
+      expect(
+        MobileViewMigrationHandoff.replacementViewId(
+          'old-private-whiteboard',
+        ),
+        isNull,
       );
     });
   });

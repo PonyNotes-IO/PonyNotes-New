@@ -7,6 +7,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/base/mobile_view_page_bloc.dart';
+import 'package:appflowy/mobile/application/mobile_view_migration_handoff.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/view_page/app_bar_buttons.dart';
@@ -111,9 +112,18 @@ class _MobileViewPageState extends State<MobileViewPage> {
         return;
       }
 
-      // 白板私有→协作迁移会删除旧 view 并立即打开新 view。路由交接会先把
-      // latestOpenView 切到新 ID；旧页面即使在 dispose 前收到延迟的删除通知，
-      // 也不能再执行 go('/home') 把已经打开的新协作白板覆盖掉。
+      if (MobileViewMigrationHandoff.isExpectedRemoval(widget.id)) {
+        Log.info(
+          '[WhiteboardMigrationUI] 忽略迁移中的源白板删除通知: '
+          'removed=${widget.id} replacement='
+          '${MobileViewMigrationHandoff.replacementViewId(widget.id)}',
+        );
+        return;
+      }
+
+      // 门闩处理“删除通知早于 replace”的主竞态；这里继续处理 replace 已提交、
+      // 门闩已清理后才到达的延迟通知。latestOpenView 已切到新 ID 时，旧页面不能
+      // 再执行 go('/home') 把已经打开的新白板覆盖掉。
       final latestOpenViewId = getIt<MenuSharedState>().latestOpenView?.id;
       if (latestOpenViewId != null && latestOpenViewId != widget.id) {
         Log.info(
