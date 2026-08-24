@@ -54,6 +54,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show AFRolePB, UserProfilePB;
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
@@ -769,8 +770,9 @@ class _SidebarSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shortcut =
-        Platform.isMacOS ? '${String.fromCharCode(0x2318)}+P' : 'Ctrl+P';
+    final searchLabel = PlatformInfo.isTablet
+        ? LocaleKeys.search_label.tr()
+        : '${LocaleKeys.search_label.tr()} (${Platform.isMacOS ? String.fromCharCode(0x2318) : 'Ctrl'}+P)';
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final searchBackgroundColor =
         isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
@@ -801,7 +803,7 @@ class _SidebarSearchButton extends StatelessWidget {
               const HSpace(8),
               Expanded(
                 child: FlowyText.regular(
-                  '${LocaleKeys.search_label.tr()} ($shortcut)',
+                  searchLabel,
                   fontSize: 14,
                   color: const Color(0xFF7A7A7A),
                   overflow: TextOverflow.ellipsis,
