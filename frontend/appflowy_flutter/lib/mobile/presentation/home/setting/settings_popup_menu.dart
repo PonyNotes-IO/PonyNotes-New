@@ -46,7 +46,6 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
         _buildItem(
           value: _MobileSettingsPopupMenuItem.import,
           svg: FlowySvgs.icon_import_mobile_lg,
-          iconSize: const Size.square(16),
           text: LocaleKeys.moreAction_import.tr(),
         ),
         const PopupMenuDivider(height: 0.5),

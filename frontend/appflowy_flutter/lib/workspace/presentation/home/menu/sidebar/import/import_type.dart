@@ -57,6 +57,27 @@ enum ImportType {
         );
       };
 
+  /// The import card icons used by the desktop import page.
+  ///
+  /// Mobile import options use the same Material icons so both surfaces stay
+  /// visually consistent.
+  IconData get cardIcon {
+    switch (this) {
+      case ImportType.csv:
+        return Icons.table_chart;
+      case ImportType.pdf:
+        return Icons.picture_as_pdf;
+      case ImportType.markdownOrText:
+        return Icons.text_snippet;
+      case ImportType.html:
+        return Icons.code;
+      case ImportType.historyDocument:
+      case ImportType.historyDatabase:
+      case ImportType.afDatabase:
+        return Icons.description;
+    }
+  }
+
   bool get enableOnRelease {
     switch (this) {
       case ImportType.historyDatabase:

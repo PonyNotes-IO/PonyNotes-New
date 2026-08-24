@@ -367,7 +367,11 @@ class _MobileImportOption extends StatelessWidget {
               children: [
                 SizedBox.fromSize(
                   size: _importOptionIconSize,
-                  child: type.icon(context),
+                  child: Icon(
+                    type.cardIcon,
+                    size: 22,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
