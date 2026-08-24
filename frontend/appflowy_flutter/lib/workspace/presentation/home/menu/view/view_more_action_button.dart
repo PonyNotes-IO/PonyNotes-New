@@ -298,12 +298,14 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
                 child: MovePageMenu(
                   sourceView: sourceView,
                   onSelected: (space, view) {
-                    // 必须从当前 Overlay 的 PopoverContainer 关闭整组嵌套菜单。
+                    // 必须从当前 Overlay 的 PopoverContainer 只关闭移动目标弹层。
                     // 不能使用 BlocBuilder 内临时创建的 PopoverController：空间状态
                     // 重建后新 controller 不会被 PopoverState 重新绑定，close 会失效。
-                    final closed = closeMovePagePopovers(movePopoverContext);
+                    // 也不能 closeAll：父级“更多”菜单提供移动依赖的 Bloc 和 context，
+                    // 提前销毁父级会让异步移动在 mounted 检查处直接退出。
+                    final closed = closeMovePagePopover(movePopoverContext);
                     Log.info(
-                      '[CrossSpaceMove] 已请求关闭移动目标弹层: $closed',
+                      '[CrossSpaceMove] 已关闭移动目标二级弹层: $closed',
                     );
                     onTap(controller, (space, view));
                   },
@@ -379,15 +381,15 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
   }
 }
 
-/// 关闭“更多”菜单及其“移动到”二级菜单。
+/// 只关闭“移动到”二级菜单，保留父级“更多”菜单的业务上下文。
 ///
 /// [popoverContext] 必须来自二级 [AppFlowyPopover.popupBuilder]，这样取得的
 /// [PopoverContainer] 才是当前实际显示的 Overlay，而不是重建后失效的控制器。
-bool closeMovePagePopovers(BuildContext popoverContext) {
+bool closeMovePagePopover(BuildContext popoverContext) {
   final container = PopoverContainer.maybeOf(popoverContext);
   if (container == null) {
     return false;
   }
-  container.closeAll();
+  container.close();
   return true;
 }
