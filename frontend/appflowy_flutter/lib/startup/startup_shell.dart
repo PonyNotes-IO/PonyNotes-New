@@ -16,24 +16,38 @@ class _StartupShellState extends State<StartupShell>
   static const _brandColor = Color(0xFFFF3800);
   static const _darkBackground = Color(0xFF121212);
 
-  late final AnimationController _entranceController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 360),
-  )..forward();
+  static bool get _isMobileTarget =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
+  // On mobile we never render the entrance animation, so creating an
+  // AnimationController would start a ticker whose only lifetime is the brief
+  // window before this widget is replaced. Disposing that unused ticker from
+  // inside `dispose()` walks the (already deactivated) TickerMode ancestor and
+  // throws. Skip the controller entirely on mobile.
+  late final AnimationController? _entranceController = () {
+    if (_isMobileTarget) {
+      return null;
+    }
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 360),
+    );
+    controller.forward();
+    return controller;
+  }();
 
   @override
   void dispose() {
-    _entranceController.dispose();
+    _entranceController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
-    final isMobile = defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
 
-    if (isMobile) {
+    if (_isMobileTarget) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
@@ -50,7 +64,7 @@ class _StartupShellState extends State<StartupShell>
     }
 
     final entrance = CurvedAnimation(
-      parent: _entranceController,
+      parent: _entranceController!,
       curve: Curves.easeOutCubic,
     );
 
