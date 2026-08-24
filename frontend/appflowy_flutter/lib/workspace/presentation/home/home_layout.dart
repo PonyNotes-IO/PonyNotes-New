@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:math';
 
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/size.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,14 +48,17 @@ class HomeLayout {
     //   因此完全不需要避让，相关间距全部为 0。
     if (Platform.isMacOS) {
       menuSpacing = !showMenu ? 80.0 : 0.0;
-      menuTopSpacing =
-          !showMenu ? HomeSizes.macOSTrafficLightsTopInset : 0.0;
+      menuTopSpacing = !showMenu ? HomeSizes.macOSTrafficLightsTopInset : 0.0;
     } else {
       // Windows / Linux：左上角不存在窗口按钮，无需避让。
       menuSpacing = 0.0;
       menuTopSpacing = 0.0;
     }
-    animDuration = homeSetting.resizeType.duration();
+    // Tablet full-window transitions need a slightly shorter settle time for
+    // direct touch interaction while preserving desktop/mobile timings.
+    animDuration = PlatformInfo.isTablet
+        ? const Duration(milliseconds: 280)
+        : homeSetting.resizeType.duration();
     editPanelWidth = HomeSizes.editPanelWidth;
     notificationPanelWidth = MediaQuery.of(context).size.width -
         (showEditPanel ? editPanelWidth : 0);

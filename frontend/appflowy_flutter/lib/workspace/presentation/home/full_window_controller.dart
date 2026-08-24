@@ -19,7 +19,7 @@ class FullWindowController {
   static bool _isTransitioning = false;
 
   /// 最小状态切换间隔（毫秒）
-  static const _minTransitionIntervalMs = 200;
+  static const _minTransitionIntervalMs = 300;
 
   /// 上次状态切换时间
   static DateTime? _lastTransitionTime;
