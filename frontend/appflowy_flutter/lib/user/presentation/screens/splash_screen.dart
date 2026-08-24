@@ -1,5 +1,4 @@
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -293,14 +292,13 @@ class _MobileSplashBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    return SingleChildScrollView(
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          FlowySvg(FlowySvgs.app_logo_xl, blendMode: null),
-          const CircularProgressIndicator.adaptive(),
-        ],
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SizedBox.expand(
+      child: Image.asset(
+        isDark
+            ? 'assets/images/launch_screen_dark.png'
+            : 'assets/images/launch_screen_light.png',
+        fit: BoxFit.cover,
       ),
     );
   }

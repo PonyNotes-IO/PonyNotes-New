@@ -1,4 +1,5 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// A lightweight first Flutter frame that bridges Android's native splash and
@@ -29,6 +30,25 @@ class _StartupShellState extends State<StartupShell>
   @override
   Widget build(BuildContext context) {
     final isDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final isMobile = defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (isMobile) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: SizedBox.expand(
+            child: Image.asset(
+              isDark
+                  ? 'assets/images/launch_screen_dark.png'
+                  : 'assets/images/launch_screen_light.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      );
+    }
+
     final entrance = CurvedAnimation(
       parent: _entranceController,
       curve: Curves.easeOutCubic,

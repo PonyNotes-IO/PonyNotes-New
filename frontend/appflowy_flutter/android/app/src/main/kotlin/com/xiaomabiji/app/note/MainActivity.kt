@@ -4,11 +4,9 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
-import android.window.SplashScreenView
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -21,8 +19,6 @@ class MainActivity : FlutterActivity() {
     private var weChatBridge: WeChatBridge? = null
     private var handwritingExportResult: MethodChannel.Result? = null
     private var handwritingExportBytes: ByteArray? = null
-    private var flutterUiDisplayed = false
-    private var pendingSplashScreen: SplashScreenView? = null
 
     companion object {
         private const val HANDWRITING_EXPORT_CHANNEL =
@@ -43,38 +39,10 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Keep the native splash background behind Flutter until its first
-        // frame. The drawable follows the system light/dark configuration.
+        // Keep the themed launch image behind Flutter during startup.
         window.setBackgroundDrawableResource(R.drawable.launch_background)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            splashScreen.setOnExitAnimationListener { splashScreenView ->
-                if (flutterUiDisplayed) {
-                    fadeOutSplashScreen(splashScreenView)
-                } else {
-                    pendingSplashScreen = splashScreenView
-                }
-            }
-        }
         // Keep screen on during initial load to prevent display sleep issues
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-    }
-
-    override fun onFlutterUiDisplayed() {
-        flutterUiDisplayed = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            pendingSplashScreen?.let(::fadeOutSplashScreen)
-        }
-        pendingSplashScreen = null
-        super.onFlutterUiDisplayed()
-    }
-
-    @android.annotation.TargetApi(Build.VERSION_CODES.S)
-    private fun fadeOutSplashScreen(splashScreenView: SplashScreenView) {
-        splashScreenView.animate()
-            .alpha(0f)
-            .setDuration(180L)
-            .withEndAction { splashScreenView.remove() }
-            .start()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
