@@ -17,14 +17,16 @@ class MSharedPageList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pages = sharedPages.reversed.toList();
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: sharedPages.map((sharedPage) {
+      children: pages.map((sharedPage) {
         final view = sharedPage.view;
         return MobileViewItem(
           key: ValueKey(view.id),
           spaceType: FolderSpaceType.public,
-          isFirstChild: view.id == sharedPages.first.view.id,
+          isFirstChild: view.id == pages.first.view.id,
           view: view,
           level: 0,
           isDraggable: false, // disable draggable for shared pages
