@@ -44,6 +44,8 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final toolbarHeight = preferredSize.height - statusBarHeight;
     final isWhiteboard = view?.layout == ViewLayoutPB.Whiteboard;
+    final useDocumentBackButtonSpacing =
+        view?.layout == ViewLayoutPB.Grid || view?.layout == ViewLayoutPB.Board;
 
     return ValueListenableBuilder(
       valueListenable: appBarOpacity,
@@ -62,10 +64,18 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
               child: Row(
                 children: [
                   Padding(
-                    padding: EdgeInsets.only(left: isWhiteboard ? 24.0 : 12.0),
+                    padding: EdgeInsets.only(
+                      left: isWhiteboard
+                          ? 24.0
+                          : useDocumentBackButtonSpacing
+                              ? 16.0
+                              : 12.0,
+                    ),
                     child: _buildAppBarBackButton(
                       context,
-                      expandTapTarget: isWhiteboard,
+                      expandTapTarget:
+                          isWhiteboard || useDocumentBackButtonSpacing,
+                      centerExpandedIcon: useDocumentBackButtonSpacing,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -92,6 +102,7 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
   Widget _buildAppBarBackButton(
     BuildContext context, {
     bool expandTapTarget = false,
+    bool centerExpandedIcon = false,
   }) {
     final afTheme = AppFlowyTheme.of(context);
     final backIcon = ValueListenableBuilder(
@@ -124,7 +135,9 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
               width: 32,
               height: 32,
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: centerExpandedIcon
+                    ? Alignment.center
+                    : Alignment.centerLeft,
                 child: backIcon,
               ),
             )

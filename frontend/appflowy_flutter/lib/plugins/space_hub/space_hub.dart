@@ -990,7 +990,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
     final isHandwriting = isHandwritingNote(view);
-    final isGrid = view.layout == ViewLayoutPB.Grid;
     final showBackButton = parentView != null;
     return Stack(
       children: [
@@ -1005,7 +1004,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               viewInfoBloc: viewInfoBloc,
               showCollaborators: FeatureFlag.syncDocument.isOn && !isWhiteboard,
               useFloatingSurface: true,
-              showShareButton: !isWhiteboard && !isHandwriting && !isGrid,
+              showShareButton: !isWhiteboard && !isHandwriting,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),
