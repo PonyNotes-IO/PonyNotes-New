@@ -36,19 +36,25 @@ class MobileTabBarHeader extends StatelessWidget {
       padding: EdgeInsets.only(
         left: 16.0,
         right: 16.0,
-        top: compactTopSpacing ? 4.0 : 14.0,
+        top: compactTopSpacing ? 0.0 : 14.0,
         bottom: 8.0,
       ),
-      child: const Align(
+      child: Align(
         alignment: Alignment.centerLeft,
-        child: _DatabaseViewSelectorButton(),
+        child: _DatabaseViewSelectorButton(
+          compactTapTarget: compactTopSpacing,
+        ),
       ),
     );
   }
 }
 
 class _DatabaseViewSelectorButton extends StatelessWidget {
-  const _DatabaseViewSelectorButton();
+  const _DatabaseViewSelectorButton({
+    required this.compactTapTarget,
+  });
+
+  final bool compactTapTarget;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +70,9 @@ class _DatabaseViewSelectorButton extends StatelessWidget {
 
         return TextButton(
           style: ButtonStyle(
+            tapTargetSize: compactTapTarget
+                ? MaterialTapTargetSize.shrinkWrap
+                : MaterialTapTargetSize.padded,
             padding: const WidgetStatePropertyAll(
               EdgeInsets.fromLTRB(12, 8, 8, 8),
             ),
