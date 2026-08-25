@@ -99,47 +99,6 @@ class PaymentUtil {
 
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
-  /// 根据 planCode 和 billingType 获取 App Store Connect 内购产品 ID
-  /// App Store Connect 实际配置的产品 ID（消耗型项目）：
-  ///   标准版：com.ponynotes.standard.{monthly,yearly}
-  ///   专业版：com.ponynotes.professional.{monthly,yearly}
-  ///   高级版：com.ponynotes.premium.{monthly,yearly}
-  ///
-  /// 后端 plan_code 与 App Store Connect 产品名称的对应关系：
-  ///   standard/stand → standard
-  ///   pro/professor/profersor → professional
-  ///   hiclass/premium/team → premium
-  static String? getAppleProductId(String planCode, String billingType) {
-    final applePlanName = _toApplePlanName(planCode);
-    if (applePlanName == null) {
-      Log.error('Apple Pay: 未知的套餐代码: $planCode');
-      return null;
-    }
-    return 'com.ponynotes.$applePlanName.$billingType';
-  }
-
-  /// 将后端 plan_code 转换为 App Store Connect 产品 ID 中的套餐名称
-  /// 返回值：standard / professional / premium
-  static String? _toApplePlanName(String planCode) {
-    final lower = planCode.toLowerCase();
-    switch (lower) {
-      case 'standard':
-      case 'stand':
-        return 'standard';
-      case 'pro':
-      case 'professor':
-      case 'profersor':
-      case 'professional':
-        return 'professional';
-      case 'hiclass':
-      case 'premium':
-      case 'team':
-        return 'premium';
-      default:
-        return null;
-    }
-  }
-
   static Future<PaymentResult> pay({
     required PaymentMethod method,
     required int amount,

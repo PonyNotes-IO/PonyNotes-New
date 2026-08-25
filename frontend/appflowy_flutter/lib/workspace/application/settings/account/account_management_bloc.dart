@@ -1441,10 +1441,8 @@ class AccountManagementBloc
             final billingTypeStr = selectedDuration == PurchaseDurationOption.monthly
                 ? 'monthly'
                 : 'yearly';
-            final planCode = planConfig.planCode ?? '';
-            final productId = PaymentUtil.getAppleProductId(planCode, billingTypeStr);
-
-            if (productId == null) {
+            final planCode = planConfig.planCode;
+            if (planCode == null || planCode.isEmpty) {
               emit(
                 AccountManagementState.ready(
                   subscriptionInfo: subscriptionInfo,
@@ -1462,6 +1460,8 @@ class AccountManagementBloc
               );
               return;
             }
+            // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
+            final productId = 'com.ponynotes.$planCode.$billingTypeStr';
 
             final userUuid = _getUserUuid();
             final extra = <String, dynamic>{

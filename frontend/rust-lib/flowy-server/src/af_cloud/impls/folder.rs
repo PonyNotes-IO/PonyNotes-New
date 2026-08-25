@@ -135,6 +135,7 @@ where
           new_parent_view_id,
           prev_view_id,
           to_private,
+          return_update: true,
         },
       )
       .await

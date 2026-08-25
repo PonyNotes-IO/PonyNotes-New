@@ -154,10 +154,30 @@ extension ViewPBToSearchResultItem on ViewPB {
         ty: hasIcon
             ? ResultIconTypePB.valueOf(icon.ty.value)
             : ResultIconTypePB.Icon,
-        value: hasIcon ? icon.value : '${layout.value}',
+        value: hasIcon ? icon.value : _layoutToDefaultIconValue(layout.value),
       ),
       content: '',
     );
+  }
+}
+
+// Maps a ViewLayoutPB enum value to one of the default-icon keys
+// ('0'..'4') that ResultIconPB.getIcon recognises. Without this
+// mapping, layouts outside the supported range (e.g. Whiteboard = 7,
+// Folder = 5, Notebook = 6) would fall into the JSON-decoding path of
+// RawEmojiIconWidget and crash with NoSuchMethodError.
+String _layoutToDefaultIconValue(int layoutValue) {
+  switch (layoutValue) {
+    case 1: // Grid
+      return '1';
+    case 2: // Board
+      return '2';
+    case 3: // Calendar
+      return '3';
+    case 4: // Chat
+      return '4';
+    default: // Document (0) and any new / unmapped layout
+      return '0';
   }
 }
 
