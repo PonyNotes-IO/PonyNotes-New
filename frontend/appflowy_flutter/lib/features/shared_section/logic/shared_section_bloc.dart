@@ -160,22 +160,13 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
         if (isClosed) {
           return;
         }
-        
+
         if (notification == FolderNotification.DidUpdateSharedViews) {
-          final response = result.fold(
-            (payload) {
-              final repeatedSharedViews =
-                  RepeatedSharedViewResponsePB.fromBuffer(payload);
-              return repeatedSharedViews;
-            },
-            (error) => null,
-          );
-          if (response != null && !isClosed) {
-            add(
-              SharedSectionEvent.updateSharedPages(
-                sharedPages: response.sharedPages,
-              ),
-            );
+          if (!isClosed) {
+            // The notification payload comes from the legacy local cache and
+            // can be incomplete. Re-fetch through the repository so mobile
+            // keeps the same sent + received dataset as desktop.
+            add(const SharedSectionEvent.refresh());
           }
         }
       },
@@ -187,12 +178,12 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
     Emitter<SharedSectionState> emit,
   ) async {
     final result = await repository.leaveSharedPage(event.pageId);
-    
+
     // 检查bloc是否已关闭，避免在dispose后调用add()或emit()
     if (isClosed) {
       return;
     }
-    
+
     result.fold(
       (success) {
         if (!isClosed) {
@@ -226,7 +217,7 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
             _pollingTimer = null;
             return;
           }
-          
+
           add(const SharedSectionEvent.refresh());
 
           Log.debug('Polling shared views');

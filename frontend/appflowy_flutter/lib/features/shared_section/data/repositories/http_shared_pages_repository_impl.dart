@@ -21,7 +21,7 @@ class HttpSharedPagesRepositoryImpl implements SharedPagesRepository {
       final user = profile.fold((value) => value, (error) => throw error);
       final token = _accessToken(user.token);
       if (token == null) {
-        return FlowyResult.failure(FlowyError(msg: 'Access token is empty'));
+        return RustSharePagesRepositoryImpl().getSharedPages();
       }
 
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -34,18 +34,23 @@ class HttpSharedPagesRepositoryImpl implements SharedPagesRepository {
         '/api/collab/me/sent',
         '/api/collab/me/received',
       ]) {
-        final response = await http.get(
-          Uri.parse(baseUrl).replace(path: path),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ).timeout(const Duration(seconds: 10));
-        if (response.statusCode == 404) continue;
-        if (response.statusCode != 200) continue;
-        successfulResponses++;
-        for (final entry in _parse(response.body)) {
-          combined.putIfAbsent(entry.view.id, () => entry);
+        try {
+          final response = await http.get(
+            Uri.parse(baseUrl).replace(path: path),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          ).timeout(const Duration(seconds: 10));
+          if (response.statusCode == 404 || response.statusCode != 200) {
+            continue;
+          }
+          successfulResponses++;
+          for (final entry in _parse(response.body)) {
+            combined.putIfAbsent(entry.view.id, () => entry);
+          }
+        } catch (_) {
+          // Keep the other endpoint usable when one request is unavailable.
         }
       }
 
@@ -64,7 +69,13 @@ class HttpSharedPagesRepositoryImpl implements SharedPagesRepository {
         ..sort((a, b) => b.view.createTime.compareTo(a.view.createTime));
       return FlowyResult.success(pages);
     } catch (error) {
-      return FlowyResult.failure(FlowyError(msg: '$error'));
+      final fallback = await RustSharePagesRepositoryImpl().getSharedPages();
+      return fallback.fold(
+        (pages) => FlowyResult.success(pages),
+        (_) => FlowyResult.failure(
+          FlowyError(msg: 'Unable to load shared documents'),
+        ),
+      );
     }
   }
 

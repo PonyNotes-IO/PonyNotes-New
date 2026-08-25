@@ -47,7 +47,9 @@ class MSharedSection extends StatelessWidget {
               if (state.isLoading)
                 const SharedSectionLoading()
               else if (state.errorMessage.isNotEmpty)
-                SharedSectionError(errorMessage: state.errorMessage)
+                const SharedSectionError(
+                  errorMessage: '共享文档暂时无法加载，请检查网络后重试',
+                )
               else if (state.sharedPages.isNotEmpty && state.isExpanded)
                 Padding(
                   padding: const EdgeInsets.only(
