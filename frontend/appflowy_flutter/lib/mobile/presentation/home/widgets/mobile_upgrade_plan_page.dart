@@ -1134,7 +1134,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       return;
     }
     // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
-    final productId = 'com.ponynotes.$planCode.$billingType';
+    final productId = 'com.ponynotes.$billingType.$planCode';
 
     final extra = <String, dynamic>{
       'productId': productId,

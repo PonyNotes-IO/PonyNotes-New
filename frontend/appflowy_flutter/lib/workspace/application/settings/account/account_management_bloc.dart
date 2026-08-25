@@ -1461,7 +1461,7 @@ class AccountManagementBloc
               return;
             }
             // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
-            final productId = 'com.ponynotes.$planCode.$billingTypeStr';
+            final productId = 'com.ponynotes.$billingTypeStr.$planCode';
 
             final userUuid = _getUserUuid();
             final extra = <String, dynamic>{
