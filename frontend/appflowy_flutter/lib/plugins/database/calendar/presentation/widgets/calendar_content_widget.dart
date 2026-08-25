@@ -340,9 +340,10 @@ class _CalendarContentState extends State<CalendarContent> {
         view: node.view,
         depth: depth,
         indent: _perLevelIndent,
-        onTitleTap: node.view.isDocument && widget.onNoteTap != null
-            ? () => widget.onNoteTap!(node.view)
-            : null,
+        onTitleTap:
+            canOpenCalendarNoteTreeNode(node.view) && widget.onNoteTap != null
+                ? () => widget.onNoteTap!(node.view)
+                : null,
         childWidgets: node.sortedChildren
             .map((c) => _buildNoteTreeNode(context, c, depth: depth + 1))
             .toList(),

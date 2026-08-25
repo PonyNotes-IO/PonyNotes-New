@@ -34,6 +34,13 @@ class CalendarNoteTreeNode {
   }
 }
 
+/// 只有普通文档允许从日历文档树跳转打开。
+///
+/// 工作区在数据层同样使用 Document 布局，但它只是日历树中的归属容器，点击时
+/// 应展开或折叠子文档，不能按普通文档跳转。
+bool canOpenCalendarNoteTreeNode(ViewPB view) =>
+    view.layout == ViewLayoutPB.Document && !view.isSpace;
+
 /// 按电脑端日历的规则，把当天文档沿 parentViewId 还原成工作区文档树。
 ///
 /// 顶层仅剥离历史数据中名为 Workspace / 工作区的壳节点，真实工作区会被保留，

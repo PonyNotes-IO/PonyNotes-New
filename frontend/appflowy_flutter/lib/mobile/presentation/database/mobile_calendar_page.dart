@@ -967,7 +967,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
         key: ValueKey('mobile_calendar_folder_${node.view.id}'),
         view: node.view,
         depth: depth,
-        onTitleTap: node.view.layout == ViewLayoutPB.Document
+        onTitleTap: canOpenCalendarNoteTreeNode(node.view)
             ? () => widget.onNoteTap(node.view)
             : null,
         children: node.sortedChildren
@@ -1096,7 +1096,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
   }
 }
 
-/// 移动端沿用电脑端的默认展开层级：箭头只控制展开，文档标题仍可正常打开。
+/// 移动端沿用电脑端的默认展开层级：工作区整行只展开折叠，普通文档可打开。
 class _MobileCalendarNoteFolderTile extends StatefulWidget {
   const _MobileCalendarNoteFolderTile({
     super.key,

@@ -6,6 +6,14 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('工作区不可跳转但普通父文档可以打开', () {
+    final space = _view(id: 'space', name: '工作区', isSpace: true);
+    final parentDocument = _view(id: 'parent-document', name: '父文档');
+
+    expect(canOpenCalendarNoteTreeNode(space), isFalse);
+    expect(canOpenCalendarNoteTreeNode(parentDocument), isTrue);
+  });
+
   test('当天文档按工作区父子关系展示并隐藏 Workspace 壳', () {
     final workspaceShell = _view(
       id: 'workspace',
