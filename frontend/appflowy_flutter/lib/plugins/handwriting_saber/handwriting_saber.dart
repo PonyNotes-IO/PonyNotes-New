@@ -133,7 +133,10 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
 
     final preferHostTopRightActions =
         data?['preferHostTopRightActions'] == true;
-    if (PlatformInfo.isMobile || preferHostTopRightActions) {
+    // Tablets use the desktop handwriting surface while retaining the mobile
+    // navigation/business flow. Keep the compact mobile surface for phones.
+    final isPhone = PlatformInfo.isMobile && !PlatformInfo.isTablet;
+    if (isPhone || preferHostTopRightActions) {
       return content;
     }
 

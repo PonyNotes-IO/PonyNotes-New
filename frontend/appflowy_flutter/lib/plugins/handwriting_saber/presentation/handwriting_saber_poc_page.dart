@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:defer_pointer/defer_pointer.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -94,11 +95,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
   bool _isDataLoaded = false;
 
-  /// Cached platform check. Only used to decide whether to surface the
-  /// toolbar's leading "back" button. Computed once at state creation
-  /// so we avoid hitting `dart:io` on every build().
+  /// Cached phone check. Tablets use the desktop handwriting UI, while their
+  /// surrounding navigation and business flow remain mobile-owned.
   final bool _isMobilePlatform =
-      Platform.isAndroid || Platform.isIOS;
+      (Platform.isAndroid || Platform.isIOS) && !PlatformInfo.isTablet;
 
   /// 当前正在绘制的一笔（使用 ValueNotifier 减少父级 setState 频繁重建）
   final ValueNotifier<Stroke?> _currentStrokeNotifier =
