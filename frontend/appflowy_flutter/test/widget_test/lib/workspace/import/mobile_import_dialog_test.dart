@@ -56,6 +56,12 @@ void main() {
     expect(pdf, findsOneWidget);
     expect(markdown, findsOneWidget);
     expect(html, findsOneWidget);
+    for (final option in [csv, pdf, markdown, html]) {
+      final optionText = tester.widget<Text>(
+        find.descendant(of: option, matching: find.byType(Text)),
+      );
+      expect(optionText.style?.color, Colors.black);
+    }
     expect(
       find.byWidgetPredicate(
         (widget) =>

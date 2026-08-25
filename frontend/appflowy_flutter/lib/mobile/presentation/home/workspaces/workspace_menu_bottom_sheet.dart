@@ -440,7 +440,8 @@ class _WorkspaceMenuItemTrailing extends StatelessWidget {
       '${LocaleKeys.space_delete.tr()}: ${workspace.name}',
       LocaleKeys.workspace_deleteWorkspaceHintText.tr(),
       LocaleKeys.button_delete.tr(),
-      (_) async {
+      (dialogContext) async {
+        Navigator.of(dialogContext).pop();
         context.read<UserWorkspaceBloc>().add(
               UserWorkspaceEvent.deleteWorkspace(
                 workspaceId: workspace.workspaceId,
