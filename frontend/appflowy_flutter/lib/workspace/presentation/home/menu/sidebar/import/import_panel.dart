@@ -379,7 +379,7 @@ class _MobileImportOption extends StatelessWidget {
                     type.toString(),
                     fontSize: 16,
                     overflow: TextOverflow.ellipsis,
-                    color: Theme.of(context).colorScheme.tertiary,
+                    color: Colors.black,
                   ),
                 ),
               ],

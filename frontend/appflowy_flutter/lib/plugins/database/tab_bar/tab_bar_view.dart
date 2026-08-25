@@ -528,7 +528,6 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     bool showTopRightActions = true,
   }) {
     final isWhiteboard = view.layout == ViewLayoutPB.Whiteboard;
-    final isGrid = view.layout == ViewLayoutPB.Grid;
     // On mobile the database plugin renders its own top bar (MobileTabBarHeader)
     // with back/favorite/share/more actions, so the desktop UnifiedViewTopRightActions
     // overlay would create a duplicated toolbar.
@@ -546,7 +545,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
               viewInfoBloc: viewInfoBloc,
               pageAccessLevelBloc: pageAccessLevelBloc,
               useFloatingSurface: true,
-              showShareButton: !isWhiteboard && !isGrid,
+              showShareButton: !isWhiteboard,
               iconColorOverride: isWhiteboard ? const Color(0xFF111111) : null,
             ),
           ),

@@ -271,10 +271,16 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   @override
   Widget build(BuildContext context) {
     final isLightMode = Theme.of(context).brightness == Brightness.light;
+    final isSpaceManagement =
+        _currentSection == MobileSettingsSection.workspaceManagement;
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
+      backgroundColor: isLightMode
+          ? isSpaceManagement
+              ? Colors.white
+              : const Color(0xFFF9F9F9)
+          : null,
       body: SafeArea(
         bottom: false,
         child: Column(

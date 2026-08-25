@@ -150,7 +150,7 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
-  static const _lightBackgroundColor = Color(0xFFF9F9F9);
+  static const _lightBackgroundColor = Colors.white;
 
   @override
   void dispose() {
@@ -178,7 +178,7 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
                 SafeArea(
                   bottom: false,
                   child: _TrashAppBar(
-                    title: '垃圾箱',
+                    title: LocaleKeys.trash_text.tr(),
                     onBack: () => Navigator.of(context).maybePop(),
                     showMoreButton: state.objects.isNotEmpty,
                     onMorePressed: state.objects.isEmpty

@@ -506,7 +506,9 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         extra: jsonEncode(_calendarSpaceExtra(legacyCalendarRoot.extra)),
       );
       return updateResult.fold(
-        (view) => view,
+        // FolderEventUpdateView 当前只返回成功状态，不携带 ViewPB 数据。
+        // Dart 侧会把空响应解码为默认 ViewPB，直接返回会丢失原节点 ID。
+        (_) => legacyCalendarRoot,
         (error) => throw Exception('升级日历工作区失败: ${error.msg}'),
       );
     }
@@ -521,7 +523,12 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     );
 
     return createSpaceResult.fold(
-      (view) => view,
+      (view) {
+        if (view.id.trim().isEmpty) {
+          throw Exception('创建日历工作区失败: 返回的视图 ID 为空');
+        }
+        return view;
+      },
       (error) => throw Exception('创建日历工作区失败: ${error.msg}'),
     );
   }
