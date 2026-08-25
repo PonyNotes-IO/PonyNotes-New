@@ -17,7 +17,8 @@ class MSharedPageList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pages = sharedPages.reversed.toList();
+    // Keep the same server ordering as the desktop shared section.
+    final pages = sharedPages;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
