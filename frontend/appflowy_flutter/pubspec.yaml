@@ -4,7 +4,7 @@ description: Bring projects, wikis, and teams together with AI. AppFlowy is an
   your data. The best open source alternative to Notion.
 publish_to: "none"
 
-version: 1.2.2+47
+version: 1.2.2+48
 
 environment:
   flutter: ">=3.27.4"
