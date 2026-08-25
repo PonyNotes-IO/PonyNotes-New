@@ -3,7 +3,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('keeps owner workspace out of the navigation ViewPB', () {
+  test('carries owner workspace into the navigation ViewPB', () {
     final item = sharedCollabViewFromJson({
       'oid': 'view-1',
       'name': 'Shared note',
@@ -14,7 +14,7 @@ void main() {
 
     expect(item, isNotNull);
     expect(item!.ownerWorkspaceId, 'workspace-w1');
-    expect(item.view.workspaceId, isEmpty);
+    expect(item.view.workspaceId, 'workspace-w1');
     expect(item.view.layout, ViewLayoutPB.Document);
     expect(
       item.view.createTime.toInt(),
@@ -33,7 +33,7 @@ void main() {
     expect(item, isNotNull);
     expect(item!.view.id, 'view-2');
     expect(item.ownerWorkspaceId, 'workspace-w2');
-    expect(item.view.workspaceId, isEmpty);
+    expect(item.view.workspaceId, 'workspace-w2');
     expect(item.view.layout, ViewLayoutPB.Board);
     expect(item.view.createTime.toInt(), 1775000000);
   });
@@ -55,5 +55,6 @@ void main() {
 
     expect(result.ownerWorkspaceId, 'workspace-w1');
     expect(result.view.name, 'Resolved title');
+    expect(result.view.workspaceId, 'workspace-w1');
   });
 }

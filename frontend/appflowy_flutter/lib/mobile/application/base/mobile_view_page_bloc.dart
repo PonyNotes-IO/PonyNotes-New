@@ -2,6 +2,7 @@ import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -15,6 +16,7 @@ class MobileViewPageBloc
     extends Bloc<MobileViewPageEvent, MobileViewPageState> {
   MobileViewPageBloc({
     required this.viewId,
+    this.fallbackView,
   })  : _viewListener = ViewListener(viewId: viewId),
         super(MobileViewPageState.initial()) {
     on<MobileViewPageEvent>(
@@ -26,7 +28,12 @@ class MobileViewPageBloc
               final userProfilePB =
                   await UserBackendService.getCurrentUserProfile()
                       .fold((s) => s, (f) => null);
-              final result = await ViewBackendService.getView(viewId);
+              final localResult = await ViewBackendService.getView(viewId);
+              final result = mobileViewResultWithFallback(
+                localResult: localResult,
+                fallbackView: fallbackView,
+                viewId: viewId,
+              );
               final isImmersiveMode =
                   _isImmersiveMode(result.fold((s) => s, (f) => null));
               if (!isClosed) {
@@ -59,6 +66,7 @@ class MobileViewPageBloc
   }
 
   final String viewId;
+  final ViewPB? fallbackView;
   final ViewListener _viewListener;
 
   @override
@@ -92,6 +100,24 @@ class MobileViewPageBloc
 
     return false;
   }
+}
+
+FlowyResult<ViewPB, FlowyError> mobileViewResultWithFallback({
+  required FlowyResult<ViewPB, FlowyError> localResult,
+  required ViewPB? fallbackView,
+  required String viewId,
+}) {
+  return localResult.fold(
+    FlowyResult.success,
+    (error) {
+      if (error.code == ErrorCode.RecordNotFound &&
+          fallbackView?.id == viewId &&
+          fallbackView!.hasWorkspaceId()) {
+        return FlowyResult.success(fallbackView);
+      }
+      return FlowyResult.failure(error);
+    },
+  );
 }
 
 @freezed

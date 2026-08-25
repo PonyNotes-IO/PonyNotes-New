@@ -57,8 +57,8 @@ class MSharedSection extends StatelessWidget {
                   ),
                   child: MSharedPageList(
                     sharedPages: state.sharedPages,
-                    onSelected: (view) {
-                      context.pushView(
+                    onSelected: (view) async {
+                      await context.pushView(
                         view,
                         tabs: [
                           PickerTabType.emoji,

@@ -11,8 +11,12 @@ class SharedCollabView {
   final String ownerWorkspaceId;
 
   SharedCollabView copyWith({ViewPB? view}) {
+    final nextView = view ?? this.view;
+    if (ownerWorkspaceId.isNotEmpty && !nextView.hasWorkspaceId()) {
+      nextView.workspaceId = ownerWorkspaceId;
+    }
     return SharedCollabView(
-      view: view ?? this.view,
+      view: nextView,
       ownerWorkspaceId: ownerWorkspaceId,
     );
   }
@@ -46,6 +50,12 @@ SharedCollabView? sharedCollabViewFromJson(Map<String, dynamic> entry) {
     ..name = name.isNotEmpty ? name : '加载中...'
     ..layout = layout
     ..createTime = fixnum.Int64(createdSeconds);
+  // Received shares belong to the owner's workspace. Preserve that identity
+  // so DocumentBloc opens the collab against the correct workspace instead of
+  // silently falling back to the currently active one.
+  if (ownerWorkspaceId.isNotEmpty) {
+    view.workspaceId = ownerWorkspaceId;
+  }
   return SharedCollabView(
     view: view,
     ownerWorkspaceId: ownerWorkspaceId,

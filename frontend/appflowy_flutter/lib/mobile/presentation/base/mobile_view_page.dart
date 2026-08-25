@@ -140,10 +140,15 @@ class _MobileViewPageState extends State<MobileViewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final latestOpenView = getIt<MenuSharedState>().latestOpenView;
+    final fallbackView =
+        latestOpenView?.id == widget.id ? latestOpenView : null;
     return BlocProvider(
       key: ValueKey('mobile_view_page_bloc_${widget.id}'),
-      create: (_) => MobileViewPageBloc(viewId: widget.id)
-        ..add(const MobileViewPageEvent.initial()),
+      create: (_) => MobileViewPageBloc(
+        viewId: widget.id,
+        fallbackView: fallbackView,
+      )..add(const MobileViewPageEvent.initial()),
       child: BlocBuilder<MobileViewPageBloc, MobileViewPageState>(
         // 只在 result 或 isLoading 变化时重建，避免输入法动画期间的无效重建
         buildWhen: (previous, current) =>
@@ -154,7 +159,7 @@ class _MobileViewPageState extends State<MobileViewPage> {
           final body = _buildBody(context, state);
 
           if (view == null) {
-            return SizedBox.shrink();
+            return _buildApp(context, null, body);
           }
 
           return MultiBlocProvider(
