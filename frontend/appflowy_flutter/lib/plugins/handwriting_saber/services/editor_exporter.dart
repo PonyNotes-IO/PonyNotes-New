@@ -352,7 +352,7 @@ abstract class EditorExporter {
         height: renderHeight,
         fullWidth: pageSize.width * exportScale,
         fullHeight: pageSize.height * exportScale,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.white.value,
       );
 
       if (renderedImage == null) {

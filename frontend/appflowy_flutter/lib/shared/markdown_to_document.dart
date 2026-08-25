@@ -71,7 +71,7 @@ Future<String> customDocumentToMarkdown(
   /// create root Archive and directory
   final id = document.root.id,
       archive = Archive(),
-      resourceDir = ArchiveFile('$id/', 0, null)..isFile = false,
+      resourceDir = ArchiveFile('$id/', 0, const <int>[])..isFile = false,
       fileName = p.basenameWithoutExtension(path),
       dirName = resourceDir.name;
 
