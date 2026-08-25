@@ -31,6 +31,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'mobile_home_workspace_listener_policy.dart';
+
 class MobileHomeScreen extends StatelessWidget {
   const MobileHomeScreen({super.key});
 
@@ -203,91 +205,105 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<UserWorkspaceBloc, UserWorkspaceState>(
-      buildWhen: (previous, current) =>
-          previous.currentWorkspace?.workspaceId !=
-          current.currentWorkspace?.workspaceId,
-      listener: (context, state) {
-        getIt<CachedRecentService>().reset();
-        mCurrentWorkspace.value = state.currentWorkspace;
-        if (FeatureFlag.search.isOn) {
-          // Notify command palette that workspace has changed
-          context.read<CommandPaletteBloc>().add(
-                CommandPaletteEvent.workspaceChanged(
-                  workspaceId: state.currentWorkspace?.workspaceId,
-                ),
-              );
-        }
-        Debounce.debounce(
-          'workspace_action_result',
-          const Duration(milliseconds: 150),
-          () {
-            _showResultDialog(context, state);
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+          listenWhen: didMobileCurrentWorkspaceChange,
+          listener: (context, state) {
+            getIt<CachedRecentService>().reset();
+            if (FeatureFlag.search.isOn) {
+              context.read<CommandPaletteBloc>().add(
+                    CommandPaletteEvent.workspaceChanged(
+                      workspaceId: state.currentWorkspace?.workspaceId,
+                    ),
+                  );
+            }
           },
-        );
-      },
-      builder: (context, state) {
-        if (state.currentWorkspace == null) {
-          return const SizedBox.shrink();
-        }
+        ),
+        BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+          listenWhen: didMobileCurrentWorkspaceMetadataChange,
+          listener: (context, state) {
+            mCurrentWorkspace.value = state.currentWorkspace;
+          },
+        ),
+        BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+          listenWhen: didMobileWorkspaceActionResultChange,
+          listener: (context, state) {
+            Debounce.debounce(
+              'workspace_action_result',
+              const Duration(milliseconds: 150),
+              () {
+                _showResultDialog(context, state);
+              },
+            );
+          },
+        ),
+      ],
+      child: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+        buildWhen: didMobileCurrentWorkspaceChange,
+        builder: (context, state) {
+          if (state.currentWorkspace == null) {
+            return const SizedBox.shrink();
+          }
 
-        _markHomeReady();
+          _markHomeReady();
 
-        final workspaceId = state.currentWorkspace!.workspaceId;
+          final workspaceId = state.currentWorkspace!.workspaceId;
 
-        return BlocProvider(
-          create: (_) => SpaceBloc(
-            userProfile: widget.userProfile,
-            workspaceId: workspaceId,
-          )..add(
-              const SpaceEvent.initial(
-                openFirstPage: false,
-              ),
-            ),
-          child: Column(
-            key: ValueKey('mobile_home_page_$workspaceId'),
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.only(
-                  left: HomeSpaceViewSizes.mHorizontalPadding,
-                  right: 8.0,
+          return BlocProvider(
+            create: (_) => SpaceBloc(
+              userProfile: widget.userProfile,
+              workspaceId: workspaceId,
+            )..add(
+                const SpaceEvent.initial(
+                  openFirstPage: false,
                 ),
-                child: MobileHomePageHeader(
-                  userProfile: widget.userProfile,
-                ),
               ),
-
-              Expanded(
-                child: MultiBlocProvider(
-                  providers: [
-                    BlocProvider(
-                      create: (_) => SpaceOrderBloc()
-                        ..add(const SpaceOrderEvent.initial()),
-                    ),
-                    BlocProvider(
-                      create: (_) => SidebarSectionsBloc()
-                        ..add(
-                          SidebarSectionsEvent.initial(
-                            widget.userProfile,
-                            workspaceId,
-                          ),
-                        ),
-                    ),
-                    BlocProvider(
-                      create: (_) =>
-                          FavoriteBloc()..add(const FavoriteEvent.initial()),
-                    ),
-                  ],
-                  child: MobileHomePageTab(
+            child: Column(
+              key: ValueKey('mobile_home_page_$workspaceId'),
+              children: [
+                // Header
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: HomeSpaceViewSizes.mHorizontalPadding,
+                    right: 8.0,
+                  ),
+                  child: MobileHomePageHeader(
                     userProfile: widget.userProfile,
                   ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+
+                Expanded(
+                  child: MultiBlocProvider(
+                    providers: [
+                      BlocProvider(
+                        create: (_) => SpaceOrderBloc()
+                          ..add(const SpaceOrderEvent.initial()),
+                      ),
+                      BlocProvider(
+                        create: (_) => SidebarSectionsBloc()
+                          ..add(
+                            SidebarSectionsEvent.initial(
+                              widget.userProfile,
+                              workspaceId,
+                            ),
+                          ),
+                      ),
+                      BlocProvider(
+                        create: (_) =>
+                            FavoriteBloc()..add(const FavoriteEvent.initial()),
+                      ),
+                    ],
+                    child: MobileHomePageTab(
+                      userProfile: widget.userProfile,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 

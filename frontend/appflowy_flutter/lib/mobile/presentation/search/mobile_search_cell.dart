@@ -26,7 +26,6 @@ class MobileSearchResultCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final commandPaletteState = context.read<CommandPaletteBloc>().state;
     final displayName = item.displayName.isEmpty
         ? LocaleKeys.menuAppHeader_defaultNewPageName.tr()
         : item.displayName;
@@ -61,7 +60,7 @@ class MobileSearchResultCell extends StatelessWidget {
                     ),
                   ),
                 ),
-                buildPath(commandPaletteState, theme),
+                buildPath(theme),
                 ...buildSummary(theme),
               ],
             ),
@@ -71,24 +70,30 @@ class MobileSearchResultCell extends StatelessWidget {
     );
   }
 
-  Widget buildPath(CommandPaletteState state, AppFlowyThemeData theme) {
+  Widget buildPath(AppFlowyThemeData theme) {
+    final pathStyle =
+        theme.textStyle.body.standard(color: theme.textColorScheme.tertiary);
+    final pathHeight = (pathStyle.fontSize ?? 14.0) * (pathStyle.height ?? 1.0);
     return BlocProvider(
       key: ValueKey(item.id),
       create: (context) => ViewAncestorBloc(item.id),
       child: BlocBuilder<ViewAncestorBloc, ViewAncestorState>(
         builder: (context, state) {
           final ancestors = state.ancestor.ancestors;
-          if(ancestors.isEmpty) return const SizedBox.shrink();
           List<String> displayPath = ancestors.map((e) => e.name).toList();
           if (ancestors.length > 2) {
             displayPath = [ancestors.first.name, '...', ancestors.last.name];
           }
-          return Text(
-            displayPath.join(' / '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textStyle.body
-                .standard(color: theme.textColorScheme.tertiary),
+          return SizedBox(
+            height: pathHeight,
+            child: ancestors.isEmpty
+                ? null
+                : Text(
+                    displayPath.join(' / '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: pathStyle,
+                  ),
           );
         },
       ),

@@ -54,10 +54,10 @@ Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   PerformanceTrace.mark('flutter_binding_ready');
 
-  if (Platform.isAndroid) {
+  if (Platform.isAndroid || Platform.isIOS) {
     // Render a Flutter frame before the dependency-heavy application startup.
-    // This prevents Android from exposing an empty Flutter surface after its
-    // native splash has been removed.
+    // This prevents mobile platforms from exposing an empty Flutter surface
+    // after the native splash has been removed.
     PerformanceTrace.mark('startup_shell_run_app');
     runApp(const StartupShell());
     await WidgetsBinding.instance.endOfFrame;
