@@ -10,6 +10,16 @@ void main() {
     ..id = 'shared-view'
     ..workspaceId = 'owner-workspace';
 
+  test('immersion updates do not finish initial loading', () async {
+    final bloc = MobileViewPageBloc(viewId: 'view');
+    addTearDown(bloc.close);
+    final nextState = bloc.stream.first;
+
+    bloc.add(const MobileViewPageEvent.updateImmersionMode(true));
+
+    expect((await nextState).isLoading, isTrue);
+  });
+
   test('uses shared navigation view when local metadata is missing', () {
     final result = mobileViewResultWithFallback(
       localResult: FlowyResult.failure(
@@ -25,7 +35,7 @@ void main() {
     expect(result.toNullable(), sharedView);
   });
 
-  test('does not hide non-record-not-found errors', () {
+  test('uses matching navigation view for transient local errors', () {
     final error = FlowyError(
       code: ErrorCode.NetworkError,
       msg: 'Network error',
@@ -36,8 +46,7 @@ void main() {
       viewId: sharedView.id,
     );
 
-    expect(result.isFailure, isTrue);
-    expect(result.getFailure().code, ErrorCode.NetworkError);
+    expect(result.toNullable(), sharedView);
   });
 
   test('does not use fallback from another route', () {

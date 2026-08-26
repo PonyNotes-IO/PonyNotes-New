@@ -2,7 +2,6 @@ import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -55,7 +54,6 @@ class MobileViewPageBloc
           updateImmersionMode: (isImmersiveMode) {
             emit(
               state.copyWith(
-                isLoading: false,
                 isImmersiveMode: isImmersiveMode,
               ),
             );
@@ -110,9 +108,7 @@ FlowyResult<ViewPB, FlowyError> mobileViewResultWithFallback({
   return localResult.fold(
     FlowyResult.success,
     (error) {
-      if (error.code == ErrorCode.RecordNotFound &&
-          fallbackView?.id == viewId &&
-          fallbackView!.hasWorkspaceId()) {
+      if (fallbackView?.id == viewId && fallbackView!.hasWorkspaceId()) {
         return FlowyResult.success(fallbackView);
       }
       return FlowyResult.failure(error);
