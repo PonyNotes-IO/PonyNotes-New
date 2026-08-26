@@ -352,6 +352,9 @@ class _MobileImportOption extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const radius = BorderRadius.all(Radius.circular(8));
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black;
 
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -379,7 +382,7 @@ class _MobileImportOption extends StatelessWidget {
                     type.toString(),
                     fontSize: 16,
                     overflow: TextOverflow.ellipsis,
-                    color: Colors.black,
+                    color: textColor,
                   ),
                 ),
               ],
