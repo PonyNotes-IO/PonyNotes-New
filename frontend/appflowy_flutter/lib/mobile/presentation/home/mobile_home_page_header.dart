@@ -87,7 +87,10 @@ class _MobileUser extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const FlowyText.medium('AppFlowy', fontSize: 18),
+              FlowyText.medium(
+                LocaleKeys.sidebar_appName.tr(),
+                fontSize: 18,
+              ),
               const VSpace(4),
               FlowyText.regular(
                 userProfile.email.isNotEmpty
