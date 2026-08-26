@@ -31,7 +31,8 @@ class EnhancedPdfImportDialog extends StatefulWidget {
   });
 
   @override
-  State<EnhancedPdfImportDialog> createState() => _EnhancedPdfImportDialogState();
+  State<EnhancedPdfImportDialog> createState() =>
+      _EnhancedPdfImportDialogState();
 }
 
 class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
@@ -52,6 +53,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final Size screenSize = MediaQuery.of(context).size;
     final double dialogMaxWidth = 900;
     final double dialogMaxHeight = 700;
@@ -61,12 +63,18 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     final double dialogHeight = screenSize.height * 0.9 > dialogMaxHeight
         ? dialogMaxHeight
         : screenSize.height * 0.9;
+    final double dialogCornerRadius = screenSize.width < 600 ? 24 : 4;
 
     return Dialog(
+      backgroundColor: colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(dialogCornerRadius),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Container(
         width: dialogWidth,
         height: dialogHeight,
-        color: Colors.white,
+        color: colorScheme.surface,
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,13 +101,17 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   }
 
   Widget _buildHeader() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
-        const Icon(Icons.picture_as_pdf, size: 32, color: Colors.red),
+        Icon(Icons.picture_as_pdf, size: 32, color: colorScheme.error),
         const SizedBox(width: 12),
-        const Text(
+        Text(
           '智能PDF导入',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
         ),
         const Spacer(),
         IconButton(
@@ -114,6 +126,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   }
 
   Widget _buildModeSelector() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -144,7 +157,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           _importMode.description,
           style: TextStyle(
             fontSize: 12,
-            color: Colors.grey[600],
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -152,18 +165,22 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   }
 
   Widget _buildFileSelector() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey[300]!),
+        color: colorScheme.surfaceContainerHighest,
+        border: Border.all(color: colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             '选择PDF文件',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
           ),
           const SizedBox(height: 8),
           if (_selectedFile == null)
@@ -174,20 +191,21 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Colors.grey[400]!,
+                    color: colorScheme.outline,
                     style: BorderStyle.solid,
                     width: 2,
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Column(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.cloud_upload, size: 32, color: Colors.grey),
+                    Icon(Icons.cloud_upload,
+                        size: 32, color: colorScheme.onSurfaceVariant),
                     SizedBox(height: 8),
                     Text(
                       '点击选择PDF文件',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -196,12 +214,15 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           else
             Row(
               children: [
-                const Icon(Icons.picture_as_pdf, color: Colors.red),
+                Icon(Icons.picture_as_pdf, color: colorScheme.error),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _selectedFile!.path.split('/').last,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurface,
+                    ),
                   ),
                 ),
                 TextButton(
@@ -219,7 +240,8 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _selectedFile != null && !_isProcessing ? _processFile : null,
+        onPressed:
+            _selectedFile != null && !_isProcessing ? _processFile : null,
         icon: _isProcessing
             ? const SizedBox(
                 width: 16,
@@ -236,38 +258,45 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   }
 
   Widget _buildContentPreview() {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_processingError != null) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.red[50],
-          border: Border.all(color: Colors.red[200]!),
+          color: colorScheme.errorContainer,
+          border: Border.all(color: colorScheme.error.withValues(alpha: 0.45)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.error, color: Colors.red),
+                  Icon(Icons.error, color: colorScheme.error),
                   SizedBox(width: 8),
                   Text(
                     '处理失败',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
-                      color: Colors.red,
+                      color: colorScheme.onErrorContainer,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(_processingError!),
+              Text(
+                _processingError!,
+                style: TextStyle(color: colorScheme.onErrorContainer),
+              ),
               const SizedBox(height: 12),
               if (_buildErrorHints(_processingError!).isNotEmpty) ...[
-                const Text(
+                Text(
                   '建议：',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onErrorContainer,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 ..._buildErrorHints(_processingError!).map((h) => Padding(
@@ -275,8 +304,17 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('• '),
-                          Expanded(child: Text(h)),
+                          Text('• ',
+                              style: TextStyle(
+                                  color: colorScheme.onErrorContainer)),
+                          Expanded(
+                            child: Text(
+                              h,
+                              style: TextStyle(
+                                color: colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     )),
@@ -295,7 +333,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Center(
@@ -305,12 +343,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
               Icon(
                 _isProcessing ? Icons.hourglass_empty : Icons.preview,
                 size: 48,
-                color: Colors.grey,
+                color: colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: 16),
               Text(
                 message,
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -323,9 +361,11 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       children: [
         Row(
           children: [
-            const Text(
+            Text(
               '提取内容预览',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             const Spacer(),
             if (_pdfBytes != null && _extractedContent != null)
@@ -341,9 +381,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey[300]!),
+              border: Border.all(color: colorScheme.outlineVariant),
               borderRadius: BorderRadius.circular(8),
-              color: Colors.white,
+              color: colorScheme.surface,
             ),
             child: SingleChildScrollView(
               padding: EdgeInsets.zero,
@@ -351,6 +391,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
                 data: _extractedContent!,
                 shrinkWrap: true,
                 selectable: true,
+                config: Theme.of(context).brightness == Brightness.dark
+                    ? MarkdownConfig.darkConfig
+                    : MarkdownConfig.defaultConfig,
               ),
             ),
           ),
@@ -367,7 +410,8 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     }
     if (lower.contains('权限不足') || lower.contains('403')) {
       hints.add('确认当前登录账号对文件存储有权限。');
-      hints.add('若使用反向代理，请放行 Authorization 头到 /api/file_storage/**，并允许 PUT/POST。');
+      hints.add(
+          '若使用反向代理，请放行 Authorization 头到 /api/file_storage/**，并允许 PUT/POST。');
       hints.add('确保 APPFLOWY_CLOUD_URL 指向正确的 Cloud 根地址（含 http/https）。');
     }
     if (lower.contains('过大') || lower.contains('413')) {
@@ -401,14 +445,14 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             child: const Text('取消处理'),
           )
         else
-        ElevatedButton(
-          onPressed: _extractedContent != null ? _importDocument : null,
-          child: const Text('导入文档'),
-        ),
+          ElevatedButton(
+            onPressed: _extractedContent != null ? _importDocument : null,
+            child: const Text('导入文档'),
+          ),
       ],
     );
   }
-  
+
   /// Cancel current processing task
   void _cancelProcessing() {
     if (_isProcessing && _cancellationToken != null) {
@@ -431,19 +475,21 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
-        
+
         // 检查文件大小（使用阿里云API限制：20MB）
         final fileSize = await file.length();
         if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
-          final maxSizeStr = _formatFileSize(AliyunDocParseProcessor.maxFileSize);
+          final maxSizeStr =
+              _formatFileSize(AliyunDocParseProcessor.maxFileSize);
           showToastNotification(
-            message: '文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。',
+            message:
+                '文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。',
             type: ToastificationType.error,
           );
           return;
         }
-        
+
         setState(() {
           _selectedFile = file;
           _extractedContent = null;
@@ -458,7 +504,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       );
     }
   }
-  
+
   String _formatFileSize(int bytes) {
     if (bytes < 1024) {
       return '${bytes}B';
@@ -474,7 +520,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
     // 创建新的取消令牌
     _cancellationToken = CancellationToken();
-    
+
     // 读取PDF文件bytes用于混合预览
     Uint8List? pdfBytes;
     try {
@@ -492,26 +538,28 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
     try {
       String? content;
-      
+
       // 使用阿里云API处理PDF
       // 注意：阿里云API会自动处理所有模式，不需要指定mode、language等参数
       // content = await AliyunDocParseProcessor.processPdfFile(
       //       _selectedFile!,
       //       cancellationToken: _cancellationToken,
       //     );
-      final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,cancellationToken: _cancellationToken);
-      if(content1 != null){
+      final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,
+          cancellationToken: _cancellationToken);
+      if (content1 != null) {
         content = content1['text']?.toString();
         final pages = content1['pages'];
         final engine = content1['engine']?.toString() ?? 'unknown';
-        
-        Log.info('PDF提取结果: pages=$pages, engine=$engine, textLength=${content?.length ?? 0}');
-        
+
+        Log.info(
+            'PDF提取结果: pages=$pages, engine=$engine, textLength=${content?.length ?? 0}');
+
         // 如果OCR返回的文本为空，尝试使用Syncfusion作为备用方案
         if (content == null || content.isEmpty) {
           Log.warn('OCR提取结果为空，尝试使用Syncfusion备用方案。文件: ${_selectedFile!.path}');
           Log.warn('OCR提取结果详情: $content1');
-          
+
           try {
             // 使用Syncfusion提取文本作为备用方案
             final bytes = await _selectedFile!.readAsBytes();
@@ -519,7 +567,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             final PdfTextExtractor extractor = PdfTextExtractor(document);
             final String rawText = extractor.extractText();
             document.dispose();
-            
+
             if (rawText.isNotEmpty) {
               // 清理文本
               content = pdf_import_service.ImportService.cleanPdfText(rawText);
@@ -533,7 +581,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         }
       } else {
         Log.warn('PDF提取返回null，可能后端服务不可用或处理失败，尝试使用Syncfusion备用方案');
-        
+
         // 如果OCR完全失败，尝试使用Syncfusion
         try {
           final bytes = await _selectedFile!.readAsBytes();
@@ -541,7 +589,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           final PdfTextExtractor extractor = PdfTextExtractor(document);
           final String rawText = extractor.extractText();
           document.dispose();
-          
+
           if (rawText.isNotEmpty) {
             content = pdf_import_service.ImportService.cleanPdfText(rawText);
             Log.info('Syncfusion备用方案成功提取文本，长度: ${content.length}');
@@ -574,13 +622,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
 
       if (mounted) {
-      setState(() {
-        _extractedContent = content;
-        _isProcessing = false;
-      });
+        setState(() {
+          _extractedContent = content;
+          _isProcessing = false;
+        });
         Log.info('Content preview updated, length: ${content.length}');
       }
-
     } catch (e) {
       // 如果是取消操作，不记录错误
       if (e.toString().contains('已取消') || e.toString().contains('取消')) {
@@ -592,13 +639,13 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         }
         return;
       }
-      
+
       Log.error('Failed to process PDF: $e');
       if (mounted) {
-      setState(() {
-        _processingError = 'PDF处理失败: $e';
-        _isProcessing = false;
-      });
+        setState(() {
+          _processingError = 'PDF处理失败: $e';
+          _isProcessing = false;
+        });
       }
     } finally {
       _cancellationToken = null;
@@ -624,11 +671,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
     try {
       final fileName = p.basenameWithoutExtension(_selectedFile!.path);
-      
+
       // 将Markdown转换为Document格式
       final document = customMarkdownToDocument(_extractedContent!);
-      final documentBytes = DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
-      
+      final documentBytes =
+          DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
+
       if (documentBytes != null) {
         final importValues = [
           ImportItemPayloadPB.create()
@@ -637,9 +685,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             ..viewLayout = ViewLayoutPB.Document
             ..importType = ImportTypePB.Markdown,
         ];
-        
-        final importResult = await ImportBackendService.importPages(widget.parentViewId, importValues);
-        
+
+        final importResult = await ImportBackendService.importPages(
+            widget.parentViewId, importValues);
+
         importResult.fold(
           (views) async {
             // 将导入的文件移动到列表首位
@@ -647,10 +696,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
               await ViewBackendService.moveViewV2(
                 viewId: view.id,
                 newParentId: widget.parentViewId,
-                prevViewId: null,  // null 表示移动到列表开头
+                prevViewId: null, // null 表示移动到列表开头
               );
             }
-            
+
             if (mounted) {
               showToastNotification(
                 message: '成功导入PDF文档: $fileName',
@@ -680,7 +729,6 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
     }
   }
-
 }
 
 enum PdfImportMode {
@@ -713,7 +761,8 @@ class PdfHybridPreviewScreen extends StatefulWidget {
 }
 
 class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
-  final pdfrx_widget.PdfViewerController _pdfController = pdfrx_widget.PdfViewerController();
+  final pdfrx_widget.PdfViewerController _pdfController =
+      pdfrx_widget.PdfViewerController();
   bool _isLoading = true;
   String? _error;
   int _currentPage = 1;
@@ -734,7 +783,6 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
       });
 
       Log.info('PDF混合预览初始化成功: ${widget.fileName}');
-
     } catch (e) {
       Log.error('PDF混合预览初始化失败: $e');
       setState(() {
@@ -751,6 +799,7 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Text('混合预览: ${widget.fileName}'),
@@ -783,34 +832,45 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  color: Colors.grey[100],
+                  color: colorScheme.surfaceContainerHighest,
                   child: Row(
                     children: [
-                      const Icon(Icons.picture_as_pdf, color: Colors.red),
+                      Icon(Icons.picture_as_pdf, color: colorScheme.error),
                       const SizedBox(width: 8),
-                      const Text('原文档', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('原文档',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.onSurface)),
                       const Spacer(),
                       if (_showControls && !_isLoading && _error == null) ...[
                         IconButton(
-                          onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage - 1).clamp(1, _totalPages ?? 1)),
+                          onPressed: () => _pdfController.goToPage(
+                              pageNumber: (_currentPage - 1)
+                                  .clamp(1, _totalPages ?? 1)),
                           icon: const Icon(Icons.chevron_left),
                           tooltip: '上一页',
                         ),
                         Text('$_currentPage / ${_totalPages ?? 0}'),
                         IconButton(
-                          onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage + 1).clamp(1, _totalPages ?? 1)),
+                          onPressed: () => _pdfController.goToPage(
+                              pageNumber: (_currentPage + 1)
+                                  .clamp(1, _totalPages ?? 1)),
                           icon: const Icon(Icons.chevron_right),
                           tooltip: '下一页',
                         ),
                         const SizedBox(width: 8),
                         IconButton(
-                          onPressed: _zoom > 0.5 ? () => setState(() => _zoom -= 0.1) : null,
+                          onPressed: _zoom > 0.5
+                              ? () => setState(() => _zoom -= 0.1)
+                              : null,
                           icon: const Icon(Icons.zoom_out),
                           tooltip: '缩小',
                         ),
                         Text('${(_zoom * 100).toInt()}%'),
                         IconButton(
-                          onPressed: _zoom < 3.0 ? () => setState(() => _zoom += 0.1) : null,
+                          onPressed: _zoom < 3.0
+                              ? () => setState(() => _zoom += 0.1)
+                              : null,
                           icon: const Icon(Icons.zoom_in),
                           tooltip: '放大',
                         ),
@@ -820,14 +880,15 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
                 ),
                 Expanded(
                   child: Container(
-                    color: Colors.grey[50],
+                    color: colorScheme.surface,
                     child: _buildPdfViewer(),
                   ),
                 ),
                 if (_showControls && !_isLoading && _error == null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    color: Colors.grey[200],
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    color: colorScheme.surfaceContainer,
                     child: Row(
                       children: [
                         const Icon(Icons.info_outline, size: 16),
@@ -843,7 +904,7 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
           ),
           Container(
             width: 1,
-            color: Colors.grey[300],
+            color: colorScheme.outlineVariant,
           ),
           // 提取文本显示
           Expanded(
@@ -853,12 +914,13 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  color: Colors.grey[100],
-                  child: const Row(
+                  color: colorScheme.surfaceContainerHighest,
+                  child: Row(
                     children: [
                       Icon(Icons.text_fields, color: Colors.blue),
                       SizedBox(width: 8),
-                      Text('解析结果 (Markdown)', style: TextStyle(fontWeight: FontWeight.w600)),
+                      Text('解析结果 (Markdown)',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -869,11 +931,13 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  color: Colors.blue[50],
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: colorScheme.primaryContainer,
                   child: Row(
                     children: [
-                      const Icon(Icons.text_fields, size: 16, color: Colors.blue),
+                      Icon(Icons.text_fields,
+                          size: 16, color: colorScheme.primary),
                       const SizedBox(width: 4),
                       Text('Markdown解析结果'),
                       const Spacer(),
@@ -890,6 +954,7 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
   }
 
   Widget _buildPdfViewer() {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -908,11 +973,11 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red.shade400),
+            Icon(Icons.error_outline, size: 48, color: colorScheme.error),
             const SizedBox(height: 16),
             Text(
               _error!,
-              style: TextStyle(color: Colors.red.shade600),
+              style: TextStyle(color: colorScheme.error),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -953,6 +1018,9 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
       data: widget.extractedText,
       shrinkWrap: true,
       selectable: true,
+      config: Theme.of(context).brightness == Brightness.dark
+          ? MarkdownConfig.darkConfig
+          : MarkdownConfig.defaultConfig,
     );
   }
 }
