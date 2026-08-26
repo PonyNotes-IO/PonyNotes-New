@@ -28,11 +28,13 @@ class TermsAndConditionsSection extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () {
             onAgreedToTermsChanged(!agreedToTerms);
           },
           child: SizedBox(
-            width: 30,
+            // 使用标准的 44x44 触控目标，图标尺寸保持不变。
+            width: 44,
             height: 44,
             child: Align(
               alignment: Alignment.centerRight,
