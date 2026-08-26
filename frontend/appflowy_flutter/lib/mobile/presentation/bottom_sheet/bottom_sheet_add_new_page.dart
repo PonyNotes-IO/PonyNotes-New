@@ -90,14 +90,6 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           ),
         ),
         FlowyOptionTile.text(
-          text: LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
-          height: 52.0,
-          leftIcon: const Text('\u{1F4D3}', style: TextStyle(fontSize: 20)),
-          showTopBorder: false,
-          showBottomBorder: false,
-          onTap: () => onAction(ViewLayoutPB.Notebook),
-        ),
-        FlowyOptionTile.text(
           text: LocaleKeys.mobileAddNewPage_whiteboard.tr(),
           height: 52.0,
           leftIcon: const FlowySvg(
