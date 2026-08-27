@@ -215,6 +215,64 @@ void main() {
         )));
   });
 
+  test('whiteboard forces host theme and disables internal theme switching',
+      () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(webViewSource, contains('window.setHostTheme'));
+    expect(bridgeSource, contains('window.setHostTheme = function'));
+    expect(bridgeSource, contains('_forcedHostTheme'));
+    expect(bridgeSource, contains('syncExcalidrawEditorTheme'));
+    expect(bridgeSource, contains('__ponynotesSetHostTheme'));
+    expect(bridgeSource, contains('__ponynotesHostTheme'));
+    expect(bridgeSource, contains('__ponynotesThemeSync'));
+    expect(bridgeSource, contains('enforceHostTheme'));
+    expect(bridgeSource, contains('appState: {\n                    theme,'));
+    expect(
+        bridgeSource,
+        contains(
+            "const backgroundColor = theme === 'dark' ? '#121212' : '#ffffff'"));
+    expect(bridgeSource, contains('_ponynotesHostThemeWatchdog'));
+    expect(bridgeSource, contains('KeyboardEvent'));
+    expect(bridgeSource, contains('syncExcalidrawEditorTheme'));
+    expect(bridgeSource, contains("classList.toggle('theme--dark'"));
+    expect(webViewSource, contains('toggle-dark-mode'));
+    expect(webViewSource, contains('text.includes(\'system mode\')'));
+    expect(webViewSource, contains('MediaQuery.platformBrightnessOf(context)'));
+    expect(pageSource, contains('_whiteboardCanvasDarkColor'));
+    expect(pageSource, contains('canvasFallbackColor'));
+    expect(pageSource, contains('didChangePlatformBrightness'));
+    expect(pageSource, contains('_brightnessPollTimer'));
+    expect(pageSource, contains('Timer.periodic'));
+    expect(pageSource, contains('_syncSystemBrightness'));
+    final indexSource = File('assets/excalidraw/index.html').readAsStringSync();
+    expect(indexSource, contains('getSystemTheme'));
+    expect(indexSource, contains('getInitialTheme'));
+    expect(webViewSource, contains('hostTheme'));
+    expect(webViewSource, contains('ponynotes-whiteboard-v7'));
+    expect(indexSource,
+        contains('localStorage.setItem("excalidraw-theme", theme)'));
+    expect(indexSource, contains('initialTheme'));
+    final remoteSource = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    expect(remoteSource, contains('hostTheme'));
+    expect(remoteSource, contains('__ponynotesApplyTheme'));
+    expect(remoteSource, contains('MediaQuery.platformBrightnessOf(context)'));
+    expect(remoteSource, contains('WidgetsBindingObserver'));
+    expect(remoteSource, contains('_brightnessPollTimer'));
+    expect(remoteSource, contains('Timer.periodic'));
+    expect(remoteSource, contains('_syncSystemBrightness'));
+    expect(remoteSource, contains('syncExcalidrawEditorTheme'));
+    expect(remoteSource, contains('__ponynotesThemeSync'));
+  });
+
   test('whiteboard uses memory storage only on macOS', () {
     final webViewSource = File(
       'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
@@ -244,7 +302,7 @@ void main() {
       source,
       isNot(contains('_debounceDuration = Duration(milliseconds: 50)')),
     );
-    expect(source, contains('Duration(milliseconds: 650)'));
+    expect(source, contains('Duration(milliseconds: 900)'));
     expect(source, isNot(contains('Saving whiteboard data, fullData keys')));
     expect(source, isNot(contains('Files count:')));
     expect(source, isNot(contains('Notification update: key=')));

@@ -250,9 +250,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final storageMode = defaultTargetPlatform == TargetPlatform.macOS
           ? 'memory'
           : 'persistent';
-      const cacheVersion = 'ponynotes-whiteboard-v4';
+      // 将 Flutter 读取到的系统亮度传给 WebView，规避部分 iOS WKWebView
+      // 的 prefers-color-scheme 与系统设置不同步，确保 React 首屏即为暗色。
+      final hostTheme =
+          MediaQuery.platformBrightnessOf(context) == Brightness.dark
+              ? 'dark'
+              : 'light';
+      // 入口页包含首屏主题初始化脚本，版本变化用于主动淘汰设备上的旧 WebView 缓存。
+      const cacheVersion = 'ponynotes-whiteboard-v7';
       final url =
-          '$baseUrl/index.html?viewId=$viewId&storageMode=$storageMode&v=$cacheVersion';
+          '$baseUrl/index.html?viewId=$viewId&storageMode=$storageMode&hostTheme=$hostTheme&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
       // debug logs removed
@@ -745,11 +752,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 设置主题
       final theme =
-          Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+          MediaQuery.platformBrightnessOf(context) == Brightness.dark
+              ? 'dark'
+              : 'light';
       // debug log removed
       await _safeEvalJs('''
         console.log('[ExcalidrawWebView] Setting theme to $theme');
-        if (window.setTheme) {
+        if (window.setHostTheme) {
+          window.setHostTheme('$theme');
+        } else if (window.setTheme) {
           window.setTheme('$theme');
         } else {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
@@ -999,6 +1010,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           .main-menu-dropdown {
             display: none !important;
           }
+
+          /* 白板主题强制跟随宿主系统，隐藏 Excalidraw 内置主题切换项。 */
+          [data-testid="toggle-dark-mode"],
+          [data-testid="toggle-theme"],
+          .dropdown-menu-item[data-testid*="theme"],
+          .dropdown-menu-item-base:has(input[name="theme"]) {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+          }
         `;
         
         document.head.appendChild(style);
@@ -1013,6 +1034,37 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           
           document.querySelectorAll('.main-menu-dropdown').forEach(container => {
             container.style.display = 'none';
+          });
+
+          document.querySelectorAll('[data-testid="toggle-dark-mode"], [data-testid="toggle-theme"], .dropdown-menu-item').forEach(item => {
+            const text = (item.textContent || '').toLowerCase();
+            const label = (item.getAttribute('aria-label') || '').toLowerCase();
+            if (text.includes('dark mode') || text.includes('light mode') ||
+                text.includes('system mode') || text.includes('主题') ||
+                text.includes('模式') || label.includes('theme') ||
+                label.includes('mode')) {
+              item.style.display = 'none';
+              item.style.visibility = 'hidden';
+              item.style.pointerEvents = 'none';
+            }
+          });
+
+          // 移动端主题菜单使用 input[name="theme"] 单选组，没有主题按钮的
+          // data-testid；隐藏其整行并拦截 change，避免用户改写宿主系统主题。
+          document.querySelectorAll('input[name="theme"]').forEach(input => {
+            const item = input.closest('.dropdown-menu-item-base') || input.parentElement?.parentElement;
+            if (item) {
+              item.style.display = 'none';
+              item.style.visibility = 'hidden';
+              item.style.pointerEvents = 'none';
+            }
+            if (!input.dataset.ponynotesThemeGuarded) {
+              input.dataset.ponynotesThemeGuarded = 'true';
+              input.addEventListener('change', event => {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+              }, true);
+            }
           });
         };
         
@@ -1121,6 +1173,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             background: rgba(255, 255, 255, 0.96) !important;
             border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+          }
+
+          .excalidraw.theme--dark .App-toolbar {
+            background: rgba(35, 35, 41, 0.96) !important;
+            border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24) !important;
           }
           
           /* 确保工具栏按钮可以正常点击 */
@@ -1819,7 +1877,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> updateTheme(String theme) async {
     try {
       await _safeEvalJs('''
-        if (window.setTheme) {
+        if (window.setHostTheme) {
+          window.setHostTheme('$theme');
+        } else if (window.setTheme) {
           window.setTheme('$theme');
         }
       ''', tag: 'updateTheme($theme)');
@@ -1969,10 +2029,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 设置主题
       final theme =
-          Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+          MediaQuery.platformBrightnessOf(context) == Brightness.dark
+              ? 'dark'
+              : 'light';
       await _safeEvalJs('''
         console.log('[ExcalidrawWebView] Reinitializing UI, setting theme to $theme');
-        if (window.setTheme) {
+        if (window.setHostTheme) {
+          window.setHostTheme('$theme');
+        } else if (window.setTheme) {
           window.setTheme('$theme');
         } else {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
@@ -2256,7 +2320,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               Builder(
                 builder: (context) {
                   final isDark =
-                      Theme.of(context).brightness == Brightness.dark;
+                      MediaQuery.platformBrightnessOf(context) == Brightness.dark;
                   return Container(
                     // 使用完全不透明的背景色，根据主题切换，彻底遮挡底层的 Excalidraw 加载界面
                     color: isDark ? const Color(0xFF121212) : Colors.white,

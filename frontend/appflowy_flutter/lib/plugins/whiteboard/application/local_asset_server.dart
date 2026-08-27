@@ -210,7 +210,7 @@ class LocalAssetServer {
         normalizedPath == 'flutter_bridge.js' ||
         normalizedPath == 'sw.js' ||
         normalizedPath == 'service-worker.js') {
-      return normalizedPath == 'flutter_bridge.js'
+      return normalizedPath == 'index.html' || normalizedPath == 'flutter_bridge.js'
           ? 'no-store, no-cache, must-revalidate, max-age=0'
           : 'public, max-age=300';
     }

@@ -59,6 +59,126 @@
     // 解决方案：将 initData 返回的数据保存到 JS 变量中，
     // 在 _injectFilesFromStorage 中使用此变量而非 localStorage
     let _initPayload = null;
+    // 宿主主题是白板唯一主题来源；白板内置主题选择会被自动纠正。
+    let _applyingHostTheme = false;
+    let _forcedHostTheme = null;
+    let _pendingHostTheme = null;
+
+    // Excalidraw 的 React 主题由内部 setAppTheme 状态控制，仅调用 API 的
+    // updateScene 不会更新该状态。复用 Excalidraw 自带的 Alt+Shift+D 快捷键
+    // 触发 React 状态切换，再用 API 同步画布状态。
+    document.addEventListener('keydown', (event) => {
+        if (event.altKey && event.shiftKey && event.code === 'KeyD' &&
+            !event.__ponynotesThemeSync) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        }
+    }, true);
+
+    const syncExcalidrawEditorTheme = (theme) => {
+        // 新版 Excalidraw 暴露了 React 状态 setter。优先调用它，确保
+        // editorTheme 与画布状态同时更新，不依赖 isTrusted 为 false 的合成键盘事件。
+        if (typeof window.__ponynotesSetHostTheme === 'function') {
+            window.__ponynotesSetHostTheme(theme);
+            console.info('[PonyNotes] React editor theme synchronized:', theme);
+            return;
+        }
+        const root = document.querySelector('.excalidraw');
+        if (!root) return;
+        const currentTheme = root.classList.contains('theme--dark') ? 'dark' : 'light';
+        if (currentTheme === theme) return;
+        const event = new KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            altKey: true,
+            shiftKey: true,
+            code: 'KeyD',
+            key: 'd',
+        });
+        Object.defineProperty(event, '__ponynotesThemeSync', { value: true });
+        document.dispatchEvent(event);
+        console.info('[PonyNotes] React editor theme synchronized:', theme);
+    };
+
+    const getPayloadTheme = (payload) => {
+        if (!payload || typeof payload !== 'object') return null;
+        let appState = payload.appState || payload['excalidraw-state'];
+        if (typeof appState === 'string') {
+            try { appState = JSON.parse(appState); } catch (e) { return null; }
+        }
+        const theme = appState && appState.theme;
+        return theme === 'dark' || theme === 'light' ? theme : null;
+    };
+
+    const applyHostThemeToScene = (theme) => {
+        const api = window._excalidrawAPI;
+        if (!api || typeof api.updateScene !== 'function') {
+            _pendingHostTheme = theme;
+            syncExcalidrawEditorTheme(theme);
+            return;
+        }
+        const backgroundColor = theme === 'dark' ? '#121212' : '#ffffff';
+        const currentState = typeof api.getAppState === 'function'
+            ? api.getAppState()
+            : null;
+        const alreadyApplied = currentState?.theme === theme &&
+            currentState?.viewBackgroundColor === backgroundColor;
+        syncExcalidrawEditorTheme(theme);
+        if (alreadyApplied) {
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            document.querySelectorAll('.excalidraw').forEach((root) => {
+                root.classList.toggle('theme--dark', theme === 'dark');
+            });
+            return;
+        }
+        _applyingHostTheme = true;
+        try {
+            api.updateScene({
+                // Excalidraw 的 UI 主题与画布背景是两个独立状态，必须同时设置。
+                appState: {
+                    theme,
+                    viewBackgroundColor: backgroundColor,
+                },
+                commitToHistory: false,
+            });
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            document.querySelectorAll('.excalidraw').forEach((root) => {
+                root.classList.toggle('theme--dark', theme === 'dark');
+            });
+        } finally {
+            // Excalidraw writes localStorage during updateScene; keep the guard
+            // active until that synchronous callback chain has completed.
+            setTimeout(() => { _applyingHostTheme = false; }, 0);
+        }
+    };
+
+    // Flutter 调用：将应用/系统主题作为新白板的默认主题。
+    window.setHostTheme = function (theme) {
+        const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        console.log('[PonyNotes] Host system appearance changed to ' + normalizedTheme);
+        _forcedHostTheme = normalizedTheme;
+        window.__ponynotesHostTheme = normalizedTheme;
+        if (typeof window.__ponynotesSetHostTheme === 'function') {
+            window.__ponynotesSetHostTheme(normalizedTheme);
+        }
+        if (typeof window.setTheme === 'function') {
+            window.setTheme(normalizedTheme);
+        }
+        applyHostThemeToScene(normalizedTheme);
+        if (!window._ponynotesHostThemeWatchdog) {
+            window._ponynotesHostThemeWatchdog = setInterval(() => {
+                if (_forcedHostTheme) applyHostThemeToScene(_forcedHostTheme);
+            }, 500);
+        }
+    };
+
+    const enforceHostTheme = (payload) => {
+        if (_applyingHostTheme || !_forcedHostTheme) return;
+        const sceneTheme = getPayloadTheme(payload);
+        if (sceneTheme && sceneTheme !== _forcedHostTheme) {
+            setTimeout(() => applyHostThemeToScene(_forcedHostTheme), 0);
+        }
+    };
 
     // ✅ 关键修复（数据丢失根因）：稳定 appState 助手必须在此处提前定义。
     // 原因：下方 waitForExcalidrawAndRestore() 会在 IIFE 同步执行阶段（远早于
@@ -270,6 +390,13 @@
             } else {
                 originalLocalStorage.setItem(scopedStorageKey(key), value);
             }
+            if (key.endsWith('excalidraw-state')) {
+                let state = value;
+                if (typeof state === 'string') {
+                    try { state = JSON.parse(state); } catch (e) { state = null; }
+                }
+                enforceHostTheme({ appState: state });
+            }
             if (init) {
                 scheduleFlutterStorageSync(
                     key,
@@ -372,10 +499,20 @@
                 window._excalidrawAPI = api;
                 console.log('[PonyNotes] ✅ Excalidraw API captured, restoring data...');
 
+                // 先应用宿主主题再恢复场景，避免恢复较大的白板数据期间露出白色首屏。
+                if (_pendingHostTheme) {
+                    applyHostThemeToScene(_pendingHostTheme);
+                }
+
                 if (!_filesInjected) {
                     _filesInjected = true;
                     try {
                         await _restoreWhiteboardData(api);
+                        if (_pendingHostTheme) {
+                            const pendingTheme = _pendingHostTheme;
+                            _pendingHostTheme = null;
+                            applyHostThemeToScene(pendingTheme);
+                        }
                     } catch (e) {
                         console.error('[PonyNotes] ❌ Data restoration failed:', e);
                     }
@@ -1500,7 +1637,9 @@
         try {
             const api = await waitForExcalidrawAPI();
             _initPayload = data || {};
+            if (_forcedHostTheme) applyHostThemeToScene(_forcedHostTheme);
             await _restoreWhiteboardData(api);
+            if (_forcedHostTheme) applyHostThemeToScene(_forcedHostTheme);
         } catch (e) {
             console.error('[PonyNotes] loadExcalidrawData failed', e);
         }
@@ -1667,6 +1806,7 @@
             if (data.key === 'elements') {
                 api.updateScene({ elements: data.value, commitToHistory: false });
             } else if (data.key === 'appState') {
+                enforceHostTheme({ appState: data.value });
                 const stableAppState = pickStableAppState(data.value);
                 if (Object.keys(stableAppState).length > 0) {
                     api.updateScene({ appState: stableAppState, commitToHistory: false });
