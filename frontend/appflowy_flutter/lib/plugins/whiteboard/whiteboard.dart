@@ -1,5 +1,6 @@
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -47,7 +48,8 @@ const _preferHostFullWindowMoreItemKey = 'preferHostFullWindowMoreItem';
 const _preferHostTopRightActionsKey = 'preferHostTopRightActions';
 const _whiteboardHostActionIconColorLight = Color(0xFF111111);
 const _whiteboardHostActionIconColorDark = Color(0xFFF3F4F6);
-const _whiteboardCanvasFallbackColor = Color(0xFFFFFFFF);
+const _whiteboardCanvasLightColor = Color(0xFFFFFFFF);
+const _whiteboardCanvasDarkColor = Color(0xFF121212);
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -300,6 +302,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   // 主题监听
   Brightness? _lastBrightness;
+  Timer? _brightnessPollTimer;
   late final String _sessionTraceId;
   late final String _loadTraceId;
   late final Stopwatch _loadStopwatch;
@@ -309,6 +312,14 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     super.initState();
     // 注册应用生命周期监听
     WidgetsBinding.instance.addObserver(this);
+    // iOS 的 PlatformView 场景下，系统亮度事件偶尔不会传递到 Flutter 页面。
+    // 轮询只在检测到亮度变化时同步，作为原生事件监听的兜底。
+    _brightnessPollTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _syncSystemBrightness(
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      ),
+    );
 
     _sessionTraceId =
         ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
@@ -530,9 +541,49 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   }
 
   @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _syncSystemBrightness(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
+  }
+
+  void _syncSystemBrightness(Brightness brightness) {
+    if (_isDisposing || _lastBrightness == brightness) return;
+
+    final theme = brightness == Brightness.dark ? 'dark' : 'light';
+    Log.info('[WhiteboardPage] 系统外观变化: $theme');
+    // MediaQuery 通常会随后重建页面，但这里直接同步 WebView，避免依赖
+    // Flutter 重建时序，确保白板停留在前台时也能实时切换主题。
+    _lastBrightness = brightness;
+    if (mounted) {
+      setState(() {});
+      _scheduleThemeSync(theme);
+    }
+  }
+
+  void _scheduleThemeSync(String theme) {
+    void sync() {
+      if (!mounted || _isDisposing) return;
+      final webViewState = _webViewKey.currentState;
+      if (webViewState != null) {
+        unawaited(webViewState.updateTheme(theme));
+      }
+    }
+
+    // 立即尝试一次，并覆盖 WebView 尚未完成初始化的几个常见时序窗口。
+    sync();
+    WidgetsBinding.instance.addPostFrameCallback((_) => sync());
+    Future<void>.delayed(const Duration(milliseconds: 180), sync);
+    Future<void>.delayed(const Duration(milliseconds: 600), sync);
+  }
+
+  @override
   void dispose() {
     // 注销应用生命周期监听
     WidgetsBinding.instance.removeObserver(this);
+    _brightnessPollTimer?.cancel();
+    _brightnessPollTimer = null;
 
     _isDisposing = true;
     logDiagnosticEvent(
@@ -943,7 +994,13 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   Widget build(BuildContext context) {
     // 监听主题变化
     final appearanceCubit = context.watch<AppearanceSettingsCubit>();
-    final currentBrightness = Theme.of(context).brightness;
+    // 白板强制跟随设备系统亮度，不受应用内手动主题设置影响。
+    final currentBrightness = MediaQuery.platformBrightnessOf(context);
+    // WebView 使用透明背景，外层兜底层也必须跟随系统，否则首屏加载或
+    // Excalidraw 画布尚未绘制时会露出白色背景。
+    final canvasFallbackColor = currentBrightness == Brightness.dark
+        ? _whiteboardCanvasDarkColor
+        : _whiteboardCanvasLightColor;
 
     // 如果主题发生变化，更新Excalidraw主题
     if (_lastBrightness != null && _lastBrightness != currentBrightness) {
@@ -958,6 +1015,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     if (_isLoadingData && _showLegacyBlockingLoader) {
       return Scaffold(
         resizeToAvoidBottomInset: !PlatformInfo.isTablet,
+        backgroundColor: canvasFallbackColor,
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -973,15 +1031,15 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
     return Scaffold(
       resizeToAvoidBottomInset: !PlatformInfo.isTablet,
-      backgroundColor: _whiteboardCanvasFallbackColor,
+      backgroundColor: canvasFallbackColor,
       body: ValueListenableBuilder<bool>(
         valueListenable: FullWindowController.isFullWindow,
         child: _buildExcalidrawView(),
         builder: (context, isFullWindow, excalidrawView) {
           return Stack(
             children: [
-              const Positioned.fill(
-                child: ColoredBox(color: _whiteboardCanvasFallbackColor),
+              Positioned.fill(
+                child: ColoredBox(color: canvasFallbackColor),
               ),
               excalidrawView!,
               if (_shouldRenderTopActionsBar(isFullWindow))

@@ -35,7 +35,8 @@ class RemoteWhiteboardPage extends StatefulWidget {
   State<RemoteWhiteboardPage> createState() => _RemoteWhiteboardPageState();
 }
 
-class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
+class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
+    with WidgetsBindingObserver {
   InAppWebViewController? _controller;
   bool _isLoading = true;
   bool _isDisposed = false;
@@ -43,6 +44,8 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   String? _userNickname;
   bool _ownsExportController = false;
   bool _isExporting = false;
+  String? _lastHostTheme;
+  Timer? _brightnessPollTimer;
   // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
   final WhiteboardMirrorService _mirrorService = WhiteboardMirrorService();
   // Flutter 侧再做一次按 sceneVersion 去重，避免重复落盘。
@@ -51,6 +54,15 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // iOS 的 PlatformView 场景下，系统亮度事件偶尔不会传递到 Flutter 页面。
+    // 轮询只在检测到亮度变化时同步，作为原生事件监听的兜底。
+    _brightnessPollTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _syncSystemBrightness(
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      ),
+    );
     // 【慢机器丢最后编辑修复】注册"切走前冲刷保存"回调，供上游 TabsBloc 在真正
     // dispose 本页前 await（保证最后一次保存在 WebView 销毁前完成或超时）。
     // 用本 State 实例作为 key，避免同一 viewId 新旧页面重建时互相误删注册项。
@@ -61,6 +73,9 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _brightnessPollTimer?.cancel();
+    _brightnessPollTimer = null;
     _isDisposed = true;
     // 注销冲刷回调（本页已销毁，不再参与上游冲刷）
     WhiteboardExitFlush.instance.unregister(this);
@@ -73,9 +88,11 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     // 其他路径继续访问已失效的 controller。
     final controller = _controller;
     _controller = null;
-    controller?.evaluateJavascript(
+    controller
+        ?.evaluateJavascript(
       source: 'window.__xmForceSave && window.__xmForceSave("dispose");',
-    ).catchError((e) {
+    )
+        .catchError((e) {
       Log.warn('[RemoteWhiteboard] 退出保存触发失败: $e');
       return null;
     });
@@ -90,6 +107,43 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
       });
     }
     super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _syncSystemBrightness(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
+  }
+
+  void _syncSystemBrightness(Brightness brightness) {
+    if (_isDisposed) return;
+
+    final theme = brightness == Brightness.dark ? 'dark' : 'light';
+    if (_lastHostTheme == theme) return;
+
+    Log.info('[RemoteWhiteboard] 系统外观变化: $theme');
+    _lastHostTheme = theme;
+    Log.info('[RemoteWhiteboard] 系统外观已变化: $theme，开始同步 Excalidraw');
+    if (mounted) {
+      setState(() {});
+    }
+    // 不依赖页面重建或 URL 重新加载，直接更新当前远程 Excalidraw。
+    _scheduleRemoteThemeSync(theme);
+  }
+
+  void _scheduleRemoteThemeSync(String theme) {
+    void sync() {
+      if (!_isDisposed) {
+        unawaited(_applyRemoteTheme(theme));
+      }
+    }
+
+    sync();
+    WidgetsBinding.instance.addPostFrameCallback((_) => sync());
+    Future<void>.delayed(const Duration(milliseconds: 180), sync);
+    Future<void>.delayed(const Duration(milliseconds: 600), sync);
   }
 
   /// 协作白板由远程 WebView 承载，仍需注册导出控制器供页面“更多”菜单调用。
@@ -246,7 +300,8 @@ return await window.__xmExportImage('$format');
     final userProfileResult = await UserBackendService.getCurrentUserProfile();
     String nickname = userProfileResult.fold(
       (profile) {
-        Log.info('[RemoteWhiteboard] ✅ Got user profile: id=${profile.id}, name=${profile.name}, email=${profile.email}');
+        Log.info(
+            '[RemoteWhiteboard] ✅ Got user profile: id=${profile.id}, name=${profile.name}, email=${profile.email}');
         return profile.name;
       },
       (error) {
@@ -257,20 +312,34 @@ return await window.__xmExportImage('$format');
 
     if (nickname.isEmpty) {
       nickname = '小马笔记用户';
-      Log.info('[RemoteWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
+      Log.info(
+          '[RemoteWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
     }
 
     setState(() {
       _userNickname = nickname;
     });
-    Log.info('[RemoteWhiteboard] 📌 Final nickname: "$nickname", isEmpty: ${nickname.isEmpty}, length: ${nickname.length}');
+    Log.info(
+        '[RemoteWhiteboard] 📌 Final nickname: "$nickname", isEmpty: ${nickname.isEmpty}, length: ${nickname.length}');
   }
 
   @override
   Widget build(BuildContext context) {
+    final hostTheme =
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark
+            ? 'dark'
+            : 'light';
+    if (_lastHostTheme != null && _lastHostTheme != hostTheme) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _applyRemoteTheme(hostTheme);
+      });
+    }
+    _lastHostTheme = hostTheme;
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.white,
+      backgroundColor:
+          hostTheme == 'dark' ? const Color(0xFF121212) : Colors.white,
       body: _userNickname == null
           ? const Center(
               child: CircularProgressIndicator(),
@@ -300,6 +369,67 @@ return await window.__xmExportImage('$format');
                     ),
                     UserScript(
                       source: '''
+                        (function() {
+                          var params = new URLSearchParams(window.location.search || '');
+                          var hostTheme = params.get('hostTheme') === 'dark' ? 'dark' : 'light';
+                          window.__ponynotesHostTheme = hostTheme;
+                          try { window.localStorage.setItem('excalidraw-theme', hostTheme); } catch (_) {}
+                          document.documentElement.classList.toggle('dark', hostTheme === 'dark');
+                          document.addEventListener('keydown', function(event) {
+                            if (event.altKey && event.shiftKey && event.code === 'KeyD' && !event.__ponynotesThemeSync) {
+                              event.preventDefault();
+                              event.stopImmediatePropagation();
+                            }
+                          }, true);
+                          var syncExcalidrawEditorTheme = function(theme) {
+                            var root = document.querySelector('.excalidraw');
+                            if (!root) return;
+                            var currentTheme = root.classList.contains('theme--dark') ? 'dark' : 'light';
+                            if (currentTheme === theme) return;
+                            var event = new KeyboardEvent('keydown', {
+                              bubbles: true,
+                              cancelable: true,
+                              altKey: true,
+                              shiftKey: true,
+                              code: 'KeyD',
+                              key: 'd'
+                            });
+                            Object.defineProperty(event, '__ponynotesThemeSync', { value: true });
+                            document.dispatchEvent(event);
+                            console.info('[PonyNotes] React editor theme synchronized:', theme);
+                          };
+                          var style = document.createElement('style');
+                          style.textContent = '.dropdown-menu-item-base:has(input[name="theme"]), [data-testid="toggle-dark-mode"] { display:none!important; pointer-events:none!important; }';
+                          (document.head || document.documentElement).appendChild(style);
+                          window.__ponynotesApplyTheme = function(theme) {
+                            window.__ponynotesHostTheme = theme === 'dark' ? 'dark' : 'light';
+                            try { window.localStorage.setItem('excalidraw-theme', window.__ponynotesHostTheme); } catch (_) {}
+                            syncExcalidrawEditorTheme(window.__ponynotesHostTheme);
+                            document.documentElement.classList.toggle('dark', window.__ponynotesHostTheme === 'dark');
+                            var api = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+                            console.info('[PonyNotes] host theme requested:', window.__ponynotesHostTheme, 'apiReady=', !!api);
+                            if (api && typeof api.updateScene === 'function') {
+                              api.updateScene({ appState: {
+                                theme: window.__ponynotesHostTheme,
+                                viewBackgroundColor: window.__ponynotesHostTheme === 'dark' ? '#121212' : '#ffffff'
+                              }, commitToHistory: false });
+                              document.querySelectorAll('.excalidraw').forEach(function(root) {
+                                root.classList.toggle('theme--dark', window.__ponynotesHostTheme === 'dark');
+                              });
+                            }
+                          };
+                          document.addEventListener('change', function(event) {
+                            if (event.target && event.target.name === 'theme') {
+                              event.preventDefault();
+                              event.stopImmediatePropagation();
+                              window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
+                            }
+                          }, true);
+                          setInterval(function() {
+                            window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
+                          }, 500);
+                        })();
+
                         (function() {
                           var originalDownload = HTMLAnchorElement.prototype.download;
                           Object.defineProperty(HTMLAnchorElement.prototype, 'download', {
@@ -349,6 +479,7 @@ return await window.__xmExportImage('$format');
                     setState(() {
                       _isLoading = false;
                     });
+                    _applyRemoteTheme(hostTheme);
                     Log.debug('✅ [RemoteWhiteboard] Loaded: $url');
                   },
                   onReceivedError: (controller, request, error) {
@@ -356,7 +487,8 @@ return await window.__xmExportImage('$format');
                       _isLoading = false;
                       _loadingError = error.description;
                     });
-                    Log.error('❌ [RemoteWhiteboard] Load error: ${error.type} - ${error.description}');
+                    Log.error(
+                        '❌ [RemoteWhiteboard] Load error: ${error.type} - ${error.description}');
                   },
                   // 【白板丢内容修复】把页面 console 输出写入客户端日志，
                   // 页内 JS 故障（此前完全不可见）从此可以在 log 文件中定位
@@ -378,30 +510,43 @@ return await window.__xmExportImage('$format');
                     // 修复：页面已 dispose 时不应再 reload，避免向已销毁的
                     // 原生 WebView 发送 MethodChannel 消息触发空指针崩溃。
                     if (!mounted || _isDisposed) return;
-                    Log.error('[RemoteWhiteboard] ⚠️ WebView 内容进程已终止，自动重新加载白板页面');
+                    Log.error(
+                        '[RemoteWhiteboard] ⚠️ WebView 内容进程已终止，自动重新加载白板页面');
                     await controller.reload();
                   },
-                  shouldOverrideUrlLoading: (controller, navigationAction) async {
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
                     final url = navigationAction.request.url?.toString();
                     final headers = navigationAction.request.headers;
-                    final filename = headers != null ? 
-                      (headers['Content-Disposition']?.split('filename=').last ?? 
-                       headers['content-disposition']?.split('filename=').last ?? 'download') : 'download';
-                    
+                    final filename = headers != null
+                        ? (headers['Content-Disposition']
+                                ?.split('filename=')
+                                .last ??
+                            headers['content-disposition']
+                                ?.split('filename=')
+                                .last ??
+                            'download')
+                        : 'download';
+
                     if (url != null && url.startsWith('blob:')) {
-                      Log.info('[RemoteWhiteboard] 🚫 Blocking blob navigation, starting download: $url, filename: $filename');
-                      _downloadBlobUrl(controller, url, filename.replaceAll('"', ''));
+                      Log.info(
+                          '[RemoteWhiteboard] 🚫 Blocking blob navigation, starting download: $url, filename: $filename');
+                      _downloadBlobUrl(
+                          controller, url, filename.replaceAll('"', ''));
                       return NavigationActionPolicy.CANCEL;
                     }
                     if (url != null && url.startsWith('data:')) {
-                      Log.info('[RemoteWhiteboard] 🚫 Blocking data URL navigation, starting download: $url, filename: $filename');
+                      Log.info(
+                          '[RemoteWhiteboard] 🚫 Blocking data URL navigation, starting download: $url, filename: $filename');
                       _saveDataUrlToFile(url, filename.replaceAll('"', ''));
                       return NavigationActionPolicy.CANCEL;
                     }
                     return NavigationActionPolicy.ALLOW;
                   },
-                  onDownloadStartRequest: (controller, downloadStartRequest) async {
-                    Log.info('[RemoteWhiteboard] 📥 Download request: ${downloadStartRequest.url}');
+                  onDownloadStartRequest:
+                      (controller, downloadStartRequest) async {
+                    Log.info(
+                        '[RemoteWhiteboard] 📥 Download request: ${downloadStartRequest.url}');
                     await _handleDownloadRequest(downloadStartRequest);
                   },
                 ),
@@ -450,9 +595,29 @@ return await window.__xmExportImage('$format');
     final encodedNickname = Uri.encodeComponent(_userNickname ?? '');
     Log.info('[RemoteWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
 
-    final url = 'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname#room=${widget.roomId},${widget.roomKey}';
+    final hostTheme =
+        MediaQuery.platformBrightnessOf(context) == Brightness.dark
+            ? 'dark'
+            : 'light';
+    final url =
+        'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname&hostTheme=$hostTheme#room=${widget.roomId},${widget.roomKey}';
     Log.info('[RemoteWhiteboard] ✅ Built URL: $url');
     return url;
+  }
+
+  Future<void> _applyRemoteTheme(String theme) async {
+    final controller = _controller;
+    if (_isDisposed || controller == null) return;
+    try {
+      await controller.evaluateJavascript(source: '''
+        if (typeof window.__ponynotesApplyTheme === 'function') {
+          window.__ponynotesApplyTheme('${theme == 'dark' ? 'dark' : 'light'}');
+        }
+      ''');
+      Log.info('[RemoteWhiteboard] WebView 主题同步脚本已发送: $theme');
+    } catch (e) {
+      Log.warn('[RemoteWhiteboard] WebView 主题同步失败（页面可能尚未就绪）: $e');
+    }
   }
 
   void _setupDownloadHandler(InAppWebViewController controller) {
@@ -463,8 +628,9 @@ return await window.__xmExportImage('$format');
         try {
           final String blobUrl = args[0];
           final String filename = args.length > 1 ? args[1] : 'download';
-          Log.info('[RemoteWhiteboard] 📥 downloadBlobFile handler: blobUrl=$blobUrl, filename=$filename');
-          
+          Log.info(
+              '[RemoteWhiteboard] 📥 downloadBlobFile handler: blobUrl=$blobUrl, filename=$filename');
+
           if (blobUrl.startsWith('data:')) {
             await _saveDataUrlToFile(blobUrl, filename);
           } else if (blobUrl.startsWith('blob:')) {
@@ -491,7 +657,7 @@ return await window.__xmExportImage('$format');
               base64Data = parts[1];
             }
           }
-          
+
           await _saveBase64ToFile(base64Data, filename, mimeType);
         }
       },
@@ -538,11 +704,12 @@ return await window.__xmExportImage('$format');
     );
   }
 
-  Future<void> _handleDownloadRequest(DownloadStartRequest downloadStartRequest) async {
+  Future<void> _handleDownloadRequest(
+      DownloadStartRequest downloadStartRequest) async {
     try {
       final url = downloadStartRequest.url.toString();
       Log.info('[RemoteWhiteboard] 📥 Handling download request: $url');
-      
+
       if (url.startsWith('data:')) {
         final filename = downloadStartRequest.suggestedFilename ?? 'download';
         await _saveDataUrlToFile(url, filename);
@@ -559,9 +726,10 @@ return await window.__xmExportImage('$format');
     }
   }
 
-  Future<void> _downloadBlobUrl(InAppWebViewController controller, String blobUrl, String filename) async {
+  Future<void> _downloadBlobUrl(InAppWebViewController controller,
+      String blobUrl, String filename) async {
     Log.info('[RemoteWhiteboard] 📥 Downloading blob URL: $blobUrl');
-    
+
     try {
       final jsCode = '''
         (async function() {
@@ -576,7 +744,7 @@ return await window.__xmExportImage('$format');
           reader.readAsDataURL(blob);
         })();
       ''';
-      
+
       await controller.evaluateJavascript(source: jsCode);
     } catch (e) {
       Log.error('[RemoteWhiteboard] ❌ _downloadBlobUrl error: $e');
@@ -600,9 +768,11 @@ return await window.__xmExportImage('$format');
     }
   }
 
-  Future<void> _saveBase64ToFile(String base64Data, String filename, String mimeType) async {
+  Future<void> _saveBase64ToFile(
+      String base64Data, String filename, String mimeType) async {
     try {
-      final String cleanBase64 = base64Data.replaceAll('\n', '').replaceAll('\r', '');
+      final String cleanBase64 =
+          base64Data.replaceAll('\n', '').replaceAll('\r', '');
       final List<int> bytes = base64Decode(cleanBase64);
 
       String ext = '';
@@ -636,20 +806,21 @@ return await window.__xmExportImage('$format');
         );
         return;
       }
-      
-      final Directory downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+
+      final Directory downloadsDir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       await downloadsDir.create(recursive: true);
       final File file = File('${downloadsDir.path}/$finalFilename');
 
       await file.writeAsBytes(bytes);
       Log.info('[RemoteWhiteboard] ✅ File saved: ${file.path}');
-      
+
       showToastNotification(
         message: '文件已保存到: ${file.path.split('/').last}',
         type: ToastificationType.success,
         description: file.path,
       );
-      
+
       await OpenFilex.open(file.path);
     } catch (e) {
       Log.error('[RemoteWhiteboard] ❌ _saveBase64ToFile error: $e');
@@ -693,14 +864,16 @@ return await window.__xmExportImage('$format');
 
   String _detectExtensionFromBytes(List<int> bytes) {
     if (bytes.length >= 4) {
-      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      if (bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47) {
         return 'png';
       }
       if (bytes[0] == 0xFF && bytes[1] == 0xD8) {
         return 'jpg';
       }
-      if (bytes.length >= 10 && 
-          (bytes[0] == 0x3C && bytes[1] == 0x73) || 
+      if (bytes.length >= 10 && (bytes[0] == 0x3C && bytes[1] == 0x73) ||
           (bytes[0] == 0x3C && bytes[1] == 0x3F)) {
         return 'svg';
       }

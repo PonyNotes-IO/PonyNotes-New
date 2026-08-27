@@ -38,19 +38,36 @@
             }
         }
 
-        function getTheme() {
-            const theme = window.localStorage.getItem("excalidraw-theme");
-
-            if (theme && theme === "system") {
-                return window.matchMedia("(prefers-color-scheme: dark)").matches
-                    ? "dark"
-                    : "light";
-            } else {
-                return theme || "light";
-            }
+        function getSystemTheme() {
+            return window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
         }
 
-        setTheme(getTheme());
+        function getInitialTheme() {
+            const hostTheme = new URLSearchParams(window.location.search).get("hostTheme");
+            return hostTheme === "dark" || hostTheme === "light"
+                ? hostTheme
+                : getSystemTheme();
+        }
+
+        // PonyNotes 白板强制跟随设备系统主题。必须在 Excalidraw React
+        // 首次渲染前写入 localStorage，否则其内部 editorTheme 会默认成 light。
+        function getTheme() {
+            const theme = getInitialTheme();
+            try {
+                window.localStorage.setItem("excalidraw-theme", theme);
+            } catch (e) {
+                // WebView 存储不可用时仍使用系统主题渲染首屏。
+            }
+            return theme;
+        }
+
+        const initialTheme = getTheme();
+        window.__ponynotesHostTheme = initialTheme;
+        setTheme(initialTheme);
+        window.matchMedia("(prefers-color-scheme: dark)")
+            .addEventListener("change", () => setTheme(getSystemTheme()));
     } catch (e) {
         console.error("Error setting dark mode", e);
     }</script>
@@ -130,7 +147,7 @@
             user-select: auto
         }
     }</style>
-    <script type="module" crossorigin src="/assets/index-D9TGhlVV.js"></script>
+    <script type="module" crossorigin src="/assets/index-D9TGhlVV.js?ponynotes-whiteboard-v7"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-6msCUY9p.css">
     <style>
         @font-face {
