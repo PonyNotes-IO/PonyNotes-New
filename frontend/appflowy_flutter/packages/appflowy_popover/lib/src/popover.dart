@@ -173,6 +173,11 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
 
   Offset? cursorPosition;
 
+  /// Monotonic token to prevent stale async close callbacks from
+  /// removing a newly inserted overlay entry when showOverlay is
+  /// called while a previous animated close is still in-flight.
+  int _closeToken = 0;
+
   @override
   void initState() {
     super.initState();
@@ -184,7 +189,6 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
   @override
   void deactivate() {
     close(notify: false);
-
     super.deactivate();
   }
 
@@ -216,6 +220,9 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
 
   void showOverlay([Offset? position]) {
     close(withAnimation: true);
+    // Invalidate any pending async close callback so it won't
+    // remove the new entry we are about to insert.
+    _closeToken++;
 
     if (widget.mutex != null) {
       widget.mutex?.state = this;
@@ -251,7 +258,16 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
     bool withAnimation = false,
   }) {
     if (rootEntry.contains(this)) {
+      // Capture the token so we can detect if a new showOverlay
+      // has superseded this close while its reverse animation
+      // was still in-flight.
+      final token = _closeToken;
+
       void callback() {
+        // If a new showOverlay happened after this close was
+        // scheduled, the token will have been incremented and
+        // we must NOT remove the (now different) entry.
+        if (token != _closeToken) return;
         rootEntry.removeEntry(this);
         if (notify) {
           widget.onClose?.call();
@@ -366,7 +382,7 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildMask() {
-    return PopoverMask(
+    return _PopoverMaskWithGracePeriod(
       decoration: widget.maskDecoration,
       onTap: () async {
         if (await widget.canClose?.call() ?? true) {
@@ -556,4 +572,56 @@ class PopoverContainerState extends State<PopoverContainer> {
   void close() => widget.onClose();
 
   void closeAll() => widget.onCloseAll();
+}
+
+/// Wraps [PopoverMask] with [IgnorePointer] to completely block touch
+/// events from reaching the mask during a grace period after the popover
+/// is opened.
+///
+/// On iOS/iPad, the touch sequence that opened the popover can be
+/// re-dispatched to the newly inserted mask (often ~300-400ms later due
+/// to iOS tap-recognition delay), causing the popover to close
+/// immediately. Using [IgnorePointer] is more reliable than checking a
+/// timestamp in `onTap` because it prevents the gesture arena from ever
+/// registering the spurious tap.
+class _PopoverMaskWithGracePeriod extends StatefulWidget {
+  const _PopoverMaskWithGracePeriod({
+    required this.onTap,
+    this.decoration,
+  });
+
+  final Decoration? decoration;
+  final VoidCallback onTap;
+
+  @override
+  State<_PopoverMaskWithGracePeriod> createState() =>
+      _PopoverMaskWithGracePeriodState();
+}
+
+class _PopoverMaskWithGracePeriodState
+    extends State<_PopoverMaskWithGracePeriod> {
+  bool _ignoring = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Block all touch events for 500ms after the mask is inserted.
+    // This covers the iOS tap-recognition delay (~350-400ms) with margin.
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() => _ignoring = false);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: _ignoring,
+      child: PopoverMask(
+        decoration: widget.decoration,
+        onTap: widget.onTap,
+      ),
+    );
+  }
 }

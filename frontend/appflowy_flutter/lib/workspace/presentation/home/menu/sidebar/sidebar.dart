@@ -909,15 +909,25 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             beginOpacity: 0.8,
             controller: _popoverController,
             triggerActions: PopoverTriggerFlags.none,
-            onOpen: () {
-              context
-                  .read<UserWorkspaceBloc>()
-                  .add(UserWorkspaceEvent.fetchWorkspaces());
-            },
             popupBuilder: (_) {
               return BlocProvider<UserWorkspaceBloc>.value(
                 value: context.read<UserWorkspaceBloc>(),
                 child: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+                  // 仅在实际数据变化时才重建，避免 OverlayEntry 插入后
+                  // 立即重建导致 iPad 上弹框被错误移除
+                  buildWhen: (previous, current) {
+                    if (previous.currentWorkspace?.workspaceId !=
+                        current.currentWorkspace?.workspaceId) {
+                      return true;
+                    }
+                    final prevIds = previous.workspaces
+                        .map((w) => w.workspaceId)
+                        .toSet();
+                    final currIds =
+                        current.workspaces.map((w) => w.workspaceId).toSet();
+                    if (prevIds.length != currIds.length) return true;
+                    return prevIds.difference(currIds).isNotEmpty;
+                  },
                   builder: (context, state) {
                     final currentWorkspace = state.currentWorkspace;
                     final workspaces = state.workspaces;
@@ -926,7 +936,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     }
                     return WorkspacesMenu(
                       userProfile: widget.userProfile,
-                      currentWorkspace: currentWorkspace,
+                      currentWorkspace: currentWorkspace, 
                       workspaces: workspaces,
                     );
                   },
@@ -937,10 +947,14 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 onTap: () {
-                  context.read<UserWorkspaceBloc>().add(
-                        UserWorkspaceEvent.fetchWorkspaces(),
-                      );
                   _popoverController.show();
+                  // 弹框显示后延迟再 fetch，确保 OverlayEntry 先稳定渲染，
+                  // 避免 iPad 上因弹框内容立即重建而被错误关闭
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    context.read<UserWorkspaceBloc>().add(
+                          UserWorkspaceEvent.fetchWorkspaces(),
+                        );
+                  });
                 },
                 behavior: HitTestBehavior.opaque,
                 child: Builder(
