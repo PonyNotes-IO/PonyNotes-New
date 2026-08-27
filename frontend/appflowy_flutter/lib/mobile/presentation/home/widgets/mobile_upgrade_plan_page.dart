@@ -7,6 +7,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
+import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
@@ -261,6 +262,22 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
                                 ],
                               ),
                             ),
+                            // iOS/macOS 专属：StoreKit 恢复购买
+                            if (Platform.isIOS || Platform.isMacOS) ...[
+                              const SizedBox(width: 20),
+                              GestureDetector(
+                                onTap: () async => _restoreApplePurchases(),
+                                child: Text(
+                                  '恢复购买',
+                                  style: theme.textStyle.body
+                                      .standard(
+                                        color:
+                                            theme.textColorScheme.secondary,
+                                      )
+                                      .copyWith(fontSize: 12),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ],
@@ -954,7 +971,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   /// 与 AccountManagementBloc._getUserUuid() 逻辑保持一致。
   String _extractUserId(UserProfilePB profile) {
     final rawToken = profile.token;
-    if (rawToken != null && rawToken.isNotEmpty) {
+    if (rawToken.isNotEmpty) {
       String? accessToken;
       try {
         final decoded = jsonDecode(rawToken);
@@ -986,6 +1003,36 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       }
     }
     return profile.id.toString();
+  }
+
+  /// StoreKit 恢复购买（重装 / 换设备 / 掉单 时手动同步）。
+  ///
+  /// 内部会：
+  /// 1. 调 InAppPurchase.restorePurchases() 触发 StoreKit 重放历史交易
+  ///    → purchaseStream 监听器会逐条执行 verify → finish。
+  /// 2. 再兜底扫一次 Transaction.unfinished（in_app_purchase 3.x 走
+  ///    queryPastPurchases）把没 finish 的再补一次。
+  Future<void> _restoreApplePurchases() async {
+    if (!(Platform.isIOS || Platform.isMacOS)) {
+      showToastNotification(message: '当前平台不支持恢复购买');
+      return;
+    }
+    showToastNotification(message: '正在恢复购买，请稍候...');
+    await AppleIAPService.instance.initialize();
+    final userRes = await UserBackendService.getCurrentUserProfile();
+    final userUuid = userRes.fold((p) => _extractUserId(p), (_) => '');
+    if (userUuid.isEmpty) {
+      showToastNotification(message: '未登录，无法恢复购买');
+      return;
+    }
+    final res = await AppleIAPService.instance
+        .restorePurchasesForUser(userUuid);
+    if (!mounted) return;
+    if (res.ok) {
+      showToastNotification(message: res.message);
+    } else {
+      showToastNotification(message: '恢复失败: ${res.message}');
+    }
   }
 
   Future<void> _confirmAndPay(
@@ -1126,37 +1173,38 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     String billingType,
     String userUuid,
   ) async {
-    Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay 内购');
+    Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay（StoreKit 2）内购，'
+        'userUuid=$userUuid, billing=$billingType');
 
     final planCode = config.planCode;
     if (planCode == null || planCode.isEmpty) {
       showToastNotification(message: '暂不支持该套餐的 Apple Pay 支付');
       return;
     }
-    // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
-    final productId = 'com.ponynotes.$billingType.$planCode';
 
-    final extra = <String, dynamic>{
-      'productId': productId,
-      'planId': config.id,
-      'billingType': billingType,
-      'userInfo': userUuid,
-    };
+    // AppleIAPService 启动监听器会立即初始化一次，保险起见再补一次
+    // (重复 initialize 会直接返回)。
+    await AppleIAPService.instance.initialize();
 
-    final paymentResult = await PaymentUtil.pay(
-      method: paymentMethod,
-      amount: (price * 100).toInt(),
-      currency: 'CNY',
-      orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
-      extra: extra,
+    // ====================================================================
+    // 商品 ID 拼接格式：com.ponynotes.{billingType}.{planCode}
+    // 必须与 App Store Connect 和 后端 payment.apple.products 的 key
+    // 完全一致，否则 verify 返回"未配置的苹果商品"。
+    // 例如：com.ponynotes.monthly.pro、com.ponynotes.yearly.pro
+    // ====================================================================
+    final productId =
+        AppleIAPService.buildAppleProductId(planCode, billingType);
+
+    final res = await AppleIAPService.instance.purchaseProduct(
+      productId: productId,
+      userUuid: userUuid,
     );
 
-    if (mounted) {
-      if (paymentResult.success) {
-        showToastNotification(message: paymentResult.message);
-      } else {
-        showToastNotification(message: '支付失败: ${paymentResult.message}');
-      }
+    if (!mounted) return;
+    if (res.ok) {
+      showToastNotification(message: res.message);
+    } else {
+      showToastNotification(message: '支付失败: ${res.message}');
     }
   }
 

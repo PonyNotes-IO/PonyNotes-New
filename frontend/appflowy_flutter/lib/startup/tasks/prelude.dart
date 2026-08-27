@@ -1,5 +1,6 @@
 export 'app_widget.dart';
 export 'appflowy_cloud_task.dart';
+export 'apple_iap_init_task.dart';
 export 'auto_export_debug_logs_task.dart';
 export 'auto_update_task.dart';
 export 'debug_task.dart';

@@ -196,6 +196,10 @@ class FlowyRunner {
             WhiteboardPreloadTask(),
             NotificationServiceTask(),
             InitPlatformServiceTask(),
+            // 苹果 StoreKit 2 内购：启动 purchaseStream 永久监听，
+            // 对未 finish 的交易（扣款成功但 verify 网络异常等）
+            // 再次补单。
+            const AppleIAPInitTask(),
           ],
           const RecentServiceTask(),
         ],

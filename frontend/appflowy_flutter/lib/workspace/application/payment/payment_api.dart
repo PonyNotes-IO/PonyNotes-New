@@ -945,4 +945,271 @@ class PaymentApi {
     return token;
   }
 
+  // ======================================================================
+  // StoreKit 2 内购服务端校验接口
+  // 对接：POST /api/payment/apple/verify  与  POST /api/payment/apple/restore
+  //
+  // 规范（三条红线）：
+  //   1) App 购买时必须把 appAccountToken 设为 userUuid（标准 UUID），
+  //      以便后端 server-to-server 通知掉单时靠它认人。
+  //   2) 只有在 verify 接口返回 code==200 之后才能 finish()
+  //      （in_app_purchase 的 completePurchase），否则扣款掉单时
+  //      苹果不再重发该交易。
+  //   3) App 内不解析金额、不自行判断开通，套餐/金额/签名校验全以后端
+  //      verify 返回为准。
+  // ======================================================================
+
+  static const String _kAppleVerifyPath = '/api/payment/apple/verify';
+  static const String _kAppleRestorePath = '/api/payment/apple/restore';
+  static const String _kSubscriptionPath = '/api/ponynotes/order/subscription';
+
+  /// 提交 StoreKit 2 签名交易给后端验签 / 开通订阅。
+  ///
+  /// [userInfo]   用户 UUID（标准格式，对应购买时的 appAccountToken）
+  /// [transaction] 签名交易的 jwsRepresentation 字符串
+  ///
+  /// 后端成功返回 code==200 → App 再调 transaction.finish() / completePurchase。
+  /// 后端失败 / 网络异常 → 抛异常，由上层保留交易不 finish，下次启动
+  /// 通过 purchaseStream 自动重试。
+  ///
+  /// 该接口是幂等的：同一苹果交易号重复提交返回原订单。
+  static Future<FlowyResult<Map<String, dynamic>, FlowyError>> appleVerify({
+    required String userInfo,
+    required String transaction,
+  }) async {
+    try {
+      final (baseUrl, token) = await _resolveBaseUrlAndToken();
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Apple verify: 缺少服务器地址或客户端 token',
+        );
+      }
+      final uri = Uri.parse('$baseUrl$_kAppleVerifyPath');
+
+      final body = jsonEncode(<String, dynamic>{
+        'userInfo': userInfo,
+        'transaction': transaction,
+      });
+      Log.info('[PaymentApi] POST $uri — userInfo len=${userInfo.length}, '
+          'transaction len=${transaction.length}');
+
+      final response = await http.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'X-Client-Authorization': token,
+        },
+        body: body,
+      );
+
+      return _parseJsonResponse(
+        response,
+        successMessage: 'Apple verify success',
+        fallbackError: 'Apple verify failed',
+        requireDataNonNull: false,
+      );
+    } catch (e, s) {
+      Log.error('[PaymentApi] appleVerify exception: $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Apple verify 异常: ${e.toString()}',
+      );
+    }
+  }
+
+  /// 恢复购买：把 `Transaction.currentEntitlements` 中所有已验证交易
+  /// 的 jwsRepresentation 批量提交给后端，后端按 userInfo 关联账号
+  /// 并返回已开通的订单列表。
+  ///
+  /// [userInfo]      当前登录用户的 UUID（标准格式）
+  /// [transactions]  jws 字符串数组
+  static Future<FlowyResult<dynamic, FlowyError>> appleRestore({
+    required String userInfo,
+    required List<String> transactions,
+  }) async {
+    try {
+      final (baseUrl, token) = await _resolveBaseUrlAndToken();
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Apple restore: 缺少服务器地址或客户端 token',
+        );
+      }
+      final uri = Uri.parse('$baseUrl$_kAppleRestorePath').replace(
+        queryParameters: <String, String>{'userInfo': userInfo},
+      );
+
+      final body = jsonEncode(transactions);
+      Log.info('[PaymentApi] POST $uri — transactions=${transactions.length}');
+
+      final response = await http.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'X-Client-Authorization': token,
+        },
+        body: body,
+      );
+
+      return _parseJsonResponse(
+        response,
+        successMessage: 'Apple restore success',
+        fallbackError: 'Apple restore failed',
+        requireDataNonNull: false,
+      );
+    } catch (e, s) {
+      Log.error('[PaymentApi] appleRestore exception: $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Apple restore 异常: ${e.toString()}',
+      );
+    }
+  }
+
+  /// 刷新本地会员订阅状态（对应规范 ⑥ 与 退款/到期被动处理）。
+  ///
+  /// 退款/自动续费到期/失败全由 App Store V2 server-to-server 通知
+  /// 驱动后端处理，App 端只负责 GET 本接口同步展示。
+  static Future<FlowyResult<Map<String, dynamic>, FlowyError>>
+      getSubscription() async {
+    try {
+      final (baseUrl, token) = await _resolveBaseUrlAndToken();
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'getSubscription: 缺少服务器地址或客户端 token',
+        );
+      }
+      final uri = Uri.parse('$baseUrl$_kSubscriptionPath');
+
+      final response = await http.get(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'X-Client-Authorization': token,
+        },
+      );
+
+      return _parseJsonResponse(
+        response,
+        successMessage: 'getSubscription success',
+        fallbackError: 'getSubscription failed',
+        requireDataNonNull: false,
+      );
+    } catch (e, s) {
+      Log.error('[PaymentApi] getSubscription exception: $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = '获取订阅状态异常: ${e.toString()}',
+      );
+    }
+  }
+
+  // ------------------------------ 内部辅助 ------------------------------
+
+  /// 统一解析后端 {code, msg, data} 结构。
+  ///
+  /// - HTTP 2xx 且 json.code == 200 → 返回 data 字段（可能为 null）
+  /// - 其他情况 → 返回 FlowyError，msg 优先取后端消息
+  static Future<FlowyResult<Map<String, dynamic>, FlowyError>>
+      _parseJsonResponse(
+    http.Response response, {
+    required String successMessage,
+    required String fallbackError,
+    required bool requireDataNonNull,
+  }) async {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final msg = response.body.isNotEmpty ? response.body : fallbackError;
+      Log.error('[PaymentApi] HTTP ${response.statusCode}: $msg');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = '$fallbackError (HTTP ${response.statusCode})',
+      );
+    }
+
+    Map<String, dynamic> json;
+    try {
+      json = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      Log.error('[PaymentApi] Response JSON decode error: $e');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = '后端响应格式错误: ${e.toString()}',
+      );
+    }
+
+    final code = (json['code'] as num?)?.toInt() ?? 200;
+    final msg = (json['msg'] as String?) ?? '';
+    final data = json['data'];
+
+    if (code != 200) {
+      Log.error('[PaymentApi] $fallbackError — code=$code, msg=$msg');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = msg.isNotEmpty ? msg : fallbackError,
+      );
+    }
+
+    final Map<String, dynamic> resultData;
+    if (data == null) {
+      if (requireDataNonNull) {
+        Log.error('[PaymentApi] $fallbackError — data 为空');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.FailedToParseQuery
+            ..msg = '后端返回数据为空',
+        );
+      }
+      resultData = <String, dynamic>{};
+    } else if (data is Map<String, dynamic>) {
+      resultData = data;
+    } else {
+      // data 为数组或其他类型 → 包装一下方便上层消费
+      resultData = <String, dynamic>{'payload': data};
+    }
+
+    Log.info('[PaymentApi] $successMessage — raw data type: '
+        '${data.runtimeType}');
+    return FlowyResult.success(resultData);
+  }
+
+  /// 取 baseUrl + 标准 Bearer token（或已抽取的 access_token）。
+  static Future<(String baseUrl, String token)> _resolveBaseUrlAndToken() async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      var baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        final cloudConfigResult = await UserEventGetCloudConfig().send();
+        baseUrl = cloudConfigResult.fold(
+          (config) => config.serverUrl,
+          (_) => '',
+        );
+      }
+
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userProfileResult.fold((p) => p, (_) => null);
+      final accessToken = userProfile == null
+          ? null
+          : _extractAccessToken(userProfile.token);
+      final token = accessToken == null || accessToken.isEmpty
+          ? ''
+          : _normalizeToken(accessToken);
+
+      return (baseUrl, token);
+    } catch (e, s) {
+      Log.error('[PaymentApi] _resolveBaseUrlAndToken failed: $e\n$s');
+      return ('', '');
+    }
+  }
+
 }
