@@ -132,7 +132,7 @@ dependencies:
   pdf: ^3.11.1
   screenshot: ^3.0.0  # ✅ 用于手写笔记导出PDF时截图
   syncfusion_flutter_pdf: ^27.2.5
-  pdfrx: ^2.2.23
+  pdfrx: 2.1.5
   percent_indicator: 4.2.3
   permission_handler: ^11.3.1
   protobuf: ^5.1.0
