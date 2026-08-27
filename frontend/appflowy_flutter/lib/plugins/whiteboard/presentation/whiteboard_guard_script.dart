@@ -140,6 +140,13 @@ const String whiteboardGuardScript = r'''
     return null;
   }
 
+  // Export bridge entry point: the remote app keeps this API on its Collab
+  // React instance instead of exposing it on window.
+  window.__xmGetExcalidrawAPI = function () {
+    var c = findCollab();
+    return c && c.excalidrawAPI ? c.excalidrawAPI : null;
+  };
+
   // ---- 第 1 层：改动防抖保存（改动后 ~500ms 防抖，缩小未保存窗口）----
   var lastSavedVersion = -1;   // 已成功落盘的版本
   var lastSeenVersion = -1;    // 上一次轮询看到的版本（用于检测改动）
@@ -323,6 +330,17 @@ const String whiteboardGuardScript = r'''
   window.__xmExportImage = async function (format) {
     var buttonIndex = format === 'png' ? 0 : format === 'svg' ? 1 : -1;
     if (buttonIndex < 0) return { ok: false, reason: 'unsupported-format' };
+
+    // Mobile Flutter injects flutter_bridge.js, whose export function returns
+    // the bytes to the native save handler without opening a browser picker.
+    if (typeof window.exportExcalidraw === 'function') {
+      try {
+        await window.exportExcalidraw(format);
+        return { ok: true, direct: true };
+      } catch (e) {
+        log('直接导出失败，回退原生导出面板: ' + (e && e.message));
+      }
+    }
 
     var deadline = Date.now() + 5000;
     var c = null;

@@ -366,7 +366,8 @@
         const interval = 200;
 
         while (attempts < maxAttempts) {
-            const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+            const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ ||
+                window._excalidrawAPI || window.__xmGetExcalidrawAPI?.();
             if (api) {
                 window._excalidrawAPI = api;
                 console.log('[PonyNotes] ✅ Excalidraw API captured, restoring data...');
@@ -401,7 +402,8 @@
                 const api =
                     window.excalidrawAPI ||
                     window.__EXCALIDRAW_API__ ||
-                    window._excalidrawAPI;
+                    window._excalidrawAPI ||
+                    window.__xmGetExcalidrawAPI?.();
                 if (api) {
                     clearInterval(timer);
                     resolve(api);

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -12,12 +13,133 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_mirror_servic
 import 'package:appflowy/plugins/whiteboard/presentation/webview_async_eval.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_guard_script.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+
+const String _mobileExportBridgeScript = r'''
+(function () {
+  // Re-install on load stop as the remote app may replace these APIs later.
+  var saveFilePicker = function (options) {
+    var suggestedName = (options && options.suggestedName) || 'download';
+    var accept = options && options.types && options.types[0] && options.types[0].accept;
+    var mimeType = accept && Object.keys(accept)[0] || 'application/octet-stream';
+    return Promise.resolve({
+      name: suggestedName,
+      kind: 'file',
+      createWritable: function () {
+        var chunks = [];
+        return Promise.resolve(new WritableStream({
+          write: function (chunk) { chunks.push(chunk); },
+          close: function () {
+            var blob = new Blob(chunks, { type: mimeType });
+            return new Promise(function (resolve, reject) {
+              var reader = new FileReader();
+              reader.onloadend = function () {
+                try {
+                  Promise.resolve(window.flutter_inappwebview.callHandler(
+                    'saveBase64File', reader.result, suggestedName, mimeType,
+                  )).then(resolve, reject);
+                } catch (error) { reject(error); }
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          },
+        }));
+      },
+    });
+  };
+  try {
+    Object.defineProperty(window, 'showSaveFilePicker', {
+      configurable: true,
+      writable: true,
+      value: saveFilePicker,
+    });
+  } catch (error) {
+    try { delete window.showSaveFilePicker; } catch (ignored) {}
+    try { window.showSaveFilePicker = saveFilePicker; } catch (ignored) {}
+  }
+
+  var clipboard = navigator.clipboard;
+  if (!clipboard) {
+    clipboard = {};
+    try {
+      Object.defineProperty(navigator, 'clipboard', {
+        value: clipboard,
+        configurable: true,
+      });
+    } catch (error) { return; }
+  }
+  var originalWrite = clipboard.write && clipboard.write.bind(clipboard);
+  var originalWriteText = clipboard.writeText && clipboard.writeText.bind(clipboard);
+  if (clipboard.write !== window.__ponynotesNativeClipboardWrite ||
+      clipboard.writeText !== window.__ponynotesNativeClipboardWriteText) {
+    var bytesToBase64 = function (bytes) {
+      var binary = '';
+      for (var i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(binary);
+    };
+    var readItem = async function (item, payload) {
+      for (var i = 0; i < (item.types || []).length; i++) {
+        var type = item.types[i];
+        var blob = await item.getType(type);
+        if (type === 'image/png') {
+          payload.imageBase64 = bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
+          payload.imageMimeType = type;
+        } else if (type === 'image/svg+xml') {
+          payload.plainText = await blob.text();
+        } else if (type === 'text/html') {
+          payload.html = await blob.text();
+        } else if (type === 'text/plain') {
+          payload.plainText = await blob.text();
+        }
+      }
+    };
+    var nativeWrite = async function (items) {
+      var payload = {};
+      for (var i = 0; i < (items || []).length; i++) {
+        await readItem(items[i], payload);
+      }
+      if (!payload.imageBase64 && !payload.plainText && !payload.html) {
+        return originalWrite(items);
+      }
+      await window.flutter_inappwebview.callHandler('writeWhiteboardClipboard', payload);
+    };
+    try {
+      Object.defineProperty(clipboard, 'write', {
+        configurable: true,
+        writable: true,
+        value: nativeWrite,
+      });
+    } catch (error) {
+      clipboard.write = nativeWrite;
+    }
+    window.__ponynotesNativeClipboardWrite = nativeWrite;
+    var nativeWriteText = function (text) {
+      return window.flutter_inappwebview.callHandler(
+        'writeWhiteboardClipboard', { plainText: String(text) },
+      );
+    };
+    try {
+      Object.defineProperty(clipboard, 'writeText', {
+        configurable: true,
+        writable: true,
+        value: nativeWriteText,
+      });
+    } catch (error) {
+      clipboard.writeText = nativeWriteText;
+    }
+    window.__ponynotesNativeClipboardWriteText = nativeWriteText;
+  }
+})();
+''';
 
 class RemoteWhiteboardPage extends StatefulWidget {
   const RemoteWhiteboardPage({
@@ -41,6 +163,8 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
   bool _isDisposed = false;
   String? _loadingError;
   String? _userNickname;
+  String? _flutterBridgeScript;
+  bool _flutterBridgeInjected = false;
   bool _ownsExportController = false;
   bool _isExporting = false;
   // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
@@ -56,7 +180,18 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage> {
     // 用本 State 实例作为 key，避免同一 viewId 新旧页面重建时互相误删注册项。
     WhiteboardExitFlush.instance.register(this, _flushSave);
     _registerExportController();
+    _loadFlutterBridgeScript();
     _loadUserNickname();
+  }
+
+  Future<void> _loadFlutterBridgeScript() async {
+    if (!Platform.isAndroid && !Platform.isIOS) return;
+    try {
+      _flutterBridgeScript =
+          await rootBundle.loadString('assets/excalidraw/flutter_bridge.js');
+    } catch (e) {
+      Log.warn('[RemoteWhiteboard] 加载移动端导出桥失败: $e');
+    }
   }
 
   @override
@@ -172,7 +307,7 @@ if (typeof window.__xmExportImage !== 'function') {
 }
 return await window.__xmExportImage('$format');
 ''',
-        timeout: const Duration(seconds: 6),
+        timeout: const Duration(seconds: 15),
         isCancelled: () => _isDisposed,
         debugLabel: ' exportImage view=${widget.view.id} format=$format',
       );
@@ -331,6 +466,11 @@ return await window.__xmExportImage('$format');
                       ''',
                       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                     ),
+                    if (Platform.isAndroid || Platform.isIOS)
+                      UserScript(
+                        source: _mobileExportBridgeScript,
+                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                      ),
                   ]),
                   onWebViewCreated: (controller) {
                     if (_isDisposed) return;
@@ -345,10 +485,39 @@ return await window.__xmExportImage('$format');
                     });
                     Log.debug('🔄 [RemoteWhiteboard] Loading: $url');
                   },
-                  onLoadStop: (controller, url) {
+                  onLoadStop: (controller, url) async {
                     setState(() {
                       _isLoading = false;
                     });
+                    if (Platform.isAndroid || Platform.isIOS) {
+                      if (_flutterBridgeScript == null) {
+                        await _loadFlutterBridgeScript();
+                      }
+                      unawaited(
+                        controller.evaluateJavascript(
+                          source: _mobileExportBridgeScript,
+                        ).catchError((error) {
+                          Log.warn('[RemoteWhiteboard] 移动端导出桥重装失败: $error');
+                          return null;
+                        }),
+                      );
+                      final bridge = _flutterBridgeScript;
+                      if (!_flutterBridgeInjected && bridge != null) {
+                        _flutterBridgeInjected = true;
+                        unawaited(
+                          controller.evaluateJavascript(
+                            source:
+                                'if (!window.__ponynotesFlutterBridgeInjected) '
+                                '{ window.__ponynotesFlutterBridgeInjected = true; '
+                                '$bridge }',
+                          ).catchError((error) {
+                            _flutterBridgeInjected = false;
+                            Log.warn('[RemoteWhiteboard] 导出桥注入失败: $error');
+                            return null;
+                          }),
+                        );
+                      }
+                    }
                     Log.debug('✅ [RemoteWhiteboard] Loaded: $url');
                   },
                   onReceivedError: (controller, request, error) {
@@ -493,6 +662,69 @@ return await window.__xmExportImage('$format');
           }
           
           await _saveBase64ToFile(base64Data, filename, mimeType);
+        }
+      },
+    );
+
+    controller.addJavaScriptHandler(
+      handlerName: 'writeWhiteboardClipboard',
+      callback: (args) async {
+        if (args.isEmpty || args.first is! Map) return;
+        try {
+          final payload = Map<String, dynamic>.from(args.first as Map);
+          final imageBase64 = payload['imageBase64'] as String?;
+          final imageMimeType = payload['imageMimeType'] as String?;
+          final image = imageBase64 == null || imageBase64.isEmpty
+              ? null
+              : (
+                  imageMimeType == 'image/png' ? 'png' : imageMimeType ?? 'png',
+                  Uint8List.fromList(base64Decode(imageBase64)),
+                );
+          final plainText = payload['plainText'] as String?;
+          final html = payload['html'] as String?;
+          await ClipboardService().setData(
+            ClipboardServiceData(
+              plainText: plainText ?? html,
+              html: html,
+              image: image,
+            ),
+          );
+          Log.info('[RemoteWhiteboard] 已写入系统剪贴板');
+        } catch (e) {
+          Log.error('[RemoteWhiteboard] 写入系统剪贴板失败: $e');
+        }
+      },
+    );
+
+    controller.addJavaScriptHandler(
+      handlerName: 'onExport',
+      callback: (args) async {
+        if (args.isEmpty || args.first is! Map) return;
+        final payload = Map<String, dynamic>.from(args.first as Map);
+        final format = payload['format'] as String?;
+        final data = payload['data'];
+        if (format == 'png' && data is String) {
+          await _saveDataUrlToFile(data, '${widget.view.name}.png');
+        } else if (format == 'svg' && data is String) {
+          await _saveBase64ToFile(
+            base64Encode(utf8.encode(data)),
+            '${widget.view.name}.svg',
+            'image/svg+xml',
+          );
+        }
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'onExportError',
+      callback: (args) async {
+        final message = args.isNotEmpty && args.first is Map
+            ? (args.first as Map)['message']?.toString()
+            : null;
+        if (!_isDisposed) {
+          showToastNotification(
+            message: message == null ? '导出图片失败' : '导出图片失败: $message',
+            type: ToastificationType.error,
+          );
         }
       },
     );
