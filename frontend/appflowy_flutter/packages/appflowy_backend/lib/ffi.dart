@@ -115,6 +115,17 @@ final _dispose_sdk_Dart _dispose_sdk =
 typedef _dispose_sdk_C = Void Function();
 typedef _dispose_sdk_Dart = void Function();
 
+void force_sync(int timeoutMs) {
+  _force_sync(timeoutMs);
+}
+
+final _force_sync_Dart _force_sync =
+    _dart_ffi_lib.lookupFunction<_force_sync_C, _force_sync_Dart>(
+  _symbolName('force_sync'),
+);
+typedef _force_sync_C = Void Function(Uint64 timeoutMs);
+typedef _force_sync_Dart = void Function(int timeoutMs);
+
 /// C function `init_stream`.
 int set_stream_port(int port) {
   return _set_stream_port(port);

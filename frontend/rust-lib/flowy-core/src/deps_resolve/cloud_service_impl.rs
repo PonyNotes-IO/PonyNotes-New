@@ -750,6 +750,7 @@ impl CollabCloudPluginProvider for ServerProvider {
                   ws_connect_state,
                   Some(Duration::from_secs(60)),
                 );
+                self.register_sync_trigger(object_id, sync_plugin.sync_trigger());
                 plugins.push(Box::new(sync_plugin));
               } else {
                 error!(

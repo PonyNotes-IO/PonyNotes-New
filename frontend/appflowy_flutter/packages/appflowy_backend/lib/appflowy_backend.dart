@@ -36,6 +36,10 @@ class FlowySDK {
     ffi.dispose_sdk();
   }
 
+  void forceSync({Duration timeout = const Duration(milliseconds: 1500)}) {
+    ffi.force_sync(timeout.inMilliseconds);
+  }
+
   Future<void> init(String configuration) async {
     ffi.set_stream_port(RustStreamReceiver.shared.port);
     ffi.store_dart_post_cobject(NativeApi.postCObject);

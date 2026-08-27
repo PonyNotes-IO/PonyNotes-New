@@ -122,6 +122,10 @@ impl AppFlowyCore {
     self.user_manager.close_db();
   }
 
+  pub fn force_sync(&self, timeout: Duration) {
+    self.server_provider.force_sync(timeout);
+  }
+
   #[instrument(skip(config, runtime))]
   async fn init(config: AppFlowyCoreConfig, runtime: Arc<AFPluginRuntime>) -> Self {
     config.ensure_path();

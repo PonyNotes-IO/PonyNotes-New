@@ -25,6 +25,7 @@ import 'package:appflowy/workspace/application/sidebar/rename_view/rename_view_b
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
+import 'package:appflowy_backend/appflowy_backend.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -189,7 +190,8 @@ class ApplicationWidget extends StatefulWidget {
   State<ApplicationWidget> createState() => _ApplicationWidgetState();
 }
 
-class _ApplicationWidgetState extends State<ApplicationWidget> {
+class _ApplicationWidgetState extends State<ApplicationWidget>
+    with WidgetsBindingObserver {
   late final GoRouter routerConfig;
 
   final _commandPaletteNotifier = ValueNotifier(CommandPaletteNotifierValue());
@@ -199,14 +201,25 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Avoid rebuild routerConfig when the appTheme is changed.
     routerConfig = generateRouter(widget.child);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _commandPaletteNotifier.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.paused ||
+            state == AppLifecycleState.detached) &&
+        getIt.isRegistered<FlowySDK>()) {
+      getIt<FlowySDK>().forceSync();
+    }
   }
 
   @override

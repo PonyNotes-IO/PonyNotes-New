@@ -8,6 +8,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
+use std::time::Duration;
 use std::{ffi::CStr, os::raw::c_char};
 use tokio::sync::mpsc;
 use tokio::task::LocalSet;
@@ -206,6 +207,13 @@ pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
 #[no_mangle]
 pub extern "C" fn dispose_sdk() {
   DART_APPFLOWY_CORE.dispose();
+}
+
+#[no_mangle]
+pub extern "C" fn force_sync(timeout_ms: u64) {
+  if let Some(core) = DART_APPFLOWY_CORE.core.read().unwrap().as_ref() {
+    core.force_sync(Duration::from_millis(timeout_ms));
+  }
 }
 
 #[no_mangle]

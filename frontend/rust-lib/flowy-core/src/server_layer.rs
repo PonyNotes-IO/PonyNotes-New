@@ -1,5 +1,6 @@
 use crate::AppFlowyCoreConfig;
 use arc_swap::{ArcSwap, ArcSwapOption};
+use client_api::collab_sync::SyncTrigger;
 use collab::entity::EncodedCollab;
 use collab_entity::CollabType;
 use collab_integrate::instant_indexed_data_provider::InstantIndexedDataWriter;
@@ -20,6 +21,7 @@ use flowy_user_pub::entities::*;
 use lib_infra::async_trait::async_trait;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{error, info};
 use uuid::Uuid;
@@ -37,6 +39,7 @@ pub struct ServerProvider {
   /// 私有空间视图登记表。由 folder 侧写入，这里只读 —— 用于给私有内容选用
   /// 「编辑静默后才推送」的同步配置（见 get_plugins）。
   pub private_views: PrivateViewRegistry,
+  sync_triggers: DashMap<Uuid, SyncTrigger>,
 }
 
 // Our little guard wrapper:
@@ -75,7 +78,35 @@ impl ServerProvider {
       local_ai,
       indexed_data_writer,
       private_views: PrivateViewRegistry::new(),
+      sync_triggers: DashMap::new(),
     }
+  }
+
+  pub fn force_sync(&self, timeout: Duration) {
+    let Ok(server) = self.get_server() else {
+      return;
+    };
+    if server.get_ws_state() != client_api::ws::ConnectState::Connected {
+      return;
+    }
+
+    let mut triggers = Vec::with_capacity(self.sync_triggers.len());
+    self.sync_triggers.retain(|_, trigger| {
+      let live = trigger.flush();
+      if live {
+        triggers.push(trigger.clone());
+      }
+      live
+    });
+
+    let deadline = Instant::now() + timeout;
+    while triggers.iter().any(|trigger| !trigger.is_finished()) && Instant::now() < deadline {
+      std::thread::sleep(Duration::from_millis(10));
+    }
+  }
+
+  pub(crate) fn register_sync_trigger(&self, object_id: Uuid, trigger: SyncTrigger) {
+    self.sync_triggers.insert(object_id, trigger);
   }
 
   async fn set_tanvity_state(&self, tanvity_state: Option<Weak<RwLock<DocumentTantivyState>>>) {
