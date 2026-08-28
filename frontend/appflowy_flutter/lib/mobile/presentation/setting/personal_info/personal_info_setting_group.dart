@@ -35,10 +35,12 @@ class PersonalInfoSettingGroup extends StatelessWidget {
     super.key,
     required this.userProfile,
     this.onUserProfileUpdated,
+    this.showDeleteAccountButton = true,
   });
 
   final UserProfilePB userProfile;
   final VoidCallback? onUserProfileUpdated;
+  final bool showDeleteAccountButton;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +159,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
                       ),
                   ],
                 ),
-                if (isServerUser) ...[
+                if (showDeleteAccountButton && isServerUser) ...[
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
@@ -167,7 +169,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
                       textStyle: theme.textStyle.body.standard(
                         color: theme.textColorScheme.error,
                       ),
-                      onTap: () => _showDeleteAccountDialog(context),
+                      onTap: () => showMobileDeleteAccountDialog(context),
                       size: AFButtonSize.l,
                     ),
                   ),
@@ -231,26 +233,42 @@ class PersonalInfoSettingGroup extends StatelessWidget {
       },
     );
   }
-
-  Future<void> _showDeleteAccountDialog(BuildContext context) async {
-    return showMobileBottomSheet(
-      context,
-      useRootNavigator: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      builder: (_) => const _DeleteAccountBottomSheet(),
-    );
-  }
 }
 
-class _DeleteAccountBottomSheet extends StatefulWidget {
-  const _DeleteAccountBottomSheet();
+Future<void> showMobileDeleteAccountDialog(BuildContext context) async {
+  return showDialog(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: false,
+    barrierColor: Colors.black.withValues(alpha: 0.5),
+    builder: (dialogContext) => Dialog(
+      backgroundColor: Theme.of(dialogContext).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.8,
+        ),
+        child: const SingleChildScrollView(
+          child: MobileDeleteAccountDialog(),
+        ),
+      ),
+    ),
+  );
+}
+
+class MobileDeleteAccountDialog extends StatefulWidget {
+  const MobileDeleteAccountDialog({super.key});
 
   @override
-  State<_DeleteAccountBottomSheet> createState() =>
-      _DeleteAccountBottomSheetState();
+  State<MobileDeleteAccountDialog> createState() =>
+      _MobileDeleteAccountDialogState();
 }
 
-class _DeleteAccountBottomSheetState extends State<_DeleteAccountBottomSheet> {
+class _MobileDeleteAccountDialogState extends State<MobileDeleteAccountDialog> {
   final controller = TextEditingController();
   final isChecked = ValueNotifier(false);
 

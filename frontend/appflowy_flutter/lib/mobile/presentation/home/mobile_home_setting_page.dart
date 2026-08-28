@@ -357,6 +357,41 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       return const MobileSpaceManagementPage(showAppBar: false);
     }
 
+    if (_currentSection == MobileSettingsSection.account) {
+      final isServerUser = _userProfile!.userAuthType == AuthTypePB.Server;
+      return Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: PersonalInfoSettingGroup(
+                  userProfile: _userProfile!,
+                  showDeleteAccountButton: false,
+                  onUserProfileUpdated: _refreshUserProfile,
+                ),
+              ),
+            ),
+          ),
+          if (isServerUser)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: AFOutlinedTextButton.destructive(
+                  alignment: Alignment.center,
+                  text: LocaleKeys.button_closeAccount.tr(),
+                  onTap: () {
+                    showMobileDeleteAccountDialog(context);
+                  },
+                  size: AFButtonSize.l,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16),
