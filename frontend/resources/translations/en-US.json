@@ -561,6 +561,8 @@
     "logout": "Log out",
     "deleteAccount": "Delete account",
     "closeAccount": "Close account",
+    "closeAccountConfirm": "Confirm account closure",
+    "closeAccountPrompt": "Are you sure you want to close this account?",
     "back": "Back",
     "signInGoogle": "Continue with Google",
     "signInGithub": "Continue with GitHub",

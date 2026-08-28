@@ -16,7 +16,6 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
-import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/sign_in_or_logout_button.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/account_deletion.dart';
 import 'package:appflowy/workspace/application/user/prelude.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -238,7 +237,6 @@ class PersonalInfoSettingGroup extends StatelessWidget {
 Future<void> showMobileDeleteAccountDialog(BuildContext context) async {
   return showDialog(
     context: context,
-    useRootNavigator: true,
     barrierDismissible: false,
     barrierColor: Colors.black.withValues(alpha: 0.5),
     builder: (dialogContext) => Dialog(
@@ -252,16 +250,19 @@ Future<void> showMobileDeleteAccountDialog(BuildContext context) async {
           maxWidth: 420,
           maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.8,
         ),
-        child: const SingleChildScrollView(
-          child: MobileDeleteAccountDialog(),
-        ),
+        child: MobileDeleteAccountDialog(parentContext: context),
       ),
     ),
   );
 }
 
 class MobileDeleteAccountDialog extends StatefulWidget {
-  const MobileDeleteAccountDialog({super.key});
+  const MobileDeleteAccountDialog({
+    super.key,
+    required this.parentContext,
+  });
+
+  final BuildContext parentContext;
 
   @override
   State<MobileDeleteAccountDialog> createState() =>
@@ -269,106 +270,56 @@ class MobileDeleteAccountDialog extends StatefulWidget {
 }
 
 class _MobileDeleteAccountDialogState extends State<MobileDeleteAccountDialog> {
-  final controller = TextEditingController();
-  final isChecked = ValueNotifier(false);
-
-  @override
-  void dispose() {
-    controller.dispose();
-    isChecked.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const VSpace(18.0),
-          const FlowySvg(
-            FlowySvgs.icon_warning_xl,
-            blendMode: null,
-          ),
-          const VSpace(12.0),
           FlowyText(
-            LocaleKeys.newSettings_myAccount_deleteAccount_title.tr(),
-            fontSize: 20.0,
-            fontWeight: FontWeight.w500,
+            LocaleKeys.button_closeAccountPrompt.tr(),
+            fontSize: 16.0,
+            fontWeight: FontWeight.w600,
+            textAlign: TextAlign.center,
           ),
-          const VSpace(12.0),
-          FlowyText(
-            LocaleKeys.newSettings_myAccount_deleteAccount_confirmHint1.tr(),
-            fontSize: 14.0,
-            fontWeight: FontWeight.w400,
-            maxLines: 10,
+          const VSpace(30.0),
+          Row(
+            children: [
+              Expanded(
+                child: AFOutlinedTextButton.normal(
+                  alignment: Alignment.center,
+                  text: LocaleKeys.button_closeAccountConfirm.tr(),
+                  textStyle: AppFlowyTheme.of(context).textStyle.body.standard(
+                        color:
+                            AppFlowyTheme.of(context).textColorScheme.tertiary,
+                      ),
+                  onTap: () {
+                    deleteMyAccount(
+                      widget.parentContext,
+                      LocaleKeys
+                          .newSettings_myAccount_deleteAccount_confirmHint3
+                          .tr(),
+                      true,
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  size: AFButtonSize.l,
+                ),
+              ),
+              const HSpace(8.0),
+              Expanded(
+                child: AFFilledTextButton.destructive(
+                  alignment: Alignment.center,
+                  text: LocaleKeys.button_back.tr(),
+                  onTap: () => Navigator.of(context).pop(),
+                  size: AFButtonSize.l,
+                ),
+              ),
+            ],
           ),
-          const VSpace(18.0),
-          SizedBox(
-            height: 36.0,
-            child: FlowyTextField(
-              controller: controller,
-              textStyle: const TextStyle(fontSize: 14.0),
-              hintStyle: const TextStyle(fontSize: 14.0),
-              hintText: LocaleKeys
-                  .newSettings_myAccount_deleteAccount_confirmHint3
-                  .tr(),
-            ),
-          ),
-          const VSpace(18.0),
-          _buildCheckbox(),
-          const VSpace(18.0),
-          MobileLogoutButton(
-            text: LocaleKeys.button_closeAccount.tr(),
-            textColor: Theme.of(context).colorScheme.error,
-            onPressed: () => deleteMyAccount(
-              context,
-              controller.text.trim(),
-              isChecked.value,
-            ),
-          ),
-          const VSpace(12.0),
-          MobileLogoutButton(
-            text: LocaleKeys.button_cancel.tr(),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          const VSpace(36.0),
         ],
       ),
-    );
-  }
-
-  Widget _buildCheckbox() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: () => isChecked.value = !isChecked.value,
-          child: ValueListenableBuilder<bool>(
-            valueListenable: isChecked,
-            builder: (context, isChecked, _) {
-              return Padding(
-                padding: const EdgeInsets.all(1.0),
-                child: FlowySvg(
-                  isChecked ? FlowySvgs.check_filled_s : FlowySvgs.uncheck_s,
-                  size: const Size.square(16.0),
-                  blendMode: isChecked ? null : BlendMode.srcIn,
-                ),
-              );
-            },
-          ),
-        ),
-        const HSpace(6.0),
-        Expanded(
-          child: FlowyText.regular(
-            LocaleKeys.newSettings_myAccount_deleteAccount_confirmHint2.tr(),
-            fontSize: 14.0,
-            figmaLineHeight: 18.0,
-            maxLines: 3,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -567,6 +567,8 @@
     "logout": "退出",
     "deleteAccount": "删除账户",
     "closeAccount": "注销账号",
+    "closeAccountConfirm": "确认注销",
+    "closeAccountPrompt": "您确定要注销该账号吗？",
     "signInGoogle": "使用 Google 账户登录",
     "signInGithub": "使用 Github 账户登录",
     "signInDiscord": "使用 Discord 账户登录",
