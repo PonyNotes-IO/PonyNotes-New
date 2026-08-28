@@ -28,20 +28,182 @@ class MobileWhiteboardBody extends StatefulWidget {
   State<MobileWhiteboardBody> createState() => _MobileWhiteboardBodyState();
 }
 
-class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
+class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
+    with WidgetsBindingObserver {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isDisposed = false;
   String? _loadingError;
   String? _userNickname;
   String? _roomId;
   String? _roomKey;
   bool _isFetchingRoom = false;
+  String? _lastHostTheme;
+  Timer? _brightnessPollTimer;
+  int _themeSyncGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // 与协作空间 RemoteWhiteboardPage 保持一致：iOS PlatformView 偶尔不会
+    // 转发系统外观事件，轮询作为兜底，确保白板停留时也能实时切换。
+    _brightnessPollTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _syncSystemBrightness(
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      ),
+    );
     _loadUserNickname();
     _tryFetchRoomInfo();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _brightnessPollTimer?.cancel();
+    _brightnessPollTimer = null;
+    _themeSyncGeneration++;
+    _isDisposed = true;
+    _controller?.dispose();
+    _controller = null;
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _syncSystemBrightness(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
+  }
+
+  void _syncSystemBrightness(Brightness brightness) {
+    if (_isDisposed) return;
+
+    final theme = brightness == Brightness.dark ? 'dark' : 'light';
+    if (_lastHostTheme == theme) return;
+
+    _lastHostTheme = theme;
+    Log.info('[MobileWhiteboard] 系统外观变化: $theme');
+    if (mounted) setState(() {});
+    _scheduleThemeSync(theme);
+  }
+
+  void _scheduleThemeSync(String theme) {
+    final generation = ++_themeSyncGeneration;
+
+    void sync() {
+      if (!_isDisposed && generation == _themeSyncGeneration) {
+        unawaited(_applyTheme(theme));
+      }
+    }
+
+    sync();
+    WidgetsBinding.instance.addPostFrameCallback((_) => sync());
+    Future<void>.delayed(const Duration(milliseconds: 180), sync);
+    Future<void>.delayed(const Duration(milliseconds: 600), sync);
+  }
+
+  Future<void> _applyTheme(String theme) async {
+    final controller = _controller;
+    if (_isDisposed || controller == null) return;
+
+    final normalizedTheme = theme == 'dark' ? 'dark' : 'light';
+    try {
+      await controller.evaluateJavascript(source: '''
+        (function() {
+          var requestedTheme = '$normalizedTheme';
+          var uiBackgroundColor = requestedTheme === 'dark' ? '#121212' : '#ffffff';
+          var hostStyle = document.getElementById('ponynotes-host-theme-style');
+          if (!hostStyle) {
+            hostStyle = document.createElement('style');
+            hostStyle.id = 'ponynotes-host-theme-style';
+            (document.head || document.documentElement).appendChild(hostStyle);
+          }
+          hostStyle.textContent = 'html.dark #root .excalidraw canvas.excalidraw__canvas,' +
+            'html.dark #root .excalidraw canvas.static,' +
+            'html.dark #root .excalidraw canvas.interactive {' +
+            '-webkit-filter: invert(93%) hue-rotate(180deg) !important;' +
+            'filter: invert(93%) hue-rotate(180deg) !important;' +
+            '} html.dark #root .excalidraw { background-color: #121212 !important; }' +
+            ' html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,' +
+            'html:not(.dark) #root .excalidraw canvas.static,' +
+            'html:not(.dark) #root .excalidraw canvas.interactive {' +
+            '-webkit-filter: none !important; filter: none !important; }';
+          // 先调用页面已有桥接，再执行下面的 DOM/API 兜底；这样旧页面和
+          // 新页面都能在不重建 PlatformView 的情况下即时变更画布。
+          if (typeof window.__ponynotesApplyTheme === 'function') {
+            try { window.__ponynotesApplyTheme(requestedTheme); } catch (_) {}
+          }
+          window.__ponynotesHostTheme = requestedTheme;
+          try { window.localStorage.setItem('excalidraw-theme', requestedTheme); } catch (_) {}
+          var setter = window.__ponynotesSetHostTheme;
+          if (typeof setter === 'function') {
+            try { setter(requestedTheme); } catch (_) {}
+          }
+          document.documentElement.classList.toggle('dark', requestedTheme === 'dark');
+          if (document.body) document.body.style.backgroundColor = uiBackgroundColor;
+          document.querySelectorAll('.excalidraw').forEach(function(root) {
+            root.classList.toggle('theme--dark', requestedTheme === 'dark');
+            root.style.backgroundColor = uiBackgroundColor;
+          });
+          document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+            canvas.style.backgroundColor = '';
+          });
+          var api = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+          if (api && typeof api.updateScene === 'function') {
+            var state = typeof api.getAppState === 'function' ? api.getAppState() : null;
+            var legacyDarkBackground = !!state && typeof state.viewBackgroundColor === 'string' && state.viewBackgroundColor.toLowerCase() === '#121212';
+            if (!state || state.theme !== requestedTheme || legacyDarkBackground) {
+              var appState = { theme: requestedTheme };
+              if (legacyDarkBackground) appState.viewBackgroundColor = '#ffffff';
+              api.updateScene({ appState: appState, commitToHistory: false });
+            }
+          }
+          if (!window.__ponynotesRuntimeThemeWatchdog) {
+            window.__ponynotesRuntimeThemeWatchdog = window.setInterval(function() {
+              var currentTheme = window.__ponynotesHostTheme;
+              if (currentTheme !== 'dark' && currentTheme !== 'light') return;
+              var currentUiBackground = currentTheme === 'dark' ? '#121212' : '#ffffff';
+              var currentSetter = window.__ponynotesSetHostTheme;
+              if (typeof currentSetter === 'function') {
+                try { currentSetter(currentTheme); } catch (_) {}
+              }
+              var currentApi = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+              if (currentApi && typeof currentApi.getAppState === 'function' && typeof currentApi.updateScene === 'function') {
+                var currentState = currentApi.getAppState();
+                var legacyDarkBackground = !!currentState && typeof currentState.viewBackgroundColor === 'string' && currentState.viewBackgroundColor.toLowerCase() === '#121212';
+                if (!currentState || currentState.theme !== currentTheme || legacyDarkBackground) {
+                  var currentAppState = { theme: currentTheme };
+                  if (legacyDarkBackground) currentAppState.viewBackgroundColor = '#ffffff';
+                  currentApi.updateScene({ appState: currentAppState, commitToHistory: false });
+                }
+              }
+              document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+              document.querySelectorAll('.excalidraw').forEach(function(root) {
+                root.classList.toggle('theme--dark', currentTheme === 'dark');
+                root.style.backgroundColor = currentUiBackground;
+              });
+              document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+                canvas.style.backgroundColor = '';
+              });
+            }, 500);
+          }
+          console.info('[PonyNotes] Dart host theme applied:', requestedTheme, 'apiReady=', !!api);
+        })();
+      ''');
+      Log.info('[MobileWhiteboard] WebView 主题同步脚本已发送: $normalizedTheme');
+    } catch (e) {
+      Log.warn('[MobileWhiteboard] WebView 主题同步失败（页面可能尚未就绪）: $e');
+    }
+  }
+
+  String _currentHostTheme() {
+    return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark
+        ? 'dark'
+        : 'light';
   }
 
   Future<void> _loadUserNickname() async {
@@ -49,7 +211,8 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
     final userProfileResult = await UserBackendService.getCurrentUserProfile();
     String nickname = userProfileResult.fold(
       (profile) {
-        Log.info('[MobileWhiteboard] ✅ Got user profile: id=${profile.id}, name=${profile.name}, email=${profile.email}');
+        Log.info(
+            '[MobileWhiteboard] ✅ Got user profile: id=${profile.id}, name=${profile.name}, email=${profile.email}');
         return profile.name;
       },
       (error) {
@@ -57,17 +220,19 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         return '';
       },
     );
-    
+
     if (nickname.isEmpty) {
       nickname = '小马笔记用户';
-      Log.info('[MobileWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
+      Log.info(
+          '[MobileWhiteboard] 📌 Nickname is empty, using default: "$nickname"');
     }
-    
+
     if (!mounted) return;
     setState(() {
       _userNickname = nickname;
     });
-    Log.info('[MobileWhiteboard] 📌 Final nickname: "$nickname", isEmpty: ${nickname.isEmpty}, length: ${nickname.length}');
+    Log.info(
+        '[MobileWhiteboard] 📌 Final nickname: "$nickname", isEmpty: ${nickname.isEmpty}, length: ${nickname.length}');
   }
 
   Future<void> _tryFetchRoomInfo() async {
@@ -78,9 +243,10 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
 
     try {
       final room = await WhiteboardRoomService.getRoom(widget.view.id);
-      
+
       if (room != null) {
-        Log.debug('🟢 [MobileWhiteboard] Found room in local storage: roomId=${room.roomId}');
+        Log.debug(
+            '🟢 [MobileWhiteboard] Found room in local storage: roomId=${room.roomId}');
         // 本地 room 已足够构造远程白板 URL。不要在每次打开时再读取完整
         // collab 场景：该调用会先 openWhiteboard 再拉取整块 JSON，移动端会被
         // 网络和大白板数据拖住；白板页面会自行从 room 恢复场景。
@@ -89,27 +255,38 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
         });
-        Log.debug('⚡ [MobileWhiteboard] Local room fast path, skip collab preload');
+        Log.debug(
+            '⚡ [MobileWhiteboard] Local room fast path, skip collab preload');
         return;
       }
 
-      final whiteboardData = await WhiteboardDataService().loadWhiteboardData(widget.view.id);
-      Log.debug('🔍 [MobileWhiteboard] Loaded whiteboard data keys: ${whiteboardData.keys}');
-      
+      final whiteboardData =
+          await WhiteboardDataService().loadWhiteboardData(widget.view.id);
+      Log.debug(
+          '🔍 [MobileWhiteboard] Loaded whiteboard data keys: ${whiteboardData.keys}');
+
       final serverRoomId = whiteboardData['roomId'];
       final serverRoomKey = whiteboardData['roomKey'];
 
-      if (serverRoomId != null && serverRoomId.toString().isNotEmpty && serverRoomKey != null && serverRoomKey.toString().isNotEmpty) {
-        final roomIdStr = serverRoomId is String ? serverRoomId : serverRoomId.toString();
-        final roomKeyStr = serverRoomKey is String ? serverRoomKey : serverRoomKey.toString();
-        
-        Log.debug('🟢 [MobileWhiteboard] Found room in server data: roomId=$roomIdStr');
-        
+      if (serverRoomId != null &&
+          serverRoomId.toString().isNotEmpty &&
+          serverRoomKey != null &&
+          serverRoomKey.toString().isNotEmpty) {
+        final roomIdStr =
+            serverRoomId is String ? serverRoomId : serverRoomId.toString();
+        final roomKeyStr =
+            serverRoomKey is String ? serverRoomKey : serverRoomKey.toString();
+
+        Log.debug(
+            '🟢 [MobileWhiteboard] Found room in server data: roomId=$roomIdStr');
+
         if (roomIdStr != _roomId || roomKeyStr != _roomKey) {
-          await WhiteboardRoomService.saveRoom(widget.view.id, roomIdStr, roomKeyStr);
-          Log.debug('✅ [MobileWhiteboard] Synced server room to local storage: roomId=$roomIdStr');
+          await WhiteboardRoomService.saveRoom(
+              widget.view.id, roomIdStr, roomKeyStr);
+          Log.debug(
+              '✅ [MobileWhiteboard] Synced server room to local storage: roomId=$roomIdStr');
         }
-        
+
         if (!mounted) return;
         setState(() {
           _roomId = roomIdStr;
@@ -119,19 +296,24 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
       }
 
       if (_roomId != null && _roomKey != null) {
-        Log.debug('🟢 [MobileWhiteboard] Using existing room from local storage: roomId=$_roomId');
+        Log.debug(
+            '🟢 [MobileWhiteboard] Using existing room from local storage: roomId=$_roomId');
         return;
       }
 
-      Log.debug('🟡 [MobileWhiteboard] No room found for view ${widget.view.id}, generating new one');
+      Log.debug(
+          '🟡 [MobileWhiteboard] No room found for view ${widget.view.id}, generating new one');
       final newRoomId = WhiteboardRoomService.generateRoomId();
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
-      
-      Log.info('🆕 [MobileWhiteboard] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${widget.view.id}');
-      
-      await WhiteboardRoomService.saveRoom(widget.view.id, newRoomId, newRoomKey);
-      Log.info('✅ [MobileWhiteboard] Saved room to local storage: viewId=${widget.view.id}, roomId=$newRoomId');
-      
+
+      Log.info(
+          '🆕 [MobileWhiteboard] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${widget.view.id}');
+
+      await WhiteboardRoomService.saveRoom(
+          widget.view.id, newRoomId, newRoomKey);
+      Log.info(
+          '✅ [MobileWhiteboard] Saved room to local storage: viewId=${widget.view.id}, roomId=$newRoomId');
+
       Log.info('📤 [MobileWhiteboard] Saving room info to server...');
       final saveResult = await WhiteboardDataService().saveWhiteboardData(
         widget.view.id,
@@ -141,13 +323,14 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         },
         source: 'room-init',
       );
-      
+
       if (saveResult) {
-        Log.info('✅ [MobileWhiteboard] SUCCESSFULLY saved room info to server: roomId=$newRoomId, roomKey=$newRoomKey');
+        Log.info(
+            '✅ [MobileWhiteboard] SUCCESSFULLY saved room info to server: roomId=$newRoomId, roomKey=$newRoomKey');
       } else {
         Log.error('❌ [MobileWhiteboard] FAILED to save room info to server');
       }
-      
+
       if (!mounted) return;
       setState(() {
         _roomId = newRoomId;
@@ -164,11 +347,17 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isFetchingRoom || _userNickname == null || _roomId == null || _roomKey == null) {
+    if (_isFetchingRoom ||
+        _userNickname == null ||
+        _roomId == null ||
+        _roomKey == null) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
+
+    final hostTheme = _currentHostTheme();
+    if (_lastHostTheme == null) _lastHostTheme = hostTheme;
 
     return Stack(
       children: [
@@ -187,6 +376,80 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
             allowUniversalAccessFromFileURLs: true,
           ),
           initialUserScripts: UnmodifiableListView([
+            UserScript(
+              source: '''
+                (function() {
+                  var params = new URLSearchParams(window.location.search || '');
+                  var hostTheme = params.get('hostTheme') === 'dark' ? 'dark' : 'light';
+                  window.__ponynotesHostTheme = hostTheme;
+                  try { window.localStorage.setItem('excalidraw-theme', hostTheme); } catch (_) {}
+                  document.documentElement.classList.toggle('dark', hostTheme === 'dark');
+
+                  var style = document.createElement('style');
+                  style.textContent = '.dropdown-menu-item-base:has(input[name="theme"]), [data-testid="toggle-dark-mode"] { display:none!important; pointer-events:none!important; }';
+                  (document.head || document.documentElement).appendChild(style);
+
+                  window.__ponynotesApplyTheme = function(theme) {
+                    var normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+                    var uiBackgroundColor = normalizedTheme === 'dark' ? '#121212' : '#ffffff';
+                    var hostStyle = document.getElementById('ponynotes-host-theme-style');
+                    if (!hostStyle) {
+                      hostStyle = document.createElement('style');
+                      hostStyle.id = 'ponynotes-host-theme-style';
+                      (document.head || document.documentElement).appendChild(hostStyle);
+                    }
+                    hostStyle.textContent = 'html.dark #root .excalidraw canvas.excalidraw__canvas,' +
+                      'html.dark #root .excalidraw canvas.static,' +
+                      'html.dark #root .excalidraw canvas.interactive {' +
+                      '-webkit-filter: invert(93%) hue-rotate(180deg) !important;' +
+                      'filter: invert(93%) hue-rotate(180deg) !important;' +
+                      '} html.dark #root .excalidraw { background-color: #121212 !important; }' +
+                      ' html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,' +
+                      'html:not(.dark) #root .excalidraw canvas.static,' +
+                      'html:not(.dark) #root .excalidraw canvas.interactive {' +
+                      '-webkit-filter: none !important; filter: none !important; }';
+                    window.__ponynotesHostTheme = normalizedTheme;
+                    try { window.localStorage.setItem('excalidraw-theme', normalizedTheme); } catch (_) {}
+                    var setter = window.__ponynotesSetHostTheme;
+                    if (typeof setter === 'function') {
+                      try { setter(normalizedTheme); } catch (_) {}
+                    }
+                    document.documentElement.classList.toggle('dark', normalizedTheme === 'dark');
+                    if (document.body) document.body.style.backgroundColor = uiBackgroundColor;
+                    document.querySelectorAll('.excalidraw').forEach(function(root) {
+                      root.classList.toggle('theme--dark', normalizedTheme === 'dark');
+                      root.style.backgroundColor = uiBackgroundColor;
+                    });
+                    document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+                      canvas.style.backgroundColor = '';
+                    });
+                    var api = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+                    if (api && typeof api.updateScene === 'function') {
+                      var state = typeof api.getAppState === 'function' ? api.getAppState() : null;
+                      var legacyDarkBackground = !!state && typeof state.viewBackgroundColor === 'string' && state.viewBackgroundColor.toLowerCase() === '#121212';
+                      if (!state || state.theme !== normalizedTheme || legacyDarkBackground) {
+                        var appState = { theme: normalizedTheme };
+                        if (legacyDarkBackground) appState.viewBackgroundColor = '#ffffff';
+                          api.updateScene({ appState: appState, commitToHistory: false });
+                      }
+                    }
+                  };
+
+                  document.addEventListener('change', function(event) {
+                    if (event.target && event.target.name === 'theme') {
+                      event.preventDefault();
+                      event.stopImmediatePropagation();
+                      window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
+                    }
+                  }, true);
+                  setInterval(function() {
+                    window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
+                  }, 500);
+                  window.__ponynotesApplyTheme(hostTheme);
+                })();
+              ''',
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
             UserScript(
               source: '''
                 (function() {
@@ -236,6 +499,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
             setState(() {
               _isLoading = false;
             });
+            _applyTheme(hostTheme);
             Log.debug('✅ [MobileWhiteboard] Loaded: $url');
           },
           onReceivedError: (controller, request, error) {
@@ -243,29 +507,36 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
               _isLoading = false;
               _loadingError = error.description;
             });
-            Log.error('❌ [MobileWhiteboard] Load error: ${error.type} - ${error.description}');
+            Log.error(
+                '❌ [MobileWhiteboard] Load error: ${error.type} - ${error.description}');
           },
           shouldOverrideUrlLoading: (controller, navigationAction) async {
             final url = navigationAction.request.url?.toString();
             final headers = navigationAction.request.headers;
-            final filename = headers != null ? 
-              (headers['Content-Disposition']?.split('filename=').last ?? 
-               headers['content-disposition']?.split('filename=').last ?? 'download') : 'download';
-            
+            final filename = headers != null
+                ? (headers['Content-Disposition']?.split('filename=').last ??
+                    headers['content-disposition']?.split('filename=').last ??
+                    'download')
+                : 'download';
+
             if (url != null && url.startsWith('blob:')) {
-              Log.info('[MobileWhiteboard] 🚫 Blocking blob navigation, starting download: $url, filename: $filename');
-              unawaited(_downloadBlobUrl(controller, url, filename.replaceAll('"', '')));
+              Log.info(
+                  '[MobileWhiteboard] 🚫 Blocking blob navigation, starting download: $url, filename: $filename');
+              unawaited(_downloadBlobUrl(
+                  controller, url, filename.replaceAll('"', '')));
               return NavigationActionPolicy.CANCEL;
             }
             if (url != null && url.startsWith('data:')) {
-              Log.info('[MobileWhiteboard] 🚫 Blocking data URL navigation, starting download: $url, filename: $filename');
+              Log.info(
+                  '[MobileWhiteboard] 🚫 Blocking data URL navigation, starting download: $url, filename: $filename');
               unawaited(_saveDataUrlToFile(url, filename.replaceAll('"', '')));
               return NavigationActionPolicy.CANCEL;
             }
             return NavigationActionPolicy.ALLOW;
           },
           onDownloadStartRequest: (controller, downloadStartRequest) async {
-            Log.info('[MobileWhiteboard] 📥 Download request: ${downloadStartRequest.url}');
+            Log.info(
+                '[MobileWhiteboard] 📥 Download request: ${downloadStartRequest.url}');
             await _handleDownloadRequest(downloadStartRequest);
           },
         ),
@@ -309,11 +580,13 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
   String _buildRemoteUrl() {
     Log.info('[MobileWhiteboard] 🔨 Building remote URL...');
     Log.info('[MobileWhiteboard] 🔨 _userNickname: "$_userNickname"');
-    
+
     final encodedNickname = Uri.encodeComponent(_userNickname ?? '');
     Log.info('[MobileWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
-    
-    final url = 'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname#room=$_roomId,$_roomKey';
+
+    final hostTheme = _currentHostTheme();
+    final url =
+        'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname&hostTheme=$hostTheme#room=$_roomId,$_roomKey';
     Log.info('[MobileWhiteboard] ✅ Built URL: $url');
     return url;
   }
@@ -326,8 +599,9 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         try {
           final String blobUrl = args[0];
           final String filename = args.length > 1 ? args[1] : 'download';
-          Log.info('[MobileWhiteboard] 📥 downloadBlobFile handler: blobUrl=$blobUrl, filename=$filename');
-          
+          Log.info(
+              '[MobileWhiteboard] 📥 downloadBlobFile handler: blobUrl=$blobUrl, filename=$filename');
+
           if (blobUrl.startsWith('data:')) {
             await _saveDataUrlToFile(blobUrl, filename);
           } else if (blobUrl.startsWith('blob:')) {
@@ -346,7 +620,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
           String base64Data = args[0];
           final String filename = args[1];
           String mimeType = args.length > 2 ? args[2] : '';
-          
+
           if (base64Data.startsWith('data:')) {
             final parts = base64Data.split(',');
             if (parts.length >= 2) {
@@ -354,18 +628,19 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
               base64Data = parts[1];
             }
           }
-          
+
           await _saveBase64ToFile(base64Data, filename, mimeType);
         }
       },
     );
   }
 
-  Future<void> _handleDownloadRequest(DownloadStartRequest downloadStartRequest) async {
+  Future<void> _handleDownloadRequest(
+      DownloadStartRequest downloadStartRequest) async {
     try {
       final url = downloadStartRequest.url.toString();
       Log.info('[MobileWhiteboard] 📥 Handling download request: $url');
-      
+
       if (url.startsWith('data:')) {
         final filename = downloadStartRequest.suggestedFilename ?? 'download';
         await _saveDataUrlToFile(url, filename);
@@ -382,9 +657,10 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
     }
   }
 
-  Future<void> _downloadBlobUrl(InAppWebViewController controller, String blobUrl, String filename) async {
+  Future<void> _downloadBlobUrl(InAppWebViewController controller,
+      String blobUrl, String filename) async {
     Log.info('[MobileWhiteboard] 📥 Downloading blob URL: $blobUrl');
-    
+
     try {
       final jsCode = '''
         (async function() {
@@ -399,7 +675,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
           reader.readAsDataURL(blob);
         })();
       ''';
-      
+
       await controller.evaluateJavascript(source: jsCode);
     } catch (e) {
       Log.error('[MobileWhiteboard] ❌ _downloadBlobUrl error: $e');
@@ -413,32 +689,34 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         Log.error('[MobileWhiteboard] ❌ Invalid data URL format');
         return;
       }
-      
+
       final String mimeType = parts[0].split(':')[1].split(';')[0];
       final String base64Data = parts[1];
-      
+
       await _saveBase64ToFile(base64Data, filename, mimeType);
     } catch (e) {
       Log.error('[MobileWhiteboard] ❌ _saveDataUrlToFile error: $e');
     }
   }
 
-  Future<void> _saveBase64ToFile(String base64Data, String filename, String mimeType) async {
+  Future<void> _saveBase64ToFile(
+      String base64Data, String filename, String mimeType) async {
     try {
-      final String cleanBase64 = base64Data.replaceAll('\n', '').replaceAll('\r', '');
+      final String cleanBase64 =
+          base64Data.replaceAll('\n', '').replaceAll('\r', '');
       final List<int> bytes = base64Decode(cleanBase64);
-      
+
       String ext = '';
       if (mimeType.isNotEmpty) {
         ext = _mapMimeTypeToExtension(mimeType);
       } else {
         ext = _getFileExtensionFromFilename(filename);
       }
-      
+
       if (ext.isEmpty) {
         ext = _detectExtensionFromBytes(bytes);
       }
-      
+
       final String finalFilename = _ensureFilenameExtension(filename, ext);
       if (Platform.isAndroid || Platform.isIOS) {
         final savePath = await GetIt.instance<FilePickerService>().saveFile(
@@ -459,20 +737,21 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
         );
         return;
       }
-      
-      final Directory downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+
+      final Directory downloadsDir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       await downloadsDir.create(recursive: true);
       final File file = File('${downloadsDir.path}/$finalFilename');
-      
+
       await file.writeAsBytes(bytes);
       Log.info('[MobileWhiteboard] ✅ File saved: ${file.path}');
-      
+
       showToastNotification(
         message: '文件已保存到: ${file.path.split('/').last}',
         type: ToastificationType.success,
         description: file.path,
       );
-      
+
       await OpenFilex.open(file.path);
     } catch (e) {
       Log.error('[MobileWhiteboard] ❌ _saveBase64ToFile error: $e');
@@ -516,14 +795,16 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody> {
 
   String _detectExtensionFromBytes(List<int> bytes) {
     if (bytes.length >= 4) {
-      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      if (bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47) {
         return 'png';
       }
       if (bytes[0] == 0xFF && bytes[1] == 0xD8) {
         return 'jpg';
       }
-      if (bytes.length >= 10 && 
-          (bytes[0] == 0x3C && bytes[1] == 0x73) || 
+      if (bytes.length >= 10 && (bytes[0] == 0x3C && bytes[1] == 0x73) ||
           (bytes[0] == 0x3C && bytes[1] == 0x3F)) {
         return 'svg';
       }

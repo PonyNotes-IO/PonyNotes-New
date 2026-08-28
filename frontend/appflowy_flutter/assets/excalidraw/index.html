@@ -66,14 +66,38 @@
         const initialTheme = getTheme();
         window.__ponynotesHostTheme = initialTheme;
         setTheme(initialTheme);
-        window.matchMedia("(prefers-color-scheme: dark)")
-            .addEventListener("change", () => setTheme(getSystemTheme()));
+        // 私有白板由 Flutter 传入宿主主题并负责运行时同步。不要再让
+        // WKWebView 自己的 prefers-color-scheme 监听修改 html 类，否则
+        // iOS 在系统切换时可能先闪成另一种颜色，再被宿主主题纠正。
+        if (!new URLSearchParams(window.location.search).has("hostTheme")) {
+            window.matchMedia("(prefers-color-scheme: dark)")
+                .addEventListener("change", () => setTheme(getSystemTheme()));
+        }
     } catch (e) {
         console.error("Error setting dark mode", e);
     }</script>
     <style>html.dark {
         background-color: #121212;
         color: #fff
+    }
+
+    /* 宿主系统主题是白板唯一主题来源；html.dark 作为 React 类名重绘期间的稳定条件。 */
+    html.dark #root .excalidraw canvas.excalidraw__canvas,
+    html.dark #root .excalidraw canvas.static,
+    html.dark #root .excalidraw canvas.interactive {
+        -webkit-filter: invert(93%) hue-rotate(180deg) !important;
+        filter: invert(93%) hue-rotate(180deg) !important;
+    }
+
+    html.dark #root .excalidraw {
+        background-color: #121212 !important;
+    }
+
+    html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,
+    html:not(.dark) #root .excalidraw canvas.static,
+    html:not(.dark) #root .excalidraw canvas.interactive {
+        -webkit-filter: none !important;
+        filter: none !important;
     }</style>
     <meta http-equiv="Content-Security-Policy" content="font-src 'self' data:;"/>
     <script>// Redirect Excalidraw+ users which have auto-redirect enabled.

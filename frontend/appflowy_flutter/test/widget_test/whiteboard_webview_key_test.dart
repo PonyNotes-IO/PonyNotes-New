@@ -225,32 +225,65 @@ void main() {
     final bridgeSource =
         File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
 
-    expect(webViewSource, contains('window.setHostTheme'));
+    expect(webViewSource, contains('officialUpdateScene'));
+    expect(webViewSource, contains('_hostThemeRuntimeScript'));
+    expect(webViewSource, contains('__ponynotesRuntimeThemeWatchdog'));
+    expect(webViewSource, contains('canvas.static, canvas.interactive'));
+    expect(webViewSource, contains('__ponynotesApplyReactTheme'));
+    expect(webViewSource, contains('__ponynotesSetHostTheme'));
+    expect(webViewSource, contains('ponynotes-host-theme-style'));
+    expect(webViewSource,
+        contains('html.dark #root .excalidraw canvas.excalidraw__canvas'));
     expect(bridgeSource, contains('window.setHostTheme = function'));
     expect(bridgeSource, contains('_forcedHostTheme'));
-    expect(bridgeSource, contains('syncExcalidrawEditorTheme'));
+    expect(bridgeSource, contains('initialHostTheme'));
+    expect(
+        bridgeSource, contains('appStateToRestore.theme = _forcedHostTheme'));
+    expect(
+      bridgeSource,
+      contains("appStateToRestore.viewBackgroundColor ="),
+    );
+    expect(bridgeSource, contains('api.updateScene'));
+    expect(bridgeSource, contains('syncExcalidrawReactTheme'));
     expect(bridgeSource, contains('__ponynotesSetHostTheme'));
     expect(bridgeSource, contains('__ponynotesHostTheme'));
-    expect(bridgeSource, contains('__ponynotesThemeSync'));
+    expect(bridgeSource, contains('ponynotes-host-theme-style'));
+    expect(bridgeSource,
+        contains('html.dark #root .excalidraw canvas.excalidraw__canvas'));
     expect(bridgeSource, contains('enforceHostTheme'));
-    expect(bridgeSource, contains('appState: {\n                    theme,'));
+    // 深色主题由 Excalidraw 的 canvas 反色滤镜渲染，宿主桥接只更新
+    // theme；旧版本写入的 #121212 背景需要迁移回白色基准。
     expect(
-        bridgeSource,
-        contains(
-            "const backgroundColor = theme === 'dark' ? '#121212' : '#ffffff'"));
+        bridgeSource, contains('const appState = { theme: normalizedTheme };'));
+    expect(bridgeSource, contains('legacyDarkBackground'));
+    expect(
+      bridgeSource,
+      contains("appState.viewBackgroundColor = '#ffffff'"),
+    );
+    expect(webViewSource, contains("canvas.style.backgroundColor = '';"));
     expect(bridgeSource, contains('_ponynotesHostThemeWatchdog'));
-    expect(bridgeSource, contains('KeyboardEvent'));
-    expect(bridgeSource, contains('syncExcalidrawEditorTheme'));
+    expect(bridgeSource, isNot(contains('KeyboardEvent')));
     expect(bridgeSource, contains("classList.toggle('theme--dark'"));
     expect(webViewSource, contains('toggle-dark-mode'));
     expect(webViewSource, contains('text.includes(\'system mode\')'));
-    expect(webViewSource, contains('MediaQuery.platformBrightnessOf(context)'));
+    expect(
+      webViewSource,
+      contains(
+        'WidgetsBinding.instance.platformDispatcher.platformBrightness',
+      ),
+    );
     expect(pageSource, contains('_whiteboardCanvasDarkColor'));
     expect(pageSource, contains('canvasFallbackColor'));
     expect(pageSource, contains('didChangePlatformBrightness'));
     expect(pageSource, contains('_brightnessPollTimer'));
     expect(pageSource, contains('Timer.periodic'));
     expect(pageSource, contains('_syncSystemBrightness'));
+    expect(pageSource, contains('_themeSyncGeneration'));
+    expect(pageSource, contains('generation != _themeSyncGeneration'));
+    expect(
+      pageSource,
+      contains('主题同步只由 didChangePlatformBrightness 和轮询触发'),
+    );
     final indexSource = File('assets/excalidraw/index.html').readAsStringSync();
     expect(indexSource, contains('getSystemTheme'));
     expect(indexSource, contains('getInitialTheme'));
@@ -259,18 +292,82 @@ void main() {
     expect(indexSource,
         contains('localStorage.setItem("excalidraw-theme", theme)'));
     expect(indexSource, contains('initialTheme'));
+    expect(indexSource,
+        contains('html.dark #root .excalidraw canvas.excalidraw__canvas'));
+    expect(
+      indexSource,
+      contains('!new URLSearchParams(window.location.search).has("hostTheme")'),
+    );
     final remoteSource = File(
       'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
     ).readAsStringSync();
     expect(remoteSource, contains('hostTheme'));
     expect(remoteSource, contains('__ponynotesApplyTheme'));
-    expect(remoteSource, contains('MediaQuery.platformBrightnessOf(context)'));
+    expect(
+      remoteSource,
+      contains(
+        'WidgetsBinding.instance.platformDispatcher.platformBrightness',
+      ),
+    );
     expect(remoteSource, contains('WidgetsBindingObserver'));
     expect(remoteSource, contains('_brightnessPollTimer'));
     expect(remoteSource, contains('Timer.periodic'));
     expect(remoteSource, contains('_syncSystemBrightness'));
-    expect(remoteSource, contains('syncExcalidrawEditorTheme'));
-    expect(remoteSource, contains('__ponynotesThemeSync'));
+    expect(remoteSource, contains('_themeSyncGeneration'));
+    expect(remoteSource, contains('__ponynotesSetHostTheme'));
+    expect(remoteSource, contains('canvas.static, canvas.interactive'));
+    expect(remoteSource, contains('ponynotes-host-theme-style'));
+    expect(
+      remoteSource,
+      contains('html.dark #root .excalidraw canvas.excalidraw__canvas'),
+    );
+    expect(remoteSource, contains('Dart host theme applied'));
+    expect(remoteSource, isNot(contains('new KeyboardEvent')));
+
+    // 移动端 /whiteboard 路由仍使用 MobileWhiteboardBody，必须与协作空间
+    // RemoteWhiteboardPage 共用同一套系统主题同步链路。
+    final mobileSource = File(
+      'lib/plugins/whiteboard/presentation/mobile_whiteboard_body.dart',
+    ).readAsStringSync();
+    expect(mobileSource, contains('WidgetsBindingObserver'));
+    expect(mobileSource, contains('_brightnessPollTimer'));
+    expect(mobileSource, contains('_syncSystemBrightness'));
+    expect(mobileSource, contains('_themeSyncGeneration'));
+    expect(mobileSource, contains('hostTheme'));
+    expect(mobileSource, contains('__ponynotesApplyTheme'));
+    expect(mobileSource, contains('__ponynotesSetHostTheme'));
+    expect(mobileSource, contains('canvas.static, canvas.interactive'));
+    expect(mobileSource, contains('ponynotes-host-theme-style'));
+    expect(
+      mobileSource,
+      contains('html.dark #root .excalidraw canvas.excalidraw__canvas'),
+    );
+    expect(mobileSource, contains('Dart host theme applied'));
+    expect(mobileSource, isNot(contains('new KeyboardEvent')));
+    expect(mobileSource, contains('UserScriptInjectionTime.AT_DOCUMENT_START'));
+  });
+
+  test('whiteboard theme reads platform system brightness directly', () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final mobileSource = File(
+      'lib/plugins/whiteboard/presentation/mobile_whiteboard_body.dart',
+    ).readAsStringSync();
+
+    const platformBrightness =
+        'WidgetsBinding.instance.platformDispatcher.platformBrightness';
+    expect(pageSource, contains(platformBrightness));
+    expect(webViewSource, contains(platformBrightness));
+    expect(mobileSource, contains(platformBrightness));
+    expect(
+      pageSource,
+      isNot(contains(
+        'final currentBrightness = MediaQuery.platformBrightnessOf(context);',
+      )),
+    );
   });
 
   test('whiteboard uses memory storage only on macOS', () {

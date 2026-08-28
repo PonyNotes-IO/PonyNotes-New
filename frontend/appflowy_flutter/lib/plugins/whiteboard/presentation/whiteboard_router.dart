@@ -81,14 +81,17 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
   @override
   void initState() {
     super.initState();
-    Log.info('🚀 [WhiteboardRouter] initState called for view: ${widget.notifier.view.id}');
+    Log.info(
+        '🚀 [WhiteboardRouter] initState called for view: ${widget.notifier.view.id}');
     _resolveSpaceThenFetch(widget.notifier.view);
   }
 
   @override
   void dispose() {
-    Log.info('💀 [WhiteboardRouter] dispose called for view: ${widget.notifier.view.id}');
-    Log.info('💀 [WhiteboardRouter] Disposing with roomId: $_roomId, roomKey: $_roomKey');
+    Log.info(
+        '💀 [WhiteboardRouter] dispose called for view: ${widget.notifier.view.id}');
+    Log.info(
+        '💀 [WhiteboardRouter] Disposing with roomId: $_roomId, roomKey: $_roomKey');
     super.dispose();
   }
 
@@ -174,7 +177,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     if (cachedResult != null) {
       if (!mounted) return;
       setState(() => _roomReachable = cachedResult);
-      Log.info('📶 [WhiteboardRouter] room 可达性（缓存命中）=$cachedResult, view=${view.id}');
+      Log.info(
+          '📶 [WhiteboardRouter] room 可达性（缓存命中）=$cachedResult, view=${view.id}');
       return;
     }
 
@@ -229,8 +233,7 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
 
     HttpClient? client;
     try {
-      client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 3);
+      client = HttpClient()..connectionTimeout = const Duration(seconds: 3);
       final request = await client
           .headUrl(Uri.parse(_kRoomHost))
           .timeout(const Duration(seconds: 3));
@@ -287,7 +290,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       final room = await WhiteboardRoomService.getRoom(view.id);
 
       if (room != null) {
-        Log.debug('🟢 [WhiteboardRouter] Found room in local storage: roomId=${room.roomId}');
+        Log.debug(
+            '🟢 [WhiteboardRouter] Found room in local storage: roomId=${room.roomId}');
         setState(() {
           _roomId = room.roomId;
           _roomKey = room.roomKey;
@@ -329,14 +333,17 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
       }
 
       // 本地和服务端都没有 —— 这才是真正的新白板，由本端创建 room。
-      Log.debug('🟡 [WhiteboardRouter] No room found for view ${view.id}, generating new one');
+      Log.debug(
+          '🟡 [WhiteboardRouter] No room found for view ${view.id}, generating new one');
       final newRoomId = WhiteboardRoomService.generateRoomId();
       final newRoomKey = WhiteboardRoomService.generateRoomKey();
 
-      Log.info('🆕 [WhiteboardRouter] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${view.id}');
+      Log.info(
+          '🆕 [WhiteboardRouter] Generated NEW roomId=$newRoomId, roomKey=$newRoomKey for view ${view.id}');
 
       await WhiteboardRoomService.saveRoom(view.id, newRoomId, newRoomKey);
-      Log.info('✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
+      Log.info(
+          '✅ [WhiteboardRouter] Saved room to local storage: viewId=${view.id}, roomId=$newRoomId');
 
       // room 必须落到服务端 —— 这是其他协作者唯一能拿到它的地方。
       // 这里**等待写入完成**：它每个白板只发生一次（创建时），不影响后续打开
@@ -350,7 +357,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
         source: 'room-init',
       );
       if (saved) {
-        Log.info('✅ [WhiteboardRouter] Room info synced to server: roomId=$newRoomId');
+        Log.info(
+            '✅ [WhiteboardRouter] Room info synced to server: roomId=$newRoomId');
       } else {
         Log.error(
           '❌ [WhiteboardRouter] room 未能写入服务端，其他协作者将取不到该白板的 room：view=${view.id}。'
@@ -390,6 +398,11 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
+        final placeholderColor =
+            WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                    Brightness.dark
+                ? const Color(0xFF121212)
+                : Colors.white;
         // 空间归属未判定完 —— 此时**还不知道**该挂哪一套，只能渲染中性占位。
         //
         // 曾经这里对 `_isPrivateSpace == null` 也直接渲染 B 套本地页以避免
@@ -399,8 +412,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
         //
         // 空间归属有 _spaceTypeCache，重复打开时是同步命中的，占位窗口极短。
         if (_isPrivateSpace == null) {
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
+          return ColoredBox(
+            color: placeholderColor,
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
@@ -409,14 +422,15 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
           Log.debug(
             '⏳ [WhiteboardRouter] 协作空间等待 room 可达性探测: view=${view.id}',
           );
-          return const ColoredBox(
-            color: Color(0xFFFFFFFF),
+          return ColoredBox(
+            color: placeholderColor,
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           );
         }
         // 私有空间白板：始终渲染 B 套 WhiteboardPage（本地 collab + 静默云备份），忽略 room。
         if (_isPrivateSpace == true) {
-          Log.debug('🔒 [WhiteboardRouter] 私有空间，使用本地 WhiteboardPage（B 套）: ${view.id}');
+          Log.debug(
+              '🔒 [WhiteboardRouter] 私有空间，使用本地 WhiteboardPage（B 套）: ${view.id}');
           return WhiteboardPage(
             key: ValueKey('whiteboard_page_${view.id}'),
             view: view,
@@ -437,7 +451,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
         // 可达（或离线但无镜像，不误判）：维持现状 A 套 room。
         // 有 room 走 RemoteWhiteboardPage（A 套），否则回退 B 套。
         if (_roomId != null && _roomKey != null) {
-          Log.debug('🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
+          Log.debug(
+              '🟢 [WhiteboardRouter] Using RemoteWhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
           return RemoteWhiteboardPage(
             key: ValueKey('remote_whiteboard_page_${view.id}'),
             view: view,
@@ -445,7 +460,8 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
             roomKey: _roomKey!,
           );
         } else {
-          Log.debug('🔵 [WhiteboardRouter] Using WhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
+          Log.debug(
+              '🔵 [WhiteboardRouter] Using WhiteboardPage: roomId=$_roomId, roomKey=$_roomKey');
           return WhiteboardPage(
             key: ValueKey('whiteboard_page_${view.id}'),
             view: view,

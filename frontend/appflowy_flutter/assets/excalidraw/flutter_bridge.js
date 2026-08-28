@@ -61,43 +61,33 @@
     let _initPayload = null;
     // 宿主主题是白板唯一主题来源；白板内置主题选择会被自动纠正。
     let _applyingHostTheme = false;
-    let _forcedHostTheme = null;
+    const initialHostTheme = urlParams.get('hostTheme');
+    let _forcedHostTheme = initialHostTheme === 'dark' || initialHostTheme === 'light'
+        ? initialHostTheme
+        : null;
     let _pendingHostTheme = null;
 
-    // Excalidraw 的 React 主题由内部 setAppTheme 状态控制，仅调用 API 的
-    // updateScene 不会更新该状态。复用 Excalidraw 自带的 Alt+Shift+D 快捷键
-    // 触发 React 状态切换，再用 API 同步画布状态。
-    document.addEventListener('keydown', (event) => {
-        if (event.altKey && event.shiftKey && event.code === 'KeyD' &&
-            !event.__ponynotesThemeSync) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-        }
-    }, true);
-
-    const syncExcalidrawEditorTheme = (theme) => {
-        // 新版 Excalidraw 暴露了 React 状态 setter。优先调用它，确保
-        // editorTheme 与画布状态同时更新，不依赖 isTrusted 为 false 的合成键盘事件。
-        if (typeof window.__ponynotesSetHostTheme === 'function') {
-            window.__ponynotesSetHostTheme(theme);
-            console.info('[PonyNotes] React editor theme synchronized:', theme);
+    // Excalidraw 的工具栏主题由 useHandleAppTheme 的 React 状态维护，
+    // 仅调用 excalidrawAPI.updateScene() 只能改变画布 appState，不能保证
+    // React 外壳同步更新。集成版 Excalidraw 通过该 setter 暴露宿主主题入口。
+    const syncExcalidrawReactTheme = (theme) => {
+        if (typeof window.__ponynotesApplyReactTheme === 'function') {
+            window.__ponynotesApplyReactTheme(theme);
             return;
         }
-        const root = document.querySelector('.excalidraw');
-        if (!root) return;
-        const currentTheme = root.classList.contains('theme--dark') ? 'dark' : 'light';
-        if (currentTheme === theme) return;
-        const event = new KeyboardEvent('keydown', {
-            bubbles: true,
-            cancelable: true,
-            altKey: true,
-            shiftKey: true,
-            code: 'KeyD',
-            key: 'd',
-        });
-        Object.defineProperty(event, '__ponynotesThemeSync', { value: true });
-        document.dispatchEvent(event);
-        console.info('[PonyNotes] React editor theme synchronized:', theme);
+
+        const setter = window.__ponynotesSetHostTheme;
+        if (typeof setter !== 'function') return;
+
+        const last = window.__ponynotesReactThemeState;
+        if (last && last.setter === setter && last.theme === theme) return;
+
+        try {
+            setter(theme);
+            window.__ponynotesReactThemeState = { setter, theme };
+        } catch (e) {
+            console.warn('[PonyNotes] Failed to synchronize React editor theme:', e);
+        }
     };
 
     const getPayloadTheme = (payload) => {
@@ -110,40 +100,74 @@
         return theme === 'dark' || theme === 'light' ? theme : null;
     };
 
+    // React 重绘时 .theme--dark 可能短暂被移除。额外维护一条由宿主控制的
+    // CSS 规则，以 html.dark 直接驱动画布滤镜，避免画布在切换窗口露白。
+    const ensureHostThemeStyle = () => {
+        let style = document.getElementById('ponynotes-host-theme-style');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = 'ponynotes-host-theme-style';
+            (document.head || document.documentElement).appendChild(style);
+        }
+        style.textContent = `
+            html.dark #root .excalidraw canvas.excalidraw__canvas,
+            html.dark #root .excalidraw canvas.static,
+            html.dark #root .excalidraw canvas.interactive {
+                -webkit-filter: invert(93%) hue-rotate(180deg) !important;
+                filter: invert(93%) hue-rotate(180deg) !important;
+            }
+            html.dark #root .excalidraw {
+                background-color: #121212 !important;
+            }
+            html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,
+            html:not(.dark) #root .excalidraw canvas.static,
+            html:not(.dark) #root .excalidraw canvas.interactive {
+                -webkit-filter: none !important;
+                filter: none !important;
+            }
+        `;
+    };
+
     const applyHostThemeToScene = (theme) => {
+        const normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+        syncExcalidrawReactTheme(normalizedTheme);
+        ensureHostThemeStyle();
+        document.documentElement.classList.toggle('dark', normalizedTheme === 'dark');
+        document.querySelectorAll('.excalidraw').forEach((root) => {
+            root.classList.toggle('theme--dark', normalizedTheme === 'dark');
+        });
+
         const api = window._excalidrawAPI;
         if (!api || typeof api.updateScene !== 'function') {
-            _pendingHostTheme = theme;
-            syncExcalidrawEditorTheme(theme);
+            _pendingHostTheme = normalizedTheme;
             return;
         }
-        const backgroundColor = theme === 'dark' ? '#121212' : '#ffffff';
         const currentState = typeof api.getAppState === 'function'
             ? api.getAppState()
             : null;
-        const alreadyApplied = currentState?.theme === theme &&
-            currentState?.viewBackgroundColor === backgroundColor;
-        syncExcalidrawEditorTheme(theme);
+        // Excalidraw 的深色主题会给 canvas 应用 invert(93%) 滤镜。
+        // 因此场景背景必须保持原始颜色（默认是白色），不能把它改成
+        // #121212，否则会被滤镜再次反转成接近白色。旧版本曾写入
+        // #121212，这里只对这个遗留值做一次迁移恢复。
+        const legacyDarkBackground =
+            typeof currentState?.viewBackgroundColor === 'string' &&
+            currentState.viewBackgroundColor.toLowerCase() === '#121212';
+        const alreadyApplied = currentState?.theme === normalizedTheme &&
+            !legacyDarkBackground;
         if (alreadyApplied) {
-            document.documentElement.classList.toggle('dark', theme === 'dark');
-            document.querySelectorAll('.excalidraw').forEach((root) => {
-                root.classList.toggle('theme--dark', theme === 'dark');
-            });
             return;
         }
         _applyingHostTheme = true;
         try {
+            const appState = { theme: normalizedTheme };
+            if (legacyDarkBackground) {
+                appState.viewBackgroundColor = '#ffffff';
+            }
             api.updateScene({
-                // Excalidraw 的 UI 主题与画布背景是两个独立状态，必须同时设置。
-                appState: {
-                    theme,
-                    viewBackgroundColor: backgroundColor,
-                },
+                // UI 主题与场景背景是两个独立状态；只更新主题，交给
+                // Excalidraw 自带滤镜把默认白色画布渲染成深色。
+                appState,
                 commitToHistory: false,
-            });
-            document.documentElement.classList.toggle('dark', theme === 'dark');
-            document.querySelectorAll('.excalidraw').forEach((root) => {
-                root.classList.toggle('theme--dark', theme === 'dark');
             });
         } finally {
             // Excalidraw writes localStorage during updateScene; keep the guard
@@ -158,12 +182,6 @@
         console.log('[PonyNotes] Host system appearance changed to ' + normalizedTheme);
         _forcedHostTheme = normalizedTheme;
         window.__ponynotesHostTheme = normalizedTheme;
-        if (typeof window.__ponynotesSetHostTheme === 'function') {
-            window.__ponynotesSetHostTheme(normalizedTheme);
-        }
-        if (typeof window.setTheme === 'function') {
-            window.setTheme(normalizedTheme);
-        }
         applyHostThemeToScene(normalizedTheme);
         if (!window._ponynotesHostThemeWatchdog) {
             window._ponynotesHostThemeWatchdog = setInterval(() => {
@@ -1668,6 +1686,18 @@
                     try { appStateToRestore = JSON.parse(appState); } catch (e) { }
                 }
                 appStateToRestore = pickStableAppState(appStateToRestore);
+                // 场景数据可能保存了上一次会话的主题。私有白板主题由
+                // Flutter 宿主决定，恢复时直接覆盖主题和画布背景，避免先
+                // 绘制历史浅色再异步切回当前系统深色造成黑白闪烁。
+                if (_forcedHostTheme) {
+                    appStateToRestore.theme = _forcedHostTheme;
+                    // 兼容旧版本曾保存的深色背景。正常数据的背景颜色
+                    // 保持不变，由 Excalidraw 的主题滤镜负责深色显示。
+                    if (typeof appStateToRestore.viewBackgroundColor === 'string' &&
+                        appStateToRestore.viewBackgroundColor.toLowerCase() === '#121212') {
+                        appStateToRestore.viewBackgroundColor = '#ffffff';
+                    }
+                }
 
                 if (elementsToRestore || appStateToRestore) {
                     console.log('[PonyNotes] 🎨 Applying scene from payload');
@@ -1808,6 +1838,13 @@
             } else if (data.key === 'appState') {
                 enforceHostTheme({ appState: data.value });
                 const stableAppState = pickStableAppState(data.value);
+                if (_forcedHostTheme) {
+                    stableAppState.theme = _forcedHostTheme;
+                    if (typeof stableAppState.viewBackgroundColor === 'string' &&
+                        stableAppState.viewBackgroundColor.toLowerCase() === '#121212') {
+                        stableAppState.viewBackgroundColor = '#ffffff';
+                    }
+                }
                 if (Object.keys(stableAppState).length > 0) {
                     api.updateScene({ appState: stableAppState, commitToHistory: false });
                 }

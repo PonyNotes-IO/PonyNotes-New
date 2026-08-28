@@ -13,7 +13,6 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
-import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
@@ -302,7 +301,10 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   // 主题监听
   Brightness? _lastBrightness;
+  Brightness? _pendingBrightness;
   Timer? _brightnessPollTimer;
+  Timer? _brightnessDebounceTimer;
+  int _themeSyncGeneration = 0;
   late final String _sessionTraceId;
   late final String _loadTraceId;
   late final Stopwatch _loadStopwatch;
@@ -551,20 +553,36 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   void _syncSystemBrightness(Brightness brightness) {
     if (_isDisposing || _lastBrightness == brightness) return;
 
-    final theme = brightness == Brightness.dark ? 'dark' : 'light';
-    Log.info('[WhiteboardPage] 系统外观变化: $theme');
-    // MediaQuery 通常会随后重建页面，但这里直接同步 WebView，避免依赖
-    // Flutter 重建时序，确保白板停留在前台时也能实时切换主题。
-    _lastBrightness = brightness;
-    if (mounted) {
-      setState(() {});
+    // iOS 在切换系统外观的动画窗口内可能连续回调相反的亮度值。
+    // 只有亮度稳定一小段时间后才提交，避免 WebView 黑白主题交替闪烁。
+    _pendingBrightness = brightness;
+    _brightnessDebounceTimer?.cancel();
+    _brightnessDebounceTimer = Timer(const Duration(milliseconds: 260), () {
+      if (!mounted || _isDisposing) return;
+      final stableBrightness = _pendingBrightness;
+      final currentBrightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      if (stableBrightness == null || stableBrightness != currentBrightness) {
+        return;
+      }
+      if (_lastBrightness == stableBrightness) return;
+
+      final theme = stableBrightness == Brightness.dark ? 'dark' : 'light';
+      Log.info('[WhiteboardPage] 系统外观变化: $theme');
+      _lastBrightness = stableBrightness;
+      // 不重建包含原生 PlatformView 的整页布局。主题切换由 WebView
+      // 桥接直接完成，避免 Flutter 重建与 JS 更新同时发生而产生闪屏。
       _scheduleThemeSync(theme);
-    }
+    });
   }
 
   void _scheduleThemeSync(String theme) {
+    final generation = ++_themeSyncGeneration;
+
     void sync() {
-      if (!mounted || _isDisposing) return;
+      if (!mounted || _isDisposing || generation != _themeSyncGeneration) {
+        return;
+      }
       final webViewState = _webViewKey.currentState;
       if (webViewState != null) {
         unawaited(webViewState.updateTheme(theme));
@@ -584,6 +602,10 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     WidgetsBinding.instance.removeObserver(this);
     _brightnessPollTimer?.cancel();
     _brightnessPollTimer = null;
+    _brightnessDebounceTimer?.cancel();
+    _brightnessDebounceTimer = null;
+    _pendingBrightness = null;
+    _themeSyncGeneration++;
 
     _isDisposing = true;
     logDiagnosticEvent(
@@ -992,26 +1014,20 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   @override
   Widget build(BuildContext context) {
-    // 监听主题变化
-    final appearanceCubit = context.watch<AppearanceSettingsCubit>();
     // 白板强制跟随设备系统亮度，不受应用内手动主题设置影响。
-    final currentBrightness = MediaQuery.platformBrightnessOf(context);
+    // 直接读取平台分发器，避免应用 ThemeMode 或 MediaQuery 更新时序
+    // 覆盖真实的手机系统深色/浅色模式。
+    final currentBrightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
     // WebView 使用透明背景，外层兜底层也必须跟随系统，否则首屏加载或
     // Excalidraw 画布尚未绘制时会露出白色背景。
     final canvasFallbackColor = currentBrightness == Brightness.dark
         ? _whiteboardCanvasDarkColor
         : _whiteboardCanvasLightColor;
 
-    // 如果主题发生变化，更新Excalidraw主题
-    if (_lastBrightness != null && _lastBrightness != currentBrightness) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _webViewKey.currentState?.updateTheme(
-          currentBrightness == Brightness.dark ? 'dark' : 'light',
-        );
-      });
-    }
-    _lastBrightness = currentBrightness;
-
+    // 主题同步只由 didChangePlatformBrightness 和轮询触发。
+    // build 期间不能再排队 updateTheme，否则应用主题/MediaQuery 重建时
+    // 可能把旧亮度延迟写回 WebView，与当前宿主主题交替闪烁。
     if (_isLoadingData && _showLegacyBlockingLoader) {
       return Scaffold(
         resizeToAvoidBottomInset: !PlatformInfo.isTablet,

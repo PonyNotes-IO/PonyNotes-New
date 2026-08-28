@@ -170,6 +170,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
   bool _isExporting = false;
   String? _lastHostTheme;
   Timer? _brightnessPollTimer;
+  int _themeSyncGeneration = 0;
   // 本地镜像（严格单向：只写「服务器 → 本地」，永不回推 room）。
   final WhiteboardMirrorService _mirrorService = WhiteboardMirrorService();
   // Flutter 侧再做一次按 sceneVersion 去重，避免重复落盘。
@@ -211,6 +212,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
     WidgetsBinding.instance.removeObserver(this);
     _brightnessPollTimer?.cancel();
     _brightnessPollTimer = null;
+    _themeSyncGeneration++;
     _isDisposed = true;
     // 注销冲刷回调（本页已销毁，不再参与上游冲刷）
     WhiteboardExitFlush.instance.unregister(this);
@@ -269,8 +271,10 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
   }
 
   void _scheduleRemoteThemeSync(String theme) {
+    final generation = ++_themeSyncGeneration;
+
     void sync() {
-      if (!_isDisposed) {
+      if (!_isDisposed && generation == _themeSyncGeneration) {
         unawaited(_applyRemoteTheme(theme));
       }
     }
@@ -461,7 +465,8 @@ return await window.__xmExportImage('$format');
   @override
   Widget build(BuildContext context) {
     final hostTheme =
-        MediaQuery.platformBrightnessOf(context) == Brightness.dark
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark
             ? 'dark'
             : 'light';
     if (_lastHostTheme != null && _lastHostTheme != hostTheme) {
@@ -510,47 +515,53 @@ return await window.__xmExportImage('$format');
                           window.__ponynotesHostTheme = hostTheme;
                           try { window.localStorage.setItem('excalidraw-theme', hostTheme); } catch (_) {}
                           document.documentElement.classList.toggle('dark', hostTheme === 'dark');
-                          document.addEventListener('keydown', function(event) {
-                            if (event.altKey && event.shiftKey && event.code === 'KeyD' && !event.__ponynotesThemeSync) {
-                              event.preventDefault();
-                              event.stopImmediatePropagation();
-                            }
-                          }, true);
-                          var syncExcalidrawEditorTheme = function(theme) {
-                            var root = document.querySelector('.excalidraw');
-                            if (!root) return;
-                            var currentTheme = root.classList.contains('theme--dark') ? 'dark' : 'light';
-                            if (currentTheme === theme) return;
-                            var event = new KeyboardEvent('keydown', {
-                              bubbles: true,
-                              cancelable: true,
-                              altKey: true,
-                              shiftKey: true,
-                              code: 'KeyD',
-                              key: 'd'
-                            });
-                            Object.defineProperty(event, '__ponynotesThemeSync', { value: true });
-                            document.dispatchEvent(event);
-                            console.info('[PonyNotes] React editor theme synchronized:', theme);
-                          };
                           var style = document.createElement('style');
                           style.textContent = '.dropdown-menu-item-base:has(input[name="theme"]), [data-testid="toggle-dark-mode"] { display:none!important; pointer-events:none!important; }';
                           (document.head || document.documentElement).appendChild(style);
                           window.__ponynotesApplyTheme = function(theme) {
-                            window.__ponynotesHostTheme = theme === 'dark' ? 'dark' : 'light';
-                            try { window.localStorage.setItem('excalidraw-theme', window.__ponynotesHostTheme); } catch (_) {}
-                            syncExcalidrawEditorTheme(window.__ponynotesHostTheme);
-                            document.documentElement.classList.toggle('dark', window.__ponynotesHostTheme === 'dark');
+                            var normalizedTheme = theme === 'dark' ? 'dark' : 'light';
+                            var uiBackgroundColor = normalizedTheme === 'dark' ? '#121212' : '#ffffff';
+                            var hostStyle = document.getElementById('ponynotes-host-theme-style');
+                            if (!hostStyle) {
+                              hostStyle = document.createElement('style');
+                              hostStyle.id = 'ponynotes-host-theme-style';
+                              (document.head || document.documentElement).appendChild(hostStyle);
+                            }
+                            hostStyle.textContent = 'html.dark #root .excalidraw canvas.excalidraw__canvas,' +
+                              'html.dark #root .excalidraw canvas.static,' +
+                              'html.dark #root .excalidraw canvas.interactive {' +
+                              '-webkit-filter: invert(93%) hue-rotate(180deg) !important;' +
+                              'filter: invert(93%) hue-rotate(180deg) !important;' +
+                              '} html.dark #root .excalidraw { background-color: #121212 !important; }' +
+                              ' html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,' +
+                              'html:not(.dark) #root .excalidraw canvas.static,' +
+                              'html:not(.dark) #root .excalidraw canvas.interactive {' +
+                              '-webkit-filter: none !important; filter: none !important; }';
+                            window.__ponynotesHostTheme = normalizedTheme;
+                            try { window.localStorage.setItem('excalidraw-theme', normalizedTheme); } catch (_) {}
+                            var setter = window.__ponynotesSetHostTheme;
+                            if (typeof setter === 'function') {
+                              try { setter(normalizedTheme); } catch (_) {}
+                            }
+                            document.documentElement.classList.toggle('dark', normalizedTheme === 'dark');
+                            if (document.body) document.body.style.backgroundColor = uiBackgroundColor;
+                            document.querySelectorAll('.excalidraw').forEach(function(root) {
+                              root.classList.toggle('theme--dark', normalizedTheme === 'dark');
+                              root.style.backgroundColor = uiBackgroundColor;
+                            });
+                            document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+                              canvas.style.backgroundColor = '';
+                            });
                             var api = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
                             console.info('[PonyNotes] host theme requested:', window.__ponynotesHostTheme, 'apiReady=', !!api);
                             if (api && typeof api.updateScene === 'function') {
-                              api.updateScene({ appState: {
-                                theme: window.__ponynotesHostTheme,
-                                viewBackgroundColor: window.__ponynotesHostTheme === 'dark' ? '#121212' : '#ffffff'
-                              }, commitToHistory: false });
-                              document.querySelectorAll('.excalidraw').forEach(function(root) {
-                                root.classList.toggle('theme--dark', window.__ponynotesHostTheme === 'dark');
-                              });
+                              var state = typeof api.getAppState === 'function' ? api.getAppState() : null;
+                              var legacyDarkBackground = !!state && typeof state.viewBackgroundColor === 'string' && state.viewBackgroundColor.toLowerCase() === '#121212';
+                              if (!state || state.theme !== normalizedTheme || legacyDarkBackground) {
+                                var appState = { theme: normalizedTheme };
+                                if (legacyDarkBackground) appState.viewBackgroundColor = '#ffffff';
+                                api.updateScene({ appState: appState, commitToHistory: false });
+                              }
                             }
                           };
                           document.addEventListener('change', function(event) {
@@ -563,6 +574,7 @@ return await window.__xmExportImage('$format');
                           setInterval(function() {
                             window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
                           }, 500);
+                          window.__ponynotesApplyTheme(hostTheme);
                         })();
 
                         (function() {
@@ -765,7 +777,8 @@ return await window.__xmExportImage('$format');
     Log.info('[RemoteWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
 
     final hostTheme =
-        MediaQuery.platformBrightnessOf(context) == Brightness.dark
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark
             ? 'dark'
             : 'light';
     final url =
@@ -777,11 +790,87 @@ return await window.__xmExportImage('$format');
   Future<void> _applyRemoteTheme(String theme) async {
     final controller = _controller;
     if (_isDisposed || controller == null) return;
+    final normalizedTheme = theme == 'dark' ? 'dark' : 'light';
     try {
       await controller.evaluateJavascript(source: '''
-        if (typeof window.__ponynotesApplyTheme === 'function') {
-          window.__ponynotesApplyTheme('${theme == 'dark' ? 'dark' : 'light'}');
-        }
+        (function() {
+          var requestedTheme = '$normalizedTheme';
+          var uiBackgroundColor = requestedTheme === 'dark' ? '#121212' : '#ffffff';
+          var hostStyle = document.getElementById('ponynotes-host-theme-style');
+          if (!hostStyle) {
+            hostStyle = document.createElement('style');
+            hostStyle.id = 'ponynotes-host-theme-style';
+            (document.head || document.documentElement).appendChild(hostStyle);
+          }
+          hostStyle.textContent = 'html.dark #root .excalidraw canvas.excalidraw__canvas,' +
+            'html.dark #root .excalidraw canvas.static,' +
+            'html.dark #root .excalidraw canvas.interactive {' +
+            '-webkit-filter: invert(93%) hue-rotate(180deg) !important;' +
+            'filter: invert(93%) hue-rotate(180deg) !important;' +
+            '} html.dark #root .excalidraw { background-color: #121212 !important; }' +
+            ' html:not(.dark) #root .excalidraw canvas.excalidraw__canvas,' +
+            'html:not(.dark) #root .excalidraw canvas.static,' +
+            'html:not(.dark) #root .excalidraw canvas.interactive {' +
+            '-webkit-filter: none !important; filter: none !important; }';
+          if (typeof window.__ponynotesApplyTheme === 'function') {
+            try { window.__ponynotesApplyTheme(requestedTheme); } catch (_) {}
+          }
+          window.__ponynotesHostTheme = requestedTheme;
+          try { window.localStorage.setItem('excalidraw-theme', requestedTheme); } catch (_) {}
+          var setter = window.__ponynotesSetHostTheme;
+          if (typeof setter === 'function') {
+            try { setter(requestedTheme); } catch (_) {}
+          }
+          document.documentElement.classList.toggle('dark', requestedTheme === 'dark');
+          if (document.body) document.body.style.backgroundColor = uiBackgroundColor;
+          document.querySelectorAll('.excalidraw').forEach(function(root) {
+            root.classList.toggle('theme--dark', requestedTheme === 'dark');
+            root.style.backgroundColor = uiBackgroundColor;
+          });
+          document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+            canvas.style.backgroundColor = '';
+          });
+          var api = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+          if (api && typeof api.updateScene === 'function') {
+            var state = typeof api.getAppState === 'function' ? api.getAppState() : null;
+            var legacyDarkBackground = !!state && typeof state.viewBackgroundColor === 'string' && state.viewBackgroundColor.toLowerCase() === '#121212';
+            if (!state || state.theme !== requestedTheme || legacyDarkBackground) {
+              var appState = { theme: requestedTheme };
+              if (legacyDarkBackground) appState.viewBackgroundColor = '#ffffff';
+              api.updateScene({ appState: appState, commitToHistory: false });
+            }
+          }
+          console.info('[PonyNotes] Dart host theme applied:', requestedTheme, 'apiReady=', !!api);
+          if (!window.__ponynotesRuntimeThemeWatchdog) {
+            window.__ponynotesRuntimeThemeWatchdog = window.setInterval(function() {
+              var currentTheme = window.__ponynotesHostTheme;
+              if (currentTheme !== 'dark' && currentTheme !== 'light') return;
+              var currentUiBackground = currentTheme === 'dark' ? '#121212' : '#ffffff';
+              var currentSetter = window.__ponynotesSetHostTheme;
+              if (typeof currentSetter === 'function') {
+                try { currentSetter(currentTheme); } catch (_) {}
+              }
+              var currentApi = window.excalidrawAPI || window._excalidrawAPI || window.__EXCALIDRAW_API__;
+              if (currentApi && typeof currentApi.getAppState === 'function' && typeof currentApi.updateScene === 'function') {
+                var currentState = currentApi.getAppState();
+                var legacyDarkBackground = !!currentState && typeof currentState.viewBackgroundColor === 'string' && currentState.viewBackgroundColor.toLowerCase() === '#121212';
+                if (!currentState || currentState.theme !== currentTheme || legacyDarkBackground) {
+                  var currentAppState = { theme: currentTheme };
+                  if (legacyDarkBackground) currentAppState.viewBackgroundColor = '#ffffff';
+                  currentApi.updateScene({ appState: currentAppState, commitToHistory: false });
+                }
+              }
+              document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+              document.querySelectorAll('.excalidraw').forEach(function(root) {
+                root.classList.toggle('theme--dark', currentTheme === 'dark');
+                root.style.backgroundColor = currentUiBackground;
+              });
+              document.querySelectorAll('.excalidraw__canvas, canvas.static, canvas.interactive').forEach(function(canvas) {
+                canvas.style.backgroundColor = '';
+              });
+            }, 500);
+          }
+        })();
       ''');
       Log.info('[RemoteWhiteboard] WebView 主题同步脚本已发送: $theme');
     } catch (e) {
