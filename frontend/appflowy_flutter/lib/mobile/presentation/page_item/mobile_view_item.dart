@@ -288,7 +288,7 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
       _buildLeftIcon(),
       // icon
       _buildViewIcon(),
-      const HSpace(2),
+      const HSpace(6),
       // title
       Expanded(
         child: FlowyText.regular(
@@ -418,8 +418,16 @@ class _SingleMobileInnerViewItemState extends State<SingleMobileInnerViewItem> {
             child: widget.view.defaultIcon(size: const Size.square(18)),
           );
     return SizedBox(
-      width: _viewIconSize,
-      child: Center(child: icon),
+      width: _viewIconSize + 8,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: SizedBox.square(
+          dimension: _viewIconSize,
+          child: FittedBox(
+            child: icon,
+          ),
+        ),
+      ),
     );
   }
 
