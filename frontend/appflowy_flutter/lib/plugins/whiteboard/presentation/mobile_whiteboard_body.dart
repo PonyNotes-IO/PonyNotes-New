@@ -50,9 +50,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
     // 转发系统外观事件，轮询作为兜底，确保白板停留时也能实时切换。
     _brightnessPollTimer = Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) => _syncSystemBrightness(
-        WidgetsBinding.instance.platformDispatcher.platformBrightness,
-      ),
+      (_) => _syncSystemBrightness(_currentSystemBrightness()),
     );
     _loadUserNickname();
     _tryFetchRoomInfo();
@@ -73,12 +71,24 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    _syncSystemBrightness(
-      WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    );
+    _syncSystemBrightness(_currentSystemBrightness());
   }
 
-  void _syncSystemBrightness(Brightness brightness) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery 变化通常先于 PlatformView 的原生亮度回调到达，直接从
+    // 当前页面依赖读取可以让白板在停留状态下立即切换主题。
+    _syncSystemBrightness(_currentSystemBrightness(), rebuild: false);
+  }
+
+  Brightness _currentSystemBrightness() {
+    // Theme.of(context) 表示应用当前实际生效的亮度，能够捕获应用内主题
+    // 模式切换；MediaQuery/平台分发器只作为无主题上下文时的兜底。
+    return Theme.of(context).brightness;
+  }
+
+  void _syncSystemBrightness(Brightness brightness, {bool rebuild = true}) {
     if (_isDisposed) return;
 
     final theme = brightness == Brightness.dark ? 'dark' : 'light';
@@ -86,7 +96,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
 
     _lastHostTheme = theme;
     Log.info('[MobileWhiteboard] 系统外观变化: $theme');
-    if (mounted) setState(() {});
+    if (rebuild && mounted) setState(() {});
     _scheduleThemeSync(theme);
   }
 
@@ -131,6 +141,11 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
             'html:not(.dark) #root .excalidraw canvas.static,' +
             'html:not(.dark) #root .excalidraw canvas.interactive {' +
             '-webkit-filter: none !important; filter: none !important; }';
+          // 同步本地 flutter_bridge.js 的内部强制主题，避免其看门狗把
+          // URL 初始主题重新写回，导致切换后很快恢复旧颜色。
+          if (typeof window.setHostTheme === 'function') {
+            try { window.setHostTheme(requestedTheme); } catch (_) {}
+          }
           // 先调用页面已有桥接，再执行下面的 DOM/API 兜底；这样旧页面和
           // 新页面都能在不重建 PlatformView 的情况下即时变更画布。
           if (typeof window.__ponynotesApplyTheme === 'function') {
@@ -200,10 +215,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
   }
 
   String _currentHostTheme() {
-    return WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-            Brightness.dark
-        ? 'dark'
-        : 'light';
+    return _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
   }
 
   Future<void> _loadUserNickname() async {
@@ -442,6 +454,17 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
                       window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
                     }
                   }, true);
+                  var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                  var syncThemeFromSystem = function() {
+                    var systemTheme = systemThemeQuery.matches ? 'dark' : 'light';
+                    if (window.__ponynotesHostTheme === systemTheme) return;
+                    window.__ponynotesApplyTheme(systemTheme);
+                  };
+                  if (typeof systemThemeQuery.addEventListener === 'function') {
+                    systemThemeQuery.addEventListener('change', syncThemeFromSystem);
+                  } else if (typeof systemThemeQuery.addListener === 'function') {
+                    systemThemeQuery.addListener(syncThemeFromSystem);
+                  }
                   setInterval(function() {
                     window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
                   }, 500);
@@ -499,7 +522,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
             setState(() {
               _isLoading = false;
             });
-            _applyTheme(hostTheme);
+            _applyTheme(_currentHostTheme());
             Log.debug('✅ [MobileWhiteboard] Loaded: $url');
           },
           onReceivedError: (controller, request, error) {

@@ -398,11 +398,9 @@ class _WhiteboardRouterState extends State<WhiteboardRouter> {
     return ValueListenableBuilder<ViewPB>(
       valueListenable: widget.notifier.viewNotifier,
       builder: (context, view, child) {
-        final placeholderColor =
-            WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                    Brightness.dark
-                ? const Color(0xFF121212)
-                : Colors.white;
+        final placeholderColor = Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF121212)
+            : Colors.white;
         // 空间归属未判定完 —— 此时**还不知道**该挂哪一套，只能渲染中性占位。
         //
         // 曾经这里对 `_isPrivateSpace == null` 也直接渲染 B 套本地页以避免

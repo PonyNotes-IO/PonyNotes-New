@@ -184,9 +184,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
     // 轮询只在检测到亮度变化时同步，作为原生事件监听的兜底。
     _brightnessPollTimer = Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) => _syncSystemBrightness(
-        WidgetsBinding.instance.platformDispatcher.platformBrightness,
-      ),
+      (_) => _syncSystemBrightness(_currentSystemBrightness()),
     );
     // 【慢机器丢最后编辑修复】注册"切走前冲刷保存"回调，供上游 TabsBloc 在真正
     // dispose 本页前 await（保证最后一次保存在 WebView 销毁前完成或超时）。
@@ -249,12 +247,28 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    _syncSystemBrightness(
-      WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    );
+    _syncSystemBrightness(_currentSystemBrightness());
   }
 
-  void _syncSystemBrightness(Brightness brightness) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // MediaQuery 变化通常先于 PlatformView 的原生亮度回调到达，直接从
+    // 当前页面依赖读取可以让远程白板在停留状态下立即切换主题。
+    _syncSystemBrightness(_currentSystemBrightness(), rebuild: false);
+  }
+
+  Brightness _currentSystemBrightness() {
+    // 优先使用 MaterialApp 当前生效的主题，确保应用内手动切换主题时，
+    // 远程白板也能在不重建页面的情况下立即同步。
+    return Theme.of(context).brightness;
+  }
+
+  String _currentHostTheme() {
+    return _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
+  }
+
+  void _syncSystemBrightness(Brightness brightness, {bool rebuild = true}) {
     if (_isDisposed) return;
 
     final theme = brightness == Brightness.dark ? 'dark' : 'light';
@@ -263,7 +277,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
     Log.info('[RemoteWhiteboard] 系统外观变化: $theme');
     _lastHostTheme = theme;
     Log.info('[RemoteWhiteboard] 系统外观已变化: $theme，开始同步 Excalidraw');
-    if (mounted) {
+    if (rebuild && mounted) {
       setState(() {});
     }
     // 不依赖页面重建或 URL 重新加载，直接更新当前远程 Excalidraw。
@@ -464,11 +478,7 @@ return await window.__xmExportImage('$format');
 
   @override
   Widget build(BuildContext context) {
-    final hostTheme =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                Brightness.dark
-            ? 'dark'
-            : 'light';
+    final hostTheme = _currentHostTheme();
     if (_lastHostTheme != null && _lastHostTheme != hostTheme) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _applyRemoteTheme(hostTheme);
@@ -537,6 +547,11 @@ return await window.__xmExportImage('$format');
                               'html:not(.dark) #root .excalidraw canvas.static,' +
                               'html:not(.dark) #root .excalidraw canvas.interactive {' +
                               '-webkit-filter: none !important; filter: none !important; }';
+                            // 若远程页面存在宿主桥接，同步其内部强制主题，防止
+                            // 看门狗把 URL 初始主题覆盖回当前系统主题。
+                            if (typeof window.setHostTheme === 'function') {
+                              try { window.setHostTheme(normalizedTheme); } catch (_) {}
+                            }
                             window.__ponynotesHostTheme = normalizedTheme;
                             try { window.localStorage.setItem('excalidraw-theme', normalizedTheme); } catch (_) {}
                             var setter = window.__ponynotesSetHostTheme;
@@ -571,6 +586,17 @@ return await window.__xmExportImage('$format');
                               window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
                             }
                           }, true);
+                          var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+                          var syncThemeFromSystem = function() {
+                            var systemTheme = systemThemeQuery.matches ? 'dark' : 'light';
+                            if (window.__ponynotesHostTheme === systemTheme) return;
+                            window.__ponynotesApplyTheme(systemTheme);
+                          };
+                          if (typeof systemThemeQuery.addEventListener === 'function') {
+                            systemThemeQuery.addEventListener('change', syncThemeFromSystem);
+                          } else if (typeof systemThemeQuery.addListener === 'function') {
+                            systemThemeQuery.addListener(syncThemeFromSystem);
+                          }
                           setInterval(function() {
                             window.__ponynotesApplyTheme(window.__ponynotesHostTheme);
                           }, 500);
@@ -611,7 +637,8 @@ return await window.__xmExportImage('$format');
                     if (Platform.isAndroid || Platform.isIOS)
                       UserScript(
                         source: _mobileExportBridgeScript,
-                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                        injectionTime:
+                            UserScriptInjectionTime.AT_DOCUMENT_START,
                       ),
                   ]),
                   onWebViewCreated: (controller) {
@@ -636,9 +663,11 @@ return await window.__xmExportImage('$format');
                         await _loadFlutterBridgeScript();
                       }
                       unawaited(
-                        controller.evaluateJavascript(
+                        controller
+                            .evaluateJavascript(
                           source: _mobileExportBridgeScript,
-                        ).catchError((error) {
+                        )
+                            .catchError((error) {
                           Log.warn('[RemoteWhiteboard] 移动端导出桥重装失败: $error');
                           return null;
                         }),
@@ -647,12 +676,14 @@ return await window.__xmExportImage('$format');
                       if (!_flutterBridgeInjected && bridge != null) {
                         _flutterBridgeInjected = true;
                         unawaited(
-                          controller.evaluateJavascript(
+                          controller
+                              .evaluateJavascript(
                             source:
                                 'if (!window.__ponynotesFlutterBridgeInjected) '
                                 '{ window.__ponynotesFlutterBridgeInjected = true; '
                                 '$bridge }',
-                          ).catchError((error) {
+                          )
+                              .catchError((error) {
                             _flutterBridgeInjected = false;
                             Log.warn('[RemoteWhiteboard] 导出桥注入失败: $error');
                             return null;
@@ -660,7 +691,7 @@ return await window.__xmExportImage('$format');
                         );
                       }
                     }
-                    _applyRemoteTheme(hostTheme);
+                    _applyRemoteTheme(_currentHostTheme());
                     Log.debug('✅ [RemoteWhiteboard] Loaded: $url');
                   },
                   onReceivedError: (controller, request, error) {
@@ -776,11 +807,7 @@ return await window.__xmExportImage('$format');
     final encodedNickname = Uri.encodeComponent(_userNickname ?? '');
     Log.info('[RemoteWhiteboard] 🔨 Encoded nickname: "$encodedNickname"');
 
-    final hostTheme =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                Brightness.dark
-            ? 'dark'
-            : 'light';
+    final hostTheme = _currentHostTheme();
     final url =
         'https://xm-arts.xiaomabiji.com/?ua=$encodedNickname&hostTheme=$hostTheme#room=${widget.roomId},${widget.roomKey}';
     Log.info('[RemoteWhiteboard] ✅ Built URL: $url');

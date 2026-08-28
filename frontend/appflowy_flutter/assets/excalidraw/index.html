@@ -66,12 +66,24 @@
         const initialTheme = getTheme();
         window.__ponynotesHostTheme = initialTheme;
         setTheme(initialTheme);
-        // 私有白板由 Flutter 传入宿主主题并负责运行时同步。不要再让
-        // WKWebView 自己的 prefers-color-scheme 监听修改 html 类，否则
-        // iOS 在系统切换时可能先闪成另一种颜色，再被宿主主题纠正。
-        if (!new URLSearchParams(window.location.search).has("hostTheme")) {
-            window.matchMedia("(prefers-color-scheme: dark)")
-                .addEventListener("change", () => setTheme(getSystemTheme()));
+        // Flutter 回调在 iOS WKWebView 中可能延迟或丢失，因此即使宿主传入
+        // hostTheme，也保留 WebView 自己的系统外观监听作为实时同步主路径。
+        // setHostTheme 会同时更新 Excalidraw appState、React 外壳和画布滤镜。
+        const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        const syncThemeFromSystem = () => {
+            const systemTheme = getSystemTheme();
+            if (window.__ponynotesHostTheme === systemTheme) return;
+            if (typeof window.setHostTheme === "function") {
+                window.setHostTheme(systemTheme);
+            } else {
+                window.__ponynotesHostTheme = systemTheme;
+                setTheme(systemTheme);
+            }
+        };
+        if (typeof systemThemeQuery.addEventListener === "function") {
+            systemThemeQuery.addEventListener("change", syncThemeFromSystem);
+        } else if (typeof systemThemeQuery.addListener === "function") {
+            systemThemeQuery.addListener(syncThemeFromSystem);
         }
     } catch (e) {
         console.error("Error setting dark mode", e);

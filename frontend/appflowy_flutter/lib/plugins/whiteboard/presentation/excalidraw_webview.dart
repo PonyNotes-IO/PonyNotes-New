@@ -86,6 +86,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   late InAppWebViewSettings _settings;
   bool _webViewCreated = false;
   bool _pageLoaded = false;
+  String? _lastObservedHostTheme;
   String? _pendingHostTheme;
   int _themeSyncRequestId = 0;
   Future<void>? _themeSyncInFlight;
@@ -232,6 +233,26 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         applyTheme(theme, true);
       };
 
+      // 即使 Flutter 没有收到 iOS 的亮度回调，也由当前 WKWebView 直接
+      // 监听系统外观。以全局标记保证运行时脚本重复注入时不会注册多个监听。
+      if (!window.__ponynotesSystemThemeListenerInstalled) {
+        var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        var syncThemeFromSystem = function() {
+          var systemTheme = systemThemeQuery.matches ? 'dark' : 'light';
+          if (window.__ponynotesHostTheme === systemTheme) return;
+          var apply = window.setHostTheme || window.__ponynotesDartSetHostTheme;
+          if (typeof apply === 'function') {
+            try { apply(systemTheme); } catch (_) {}
+          }
+        };
+        if (typeof systemThemeQuery.addEventListener === 'function') {
+          systemThemeQuery.addEventListener('change', syncThemeFromSystem);
+        } else if (typeof systemThemeQuery.addListener === 'function') {
+          systemThemeQuery.addListener(syncThemeFromSystem);
+        }
+        window.__ponynotesSystemThemeListenerInstalled = true;
+      }
+
       document.addEventListener('DOMContentLoaded', function() {
         applyTheme(requestedTheme, false);
       }, { once: true });
@@ -253,6 +274,27 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       var requestedTheme = '$theme' === 'dark' ? 'dark' : 'light';
       var uiBackgroundColor = requestedTheme === 'dark' ? '#121212' : '#ffffff';
       window.__ponynotesHostTheme = requestedTheme;
+
+      // 运行时自愈脚本也安装系统监听，覆盖旧 PlatformView 未重新执行
+      // document-start 脚本的情况。
+      if (!window.__ponynotesSystemThemeListenerInstalled &&
+          typeof window.matchMedia === 'function') {
+        var systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        var syncThemeFromSystem = function() {
+          var systemTheme = systemThemeQuery.matches ? 'dark' : 'light';
+          if (window.__ponynotesHostTheme === systemTheme) return;
+          var apply = window.setHostTheme || window.__ponynotesDartSetHostTheme;
+          if (typeof apply === 'function') {
+            try { apply(systemTheme); } catch (_) {}
+          }
+        };
+        if (typeof systemThemeQuery.addEventListener === 'function') {
+          systemThemeQuery.addEventListener('change', syncThemeFromSystem);
+        } else if (typeof systemThemeQuery.addListener === 'function') {
+          systemThemeQuery.addListener(syncThemeFromSystem);
+        }
+        window.__ponynotesSystemThemeListenerInstalled = true;
+      }
 
       var style = document.getElementById('ponynotes-host-theme-style');
       if (!style) {
@@ -281,6 +323,13 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       try {
         window.localStorage.setItem('excalidraw-theme', requestedTheme);
       } catch (_) {}
+
+      // flutter_bridge.js 维护了内部的强制主题和看门狗。必须通过公开入口
+      // 更新该状态，否则看门狗会在下一次 tick 把 URL 初始主题写回画布。
+      var hostThemeSetter = window.setHostTheme;
+      if (typeof hostThemeSetter === 'function') {
+        try { hostThemeSetter(requestedTheme); } catch (_) {}
+      }
 
       // 新版集成版 Excalidraw 提供 React 状态 setter；旧主包没有该入口时，
       // 下面的 DOM 类和官方 API 兜底仍可保证工具栏外壳与画布变暗。
@@ -369,6 +418,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     })();
   ''';
 
+  Brightness _currentSystemBrightness() {
+    // WebView 需要跟随 Flutter 当前实际生效的主题，而不是只读取设备系统
+    // 亮度。否则应用内切换 ThemeMode 后，只有重建白板页面才会更新画布。
+    return Theme.of(context).brightness;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -380,6 +435,19 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
     _initializeSettings();
     _loadExcalidrawHTML();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final brightness = _currentSystemBrightness();
+    final theme = brightness == Brightness.dark ? 'dark' : 'light';
+    if (_lastObservedHostTheme == theme) return;
+    _lastObservedHostTheme = theme;
+    if (_whiteboardUrl == null && !_webViewCreated) return;
+    // 让 WebView 自身也订阅 MediaQuery，覆盖没有外层白板 State 监听的入口
+    // （例如离线镜像）；主题队列会在原生 WebView 就绪后自动补发。
+    unawaited(_syncHostThemeWhenReady(theme));
   }
 
   @override
@@ -554,10 +622,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 将 Flutter 读取到的系统亮度传给 WebView，规避部分 iOS WKWebView
       // 的 prefers-color-scheme 与系统设置不同步，确保 React 首屏即为暗色。
       final hostTheme =
-          WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                  Brightness.dark
-              ? 'dark'
-              : 'light';
+          _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
       // 入口页包含首屏主题初始化脚本，版本变化用于主动淘汰设备上的旧 WebView 缓存。
       const cacheVersion = 'ponynotes-whiteboard-v7';
       final url =
@@ -1054,10 +1119,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 设置主题
       final theme =
-          WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                  Brightness.dark
-              ? 'dark'
-              : 'light';
+          _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
       await _syncHostThemeWhenReady(theme);
       // 注入弹性滚动防护 + 诊断
       // 根因分析：macOS 26.x WKWebView 的 NSScrollView 发生弹性回弹（elastic bounce），
@@ -2322,10 +2384,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 设置主题
       final theme =
-          WidgetsBinding.instance.platformDispatcher.platformBrightness ==
-                  Brightness.dark
-              ? 'dark'
-              : 'light';
+          _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
       // 重新初始化也必须经过主题同步队列，避免恢复流程中的旧请求
       // 在系统主题切换后晚于最新值执行。
       await _syncHostThemeWhenReady(theme);
@@ -2432,9 +2491,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       initialUserScripts: UnmodifiableListView([
                         UserScript(
                           source: _hostThemeBootstrapScript(
-                            WidgetsBinding.instance.platformDispatcher
-                                        .platformBrightness ==
-                                    Brightness.dark
+                            _currentSystemBrightness() == Brightness.dark
                                 ? 'dark'
                                 : 'light',
                           ),
@@ -2539,9 +2596,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                           // 系统切换若发生在页面加载/数据恢复期间，补发最后一次
                           // 主题请求，避免首次调用落在 WebView 未就绪窗口。
                           final pendingTheme = _pendingHostTheme ??
-                              (WidgetsBinding.instance.platformDispatcher
-                                          .platformBrightness ==
-                                      Brightness.dark
+                              (_currentSystemBrightness() == Brightness.dark
                                   ? 'dark'
                                   : 'light');
                           await _syncHostThemeWhenReady(pendingTheme);
@@ -2634,9 +2689,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             if (_isLoading || _isInitializing)
               Builder(
                 builder: (context) {
-                  final isDark = WidgetsBinding
-                          .instance.platformDispatcher.platformBrightness ==
-                      Brightness.dark;
+                  final isDark = _currentSystemBrightness() == Brightness.dark;
                   return Container(
                     // 使用完全不透明的背景色，根据主题切换，彻底遮挡底层的 Excalidraw 加载界面
                     color: isDark ? const Color(0xFF121212) : Colors.white,

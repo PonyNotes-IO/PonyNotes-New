@@ -266,12 +266,7 @@ void main() {
     expect(bridgeSource, contains("classList.toggle('theme--dark'"));
     expect(webViewSource, contains('toggle-dark-mode'));
     expect(webViewSource, contains('text.includes(\'system mode\')'));
-    expect(
-      webViewSource,
-      contains(
-        'WidgetsBinding.instance.platformDispatcher.platformBrightness',
-      ),
-    );
+    expect(webViewSource, contains('Theme.of(context).brightness'));
     expect(pageSource, contains('_whiteboardCanvasDarkColor'));
     expect(pageSource, contains('canvasFallbackColor'));
     expect(pageSource, contains('didChangePlatformBrightness'));
@@ -282,7 +277,7 @@ void main() {
     expect(pageSource, contains('generation != _themeSyncGeneration'));
     expect(
       pageSource,
-      contains('主题同步只由 didChangePlatformBrightness 和轮询触发'),
+      contains('主题同步由 didChangeDependencies、didChangePlatformBrightness 和轮询'),
     );
     final indexSource = File('assets/excalidraw/index.html').readAsStringSync();
     expect(indexSource, contains('getSystemTheme'));
@@ -292,25 +287,28 @@ void main() {
     expect(indexSource,
         contains('localStorage.setItem("excalidraw-theme", theme)'));
     expect(indexSource, contains('initialTheme'));
+    expect(indexSource, contains('syncThemeFromSystem'));
+    expect(indexSource, contains('systemThemeQuery.addEventListener'));
+    expect(
+        webViewSource, contains('var hostThemeSetter = window.setHostTheme'));
+    expect(webViewSource, contains('__ponynotesSystemThemeListenerInstalled'));
+    expect(
+        webViewSource, contains("matchMedia('(prefers-color-scheme: dark)')"));
     expect(indexSource,
         contains('html.dark #root .excalidraw canvas.excalidraw__canvas'));
-    expect(
-      indexSource,
-      contains('!new URLSearchParams(window.location.search).has("hostTheme")'),
-    );
+    // 带有初始 hostTheme 时也必须保留系统外观监听，覆盖白板驻留期间的切换。
+    expect(indexSource, contains('systemThemeQuery.addEventListener'));
     final remoteSource = File(
       'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
     ).readAsStringSync();
     expect(remoteSource, contains('hostTheme'));
     expect(remoteSource, contains('__ponynotesApplyTheme'));
-    expect(
-      remoteSource,
-      contains(
-        'WidgetsBinding.instance.platformDispatcher.platformBrightness',
-      ),
-    );
+    expect(remoteSource, contains('didChangeDependencies'));
+    expect(remoteSource, contains('_currentSystemBrightness'));
+    expect(remoteSource, contains('Theme.of(context).brightness'));
     expect(remoteSource, contains('WidgetsBindingObserver'));
     expect(remoteSource, contains('_brightnessPollTimer'));
+    expect(remoteSource, contains('window.setHostTheme'));
     expect(remoteSource, contains('Timer.periodic'));
     expect(remoteSource, contains('_syncSystemBrightness'));
     expect(remoteSource, contains('_themeSyncGeneration'));
@@ -330,7 +328,11 @@ void main() {
       'lib/plugins/whiteboard/presentation/mobile_whiteboard_body.dart',
     ).readAsStringSync();
     expect(mobileSource, contains('WidgetsBindingObserver'));
+    expect(mobileSource, contains('didChangeDependencies'));
+    expect(mobileSource, contains('_currentSystemBrightness'));
+    expect(mobileSource, contains('Theme.of(context).brightness'));
     expect(mobileSource, contains('_brightnessPollTimer'));
+    expect(mobileSource, contains('window.setHostTheme'));
     expect(mobileSource, contains('_syncSystemBrightness'));
     expect(mobileSource, contains('_themeSyncGeneration'));
     expect(mobileSource, contains('hostTheme'));
@@ -347,7 +349,7 @@ void main() {
     expect(mobileSource, contains('UserScriptInjectionTime.AT_DOCUMENT_START'));
   });
 
-  test('whiteboard theme reads platform system brightness directly', () {
+  test('whiteboard theme follows the effective app theme in real time', () {
     final pageSource =
         File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
     final webViewSource = File(
@@ -356,17 +358,19 @@ void main() {
     final mobileSource = File(
       'lib/plugins/whiteboard/presentation/mobile_whiteboard_body.dart',
     ).readAsStringSync();
-
-    const platformBrightness =
-        'WidgetsBinding.instance.platformDispatcher.platformBrightness';
-    expect(pageSource, contains(platformBrightness));
-    expect(webViewSource, contains(platformBrightness));
-    expect(mobileSource, contains(platformBrightness));
+    expect(pageSource, contains('didChangeDependencies'));
+    expect(pageSource, contains('_currentSystemBrightness'));
+    expect(pageSource, contains('Theme.of(context).brightness'));
+    expect(webViewSource, contains('_currentSystemBrightness'));
+    expect(webViewSource, contains('didChangeDependencies'));
+    expect(webViewSource, contains('_lastObservedHostTheme'));
+    expect(webViewSource, contains('Theme.of(context).brightness'));
+    expect(mobileSource, contains('didChangeDependencies'));
+    expect(mobileSource, contains('_currentSystemBrightness'));
+    expect(mobileSource, contains('Theme.of(context).brightness'));
     expect(
       pageSource,
-      isNot(contains(
-        'final currentBrightness = MediaQuery.platformBrightnessOf(context);',
-      )),
+      contains('final currentBrightness = _currentSystemBrightness();'),
     );
   });
 

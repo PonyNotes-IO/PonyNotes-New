@@ -318,9 +318,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     // 轮询只在检测到亮度变化时同步，作为原生事件监听的兜底。
     _brightnessPollTimer = Timer.periodic(
       const Duration(milliseconds: 500),
-      (_) => _syncSystemBrightness(
-        WidgetsBinding.instance.platformDispatcher.platformBrightness,
-      ),
+      (_) => _syncSystemBrightness(_currentSystemBrightness()),
     );
 
     _sessionTraceId =
@@ -545,9 +543,22 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    _syncSystemBrightness(
-      WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    );
+    _syncSystemBrightness(_currentSystemBrightness());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // PlatformView 场景下原生亮度回调可能晚于 MediaQuery 更新；订阅当前
+    // 页面依赖可以在系统外观变化的同一帧触发主题同步。
+    _syncSystemBrightness(_currentSystemBrightness());
+  }
+
+  Brightness _currentSystemBrightness() {
+    // 主题模式切换（浅色/深色/跟随系统）首先更新 MaterialApp 的有效主题；
+    // 仅读取 platformBrightness 会漏掉应用内手动切换，导致 WebView 只能在
+    // 白板重建后才拿到新主题。
+    return Theme.of(context).brightness;
   }
 
   void _syncSystemBrightness(Brightness brightness) {
@@ -560,8 +571,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     _brightnessDebounceTimer = Timer(const Duration(milliseconds: 260), () {
       if (!mounted || _isDisposing) return;
       final stableBrightness = _pendingBrightness;
-      final currentBrightness =
-          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      final currentBrightness = _currentSystemBrightness();
       if (stableBrightness == null || stableBrightness != currentBrightness) {
         return;
       }
@@ -1014,20 +1024,17 @@ class _WhiteboardPageState extends State<WhiteboardPage>
 
   @override
   Widget build(BuildContext context) {
-    // 白板强制跟随设备系统亮度，不受应用内手动主题设置影响。
-    // 直接读取平台分发器，避免应用 ThemeMode 或 MediaQuery 更新时序
-    // 覆盖真实的手机系统深色/浅色模式。
-    final currentBrightness =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    // 使用 Flutter 当前生效的主题亮度，覆盖系统主题和应用内手动主题设置。
+    // MediaQuery/平台分发器仅作为没有 Material 主题上下文时的兜底。
+    final currentBrightness = _currentSystemBrightness();
     // WebView 使用透明背景，外层兜底层也必须跟随系统，否则首屏加载或
     // Excalidraw 画布尚未绘制时会露出白色背景。
     final canvasFallbackColor = currentBrightness == Brightness.dark
         ? _whiteboardCanvasDarkColor
         : _whiteboardCanvasLightColor;
 
-    // 主题同步只由 didChangePlatformBrightness 和轮询触发。
-    // build 期间不能再排队 updateTheme，否则应用主题/MediaQuery 重建时
-    // 可能把旧亮度延迟写回 WebView，与当前宿主主题交替闪烁。
+    // 主题同步由 didChangeDependencies、didChangePlatformBrightness 和轮询
+    // 触发。build 期间不再排队 updateTheme，避免旧亮度延迟写回 WebView。
     if (_isLoadingData && _showLegacyBlockingLoader) {
       return Scaffold(
         resizeToAvoidBottomInset: !PlatformInfo.isTablet,
