@@ -566,6 +566,7 @@
     "login": "登录",
     "logout": "退出",
     "deleteAccount": "删除账户",
+    "closeAccount": "注销账号",
     "signInGoogle": "使用 Google 账户登录",
     "signInGithub": "使用 Github 账户登录",
     "signInDiscord": "使用 Discord 账户登录",

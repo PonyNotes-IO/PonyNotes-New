@@ -133,16 +133,16 @@ class PasswordHttpService {
         'email': email,
       };
 
-    final result = await _makeRequest(
-      endpoint: PasswordEndpoint.forgotPassword,
+      final result = await _makeRequest(
+        endpoint: PasswordEndpoint.forgotPassword,
         body: body,
-      errorMessage: 'Failed to send password reset email',
-    );
+        errorMessage: 'Failed to send password reset email',
+      );
 
-    return result.fold(
-      (data) => FlowyResult.success(true),
-      (error) => FlowyResult.failure(error),
-    );
+      return result.fold(
+        (data) => FlowyResult.success(true),
+        (error) => FlowyResult.failure(error),
+      );
     }
   }
 
@@ -373,8 +373,7 @@ class PasswordHttpService {
         }
 
         // the checkHasPassword endpoint will return 403, which is not an error
-        if (endpoint != PasswordEndpoint.checkHasPassword) {
-        }
+        if (endpoint != PasswordEndpoint.checkHasPassword) {}
 
         ErrorCode errorCode = ErrorCode.Internal;
 
@@ -494,7 +493,8 @@ class PasswordHttpService {
         );
       }
     } catch (e) {
-      Log.error('🦋[PasswordHttpService] Password login request failed: error: $e');
+      Log.error(
+          '🦋[PasswordHttpService] Password login request failed: error: $e');
 
       return FlowyResult.failure(
         FlowyError(msg: 'Network error: ${e.toString()}'),
@@ -560,7 +560,8 @@ class PasswordHttpService {
           }
         }
 
-        final errorMsg = errorBody['msg'] ?? errorBody['message'] ?? 'Refresh token failed';
+        final errorMsg =
+            errorBody['msg'] ?? errorBody['message'] ?? 'Refresh token failed';
         return FlowyResult.failure(
           FlowyError(
             code: ErrorCode.UserUnauthorized,
@@ -671,10 +672,65 @@ class PasswordHttpService {
         ),
       );
     } catch (e) {
-      Log.error('🦋[PasswordHttpService] Third party login request failed: error: $e');
+      Log.error(
+          '🦋[PasswordHttpService] Third party login request failed: error: $e');
 
       return FlowyResult.failure(
         FlowyError(msg: 'Network error: ${e.toString()}'),
+      );
+    }
+  }
+
+  /// 使用 iOS 原生 Sign in with Apple 返回的 identityToken 登录。
+  Future<FlowyResult<Map<String, dynamic>, FlowyError>> signInWithIdToken({
+    required String provider,
+    required String idToken,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/token?grant_type=id_token');
+      final response = await client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'provider': provider,
+              'id_token': idToken,
+            }),
+          )
+          .timeout(_requestTimeout);
+
+      Map<String, dynamic> body = {};
+      if (response.body.isNotEmpty) {
+        try {
+          body = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (error) {
+          Log.error(
+              '[PasswordHttpService] Failed to decode id_token response: $error');
+        }
+      }
+      if (response.statusCode == 200) {
+        return FlowyResult.success(body);
+      }
+
+      final errorMessage = body['msg'] ??
+          body['error_description'] ??
+          body['message'] ??
+          'Apple sign-in failed';
+      return FlowyResult.failure(
+        FlowyError(
+          code: response.statusCode == 400
+              ? ErrorCode.UserUnauthorized
+              : ErrorCode.Internal,
+          msg: errorMessage.toString(),
+        ),
+      );
+    } catch (error) {
+      Log.error('[PasswordHttpService] id_token request failed: $error');
+      return FlowyResult.failure(
+        FlowyError(
+          code: ErrorCode.Internal,
+          msg: 'Network error during Apple sign-in',
+        ),
       );
     }
   }

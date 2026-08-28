@@ -32,6 +32,8 @@ class MobileSignInScreen extends StatefulWidget {
 }
 
 class _MobileSignInScreenState extends State<MobileSignInScreen> {
+  static const double _thirdPartyButtonSize = 28;
+
   bool _agreedToTerms = false;
   bool _phoneDialogOpen = false;
   bool _phoneBindingCancelled = false;
@@ -202,23 +204,90 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              icon: FlowySvg(FlowySvgs.icon_login_wx_xl, blendMode: null),
-              iconSize: 28,
-              onPressed: () {
-                _signInWithWeChat(context);
-              },
+            _buildThirdPartyIconButton(
+              icon: FlowySvg(
+                FlowySvgs.icon_login_wx_xl,
+                size: const Size.square(_thirdPartyButtonSize),
+                blendMode: null,
+              ),
+              onPressed: () => _signInWithWeChat(context),
             ),
             const SizedBox(width: 20),
-            IconButton(
-              icon: FlowySvg(FlowySvgs.icon_login_dy_xl, blendMode: null),
-              iconSize: 28,
+            _buildThirdPartyIconButton(
+              icon: FlowySvg(
+                FlowySvgs.icon_login_dy_xl,
+                size: const Size.square(_thirdPartyButtonSize),
+                blendMode: null,
+              ),
               onPressed: () => _signInWithDouYin(context),
             ),
+            if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+              const SizedBox(width: 20),
+              _buildThirdPartyIconButton(
+                icon: Builder(
+                  builder: (context) {
+                    final theme = AppFlowyTheme.of(context);
+                    return Container(
+                      width: _thirdPartyButtonSize,
+                      height: _thirdPartyButtonSize,
+                      decoration: BoxDecoration(
+                        color: theme.surfaceColorScheme.layer01,
+                        border: Border.all(
+                          color: theme.borderColorScheme.primary,
+                        ),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: FlowySvg(
+                        FlowySvgs.m_apple_icon_xl,
+                        size: const Size.square(16),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
+                        blendMode: BlendMode.srcIn,
+                      ),
+                    );
+                  },
+                ),
+                onPressed: () => _signInWithApple(context),
+              ),
+            ],
           ],
         ),
       ],
     );
+  }
+
+  Widget _buildThirdPartyIconButton({
+    required Widget icon,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox.square(
+      dimension: _thirdPartyButtonSize,
+      child: IconButton(
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(
+          width: _thirdPartyButtonSize,
+          height: _thirdPartyButtonSize,
+        ),
+        iconSize: _thirdPartyButtonSize,
+        icon: icon,
+      ),
+    );
+  }
+
+  Future<void> _signInWithApple(BuildContext context) async {
+    if (!_agreedToTerms) {
+      showToastNotification(
+        message: LocaleKeys.signIn_pleaseAgreeToTerms.tr(),
+        type: ToastificationType.error,
+      );
+      return;
+    }
+    context.read<SignInBloc>().add(
+          const SignInEvent.signInWithOAuth(platform: 'apple'),
+        );
   }
 
   Future<void> _signInWithWeChat(BuildContext context) async {
@@ -268,7 +337,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
         MaterialPageRoute(
           builder: (_) => BlocProvider.value(
             value: signInBloc,
-            child: const PhoneBindScreen(),
+            child: PhoneBindScreen(pendingToken: state.pendingToken),
           ),
         ),
       );
@@ -356,7 +425,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
               MaterialPageRoute(
                 builder: (_) => BlocProvider.value(
                   value: signInBloc,
-                  child: const PhoneBindScreen(),
+                  child: PhoneBindScreen(pendingToken: state.pendingToken),
                 ),
               ),
             );
@@ -401,7 +470,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                 MaterialPageRoute(
                   builder: (_) => BlocProvider.value(
                     value: signInBloc,
-                    child: const PhoneBindScreen(),
+                    child: PhoneBindScreen(pendingToken: state.pendingToken),
                   ),
                 ),
               );

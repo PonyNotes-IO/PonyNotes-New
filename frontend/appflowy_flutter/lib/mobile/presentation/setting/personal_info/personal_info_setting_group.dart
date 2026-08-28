@@ -16,12 +16,13 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/sign_in_or_logout_button.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/account/account_deletion.dart';
 import 'package:appflowy/workspace/application/user/prelude.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -63,6 +64,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
           builder: (context, state) {
             final profile = state.userProfile;
             final isServerUser = profile.userAuthType == AuthTypePB.Server;
+            final theme = AppFlowyTheme.of(context);
 
             return Column(
               children: [
@@ -155,6 +157,21 @@ class PersonalInfoSettingGroup extends StatelessWidget {
                       ),
                   ],
                 ),
+                if (isServerUser) ...[
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AFOutlinedTextButton.destructive(
+                      alignment: Alignment.center,
+                      text: LocaleKeys.button_closeAccount.tr(),
+                      textStyle: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.error,
+                      ),
+                      onTap: () => _showDeleteAccountDialog(context),
+                      size: AFButtonSize.l,
+                    ),
+                  ),
+                ],
               ],
             );
           },
@@ -212,6 +229,128 @@ class PersonalInfoSettingGroup extends StatelessWidget {
           });
         },
       },
+    );
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context) async {
+    return showMobileBottomSheet(
+      context,
+      useRootNavigator: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => const _DeleteAccountBottomSheet(),
+    );
+  }
+}
+
+class _DeleteAccountBottomSheet extends StatefulWidget {
+  const _DeleteAccountBottomSheet();
+
+  @override
+  State<_DeleteAccountBottomSheet> createState() =>
+      _DeleteAccountBottomSheetState();
+}
+
+class _DeleteAccountBottomSheetState extends State<_DeleteAccountBottomSheet> {
+  final controller = TextEditingController();
+  final isChecked = ValueNotifier(false);
+
+  @override
+  void dispose() {
+    controller.dispose();
+    isChecked.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const VSpace(18.0),
+          const FlowySvg(
+            FlowySvgs.icon_warning_xl,
+            blendMode: null,
+          ),
+          const VSpace(12.0),
+          FlowyText(
+            LocaleKeys.newSettings_myAccount_deleteAccount_title.tr(),
+            fontSize: 20.0,
+            fontWeight: FontWeight.w500,
+          ),
+          const VSpace(12.0),
+          FlowyText(
+            LocaleKeys.newSettings_myAccount_deleteAccount_confirmHint1.tr(),
+            fontSize: 14.0,
+            fontWeight: FontWeight.w400,
+            maxLines: 10,
+          ),
+          const VSpace(18.0),
+          SizedBox(
+            height: 36.0,
+            child: FlowyTextField(
+              controller: controller,
+              textStyle: const TextStyle(fontSize: 14.0),
+              hintStyle: const TextStyle(fontSize: 14.0),
+              hintText: LocaleKeys
+                  .newSettings_myAccount_deleteAccount_confirmHint3
+                  .tr(),
+            ),
+          ),
+          const VSpace(18.0),
+          _buildCheckbox(),
+          const VSpace(18.0),
+          MobileLogoutButton(
+            text: LocaleKeys.button_closeAccount.tr(),
+            textColor: Theme.of(context).colorScheme.error,
+            onPressed: () => deleteMyAccount(
+              context,
+              controller.text.trim(),
+              isChecked.value,
+            ),
+          ),
+          const VSpace(12.0),
+          MobileLogoutButton(
+            text: LocaleKeys.button_cancel.tr(),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          const VSpace(36.0),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCheckbox() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => isChecked.value = !isChecked.value,
+          child: ValueListenableBuilder<bool>(
+            valueListenable: isChecked,
+            builder: (context, isChecked, _) {
+              return Padding(
+                padding: const EdgeInsets.all(1.0),
+                child: FlowySvg(
+                  isChecked ? FlowySvgs.check_filled_s : FlowySvgs.uncheck_s,
+                  size: const Size.square(16.0),
+                  blendMode: isChecked ? null : BlendMode.srcIn,
+                ),
+              );
+            },
+          ),
+        ),
+        const HSpace(6.0),
+        Expanded(
+          child: FlowyText.regular(
+            LocaleKeys.newSettings_myAccount_deleteAccount_confirmHint2.tr(),
+            fontSize: 14.0,
+            figmaLineHeight: 18.0,
+            maxLines: 3,
+          ),
+        ),
+      ],
     );
   }
 }

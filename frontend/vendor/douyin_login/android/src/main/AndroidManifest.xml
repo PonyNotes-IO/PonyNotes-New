@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.postliu.douyin_login">
+
+    <queries>
+        <!--允许查询抖音和抖音极速版的软件包信息-->
+        <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.ss.android.ugc.aweme.lite" />
+    </queries>
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <activity
+            android:name=".DouyinCallbackActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}" />
+
+        <activity-alias
+            android:name="${applicationId}.douyinapi.DouYinEntryActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:targetActivity=".DouyinCallbackActivity"
+            android:taskAffinity="${applicationId}" />
+    </application>
+
+</manifest>

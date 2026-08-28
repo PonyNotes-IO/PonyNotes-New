@@ -186,6 +186,7 @@ dependencies:
   # webview_flutter: ^4.10.0  # 已替换为 flutter_inappwebview (支持 Windows)
   flutter_inappwebview: ^6.0.0
   in_app_purchase: ^3.2.3
+  sign_in_with_apple: ^6.1.0
   decimal: ^2.3.0
   # WeChat SDK
   # 注意:fluwx 仅在 iOS 端使用 (Android 端因腾讯 SDK 6.8.34 的 PendingIntent bug,
@@ -223,6 +224,11 @@ dev_dependencies:
   url_launcher_platform_interface: any
 
 dependency_overrides:
+  # pub.dev douyin_login 1.0.6 包含重复的 Objective-C 方法声明，导致 Xcode 编译失败。
+  # 使用仓库内修复版本，确保团队和 CI 不依赖本机 pub 缓存补丁。
+  douyin_login:
+    path: ../vendor/douyin_login
+
   # media_kit 原生 JAR 默认直连 GitHub；本地补丁支持镜像并按 ABI 下载。
   media_kit_libs_android_video:
     path: ../vendor/media_kit_libs_android_video

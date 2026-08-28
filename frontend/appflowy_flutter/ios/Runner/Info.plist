@@ -10,6 +10,8 @@
 	</array>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>DouyinAppID</key>
 	<string>aws8ujfhmwybxv72</string>
 	<key>CFBundleURLTypes</key>

@@ -6,6 +6,7 @@ import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/back_to_login_in_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/title_logo.dart';
@@ -23,6 +24,7 @@ class PhoneBindScreen extends StatefulWidget {
   const PhoneBindScreen({
     super.key,
     this.logoutOnBack = false,
+    this.pendingToken,
   });
 
   /// 是否在点击“返回登录”时执行退出登录并回到登录页。
@@ -32,6 +34,9 @@ class PhoneBindScreen extends StatefulWidget {
   ///   1. 调用 `AuthService.signOut()` 退出登录
   ///   2. 调用 `runAppFlowy()` 回到登录入口
   final bool logoutOnBack;
+
+  /// OAuth 登录返回的待绑定令牌。显式传入，避免登录状态刷新时丢失。
+  final String? pendingToken;
 
   @override
   State<PhoneBindScreen> createState() => _PhoneBindScreenState();
@@ -84,15 +89,19 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
               VSpace(spacing),
               BackToLoginButton(
                 onTap: () async {
-                  try {
-                    await getIt<AuthService>().signOut();
-                  } catch (e, stack) {
-                    Log.error(
-                      '🔵 [PhoneBindScreen] signOut failed on backToLogin: $e',
-                      stack,
-                    );
+                  if (widget.logoutOnBack) {
+                    try {
+                      await getIt<AuthService>().signOut();
+                    } catch (e, stack) {
+                      Log.error(
+                        '🔵 [PhoneBindScreen] signOut failed on backToLogin: $e',
+                        stack,
+                      );
+                    }
+                    await runAppFlowy();
+                  } else if (mounted) {
+                    Navigator.of(context).pop();
                   }
-                  await runAppFlowy();
                 },
               ),
             ],
@@ -212,7 +221,7 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     });
 
     // 从 SignInBloc 获取 pendingToken（OAuth pending 流程）
-    final pendingToken = _getPendingTokenFromBloc();
+    final pendingToken = widget.pendingToken ?? _getPendingTokenFromBloc();
     final result = await UserBackendService.sendPhoneBindCode(
       e164Phone,
       pendingToken: pendingToken,
@@ -247,6 +256,8 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
             _sliderResetKey = Object();
           });
           _startCountdown();
+        } else {
+          _toast(res.message ?? '验证码发送失败，请稍后重试');
         }
       },
       (error) {
@@ -333,9 +344,10 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     final e164Phone =
         cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
 
-    // 从 SignInBloc 获取 pendingToken
-    final pendingToken = _getPendingTokenFromBloc();
-    if (pendingToken == null || pendingToken.isEmpty) {
+    // 登录页进入时必须持有 OAuth pending token；应用内部已登录换绑则走 Cloud 接口。
+    final pendingToken = widget.pendingToken ?? _getPendingTokenFromBloc();
+    if (!widget.logoutOnBack &&
+        (pendingToken == null || pendingToken.isEmpty)) {
       _toast('登录状态已过期，请重新登录');
       return;
     }
@@ -371,9 +383,14 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
         } else {
           _toast('注册成功');
         }
-        await Future.delayed(const Duration(milliseconds: 500));
+        // 绑定接口返回的新会话令牌，拉取完整用户资料后再返回给登录页。
+        // 登录页据此区分“绑定成功”和“返回登录”，避免成功被误判为取消。
+        final profileResult = await UserEventGetUserProfile().send();
         if (!mounted) return;
-        Navigator.of(context).pop();
+        profileResult.fold(
+          (profile) => Navigator.of(context).pop(profile),
+          (error) => _toast('绑定成功，但获取用户信息失败，请重新登录'),
+        );
       },
       (error) {
         if (mounted) {
@@ -408,4 +425,3 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     );
   }
 }
-

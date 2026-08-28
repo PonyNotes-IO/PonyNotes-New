@@ -52,18 +52,21 @@ class _ThirdPartyIconButton extends StatelessWidget {
                       valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    icon,
-                    HSpace(8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: theme.textColorScheme.primary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      icon,
+                      HSpace(8),
+                      Text(
+                        label,
+                        style: TextStyle(
+                          color: theme.textColorScheme.primary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -94,7 +97,8 @@ class ThirdPartySignInButtons extends StatelessWidget {
     }
   }
 
-  Future<void> _signIn(BuildContext context, ThirdPartySignInButtonType type) async {
+  Future<void> _signIn(
+      BuildContext context, ThirdPartySignInButtonType type) async {
     final signInBloc = context.read<SignInBloc>();
 
     if (type == ThirdPartySignInButtonType.wechat) {
@@ -188,6 +192,21 @@ class _MobileThirdPartySignIn extends StatelessWidget {
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
         ),
+        if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+          const SizedBox(width: 24),
+          CircularIconButton(
+            buttonSize: 44,
+            icon: FlowySvg(
+              ThirdPartySignInButtonType.apple.icon,
+              size: const Size.square(22),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : Colors.black,
+              blendMode: BlendMode.srcIn,
+            ),
+            onTap: () => onSignIn(ThirdPartySignInButtonType.apple),
+          ),
+        ],
       ],
     );
   }
@@ -199,11 +218,13 @@ class CircularIconButton extends StatelessWidget {
     required this.icon,
     this.onTap,
     this.isLoading = false,
+    this.buttonSize = 52,
   });
 
   final Widget icon;
   final VoidCallback? onTap;
   final bool isLoading;
+  final double buttonSize;
 
   @override
   Widget build(BuildContext context) {
@@ -213,8 +234,8 @@ class CircularIconButton extends StatelessWidget {
       child: Opacity(
         opacity: (onTap == null || isLoading) ? 0.6 : 1.0,
         child: Container(
-          width: 52,
-          height: 52,
+          width: buttonSize,
+          height: buttonSize,
           decoration: BoxDecoration(
             color: theme.surfaceColorScheme.layer01,
             border: Border.all(color: theme.borderColorScheme.primary),
@@ -227,7 +248,8 @@ class CircularIconButton extends StatelessWidget {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(theme.textColorScheme.primary),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.textColorScheme.primary),
                     ),
                   )
                 : icon,

@@ -92,7 +92,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
             MaterialPageRoute(
               builder: (_) => BlocProvider.value(
                 value: signInBloc,
-                child: const PhoneBindScreen(),
+                child: PhoneBindScreen(pendingToken: state.pendingToken),
               ),
             ),
           );
@@ -198,7 +198,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   MaterialPageRoute(
                     builder: (_) => BlocProvider.value(
                       value: signInBloc,
-                      child: const PhoneBindScreen(),
+                      child: PhoneBindScreen(pendingToken: state.pendingToken),
                     ),
                   ),
                 );
@@ -252,7 +252,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                     MaterialPageRoute(
                       builder: (_) => BlocProvider.value(
                         value: signInBloc,
-                        child: const PhoneBindScreen(),
+                        child:
+                            PhoneBindScreen(pendingToken: state.pendingToken),
                       ),
                     ),
                   );

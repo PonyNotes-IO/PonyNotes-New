@@ -469,16 +469,18 @@ class UserBackendService implements IUserBackendService {
             '[sendPhoneBindCode] POST $uri, body: phone=$phone, pending_token=${pendingToken.substring(0, 8)}...');
         http.Response response;
         try {
-          response = await http.post(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'phone': phone,
-              'pending_token': pendingToken,
-            }),
-          );
+          response = await http
+              .post(
+                uri,
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: jsonEncode({
+                  'phone': phone,
+                  'pending_token': pendingToken,
+                }),
+              )
+              .timeout(const Duration(seconds: 20));
           Log.info(
               '[sendPhoneBindCode] response status: ${response.statusCode}, body: ${response.body}');
         } catch (e, st) {
@@ -493,6 +495,14 @@ class UserBackendService implements IUserBackendService {
         if (response.statusCode == 200) {
           try {
             final json = jsonDecode(response.body) as Map<String, dynamic>;
+            final responseCode = (json['code'] as num?)?.toInt();
+            if (responseCode != null && responseCode != 0) {
+              return FlowyResult.failure(
+                FlowyError()
+                  ..code = ErrorCode.Internal
+                  ..msg = json['message'] as String? ?? '发送验证码失败',
+              );
+            }
             return FlowyResult.success(PhoneBindSendResult(
               codeSent: json['code_sent'] as bool? ?? false,
               phoneExists: json['phone_exists'] as bool? ?? false,
@@ -557,20 +567,31 @@ class UserBackendService implements IUserBackendService {
 
       // 已登录用户流程：发到 Cloud Rust /send-phone-otp
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
-        },
-        body: jsonEncode({'phone': phone}),
-      );
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $authToken',
+            },
+            body: jsonEncode({'phone': phone}),
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         try {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
+          final responseCode = (json['code'] as num?)?.toInt();
+          if (responseCode != null && responseCode != 0) {
+            return FlowyResult.failure(
+              FlowyError()
+                ..code = ErrorCode.Internal
+                ..msg = json['message'] as String? ?? '发送验证码失败',
+            );
+          }
           return FlowyResult.success(PhoneBindSendResult(
-            codeSent: json['code_sent'] as bool? ?? false,
+            // Rust AppResponse 成功时只返回 code=0，不包含 code_sent。
+            codeSent: json['code_sent'] as bool? ?? responseCode == 0,
             phoneExists: json['phone_exists'] as bool? ?? false,
             isOwnPhone: json['is_own_phone'] as bool? ?? false,
             existingUid: json['existing_uid'] as String?,
@@ -667,15 +688,25 @@ class UserBackendService implements IUserBackendService {
       }
 
       final uri = Uri.parse(uriStr);
-      final response = await http.post(
-        uri,
-        headers: headers,
-        body: jsonEncode(body),
-      );
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         try {
           final json = jsonDecode(response.body) as Map<String, dynamic>;
+          final responseCode = (json['code'] as num?)?.toInt();
+          if (responseCode != null && responseCode != 0) {
+            return FlowyResult.failure(
+              FlowyError()
+                ..code = ErrorCode.Internal
+                ..msg = json['message'] as String? ?? '绑定手机号失败',
+            );
+          }
           return FlowyResult.success(PhoneBindConfirmResult(
             bindToExisting: json['bind_to_existing'] as bool? ?? false,
             userId: json['user_id'] as String?,

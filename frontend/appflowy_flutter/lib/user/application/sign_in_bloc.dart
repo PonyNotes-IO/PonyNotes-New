@@ -6,6 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/apple/apple_login_service.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/application/wechat/wechat_login_service.dart';
 import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
@@ -190,7 +191,8 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         final newState = result.result?.fold(
           (s) {
             // 检查是否需要绑定手机号（第三方登录且手机号是临时手机号）
-            final needBindPhone = s.phone.isNotEmpty && s.phone.startsWith('+86temp');
+            final needBindPhone =
+                s.phone.isNotEmpty && s.phone.startsWith('+86temp');
             if (needBindPhone) {
               // 第三方登录需要绑定手机号，暂不设置 successOrFail
               // 等绑定成功后再设置
@@ -201,10 +203,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               );
             } else {
               // 不需要绑定手机号，直接设置成功状态
-            return state.copyWith(
-              isSubmitting: false,
-              successOrFail: FlowyResult.success(s),
-            );
+              return state.copyWith(
+                isSubmitting: false,
+                successOrFail: FlowyResult.success(s),
+              );
             }
           },
           (f) => _stateFromCode(f),
@@ -250,39 +252,45 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               final gotrueTokenResponse = GotrueTokenResponsePB.create()
                 ..accessToken = tokenMap['access_token'] as String? ?? ''
                 ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
-                ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
-                ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+                ..expiresIn =
+                    Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+                ..expiresAt =
+                    Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
                 ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
-                ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
-                ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
+                ..providerAccessToken =
+                    tokenMap['provider_access_token'] as String? ?? ''
+                ..providerRefreshToken =
+                    tokenMap['provider_refresh_token'] as String? ?? '';
 
               getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
                 gotrueTokenResponse,
               );
               // Ensure server-side user profile is pulled immediately so other listeners/blocs receive the update.
-              unawaited(
-                UserEventGetUserProfile().send().then((profileResult) {
-                  if (!isClosed) {
-                    profileResult.fold(
-                      (userProfile) {
-                        Log.info('[SignInBloc] Pulled user profile after sign-in: ${userProfile.email}');
-                        // Update state with fetched profile if still needed
-                        if (state.successOrFail == null || state.successOrFail!.isFailure) {
-                          emit(state.copyWith(
-                            isSubmitting: false,
-                            successOrFail: FlowyResult.success(userProfile),
-                          ));
-                        }
-                      },
-                      (err) {
-                        Log.warn('[SignInBloc] Failed to pull user profile after sign-in: ${err.msg}');
-                      },
-                    );
-                  }
-                }).catchError((e, s) {
-                  Log.warn('[SignInBloc] UserEventGetUserProfile attempt failed: $e');
-                })
-              );
+              unawaited(UserEventGetUserProfile().send().then((profileResult) {
+                if (!isClosed) {
+                  profileResult.fold(
+                    (userProfile) {
+                      Log.info(
+                          '[SignInBloc] Pulled user profile after sign-in: ${userProfile.email}');
+                      // Update state with fetched profile if still needed
+                      if (state.successOrFail == null ||
+                          state.successOrFail!.isFailure) {
+                        emit(state.copyWith(
+                          isSubmitting: false,
+                          successOrFail: FlowyResult.success(userProfile),
+                        ));
+                      }
+                    },
+                    (err) {
+                      Log.warn(
+                          '[SignInBloc] Failed to pull user profile after sign-in: ${err.msg}');
+                    },
+                  );
+                }
+              }).catchError((e, s) {
+                Log.warn(
+                    '[SignInBloc] UserEventGetUserProfile attempt failed: $e');
+              }));
               return state.copyWith(
                 isSubmitting: false,
               );
@@ -314,29 +322,31 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               gotrueTokenResponse,
             );
             // Try to pull server-side user profile so listeners get updated promptly.
-            unawaited(
-              UserEventGetUserProfile().send().then((profileResult) {
-                if (!isClosed) {
-                  profileResult.fold(
-                    (userProfile) {
-                      Log.info('[SignInBloc] Pulled user profile after email sign-in: ${userProfile.email}');
-                      // Update state with fetched profile if still needed
-                      if (state.successOrFail == null || state.successOrFail!.isFailure) {
-                        emit(state.copyWith(
-                          isSubmitting: false,
-                          successOrFail: FlowyResult.success(userProfile),
-                        ));
-                      }
-                    },
-                    (err) {
-                      Log.warn('[SignInBloc] Failed to pull user profile after email sign-in: ${err.msg}');
-                    },
-                  );
-                }
-              }).catchError((e, s) {
-                Log.warn('[SignInBloc] UserEventGetUserProfile attempt failed: $e');
-              })
-            );
+            unawaited(UserEventGetUserProfile().send().then((profileResult) {
+              if (!isClosed) {
+                profileResult.fold(
+                  (userProfile) {
+                    Log.info(
+                        '[SignInBloc] Pulled user profile after email sign-in: ${userProfile.email}');
+                    // Update state with fetched profile if still needed
+                    if (state.successOrFail == null ||
+                        state.successOrFail!.isFailure) {
+                      emit(state.copyWith(
+                        isSubmitting: false,
+                        successOrFail: FlowyResult.success(userProfile),
+                      ));
+                    }
+                  },
+                  (err) {
+                    Log.warn(
+                        '[SignInBloc] Failed to pull user profile after email sign-in: ${err.msg}');
+                  },
+                );
+              }
+            }).catchError((e, s) {
+              Log.warn(
+                  '[SignInBloc] UserEventGetUserProfile attempt failed: $e');
+            }));
             return state.copyWith(
               isSubmitting: false,
             );
@@ -382,6 +392,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       ),
     );
 
+    // iOS 使用系统原生 Apple 授权，避免跳转浏览器后无法稳定回到应用。
+    if (platform == 'apple' &&
+        defaultTargetPlatform == TargetPlatform.iOS &&
+        !kIsWeb) {
+      await _onSignInWithApple(emit);
+      return;
+    }
+
     final result = await authService.signUpWithOAuth(platform: platform);
     emit(
       result.fold(
@@ -391,6 +409,85 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         ),
         (error) => _stateFromCode(error),
       ),
+    );
+  }
+
+  Future<void> _onSignInWithApple(Emitter<SignInState> emit) async {
+    if (passwordService == null) {
+      final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
+      passwordService = PasswordHttpService(
+        baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
+        authToken: '',
+      );
+    }
+
+    final credential = await AppleLoginService.instance.getIdentityToken();
+    await credential.fold(
+      (idToken) async {
+        final loginResult = await passwordService!.signInWithIdToken(
+          provider: 'apple',
+          idToken: idToken,
+        );
+        emit(await _stateFromTokenResult(loginResult, 'Apple'));
+      },
+      (error) {
+        if (error.startsWith('CANCELLED:')) {
+          emit(state.copyWith(isSubmitting: false, successOrFail: null));
+        } else {
+          emit(_stateFromCodeWithMessage(
+            FlowyError.create()
+              ..code = ErrorCode.Internal
+              ..msg = LocaleKeys.signIn_generalError.tr(),
+          ));
+        }
+      },
+    );
+  }
+
+  Future<SignInState> _stateFromTokenResult(
+    FlowyResult<Map<String, dynamic>, FlowyError> loginResult,
+    String providerName,
+  ) async {
+    return loginResult.fold(
+      (tokenMap) {
+        final pendingTokenValue = tokenMap['pending_token'];
+        final pendingToken =
+            pendingTokenValue is String ? pendingTokenValue : null;
+        if (pendingToken != null && pendingToken.isNotEmpty) {
+          return state.copyWith(
+            isSubmitting: false,
+            requiresPhoneBinding: true,
+            pendingToken: pendingToken,
+          );
+        }
+
+        try {
+          final tokenResponse = GotrueTokenResponsePB.create()
+            ..accessToken = tokenMap['access_token'] as String? ?? ''
+            ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
+            ..expiresIn =
+                Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+            ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+            ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
+            ..providerAccessToken =
+                tokenMap['provider_access_token'] as String? ?? ''
+            ..providerRefreshToken =
+                tokenMap['provider_refresh_token'] as String? ?? '';
+          getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(tokenResponse);
+          unawaited(UserEventGetUserProfile().send());
+          Log.info('[SignInBloc] $providerName login successful');
+          return state.copyWith(
+            isSubmitting: false,
+            requiresPhoneBinding: false,
+            pendingToken: null,
+          );
+        } catch (error) {
+          return _stateFromCode(FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = 'Failed to parse token response: $error');
+        }
+      },
+      (error) => _stateFromCode(error),
     );
   }
 
@@ -451,7 +548,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-
     emit(
       state.copyWith(
         isSubmitting: true,
@@ -468,14 +564,13 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     final newState = await result.fold(
       (gotrueTokenResponse) async {
-
         try {
           // 保存 accessToken 到状态中，用于后续设置密码流程
           final accessToken = gotrueTokenResponse.accessToken;
           if (!isClosed) {
             emit(state.copyWith(accessToken: accessToken));
           }
-          
+
           // 将 token 交给 Deep Link 处理（写入本地并触发登录流程）
           await getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
             gotrueTokenResponse,
@@ -494,11 +589,12 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           // 检查用户是否设置了密码
           if (passwordService != null) {
             try {
-              final passwordStatusResult = await passwordService!.checkPasswordStatus(
+              final passwordStatusResult =
+                  await passwordService!.checkPasswordStatus(
                 email: email.contains('@') ? email : null,
                 phone: email.contains('@') ? null : email,
               );
-              
+
               passwordStatusResult.fold(
                 (passwordIsSet) {
                   if (!isClosed) {
@@ -543,11 +639,12 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             // 检查用户是否设置了密码
             if (passwordService != null) {
               try {
-                final passwordStatusResult = await passwordService!.checkPasswordStatus(
+                final passwordStatusResult =
+                    await passwordService!.checkPasswordStatus(
                   email: email.contains('@') ? email : null,
                   phone: email.contains('@') ? null : email,
                 );
-                
+
                 passwordStatusResult.fold(
                   (passwordIsSet) {
                     if (!isClosed) {
@@ -594,63 +691,60 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
         // 兜底：直接获取用户信息并返回成功状态，确保不会卡在验证码页
         final profileResult = await authService.getUser();
-        return profileResult.fold(
-          (userProfile) {
-            // 检查用户是否设置了密码
-            if (passwordService != null) {
-              try {
-                final passwordStatusResult = passwordService!.checkPasswordStatus(
-                  email: email.contains('@') ? email : null,
-                  phone: email.contains('@') ? null : email,
-                );
-                
-                passwordStatusResult.fold(
-                  (passwordIsSet) {
-                    if (!isClosed) {
-                      emit(state.copyWith(
-                        isSubmitting: false,
-                        successOrFail: FlowyResult.success(userProfile),
-                        passwordIsSet: passwordIsSet,
-                      ));
-                    }
-                  },
-                  (error) {
-                    if (!isClosed) {
-                      emit(state.copyWith(
-                        isSubmitting: false,
-                        successOrFail: FlowyResult.success(userProfile),
-                        passwordIsSet: false,
-                      ));
-                    }
-                  },
-                );
-              } catch (e) {
-                Log.warn('[SignInBloc] Check password status failed: $e');
-                if (!isClosed) {
-                  emit(state.copyWith(
-                    isSubmitting: false,
-                    successOrFail: FlowyResult.success(userProfile),
-                    passwordIsSet: false,
-                  ));
-                }
+        return profileResult.fold((userProfile) {
+          // 检查用户是否设置了密码
+          if (passwordService != null) {
+            try {
+              final passwordStatusResult = passwordService!.checkPasswordStatus(
+                email: email.contains('@') ? email : null,
+                phone: email.contains('@') ? null : email,
+              );
+
+              passwordStatusResult.fold(
+                (passwordIsSet) {
+                  if (!isClosed) {
+                    emit(state.copyWith(
+                      isSubmitting: false,
+                      successOrFail: FlowyResult.success(userProfile),
+                      passwordIsSet: passwordIsSet,
+                    ));
+                  }
+                },
+                (error) {
+                  if (!isClosed) {
+                    emit(state.copyWith(
+                      isSubmitting: false,
+                      successOrFail: FlowyResult.success(userProfile),
+                      passwordIsSet: false,
+                    ));
+                  }
+                },
+              );
+            } catch (e) {
+              Log.warn('[SignInBloc] Check password status failed: $e');
+              if (!isClosed) {
+                emit(state.copyWith(
+                  isSubmitting: false,
+                  successOrFail: FlowyResult.success(userProfile),
+                  passwordIsSet: false,
+                ));
               }
             }
-            return state.copyWith(
-              isSubmitting: false,
-              successOrFail: FlowyResult.success(userProfile),
-              passwordIsSet: false, // 默认值，实际值会在上面的回调中更新
-            );
-          },
-          (error) {
-            Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
-            return _stateFromCode(error);
           }
-        );
+          return state.copyWith(
+            isSubmitting: false,
+            successOrFail: FlowyResult.success(userProfile),
+            passwordIsSet: false, // 默认值，实际值会在上面的回调中更新
+          );
+        }, (error) {
+          Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
+          return _stateFromCode(error);
+        });
       },
       (error) async {
-          Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
-          return _stateFromCode(error);
-        },
+        Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
+        return _stateFromCode(error);
+      },
     );
 
     emit(newState);
@@ -700,7 +794,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 判断是手机号还是邮箱
     final bool isPhone = _isValidPhone(email);
-    
+
     // 根据类型传递正确的参数
     final result = await passwordService?.forgotPassword(
       email: email,
@@ -738,7 +832,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-
     emit(
       state.copyWith(
         isSubmitting: true,
@@ -755,7 +848,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     result?.fold(
       (authToken) {
-
         passwordService?.authToken = authToken;
 
         emit(
@@ -787,7 +879,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       Log.error('Reset password is already in progress');
       return;
     }
-
 
     emit(
       state.copyWith(
@@ -892,7 +983,8 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         // 用户主动取消微信授权对话框是正常流程，不应作为错误提示。
         // WeChatLoginService 在检测到取消时返回以 "CANCELLED:" 开头的失败信息。
         if (error.startsWith(WeChatLoginService.cancelledPrefix)) {
-          Log.info('🟢[SignInBloc] WeChat login cancelled by user, reset to idle state');
+          Log.info(
+              '🟢[SignInBloc] WeChat login cancelled by user, reset to idle state');
           emit(
             state.copyWith(
               isSubmitting: false,
@@ -903,7 +995,8 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           );
           return;
         }
-        Log.error('🟢[SignInBloc] Failed to get WeChat authorization code: $error');
+        Log.error(
+            '🟢[SignInBloc] Failed to get WeChat authorization code: $error');
 
         // 区分「未安装微信」和其它错误：前者用专属引导文案，避免出现
         // "出现错误，请稍后再试" 这种让用户摸不着头脑的通用提示。
@@ -932,7 +1025,9 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     final loginResult = await passwordService!.signInWithThirdParty(
       platform: 'weixin',
       code: code,
-      platformType: kIsWeb ? 'web' : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
+      platformType: kIsWeb
+          ? 'web'
+          : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
     );
 
     emit(
@@ -944,7 +1039,8 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               pendingTokenValue is String ? pendingTokenValue : null;
           if (pendingToken != null && pendingToken.isNotEmpty) {
             // OAuth identity not found, user needs phone binding
-            Log.info('[SignInBloc] WeChat OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
+            Log.info(
+                '[SignInBloc] WeChat OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
             return state.copyWith(
               isSubmitting: false,
               requiresPhoneBinding: true,
@@ -957,30 +1053,35 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             final gotrueTokenResponse = GotrueTokenResponsePB.create()
               ..accessToken = tokenMap['access_token'] as String? ?? ''
               ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
-              ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
-              ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+              ..expiresIn =
+                  Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+              ..expiresAt =
+                  Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
               ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
-              ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
-              ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
+              ..providerAccessToken =
+                  tokenMap['provider_access_token'] as String? ?? ''
+              ..providerRefreshToken =
+                  tokenMap['provider_refresh_token'] as String? ?? '';
 
             Log.info('🟢[SignInBloc] WeChat login successful');
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );
-            unawaited(
-              UserEventGetUserProfile().send().then((profileResult) {
-                profileResult.fold(
-                  (userProfile) {
-                    Log.info('[SignInBloc] Pulled user profile after WeChat sign-in: ${userProfile.email}');
-                  },
-                  (err) {
-                    Log.warn('[SignInBloc] Failed to pull user profile after WeChat sign-in: ${err.msg}');
-                  },
-                );
-              }).catchError((e) {
-                Log.warn('[SignInBloc] Exception when pulling profile after WeChat sign-in: $e');
-              })
-            );
+            unawaited(UserEventGetUserProfile().send().then((profileResult) {
+              profileResult.fold(
+                (userProfile) {
+                  Log.info(
+                      '[SignInBloc] Pulled user profile after WeChat sign-in: ${userProfile.email}');
+                },
+                (err) {
+                  Log.warn(
+                      '[SignInBloc] Failed to pull user profile after WeChat sign-in: ${err.msg}');
+                },
+              );
+            }).catchError((e) {
+              Log.warn(
+                  '[SignInBloc] Exception when pulling profile after WeChat sign-in: $e');
+            }));
 
             return state.copyWith(
               isSubmitting: false,
@@ -1027,13 +1128,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 1. 获取抖音授权码
     final codeResult = await DouYinLoginService.instance.getAuthorizationCode();
-    
+
     await codeResult.fold(
       (code) async {
         await _completeDouYinLogin(emit, code);
       },
       (error) {
-        Log.error('🟢[SignInBloc] Failed to get DouYin authorization code: $error');
+        Log.error(
+            '🟢[SignInBloc] Failed to get DouYin authorization code: $error');
 
         // 区分「未安装抖音」和其它错误：前者用专属引导文案。
         String userMessage;
@@ -1061,7 +1163,9 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     final loginResult = await passwordService!.signInWithThirdParty(
       platform: 'douyin',
       code: code,
-      platformType: kIsWeb ? 'web' : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
+      platformType: kIsWeb
+          ? 'web'
+          : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
     );
 
     emit(
@@ -1072,7 +1176,8 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           final pendingToken =
               pendingTokenValue is String ? pendingTokenValue : null;
           if (pendingToken != null && pendingToken.isNotEmpty) {
-            Log.info('[SignInBloc] DouYin OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
+            Log.info(
+                '[SignInBloc] DouYin OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
             return state.copyWith(
               isSubmitting: false,
               requiresPhoneBinding: true,
@@ -1085,29 +1190,34 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             final gotrueTokenResponse = GotrueTokenResponsePB.create()
               ..accessToken = tokenMap['access_token'] as String? ?? ''
               ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
-              ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
-              ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+              ..expiresIn =
+                  Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+              ..expiresAt =
+                  Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
               ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
-              ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
-              ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
+              ..providerAccessToken =
+                  tokenMap['provider_access_token'] as String? ?? ''
+              ..providerRefreshToken =
+                  tokenMap['provider_refresh_token'] as String? ?? '';
 
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );
-            unawaited(
-              UserEventGetUserProfile().send().then((profileResult) {
-                profileResult.fold(
-                  (userProfile) {
-                    Log.info('[SignInBloc] Pulled user profile after DouYin sign-in: ${userProfile.email}');
-                  },
-                  (err) {
-                    Log.warn('[SignInBloc] Failed to pull user profile after DouYin sign-in: ${err.msg}');
-                  },
-                );
-              }).catchError((e) {
-                Log.warn('[SignInBloc] Exception when pulling profile after DouYin sign-in: $e');
-              })
-            );
+            unawaited(UserEventGetUserProfile().send().then((profileResult) {
+              profileResult.fold(
+                (userProfile) {
+                  Log.info(
+                      '[SignInBloc] Pulled user profile after DouYin sign-in: ${userProfile.email}');
+                },
+                (err) {
+                  Log.warn(
+                      '[SignInBloc] Failed to pull user profile after DouYin sign-in: ${err.msg}');
+                },
+              );
+            }).catchError((e) {
+              Log.warn(
+                  '[SignInBloc] Exception when pulling profile after DouYin sign-in: $e');
+            }));
 
             return state.copyWith(
               isSubmitting: false,
@@ -1307,8 +1417,10 @@ class SignInState with _$SignInState {
     @Default(LoginType.signIn) LoginType loginType,
     bool? passwordIsSet,
     @Default(false) bool requiresPhoneBinding,
+
     /// OAuth pending token（来自 ThirdPartyGrant），用于后续手机绑定流程
     String? pendingToken,
+
     /// Access token from passcode login，用于后续设置密码流程
     String? accessToken,
   }) = _SignInState;
