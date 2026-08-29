@@ -2,6 +2,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/loading.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/navigator_context_extension.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
@@ -181,9 +182,8 @@ Future<void> deleteMyAccount(
   VoidCallback? onSuccess,
   VoidCallback? onFailure,
 }) async {
-  final bottomPadding = PlatformInfo.isMobile
-      ? MediaQuery.of(context).viewInsets.bottom
-      : 0.0;
+  final bottomPadding =
+      PlatformInfo.isMobile ? MediaQuery.of(context).viewInsets.bottom : 0.0;
 
   if (!isChecked) {
     showToastNotification(
@@ -213,8 +213,7 @@ Future<void> deleteMyAccount(
   final loading = Loading(context)..start();
 
   await UserBackendService.deleteCurrentAccount().fold(
-    (s) {
-
+    (s) async {
       loading.stop();
       showToastNotification(
         message: LocaleKeys
@@ -222,18 +221,20 @@ Future<void> deleteMyAccount(
             .tr(),
       );
 
-      // delay 1 second to make sure the toast notification is shown
-      Future.delayed(const Duration(seconds: 1), () async {
-        // 在删除账户后，直接重启应用，而不是尝试导航
-        // 这样可以避免路由栈为空的问题
-        // 注意：不要调用 onSuccess，因为它会尝试 popToHome，可能导致路由错误
-        // onSuccess?.call();
+      // 删除账号只处理云端数据，不会自动清除客户端会话。
+      // 先清理本地 token、数据库会话和用户缓存，再重启进入登录流程。
+      try {
+        await getIt<AuthService>().signOut();
+      } catch (e, stack) {
+        Log.error(
+            'Failed to clear local session after account deletion: $e', stack);
+      }
 
-        // restart the application
-        await runAppFlowy();
-      });
+      // delay 1 second to make sure the toast notification is shown
+      await Future.delayed(const Duration(seconds: 1));
+      await runAppFlowy();
     },
-    (f) {
+    (f) async {
       Log.error('account deletion failed, error: $f');
 
       loading.stop();
