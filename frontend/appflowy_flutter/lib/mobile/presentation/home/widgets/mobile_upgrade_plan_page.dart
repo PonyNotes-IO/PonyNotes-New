@@ -1059,7 +1059,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     try {
       final userProfile = await UserBackendService.getCurrentUserProfile();
       final userUuid = userProfile.fold((p) => _extractUserId(p), (_) => '');
-
+      Log.info('[MobileUpgradePlan] iOS 直接调用 Apple Pay');
       if (Platform.isIOS) {
         // iPhone/iPad 直接调用 Apple Pay 内购
         Log.info('[MobileUpgradePlan] iOS 直接调用 Apple Pay');
@@ -1166,6 +1166,60 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
   }
 
+  /// 创建支付订单（Android / iOS 共用）。
+  ///
+  /// 支付方式与平台对应关系：
+  ///   - iOS     → apple_pay（App Store 内购）
+  ///   - Android → alipay_app（支付宝 App 支付）/ wechat_pay
+  ///
+  /// 返回完整订单数据（含 orderNo、payUrl），创建失败时返回 null 并已弹出 toast。
+  Future<PaymentCreateResponse?> _createPaymentOrder({
+    required PaymentMethod paymentMethod,
+    required RemotePlan config,
+    required double price,
+    required String billingType,
+    required String userUuid,
+  }) async {
+    final paymentType = switch (paymentMethod) {
+      PaymentMethod.applePay => PaymentType.applePay,
+      PaymentMethod.wechatPay => PaymentType.wechatPay,
+      PaymentMethod.alipay => PaymentType.alipayApp,
+    };
+
+    final createRequest = PaymentCreateRequest(
+      amount: price.toString(),
+      paymentType: paymentType,
+      userInfo: userUuid,
+      productName: config.planNameCn?.isNotEmpty == true
+          ? config.planNameCn!
+          : config.planName ?? '会员升级',
+      planId: config.id?.toString(),
+      billingType: billingType,
+    );
+
+    Log.info(
+        '[MobileUpgradePlan] 创建支付订单: plan=${config.planName}, '
+        'price=$price, billingType=$billingType, paymentType=$paymentType');
+
+    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+
+    if (orderResult.isFailure) {
+      final error = orderResult.fold((_) => null, (e) => e);
+      showToastNotification(message: '创建订单失败: ${error?.msg ?? '未知错误'}');
+      return null;
+    }
+
+    final orderData = orderResult.fold((r) => r, (_) => null);
+    if (orderData?.data == null) {
+      showToastNotification(message: '订单数据为空');
+      return null;
+    }
+
+    final orderNo = orderData!.data!.orderNo;
+    Log.info('[MobileUpgradePlan] 订单创建成功: orderNo=$orderNo');
+    return orderData;
+  }
+
   Future<void> _handleIOSPayment(
     PaymentMethod paymentMethod,
     RemotePlan config,
@@ -1182,30 +1236,39 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       return;
     }
 
-    // AppleIAPService 启动监听器会立即初始化一次，保险起见再补一次
-    // (重复 initialize 会直接返回)。
-    await AppleIAPService.instance.initialize();
+    // ① 创建订单（与 Android 共用，paymentType=apple_pay）
+    final orderData = await _createPaymentOrder(
+      paymentMethod: paymentMethod,
+      config: config,
+      price: price,
+      billingType: billingType,
+      userUuid: userUuid,
+    );
+    if (orderData == null) return; // 创建失败 toast 已在公共方法内弹出
 
-    // ====================================================================
-    // 商品 ID 拼接格式：com.ponynotes.{billingType}.{planCode}
-    // 必须与 App Store Connect 和 后端 payment.apple.products 的 key
-    // 完全一致，否则 verify 返回"未配置的苹果商品"。
-    // 例如：com.ponynotes.monthly.pro、com.ponynotes.yearly.pro
-    // ====================================================================
+    // ② 统一走 PaymentUtil.pay() → _payWithApplePay → AppleIAPService
+    //    与 Android 调用 PaymentUtil.pay() → _payWithAlipay 保持一致
     final productId =
         AppleIAPService.buildAppleProductId(planCode, billingType);
 
-    final res = await AppleIAPService.instance.purchaseProduct(
-      productId: productId,
-      userUuid: userUuid,
+    final paymentResult = await PaymentUtil.pay(
+      method: paymentMethod,
+      amount: (price * 100).toInt(),
+      currency: 'CNY',
+      orderId: orderData.data!.orderNo,
+      extra: {
+        'productId': productId,
+        'userUuid': userUuid,
+      },
     );
 
     if (!mounted) return;
-    if (res.ok) {
-      showToastNotification(message: res.message);
-    } else {
-      showToastNotification(message: '支付失败: ${res.message}');
+    if (!paymentResult.success) {
+      showToastNotification(message: '支付失败: ${paymentResult.message}');
     }
+    // 购买发起成功后不再弹 toast — purchaseStream 监听器会在
+    // verify 成功时通过 UpgradeSuccessOverlay 展示版本图片+文案，
+    // verify 失败时弹出错误 toast。
   }
 
   Future<void> _handleAndroidPayment(
@@ -1217,57 +1280,28 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   ) async {
     Log.info('[MobileUpgradePlan] Android 使用 $paymentMethod 支付');
 
-    // MobileUpgradePlanPage 只在移动端使用，Android 必须走 alipay_app
-    // （后端返回 orderInfo 供 Tobias 唤起支付宝 App）。
-    // 未来扩展 Android 微信支付时同样应保持 wechat_pay / alipay_app
-    // 与 App 原生支付相匹配，不要退化为 H5。
-    final paymentType = switch (paymentMethod) {
-      PaymentMethod.wechatPay => PaymentType.wechatPay,
-      PaymentMethod.alipay => PaymentType.alipayApp,
-      _ => PaymentType.alipayApp,
-    };
-
-    final createRequest = PaymentCreateRequest(
-      amount: price.toString(),
-      paymentType: paymentType,
-      userInfo: userUuid,
-      productName: config.planNameCn?.isNotEmpty == true
-          ? config.planNameCn!
-          : config.planName ?? '会员升级',
-      planId: config.id?.toString(),
+    // ① 创建订单（与 iOS 共用）
+    final orderData = await _createPaymentOrder(
+      paymentMethod: paymentMethod,
+      config: config,
+      price: price,
       billingType: billingType,
+      userUuid: userUuid,
     );
+    if (orderData == null) return;
 
-    Log.info(
-        '[MobileUpgradePlan] 创建支付订单: plan=${config.planName}, price=$price, billingType=$billingType, paymentType=$paymentType');
-
-    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
-
-    if (orderResult.isFailure) {
-      final error = orderResult.fold((_) => null, (e) => e);
-      showToastNotification(message: '创建订单失败: ${error?.msg ?? '未知错误'}');
-      return;
-    }
-
-    final orderData = orderResult.fold((r) => r, (_) => null);
-    if (orderData?.data == null) {
-      showToastNotification(message: '订单数据为空');
-      return;
-    }
-
-    final orderNo = orderData!.data!.orderNo;
-    Log.info('[MobileUpgradePlan] 订单创建成功: orderNo=$orderNo');
-
+    // ② 用订单中的 payUrl 唤起支付宝 App 支付
     final extra = <String, dynamic>{
       'payUrl': orderData.data?.payUrl,
       'plan': config.planName,
+      'userUuid': userUuid,
     };
 
     final paymentResult = await PaymentUtil.pay(
       method: paymentMethod,
       amount: (price * 100).toInt(),
       currency: 'CNY',
-      orderId: orderNo,
+      orderId: orderData.data!.orderNo,
       extra: extra,
     );
 

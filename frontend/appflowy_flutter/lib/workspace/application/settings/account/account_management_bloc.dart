@@ -7,6 +7,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart'
     show PaymentMethod, PaymentPlatformSupport, PaymentUtil;
@@ -1460,22 +1461,129 @@ class AccountManagementBloc
               );
               return;
             }
-            // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
-            final productId = 'com.ponynotes.$billingTypeStr.$planCode';
 
             final userUuid = _getUserUuid();
+            if (userUuid.isEmpty) {
+              emit(
+                AccountManagementState.ready(
+                  subscriptionInfo: subscriptionInfo,
+                  planConfigs: planConfigs,
+                  selectedPlan: selectedPlan,
+                  selectedDuration: selectedDuration,
+                  selectedTab: selectedTab,
+                  agreedProtocols: agreedProtocols,
+                  isLoadingSubscription: isLoadingSubscription,
+                  isLoadingPlans: isLoadingPlans,
+                  isProcessingPayment: false,
+                  error: '无法获取用户信息，请重新登录后重试',
+                  paymentResult: paymentResult,
+                ),
+              );
+              return;
+            }
+
+            // ① 创建订单（与 Android 共用，paymentType=apple_pay）
+            final productName = planConfig.planNameCn?.isNotEmpty == true
+                ? planConfig.planNameCn!
+                : planConfig.planName ?? '会员升级';
+            final createRequest = PaymentCreateRequest(
+              amount: selectedPrice.toStringAsFixed(2),
+              paymentType: PaymentType.applePay,
+              userInfo: userUuid,
+              productName: productName,
+              planId: planIdValue,
+              billingType: billingTypeStr,
+            );
+            final orderResult =
+                await PaymentApi.createPaymentOrder(createRequest);
+            if (orderResult.isFailure) {
+              final e = orderResult.fold((_) => null, (err) => err);
+              state.maybeWhen(
+                orElse: () {},
+                ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                ) {
+                  emit(
+                    AccountManagementState.ready(
+                      subscriptionInfo: subscriptionInfo,
+                      planConfigs: planConfigs,
+                      selectedPlan: selectedPlan,
+                      selectedDuration: selectedDuration,
+                      selectedTab: selectedTab,
+                      agreedProtocols: agreedProtocols,
+                      isLoadingSubscription: isLoadingSubscription,
+                      isLoadingPlans: isLoadingPlans,
+                      isProcessingPayment: false,
+                      error: e?.msg ?? '创建订单失败',
+                      paymentResult: paymentResult,
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+            final orderData = orderResult.fold((o) => o, (_) => null);
+            final orderNo = orderData?.orderNo ?? '';
+            if (orderNo.isEmpty) {
+              state.maybeWhen(
+                orElse: () {},
+                ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                ) {
+                  emit(
+                    AccountManagementState.ready(
+                      subscriptionInfo: subscriptionInfo,
+                      planConfigs: planConfigs,
+                      selectedPlan: selectedPlan,
+                      selectedDuration: selectedDuration,
+                      selectedTab: selectedTab,
+                      agreedProtocols: agreedProtocols,
+                      isLoadingSubscription: isLoadingSubscription,
+                      isLoadingPlans: isLoadingPlans,
+                      isProcessingPayment: false,
+                      error: '订单数据为空',
+                      paymentResult: paymentResult,
+                    ),
+                  );
+                },
+              );
+              return;
+            }
+
+            // ② 统一走 PaymentUtil.pay() → _payWithApplePay → AppleIAPService
+            //    商品 ID 格式：com.ponynotes.{billingType}.{planCode}
+            final productId =
+                AppleIAPService.buildAppleProductId(planCode, billingTypeStr);
             final extra = <String, dynamic>{
               'productId': productId,
-              'planId': planConfig.id,
-              'billingType': billingTypeStr,
-              'userInfo': userUuid,
+              'userUuid': userUuid,
             };
 
             final payResult = await PaymentUtil.pay(
               method: PaymentMethod.applePay,
               amount: (selectedPrice * 100).toInt(),
               currency: 'CNY',
-              orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
+              orderId: orderNo,
               extra: extra,
             );
 
@@ -1680,6 +1788,7 @@ class AccountManagementBloc
             final payExtra = <String, dynamic>{
               'payUrl': payUrl,
               'plan': planCode,
+              'userInfo': userUuid,
             };
 
             final payResult = await PaymentUtil.pay(

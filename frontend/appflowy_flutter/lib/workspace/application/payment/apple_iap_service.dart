@@ -43,6 +43,45 @@ class AppleIAPService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   bool _initialized = false;
 
+  // -----------------------------------------------------------------
+  // 用户交互 vs 启动补单的区分标记
+  // -----------------------------------------------------------------
+  //
+  // 启动后 purchaseStream 会投递 StoreKit 遗留的"未 finish 交易"，
+  // 此时可能：
+  //   a) 用户 token 还没恢复 → userUuid 为空 → 误弹"缺少用户信息"
+  //   b) 交易已是历史数据，verify 可能异常 → 误弹"验证失败"
+  //   c) 用户早就开通了订阅 → 重复触发 onPaymentSuccess → 重复弹
+  //      "成功升级到高级版"
+  // 这些都是"后台自动补单"场景，不应该打扰用户。
+  //
+  // 只有当用户显式：
+  //   1) 点击购买（purchaseProduct），或
+  //   2) 手动恢复（restorePurchasesForUser）
+  // 之后的 Stream 事件才是"用户主动触发"，此时才弹 toast / overlay。
+  //
+  // 我们用一个 token 记录"最近一次用户主动触发的时间戳"，
+  // 事件若在该时间戳之前（或太久远）就按"静默补单"处理：
+  //   - 错误不弹 toast
+  //   - verify 成功不弹 UpgradeSuccessOverlay（但仍 finish、仍刷新）
+  // -----------------------------------------------------------------
+  int _lastUserActionTimestamp = 0;
+
+  /// 一笔交易事件距离用户主动点击购买超过这个阈值，视为启动/历史
+  /// 交易自动补单，按静默模式处理。默认 10 分钟。
+  static const int _silentGraceMs = 10 * 60 * 1000;
+
+  bool _isSilentMode() {
+    if (_lastUserActionTimestamp == 0) return true; // 从未点过购买 → 启动补单
+    final now = DateTime.now().millisecondsSinceEpoch;
+    return now - _lastUserActionTimestamp > _silentGraceMs;
+  }
+
+  /// 标记一次"用户主动操作"，后续 Stream 事件按有 UI 反馈处理。
+  void _markUserAction() {
+    _lastUserActionTimestamp = DateTime.now().millisecondsSinceEpoch;
+  }
+
   /// 苹果商品 ID 前缀，与 App Store Connect / 后端 `payment.apple.products`
   /// 的 key 前缀保持一致。
   /// 商品 ID 拼接格式：`com.ponynotes.{billingType}.{planCode}`
@@ -90,13 +129,18 @@ class AppleIAPService {
       },
     );
 
-    // 冷启动后立刻同步一次，确保上次 App 关闭前遗留的未 finish
-    // 交易在本次启动第一时间进入 onPurchaseStreamEvent 处理。
-    try {
-      await _iap.restorePurchases();
-    } catch (e, s) {
-      Log.warn('[AppleIAP] initial restorePurchases failed: $e\n$s');
-    }
+    // ⚠️  不要在此处调用 _iap.restorePurchases()。
+    //
+    // 它会强制把用户历史上所有购买过的商品（包括已 finish、已续费多
+    // 次的）全部以 PurchaseStatus.restored 重新投递到 Stream，导致：
+    //   1) 对已完成交易重复调 /api/payment/apple/verify → 重复弹
+    //      UpgradeSuccessOverlay（"成功升级到高级版"）
+    //   2) 沙箱环境遗留脏数据 → 误弹"验证失败"
+    //
+    // 真正需要补的"未 finish 交易"，StoreKit 会通过
+    // purchaseStream 自动投递，不需要 restorePurchases() 触发。
+    // 用户手动"恢复购买"时走 restorePurchasesForUser()，那里会
+    // 主动调一次 _iap.restorePurchases()。
 
     _initialized = true;
     Log.info('[AppleIAP] initialized');
@@ -126,7 +170,7 @@ class AppleIAPService {
   // 发起购买（前台用户手动点击）
   // ----------------------------------------------------------------
 
-  /// 发起苹果内购购买。
+  /// 发起苹果内购购买（用户主动点击购买按钮）。
   ///
   /// 参数：
   ///   [productId]    由 [buildAppleProductId] 拼接得到，必须与
@@ -143,6 +187,9 @@ class AppleIAPService {
     required String productId,
     required String userUuid,
   }) async {
+    // 🎯 用户主动操作，后续 Stream 事件启用 toast / overlay 反馈
+    _markUserAction();
+
     if (!isApplePlatform) {
       return PurchaseResult.failure('当前平台不支持 App Store 内购');
     }
@@ -217,6 +264,9 @@ class AppleIAPService {
   ///   3) 调用 PaymentApi.appleRestore 批量提交后端
   ///   4) 成功后通知 SubscriptionSuccessListenable & 返回 true
   Future<RestoreResult> restorePurchasesForUser(String userUuid) async {
+    // 🎯 用户主动点"恢复购买"，后续 Stream 事件启用 toast / overlay 反馈
+    _markUserAction();
+
     if (!isApplePlatform) {
       return RestoreResult.failure('当前平台不支持 App Store 内购');
     }
@@ -267,10 +317,18 @@ class AppleIAPService {
   Future<void> _onPurchaseStreamEvent(
     List<PurchaseDetails> purchaseDetailsList,
   ) async {
+    // 🤫 启动补单 vs 用户主动点击购买：
+    //    _isSilentMode() 为 true 时只记日志、不打扰用户。
+    final silent = _isSilentMode();
+    if (silent) {
+      Log.info('[AppleIAP] stream event — silent-mode (startup/background '
+          'retry, no UI feedback)');
+    }
+
     for (final PurchaseDetails pd in purchaseDetailsList) {
       Log.info('[AppleIAP] stream event — productId=${pd.productID}, '
           'status=${pd.status}, purchaseID=${pd.purchaseID}, '
-          'pendingComplete=${pd.pendingCompletePurchase}');
+          'pendingComplete=${pd.pendingCompletePurchase}, silent=$silent');
 
       switch (pd.status) {
         case PurchaseStatus.pending:
@@ -278,14 +336,16 @@ class AppleIAPService {
           break;
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
-          await _handleVerifiedPurchase(pd);
+          await _handleVerifiedPurchase(pd, silent: silent);
           break;
         case PurchaseStatus.error:
           Log.error('[AppleIAP] PurchaseStatus.error: ${pd.error}');
-          showToastNotification(
-            message: '购买失败：${pd.error?.message ?? '未知错误'}',
-            type: ToastificationType.error,
-          );
+          if (!silent) {
+            showToastNotification(
+              message: '购买失败：${pd.error?.message ?? '未知错误'}',
+              type: ToastificationType.error,
+            );
+          }
           // 明确错误态也 finish，避免 StoreKit 一直留着（用户取消/
           // 系统弹错的交易不会被重交付）。
           if (pd.pendingCompletePurchase) {
@@ -298,10 +358,12 @@ class AppleIAPService {
           break;
         case PurchaseStatus.canceled:
           Log.info('[AppleIAP] PurchaseStatus.canceled');
-          showToastNotification(
-            message: '购买已取消',
-            type: ToastificationType.info,
-          );
+          if (!silent) {
+            showToastNotification(
+              message: '购买已取消',
+              type: ToastificationType.info,
+            );
+          }
           if (pd.pendingCompletePurchase) {
             try {
               await _iap.completePurchase(pd);
@@ -319,21 +381,31 @@ class AppleIAPService {
   /// 🔴 红线 2：verify 成功之前绝不 completePurchase。
   /// 🔴 红线 3：不解析交易金额，一切以后端 verify 返回为准。
   ///
+  /// [silent] = true 时表示此交易来自"启动自动补单 / 历史重放"，不
+  /// 打扰用户（不弹 toast，不触发 UpgradeSuccessOverlay）；但
+  /// **红线仍严格执行**：verify 成功才 finish，失败不 finish（下次
+  /// 启动自动重试）。
+  ///
   /// 失败 / 网络异常 → **不 completePurchase** → 苹果下次启动
   /// 再通过 purchaseStream 重发 → 我们再次走 verify。
   /// apple/verify 接口是幂等的（同一苹果交易号返回原订单），所以
   /// 重复执行没有问题。
-  Future<void> _handleVerifiedPurchase(PurchaseDetails pd) async {
+  Future<void> _handleVerifiedPurchase(
+    PurchaseDetails pd, {
+    required bool silent,
+  }) async {
     final jws = _extractJwsFromPurchase(pd);
     final purchaseId = pd.purchaseID ?? '';
 
     if (jws == null || jws.isEmpty) {
       Log.error('[AppleIAP] handleVerifiedPurchase: no jwsRepresentation, '
-          'productId=${pd.productID}, purchaseID=$purchaseId');
-      showToastNotification(
-        message: '支付验证异常：无法获取交易凭证，请稍后重试或联系客服',
-        type: ToastificationType.error,
-      );
+          'productId=${pd.productID}, purchaseID=$purchaseId, silent=$silent');
+      if (!silent) {
+        showToastNotification(
+          message: '支付验证异常：无法获取交易凭证，请稍后重试或联系客服',
+          type: ToastificationType.error,
+        );
+      }
       // 没有 jws 我们无法验签。为了不永远阻塞在未 finish 队列，
       // 视情况 finish 但记录严重错误，便于后续排查。
       if (pd.pendingCompletePurchase) {
@@ -354,11 +426,16 @@ class AppleIAPService {
     // 极端不一致时以后端校验为准。
     final String? userUuid = await _resolveCurrentUserUuid();
     if (userUuid == null || userUuid.isEmpty) {
-      Log.error('[AppleIAP] userUuid unavailable, skip verify, purchaseID=$purchaseId');
-      showToastNotification(
-        message: '无法获取用户信息，请重新登录后重试',
-        type: ToastificationType.error,
-      );
+      Log.error('[AppleIAP] userUuid unavailable, skip verify, '
+          'purchaseID=$purchaseId, silent=$silent');
+      // 🤫 静默模式（典型：启动时 token 还没恢复）不弹 toast，StoreKit
+      //    下次启动会再投递，届时用户可能已经登录了。
+      if (!silent) {
+        showToastNotification(
+          message: '无法获取用户信息，请重新登录后重试',
+          type: ToastificationType.error,
+        );
+      }
       // 不 finish，等用户登录后再触发 restorePurchases 补单
       return;
     }
@@ -372,33 +449,43 @@ class AppleIAPService {
       final err = verify.fold((_) => null, (e) => e);
       final errMsg = err?.msg ?? '验证失败';
       Log.error('[AppleIAP] verify failed — productId=${pd.productID}, '
-          'purchaseID=$purchaseId, msg=$errMsg');
+          'purchaseID=$purchaseId, msg=$errMsg, silent=$silent');
       // 🔴 红线 2：verify 失败，一定不要 completePurchase。
       // 下次启动 purchaseStream 会重新交付此交易，再尝试一次。
-      showToastNotification(
-        message: '支付验证失败：$errMsg',
-        type: ToastificationType.error,
-      );
+      if (!silent) {
+        showToastNotification(
+          message: '支付验证失败：$errMsg',
+          type: ToastificationType.error,
+        );
+      }
       return;
     }
 
     Log.info('[AppleIAP] verify success, productId=${pd.productID}, '
-        'purchaseID=$purchaseId');
+        'purchaseID=$purchaseId, silent=$silent');
 
-    // verify 成功 → 先 finish，再通知 UI 刷新订阅
-    // onPaymentSuccess(null) 会触发 SubscriptionSuccessListenable →
-    // desktop_home_screen 显示 UpgradeSuccessOverlay（图片+文案弹窗），
-    // 不需要额外 toast 提示成功。
+    // verify 成功 → 先 finish（红线 2），无论是否静默都必须 finish。
     if (pd.pendingCompletePurchase) {
       try {
         await _iap.completePurchase(pd);
       } catch (e, s) {
         Log.error('[AppleIAP] completePurchase failed: $e\n$s');
-        // 即使 completePurchase 抛异常，Subscription 刷新先跑起来。
-        // 苹果侧的 finish 下次启动会再补一次。
       }
     }
 
+    // 🤫 静默模式（启动补单 / 历史交易重放）：
+    //    用户早就看到过"开通成功"的提示了，这里只刷新订阅状态，
+    //    不再触发 onPaymentSuccess → UpgradeSuccessOverlay。
+    if (silent) {
+      Log.info('[AppleIAP] silent-mode: skipping onPaymentSuccess (no '
+          'UpgradeSuccessOverlay)');
+      return;
+    }
+
+    // 用户主动购买 / 恢复购买场景：调 onPaymentSuccess(null) →
+    // SubscriptionSuccessListenable._fetchAndNotify() 从服务端拉取
+    // 最新 planCode → notifyListeners() → 桌面/移动端显示
+    // UpgradeSuccessOverlay（图片+文案弹窗）。
     try {
       getIt<SubscriptionSuccessListenable>().onPaymentSuccess(null);
     } catch (e) {
