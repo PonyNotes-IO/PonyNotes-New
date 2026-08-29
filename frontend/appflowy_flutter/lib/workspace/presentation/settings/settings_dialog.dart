@@ -35,6 +35,7 @@ import 'package:appflowy/workspace/presentation/settings/widgets/members/workspa
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_notifications_view.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/web_url_hint_widget.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -56,7 +57,7 @@ const kSelfHostedTextInputFieldKey =
 const kSelfHostedWebTextInputFieldKey =
     ValueKey('self_hosted_web_url_input_text_field');
 
-class SettingsDialog extends StatelessWidget {
+class SettingsDialog extends StatefulWidget {
   SettingsDialog(
     this.user, {
     required this.dismissDialog,
@@ -70,6 +71,40 @@ class SettingsDialog extends StatelessWidget {
   final VoidCallback dismissDialog;
   final VoidCallback didLogout;
   final VoidCallback restartApp;
+
+  @override
+  State<SettingsDialog> createState() => _SettingsDialogState();
+}
+
+class _SettingsDialogState extends State<SettingsDialog> {
+  late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
+
+  @override
+  void initState() {
+    super.initState();
+    // 支付成功（桌面端 / iPad 任何路径：H5、安卓、苹果内购 verify 成功）
+    // 会触发 SubscriptionSuccessListenable → UpgradeSuccessOverlay。
+    // 此处额外监听：支付成功后自动**关闭设置 Dialog**，实现「确认
+    // 开通后 → 弹「您已升级到小马笔记专业版」浮层 + 关闭设置页」
+    // 的体验，与桌面端其他支付渠道（支付宝 / Stripe WebView 跳转后）
+    // 行为保持一致。
+    _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>();
+    _subscriptionSuccessListener = () {
+      if (!mounted) return;
+      Log.info('[SettingsDialog] subscription success — closing dialog, '
+          'message=${_subscriptionSuccessListenable.upgradeSuccessMessage}');
+      widget.dismissDialog();
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+  }
+
+  @override
+  void dispose() {
+    _subscriptionSuccessListenable
+        .removeListener(_subscriptionSuccessListener);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,9 +136,9 @@ class SettingsDialog extends StatelessWidget {
         context.read<UserWorkspaceBloc>().state.currentUserRole;
     return BlocProvider<SettingsDialogBloc>(
       create: (context) => SettingsDialogBloc(
-        user,
+        widget.user,
         currentWorkspaceMemberRole,
-        initPage: initPage,
+        initPage: widget.initPage,
       )..add(const SettingsDialogEvent.initial()),
       child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
         builder: (context, state) => FlowyDialog(
@@ -124,7 +159,7 @@ class SettingsDialog extends StatelessWidget {
                   final currentWorkspace = workspaceState.currentWorkspace;
                   return BlocProvider<SpaceBloc>(
                     create: (context) => SpaceBloc(
-                      userProfile: user,
+                      userProfile: widget.user,
                       workspaceId: currentWorkspace?.workspaceId ?? '',
                     )..add(const SpaceEvent.initial(openFirstPage: false)),
                     child: Row(
@@ -205,8 +240,8 @@ class SettingsDialog extends StatelessWidget {
       case SettingsPage.account:
         return SettingsAccountView(
           userProfile: user,
-          didLogout: didLogout,
-          didLogin: dismissDialog,
+          didLogout: widget.didLogout,
+          didLogin: widget.dismissDialog,
         );
       case SettingsPage.accountManagement:
         return AccountManagementView(
@@ -260,7 +295,7 @@ class SettingsDialog extends StatelessWidget {
       case SettingsPage.notifications:
         return const SettingsNotificationsView();
       case SettingsPage.cloud:
-        return SettingCloud(restartAppFlowy: () => restartApp());
+        return SettingCloud(restartAppFlowy: () => widget.restartApp());
       case SettingsPage.shortcuts:
         return const SettingsShortcutsView();
       case SettingsPage.ai:

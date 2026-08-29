@@ -468,6 +468,15 @@ class AppleIAPService {
       transaction: jws,
     );
 
+    // 从后端返回的 data 中提取 planCode，作为 onPaymentSuccess 的 fallback。
+    // SubscriptionSuccessListenable 会先尝试从服务端重新拉订阅（更准确，
+    // 考虑跨设备续费/合并订单等情况）；拉取失败时会退回到 fallbackPlan。
+    // 即便在最坏情况下（两次都取不到），_notifyWithPlan 也会跳过通知，
+    // 所以传 data 里的 planCode 只做额外保证。
+    final data = verify.fold((m) => m, (_) => null);
+    final fallbackPlan = (data?['planCode'] as String?) ??
+        (data?['plan_code'] as String?);
+
     if (verify.isFailure) {
       final err = verify.fold((_) => null, (e) => e);
       final errMsg = err?.msg ?? '验证失败';
@@ -485,7 +494,7 @@ class AppleIAPService {
     }
 
     Log.info('[AppleIAP] verify success, productId=${pd.productID}, '
-        'purchaseID=$purchaseId, silent=$silent');
+        'purchaseID=$purchaseId, fallbackPlan=$fallbackPlan, silent=$silent');
 
     // verify 成功 → 先 finish（红线 2），无论是否静默都必须 finish。
     if (pd.pendingCompletePurchase) {
@@ -505,12 +514,13 @@ class AppleIAPService {
       return;
     }
 
-    // 用户主动购买 / 恢复购买场景：调 onPaymentSuccess(null) →
+    // 用户主动购买 / 恢复购买场景：调 onPaymentSuccess(planCode) →
     // SubscriptionSuccessListenable._fetchAndNotify() 从服务端拉取
-    // 最新 planCode → notifyListeners() → 桌面/移动端显示
-    // UpgradeSuccessOverlay（图片+文案弹窗）。
+    // 最新 planCode → notifyListeners() → desktop_home_screen 展示
+    // UpgradeSuccessOverlay（图片+文案弹窗），同时 SettingsDialog
+    // 自动关闭。
     try {
-      getIt<SubscriptionSuccessListenable>().onPaymentSuccess(null);
+      getIt<SubscriptionSuccessListenable>().onPaymentSuccess(fallbackPlan);
     } catch (e) {
       Log.warn('[AppleIAP] notify subscription refresh failed: $e');
     }

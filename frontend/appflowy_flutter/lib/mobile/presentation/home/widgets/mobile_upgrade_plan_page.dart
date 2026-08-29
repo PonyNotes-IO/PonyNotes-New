@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -46,13 +47,37 @@ class MobileUpgradePlanPage extends StatefulWidget {
 class _MobileUpgradePlanPageState extends State<MobileUpgradePlanPage> {
   String? _lastHandledPaymentResult;
   final List<TapGestureRecognizer> _gestureRecognizers = [];
+  late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
 
   void _resetPaymentPromptDedup() {
     _lastHandledPaymentResult = null;
   }
 
   @override
+  void initState() {
+    super.initState();
+    // 与桌面端 SettingsDialog / desktop_home_screen 保持一致：
+    // 支付成功触发 SubscriptionSuccessListenable → 自动关闭移动
+    // 会员页（如果是 push 进入的话），同时 desktop_home_screen 会
+    // 在上层展示 UpgradeSuccessOverlay（浮层在所有路由之上，pop
+    // 不影响 overlay 出现）。
+    _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>();
+    _subscriptionSuccessListener = () {
+      if (!mounted) return;
+      Log.info('[MobileUpgradePlan] subscription success — closing page, '
+          'message=${_subscriptionSuccessListenable.upgradeSuccessMessage}');
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+  }
+
+  @override
   void dispose() {
+    _subscriptionSuccessListenable
+        .removeListener(_subscriptionSuccessListener);
     for (final recognizer in _gestureRecognizers) {
       recognizer.dispose();
     }
