@@ -7,6 +7,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/share_log_files.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
@@ -49,6 +50,7 @@ import 'pages/setting_ai_view/local_settings_ai_view.dart';
 import 'widgets/setting_cloud.dart';
 
 import 'package:appflowy/env/env.dart';
+import 'package:appflowy/startup/tasks/app_widget.dart';
 
 @visibleForTesting
 const kSelfHostedTextInputFieldKey =
@@ -94,7 +96,22 @@ class _SettingsDialogState extends State<SettingsDialog> {
       if (!mounted) return;
       Log.info('[SettingsDialog] subscription success — closing dialog, '
           'message=${_subscriptionSuccessListenable.upgradeSuccessMessage}');
-      widget.dismissDialog();
+      // 支付成功后关闭设置 Dialog。
+      // 直接通过 AppGlobals.rootNavKey 访问根 Navigator 来 pop，
+      // 避免Navigator.of(context) 找到嵌套 Navigator 导致
+      // pop 无效。这与 H5 支付 dismissAllDialogs() 用的是同一机制。
+      // addPostFrameCallback 延迟到下一帧执行，避免在
+      // notifyListeners 回调中直接操作路由产生时序问题。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final rootNav = AppGlobals.rootNavKey.currentState;
+        if (rootNav != null && rootNav.canPop()) {
+          rootNav.pop();
+        } else {
+          // 兜底：通过 settingsDialogKey 的 context pop
+          dismissSettingsDialog();
+        }
+      });
     };
     _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
   }
