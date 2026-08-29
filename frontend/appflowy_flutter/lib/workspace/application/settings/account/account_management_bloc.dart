@@ -1482,96 +1482,9 @@ class AccountManagementBloc
               return;
             }
 
-            // ① 创建订单（与 Android 共用，paymentType=apple_pay）
-            final productName = planConfig.planNameCn?.isNotEmpty == true
-                ? planConfig.planNameCn!
-                : planConfig.planName ?? '会员升级';
-            final createRequest = PaymentCreateRequest(
-              amount: selectedPrice.toStringAsFixed(2),
-              paymentType: PaymentType.applePay,
-              userInfo: userUuid,
-              productName: productName,
-              planId: planIdValue,
-              billingType: billingTypeStr,
-            );
-            final orderResult =
-                await PaymentApi.createPaymentOrder(createRequest);
-            if (orderResult.isFailure) {
-              final e = orderResult.fold((_) => null, (err) => err);
-              state.maybeWhen(
-                orElse: () {},
-                ready: (
-                  subscriptionInfo,
-                  planConfigs,
-                  selectedPlan,
-                  selectedDuration,
-                  selectedTab,
-                  agreedProtocols,
-                  isLoadingSubscription,
-                  isLoadingPlans,
-                  isProcessingPayment,
-                  error,
-                  paymentResult,
-                ) {
-                  emit(
-                    AccountManagementState.ready(
-                      subscriptionInfo: subscriptionInfo,
-                      planConfigs: planConfigs,
-                      selectedPlan: selectedPlan,
-                      selectedDuration: selectedDuration,
-                      selectedTab: selectedTab,
-                      agreedProtocols: agreedProtocols,
-                      isLoadingSubscription: isLoadingSubscription,
-                      isLoadingPlans: isLoadingPlans,
-                      isProcessingPayment: false,
-                      error: e?.msg ?? '创建订单失败',
-                      paymentResult: paymentResult,
-                    ),
-                  );
-                },
-              );
-              return;
-            }
-            final orderData = orderResult.fold((o) => o, (_) => null);
-            final orderNo = orderData?.orderNo ?? '';
-            if (orderNo.isEmpty) {
-              state.maybeWhen(
-                orElse: () {},
-                ready: (
-                  subscriptionInfo,
-                  planConfigs,
-                  selectedPlan,
-                  selectedDuration,
-                  selectedTab,
-                  agreedProtocols,
-                  isLoadingSubscription,
-                  isLoadingPlans,
-                  isProcessingPayment,
-                  error,
-                  paymentResult,
-                ) {
-                  emit(
-                    AccountManagementState.ready(
-                      subscriptionInfo: subscriptionInfo,
-                      planConfigs: planConfigs,
-                      selectedPlan: selectedPlan,
-                      selectedDuration: selectedDuration,
-                      selectedTab: selectedTab,
-                      agreedProtocols: agreedProtocols,
-                      isLoadingSubscription: isLoadingSubscription,
-                      isLoadingPlans: isLoadingPlans,
-                      isProcessingPayment: false,
-                      error: '订单数据为空',
-                      paymentResult: paymentResult,
-                    ),
-                  );
-                },
-              );
-              return;
-            }
-
-            // ② 统一走 PaymentUtil.pay() → _payWithApplePay → AppleIAPService
-            //    商品 ID 格式：com.ponynotes.{billingType}.{planCode}
+            // 苹果内购不走后端创建订单流程（订单落库由 /api/payment/apple/verify
+            // 接口在后端幂等完成），直接拉起 StoreKit 2 购买。
+            // 商品 ID 格式：com.ponynotes.{billingType}.{planCode}
             final productId =
                 AppleIAPService.buildAppleProductId(planCode, billingTypeStr);
             final extra = <String, dynamic>{
@@ -1583,11 +1496,17 @@ class AccountManagementBloc
               method: PaymentMethod.applePay,
               amount: (selectedPrice * 100).toInt(),
               currency: 'CNY',
-              orderId: orderNo,
+              orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
               extra: extra,
             );
 
             if (!payResult.success) {
+              // "购买已取消"是用户主动关闭，不设置 error banner（toast
+              // 已在 AppleIAPService purchaseStream 监听器里单独弹出）。
+              // 真正的失败才保留 error 文案。
+              final err = payResult.message.startsWith('购买已取消')
+                  ? null
+                  : payResult.message;
               emit(
                 AccountManagementState.ready(
                   subscriptionInfo: subscriptionInfo,
@@ -1599,7 +1518,7 @@ class AccountManagementBloc
                   isLoadingSubscription: isLoadingSubscription,
                   isLoadingPlans: isLoadingPlans,
                   isProcessingPayment: false,
-                  error: payResult.message,
+                  error: err,
                   paymentResult: paymentResult,
                 ),
               );

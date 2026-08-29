@@ -11,6 +11,8 @@ import 'package:appflowy/workspace/application/subscription_success_listenable/s
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+// ignore: implementation_imports
+import 'package:in_app_purchase_storekit/src/store_kit_2_wrappers/sk2_product_wrapper.dart';
 import 'package:toastification/toastification.dart';
 
 /// StoreKit 2 苹果内购服务（iOS / iPad / macOS 平台）。
@@ -175,14 +177,23 @@ class AppleIAPService {
   /// 参数：
   ///   [productId]    由 [buildAppleProductId] 拼接得到，必须与
   ///                  App Store Connect 中的 Product ID 一致
-  ///   [userUuid]     标准 UUID（JWT sub 字段），会被放进 appAccountToken
+  ///   [userUuid]     标准 UUID（JWT sub 字段），会被放进
+  ///                  SK2ProductPurchaseOptions.appAccountToken（红线 1）
   ///
   /// 顺序：
-  ///   purchase() → 系统扣款 → Stream 回调 → verify 后端 → 成功才 finish → 刷新订阅
+  ///   SK2Product.purchase() → **同步等待用户在系统弹窗确认/取消**
+  ///   → 返回 success / userCancelled / pending
+  ///   → Stream 异步处理 verify → 成功才 finish → 刷新订阅
   ///
-  /// 返回值：PurchaseResult.success 时调用方能给用户提示"支付成功"；
-  ///        失败时给出错误文案。App 端本身不参与成功逻辑，一切由 stream
-  ///        里的 verify 结果驱动。
+  /// 返回值：
+  ///   * PurchaseResult.success  → 用户扣款确认（后续异步 verify + overlay）
+  ///   * PurchaseResult.failure  → 用户取消 / 参数错误 / 插件异常
+  ///                               （message 以"购买已取消"开头表示取消）
+  ///   * PurchaseResult.initiated → pending（Ask to Buy 等场景，少用）
+  ///
+  /// **保证**：此方法返回时，苹果系统支付窗已经关闭，调用方 finally
+  /// 里的 setState(isProcessingPayment=false) 会可靠解除「确认协议
+  /// 开通」按钮的 loading。
   Future<PurchaseResult> purchaseProduct({
     required String productId,
     required String userUuid,
@@ -216,40 +227,50 @@ class AppleIAPService {
       Log.error('[AppleIAP] product not found: $productId');
       return PurchaseResult.failure('未找到产品：$productId');
     }
-    final product = match.first;
 
-    // 2) 把 userUuid 放进 applicationUserName，插件会把它映射为
-    //    SK2ProductPurchaseOptions.appAccountToken（红线 1）。
-    final PurchaseParam param;
+    // 2) 直接调用 StoreKit 2 原生 SK2Product.purchase()。
+    //    🔑  关键：它返回 SK2ProductPurchaseResult（success / userCancelled
+    //       / pending），是**同步等待苹果系统支付窗关闭**的——这正是
+    //       我们用来解除 UI loading 的可靠信号。
+    //
+    //    Flutter 的 InAppPurchase.buyNonConsumable 故意丢弃了这个
+    //    同步结果（只 return true/false），导致之前只能靠
+    //    purchaseStream 做跨线程分发，存在竞态 & 监听器未 attach 时
+    //    丢 canceled 事件的风险。这里直接用底层 SK2 API 解决。
     try {
-      if (Platform.isIOS || Platform.isMacOS) {
-        // Sk2PurchaseParam 声明了在 iOS 上需要的字段，插件会优先将
-        // applicationUserName 作为 appAccountToken 透传给 StoreKit 2。
-        param = Sk2PurchaseParam(
-          productDetails: product,
-          applicationUserName: userUuid,
-        );
-      } else {
-        param = PurchaseParam(productDetails: product);
+      final options = SK2ProductPurchaseOptions(appAccountToken: userUuid);
+      final SK2ProductPurchaseResult result = await SK2Product.purchase(
+        productId,
+        options: options,
+      );
+      Log.info('[AppleIAP] SK2Product.purchase result=$result, '
+          'product=$productId, appAccountToken=$userUuid');
+
+      switch (result) {
+        case SK2ProductPurchaseResult.success:
+          // ✅ 用户已在系统弹窗里确认扣款（实际是"成功触发交易创建"）。
+          //    真正的 verify → finish → UpgradeSuccessOverlay 会在
+          //    purchaseStream 监听器里异步执行（三条红线严格遵守）。
+          return PurchaseResult.success('购买发起成功');
+
+        case SK2ProductPurchaseResult.userCancelled:
+          // ❌ 用户在系统弹窗点了「取消」。
+          //    此处直接给调用方返回 failure 带特殊前缀"购买已取消"，
+          //    调用方 finally 会立即 setState(false) 解除 loading。
+          //    PurchaseStream 的 canceled 分支仍然会独立弹一个 info
+          //    toast，调用方对这个前缀做了过滤避免重复 toast。
+          return PurchaseResult.failure('购买已取消');
+
+        case SK2ProductPurchaseResult.pending:
+          // ⏳ 需家长批准（Ask to Buy）等场景。认为流程结束，解除
+          //    loading，提示用户等批准结果（会通过 purchaseStream
+          //    异步推到 purchased / restored 再处理）。
+          return PurchaseResult.initiated();
       }
     } catch (e, s) {
-      Log.error('[AppleIAP] build PurchaseParam error: $e\n$s');
-      return PurchaseResult.failure('构造内购参数失败');
+      Log.error('[AppleIAP] SK2Product.purchase exception: $e\n$s');
+      return PurchaseResult.failure('支付失败：${e.toString()}');
     }
-
-    // 3) 对于订阅类商品必须用 buyNonConsumable（或订阅接口）。
-    //    这里用更通用的 buyConsumable 会导致订阅被"消耗"，错误。
-    //    由于 in_app_purchase 订阅也是通过 buyNonConsumable 购买，
-    //    我们的 product 是 monthly / yearly 订阅，走 buyNonConsumable。
-    final bool ok = await _iap.buyNonConsumable(purchaseParam: param);
-    if (!ok) {
-      Log.error('[AppleIAP] buyNonConsumable returned false');
-      return PurchaseResult.failure('无法发起购买，请稍后重试');
-    }
-
-    Log.info('[AppleIAP] purchase initiated — product=$productId, '
-        'appAccountToken=$userUuid');
-    return PurchaseResult.initiated();
   }
 
   // ----------------------------------------------------------------
@@ -336,18 +357,24 @@ class AppleIAPService {
           break;
         case PurchaseStatus.purchased:
         case PurchaseStatus.restored:
+          // 真正的 verify / finish / overlay。
+          // ⚠️  UI loading 的解除已经在 purchaseProduct() 同步返回时
+          //     通过 finally setState 做过了，这里不再重复控制按钮
+          //     状态（严格"单一责任"：purchaseProduct 同步返回→关闭
+          //     loading；Stream 异步→ verify & 权益开通）。
           await _handleVerifiedPurchase(pd, silent: silent);
           break;
         case PurchaseStatus.error:
           Log.error('[AppleIAP] PurchaseStatus.error: ${pd.error}');
+          final errMsg = pd.error?.message ?? '未知错误';
+          // silent=false 且 purchaseProduct 同步返回未覆盖到的分支
+          // （如自动续费失败）才弹 error toast。
           if (!silent) {
             showToastNotification(
-              message: '购买失败：${pd.error?.message ?? '未知错误'}',
+              message: '购买失败：$errMsg',
               type: ToastificationType.error,
             );
           }
-          // 明确错误态也 finish，避免 StoreKit 一直留着（用户取消/
-          // 系统弹错的交易不会被重交付）。
           if (pd.pendingCompletePurchase) {
             try {
               await _iap.completePurchase(pd);
@@ -358,12 +385,8 @@ class AppleIAPService {
           break;
         case PurchaseStatus.canceled:
           Log.info('[AppleIAP] PurchaseStatus.canceled');
-          if (!silent) {
-            showToastNotification(
-              message: '购买已取消',
-              type: ToastificationType.info,
-            );
-          }
+          // 取消事件：不做 UI 反馈 — purchaseProduct 同步返回时已经把
+          // UI loading 解除了。启动补单的 canceled 也静默。
           if (pd.pendingCompletePurchase) {
             try {
               await _iap.completePurchase(pd);
@@ -591,6 +614,9 @@ class AppleIAPService {
 // 返回类型（用于调用方给用户提示）
 // ========================================================================
 
+/// 用户关闭苹果支付弹窗后的**最终事件**（与 verify 成功与否无关）。
+///
+/// 用于调用方 await 到一个"可以停止 loading"的时刻。
 class PurchaseResult {
   final bool ok;
   final bool initiated;

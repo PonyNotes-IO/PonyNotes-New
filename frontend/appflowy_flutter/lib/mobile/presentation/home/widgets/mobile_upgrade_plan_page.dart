@@ -1230,32 +1230,30 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay（StoreKit 2）内购，'
         'userUuid=$userUuid, billing=$billingType');
 
+    // 空值检查：getCurrentUserProfile() 失败或 JWT 解析失败时
+    // userUuid 为空，避免后续接口报"缺少用户信息"。
+    if (userUuid.isEmpty) {
+      showToastNotification(message: '无法获取用户信息，请重新登录后重试');
+      return;
+    }
+
     final planCode = config.planCode;
     if (planCode == null || planCode.isEmpty) {
       showToastNotification(message: '暂不支持该套餐的 Apple Pay 支付');
       return;
     }
 
-    // ① 创建订单（与 Android 共用，paymentType=apple_pay）
-    final orderData = await _createPaymentOrder(
-      paymentMethod: paymentMethod,
-      config: config,
-      price: price,
-      billingType: billingType,
-      userUuid: userUuid,
-    );
-    if (orderData == null) return; // 创建失败 toast 已在公共方法内弹出
-
-    // ② 统一走 PaymentUtil.pay() → _payWithApplePay → AppleIAPService
-    //    与 Android 调用 PaymentUtil.pay() → _payWithAlipay 保持一致
+    // 商品 ID 拼接格式：com.ponynotes.{billingType}.{planCode}
     final productId =
         AppleIAPService.buildAppleProductId(planCode, billingType);
 
+    // 苹果内购不走后端创建订单流程（订单落库由 /api/payment/apple/verify
+    // 接口在后端幂等完成），这里直接拉起 StoreKit 2 购买。
     final paymentResult = await PaymentUtil.pay(
       method: paymentMethod,
       amount: (price * 100).toInt(),
       currency: 'CNY',
-      orderId: orderData.data!.orderNo,
+      orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
       extra: {
         'productId': productId,
         'userUuid': userUuid,
@@ -1264,7 +1262,16 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
 
     if (!mounted) return;
     if (!paymentResult.success) {
-      showToastNotification(message: '支付失败: ${paymentResult.message}');
+      // "购买已取消"、"购买失败：xxx"在 AppleIAPService.purchaseStream
+      // 监听器里已经通过 showToastNotification 弹过 info/error，不再
+      // 重复弹"支付失败: 购买已取消"。其它异常（参数缺失/插件不可用）
+      // 仍然提示。
+      final msg = paymentResult.message;
+      if (!msg.startsWith('购买已取消') &&
+          !msg.startsWith('支付失败：') &&
+          !msg.startsWith('支付失败:')) {
+        showToastNotification(message: '支付失败: $msg');
+      }
     }
     // 购买发起成功后不再弹 toast — purchaseStream 监听器会在
     // verify 成功时通过 UpgradeSuccessOverlay 展示版本图片+文案，

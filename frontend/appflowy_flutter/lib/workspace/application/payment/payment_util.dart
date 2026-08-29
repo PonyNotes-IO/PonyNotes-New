@@ -133,8 +133,13 @@ class PaymentUtil {
   ///   - 'productId'  由 AppleIAPService.buildAppleProductId 生成
   ///   - 'userUuid'   当前登录用户的 UUID（JWT sub 字段）
   ///
-  /// 返回 [PaymentResult.success] 表示购买已发起（非最终结果），
-  /// 真正的 verify 成功/失败由 purchaseStream 监听器异步处理：
+  /// 返回时机：
+  ///   - 发起失败 → 立即返回 failure
+  ///   - 发起成功 → await 用户关闭苹果支付弹窗（取消/成功/失败）
+  ///                再返回 success，让调用方在 finally / after 中
+  ///                自然把「确认协议开通」的 loading 关掉。
+  ///
+  /// verify 成功/失败仍然由 purchaseStream 异步处理：
   ///   - 成功 → SubscriptionSuccessListenable → UpgradeSuccessOverlay
   ///   - 失败 → showToastNotification (error)
   static Future<PaymentResult> _payWithApplePay({
@@ -144,7 +149,9 @@ class PaymentUtil {
     Map<String, dynamic>? extra,
   }) async {
     final productId = extra?['productId'] as String?;
-    final userUuid = extra?['userInfo'] as String?;
+    // ⚠️  历史兼容：同时接受 'userUuid'（新）和 'userInfo'（旧）
+    final userUuid =
+        (extra?['userUuid'] as String?) ?? (extra?['userInfo'] as String?);
 
     if (productId == null || productId.isEmpty) {
       return PaymentResult.failure(message: '缺少产品 ID');
@@ -161,11 +168,13 @@ class PaymentUtil {
       userUuid: userUuid,
     );
 
+    // ⚠️  AppleIAPService.purchaseProduct 本身已经同步等待系统
+    //     支付窗关闭（通过 SK2Product.purchase → SK2ProductPurchaseResult），
+    //     所以这里 res.ok / res.message 就是**最终的用户关闭弹窗结
+    //     果**，直接返回 PaymentUtil 的 PaymentResult 即可，调用方
+    //     finally 会可靠地解除「确认协议开通」按钮的 loading。
     if (res.ok) {
-      return PaymentResult.success(
-        message: '购买已发起',
-        orderId: orderId,
-      );
+      return PaymentResult.success(message: res.message, orderId: orderId);
     }
     return PaymentResult.failure(message: res.message);
   }
