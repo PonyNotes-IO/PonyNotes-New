@@ -8,8 +8,10 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:toastification/toastification.dart';
 
 /// StoreKit 2 苹果内购服务（iOS / iPad / macOS 平台）。
 ///
@@ -280,6 +282,10 @@ class AppleIAPService {
           break;
         case PurchaseStatus.error:
           Log.error('[AppleIAP] PurchaseStatus.error: ${pd.error}');
+          showToastNotification(
+            message: '购买失败：${pd.error?.message ?? '未知错误'}',
+            type: ToastificationType.error,
+          );
           // 明确错误态也 finish，避免 StoreKit 一直留着（用户取消/
           // 系统弹错的交易不会被重交付）。
           if (pd.pendingCompletePurchase) {
@@ -292,6 +298,10 @@ class AppleIAPService {
           break;
         case PurchaseStatus.canceled:
           Log.info('[AppleIAP] PurchaseStatus.canceled');
+          showToastNotification(
+            message: '购买已取消',
+            type: ToastificationType.info,
+          );
           if (pd.pendingCompletePurchase) {
             try {
               await _iap.completePurchase(pd);
@@ -320,6 +330,10 @@ class AppleIAPService {
     if (jws == null || jws.isEmpty) {
       Log.error('[AppleIAP] handleVerifiedPurchase: no jwsRepresentation, '
           'productId=${pd.productID}, purchaseID=$purchaseId');
+      showToastNotification(
+        message: '支付验证异常：无法获取交易凭证，请稍后重试或联系客服',
+        type: ToastificationType.error,
+      );
       // 没有 jws 我们无法验签。为了不永远阻塞在未 finish 队列，
       // 视情况 finish 但记录严重错误，便于后续排查。
       if (pd.pendingCompletePurchase) {
@@ -341,6 +355,10 @@ class AppleIAPService {
     final String? userUuid = await _resolveCurrentUserUuid();
     if (userUuid == null || userUuid.isEmpty) {
       Log.error('[AppleIAP] userUuid unavailable, skip verify, purchaseID=$purchaseId');
+      showToastNotification(
+        message: '无法获取用户信息，请重新登录后重试',
+        type: ToastificationType.error,
+      );
       // 不 finish，等用户登录后再触发 restorePurchases 补单
       return;
     }
@@ -352,10 +370,15 @@ class AppleIAPService {
 
     if (verify.isFailure) {
       final err = verify.fold((_) => null, (e) => e);
+      final errMsg = err?.msg ?? '验证失败';
       Log.error('[AppleIAP] verify failed — productId=${pd.productID}, '
-          'purchaseID=$purchaseId, msg=${err?.msg}');
+          'purchaseID=$purchaseId, msg=$errMsg');
       // 🔴 红线 2：verify 失败，一定不要 completePurchase。
       // 下次启动 purchaseStream 会重新交付此交易，再尝试一次。
+      showToastNotification(
+        message: '支付验证失败：$errMsg',
+        type: ToastificationType.error,
+      );
       return;
     }
 
@@ -363,6 +386,9 @@ class AppleIAPService {
         'purchaseID=$purchaseId');
 
     // verify 成功 → 先 finish，再通知 UI 刷新订阅
+    // onPaymentSuccess(null) 会触发 SubscriptionSuccessListenable →
+    // desktop_home_screen 显示 UpgradeSuccessOverlay（图片+文案弹窗），
+    // 不需要额外 toast 提示成功。
     if (pd.pendingCompletePurchase) {
       try {
         await _iap.completePurchase(pd);

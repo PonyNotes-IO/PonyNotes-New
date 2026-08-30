@@ -344,13 +344,9 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     final e164Phone =
         cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
 
-    // 登录页进入时必须持有 OAuth pending token；应用内部已登录换绑则走 Cloud 接口。
+    // 有 OAuth pending token 时走 GoTrue pending 流程；没有 token 时，
+    // Apple 旧账号或应用内部账号走已登录用户的 Cloud 换绑流程。
     final pendingToken = widget.pendingToken ?? _getPendingTokenFromBloc();
-    if (!widget.logoutOnBack &&
-        (pendingToken == null || pendingToken.isEmpty)) {
-      _toast('登录状态已过期，请重新登录');
-      return;
-    }
 
     setState(() {
       _isBinding = true;

@@ -959,9 +959,9 @@ class PaymentApi {
   //      verify 返回为准。
   // ======================================================================
 
-  static const String _kAppleVerifyPath = '/api/payment/apple/verify';
-  static const String _kAppleRestorePath = '/api/payment/apple/restore';
-  static const String _kSubscriptionPath = '/api/ponynotes/order/subscription';
+  static const String _kAppleVerifyPath = '/prod-api/api/payment/apple/verify';
+  static const String _kAppleRestorePath = '/prod-api/api/payment/apple/restore';
+  static const String _kSubscriptionPath = '/prod-api/api/ponynotes/order/subscription';
 
   /// 提交 StoreKit 2 签名交易给后端验签 / 开通订阅。
   ///
@@ -988,17 +988,21 @@ class PaymentApi {
       }
       final uri = Uri.parse('$baseUrl$_kAppleVerifyPath');
 
-      final body = jsonEncode(<String, dynamic>{
+      // 后端用 @RequestParam 接收（form 或 query 字段），必须按
+      // application/x-www-form-urlencoded 发送。
+      // 如果 Content-Type 和 body 不一致，Spring 会报：
+      //   "Required request parameter 'userInfo' ... is not present"
+      final body = <String, String>{
         'userInfo': userInfo,
         'transaction': transaction,
-      });
-      Log.info('[PaymentApi] POST $uri — userInfo len=${userInfo.length}, '
-          'transaction len=${transaction.length}');
+      };
+      Log.info('[PaymentApi] POST $uri (form) — userInfo=$userInfo, '
+          'transactionLen=${transaction.length}');
 
       final response = await http.post(
         uri,
         headers: <String, String>{
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
           'X-Client-Authorization': token,
         },
         body: body,

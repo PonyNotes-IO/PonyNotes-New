@@ -330,6 +330,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
       child: BlocBuilder<SignInBloc, SignInState>(
         builder: (context, state) {
           final theme = AppFlowyTheme.of(context);
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           // 移除了 Focus 包装器 - 键盘状态错误现在由 KeyboardStateFixTask 全局处理
           // Focus 包装器可能会干扰 TextField 的正常输入
           return Scaffold(
@@ -348,96 +349,114 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   ],
                 ),
               ),
-              child: Center(
-                child: SingleChildScrollView(
-                  child: Container(
-                    width: 380,
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Logo部分 - 小马笔记 Logo
-                        const _PonyNotesLogo(
-                          size: Size.square(60),
-                        ),
-                        const VSpace(10),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(
+                        child: Container(
+                          width: 380,
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Logo部分 - 小马笔记 Logo
+                              const _PonyNotesLogo(
+                                size: Size.square(60),
+                              ),
+                              const VSpace(10),
 
-                        // 标题 - 中文化
-                        Text(
-                          LocaleKeys.welcomeToPonyNotes.tr(),
-                          style: TextStyle(
-                            color: theme.textColorScheme.primary,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                              // 标题 - 中文化
+                              Text(
+                                LocaleKeys.welcomeToPonyNotes.tr(),
+                                style: TextStyle(
+                                  color: theme.textColorScheme.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const VSpace(30),
+
+                              // 邮箱输入框和登录按钮
+                              _EmailLoginSection(
+                                checkTermsAgreement: () {
+                                  if (!_agreedToTerms) {
+                                    showToastNotification(
+                                      message: "请先同意用户协议和隐私政策",
+                                      type: ToastificationType.error,
+                                    );
+                                    return false;
+                                  }
+                                  return true;
+                                },
+                              ),
+                              const VSpace(12),
+                              // 快速开始按钮
+                              QuickStartButton(
+                                onTap: () {
+                                  context
+                                      .read<SignInBloc>()
+                                      .add(const SignInEvent.signInAsGuest());
+                                },
+                                checkTermsAgreement: () {
+                                  if (!_agreedToTerms) {
+                                    showToastNotification(
+                                      message: "请先同意用户协议和隐私政策",
+                                      type: ToastificationType.error,
+                                    );
+                                    return false;
+                                  }
+                                  return true;
+                                },
+                              ),
+                              const VSpace(20),
+                              // 分割线
+                              const _OrDivider(),
+                              const VSpace(20),
+                              // 第三方登录部分
+                              if (isAuthEnabled) ...[
+                                _CustomThirdPartyButtons(
+                                  checkTermsAgreement: () {
+                                    if (!_agreedToTerms) {
+                                      showToastNotification(
+                                        message: "请先同意用户协议和隐私政策",
+                                        type: ToastificationType.error,
+                                      );
+                                      return false;
+                                    }
+                                    return true;
+                                  },
+                                ),
+                              ],
+                              const VSpace(20),
+                              // 用户协议部分（移到三方登录下方）
+                              TermsAndConditionsSection(
+                                agreedToTerms: _agreedToTerms,
+                                onAgreedToTermsChanged: (value) {
+                                  setState(() {
+                                    _agreedToTerms = value;
+                                  });
+                                },
+                              ),
+                            ],
                           ),
                         ),
-                        const VSpace(30),
-
-                        // 邮箱输入框和登录按钮
-                        _EmailLoginSection(
-                          checkTermsAgreement: () {
-                            if (!_agreedToTerms) {
-                              showToastNotification(
-                                message: "请先同意用户协议和隐私政策",
-                                type: ToastificationType.error,
-                              );
-                              return false;
-                            }
-                            return true;
-                          },
-                        ),
-                        const VSpace(12),
-                        // 快速开始按钮
-                        QuickStartButton(
-                          onTap: () {
-                            context
-                                .read<SignInBloc>()
-                                .add(const SignInEvent.signInAsGuest());
-                          },
-                          checkTermsAgreement: () {
-                            if (!_agreedToTerms) {
-                              showToastNotification(
-                                message: "请先同意用户协议和隐私政策",
-                                type: ToastificationType.error,
-                              );
-                              return false;
-                            }
-                            return true;
-                          },
-                        ),
-                        const VSpace(20),
-                        // 分割线
-                        const _OrDivider(),
-                        const VSpace(20),
-                        // 第三方登录部分
-                        if (isAuthEnabled) ...[
-                          _CustomThirdPartyButtons(
-                            checkTermsAgreement: () {
-                              if (!_agreedToTerms) {
-                                showToastNotification(
-                                  message: "请先同意用户协议和隐私政策",
-                                  type: ToastificationType.error,
-                                );
-                                return false;
-                              }
-                              return true;
-                            },
-                          ),
-                        ],
-                        const VSpace(20),
-                        // 用户协议部分（移到三方登录下方）
-                        TermsAndConditionsSection(
-                          agreedToTerms: _agreedToTerms,
-                          onAgreedToTermsChanged: (value) {
-                            setState(() {
-                              _agreedToTerms = value;
-                            });
-                          },
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      'Powered by AppFlowy',
+                      style: TextStyle(
+                        color: isDark
+                            ? const Color(0xFF424242)
+                            : const Color(0xFFD8D8D8),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ); // Scaffold结束

@@ -136,6 +136,16 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                           });
                         },
                       ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Powered by AppFlowy',
+                        style: TextStyle(
+                          color: isDark
+                              ? const Color(0xFF424242)
+                              : const Color(0xFFD8D8D8),
+                          fontSize: 10,
+                        ),
+                      ),
                     ],
                   ),
                 ),
