@@ -7,6 +7,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart'
     show PaymentMethod, PaymentPlatformSupport, PaymentUtil;
@@ -1460,26 +1461,9 @@ class AccountManagementBloc
               );
               return;
             }
-            // 商品 ID 格式：com.ponynotes.{planCode}.{monthly|yearly}
-            final productId = 'com.ponynotes.$billingTypeStr.$planCode';
 
             final userUuid = _getUserUuid();
-            final extra = <String, dynamic>{
-              'productId': productId,
-              'planId': planConfig.id,
-              'billingType': billingTypeStr,
-              'userInfo': userUuid,
-            };
-
-            final payResult = await PaymentUtil.pay(
-              method: PaymentMethod.applePay,
-              amount: (selectedPrice * 100).toInt(),
-              currency: 'CNY',
-              orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
-              extra: extra,
-            );
-
-            if (!payResult.success) {
+            if (userUuid.isEmpty) {
               emit(
                 AccountManagementState.ready(
                   subscriptionInfo: subscriptionInfo,
@@ -1491,7 +1475,50 @@ class AccountManagementBloc
                   isLoadingSubscription: isLoadingSubscription,
                   isLoadingPlans: isLoadingPlans,
                   isProcessingPayment: false,
-                  error: payResult.message,
+                  error: '无法获取用户信息，请重新登录后重试',
+                  paymentResult: paymentResult,
+                ),
+              );
+              return;
+            }
+
+            // 苹果内购不走后端创建订单流程（订单落库由 /api/payment/apple/verify
+            // 接口在后端幂等完成），直接拉起 StoreKit 2 购买。
+            // 商品 ID 格式：com.ponynotes.{billingType}.{planCode}
+            final productId =
+                AppleIAPService.buildAppleProductId(planCode, billingTypeStr);
+            final extra = <String, dynamic>{
+              'productId': productId,
+              'userUuid': userUuid,
+            };
+
+            final payResult = await PaymentUtil.pay(
+              method: PaymentMethod.applePay,
+              amount: (selectedPrice * 100).toInt(),
+              currency: 'CNY',
+              orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
+              extra: extra,
+            );
+
+            if (!payResult.success) {
+              // "购买已取消"是用户主动关闭，不设置 error banner（toast
+              // 已在 AppleIAPService purchaseStream 监听器里单独弹出）。
+              // 真正的失败才保留 error 文案。
+              final err = payResult.message.startsWith('购买已取消')
+                  ? null
+                  : payResult.message;
+              emit(
+                AccountManagementState.ready(
+                  subscriptionInfo: subscriptionInfo,
+                  planConfigs: planConfigs,
+                  selectedPlan: selectedPlan,
+                  selectedDuration: selectedDuration,
+                  selectedTab: selectedTab,
+                  agreedProtocols: agreedProtocols,
+                  isLoadingSubscription: isLoadingSubscription,
+                  isLoadingPlans: isLoadingPlans,
+                  isProcessingPayment: false,
+                  error: err,
                   paymentResult: paymentResult,
                 ),
               );
@@ -1680,6 +1707,7 @@ class AccountManagementBloc
             final payExtra = <String, dynamic>{
               'payUrl': payUrl,
               'plan': planCode,
+              'userInfo': userUuid,
             };
 
             final payResult = await PaymentUtil.pay(

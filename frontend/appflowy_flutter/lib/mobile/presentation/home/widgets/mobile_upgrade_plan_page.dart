@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -46,13 +47,37 @@ class MobileUpgradePlanPage extends StatefulWidget {
 class _MobileUpgradePlanPageState extends State<MobileUpgradePlanPage> {
   String? _lastHandledPaymentResult;
   final List<TapGestureRecognizer> _gestureRecognizers = [];
+  late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
 
   void _resetPaymentPromptDedup() {
     _lastHandledPaymentResult = null;
   }
 
   @override
+  void initState() {
+    super.initState();
+    // 与桌面端 SettingsDialog / desktop_home_screen 保持一致：
+    // 支付成功触发 SubscriptionSuccessListenable → 自动关闭移动
+    // 会员页（如果是 push 进入的话），同时 desktop_home_screen 会
+    // 在上层展示 UpgradeSuccessOverlay（浮层在所有路由之上，pop
+    // 不影响 overlay 出现）。
+    _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>();
+    _subscriptionSuccessListener = () {
+      if (!mounted) return;
+      Log.info('[MobileUpgradePlan] subscription success — closing page, '
+          'message=${_subscriptionSuccessListenable.upgradeSuccessMessage}');
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+  }
+
+  @override
   void dispose() {
+    _subscriptionSuccessListenable
+        .removeListener(_subscriptionSuccessListener);
     for (final recognizer in _gestureRecognizers) {
       recognizer.dispose();
     }
@@ -1059,7 +1084,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     try {
       final userProfile = await UserBackendService.getCurrentUserProfile();
       final userUuid = userProfile.fold((p) => _extractUserId(p), (_) => '');
-
+      Log.info('[MobileUpgradePlan] iOS 直接调用 Apple Pay');
       if (Platform.isIOS) {
         // iPhone/iPad 直接调用 Apple Pay 内购
         Log.info('[MobileUpgradePlan] iOS 直接调用 Apple Pay');
@@ -1166,65 +1191,24 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
   }
 
-  Future<void> _handleIOSPayment(
-    PaymentMethod paymentMethod,
-    RemotePlan config,
-    double price,
-    String billingType,
-    String userUuid,
-  ) async {
-    Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay（StoreKit 2）内购，'
-        'userUuid=$userUuid, billing=$billingType');
-
-    final planCode = config.planCode;
-    if (planCode == null || planCode.isEmpty) {
-      showToastNotification(message: '暂不支持该套餐的 Apple Pay 支付');
-      return;
-    }
-
-    // AppleIAPService 启动监听器会立即初始化一次，保险起见再补一次
-    // (重复 initialize 会直接返回)。
-    await AppleIAPService.instance.initialize();
-
-    // ====================================================================
-    // 商品 ID 拼接格式：com.ponynotes.{billingType}.{planCode}
-    // 必须与 App Store Connect 和 后端 payment.apple.products 的 key
-    // 完全一致，否则 verify 返回"未配置的苹果商品"。
-    // 例如：com.ponynotes.monthly.pro、com.ponynotes.yearly.pro
-    // ====================================================================
-    final productId =
-        AppleIAPService.buildAppleProductId(planCode, billingType);
-
-    final res = await AppleIAPService.instance.purchaseProduct(
-      productId: productId,
-      userUuid: userUuid,
-    );
-
-    if (!mounted) return;
-    if (res.ok) {
-      showToastNotification(message: res.message);
-    } else {
-      showToastNotification(message: '支付失败: ${res.message}');
-    }
-  }
-
-  Future<void> _handleAndroidPayment(
-    PaymentMethod paymentMethod,
-    RemotePlan config,
-    double price,
-    String billingType,
-    String userUuid,
-  ) async {
-    Log.info('[MobileUpgradePlan] Android 使用 $paymentMethod 支付');
-
-    // MobileUpgradePlanPage 只在移动端使用，Android 必须走 alipay_app
-    // （后端返回 orderInfo 供 Tobias 唤起支付宝 App）。
-    // 未来扩展 Android 微信支付时同样应保持 wechat_pay / alipay_app
-    // 与 App 原生支付相匹配，不要退化为 H5。
+  /// 创建支付订单（Android / iOS 共用）。
+  ///
+  /// 支付方式与平台对应关系：
+  ///   - iOS     → apple_pay（App Store 内购）
+  ///   - Android → alipay_app（支付宝 App 支付）/ wechat_pay
+  ///
+  /// 返回完整订单数据（含 orderNo、payUrl），创建失败时返回 null 并已弹出 toast。
+  Future<PaymentCreateResponse?> _createPaymentOrder({
+    required PaymentMethod paymentMethod,
+    required RemotePlan config,
+    required double price,
+    required String billingType,
+    required String userUuid,
+  }) async {
     final paymentType = switch (paymentMethod) {
+      PaymentMethod.applePay => PaymentType.applePay,
       PaymentMethod.wechatPay => PaymentType.wechatPay,
       PaymentMethod.alipay => PaymentType.alipayApp,
-      _ => PaymentType.alipayApp,
     };
 
     final createRequest = PaymentCreateRequest(
@@ -1239,35 +1223,117 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
 
     Log.info(
-        '[MobileUpgradePlan] 创建支付订单: plan=${config.planName}, price=$price, billingType=$billingType, paymentType=$paymentType');
+        '[MobileUpgradePlan] 创建支付订单: plan=${config.planName}, '
+        'price=$price, billingType=$billingType, paymentType=$paymentType');
 
     final orderResult = await PaymentApi.createPaymentOrder(createRequest);
 
     if (orderResult.isFailure) {
       final error = orderResult.fold((_) => null, (e) => e);
       showToastNotification(message: '创建订单失败: ${error?.msg ?? '未知错误'}');
-      return;
+      return null;
     }
 
     final orderData = orderResult.fold((r) => r, (_) => null);
     if (orderData?.data == null) {
       showToastNotification(message: '订单数据为空');
-      return;
+      return null;
     }
 
     final orderNo = orderData!.data!.orderNo;
     Log.info('[MobileUpgradePlan] 订单创建成功: orderNo=$orderNo');
+    return orderData;
+  }
 
+  Future<void> _handleIOSPayment(
+    PaymentMethod paymentMethod,
+    RemotePlan config,
+    double price,
+    String billingType,
+    String userUuid,
+  ) async {
+    Log.info('[MobileUpgradePlan] iOS 使用 Apple Pay（StoreKit 2）内购，'
+        'userUuid=$userUuid, billing=$billingType');
+
+    // 空值检查：getCurrentUserProfile() 失败或 JWT 解析失败时
+    // userUuid 为空，避免后续接口报"缺少用户信息"。
+    if (userUuid.isEmpty) {
+      showToastNotification(message: '无法获取用户信息，请重新登录后重试');
+      return;
+    }
+
+    final planCode = config.planCode;
+    if (planCode == null || planCode.isEmpty) {
+      showToastNotification(message: '暂不支持该套餐的 Apple Pay 支付');
+      return;
+    }
+
+    // 商品 ID 拼接格式：com.ponynotes.{billingType}.{planCode}
+    final productId =
+        AppleIAPService.buildAppleProductId(planCode, billingType);
+
+    // 苹果内购不走后端创建订单流程（订单落库由 /api/payment/apple/verify
+    // 接口在后端幂等完成），这里直接拉起 StoreKit 2 购买。
+    final paymentResult = await PaymentUtil.pay(
+      method: paymentMethod,
+      amount: (price * 100).toInt(),
+      currency: 'CNY',
+      orderId: 'ios_${DateTime.now().millisecondsSinceEpoch}',
+      extra: {
+        'productId': productId,
+        'userUuid': userUuid,
+      },
+    );
+
+    if (!mounted) return;
+    if (!paymentResult.success) {
+      // "购买已取消"、"购买失败：xxx"在 AppleIAPService.purchaseStream
+      // 监听器里已经通过 showToastNotification 弹过 info/error，不再
+      // 重复弹"支付失败: 购买已取消"。其它异常（参数缺失/插件不可用）
+      // 仍然提示。
+      final msg = paymentResult.message;
+      if (!msg.startsWith('购买已取消') &&
+          !msg.startsWith('支付失败：') &&
+          !msg.startsWith('支付失败:')) {
+        showToastNotification(message: '支付失败: $msg');
+      }
+    }
+    // 购买发起成功后不再弹 toast — purchaseStream 监听器会在
+    // verify 成功时通过 UpgradeSuccessOverlay 展示版本图片+文案，
+    // verify 失败时弹出错误 toast。
+  }
+
+  Future<void> _handleAndroidPayment(
+    PaymentMethod paymentMethod,
+    RemotePlan config,
+    double price,
+    String billingType,
+    String userUuid,
+  ) async {
+    Log.info('[MobileUpgradePlan] Android 使用 $paymentMethod 支付');
+
+    // ① 创建订单（与 iOS 共用）
+    final orderData = await _createPaymentOrder(
+      paymentMethod: paymentMethod,
+      config: config,
+      price: price,
+      billingType: billingType,
+      userUuid: userUuid,
+    );
+    if (orderData == null) return;
+
+    // ② 用订单中的 payUrl 唤起支付宝 App 支付
     final extra = <String, dynamic>{
       'payUrl': orderData.data?.payUrl,
       'plan': config.planName,
+      'userUuid': userUuid,
     };
 
     final paymentResult = await PaymentUtil.pay(
       method: paymentMethod,
       amount: (price * 100).toInt(),
       currency: 'CNY',
-      orderId: orderNo,
+      orderId: orderData.data!.orderNo,
       extra: extra,
     );
 

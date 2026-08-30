@@ -7,6 +7,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/webview2_task.dart';
+import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -16,7 +17,6 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tobias/tobias.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -95,10 +95,6 @@ class PaymentUtil {
   static const MethodChannel _channel =
       MethodChannel('com.ponynotes.payment/channel');
 
-  static InAppPurchase get _inAppPurchaseInstance => InAppPurchase.instance;
-
-  static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
-
   static Future<PaymentResult> pay({
     required PaymentMethod method,
     required int amount,
@@ -131,269 +127,56 @@ class PaymentUtil {
     }
   }
 
+  /// Apple Pay（StoreKit 2）— 委托 [AppleIAPService] 处理。
+  ///
+  /// extra 必传字段：
+  ///   - 'productId'  由 AppleIAPService.buildAppleProductId 生成
+  ///   - 'userUuid'   当前登录用户的 UUID（JWT sub 字段）
+  ///
+  /// 返回时机：
+  ///   - 发起失败 → 立即返回 failure
+  ///   - 发起成功 → await 用户关闭苹果支付弹窗（取消/成功/失败）
+  ///                再返回 success，让调用方在 finally / after 中
+  ///                自然把「确认协议开通」的 loading 关掉。
+  ///
+  /// verify 成功/失败仍然由 purchaseStream 异步处理：
+  ///   - 成功 → SubscriptionSuccessListenable → UpgradeSuccessOverlay
+  ///   - 失败 → showToastNotification (error)
   static Future<PaymentResult> _payWithApplePay({
     required int amount,
     required String currency,
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
-    if (!Platform.isMacOS && !Platform.isIOS) {
-      return PaymentResult.failure(message: '当前平台不支持 App Store 内购');
+    final productId = extra?['productId'] as String?;
+    // ⚠️  历史兼容：同时接受 'userUuid'（新）和 'userInfo'（旧）
+    final userUuid =
+        (extra?['userUuid'] as String?) ?? (extra?['userInfo'] as String?);
+
+    if (productId == null || productId.isEmpty) {
+      return PaymentResult.failure(message: '缺少产品 ID');
+    }
+    if (userUuid == null || userUuid.isEmpty) {
+      return PaymentResult.failure(message: '缺少用户信息');
     }
 
-    try {
-      final bool available = await _inAppPurchaseInstance.isAvailable();
-      if (!available) {
-        return PaymentResult.failure(message: 'App Store 内购不可用');
-      }
+    // 确保 purchaseStream 监听器已启动（重复调用安全）
+    await AppleIAPService.instance.initialize();
 
-      final String? productId = extra?['productId'] as String?;
-      if (productId == null || productId.isEmpty) {
-        Log.error('Apple Pay: 缺少 productId，无法发起内购');
-        return PaymentResult.failure(message: '缺少产品 ID');
-      }
+    final res = await AppleIAPService.instance.purchaseProduct(
+      productId: productId,
+      userUuid: userUuid,
+    );
 
-      Log.info('Apple Pay: 开始购买产品，productId: $productId, orderId: $orderId');
-
-      if (_purchaseSubscription == null) {
-        _purchaseSubscription = _inAppPurchaseInstance.purchaseStream.listen(
-          (List<PurchaseDetails> purchaseDetailsList) {
-            _handlePurchaseUpdates(purchaseDetailsList);
-          },
-          onDone: () {
-            Log.info('Apple Pay: 购买流已关闭');
-            _purchaseSubscription?.cancel();
-            _purchaseSubscription = null;
-          },
-          onError: (error) {
-            Log.error('Apple Pay: 购买流错误: $error');
-          },
-        );
-      }
-
-      final ProductDetailsResponse productDetailResponse =
-          await _inAppPurchaseInstance.queryProductDetails({productId});
-
-      if (productDetailResponse.error != null) {
-        Log.error('Apple Pay: 查询产品失败: ${productDetailResponse.error}');
-        return PaymentResult.failure(
-          message: '查询产品失败: ${productDetailResponse.error?.message ?? '未知错误'}',
-        );
-      }
-
-      if (productDetailResponse.productDetails.isEmpty) {
-        Log.error('Apple Pay: 未找到产品: $productId');
-        return PaymentResult.failure(message: '未找到产品: $productId');
-      }
-
-      final ProductDetails productDetails = productDetailResponse.productDetails.first;
-
-      final PurchaseParam purchaseParam = PurchaseParam(
-        productDetails: productDetails,
-      );
-
-      // App Store Connect 配置的是"消耗型项目"，必须使用 buyConsumable
-      final bool purchaseInitiated = await _inAppPurchaseInstance.buyConsumable(
-        purchaseParam: purchaseParam,
-        autoConsume: true,
-      );
-
-      if (!purchaseInitiated) {
-        Log.error('Apple Pay: 购买请求失败');
-        return PaymentResult.failure(message: '购买请求失败');
-      }
-
-      Log.info('Apple Pay: 购买请求已发起，等待用户确认');
-
-      return PaymentResult.success(
-        message: '购买请求已发起，请完成支付',
-        orderId: orderId,
-      );
-    } catch (e, s) {
-      Log.error('Apple Pay 支付异常: $e\n$s');
-      return PaymentResult.failure(message: 'Apple Pay 支付异常: $e');
+    // ⚠️  AppleIAPService.purchaseProduct 本身已经同步等待系统
+    //     支付窗关闭（通过 SK2Product.purchase → SK2ProductPurchaseResult），
+    //     所以这里 res.ok / res.message 就是**最终的用户关闭弹窗结
+    //     果**，直接返回 PaymentUtil 的 PaymentResult 即可，调用方
+    //     finally 会可靠地解除「确认协议开通」按钮的 loading。
+    if (res.ok) {
+      return PaymentResult.success(message: res.message, orderId: orderId);
     }
-  }
-
-  static void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
-    for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
-      Log.info('Apple Pay: 收到购买更新，productId: ${purchaseDetails.productID}, status: ${purchaseDetails.status}');
-
-      if (purchaseDetails.status == PurchaseStatus.pending) {
-        Log.info('Apple Pay: 购买进行中...');
-      } else if (purchaseDetails.status == PurchaseStatus.purchased ||
-          purchaseDetails.status == PurchaseStatus.restored) {
-        Log.info('Apple Pay: 购买成功');
-        _onPurchaseSuccess(purchaseDetails);
-        if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchaseInstance.completePurchase(purchaseDetails);
-        }
-      } else if (purchaseDetails.status == PurchaseStatus.error) {
-        Log.error('Apple Pay: 购买失败: ${purchaseDetails.error}');
-        if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchaseInstance.completePurchase(purchaseDetails);
-        }
-      } else if (purchaseDetails.status == PurchaseStatus.canceled) {
-        Log.info('Apple Pay: 用户取消了购买');
-        if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchaseInstance.completePurchase(purchaseDetails);
-        }
-      }
-    }
-  }
-
-  static Future<void> _onPurchaseSuccess(PurchaseDetails purchaseDetails) async {
-    try {
-      final productId = purchaseDetails.productID;
-      final transactionId = purchaseDetails.purchaseID;
-      Log.info('Apple Pay: 处理购买成功，productId: $productId, transactionId: $transactionId');
-
-      await _verifyAndUpdateSubscription(productId, transactionId);
-    } catch (e, s) {
-      Log.error('Apple Pay: 处理购买成功异常: $e\n$s');
-    }
-  }
-
-  static Future<void> _verifyAndUpdateSubscription(String productId, String? transactionId) async {
-    try {
-      final planInfo = _parseProductId(productId);
-      if (planInfo == null) {
-        Log.error('Apple Pay: 无法解析 productId: $productId');
-        return;
-      }
-
-      final planId = planInfo['planId'] ?? '';
-      final billingType = planInfo['billingType'] ?? 'monthly';
-      final planName = planInfo['planName'] ?? '';
-
-      Log.info('Apple Pay: 调用后端更新会员订阅，planId: $planId, billingType: $billingType, planName: $planName');
-
-      await _updateSubscription(planId, billingType, planName, transactionId);
-    } catch (e, s) {
-      Log.error('Apple Pay: 验证并更新订阅异常: $e\n$s');
-    }
-  }
-
-  static Map<String, String>? _parseProductId(String productId) {
-    // 解析 App Store Connect 产品 ID 格式：com.ponynotes.{planName}.{billingType}
-    // 实际产品 ID 中的 planName：standard / professional / premium
-    // 需要反向映射回后端可识别的 planName：standard / pro / hiclass
-    if (productId.startsWith('com.ponynotes.')) {
-      final parts = productId.split('.');
-      // com.ponynotes.xxx.yyy → 至少 4 段
-      if (parts.length >= 4) {
-        final billingType = parts.last; // monthly / yearly
-        final applePlanName = parts[parts.length - 2]; // standard / professional / premium
-
-        // Apple 产品 ID 名称 → 后端 planId + planName
-        // 后端 planName 需要被 SubscriptionSuccessListenable 识别
-        const applePlanToBackend = <String, Map<String, String>>{
-          'standard': {'planId': '2', 'planName': 'standard'},
-          'professional': {'planId': '3', 'planName': 'pro'},
-          'premium': {'planId': '4', 'planName': 'hiclass'},
-        };
-
-        final backendInfo = applePlanToBackend[applePlanName];
-        if (backendInfo != null) {
-          return {
-            'planId': backendInfo['planId']!,
-            'billingType': billingType,
-            'planName': backendInfo['planName']!,
-          };
-        }
-
-        Log.error('Apple Pay: 无法从 productId 中识别套餐: $productId, planName=$applePlanName');
-        return null;
-      }
-    }
-
-    // 兼容旧格式：数字产品 ID（000001-000006）
-    const numericIdMap = <String, Map<String, String>>{
-      '000001': {'planId': '2', 'billingType': 'monthly', 'planName': 'standard'},
-      '000002': {'planId': '3', 'billingType': 'monthly', 'planName': 'pro'},
-      '000003': {'planId': '4', 'billingType': 'monthly', 'planName': 'hiclass'},
-      '000004': {'planId': '2', 'billingType': 'yearly', 'planName': 'standard'},
-      '000005': {'planId': '3', 'billingType': 'yearly', 'planName': 'pro'},
-      '000006': {'planId': '4', 'billingType': 'yearly', 'planName': 'hiclass'},
-    };
-
-    if (numericIdMap.containsKey(productId)) {
-      return numericIdMap[productId];
-    }
-
-    Log.error('Apple Pay: 无法解析 productId 格式: $productId');
-    return null;
-  }
-
-  static Future<void> _updateSubscription(String planId, String billingType, String planName, String? transactionId) async {
-    try {
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
-      );
-
-      final baseUrl = cloudConfig.serverUrl;
-      if (baseUrl.isEmpty) {
-        Log.error('Apple Pay: serverUrl 为空');
-        return;
-      }
-
-      final userProfileResult = await UserBackendService.getCurrentUserProfile();
-      final UserProfilePB userProfile = userProfileResult.fold(
-        (profile) => profile,
-        (error) => throw error,
-      );
-
-      String? accessToken;
-      try {
-        final decoded = jsonDecode(userProfile.token);
-        if (decoded is Map<String, dynamic>) {
-          accessToken = decoded['access_token'] as String?;
-        }
-      } catch (_) {
-        accessToken = userProfile.token;
-      }
-
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.error('Apple Pay: 无法提取 access_token');
-        return;
-      }
-
-      final uri = Uri.parse('$baseUrl/api/subscription/subscribe');
-
-      final requestBody = jsonEncode({
-        'plan_id': int.tryParse(planId) ?? 1,
-        'billing_type': billingType,
-        'transaction_id': transactionId,
-      });
-
-      final response = await http.post(
-        uri,
-        headers: <String, String>{
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: requestBody,
-      );
-
-      if (response.statusCode == 200) {
-        Log.info('Apple Pay: 会员订阅更新成功！planName: $planName');
-        // 通知 UI 订阅成功，触发 AccountManagementBloc 刷新订阅信息
-        try {
-          getIt<SubscriptionSuccessListenable>().onPaymentSuccess(planName);
-        } catch (e) {
-          Log.error('Apple Pay: 通知 SubscriptionSuccessListenable 失败: $e');
-        }
-      } else {
-        final errorMsg = response.body.isNotEmpty
-            ? response.body
-            : '更新会员订阅失败 (HTTP ${response.statusCode})';
-        Log.error('Apple Pay: $errorMsg');
-      }
-    } catch (e, s) {
-      Log.error('Apple Pay: 更新订阅异常: $e\n$s');
-    }
+    return PaymentResult.failure(message: res.message);
   }
 
   static Future<PaymentResult> _payWithWeChat({
