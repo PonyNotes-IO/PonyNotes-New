@@ -1030,29 +1030,30 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        GestureDetector(
-                          onTap: onUpgrade,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFADECA),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '会员升级',
-                              style: theme.textStyle.heading4
-                                  .standard(
-                                    color: const Color(0xFF4B1B03),
-                                  )
-                                  .copyWith(
-                                      fontSize: 12.0,
-                                      fontWeight: FontWeight.w600),
+                        if (!io.Platform.isAndroid)
+                          GestureDetector(
+                            onTap: onUpgrade,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFADECA),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '会员升级',
+                                style: theme.textStyle.heading4
+                                    .standard(
+                                      color: const Color(0xFF4B1B03),
+                                    )
+                                    .copyWith(
+                                        fontSize: 12.0,
+                                        fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ],
