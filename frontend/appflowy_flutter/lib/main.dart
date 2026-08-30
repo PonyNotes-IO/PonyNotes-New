@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/widgets.dart';
+import 'package:pdfrx/pdfrx.dart';
 
 import 'startup/startup.dart';
 import 'startup/startup_shell.dart';
@@ -52,6 +53,7 @@ Future<void> main(List<String> args) async {
   // 鼠标选工具偏移、绘图轨迹错位、画布整体漂移。改用标准 WidgetsFlutterBinding 彻底修复。
   // 代价：App 全局缩放(Cmd +/-)暂停用（相关调用已在 hotkeys/windows 中安全屏蔽，按键不再生效也不崩溃）。
   WidgetsFlutterBinding.ensureInitialized();
+  pdfrxFlutterInitialize();
   PerformanceTrace.mark('flutter_binding_ready');
 
   if (Platform.isAndroid || Platform.isIOS) {

@@ -45,6 +45,7 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
   void initState() {
     super.initState();
     _showControls = widget.showControls;
+    _initializePdf();
   }
 
   Future<void> _initializePdf() async {
