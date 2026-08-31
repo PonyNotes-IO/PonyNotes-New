@@ -1255,8 +1255,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             }
           });
         },
-        child: FlowyTooltip(
-          message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+        child: Semantics(
+          label: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+          button: true,
           child: SizedBox.square(
             dimension: 28,
             child: FlowyButton(
