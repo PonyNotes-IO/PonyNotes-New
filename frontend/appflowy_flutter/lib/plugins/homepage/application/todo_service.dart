@@ -19,10 +19,10 @@ import 'package:flutter/foundation.dart';
 
 @visibleForTesting
 bool isNewCalendarEvent(
-  Set<(String, String)> seenEvents,
+  Set<String> seenRowIds,
   CalendarEventPB event,
 ) =>
-    seenEvents.add((event.rowMeta.id, event.dateFieldId));
+    seenRowIds.add(event.rowMeta.id);
 
 class TodoService {
   static TodoService? _instance;
@@ -90,7 +90,7 @@ class TodoService {
   Future<List<TodoItem>> getTodosForDate(DateTime displayDate) async {
     final target = DateTime(displayDate.year, displayDate.month, displayDate.day);
     final todos = <TodoItem>[];
-    final seenEvents = <(String, String)>{};
+    final seenRowIds = <String>{};
     final calendarViewIds = await _resolveCalendarViewIds();
 
     for (final viewId in calendarViewIds) {
@@ -100,7 +100,7 @@ class TodoService {
       await result.fold(
         (events) async {
           for (final eventPB in events.items) {
-            if (!isNewCalendarEvent(seenEvents, eventPB)) {
+            if (!isNewCalendarEvent(seenRowIds, eventPB)) {
               continue;
             }
             final todo = _convertCalendarEventToTodo(eventPB);
@@ -283,14 +283,14 @@ class TodoService {
     
     try {
       final calendarTodos = <TodoItem>[];
-      final seenEvents = <(String, String)>{};
+      final seenRowIds = <String>{};
       for (final viewId in calendarViewIds) {
         final payload = CalendarEventRequestPB.create()..viewId = viewId;
         final result = await DatabaseEventGetAllCalendarEvents(payload).send();
         result.fold(
           (events) {
             for (final eventPB in events.items) {
-              if (!isNewCalendarEvent(seenEvents, eventPB)) {
+              if (!isNewCalendarEvent(seenRowIds, eventPB)) {
                 continue;
               }
               final todo = _convertCalendarEventToTodo(eventPB);

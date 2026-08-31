@@ -39,7 +39,7 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+          padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
           child: SizedBox(
             height: 40,
             child: Stack(
@@ -68,14 +68,14 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isCompact = constraints.maxWidth < 980;
                 final tableWidth = constraints.maxWidth;
                 return SizedBox(
                   width: tableWidth,
-                  child: Container(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
