@@ -40,11 +40,18 @@ class _PdfBackground extends StatefulWidget {
 }
 
 class _PdfBackgroundState extends State<_PdfBackground> {
+  // PDF 页面视图内部包含异步 FutureBuilder/PdfPageView。
+  // 缓存这棵子树，避免父级笔迹重绘时重新创建异步视图导致底图闪烁。
+  Widget? _pdfPageWidget;
+
   @override
   void initState() {
     super.initState();
     // 预加载PDF，确保显示
     widget.pdfImage.preloadPdfDocument();
+    _pdfPageWidget = widget.pdfImage.buildPdfPageWidget(
+      boxFit: BoxFit.contain,
+    );
   }
 
   @override
@@ -56,11 +63,19 @@ class _PdfBackgroundState extends State<_PdfBackground> {
     if (widget.pdfImage != oldWidget.pdfImage) {
       debugPrint('🔄[PdfBackground] pdfImage changed, reloading...');
       widget.pdfImage.resetLoadStateAndPreload();
+      _pdfPageWidget = widget.pdfImage.buildPdfPageWidget(
+        boxFit: BoxFit.contain,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 热重载可能复用已有 State，兜底确保缓存字段已初始化。
+    final pdfPageWidget = _pdfPageWidget ??= widget.pdfImage.buildPdfPageWidget(
+      boxFit: BoxFit.contain,
+    );
+
     return Positioned(
       left: widget.offsetX,
       top: widget.offsetY,
@@ -76,9 +91,7 @@ class _PdfBackgroundState extends State<_PdfBackground> {
               width: widget.pageSize.width,
               height: widget.pageSize.height,
               child: RepaintBoundary(
-                child: widget.pdfImage.buildPdfPageWidget(
-                  boxFit: BoxFit.contain,
-                ),
+                child: pdfPageWidget,
               ),
             ),
           ),
