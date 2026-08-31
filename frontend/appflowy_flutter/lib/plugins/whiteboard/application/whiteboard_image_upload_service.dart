@@ -234,6 +234,9 @@ class WhiteboardImageUploadService {
           'uploadError': e.toString(),
         };
       }
+      // 不能把单图失败伪装成成功：上层需要保留本次待上传数据并在下一次
+      // 保存时重试，否则会打印“全部上传完成”但云端没有对应图片。
+      rethrow;
     }
   }
 

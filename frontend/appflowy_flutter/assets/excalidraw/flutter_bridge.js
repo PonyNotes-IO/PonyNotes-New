@@ -66,6 +66,150 @@
         ? initialHostTheme
         : null;
     let _pendingHostTheme = null;
+    let _iosImageRefreshAPI = null;
+
+    const isIOSWebView = () => {
+        const userAgent = navigator.userAgent || '';
+        return /iPad|iPhone|iPod/.test(userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    };
+
+    const getImageViewportSnapshot = (element, appState) => {
+        const zoom = Number(appState?.zoom?.value) || 1;
+        const offsetLeft = Number(appState?.offsetLeft) || 0;
+        const offsetTop = Number(appState?.offsetTop) || 0;
+        const scrollX = Number(appState?.scrollX) || 0;
+        const scrollY = Number(appState?.scrollY) || 0;
+        const width = Number(appState?.width) || 0;
+        const height = Number(appState?.height) || 0;
+        const left = (Number(element.x) + scrollX) * zoom + offsetLeft;
+        const top = (Number(element.y) + scrollY) * zoom + offsetTop;
+        const right = left + Number(element.width) * zoom;
+        const bottom = top + Number(element.height) * zoom;
+        const viewportRight = offsetLeft + width;
+        const viewportBottom = offsetTop + height;
+
+        return {
+            elementId: element.id,
+            fileId: element.fileId,
+            status: element.status,
+            x: element.x,
+            y: element.y,
+            width: element.width,
+            height: element.height,
+            scrollX,
+            scrollY,
+            zoom,
+            viewportWidth: width,
+            viewportHeight: height,
+            centerViewportX: (left + right) / 2,
+            centerViewportY: (top + bottom) / 2,
+            isVisible: right > offsetLeft && left < viewportRight &&
+                bottom > offsetTop && top < viewportBottom,
+        };
+    };
+
+    // Keep a small iOS-only fallback around the Excalidraw image cache. The
+    // bundled editor now waits for bitmap decoding itself; this hook adds
+    // diagnostics and corrects the viewport if a native picker changed it.
+    const installIOSImageDecodeRefresh = (api) => {
+        if (!isIOSWebView() || !api || _iosImageRefreshAPI === api ||
+            typeof api.onChange !== 'function' || typeof api.refresh !== 'function') {
+            return;
+        }
+
+        _iosImageRefreshAPI = api;
+        const decodedFileIds = new Set();
+
+        api.onChange((elements, appState, files) => {
+            for (const element of elements || []) {
+                if (!element || element.isDeleted || element.type !== 'image' ||
+                    element.status !== 'pending' ||
+                    !element.fileId || decodedFileIds.has(element.fileId)) {
+                    continue;
+                }
+
+                const file = files && files[element.fileId];
+                if (!file || typeof file.dataURL !== 'string' ||
+                    !file.dataURL.startsWith('data:image/')) {
+                    continue;
+                }
+
+                decodedFileIds.add(element.fileId);
+                const image = new Image();
+                const loaded = new Promise((resolve, reject) => {
+                    const timeout = setTimeout(
+                        () => reject(new Error('image load timeout')),
+                        5000,
+                    );
+                    image.onload = () => {
+                        clearTimeout(timeout);
+                        resolve();
+                    };
+                    image.onerror = () => {
+                        clearTimeout(timeout);
+                        reject(new Error('image load failed'));
+                    };
+                });
+                image.src = file.dataURL;
+
+                (async () => {
+                    try {
+                        await loaded;
+                        if (typeof image.decode === 'function') {
+                            await image.decode();
+                        }
+                        console.log(
+                            '[PonyNotes] iOS image decoded, refreshing canvas: ' +
+                            element.fileId + ' (' + image.naturalWidth + 'x' +
+                            image.naturalHeight + ')',
+                        );
+                    } catch (error) {
+                        // Some WebKit versions reject decode() even after onload. A
+                        // delayed refresh still gives the internal image cache a new
+                        // paint opportunity and does not alter the scene.
+                        console.warn(
+                            '[PonyNotes] iOS image decode fallback: ' +
+                            element.fileId + ' - ' + (error?.message || error),
+                        );
+                    }
+
+                    const latestElement = typeof api.getSceneElementsIncludingDeleted === 'function'
+                        ? api.getSceneElementsIncludingDeleted().find(
+                            candidate => candidate.id === element.id,
+                        )
+                        : element;
+                    const latestAppState = typeof api.getAppState === 'function'
+                        ? api.getAppState()
+                        : appState;
+                    const snapshot = getImageViewportSnapshot(
+                        latestElement || element,
+                        latestAppState || appState,
+                    );
+                    console.log(
+                        '[PonyNotes] iOS image viewport: ' + JSON.stringify(snapshot),
+                    );
+
+                    if (!snapshot.isVisible && latestElement &&
+                        typeof api.scrollToContent === 'function') {
+                        api.scrollToContent(latestElement, {
+                            fitToContent: false,
+                            animate: false,
+                        });
+                        console.log(
+                            '[PonyNotes] iOS image viewport corrected: ' +
+                            element.fileId,
+                        );
+                    }
+
+                    api.refresh();
+                    requestAnimationFrame(() => api.refresh());
+                })();
+            }
+        });
+
+        console.log('[PonyNotes] iOS image decode refresh installed');
+    };
 
     // Excalidraw 的工具栏主题由 useHandleAppTheme 的 React 状态维护，
     // 仅调用 excalidrawAPI.updateScene() 只能改变画布 appState，不能保证
@@ -280,7 +424,7 @@
 
     function flushFlutterStorageSync(key) {
         const payload = pendingFlutterStorageSyncs.get(key);
-        if (!payload) return;
+        if (!payload) return Promise.resolve();
 
         const timer = flutterStorageSyncTimers.get(key);
         if (timer) {
@@ -294,22 +438,34 @@
             : payload.value;
         const lastValue = lastSentFlutterStorageValues.get(key);
         if (lastValue === value) {
-            return;
+            return Promise.resolve();
         }
         lastSentFlutterStorageValues.set(key, value);
-        window.flutter_inappwebview.callHandler('localStorageOnSet', { key, value });
+        try {
+            return Promise.resolve(
+                window.flutter_inappwebview.callHandler('localStorageOnSet', { key, value }),
+            );
+        } catch (e) {
+            return Promise.reject(e);
+        }
     }
 
-    function flushAllFlutterStorageSyncs() {
+    async function flushAllFlutterStorageSyncs() {
+        const pending = [];
         if (pendingFilesSyncTimer) {
             clearTimeout(pendingFilesSyncTimer);
             pendingFilesSyncTimer = null;
             syncFilesFromScene(pendingFilesSyncKey);
         }
         for (const key of Array.from(pendingFlutterStorageSyncs.keys())) {
-            flushFlutterStorageSync(key);
+            pending.push(flushFlutterStorageSync(key));
         }
+        await Promise.allSettled(pending);
+        return true;
     }
+
+    // Flutter 在本地白板销毁前调用，确保 elements/files 防抖队列先进入 Dart。
+    window.__ponynotesFlushStorageSyncs = flushAllFlutterStorageSyncs;
 
     function scheduleFlutterStorageSync(key, value) {
         pendingFlutterStorageSyncs.set(
@@ -515,6 +671,7 @@
                 window._excalidrawAPI || window.__xmGetExcalidrawAPI?.();
             if (api) {
                 window._excalidrawAPI = api;
+                installIOSImageDecodeRefresh(api);
                 console.log('[PonyNotes] ✅ Excalidraw API captured, restoring data...');
 
                 // 先应用宿主主题再恢复场景，避免恢复较大的白板数据期间露出白色首屏。

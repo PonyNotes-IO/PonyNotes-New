@@ -17,6 +17,7 @@ import '../application/whiteboard_image_cache_service.dart';
 import '../application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'webview_async_eval.dart';
 
 // 白板逐元素同步开关：出问题时置 false 回退到旧整段 elements 推送路径。
 const bool kWhiteboardPerElementSync = true;
@@ -113,6 +114,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     'onExport',
     'onExportError',
   ];
+
+  /// 在销毁 WebView 前冲刷 JS -> Flutter 的 elements/files 防抖队列。
+  /// 返回 false 表示页面尚未完成初始化或 JS 未确认执行，调用方仍可继续走
+  /// adapter 的 forceSync 兜底，但不能把它当作 WebView 数据已送达的保证。
+  Future<bool> flushPendingStorageSyncs() async {
+    if (_isDisposed || !mounted || _controller == null) return false;
+    final value = await evaluateAsyncJavascript(
+      _controller!,
+      asyncBody:
+          'return await (window.__ponynotesFlushStorageSyncs ? window.__ponynotesFlushStorageSyncs() : false);',
+      timeout: const Duration(seconds: 2),
+      isCancelled: () => _isDisposed,
+      debugLabel: ' flushPendingStorageSyncs view=${widget.viewId}',
+    );
+    return value == true;
+  }
 
   /// 由 Dart 直接注入的宿主主题桥接。
   ///
@@ -2661,7 +2678,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                           // 已触发”和“WebView 已实际应用”两个阶段。
                           if (message.contains('host theme applied') ||
                               message
-                                  .contains('Host system appearance changed')) {
+                                  .contains('Host system appearance changed') ||
+                              message.contains('iOS image decoded') ||
+                              message.contains('iOS image decode fallback') ||
+                              message.contains('iOS image viewport') ||
+                              message.contains(
+                                  'iOS image decode refresh installed')) {
                             Log.info('[WebView Console] $message');
                           } else {
                             Log.debug('[WebView Console] $message');

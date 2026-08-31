@@ -29,6 +29,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
@@ -290,6 +291,8 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   bool _initialDataReadyForSync = false;
   bool _webViewReadyForSync = false;
   int _whiteboardRevision = 0;
+  // 防止首次异步加载的旧数据在导入新白板后晚到并覆盖导入结果。
+  int _initialDataLoadGeneration = 0;
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -342,6 +345,10 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     _webViewKey = GlobalKey<ExcalidrawWebViewState>(
       debugLabel: 'whiteboard_webview_${widget.view.id}',
     );
+
+    // 本地/私有白板同样存在 WebView 的 files 防抖窗口。切换或关闭标签前由
+    // TabsBloc await 此回调，先把 JS 队列送入 Flutter，再等待图片上传和 collab 保存。
+    WhiteboardExitFlush.instance.register(this, _flushSave);
 
     // 注册导出和导入控制器到 GetIt，供 "更多操作" 菜单中的功能使用
     _registerControllers();
@@ -437,6 +444,9 @@ class _WhiteboardPageState extends State<WhiteboardPage>
         'appState': data['appState'] ?? {},
         'files': data['files'] ?? {},
       };
+
+      // 从这里开始，任何尚未完成的首次加载结果都已过期，不能再覆盖本次导入。
+      _initialDataLoadGeneration++;
 
       // 更新 Adapter 的全量数据缓存并保存到后端
       _collabAdapter?.onWhiteboardDataChanged('update', sceneData);
@@ -618,6 +628,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     _themeSyncGeneration++;
 
     _isDisposing = true;
+    WhiteboardExitFlush.instance.unregister(this);
     logDiagnosticEvent(
       'WhiteboardLoad',
       'page_dispose_start',
@@ -684,6 +695,22 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     Log.info('[WhiteboardPage] ✅ Dispose completed (sync part)');
   }
 
+  Future<void> _flushSave() async {
+    if (_isDisposing) return;
+    final webView = _webViewKey.currentState;
+    final adapter = _collabAdapter;
+    if (webView != null) {
+      final flushed = await webView.flushPendingStorageSyncs();
+      if (!flushed) {
+        Log.warn('[Whiteboard] 切走前 WebView 图片数据冲刷未确认: ${widget.view.id}');
+      }
+      // localStorageOnSet 是异步 MethodChannel 回调，给 Flutter 事件循环一个
+      // 短窗口完成回调后再进入上传流程，避免 forceSync 抢在 files 入队之前。
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    await adapter?.forceSync();
+  }
+
   /// 注销所有控制器
   void _unregisterControllers() {
     try {
@@ -732,6 +759,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   }
 
   Future<void> _loadInitialData() async {
+    final loadGeneration = _initialDataLoadGeneration;
     final stageStopwatch = Stopwatch()..start();
     logDiagnosticEvent(
       'WhiteboardLoad',
@@ -771,6 +799,13 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     );
 
     // debug log removed
+
+    if (loadGeneration != _initialDataLoadGeneration) {
+      Log.info(
+        '[Whiteboard] 忽略过期的初始数据加载结果: ${widget.view.id}, generation=$loadGeneration current=$_initialDataLoadGeneration',
+      );
+      return;
+    }
 
     if (mounted && !_isDisposing) {
       setState(() {

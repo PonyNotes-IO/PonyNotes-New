@@ -60,16 +60,18 @@ class FileUploadService {
       Log.info('Uploading file using PUT method: $putUrl');
       Log.info('Workspace ID: $workspaceId, File ID: $fileId');
       
-      // Use PUT method to upload file
-      final putReq = http.Request('PUT', Uri.parse(putUrl));
-      putReq.headers.addAll({
-        'Authorization': 'Bearer ${await _getAuthToken()}',
-        'Content-Type': 'application/octet-stream',
-        'Accept': 'application/json',
-      });
-      putReq.bodyBytes = fileBytes;
-      
-      final putResp = await _sendWithRetry(() => putReq.send(), onBeforeRetry: (attempt, code, body) {
+      // 每次重试都必须新建 Request。package:http 的 Request 只能 finalize/send 一次，
+      // 复用已发送的 Request 会在第二次 attempt 抛出 finalized 状态异常。
+      final putResp = await _sendWithRetry(() async {
+        final putReq = http.Request('PUT', Uri.parse(putUrl));
+        putReq.headers.addAll({
+          'Authorization': 'Bearer ${await _getAuthToken()}',
+          'Content-Type': 'application/octet-stream',
+          'Accept': 'application/json',
+        });
+        putReq.bodyBytes = fileBytes;
+        return putReq.send();
+      }, onBeforeRetry: (attempt, code, body) {
         Log.warn('File upload (PUT) retry#$attempt due to ${code ?? 'network'} - ${body ?? ''}');
       });
       

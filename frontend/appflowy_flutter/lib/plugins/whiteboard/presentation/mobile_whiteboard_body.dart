@@ -3,8 +3,10 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -15,6 +17,66 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+
+const String _mobileWhiteboardReadinessScript = r'''
+(function () {
+  if (window.__xmMobileReadinessInstalled) return;
+  window.__xmMobileReadinessInstalled = true;
+
+  var collab = null;
+  function findCollab() {
+    if (collab && collab.portal && collab.excalidrawAPI) return collab;
+    try {
+      var node = document.querySelector('.excalidraw') || document.body;
+      var fiber = null;
+      while (node && !fiber) {
+        var keys = Object.keys(node);
+        for (var i = 0; i < keys.length; i++) {
+          if (keys[i].indexOf('__reactFiber$') === 0 ||
+              keys[i].indexOf('__reactContainer$') === 0) {
+            fiber = node[keys[i]];
+            break;
+          }
+        }
+        node = node.parentElement;
+      }
+      if (!fiber) return null;
+      var root = fiber;
+      while (root.return) root = root.return;
+      var stack = [root];
+      var steps = 0;
+      while (stack.length && steps < 300000) {
+        var current = stack.pop();
+        steps++;
+        var stateNode = current && current.stateNode;
+        if (stateNode && stateNode.portal && stateNode.excalidrawAPI &&
+            typeof stateNode.excalidrawAPI.getAppState === 'function') {
+          collab = stateNode;
+          return collab;
+        }
+        if (current.child) stack.push(current.child);
+        if (current.sibling) stack.push(current.sibling);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  window.__xmIsMobileWhiteboardReady = function () {
+    var instance = findCollab();
+    if (!instance || !instance.portal ||
+        instance.portal.socketInitialized !== true) {
+      return false;
+    }
+    try {
+      var state = instance.excalidrawAPI.getAppState();
+      return !!state && state.isLoading === false &&
+        Number(state.width) > 0 && Number(state.height) > 0;
+    } catch (_) {
+      return false;
+    }
+  };
+})();
+''';
 
 class MobileWhiteboardBody extends StatefulWidget {
   const MobileWhiteboardBody({
@@ -41,6 +103,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
   String? _lastHostTheme;
   Timer? _brightnessPollTimer;
   int _themeSyncGeneration = 0;
+  int _pageLoadGeneration = 0;
 
   @override
   void initState() {
@@ -62,6 +125,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
     _brightnessPollTimer?.cancel();
     _brightnessPollTimer = null;
     _themeSyncGeneration++;
+    _pageLoadGeneration++;
     _isDisposed = true;
     _controller?.dispose();
     _controller = null;
@@ -388,6 +452,12 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
             allowUniversalAccessFromFileURLs: true,
           ),
           initialUserScripts: UnmodifiableListView([
+            // 必须在页面脚本之前安装，就绪检查会同时确认协作房间初始化、
+            // initialData 应用和画布尺寸测量均已完成。
+            UserScript(
+              source: _mobileWhiteboardReadinessScript,
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
             UserScript(
               source: '''
                 (function() {
@@ -512,20 +582,53 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
             _setupDownloadHandler(controller);
           },
           onLoadStart: (controller, url) {
+            _pageLoadGeneration++;
             setState(() {
               _isLoading = true;
               _loadingError = null;
             });
             Log.debug('🔄 [MobileWhiteboard] Loading: $url');
           },
-          onLoadStop: (controller, url) {
+          onLoadStop: (controller, url) async {
+            final loadGeneration = _pageLoadGeneration;
+            unawaited(_applyTheme(_currentHostTheme()));
+
+            // WKWebView/Android WebView 的 onLoadStop 只代表 HTML 资源加载完成，
+            // 不代表协作房间的异步初始场景已经应用。若此时允许选图，迟到的
+            // initialData 会覆盖刚插入的图片，表现为首次导入无显示。
+            final ready = await _waitForWhiteboardReady(
+              controller,
+              loadGeneration: loadGeneration,
+            );
+            if (!mounted ||
+                _isDisposed ||
+                loadGeneration != _pageLoadGeneration) {
+              return;
+            }
             setState(() {
               _isLoading = false;
+              if (!ready) {
+                _loadingError = LocaleKeys.error_loadingViewError.tr();
+              }
             });
-            _applyTheme(_currentHostTheme());
-            Log.debug('✅ [MobileWhiteboard] Loaded: $url');
+            if (ready) {
+              Log.info('✅ [MobileWhiteboard] 协作场景初始化完成: $url');
+            } else {
+              Log.warn(
+                '⚠️ [MobileWhiteboard] 等待协作场景就绪超时，已阻止未就绪状态下操作: $url',
+              );
+            }
           },
           onReceivedError: (controller, request, error) {
+            // 子资源（图片、字体等）失败不代表白板主页面加载失败，也不能
+            // 取消正在进行的协作场景就绪等待。
+            if (request.isForMainFrame == false) {
+              Log.warn(
+                '[MobileWhiteboard] Subresource load error: ${request.url} - ${error.description}',
+              );
+              return;
+            }
+            _pageLoadGeneration++;
             setState(() {
               _isLoading = false;
               _loadingError = error.description;
@@ -565,39 +668,86 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
         ),
         if (_isLoading)
           const Positioned.fill(
-            child: Center(
-              child: CircularProgressIndicator(),
+            child: AbsorbPointer(
+              child: ColoredBox(
+                color: Colors.transparent,
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
             ),
           ),
         if (_loadingError != null)
           Positioned.fill(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '加载失败: $_loadingError',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      _controller?.reload();
-                    },
-                    child: const Text('重新加载'),
-                  ),
-                ],
+            child: ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      LocaleKeys.error_cannotLoadPage.tr(),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        _loadingError!,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        _controller?.reload();
+                      },
+                      child: Text(LocaleKeys.button_retry.tr()),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
       ],
     );
+  }
+
+  Future<bool> _waitForWhiteboardReady(
+    InAppWebViewController controller, {
+    required int loadGeneration,
+  }) async {
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+
+    while (!_isDisposed &&
+        loadGeneration == _pageLoadGeneration &&
+        DateTime.now().isBefore(deadline)) {
+      try {
+        final result = await controller.evaluateJavascript(source: r'''
+          (function() {
+            try {
+              return typeof window.__xmIsMobileWhiteboardReady === 'function' &&
+                window.__xmIsMobileWhiteboardReady();
+            } catch (_) {
+              return false;
+            }
+          })();
+        ''');
+        if (result == true || result == 1 || result?.toString() == 'true') {
+          return true;
+        }
+      } catch (e) {
+        Log.debug('[MobileWhiteboard] 白板就绪检查暂未可用: $e');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+    return false;
   }
 
   String _buildRemoteUrl() {

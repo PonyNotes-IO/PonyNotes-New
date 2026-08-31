@@ -79,6 +79,17 @@ void main() {
     expect(pageSource, isNot(contains('Duration(milliseconds: 80)')));
   });
 
+  test('whiteboard import invalidates stale initial data load', () {
+    final source = File(
+      'lib/plugins/whiteboard/whiteboard.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('_initialDataLoadGeneration++'));
+    expect(
+        source, contains('final loadGeneration = _initialDataLoadGeneration'));
+    expect(source, contains('loadGeneration != _initialDataLoadGeneration'));
+  });
+
   test('whiteboard lifecycle resume does not consume the import reload token',
       () {
     final pageSource =
@@ -347,6 +358,22 @@ void main() {
     expect(mobileSource, contains('Dart host theme applied'));
     expect(mobileSource, isNot(contains('new KeyboardEvent')));
     expect(mobileSource, contains('UserScriptInjectionTime.AT_DOCUMENT_START'));
+    expect(
+      mobileSource,
+      contains('source: _mobileWhiteboardReadinessScript'),
+    );
+    expect(mobileSource, contains('_waitForWhiteboardReady'));
+    expect(mobileSource, contains('state.isLoading === false'));
+    expect(mobileSource, contains('portal.socketInitialized !== true'));
+    expect(mobileSource, contains('loadGeneration != _pageLoadGeneration'));
+    expect(mobileSource, contains('AbsorbPointer'));
+    expect(mobileSource, contains('request.isForMainFrame == false'));
+    expect(mobileSource, contains('LocaleKeys.error_loadingViewError.tr()'));
+    expect(mobileSource, contains('LocaleKeys.button_retry.tr()'));
+    expect(
+      mobileSource.indexOf('_waitForWhiteboardReady('),
+      lessThan(mobileSource.indexOf('_isLoading = false;', 0)),
+    );
   });
 
   test('whiteboard theme follows the effective app theme in real time', () {
@@ -389,6 +416,79 @@ void main() {
     expect(bridgeSource, contains('const memoryStorage = new Map();'));
     expect(bridgeSource, contains('memoryStorage.set(key, String(value));'));
     expect(bridgeSource, contains('window.flutter_inappwebview.callHandler'));
+  });
+
+  test('whiteboard bridge exposes pending storage flush for page teardown', () {
+    final source =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(source, contains('window.__ponynotesFlushStorageSyncs'));
+    expect(source, contains('async function flushAllFlutterStorageSyncs()'));
+    expect(source, contains('await Promise.allSettled(pending)'));
+    expect(source, contains('syncFilesFromScene(pendingFilesSyncKey)'));
+  });
+
+  test('whiteboard bridge recovers iOS image decode and stale viewport', () {
+    final source =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(source, contains('installIOSImageDecodeRefresh'));
+    expect(source, contains("element.type !== 'image'"));
+    expect(source, contains("element.status !== 'pending'"));
+    expect(source, contains('decodedFileIds.has(element.fileId)'));
+    expect(source, contains("file.dataURL.startsWith('data:image/')"));
+    expect(source, contains("typeof image.decode === 'function'"));
+    expect(source, contains('api.onChange((elements, appState, files)'));
+    expect(source, contains('getImageViewportSnapshot'));
+    expect(source, contains('!snapshot.isVisible'));
+    expect(source, contains('api.scrollToContent(latestElement'));
+    expect(source, contains("fitToContent: false"));
+    expect(source, contains('requestAnimationFrame(() => api.refresh())'));
+    expect(source, isNot(contains('api.resetScene()')));
+
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    expect(webViewSource, contains("message.contains('iOS image decoded')"));
+    expect(
+      webViewSource,
+      contains("message.contains('iOS image decode fallback')"),
+    );
+    expect(
+      webViewSource,
+      contains("message.contains('iOS image viewport')"),
+    );
+  });
+
+  test('bundled Excalidraw decodes images and uses live picker viewport', () {
+    final bundle = Directory('assets/excalidraw/assets')
+        .listSync()
+        .whereType<File>()
+        .firstWhere(
+          (file) =>
+              file.path.endsWith('.js') &&
+              file.readAsStringSync().contains(
+                    'Only images can be added to ImageCache',
+                  ),
+        )
+        .readAsStringSync();
+
+    expect(
+      bundle,
+      contains(
+        's=/iPad|iPhone|iPod/.test(navigator.userAgent)||navigator.platform==="MacIntel"',
+      ),
+    );
+    expect(bundle, contains('await Promise.race([i.decode()'));
+    expect(bundle, contains('setTimeout(r,2e3)'));
+
+    const pickerCall =
+        'const n=await xT({description:"Image",extensions:Object.keys(Nh),multiple:!0})';
+    const liveViewport =
+        'i=this.state.width/2+this.state.offsetLeft,s=this.state.height/2+this.state.offsetTop';
+    expect(bundle, contains(pickerCall));
+    expect(bundle, contains(liveViewport));
+    expect(bundle.indexOf(pickerCall), lessThan(bundle.indexOf(liveViewport)));
   });
 
   test('whiteboard collab adapter does not save on every pen frame', () {
