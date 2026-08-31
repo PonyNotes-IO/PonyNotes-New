@@ -15,6 +15,14 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:flowy_infra/uuid.dart';
+import 'package:flutter/foundation.dart';
+
+@visibleForTesting
+bool isNewCalendarEvent(
+  Set<(String, String)> seenEvents,
+  CalendarEventPB event,
+) =>
+    seenEvents.add((event.rowMeta.id, event.dateFieldId));
 
 class TodoService {
   static TodoService? _instance;
@@ -82,6 +90,7 @@ class TodoService {
   Future<List<TodoItem>> getTodosForDate(DateTime displayDate) async {
     final target = DateTime(displayDate.year, displayDate.month, displayDate.day);
     final todos = <TodoItem>[];
+    final seenEvents = <(String, String)>{};
     final calendarViewIds = await _resolveCalendarViewIds();
 
     for (final viewId in calendarViewIds) {
@@ -91,6 +100,9 @@ class TodoService {
       await result.fold(
         (events) async {
           for (final eventPB in events.items) {
+            if (!isNewCalendarEvent(seenEvents, eventPB)) {
+              continue;
+            }
             final todo = _convertCalendarEventToTodo(eventPB);
             if (todo == null || todo.dueDate == null) {
               continue;
@@ -271,12 +283,16 @@ class TodoService {
     
     try {
       final calendarTodos = <TodoItem>[];
+      final seenEvents = <(String, String)>{};
       for (final viewId in calendarViewIds) {
         final payload = CalendarEventRequestPB.create()..viewId = viewId;
         final result = await DatabaseEventGetAllCalendarEvents(payload).send();
         result.fold(
           (events) {
             for (final eventPB in events.items) {
+              if (!isNewCalendarEvent(seenEvents, eventPB)) {
+                continue;
+              }
               final todo = _convertCalendarEventToTodo(eventPB);
               if (todo != null) {
                 calendarTodos.add(todo);
@@ -746,4 +762,3 @@ class _CalendarDateMeta {
   final int repeatType;
   final String? repeatRuleJson;
 }
-
