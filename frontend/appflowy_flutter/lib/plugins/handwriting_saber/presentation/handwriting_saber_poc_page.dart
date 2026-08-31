@@ -100,6 +100,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final bool _isMobilePlatform =
       (Platform.isAndroid || Platform.isIOS) && !PlatformInfo.isTablet;
 
+  /// Two-finger navigation is available on phones and tablets only.
+  bool get _isTouchGesturePlatform =>
+      _isMobilePlatform || PlatformInfo.isTablet;
+
   /// 当前正在绘制的一笔（使用 ValueNotifier 减少父级 setState 频繁重建）
   final ValueNotifier<Stroke?> _currentStrokeNotifier =
       ValueNotifier<Stroke?>(null);
@@ -277,11 +281,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   bool _isProgrammaticScrolling = false;
 
   bool get _isMobileMultiTouchActive =>
-      _isMobilePlatform &&
+      _isTouchGesturePlatform &&
       (_mobileTouchPointers.length >= 2 || _mobileMultiTouchGestureInProgress);
 
   void _handleMobilePointer(PointerEvent event) {
-    if (!_isMobilePlatform || event.kind != PointerDeviceKind.touch) {
+    if (!_isTouchGesturePlatform || event.kind != PointerDeviceKind.touch) {
       return;
     }
 
@@ -423,7 +427,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   @override
   void initState() {
     super.initState();
-    if (_isMobilePlatform) {
+    if (_isTouchGesturePlatform) {
       GestureBinding.instance.pointerRouter.addGlobalRoute(_handleMobilePointer);
     }
     debugPrint('🚀🚀🚀 [HandwritingSaber] ===== initState =====');
@@ -5434,7 +5438,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _mobileTouchPointers.clear();
     _mobileTouchPositions.clear();
     _mobileTouchStartPositions.clear();
-    if (_isMobilePlatform) {
+    if (_isTouchGesturePlatform) {
       GestureBinding.instance.pointerRouter
           .removeGlobalRoute(_handleMobilePointer);
     }
@@ -5801,14 +5805,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                           controller:
                                               _pageScrollController, // ✅ 绑定滚动控制器
                                           scrollDirection: Axis.vertical,
-                                          physics: _isMobilePlatform
+                                          physics: _isTouchGesturePlatform
                                               ? const NeverScrollableScrollPhysics()
                                               : null,
                                           child: SingleChildScrollView(
                                             controller:
                                                 _canvasHorizontalScrollController,
                                             scrollDirection: Axis.horizontal,
-                                            physics: _isMobilePlatform
+                                            physics: _isTouchGesturePlatform
                                                 ? const NeverScrollableScrollPhysics()
                                                 : null,
                                             child: Column(
