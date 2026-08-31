@@ -158,7 +158,10 @@ void _resolveHomeDeps(GetIt getIt) {
 
   getIt.registerLazySingleton<TabsBloc>(() => TabsBloc());
 
-  getIt.registerSingleton<ReminderBloc>(ReminderBloc());
+  getIt.registerSingleton<ReminderBloc>(
+    ReminderBloc(),
+    dispose: (bloc) => bloc.close(),
+  );
 
   getIt.registerSingleton<RenameViewBloc>(RenameViewBloc(PopoverController()));
 }

@@ -55,6 +55,7 @@ unsafe impl Sync for DartAppFlowyCore {}
 
 struct DartAppFlowyCore {
   core: Arc<RwLock<Option<AppFlowyCore>>>,
+  runtime: RwLock<Option<Arc<AFPluginRuntime>>>,
   handle: RwLock<Option<std::thread::JoinHandle<()>>>,
   sender: RwLock<Option<mpsc::UnboundedSender<Task>>>,
 }
@@ -64,6 +65,7 @@ impl DartAppFlowyCore {
     Self {
       #[allow(clippy::arc_with_non_send_sync)]
       core: Arc::new(RwLock::new(None)),
+      runtime: RwLock::new(None),
       handle: RwLock::new(None),
       sender: RwLock::new(None),
     }
@@ -121,8 +123,19 @@ impl DartAppFlowyCore {
       }
     }
     if let Some(core) = self.core.write().unwrap().take() {
+      let runtime = self.runtime.read().unwrap().as_ref().cloned();
+      if let (Ok(server), Some(runtime)) = (core.server_provider.get_server(), runtime) {
+        runtime.block_on(async move {
+          server.set_enable_sync(0, false);
+          tokio::task::yield_now().await;
+        });
+      }
       core.close_db();
+      drop(core);
     }
+
+    // Keep the process-lifetime runtime: task-owned Arc clones must not make
+    // Tokio's blocking Runtime::drop run inside an async context.
 
     // 【修复通知全局失效 2026-07-30】此处原有 unregister_all_notification_sender()，
     // 会把 Dart 刚注册的通知发送器注销掉，导致**整个应用的 Rust→Dart 通知全部失效**。
@@ -187,7 +200,12 @@ pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
     .take()
     .map(|isolate| Arc::new(LogStreamSenderImpl { isolate }) as Arc<dyn StreamLogSender>);
   let (sender, task_rx) = mpsc::unbounded_channel::<Task>();
-  let runtime = Arc::new(AFPluginRuntime::new().unwrap());
+  let existing_runtime = { DART_APPFLOWY_CORE.runtime.read().unwrap().as_ref().cloned() };
+  let runtime = existing_runtime.unwrap_or_else(|| {
+    let runtime = Arc::new(AFPluginRuntime::new().unwrap());
+    *DART_APPFLOWY_CORE.runtime.write().unwrap() = Some(runtime.clone());
+    runtime
+  });
   let cloned_runtime = runtime.clone();
   let handle = std::thread::spawn(move || {
     #[cfg(target_os = "windows")]

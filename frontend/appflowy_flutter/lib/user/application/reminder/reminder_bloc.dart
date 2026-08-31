@@ -55,10 +55,17 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     _awarenessListener = UserAwarenessListener(workspaceId: 'user_reminder')
       ..start(
         onDidUpdateReminder: (reminder) {
+          if (!_seenCloudPushIds.add(reminder.id)) return;
           Log.info(
-            'ReminderBloc: received real-time reminder push: ${reminder.id}, triggering refresh',
+            'ReminderBloc: received real-time reminder push: ${reminder.id}',
           );
-          if (!isClosed) add(const ReminderEvent.refresh());
+          _cloudRefreshDebounce?.cancel();
+          _cloudRefreshDebounce = Timer(
+            const Duration(milliseconds: 300),
+            () {
+              if (!isClosed) add(const ReminderEvent.refresh());
+            },
+          );
         },
       );
 
@@ -68,9 +75,12 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   late final ActionNavigationBloc _actionBloc;
   late final ReminderService _reminderService;
   Timer? timer;
+  Timer? _cloudRefreshDebounce;
   late final AppLifecycleListener _listener;
   late final UserAwarenessListener _awarenessListener;
   final _deepEquality = DeepCollectionEquality();
+  final Set<String> _seenCloudPushIds = {};
+  bool _started = false;
 
   bool hasReminder(String reminderId) =>
       state.allReminders.where((e) => e.id == reminderId).firstOrNull != null;
@@ -158,6 +168,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       (event, emit) async {
         await event.when(
           started: () async {
+            if (_started) return;
+            _started = true;
             add(const ReminderEvent.refresh());
           },
           refresh: () async {
@@ -599,6 +611,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     Log.info('ReminderBloc closed');
     _listener.dispose();
     _awarenessListener.stop();
+    _cloudRefreshDebounce?.cancel();
     timer?.cancel();
     await super.close();
   }
