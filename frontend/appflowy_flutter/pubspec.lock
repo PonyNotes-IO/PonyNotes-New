@@ -1899,13 +1899,13 @@ packages:
     source: hosted
     version: "2.1.5"
   pdfrx_engine:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: pdfrx_engine
-      sha256: "7327361eb4e63660996a16773b6f57120a267796431cd29d7d3b1150d51934de"
+      sha256: "3f3553fa4618a376ebd452feb087015bbff8b79d1295d99077fb9ae34726dedc"
       url: "https://pub.dev"
     source: hosted
-    version: "0.1.21"
+    version: "0.1.13"
   percent_indicator:
     dependency: "direct main"
     description:

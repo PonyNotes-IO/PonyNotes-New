@@ -134,6 +134,36 @@ class HandwritingPdfCacheService {
     }
   }
 
+  /// 将用户选择的 PDF 复制到应用自己的持久目录。
+  ///
+  /// macOS 文件选择器可能返回 iCloud Drive 或安全作用域中的路径。该路径适合
+  /// 立即读取，但不适合交给 PDFium 长时间、按需访问。这里生成唯一的纯 ASCII
+  /// 文件名，后续解析、渲染和上传都只访问应用目录中的稳定副本。
+  Future<String> cacheImportedPdf(Uint8List bytes) async {
+    if (bytes.isEmpty) {
+      throw ArgumentError.value(bytes.length, 'bytes', 'PDF 文件为空');
+    }
+
+    final dir = await _getCacheDirectory();
+    final importId = DateTime.now().microsecondsSinceEpoch;
+    final path = p.join(dir, 'import_${importId}_${bytes.length}.pdf');
+    final file = File(path);
+
+    if (!file.existsSync() || file.lengthSync() != bytes.length) {
+      final temporaryFile = File('$path.tmp');
+      await temporaryFile.writeAsBytes(bytes, flush: true);
+      await temporaryFile.rename(path);
+      Log.info('[PdfCache] Cached imported PDF $path (${bytes.length} bytes)');
+    } else {
+      try {
+        await file.setLastModified(DateTime.now());
+      } catch (_) {}
+    }
+
+    unawaited(_enforceLimit());
+    return path;
+  }
+
   /// 容量上限 LRU 淘汰：超过 [maxCacheBytes] 时按 mtime 升序删至 90% 以下
   Future<void> _enforceLimit() async {
     try {

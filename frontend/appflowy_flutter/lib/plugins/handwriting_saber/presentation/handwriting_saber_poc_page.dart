@@ -13,9 +13,9 @@ import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
-import 'package:pdfrx/pdfrx.dart';
 
 import '../application/handwriting_saber_data_service.dart';
+import '../application/handwriting_pdf_cache_service.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
@@ -94,6 +94,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 因 deactivate/didUpdateWidget(全屏切换、视图树重建等)触发保存，
   /// 用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
   bool _isDataLoaded = false;
+
+  /// 当前数据初始化任务。PDF 导入必须等待它完成，避免旧数据加载完成后
+  /// 覆盖刚刚导入的页面。
+  Future<void>? _dataInitialization;
 
   /// Cached phone check. Tablets use the desktop handwriting UI, while their
   /// surrounding navigation and business flow remain mobile-owned.
@@ -248,8 +252,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final ScrollController _pageScrollController = ScrollController();
 
   /// 移动端画布横向滚动控制器（缩放后仍支持双指平移）
-  final ScrollController _canvasHorizontalScrollController =
-      ScrollController();
+  final ScrollController _canvasHorizontalScrollController = ScrollController();
 
   /// 移动端当前按下的手指，用于把画布滚动限制为双指操作
   final Set<int> _mobileTouchPointers = <int>{};
@@ -290,7 +293,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final renderBox =
           _mobileCanvasKey.currentContext?.findRenderObject() as RenderBox?;
       if (renderBox == null ||
-          !renderBox.paintBounds.contains(renderBox.globalToLocal(event.position))) {
+          !renderBox.paintBounds
+              .contains(renderBox.globalToLocal(event.position))) {
         return;
       }
       _mobileTouchPointers.add(event.pointer);
@@ -356,7 +360,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 后续的自然张合不再有机会触发缩放。
     final initialSpan = _initialMultiTouchSpan;
     final initialFocalPoint = _initialMultiTouchFocalPoint;
-    final totalSpanDelta = initialSpan == null ? 0.0 : (span - initialSpan).abs();
+    final totalSpanDelta =
+        initialSpan == null ? 0.0 : (span - initialSpan).abs();
     final totalFocalDelta = initialFocalPoint == null
         ? 0.0
         : (focalPoint - initialFocalPoint).distance;
@@ -424,12 +429,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void initState() {
     super.initState();
     if (_isMobilePlatform) {
-      GestureBinding.instance.pointerRouter.addGlobalRoute(_handleMobilePointer);
+      GestureBinding.instance.pointerRouter
+          .addGlobalRoute(_handleMobilePointer);
     }
     debugPrint('🚀🚀🚀 [HandwritingSaber] ===== initState =====');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewID: ${widget.view.id}');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewName: ${widget.view.name}');
-    _initLocalData();
+    _dataInitialization = _initLocalData();
     // 注册导入后 reload 回调，供 HandwritingImportAction 在导入成功后调用
     HandwritingSaberDataService.registerReloadCallback(
       widget.view.id,
@@ -460,7 +466,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 清理旧视图的状态
       _cleanupViewState();
       // 重新初始化数据
-      _initLocalData();
+      _dataInitialization = _initLocalData();
     } else {
       debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID unchanged, skipping reload');
     }
@@ -494,15 +500,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final List<int> bytes = utf8.encode(json);
 
       if (bytes.length <= 10) {
-        debugPrint('🦋[HandwritingSaber] _flushSaveForView: data too small (${ bytes.length} bytes), skipping');
+        debugPrint(
+            '🦋[HandwritingSaber] _flushSaveForView: data too small (${bytes.length} bytes), skipping');
         return;
       }
 
-      debugPrint('🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
+      debugPrint(
+          '🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
 
       // 同时保存到 Collab 和本地文件（双保险）
       _dataService.saveHandwritingSaberData(viewId, bytes).then((ok) {
-        debugPrint('🦋[HandwritingSaber] _flushSaveForView Collab: ${ok ? "✅" : "❌"} ($viewId)');
+        debugPrint(
+            '🦋[HandwritingSaber] _flushSaveForView Collab: ${ok ? "✅" : "❌"} ($viewId)');
       }).catchError((e) {
         debugPrint('❌[HandwritingSaber] _flushSaveForView Collab error: $e');
       });
@@ -510,7 +519,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 同时写入本地文件作为备份（防止 Collab 同步失败导致数据丢失）
       _saveToLocalFile(viewId, bytes);
     } catch (e) {
-      debugPrint('❌[HandwritingSaber] _flushSaveForView serialization error: $e');
+      debugPrint(
+          '❌[HandwritingSaber] _flushSaveForView serialization error: $e');
     }
   }
 
@@ -522,7 +532,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 现在：新内容显著小于既有备份时拒绝覆盖，只告警。
   Future<void> _saveToLocalFile(String viewId, List<int> bytes) async {
     try {
-      final filePath = await _dataService.getHandwritingSaberFilePathForDebug(viewId);
+      final filePath =
+          await _dataService.getHandwritingSaberFilePathForDebug(viewId);
       final file = File(filePath);
 
       if (await _wouldDegradeLocalBackup(file, bytes)) {
@@ -534,7 +545,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
 
       await file.writeAsBytes(bytes);
-      debugPrint('🦋[HandwritingSaber] _saveToLocalFile: ✅ saved to $filePath (${bytes.length} bytes)');
+      debugPrint(
+          '🦋[HandwritingSaber] _saveToLocalFile: ✅ saved to $filePath (${bytes.length} bytes)');
     } catch (e) {
       debugPrint('❌[HandwritingSaber] _saveToLocalFile error: $e');
     }
@@ -576,7 +588,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       int n = 0;
       for (final p in pages) {
         if (p is! Map) continue;
-        for (final k in const ['strokes', 'images', 'textBoxes', 'listBoxes', 'taskListBoxes']) {
+        for (final k in const [
+          'strokes',
+          'images',
+          'textBoxes',
+          'listBoxes',
+          'taskListBoxes'
+        ]) {
           final v = p[k];
           if (v is List) n += v.length;
         }
@@ -663,9 +681,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 导入成功后重新加载数据（由 HandwritingSaberDataService.triggerReload 触发）
   void _reloadAfterImport() {
     if (!mounted) return;
-    setState(() { _isImporting = true; });
-    _initLocalData().then((_) {
-      if (mounted) setState(() { _isImporting = false; });
+    setState(() {
+      _isImporting = true;
+    });
+    _dataInitialization = _initLocalData();
+    _dataInitialization!.then((_) {
+      if (mounted)
+        setState(() {
+          _isImporting = false;
+        });
     });
   }
 
@@ -856,7 +880,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         try {
           await _uploadAssetsToCloud();
         } catch (uploadError) {
-          debugPrint('⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
+          debugPrint(
+              '⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
         }
       }
 
@@ -864,7 +889,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 避免大量图片数据导致 Yrs CRDT 更新包过大、WebSocket 同步失败
       final String collabJson = _coreInfo.toJsonStringForCollab();
       final List<int> collabBytes = utf8.encode(collabJson);
-      debugPrint('🦋[HandwritingSaber] _saveToStorage: collab data size = ${collabBytes.length} bytes, skipCloudUpload=$skipCloudUpload');
+      debugPrint(
+          '🦋[HandwritingSaber] _saveToStorage: collab data size = ${collabBytes.length} bytes, skipCloudUpload=$skipCloudUpload');
 
       final bool ok = await _dataService.saveHandwritingSaberData(
         widget.view.id,
@@ -919,7 +945,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               await img.uploadToCloud();
               // 首次失败则重试一次
               if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
-                debugPrint('🦋[HandwritingSaber] Retrying image upload ${img.id}...');
+                debugPrint(
+                    '🦋[HandwritingSaber] Retrying image upload ${img.id}...');
                 await Future.delayed(const Duration(milliseconds: 500));
                 await img.uploadToCloud();
               }
@@ -935,7 +962,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           if (bgImage.pdfFilePath.isNotEmpty &&
               !bgImage.pdfFilePath.startsWith('http') &&
               File(bgImage.pdfFilePath).existsSync()) {
-            debugPrint('🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
+            debugPrint(
+                '🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
             await bgImage.uploadToCloud();
             if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
               debugPrint('🦋[HandwritingSaber] Retrying PDF upload...');
@@ -1073,8 +1101,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 下载普通图片
       for (final img in page.images) {
         if (img is PngEditorImage) {
-          if (img.imageBytes.isEmpty && img.imageUrl != null && img.imageUrl!.startsWith('http')) {
-            debugPrint('🦋[HandwritingSaber] Downloading image ${img.id} from cloud...');
+          if (img.imageBytes.isEmpty &&
+              img.imageUrl != null &&
+              img.imageUrl!.startsWith('http')) {
+            debugPrint(
+                '🦋[HandwritingSaber] Downloading image ${img.id} from cloud...');
             await img.downloadFromCloud();
             if (img.imageBytes.isNotEmpty) {
               hasDownloaded = true;
@@ -1087,8 +1118,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final bgImage = page.backgroundImage;
       if (bgImage != null) {
         if (bgImage.pdfUrl != null && bgImage.pdfUrl!.startsWith('http')) {
-          if (bgImage.pdfFilePath.isEmpty || !File(bgImage.pdfFilePath).existsSync()) {
-            debugPrint('🦋[HandwritingSaber] Downloading PDF from cloud: ${bgImage.pdfUrl}');
+          if (bgImage.pdfFilePath.isEmpty ||
+              !File(bgImage.pdfFilePath).existsSync()) {
+            debugPrint(
+                '🦋[HandwritingSaber] Downloading PDF from cloud: ${bgImage.pdfUrl}');
             await bgImage.downloadFromCloud();
             if (bgImage.pdfFilePath.isNotEmpty) {
               hasDownloaded = true;
@@ -4299,8 +4332,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     // ✅ 计算页面坐标变换参数
     final double scale = pageDisplayWidth / page.size.width;
-    final double offsetX = pageDisplayWidth <= screenWidth 
-        ? (screenWidth - pageDisplayWidth) / 2 
+    final double offsetX = pageDisplayWidth <= screenWidth
+        ? (screenWidth - pageDisplayWidth) / 2
         : 0;
     final double offsetY = 0; // 页面顶部对齐
 
@@ -4491,8 +4524,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                           backgroundPattern: _currentBackgroundPattern,
                           lineHeight: _coreInfo.lineHeight,
                           lineThickness: _coreInfo.lineThickness,
-                          laserStrokes:
-                              _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
+                          laserStrokes: _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
                         ),
                         // ✅ 关键修复：只有当绘制在当前页面时，才监听实时笔迹
                         currentStrokeListenable: currentPageIndex == pageIndex
@@ -4939,7 +4971,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 从文件路径导入 PDF（参考 Saber 的实现，支持多页）
   Future<void> _importPdfFromFilePath(String pdfFilePath) async {
     try {
+      // initState 中的数据加载是异步的。必须等待它结束，否则旧数据返回后
+      // 会把本次导入的页面列表覆盖掉，表现为仍然只有原来的手写页。
+      final dataInitialization = _dataInitialization;
+      if (dataInitialization != null) {
+        await dataInitialization;
+      }
+      if (!mounted || !_isDataLoaded) {
+        throw Exception('手写笔记数据尚未加载完成，请稍后重试');
+      }
+
       debugPrint('🦋[HandwritingSaber] 开始导入PDF: $pdfFilePath');
+      LogUtils.info('[HandwritingSaber] PDF导入开始: $pdfFilePath');
       final importStartTime = DateTime.now();
 
       // 显示加载提示（非阻塞）
@@ -4951,32 +4994,47 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           ? List<Stroke>.from(_coreInfo.pages.first.strokes)
           : <Stroke>[];
 
-      // ✅ 清空现有页面（除了最后一页空页面，如果有的话）
-      // 参考 Saber 的实现：移除最后一页空页面，导入PDF后重新添加
-      // 检查最后一页是否为空（没有笔迹、没有背景图片）
-      final bool hadEmptyPage = _coreInfo.pages.isNotEmpty &&
-          _coreInfo.pages.last.strokes.isEmpty &&
-          _coreInfo.pages.last.backgroundImage == null;
-      if (hadEmptyPage && _coreInfo.pages.length > 1) {
-        _coreInfo.pages.removeLast();
+      // macOS 文件选择器可能返回 iCloud Drive 或安全作用域路径。先立即读取，
+      // 再写入应用自己的持久目录；PDFium 后续只访问这个稳定的本地副本。
+      final pdfBytes = await File(pdfFilePath).readAsBytes();
+      if (pdfBytes.isEmpty) {
+        throw Exception('PDF 文件为空');
       }
-      _coreInfo.pages.clear();
+      debugPrint(
+          '🦋[HandwritingSaber] PDF文件读取完成: ${pdfBytes.length} bytes');
+      LogUtils.info('[HandwritingSaber] PDF文件读取完成: ${pdfBytes.length} bytes');
+      final cachedPdfPath =
+          await HandwritingPdfCacheService().cacheImportedPdf(pdfBytes);
+      debugPrint('🦋[HandwritingSaber] PDF本地副本准备完成: $cachedPdfPath');
+      LogUtils.info('[HandwritingSaber] PDF本地副本准备完成: $cachedPdfPath');
 
       // 异步加载PDF文档（在后台线程，避免阻塞UI）
-      final pdfDocument = await PdfDocument.openFile(pdfFilePath);
+      // 先完成校验和页面构造，成功后再替换当前页面，避免导入失败留下空文档。
+      // 与 PdfEditorImage 共用全局缓存文档，避免先打开临时文档、随后又打开
+      // 第二份文档，导致 macOS PDFium 资源生命周期不一致。
+      final pdfCacheManager = PdfDocumentCacheManager();
+      final pdfDocument = await pdfCacheManager.load(cachedPdfPath).timeout(
+        const Duration(seconds: 60),
+        onTimeout: () {
+          pdfCacheManager.invalidate(cachedPdfPath);
+          throw TimeoutException('PDF解析超时（超过60秒）');
+        },
+      );
       final loadTime = DateTime.now().difference(importStartTime);
       debugPrint(
           '🦋[HandwritingSaber] PDF文档加载完成: ${loadTime.inMilliseconds}ms, 页面数: ${pdfDocument.pages.length}');
+      LogUtils.info(
+          '[HandwritingSaber] PDF解析完成: ${pdfDocument.pages.length}页, ${loadTime.inMilliseconds}ms');
 
       // 检查PDF是否有页面
       if (pdfDocument.pages.isEmpty) {
-        pdfDocument.dispose();
         throw Exception('PDF 文件没有页面');
       }
 
       // ✅ 为每个 PDF 页面创建一个新的 EditorPage（严格按照Saber的实现）
       final pageCreationStartTime = DateTime.now();
-      bool _isFirstPdfPage = true;
+      final importedPages = <EditorPage>[];
+      var isFirstPdfPage = true;
       for (final pdfPage in pdfDocument.pages) {
         // pdfrx 页面编号从 1 开始
         assert(pdfPage.pageNumber >= 1, 'pdfrx page numbers start at 1');
@@ -4990,9 +5048,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
         // ✅ 创建 PDF 背景图片（参考Saber的PdfEditorImage.fromJson实现）
         final pdfImage = PdfEditorImage(
-          pdfFilePath: pdfFilePath,
+          pdfFilePath: cachedPdfPath,
           pdfPageIndex: pdfPage.pageNumber - 1, // PDF 页面索引（从 0 开始）
-          naturalSize: pdfPage.size,
+          naturalSize: Size(pdfPage.width, pdfPage.height),
+          pdfBytes: pdfBytes,
           dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
         );
 
@@ -5003,21 +5062,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         final page = EditorPage(
           size: pageSize,
           strokes:
-              _isFirstPdfPage ? List<Stroke>.from(existingStrokes) : <Stroke>[],
+              isFirstPdfPage ? List<Stroke>.from(existingStrokes) : <Stroke>[],
           backgroundImage: pdfImage,
         );
-        _coreInfo.pages.add(page);
-        _isFirstPdfPage = false;
+        importedPages.add(page);
+        isFirstPdfPage = false;
       }
 
       // ✅ 添加一个空页面（参考 Saber 的实现）
-      _coreInfo.pages.add(EditorPage(
+      importedPages.add(EditorPage(
         size: EditorPage.defaultSize,
       ));
+
+      // 页面全部构造成功后一次性替换，保证导入过程具有事务性。
+      _coreInfo.pages
+        ..clear()
+        ..addAll(importedPages);
+      _initPageNotifiers();
 
       final pageCreationTime = DateTime.now().difference(pageCreationStartTime);
       debugPrint(
           '🦋[HandwritingSaber] 页面创建完成: ${pageCreationTime.inMilliseconds}ms');
+      LogUtils.info(
+          '[HandwritingSaber] 页面构造完成: ${importedPages.length}页, ${pageCreationTime.inMilliseconds}ms');
 
       // 触发UI更新（此时PDF还未完全加载，但页面结构已建立）
       setState(() {});
@@ -5041,10 +5108,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint(
           '🦋[HandwritingSaber] 已启动智能PDF预加载，页面数: ${visiblePageKeys.length}');
 
-      // 异步保存到存储（不阻塞UI）
-      _saveToStorage().then((_) {
-        debugPrint('🦋[HandwritingSaber] 数据保存完成');
-      });
+      // 先保存页面结构，不等待云端 PDF 上传，确保导入结果立即持久化。
+      // 云端上传完成后再补写一次带 pdfUrl 的精简数据。
+      await _saveToStorage(suppressStatusUpdate: true, skipCloudUpload: true);
+      LogUtils.info('[HandwritingSaber] 导入页面已保存（等待云端资源上传）');
+      unawaited(() async {
+        try {
+          await _uploadAssetsToCloud();
+          await _saveToStorage(suppressStatusUpdate: true, skipCloudUpload: true);
+          LogUtils.info('[HandwritingSaber] PDF云端上传及索引补写完成');
+        } catch (e, stackTrace) {
+          LogUtils.error('[HandwritingSaber] PDF云端上传失败（本地导入仍保留）: $e\n$stackTrace');
+        }
+      }());
 
       final totalImportTime = DateTime.now().difference(importStartTime);
       debugPrint(
@@ -5055,11 +5131,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           message: 'PDF导入成功（${pdfDocument.pages.length}页），正在加载页面内容...',
         );
       }
-
-      // 释放临时PDF文档（PdfEditorImage会管理自己的文档）
-      pdfDocument.dispose();
     } catch (e) {
       debugPrint('❌ [HandwritingSaberPocPage] 导入 PDF 失败：$e');
+      LogUtils.error('[HandwritingSaber] PDF导入失败: $e');
       if (mounted) {
         showToastNotification(
           message: '导入 PDF 失败：$e',
@@ -5090,7 +5164,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       if (pdfImage == null) {
         if (mounted) {
-        showToastNotification(message: '当前没有PDF页面');
+          showToastNotification(message: '当前没有PDF页面');
         }
         return;
       }
@@ -5451,115 +5525,119 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return Stack(
         children: [
           Focus(
-        autofocus: true,
-        onKeyEvent: (FocusNode node, KeyEvent event) {
-          // ✅ 监听键盘事件
-          if (event is KeyDownEvent) {
-            // 检查是否按下 Control (Windows/Linux) 或 Command (macOS)
-            final isCtrlPressed = HardwareKeyboard.instance.isControlPressed ||
-                HardwareKeyboard.instance.isMetaPressed;
+            autofocus: true,
+            onKeyEvent: (FocusNode node, KeyEvent event) {
+              // ✅ 监听键盘事件
+              if (event is KeyDownEvent) {
+                // 检查是否按下 Control (Windows/Linux) 或 Command (macOS)
+                final isCtrlPressed =
+                    HardwareKeyboard.instance.isControlPressed ||
+                        HardwareKeyboard.instance.isMetaPressed;
 
-            // 检查是否按下 Shift
-            final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+                // 检查是否按下 Shift
+                final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
-            // ✅ Ctrl+Z / Cmd+Z 撤销
-            if (isCtrlPressed &&
-                !isShiftPressed &&
-                event.logicalKey == LogicalKeyboardKey.keyZ) {
-              if (_history.canUndo) {
-                _undo();
-                return KeyEventResult.handled;
+                // ✅ Ctrl+Z / Cmd+Z 撤销
+                if (isCtrlPressed &&
+                    !isShiftPressed &&
+                    event.logicalKey == LogicalKeyboardKey.keyZ) {
+                  if (_history.canUndo) {
+                    _undo();
+                    return KeyEventResult.handled;
+                  }
+                }
+
+                // ✅ Ctrl+Shift+Z / Cmd+Shift+Z 或 Ctrl+Y / Cmd+Y 重做
+                if ((isCtrlPressed &&
+                        isShiftPressed &&
+                        event.logicalKey == LogicalKeyboardKey.keyZ) ||
+                    (isCtrlPressed &&
+                        event.logicalKey == LogicalKeyboardKey.keyY)) {
+                  if (_history.canRedo) {
+                    _redo();
+                    return KeyEventResult.handled;
+                  }
+                }
+
+                // Ctrl+C 复制
+                if (isCtrlPressed &&
+                    event.logicalKey == LogicalKeyboardKey.keyC) {
+                  if (_selectResult != null && !_selectResult!.isEmpty) {
+                    _copySelectedObjects();
+                    return KeyEventResult.handled;
+                  }
+                }
+
+                // Ctrl+V 粘贴
+                if (isCtrlPressed &&
+                    event.logicalKey == LogicalKeyboardKey.keyV) {
+                  _pasteObjects();
+                  return KeyEventResult.handled;
+                }
+
+                // 退格键或 Delete 键删除
+                if (event.logicalKey == LogicalKeyboardKey.backspace ||
+                    event.logicalKey == LogicalKeyboardKey.delete) {
+                  // 删除选中的对象
+                  if (_selectResult != null && !_selectResult!.isEmpty) {
+                    _deleteSelectedObjects();
+                    return KeyEventResult.handled;
+                  }
+                }
+
+                // ✅ Ctrl/Cmd + Plus (+) 或 Ctrl/Cmd + Equal (=) 放大视图
+                // 注意：大多数键盘上 + 需要按 Shift，所以同时支持 = 键
+                if (isCtrlPressed &&
+                    (event.logicalKey == LogicalKeyboardKey.add ||
+                        event.logicalKey == LogicalKeyboardKey.equal ||
+                        event.logicalKey == LogicalKeyboardKey.numpadAdd)) {
+                  _zoomIn();
+                  return KeyEventResult.handled;
+                }
+
+                // ✅ Ctrl/Cmd + Minus (-) 缩小视图
+                if (isCtrlPressed &&
+                    (event.logicalKey == LogicalKeyboardKey.minus ||
+                        event.logicalKey ==
+                            LogicalKeyboardKey.numpadSubtract)) {
+                  _zoomOut();
+                  return KeyEventResult.handled;
+                }
+
+                // ✅ Ctrl/Cmd + 0 重置缩放到100%
+                if (isCtrlPressed &&
+                    (event.logicalKey == LogicalKeyboardKey.digit0 ||
+                        event.logicalKey == LogicalKeyboardKey.numpad0)) {
+                  _zoomReset();
+                  return KeyEventResult.handled;
+                }
               }
-            }
-
-            // ✅ Ctrl+Shift+Z / Cmd+Shift+Z 或 Ctrl+Y / Cmd+Y 重做
-            if ((isCtrlPressed &&
-                    isShiftPressed &&
-                    event.logicalKey == LogicalKeyboardKey.keyZ) ||
-                (isCtrlPressed &&
-                    event.logicalKey == LogicalKeyboardKey.keyY)) {
-              if (_history.canRedo) {
-                _redo();
-                return KeyEventResult.handled;
-              }
-            }
-
-            // Ctrl+C 复制
-            if (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
-              if (_selectResult != null && !_selectResult!.isEmpty) {
-                _copySelectedObjects();
-                return KeyEventResult.handled;
-              }
-            }
-
-            // Ctrl+V 粘贴
-            if (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyV) {
-              _pasteObjects();
-              return KeyEventResult.handled;
-            }
-
-            // 退格键或 Delete 键删除
-            if (event.logicalKey == LogicalKeyboardKey.backspace ||
-                event.logicalKey == LogicalKeyboardKey.delete) {
-              // 删除选中的对象
-              if (_selectResult != null && !_selectResult!.isEmpty) {
-                _deleteSelectedObjects();
-                return KeyEventResult.handled;
-              }
-            }
-
-            // ✅ Ctrl/Cmd + Plus (+) 或 Ctrl/Cmd + Equal (=) 放大视图
-            // 注意：大多数键盘上 + 需要按 Shift，所以同时支持 = 键
-            if (isCtrlPressed &&
-                (event.logicalKey == LogicalKeyboardKey.add ||
-                    event.logicalKey == LogicalKeyboardKey.equal ||
-                    event.logicalKey == LogicalKeyboardKey.numpadAdd)) {
-              _zoomIn();
-              return KeyEventResult.handled;
-            }
-
-            // ✅ Ctrl/Cmd + Minus (-) 缩小视图
-            if (isCtrlPressed &&
-                (event.logicalKey == LogicalKeyboardKey.minus ||
-                    event.logicalKey == LogicalKeyboardKey.numpadSubtract)) {
-              _zoomOut();
-              return KeyEventResult.handled;
-            }
-
-            // ✅ Ctrl/Cmd + 0 重置缩放到100%
-            if (isCtrlPressed &&
-                (event.logicalKey == LogicalKeyboardKey.digit0 ||
-                    event.logicalKey == LogicalKeyboardKey.numpad0)) {
-              _zoomReset();
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
-        },
-        child: Column(
-          children: [
-            // 移动端顶部操作区与系统状态栏保持更舒适的间距，桌面端沿用原布局。
-            VSpace(_isMobilePlatform ? 48 : 40),
-            // ✅ 工具栏（移除状态提示区域）
-            ValueListenableBuilder<Tool>(
-              valueListenable: _currentToolNotifier,
-              builder: (context, currentTool, child) {
-                return ValueListenableBuilder<Color?>(
-                  valueListenable: _currentFillColorNotifier,
-                  builder: (ctx, fillColor, _) {
-                    return ValueListenableBuilder<bool>(
-                      valueListenable: _canUndoNotifier,
-                      builder: (ctx, canUndo, _) {
+              return KeyEventResult.ignored;
+            },
+            child: Column(
+              children: [
+                // 移动端顶部操作区与系统状态栏保持更舒适的间距，桌面端沿用原布局。
+                VSpace(_isMobilePlatform ? 48 : 40),
+                // ✅ 工具栏（移除状态提示区域）
+                ValueListenableBuilder<Tool>(
+                  valueListenable: _currentToolNotifier,
+                  builder: (context, currentTool, child) {
+                    return ValueListenableBuilder<Color?>(
+                      valueListenable: _currentFillColorNotifier,
+                      builder: (ctx, fillColor, _) {
                         return ValueListenableBuilder<bool>(
-                          valueListenable: _canRedoNotifier,
-                          builder: (ctx2, canRedo, _) {
+                          valueListenable: _canUndoNotifier,
+                          builder: (ctx, canUndo, _) {
                             return ValueListenableBuilder<bool>(
-                              valueListenable: _textEditingModeNotifier,
-                              builder: (ctx3, textEditingMode, _) {
+                              valueListenable: _canRedoNotifier,
+                              builder: (ctx2, canRedo, _) {
                                 return ValueListenableBuilder<bool>(
-                                  valueListenable: _showPageManagerNotifier,
-                                  builder: (context, showPageManager, ___) {
-                                    return HandwritingSaberToolbar(
+                                  valueListenable: _textEditingModeNotifier,
+                                  builder: (ctx3, textEditingMode, _) {
+                                    return ValueListenableBuilder<bool>(
+                                      valueListenable: _showPageManagerNotifier,
+                                      builder: (context, showPageManager, ___) {
+                                        return HandwritingSaberToolbar(
                                           currentTool: currentTool,
                                           onToolChanged: _onToolChanged,
                                           currentBackgroundPattern:
@@ -5609,6 +5687,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                               _togglePageManager, // ✅ 切换页面管理器回调
                                           // ✅ 仅移动端显示工具栏返回按钮
                                           showBackButton: _isMobilePlatform,
+                                        );
+                                      },
                                     );
                                   },
                                 );
@@ -5619,222 +5699,234 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                       },
                     );
                   },
-                );
-              },
-            ),
-            const Divider(height: 1),
-            // ✅ 主内容区域（页面管理器 + 画布）
-            Expanded(
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _showPageManagerNotifier,
-                builder: (context, showPageManager, _) {
-                  return Row(
-                    children: [
-                      // ✅ 左侧页面管理器侧边栏
-                      if (showPageManager)
-                        LayoutBuilder(
-                          builder: (context, constraints) {
-                            return ValueListenableBuilder<int>(
-                              valueListenable: _viewingPageIndexNotifier,
-                              builder: (context, viewingPageIndex, _) {
-                                return EditorPageManager(
-                                  coreInfo: _coreInfo,
-                                  currentPageIndex: viewingPageIndex,
-                                  redrawAndSave: _redrawAndSave,
-                                  scrollToPage: _scrollToPage,
-                                  insertPageAfter: _insertPageAfter,
-                                  duplicatePage: _duplicatePage,
-                                  clearPage: _clearPage,
-                                  deletePage: _deletePage,
-                                  width: 200,
-                                  constraints: constraints,
+                ),
+                const Divider(height: 1),
+                // ✅ 主内容区域（页面管理器 + 画布）
+                Expanded(
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _showPageManagerNotifier,
+                    builder: (context, showPageManager, _) {
+                      return Row(
+                        children: [
+                          // ✅ 左侧页面管理器侧边栏
+                          if (showPageManager)
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                return ValueListenableBuilder<int>(
+                                  valueListenable: _viewingPageIndexNotifier,
+                                  builder: (context, viewingPageIndex, _) {
+                                    return EditorPageManager(
+                                      coreInfo: _coreInfo,
+                                      currentPageIndex: viewingPageIndex,
+                                      redrawAndSave: _redrawAndSave,
+                                      scrollToPage: _scrollToPage,
+                                      insertPageAfter: _insertPageAfter,
+                                      duplicatePage: _duplicatePage,
+                                      clearPage: _clearPage,
+                                      deletePage: _deletePage,
+                                      width: 200,
+                                      constraints: constraints,
+                                    );
+                                  },
                                 );
                               },
-                            );
-                          },
-                        ),
-                      // ✅ 右侧画布区域
-                      Expanded(
-                        child: ValueListenableBuilder<double>(
-                          valueListenable: _zoomLevelNotifier,
-                          builder: (context, zoomLevel, _) {
-                            return Stack(
-                              children: [
-                                // ✅ 主内容区域（支持鼠标滚轮缩放）
-                                Listener(
-                                  key: _mobileCanvasKey,
-                                  onPointerSignal: (PointerSignalEvent event) {
-                                    // 监听鼠标滚轮事件
-                                    if (event is PointerScrollEvent) {
-                                      // 检查是否按下 Ctrl/Cmd 键
-                                      final isCtrlPressed = HardwareKeyboard
-                                              .instance.isControlPressed ||
-                                          HardwareKeyboard
-                                              .instance.isMetaPressed;
+                            ),
+                          // ✅ 右侧画布区域
+                          Expanded(
+                            child: ValueListenableBuilder<double>(
+                              valueListenable: _zoomLevelNotifier,
+                              builder: (context, zoomLevel, _) {
+                                return Stack(
+                                  children: [
+                                    // ✅ 主内容区域（支持鼠标滚轮缩放）
+                                    Listener(
+                                      key: _mobileCanvasKey,
+                                      onPointerSignal:
+                                          (PointerSignalEvent event) {
+                                        // 监听鼠标滚轮事件
+                                        if (event is PointerScrollEvent) {
+                                          // 检查是否按下 Ctrl/Cmd 键
+                                          final isCtrlPressed = HardwareKeyboard
+                                                  .instance.isControlPressed ||
+                                              HardwareKeyboard
+                                                  .instance.isMetaPressed;
 
-                                      if (isCtrlPressed) {
-                                        // Ctrl/Cmd + 滚轮 = 缩放
-                                        _handleScrollZoom(event.scrollDelta.dy);
-                                      }
-                                      // 如果没有按 Ctrl/Cmd，让 SingleChildScrollView 处理滚动
-                                    }
-                                  },
-                                  child: LayoutBuilder(
-                                    builder: (BuildContext context,
-                                        BoxConstraints constraints) {
-                                      // ✅ 保存最新的布局约束，供滚动计算使用
-                                      _lastCanvasConstraints = constraints;
-
-                                      // ✅ 支持多页滚动显示
-                                      if (_coreInfo.pages.isEmpty) {
-                                        return const Center(
-                                          child: Text('没有页面'),
-                                        );
-                                      }
-
-                                      // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例，并应用用户缩放）
-                                      double screenWidth = constraints.maxWidth;
-                                      if (!screenWidth.isFinite) {
-                                        // 尝试从MediaQuery获取宽度
-                                        try {
-                                          screenWidth =
-                                              MediaQuery.of(context).size.width;
-                                        } catch (_) {
-                                          screenWidth = 800;
+                                          if (isCtrlPressed) {
+                                            // Ctrl/Cmd + 滚轮 = 缩放
+                                            _handleScrollZoom(
+                                                event.scrollDelta.dy);
+                                          }
+                                          // 如果没有按 Ctrl/Cmd，让 SingleChildScrollView 处理滚动
                                         }
-                                      }
-                                      if (screenWidth <= 0) screenWidth = 800;
-                                      final List<Widget> pageWidgets = [];
+                                      },
+                                      child: LayoutBuilder(
+                                        builder: (BuildContext context,
+                                            BoxConstraints constraints) {
+                                          // ✅ 保存最新的布局约束，供滚动计算使用
+                                          _lastCanvasConstraints = constraints;
 
-                                      debugPrint(
-                                          '🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}, zoomLevel: ${(zoomLevel * 100).toInt()}%');
-
-                                      for (int pageIndex = 0;
-                                          pageIndex < _coreInfo.pages.length;
-                                          pageIndex++) {
-                                        // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
-                                        if (_pageNotifiers.length <=
-                                            pageIndex) {
-                                          _pageNotifiers.add(EditorPageNotifier(
-                                              _coreInfo.pages[pageIndex]));
-                                        }
-
-                                        // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
-                                        final pageWidget = ListenableBuilder(
-                                          listenable: _pageNotifiers[pageIndex],
-                                          builder: (context, child) {
-                                            final page =
-                                                _pageNotifiers[pageIndex].page;
-
-                                            // 防止除零错误
-                                            if (page.size.width <= 0 ||
-                                                page.size.height <= 0) {
-                                              return const SizedBox.shrink();
-                                            }
-
-                                            // ✅ 计算页面缩放（基础缩放 * 用户缩放级别）
-                                            // 基础缩放：使页面宽度适应屏幕宽度
-                                            // 用户缩放：在基础缩放上叠加用户选择的缩放级别
-                                            final double baseScale =
-                                                screenWidth / page.size.width;
-                                            final double effectiveScale =
-                                                baseScale * zoomLevel;
-                                            final double pageDisplayWidth =
-                                                page.size.width *
-                                                    effectiveScale;
-                                            final double pageDisplayHeight =
-                                                page.size.height *
-                                                    effectiveScale;
-
-                                            // ✅ 创建单页画布
-                                            return _buildSinglePageCanvas(
-                                              page: page,
-                                              pageIndex: pageIndex,
-                                              pageDisplayWidth:
-                                                  pageDisplayWidth,
-                                              pageDisplayHeight:
-                                                  pageDisplayHeight,
-                                              screenWidth: screenWidth,
+                                          // ✅ 支持多页滚动显示
+                                          if (_coreInfo.pages.isEmpty) {
+                                            return const Center(
+                                              child: Text('没有页面'),
                                             );
-                                          },
-                                        );
-                                        pageWidgets.add(pageWidget);
+                                          }
 
-                                        // ✅ 页面之间的间距（除了最后一页）
-                                        if (pageIndex <
-                                            _coreInfo.pages.length - 1) {
-                                          pageWidgets
-                                              .add(const SizedBox(height: 16));
-                                        }
-                                      }
-
-                                      // ✅ 直接使用新创建的pageWidgets，不使用缓存
-                                      // 原因：之前的缓存机制有严重bug - 只检查页面数量，导致数据更新后界面不刷新
-                                      // ListenableBuilder已经提供了充分的优化（每个页面只在自己的数据变化时重建）
-                                      debugPrint(
-                                          '🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
-
-                                      // ✅ 使用 SingleChildScrollView 支持垂直和水平滚动（当放大超过100%时需要水平滚动）
-                                      return NotificationListener<
-                                          ScrollNotification>(
-                                        onNotification: (notification) {
-                                          // 更新当前查看的页面索引
-                                          if (notification
-                                              is ScrollUpdateNotification) {
-                                            // ✅ 如果是程序锁定的滚动，不触发索引更新
-                                            if (_isProgrammaticScrolling) {
-                                              return false;
-                                            }
-
-                                            final newIndex =
-                                                _getCurrentPageIndexFromScroll();
-                                            if (_viewingPageIndexNotifier
-                                                    .value !=
-                                                newIndex) {
-                                              _viewingPageIndexNotifier.value =
-                                                  newIndex;
+                                          // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例，并应用用户缩放）
+                                          double screenWidth =
+                                              constraints.maxWidth;
+                                          if (!screenWidth.isFinite) {
+                                            // 尝试从MediaQuery获取宽度
+                                            try {
+                                              screenWidth =
+                                                  MediaQuery.of(context)
+                                                      .size
+                                                      .width;
+                                            } catch (_) {
+                                              screenWidth = 800;
                                             }
                                           }
-                                          return false;
-                                        },
-                                        child: SingleChildScrollView(
-                                          controller:
-                                              _pageScrollController, // ✅ 绑定滚动控制器
-                                          scrollDirection: Axis.vertical,
-                                          physics: _isMobilePlatform
-                                              ? const NeverScrollableScrollPhysics()
-                                              : null,
-                                          child: SingleChildScrollView(
-                                            controller:
-                                                _canvasHorizontalScrollController,
-                                            scrollDirection: Axis.horizontal,
-                                            physics: _isMobilePlatform
-                                                ? const NeverScrollableScrollPhysics()
-                                                : null,
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children:
-                                                  pageWidgets, // 直接使用最新的pageWidgets
+                                          if (screenWidth <= 0)
+                                            screenWidth = 800;
+                                          final List<Widget> pageWidgets = [];
+
+                                          debugPrint(
+                                              '🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}, zoomLevel: ${(zoomLevel * 100).toInt()}%');
+
+                                          for (int pageIndex = 0;
+                                              pageIndex <
+                                                  _coreInfo.pages.length;
+                                              pageIndex++) {
+                                            // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
+                                            if (_pageNotifiers.length <=
+                                                pageIndex) {
+                                              _pageNotifiers.add(
+                                                  EditorPageNotifier(_coreInfo
+                                                      .pages[pageIndex]));
+                                            }
+
+                                            // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
+                                            final pageWidget =
+                                                ListenableBuilder(
+                                              listenable:
+                                                  _pageNotifiers[pageIndex],
+                                              builder: (context, child) {
+                                                final page =
+                                                    _pageNotifiers[pageIndex]
+                                                        .page;
+
+                                                // 防止除零错误
+                                                if (page.size.width <= 0 ||
+                                                    page.size.height <= 0) {
+                                                  return const SizedBox
+                                                      .shrink();
+                                                }
+
+                                                // ✅ 计算页面缩放（基础缩放 * 用户缩放级别）
+                                                // 基础缩放：使页面宽度适应屏幕宽度
+                                                // 用户缩放：在基础缩放上叠加用户选择的缩放级别
+                                                final double baseScale =
+                                                    screenWidth /
+                                                        page.size.width;
+                                                final double effectiveScale =
+                                                    baseScale * zoomLevel;
+                                                final double pageDisplayWidth =
+                                                    page.size.width *
+                                                        effectiveScale;
+                                                final double pageDisplayHeight =
+                                                    page.size.height *
+                                                        effectiveScale;
+
+                                                // ✅ 创建单页画布
+                                                return _buildSinglePageCanvas(
+                                                  page: page,
+                                                  pageIndex: pageIndex,
+                                                  pageDisplayWidth:
+                                                      pageDisplayWidth,
+                                                  pageDisplayHeight:
+                                                      pageDisplayHeight,
+                                                  screenWidth: screenWidth,
+                                                );
+                                              },
+                                            );
+                                            pageWidgets.add(pageWidget);
+
+                                            // ✅ 页面之间的间距（除了最后一页）
+                                            if (pageIndex <
+                                                _coreInfo.pages.length - 1) {
+                                              pageWidgets.add(
+                                                  const SizedBox(height: 16));
+                                            }
+                                          }
+
+                                          // ✅ 直接使用新创建的pageWidgets，不使用缓存
+                                          // 原因：之前的缓存机制有严重bug - 只检查页面数量，导致数据更新后界面不刷新
+                                          // ListenableBuilder已经提供了充分的优化（每个页面只在自己的数据变化时重建）
+                                          debugPrint(
+                                              '🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
+
+                                          // ✅ 使用 SingleChildScrollView 支持垂直和水平滚动（当放大超过100%时需要水平滚动）
+                                          return NotificationListener<
+                                              ScrollNotification>(
+                                            onNotification: (notification) {
+                                              // 更新当前查看的页面索引
+                                              if (notification
+                                                  is ScrollUpdateNotification) {
+                                                // ✅ 如果是程序锁定的滚动，不触发索引更新
+                                                if (_isProgrammaticScrolling) {
+                                                  return false;
+                                                }
+
+                                                final newIndex =
+                                                    _getCurrentPageIndexFromScroll();
+                                                if (_viewingPageIndexNotifier
+                                                        .value !=
+                                                    newIndex) {
+                                                  _viewingPageIndexNotifier
+                                                      .value = newIndex;
+                                                }
+                                              }
+                                              return false;
+                                            },
+                                            child: SingleChildScrollView(
+                                              controller:
+                                                  _pageScrollController, // ✅ 绑定滚动控制器
+                                              scrollDirection: Axis.vertical,
+                                              physics: _isMobilePlatform
+                                                  ? const NeverScrollableScrollPhysics()
+                                                  : null,
+                                              child: SingleChildScrollView(
+                                                controller:
+                                                    _canvasHorizontalScrollController,
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                physics: _isMobilePlatform
+                                                    ? const NeverScrollableScrollPhysics()
+                                                    : null,
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children:
+                                                      pageWidgets, // 直接使用最新的pageWidgets
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
           ),
           // ✅ 缩放级别指示器（固定在右下角，不随视图缩放而改变位置）
           Positioned(

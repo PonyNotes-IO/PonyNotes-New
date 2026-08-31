@@ -224,6 +224,10 @@ dev_dependencies:
   url_launcher_platform_interface: any
 
 dependency_overrides:
+  # pdfrx 2.1.5 的原生桥接与 pdfrx_engine 0.1.13 配套。0.1.14 起新增的
+  # 原生动态字体初始化不在该桥接版本中，macOS 会在首次解析 PDF 时卡住。
+  pdfrx_engine: 0.1.13
+
   # pub.dev douyin_login 1.0.6 包含重复的 Objective-C 方法声明，导致 Xcode 编译失败。
   # 使用仓库内修复版本，确保团队和 CI 不依赖本机 pub 缓存补丁。
   douyin_login:
