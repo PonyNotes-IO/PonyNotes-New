@@ -159,15 +159,9 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     required ViewSectionPB? fromSection,
     required ViewSectionPB? toSection,
   }) async {
-    final canMove = await _checkMovePermission();
-    if (!canMove) {
-      showToastNotification(
-        message: '受限成员无法移动文档',
-        type: ToastificationType.error,
-      );
-      return null;
-    }
-
+    // 同分区移动此前会额外查询一次工作区成员角色。该查询可能滞后于
+    // SpaceBloc 的权限状态，导致有写权限的文档被客户端提前拦截；
+    // Folder 的移动接口会执行权威权限校验，因此直接提交并使用其结果。
     return ViewBackendService.moveViewV2(
       viewId: from.id,
       newParentId: newParentId,
@@ -924,39 +918,6 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
       );
     } catch (e, st) {
       Log.error('Exception when checking rename permission: $e\n$st');
-      return true;
-    }
-  }
-
-  /// 检查当前用户是否有移动权限
-  /// Guest（受限成员）无法移动文档
-  Future<bool> _checkMovePermission() async {
-    try {
-      final (userProfile, workspaceId) = await _getCurrentUserInfo();
-      if (userProfile == null || workspaceId == null) {
-        return true;
-      }
-
-      final membersRes = await UserBackendService(userId: userProfile.id)
-          .getWorkspaceMembers(workspaceId);
-      return await membersRes.fold(
-        (members) {
-          final myMember = members.items.firstWhereOrNull(
-            (m) => m.uid.toInt() == userProfile.id.toInt(),
-          );
-          // Guest 角色无法移动
-          if (myMember?.role == AFRolePB.Guest) {
-            return false;
-          }
-          return true;
-        },
-        (e) async {
-          Log.error('Failed to check move permission: ${e.msg}');
-          return true;
-        },
-      );
-    } catch (e, st) {
-      Log.error('Exception when checking move permission: $e\n$st');
       return true;
     }
   }

@@ -3076,6 +3076,7 @@
     "whiteboardMigrating": "正在迁移白板内容…",
     "whiteboardMigrationFailed": "白板内容迁移失败，已取消移动（内容未丢失）",
     "whiteboardMigrationSuccess": "白板已移动",
+    "moveSuccess": "页面已移动",
     "noPermissionToMoveIntoSharedSpace": "没有权限：受限成员无法向协作区添加文档",
     "noPermissionToMoveOutOfSharedSpace": "没有权限：只有工作空间所有者可以把文档移出协作区",
     "onlyWhiteboardCreatorCanMove": "只有白板创建者可以在私有空间与协作区之间移动白板",

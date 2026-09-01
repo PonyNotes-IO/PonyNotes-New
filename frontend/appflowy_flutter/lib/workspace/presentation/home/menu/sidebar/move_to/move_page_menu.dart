@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_search_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
@@ -14,7 +18,10 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-typedef MovePageMenuOnSelected = void Function(ViewPB space, ViewPB view);
+typedef MovePageMenuOnSelected = FutureOr<void> Function(
+  ViewPB space,
+  ViewPB view,
+);
 
 class MovePageMenu extends StatefulWidget {
   const MovePageMenu({
@@ -110,22 +117,24 @@ class _MovePageMenuState extends State<MovePageMenu> {
     List<ViewPB> publicSpaces,
     List<ViewPB> privateSpaces,
   ) {
-    return SingleChildScrollView(
+    return CustomScrollView(
       physics: const ClampingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (publicSpaces.isNotEmpty) ...[
-            _buildSectionHeader(LocaleKeys.space_publicPermission.tr()),
-            ...publicSpaces.map(_buildSpaceGroup),
-          ],
-          if (privateSpaces.isNotEmpty) ...[
-            if (publicSpaces.isNotEmpty) const VSpace(8),
-            _buildSectionHeader(LocaleKeys.space_privatePermission.tr()),
-            ...privateSpaces.map(_buildSpaceGroup),
-          ],
+      slivers: [
+        if (publicSpaces.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: _buildSectionHeader(LocaleKeys.space_publicPermission.tr()),
+          ),
+          ...publicSpaces.map(_buildSpaceGroupSliver),
         ],
-      ),
+        if (privateSpaces.isNotEmpty) ...[
+          if (publicSpaces.isNotEmpty)
+            const SliverToBoxAdapter(child: VSpace(8)),
+          SliverToBoxAdapter(
+            child: _buildSectionHeader(LocaleKeys.space_privatePermission.tr()),
+          ),
+          ...privateSpaces.map(_buildSpaceGroupSliver),
+        ],
+      ],
     );
   }
 
@@ -140,60 +149,14 @@ class _MovePageMenuState extends State<MovePageMenu> {
     );
   }
 
-  Widget _buildSpaceGroup(ViewPB space) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 空间根目录行：直接可点击，移动到空间根目录
-        SizedBox(
-          height: 30,
-          child: FlowyButton(
-            margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-            text: Row(
-              children: [
-                SpaceIcon(
-                  dimension: 20,
-                  space: space,
-                  svgSize: 11,
-                  cornerRadius: 6.0,
-                ),
-                const HSpace(8),
-                Flexible(
-                  child: FlowyText.medium(
-                    space.name,
-                    fontSize: 14.0,
-                    figmaLineHeight: 18.0,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            onTap: () => widget.onSelected(space, space),
-          ),
-        ),
-        SpacePages(
-          key: ValueKey(space.id),
-          space: space,
-          isHovered: isHoveredNotifier,
-          isExpandedNotifier: isExpandedNotifier,
-          shouldIgnoreView: (view) {
-            if (_shouldIgnoreView(view, widget.sourceView)) {
-              return IgnoreViewType.hide;
-            }
-            // 仅禁用数据库视图（Grid/Board/Calendar），
-            // 允许 Document/Folder/Notebook/Whiteboard 作为移动目标
-            if (view.layout.isDatabaseView) {
-              return IgnoreViewType.disable;
-            }
-            return IgnoreViewType.none;
-          },
-          // hide the hover status and disable the editing actions
-          disableSelectedStatus: true,
-          // hide the ... and + buttons
-          rightIconsBuilder: (context, view) => [],
-          onSelected: (_, view) => widget.onSelected(space, view),
-        ),
-      ],
+  Widget _buildSpaceGroupSliver(ViewPB space) {
+    return _MoveSpaceGroupSliver(
+      key: ValueKey(space.id),
+      space: space,
+      sourceView: widget.sourceView,
+      isHovered: isHoveredNotifier,
+      isExpandedNotifier: isExpandedNotifier,
+      onSelected: widget.onSelected,
     );
   }
 }
@@ -206,25 +169,121 @@ class _MovePageGroupedViews extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: views
-            .map(
-              (view) => ViewItem(
-                key: ValueKey(view.id),
-                view: view,
-                spaceType: FolderSpaceType.unknown,
-                level: 0,
-                onSelected: (_, view) => onSelected(view),
-                isFeedback: false,
-                isDraggable: false,
-                shouldRenderChildren: false,
-                leftIconBuilder: (_, __) => const HSpace(0.0),
-                rightIconsBuilder: (_, view) => [],
+    return ListView.builder(
+      physics: const ClampingScrollPhysics(),
+      itemCount: views.length,
+      itemBuilder: (context, index) {
+        final view = views[index];
+        return ViewItem(
+          key: ValueKey(view.id),
+          view: view,
+          spaceType: FolderSpaceType.unknown,
+          level: 0,
+          onSelected: (_, view) => onSelected(view),
+          isFeedback: false,
+          isDraggable: false,
+          shouldRenderChildren: false,
+          leftIconBuilder: (_, __) => const HSpace(0.0),
+          rightIconsBuilder: (_, view) => [],
+        );
+      },
+    );
+  }
+}
+
+class _MoveSpaceGroupSliver extends StatelessWidget {
+  const _MoveSpaceGroupSliver({
+    super.key,
+    required this.space,
+    required this.sourceView,
+    required this.isHovered,
+    required this.isExpandedNotifier,
+    required this.onSelected,
+  });
+
+  final ViewPB space;
+  final ViewPB sourceView;
+  final ValueNotifier<bool> isHovered;
+  final PropertyValueNotifier<bool> isExpandedNotifier;
+  final MovePageMenuOnSelected onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => ViewBloc(view: space)..add(const ViewEvent.initial()),
+      child: BlocBuilder<ViewBloc, ViewState>(
+        builder: (context, state) {
+          final childViews = state.view.childViews.where((view) {
+            return !_shouldIgnoreView(view, sourceView);
+          }).toList();
+
+          return SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index == 0) {
+                  return _buildSpaceRootRow(context);
+                }
+
+                final view = childViews[index - 1];
+                return ViewItem(
+                  key: ValueKey('${space.id} ${view.id}'),
+                  spaceType:
+                      space.spacePermission == SpacePermission.publicToAll
+                          ? FolderSpaceType.public
+                          : FolderSpaceType.private,
+                  isFirstChild: index == 1,
+                  view: view,
+                  level: 0,
+                  leftPadding: HomeSpaceViewSizes.leftPadding,
+                  isFeedback: false,
+                  isHovered: isHovered,
+                  disableSelectedStatus: true,
+                  isExpandedNotifier: isExpandedNotifier,
+                  rightIconsBuilder: (_, __) => [],
+                  shouldIgnoreView: (view) {
+                    if (_shouldIgnoreView(view, sourceView)) {
+                      return IgnoreViewType.hide;
+                    }
+                    return view.layout.isDatabaseView
+                        ? IgnoreViewType.disable
+                        : IgnoreViewType.none;
+                  },
+                  onSelected: (_, view) => onSelected(space, view),
+                );
+              },
+              childCount: childViews.length + 1,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSpaceRootRow(BuildContext context) {
+    return SizedBox(
+      height: 30,
+      child: FlowyButton(
+        margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+        text: Row(
+          children: [
+            SpaceIcon(
+              dimension: 20,
+              space: space,
+              svgSize: 11,
+              cornerRadius: 6.0,
+            ),
+            const HSpace(8),
+            Flexible(
+              child: FlowyText.medium(
+                space.name,
+                fontSize: 14.0,
+                figmaLineHeight: 18.0,
+                overflow: TextOverflow.ellipsis,
               ),
-            )
-            .toList(),
+            ),
+          ],
+        ),
+        onTap: () => onSelected(space, space),
       ),
     );
   }

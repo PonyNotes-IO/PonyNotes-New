@@ -1646,6 +1646,11 @@ Future<void> moveViewCrossSpace(
       message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),
       type: ToastificationType.success,
     );
+  } else {
+    showToastNotification(
+      message: LocaleKeys.space_moveSuccess.tr(),
+      type: ToastificationType.success,
+    );
   }
   sidebarRefresher.refresh();
 }

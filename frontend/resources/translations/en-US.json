@@ -3019,6 +3019,7 @@
     "whiteboardMigrating": "Migrating whiteboard content…",
     "whiteboardMigrationFailed": "Whiteboard migration failed. The move was canceled (content preserved).",
     "whiteboardMigrationSuccess": "Whiteboard moved",
+    "moveSuccess": "Page moved",
     "noPermissionToMoveIntoSharedSpace": "No permission: restricted members cannot add pages to a shared space",
     "noPermissionToMoveOutOfSharedSpace": "No permission: only the workspace owner can move pages out of a shared space",
     "onlyWhiteboardCreatorCanMove": "Only the whiteboard creator can move a whiteboard between private and shared spaces",
