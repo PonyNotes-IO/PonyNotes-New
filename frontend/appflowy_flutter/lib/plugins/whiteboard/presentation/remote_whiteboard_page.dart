@@ -20,6 +20,7 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'whiteboard_clipboard_bridge.dart';
 
 const String _mobileExportBridgeScript = r'''
 (function () {
@@ -511,6 +512,10 @@ return await window.__xmExportImage('$format');
                     allowUniversalAccessFromFileURLs: true,
                   ),
                   initialUserScripts: UnmodifiableListView([
+                    UserScript(
+                      source: whiteboardClipboardBridgeScript,
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                    ),
                     // 【白板丢内容修复】持久化守护脚本：兜底保存 + 空场景防覆盖 +
                     // 退出保存入口（必须 AT_DOCUMENT_START，先于页面首次场景加载）
                     UserScript(
@@ -956,12 +961,12 @@ return await window.__xmExportImage('$format');
           final payload = Map<String, dynamic>.from(args.first as Map);
           final imageBase64 = payload['imageBase64'] as String?;
           final imageMimeType = payload['imageMimeType'] as String?;
-          final image = imageBase64 == null || imageBase64.isEmpty
+          final imageFormat = whiteboardClipboardImageFormat(imageMimeType);
+          final image = imageBase64 == null ||
+                  imageBase64.isEmpty ||
+                  imageFormat == null
               ? null
-              : (
-                  imageMimeType == 'image/png' ? 'png' : imageMimeType ?? 'png',
-                  Uint8List.fromList(base64Decode(imageBase64)),
-                );
+              : (imageFormat, Uint8List.fromList(base64Decode(imageBase64)));
           final plainText = payload['plainText'] as String?;
           final html = payload['html'] as String?;
           await ClipboardService().setData(

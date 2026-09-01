@@ -17,6 +17,8 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
+import 'whiteboard_clipboard_bridge.dart';
 
 const String _mobileWhiteboardReadinessScript = r'''
 (function () {
@@ -452,6 +454,10 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
             allowUniversalAccessFromFileURLs: true,
           ),
           initialUserScripts: UnmodifiableListView([
+            UserScript(
+              source: whiteboardClipboardBridgeScript,
+              injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            ),
             // 必须在页面脚本之前安装，就绪检查会同时确认协作房间初始化、
             // initialData 应用和画布尺寸测量均已完成。
             UserScript(
@@ -580,6 +586,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
           onWebViewCreated: (controller) {
             _controller = controller;
             _setupDownloadHandler(controller);
+            _setupClipboardHandler(controller);
           },
           onLoadStart: (controller, url) {
             _pageLoadGeneration++;
@@ -803,6 +810,35 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
           }
 
           await _saveBase64ToFile(base64Data, filename, mimeType);
+        }
+      },
+    );
+  }
+
+  void _setupClipboardHandler(InAppWebViewController controller) {
+    controller.addJavaScriptHandler(
+      handlerName: 'writeWhiteboardClipboard',
+      callback: (args) async {
+        if (_isDisposed || args.isEmpty || args.first is! Map) return;
+        try {
+          final payload = Map<String, dynamic>.from(args.first as Map);
+          final imageBase64 = payload['imageBase64'] as String?;
+          final imageFormat = whiteboardClipboardImageFormat(
+              payload['imageMimeType'] as String?);
+          final image = imageBase64 == null ||
+                  imageBase64.isEmpty ||
+                  imageFormat == null
+              ? null
+              : (imageFormat, Uint8List.fromList(base64Decode(imageBase64)));
+          await ClipboardService().setData(ClipboardServiceData(
+            plainText:
+                payload['plainText'] as String? ?? payload['html'] as String?,
+            html: payload['html'] as String?,
+            image: image,
+          ));
+          Log.info('[MobileWhiteboard] 已写入系统剪贴板');
+        } catch (e) {
+          Log.error('[MobileWhiteboard] 写入系统剪贴板失败: $e');
         }
       },
     );

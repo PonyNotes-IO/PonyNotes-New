@@ -11,6 +11,32 @@ void main() {
     expect(source, isNot(contains("ValueKey('whiteboard_container_")));
   });
 
+  test(
+      'whiteboard webviews bridge clipboard writes to Flutter native clipboard',
+      () {
+    final bridge = File(
+      'lib/plugins/whiteboard/presentation/whiteboard_clipboard_bridge.dart',
+    ).readAsStringSync();
+    final local = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final remote = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    final mobile = File(
+      'lib/plugins/whiteboard/presentation/mobile_whiteboard_body.dart',
+    ).readAsStringSync();
+
+    expect(bridge, contains("'writeWhiteboardClipboard'"));
+    expect(bridge, contains('clipboard.writeText'));
+    expect(local, contains('whiteboardClipboardBridgeScript'));
+    expect(local, contains("handlerName: 'writeWhiteboardClipboard'"));
+    expect(remote, contains('whiteboardClipboardBridgeScript'));
+    expect(remote, contains("handlerName: 'writeWhiteboardClipboard'"));
+    expect(mobile, contains('whiteboardClipboardBridgeScript'));
+    expect(mobile, contains("handlerName: 'writeWhiteboardClipboard'"));
+  });
+
   test('whiteboard import reload token reaches the platform view key', () {
     final pageSource =
         File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();

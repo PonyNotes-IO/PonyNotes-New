@@ -20,6 +20,7 @@ import '../application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'webview_async_eval.dart';
+import 'whiteboard_clipboard_bridge.dart';
 
 // 白板逐元素同步开关：出问题时置 false 回退到旧整段 elements 推送路径。
 const bool kWhiteboardPerElementSync = true;
@@ -131,6 +132,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   static const _webViewResizeSettleDuration = Duration(milliseconds: 220);
   static const _javaScriptHandlerNames = [
     'readWhiteboardClipboard',
+    'writeWhiteboardClipboard',
     'initData',
     'localStorageOnSet',
     'whiteboardImageSceneSnapshot',
@@ -792,6 +794,33 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             'imageBase64': null,
             'error': e.toString(),
           };
+        }
+      },
+    );
+
+    controller.addJavaScriptHandler(
+      handlerName: 'writeWhiteboardClipboard',
+      callback: (args) async {
+        if (_isDisposed || args.isEmpty || args.first is! Map) return;
+        try {
+          final payload = Map<String, dynamic>.from(args.first as Map);
+          final imageBase64 = payload['imageBase64'] as String?;
+          final imageFormat = whiteboardClipboardImageFormat(
+              payload['imageMimeType'] as String?);
+          final image = imageBase64 == null ||
+                  imageBase64.isEmpty ||
+                  imageFormat == null
+              ? null
+              : (imageFormat, Uint8List.fromList(base64Decode(imageBase64)));
+          await ClipboardService().setData(ClipboardServiceData(
+            plainText:
+                payload['plainText'] as String? ?? payload['html'] as String?,
+            html: payload['html'] as String?,
+            image: image,
+          ));
+          Log.info('[ExcalidrawWebView] 已写入系统剪贴板');
+        } catch (e) {
+          Log.error('[ExcalidrawWebView] 写入系统剪贴板失败: $e');
         }
       },
     );
@@ -2627,6 +2656,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       initialSettings: _settings,
                       // 在 document-start 阶段就禁用弹性回弹，比 onLoadStop 注入 CSS 更早
                       initialUserScripts: UnmodifiableListView([
+                        UserScript(
+                          source: whiteboardClipboardBridgeScript,
+                          injectionTime:
+                              UserScriptInjectionTime.AT_DOCUMENT_START,
+                        ),
                         UserScript(
                           source: _hostThemeBootstrapScript(
                             _currentSystemBrightness() == Brightness.dark
