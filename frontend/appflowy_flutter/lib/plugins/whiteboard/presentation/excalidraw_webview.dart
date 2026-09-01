@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +23,29 @@ import 'webview_async_eval.dart';
 
 // 白板逐元素同步开关：出问题时置 false 回退到旧整段 elements 推送路径。
 const bool kWhiteboardPerElementSync = true;
+
+/// 由文件扩展名推断白板插图的 MIME 类型。Excalidraw 仅接受
+/// png/jpeg/gif/svg/webp/bmp/ico，未知扩展名按 png 兜底。
+String _imageMimeTypeForExtension(String ext) {
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'webp':
+      return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'ico':
+      return 'image/x-icon';
+    case 'png':
+    default:
+      return 'image/png';
+  }
+}
 
 // 全局InAppWebView实例计数器，确保每个InAppWebView的PlatformView ID全局唯一
 int _globalInAppWebViewInstanceCounter = 0;
@@ -108,6 +133,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     'readWhiteboardClipboard',
     'initData',
     'localStorageOnSet',
+    'whiteboardImageSceneSnapshot',
     'localStorageOnRemove',
     'localStorageOnClear',
     'downloadCloudImages',
@@ -485,7 +511,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         widget.initialData != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          loadData(widget.initialData!);
+          loadData(
+            widget.initialData!,
+            preserveLocalSceneForBlankData:
+                dataArrivedLate && !reloadTokenChanged,
+          );
         }
       });
     }
@@ -641,7 +671,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final hostTheme =
           _currentSystemBrightness() == Brightness.dark ? 'dark' : 'light';
       // 入口页包含首屏主题初始化脚本，版本变化用于主动淘汰设备上的旧 WebView 缓存。
-      const cacheVersion = 'ponynotes-whiteboard-v7';
+      const cacheVersion = 'ponynotes-whiteboard-v12';
       final url =
           '$baseUrl/index.html?viewId=$viewId&storageMode=$storageMode&hostTheme=$hostTheme&v=$cacheVersion';
 
@@ -762,6 +792,49 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             'imageBase64': null,
             'error': e.toString(),
           };
+        }
+      },
+    );
+
+    // 白板插图：改由 Flutter 原生选图，绕开 WebView 里那条会「重编码为 PNG
+    // 后 >4MB 被 Excalidraw 内部 fileTooBig 静默丢弃」的原生 picker 链路。
+    // bridge 拦截 image 类型 <input> 的 click，转调此 handler 取字节，再在
+    // WebView 侧 canvas 降采样到 <4MB 后回填 input.files，交由 Excalidraw
+    // 原生插图管线建元素（该管线在 <4MB 时已被证实可靠）。
+    controller.addJavaScriptHandler(
+      handlerName: "pickWhiteboardImage",
+      callback: (args) async {
+        if (_isDisposed) return null;
+        try {
+          final result = await FilePicker.platform.pickFiles(
+            type: FileType.image,
+            allowMultiple: false,
+            withData: true,
+          );
+          if (result == null || result.files.isEmpty) {
+            return {'canceled': true};
+          }
+          final file = result.files.first;
+          Uint8List? bytes = file.bytes;
+          // 部分平台 withData 不回填 bytes，需按路径回读。
+          if ((bytes == null || bytes.isEmpty) && file.path != null) {
+            bytes = await File(file.path!).readAsBytes();
+          }
+          if (bytes == null || bytes.isEmpty) {
+            return {'error': 'empty file bytes'};
+          }
+          final ext = file.extension?.toLowerCase() ?? 'png';
+          final mimeType = _imageMimeTypeForExtension(ext);
+          return {
+            'name': file.name,
+            'mimeType': mimeType,
+            'base64': base64Encode(bytes),
+          };
+        } catch (e, stack) {
+          Log.error(
+            '[ExcalidrawWebView] pickWhiteboardImage failed: $e\n$stack',
+          );
+          return {'error': e.toString()};
         }
       },
     );
@@ -913,6 +986,31 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   '⚠️ [localStorageOnSet] Unexpected argument structure: $arg');
             }
           }
+        });
+    controller.addJavaScriptHandler(
+        handlerName: 'whiteboardImageSceneSnapshot',
+        callback: (args) {
+          if (_isDisposed || args.isEmpty || args.first is! Map) {
+            return false;
+          }
+          final snapshot = Map<dynamic, dynamic>.from(args.first as Map);
+          final elements = snapshot['elements'];
+          final files = snapshot['files'];
+          if (elements is! List || files is! Map || files.isEmpty) {
+            return false;
+          }
+
+          // iOS 原生图片选择器会临时暂停 WebView 的 LocalData 写入。
+          // 这个快照来自 Excalidraw onChange，元素和对应 files 必须作为同一
+          // 次 Flutter 更新交给本地 Collab，避免第二次选图才补发第一张。
+          Log.info(
+            '[WBCollab][ExcalidrawWebView] iOS image scene snapshot: elements=${elements.length}, files=${files.length}',
+          );
+          widget.onDataChanged?.call('update', {
+            'elements': List<dynamic>.from(elements),
+            'files': Map<String, dynamic>.from(files),
+          });
+          return true;
         });
     controller.addJavaScriptHandler(
         handlerName: "localStorageOnRemove",
@@ -2282,16 +2380,39 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   /// 加载数据（公共方法，供外部调用）
   /// 注意：此方法会重置整个场景
-  Future<void> loadData(Map<String, dynamic> data) async {
+  Future<void> loadData(
+    Map<String, dynamic> data, {
+    bool preserveLocalSceneForBlankData = false,
+  }) async {
     try {
       if (mounted) {
         setState(() => _isInitializing = true);
       }
-      await _safeEvalJs('''
-        if (window.loadExcalidrawData) {
-          window.loadExcalidrawData(${jsonEncode(data)});
-        }
-      ''', tag: 'loadData');
+      // 先沿用原有就绪重试，确保异步信箱只在页面脚本和 WebView 通道可用后启动。
+      await _safeEvalJs(
+        '''
+          if (!window.loadExcalidrawData) {
+            throw new Error('loadExcalidrawData is not ready');
+          }
+        ''',
+        tag: 'loadData readiness',
+      );
+      // 必须等待 JS 侧异步恢复完成。此前这里只启动 Promise 就立即返回，
+      // 用户在初始数据迟到期间插入的图片可能随后被旧场景 updateScene 覆盖。
+      await evaluateAsyncJavascript(
+        _controller!,
+        asyncBody: '''
+          if (window.loadExcalidrawData) {
+            await window.loadExcalidrawData(${jsonEncode(data)}, {
+              preserveLocalSceneForBlankData: $preserveLocalSceneForBlankData
+            });
+          }
+          return true;
+        ''',
+        timeout: const Duration(seconds: 10),
+        isCancelled: () => _isDisposed || !mounted,
+        debugLabel: ' loadData view=${widget.viewId}',
+      );
 
       // 加载数据后重新初始化UI，确保工具栏等元素正确显示
       await reinitializeUI();
@@ -2682,6 +2803,25 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                               message.contains('iOS image decoded') ||
                               message.contains('iOS image decode fallback') ||
                               message.contains('iOS image viewport') ||
+                              message.contains('image decoded') ||
+                              message.contains('image decode fallback') ||
+                              message.contains('image viewport') ||
+                              message.contains(
+                                  'iOS inserted image cache rebuilt') ||
+                              // 插图失败诊断：这些是 Excalidraw / bridge 在插图
+                              // 环节抛出的错误，历史上被 console.error 吞掉、日志
+                              // 不可见，导致「大图重编码 >4MB 被 fileTooBig 丢弃」
+                              // 长期静默。纳入白名单确保失败即可见。
+                              message.contains('whiteboard image insert') ||
+                              message.contains('whiteboard image picker') ||
+                              message.contains('File is too big') ||
+                              message.contains('fileTooBig') ||
+                              message.contains('imageInsertError') ||
+                              message.contains(
+                                  'New element size or position is too large') ||
+                              message
+                                  .contains('iOS zero-size image repaired') ||
+                              message.contains('zero-size image repaired') ||
                               message.contains(
                                   'iOS image decode refresh installed')) {
                             Log.info('[WebView Console] $message');

@@ -79,6 +79,30 @@ void main() {
     expect(pageSource, isNot(contains('Duration(milliseconds: 80)')));
   });
 
+  test('late scene restoration waits for JS and preserves local edits', () {
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(webViewSource, contains('await evaluateAsyncJavascript('));
+    expect(webViewSource, contains('await window.loadExcalidrawData'));
+    expect(
+      bridgeSource,
+      contains('Preserved local edits while applying initial data'),
+    );
+    expect(bridgeSource, contains('_reconcileElements('));
+  });
+
+  test('private whiteboard blocks editing until initial data is ready', () {
+    final source =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+
+    expect(source, contains('final interactiveView = _isLoadingData'));
+    expect(source, contains('IgnorePointer(child: excalidrawView)'));
+  });
+
   test('whiteboard import invalidates stale initial data load', () {
     final source = File(
       'lib/plugins/whiteboard/whiteboard.dart',
@@ -118,7 +142,41 @@ void main() {
     );
     expect(
       webViewSource,
-      contains('loadData(widget.initialData!)'),
+      contains('widget.initialData!,'),
+    );
+    expect(
+      webViewSource,
+      contains('dataArrivedLate && !reloadTokenChanged'),
+    );
+    expect(
+      webViewSource,
+      contains('preserveLocalSceneForBlankData:'),
+    );
+  });
+
+  test('late blank initial data preserves an already edited local scene', () {
+    final pageSource =
+        File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(
+      pageSource,
+      contains('_hasMeaningfulLocalChangeDuringInitialLoad'),
+    );
+    expect(
+      pageSource,
+      contains('WhiteboardInitialDataGuard.isBlankScene(data)'),
+    );
+    expect(
+      bridgeSource,
+      contains('options.preserveLocalSceneForBlankData === true'),
+    );
+    expect(bridgeSource, contains('isBlankScenePayload(data)'));
+    expect(bridgeSource, contains('currentElements.length > 0'));
+    expect(
+      bridgeSource,
+      contains('Preserved local scene from late blank initial data'),
     );
   });
 
@@ -226,6 +284,60 @@ void main() {
         )));
   });
 
+  test('iOS image bridge atomically delivers the first image scene', () {
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+
+    expect(bridgeSource, contains('queueIOSImageSceneSync(elements, files);'));
+    expect(bridgeSource, contains("'whiteboardImageSceneSnapshot'"));
+    expect(bridgeSource,
+        contains('await window.flutter_inappwebview.callHandler'));
+    expect(bridgeSource, contains('iOS image scene delivered'));
+    expect(bridgeSource, contains('_iosImageSceneSyncInFlight'));
+    expect(bridgeSource, contains('_iosImageSceneSyncInFlightPromise'));
+    expect(bridgeSource, contains('scheduleIOSImageSceneSyncFlush'));
+    expect(webViewSource, contains("'whiteboardImageSceneSnapshot'"));
+    expect(webViewSource, contains("'elements': List<dynamic>.from(elements)"));
+    expect(
+        webViewSource, contains("'files': Map<String, dynamic>.from(files)"));
+  });
+
+  test('image insertion waits for a usable canvas and repairs zero-size images',
+      () {
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+    final bundledEditor = File(
+      'assets/excalidraw/assets/index-D9TGhlVV.js',
+    ).readAsStringSync();
+
+    expect(bridgeSource, contains('needsDimensionRepair'));
+    expect(bridgeSource, contains('zero-size image repaired'));
+    expect(bundledEditor, contains('performance.now()+1500'));
+    expect(
+      bundledEditor,
+      contains(
+          'this.state.height||this.excalidrawContainerRef.current?.clientHeight'),
+    );
+  });
+
+  test('whiteboard storage bridge confirms delivery before deduplication', () {
+    final source =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+    final sendIndex = source.indexOf("'localStorageOnSet'");
+    final acknowledgeIndex = source.indexOf(
+      'lastSentFlutterStorageValues.set(key, value);',
+      sendIndex,
+    );
+
+    expect(sendIndex, greaterThanOrEqualTo(0));
+    expect(acknowledgeIndex, greaterThan(sendIndex));
+    expect(source, contains('pendingFlutterStorageSyncs.set(key, payload);'));
+    expect(source, contains('syncFilesFromScene(pendingFilesSyncKey, true)'));
+  });
+
   test('whiteboard forces host theme and disables internal theme switching',
       () {
     final pageSource =
@@ -294,7 +406,7 @@ void main() {
     expect(indexSource, contains('getSystemTheme'));
     expect(indexSource, contains('getInitialTheme'));
     expect(webViewSource, contains('hostTheme'));
-    expect(webViewSource, contains('ponynotes-whiteboard-v7'));
+    expect(webViewSource, contains('ponynotes-whiteboard-v9'));
     expect(indexSource,
         contains('localStorage.setItem("excalidraw-theme", theme)'));
     expect(indexSource, contains('initialTheme'));
@@ -440,7 +552,12 @@ void main() {
     expect(source, contains("typeof image.decode === 'function'"));
     expect(source, contains('api.onChange((elements, appState, files)'));
     expect(source, contains('getImageViewportSnapshot'));
+    expect(source, contains("window.dispatchEvent(new Event('resize'))"));
+    expect(source, contains('iOS zero-size image repaired'));
+    expect(source, contains("typeof api.mutateElement === 'function'"));
     expect(source, contains('!snapshot.isVisible'));
+    expect(source, contains('snapshot.width > 0'));
+    expect(source, contains('snapshot.viewportWidth > 0'));
     expect(source, contains('api.scrollToContent(latestElement'));
     expect(source, contains("fitToContent: false"));
     expect(source, contains('requestAnimationFrame(() => api.refresh())'));
@@ -458,9 +575,21 @@ void main() {
       webViewSource,
       contains("message.contains('iOS image viewport')"),
     );
+    expect(
+      webViewSource,
+      contains("'iOS inserted image cache rebuilt'"),
+    );
+    expect(
+      webViewSource,
+      contains(".contains('iOS zero-size image repaired')"),
+    );
   });
 
   test('bundled Excalidraw decodes images and uses live picker viewport', () {
+    final indexHtml = File('assets/excalidraw/index.html').readAsStringSync();
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
     final bundle = Directory('assets/excalidraw/assets')
         .listSync()
         .whereType<File>()
@@ -473,6 +602,9 @@ void main() {
         )
         .readAsStringSync();
 
+    expect(indexHtml, contains('ponynotes-whiteboard-v9'));
+    expect(webViewSource, contains('ponynotes-whiteboard-v9'));
+
     expect(
       bundle,
       contains(
@@ -484,11 +616,22 @@ void main() {
 
     const pickerCall =
         'const n=await xT({description:"Image",extensions:Object.keys(Nh),multiple:!0})';
+    const layoutSettle =
+        'await new Promise(i=>{const s=performance.now()+1500,r=()=>{this.updateDOMRect();if(this.state.width>0&&this.state.height>0)';
     const liveViewport =
         'i=this.state.width/2+this.state.offsetLeft,s=this.state.height/2+this.state.offsetTop';
     expect(bundle, contains(pickerCall));
+    expect(bundle, contains(layoutSettle));
     expect(bundle, contains(liveViewport));
-    expect(bundle.indexOf(pickerCall), lessThan(bundle.indexOf(liveViewport)));
+    expect(bundle, contains('rebuildImageCacheForInsertedImages'));
+    expect(bundle, contains('iOS inserted image cache rebuilt'));
+    expect(bundle.indexOf(pickerCall), lessThan(bundle.indexOf(layoutSettle)));
+    expect(
+        bundle.indexOf(layoutSettle), lessThan(bundle.indexOf(liveViewport)));
+    expect(
+      bundle,
+      contains('if((r<=0||o<=0)&&c>0&&u>0){n&&n();return}'),
+    );
   });
 
   test('whiteboard collab adapter does not save on every pen frame', () {

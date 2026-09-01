@@ -30,6 +30,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_exit_flush.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_initial_data_guard.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/remote_whiteboard_page.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_router.dart';
@@ -291,6 +292,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
   bool _initialDataReadyForSync = false;
   bool _webViewReadyForSync = false;
   int _whiteboardRevision = 0;
+  bool _hasMeaningfulLocalChangeDuringInitialLoad = false;
   // 防止首次异步加载的旧数据在导入新白板后晚到并覆盖导入结果。
   int _initialDataLoadGeneration = 0;
 
@@ -808,16 +810,25 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     }
 
     if (mounted && !_isDisposing) {
+      final preserveLocalScene = _hasMeaningfulLocalChangeDuringInitialLoad &&
+          WhiteboardInitialDataGuard.isBlankScene(data);
       setState(() {
-        _initialData = data.isEmpty ? null : data;
+        _initialData = data.isEmpty || preserveLocalScene ? null : data;
         _isLoadingData = false;
       });
 
       // 初始化 Collab Adapter 的全量数据缓存
       // 确保后续的增量更新能合并到完整的状态中
-      if (data.isNotEmpty) {
+      if (data.isNotEmpty && !preserveLocalScene) {
         _collabAdapter?.setInitialData(data);
         _whiteboardRevision = _extractRevision(data);
+      } else if (preserveLocalScene) {
+        final revision = _extractRevision(data);
+        _collabAdapter?.setInitialData({'revision': revision});
+        _whiteboardRevision = revision;
+        Log.info(
+          '[Whiteboard] 保留初始加载期间的本地编辑，忽略迟到的空白场景: ${widget.view.id}',
+        );
       }
 
       _initialDataReadyForSync = true;
@@ -832,6 +843,11 @@ class _WhiteboardPageState extends State<WhiteboardPage>
     if (_isDisposing) {
       Log.debug('⚠️ [Whiteboard] Data change ignored - widget is disposing');
       return;
+    }
+
+    if (_isLoadingData &&
+        WhiteboardInitialDataGuard.hasMeaningfulSceneChange(data)) {
+      _hasMeaningfulLocalChangeDuringInitialLoad = true;
     }
 
     final incomingRevision = _extractRevision(data);
@@ -1094,12 +1110,17 @@ class _WhiteboardPageState extends State<WhiteboardPage>
         valueListenable: FullWindowController.isFullWindow,
         child: _buildExcalidrawView(),
         builder: (context, isFullWindow, excalidrawView) {
+          // 初始数据尚未完成时禁止 WebView 编辑，避免用户插图与迟到的
+          // loadExcalidrawData 并发，首图随后被旧场景覆盖。
+          final interactiveView = _isLoadingData
+              ? IgnorePointer(child: excalidrawView)
+              : excalidrawView;
           return Stack(
             children: [
               Positioned.fill(
                 child: ColoredBox(color: canvasFallbackColor),
               ),
-              excalidrawView!,
+              interactiveView!,
               if (_shouldRenderTopActionsBar(isFullWindow))
                 Positioned.fill(
                   child: _WhiteboardFloatingActionsOverlay(

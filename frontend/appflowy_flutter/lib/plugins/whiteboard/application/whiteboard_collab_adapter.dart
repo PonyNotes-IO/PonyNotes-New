@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_image_sync_guard.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_sync_gate.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_version_lock.dart';
 import 'package:appflowy_backend/log.dart';
@@ -80,6 +81,8 @@ class WhiteboardCollabAdapter {
   String _syncType = "";
 
   Timer? _debounceTimer;
+  Timer? _imageSyncGuardTimer;
+  static const _imageSyncGuardTimeout = Duration(milliseconds: 1800);
   // 缓存完整白板数据（全量状态）
   final Map<String, dynamic> _fullData = {};
   final WhiteboardSyncGate _syncGate = WhiteboardSyncGate();
@@ -371,8 +374,6 @@ class WhiteboardCollabAdapter {
     _pendingType = type;
     _ensurePendingRevision();
 
-    // 通知上层数据已变更（用于 UI 更新）
-
     if (!_syncGate.canAutoSync) {
       // 每次编辑（gate 关闭期间）都会触发，降为 debug 以减少 Windows 日志开销。
       Log.debug(
@@ -381,7 +382,48 @@ class WhiteboardCollabAdapter {
       return;
     }
 
+    // Excalidraw writes elements and files through separate bridge debounce
+    // windows. Do not let an image element reach local Collab alone: the
+    // resulting remote echo can replace the image before its file cache is
+    // available in the WebView. The files callback normally releases this
+    // guard within 900ms; the timeout is only a bounded fallback for a broken
+    // or delayed bridge callback.
+    if (_hasUnresolvedImageFiles()) {
+      _debounceTimer?.cancel();
+      _debounceTimer = null;
+      _scheduleImageSyncGuard();
+      Log.info(
+        '[WBCollab][WhiteboardCollabAdapter] Delaying image sync for $viewId; missing file ids: ${_missingImageFileIds().join(',')}',
+      );
+      return;
+    }
+
+    _imageSyncGuardTimer?.cancel();
+    _imageSyncGuardTimer = null;
     _scheduleSync();
+  }
+
+  Set<String> _missingImageFileIds() {
+    return WhiteboardImageSyncGuard.unresolvedFileIds(
+      elements: _fullData['elements'],
+      files: _fullData['files'],
+    );
+  }
+
+  bool _hasUnresolvedImageFiles() => _missingImageFileIds().isNotEmpty;
+
+  void _scheduleImageSyncGuard() {
+    _imageSyncGuardTimer?.cancel();
+    _imageSyncGuardTimer = Timer(_imageSyncGuardTimeout, () {
+      _imageSyncGuardTimer = null;
+      if (_disposed || !_hasUnsavedChanges || !_syncGate.canAutoSync) {
+        return;
+      }
+      Log.warn(
+        '[WBCollab][WhiteboardCollabAdapter] Image sync guard timed out for $viewId; saving with missing file ids: ${_missingImageFileIds().join(',')}',
+      );
+      _syncImmediately(allowUnresolvedImages: true);
+    });
   }
 
   void _scheduleSync() {
@@ -434,7 +476,7 @@ class WhiteboardCollabAdapter {
   }
 
   /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
-  Future<void> _syncImmediately() async {
+  Future<void> _syncImmediately({bool allowUnresolvedImages = false}) async {
     if (!_hasUnsavedChanges || _isSyncing || _disposed) {
       return;
     }
@@ -443,6 +485,11 @@ class WhiteboardCollabAdapter {
       Log.info(
         '[WBCollab][WhiteboardCollabAdapter] Immediate sync skipped by startup gate: $viewId',
       );
+      return;
+    }
+
+    if (!allowUnresolvedImages && _hasUnresolvedImageFiles()) {
+      _scheduleImageSyncGuard();
       return;
     }
 
@@ -557,6 +604,8 @@ class WhiteboardCollabAdapter {
     }
 
     _debounceTimer?.cancel();
+    _imageSyncGuardTimer?.cancel();
+    _imageSyncGuardTimer = null;
 
     // 等待正在进行的同步完成（最多等待 5 秒）
     int attempts = 0;
@@ -573,7 +622,7 @@ class WhiteboardCollabAdapter {
         return;
       }
       releaseAutoSyncGate();
-      await _syncImmediately();
+      await _syncImmediately(allowUnresolvedImages: true);
     }
   }
 
@@ -858,6 +907,8 @@ class WhiteboardCollabAdapter {
     _listener.stop();
     _debounceTimer?.cancel();
     _debounceTimer = null;
+    _imageSyncGuardTimer?.cancel();
+    _imageSyncGuardTimer = null;
     _pendingData.clear();
     _syncData.clear();
     _fullData.clear();
