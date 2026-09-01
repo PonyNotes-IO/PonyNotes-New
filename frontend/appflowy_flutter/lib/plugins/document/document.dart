@@ -160,7 +160,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           PickerTabType.custom,
         ];
 
-    return Provider<ViewPluginNotifier>.value(
+    final widget = Provider<ViewPluginNotifier>.value(
       value: notifier,
       child: MultiBlocProvider(
         providers: [
@@ -179,6 +179,8 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
             child: DocumentPage(
               key: ValueKey(view.id),
               view: view,
+              // 永久删除由 DocumentPage 的 forceClose 状态触发；移入回收站
+              // 则由外层 PluginDeletionListener 转发。
               onDeleted: () => context.onDeleted?.call(view, deletedViewIndex),
               initialSelection: initialSelection,
               initialBlockId: blockId,
@@ -189,6 +191,11 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           ),
         ),
       ),
+    );
+    return PluginDeletionListener(
+      notifier: notifier,
+      onDeleted: context.onDeleted,
+      child: widget,
     );
   }
 

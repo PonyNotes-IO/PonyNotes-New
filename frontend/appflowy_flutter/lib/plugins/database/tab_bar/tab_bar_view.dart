@@ -470,13 +470,6 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    notifier.isDeleted.addListener(() {
-      final deletedView = notifier.isDeleted.value;
-      if (deletedView != null && deletedView.hasIndex()) {
-        context.onDeleted?.call(notifier.view, deletedView.index);
-      }
-    });
-
     final horizontalPadding =
         data?[kDatabasePluginWidgetBuilderHorizontalPadding] as double? ??
             GridSize.horizontalHeaderPadding + 20;
@@ -488,7 +481,7 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
     final bool showTopRightActions =
         data?[kDatabasePluginWidgetBuilderShowTopRightActions] ?? true;
 
-    return MultiBlocProvider(
+    final widget = MultiBlocProvider(
       providers: [
         BlocProvider<ViewInfoBloc>.value(
           value: bloc,
@@ -517,6 +510,11 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
           ),
         ),
       ),
+    );
+    return PluginDeletionListener(
+      notifier: notifier,
+      onDeleted: context.onDeleted,
+      child: widget,
     );
   }
 

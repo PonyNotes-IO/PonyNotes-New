@@ -29,6 +29,11 @@ void main() {
     expect(deletedView?.id, view.id);
     expect(deletedIndex, 2);
 
+    notifier.isDeleted.value = DeletedViewPB.create();
+
+    expect(deletedView?.id, view.id);
+    expect(deletedIndex, isNull);
+
     await tester.pumpWidget(const SizedBox());
     notifier.dispose();
   });

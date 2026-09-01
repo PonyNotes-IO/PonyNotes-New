@@ -266,7 +266,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }) {
     // 使用 Builder 获取外层 context，再用 StatefulWidget 保证 SpaceBloc 只创建一次；
     // 否则每次父组件重建都会新建 SpaceBloc 并 dispatch initial()，导致一直处于未初始化状态，菜单栏一直显示 loading。
-    return Builder(
+    final widget = Builder(
       builder: (outerContext) {
         return _SpaceHubBlocProvider(
           spaceView: view,
@@ -281,6 +281,11 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           tabView: tabView,
         );
       },
+    );
+    return PluginDeletionListener(
+      notifier: notifier,
+      onDeleted: context.onDeleted,
+      child: widget,
     );
   }
 
