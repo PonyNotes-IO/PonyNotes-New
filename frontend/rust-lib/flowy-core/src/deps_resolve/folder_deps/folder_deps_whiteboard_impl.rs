@@ -25,6 +25,21 @@ impl WhiteboardFolderOperation {
       .upgrade()
       .ok_or_else(|| FlowyError::internal().with_context("WhiteboardManager is already dropped"))
   }
+
+  fn sanitize_duplicate_data(json_data: &str) -> Result<String, FlowyError> {
+    let mut data: serde_json::Value = serde_json::from_str(json_data).map_err(|e| {
+      FlowyError::invalid_data().with_context(format!("Failed to parse whiteboard data: {}", e))
+    })?;
+    if let Some(object) = data.as_object_mut() {
+      object.remove("roomId");
+      object.remove("roomKey");
+    } else {
+      return Err(FlowyError::invalid_data().with_context("Whiteboard data must be a JSON object"));
+    }
+    serde_json::to_string(&data).map_err(|e| {
+      FlowyError::invalid_data().with_context(format!("Failed to encode whiteboard data: {}", e))
+    })
+  }
 }
 
 #[async_trait]
@@ -70,9 +85,21 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
     Ok(())
   }
 
-  async fn duplicate_view(&self, _view_id: &Uuid) -> Result<Bytes, FlowyError> {
-    // 白板暂不支持复制操作
-    Err(FlowyError::not_support().with_context("Whiteboard duplication is not supported yet"))
+  async fn duplicate_view(&self, view_id: &Uuid) -> Result<Bytes, FlowyError> {
+    info!(
+      "[WhiteboardFolderOperation] Duplicating whiteboard view: {}",
+      view_id
+    );
+    let json_data = self
+      .whiteboard_manager()?
+      .get_whiteboard_data(view_id)
+      .await?;
+    // roomId/roomKey are credentials for the source Excalidraw collaboration room.
+    // Keeping them would make the duplicated view open the source room instead of
+    // creating an independent room on the first open (especially on iOS, where the
+    // remote whiteboard path reads these fields before local collab data is loaded).
+    let sanitized_json = Self::sanitize_duplicate_data(&json_data)?;
+    Ok(Bytes::from(sanitized_json.into_bytes()))
   }
 
   async fn gather_publish_encode_collab(
@@ -104,18 +131,13 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
     }
 
     let whiteboard_data = match params.initial_data {
-      ViewData::Data(data) => {
+      ViewData::Data(data) | ViewData::DuplicateData(data) => {
         // 解析 JSON 数据
         let json_str = String::from_utf8(data.to_vec())
           .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid UTF-8: {}", e)))?;
         Some(serde_json::from_str(&json_str).map_err(|e| {
           FlowyError::invalid_data().with_context(format!("Failed to parse whiteboard data: {}", e))
         })?)
-      },
-      ViewData::DuplicateData(_) => {
-        return Err(
-          FlowyError::not_support().with_context("Whiteboard duplication is not supported yet"),
-        );
       },
       ViewData::Empty => None,
     };
@@ -220,5 +242,24 @@ impl FolderOperationHandler for WhiteboardFolderOperation {
   ) -> Result<(), FlowyError> {
     // 白板暂不支持从文件导入
     Err(FlowyError::not_support().with_context("Whiteboard file import is not supported yet"))
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn duplicate_data_does_not_reuse_source_room() {
+    let sanitized = WhiteboardFolderOperation::sanitize_duplicate_data(
+      r##"{"roomId":"source-room","roomKey":"source-key","elements":[{"id":"e1"}],"appState":{"viewBackgroundColor":"#fff"}}"##,
+    )
+    .unwrap();
+    let data: serde_json::Value = serde_json::from_str(&sanitized).unwrap();
+
+    assert!(data.get("roomId").is_none());
+    assert!(data.get("roomKey").is_none());
+    assert_eq!(data["elements"][0]["id"], "e1");
+    assert_eq!(data["appState"]["viewBackgroundColor"], "#fff");
   }
 }
