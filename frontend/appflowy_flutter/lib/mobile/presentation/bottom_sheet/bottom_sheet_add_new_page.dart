@@ -100,7 +100,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           showBottomBorder: false,
           onTap: () => onAction(
             ViewLayoutPB.Whiteboard,
-            name: LocaleKeys.mobileAddNewPage_whiteboard.tr(),
+            name: LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
           ),
         ),
         FlowyOptionTile.text(
