@@ -41,6 +41,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/gestures.dart';
@@ -1752,17 +1753,19 @@ Future<void> _moveViewCrossSpaceOnce(
 
   // 父级已经确认更新后，每个相关空间只重建一次列表。移动空间并没有改变
   // 空间树本身，不再触发 SpaceBloc.initial，也不在同步前反复创建 ViewBloc。
-  final refreshSpaceIds = <String>{
-    if (sourceSpaceId != null) sourceSpaceId,
-    if (toSpace != null) toSpace.id,
-  };
-  for (final spaceId in refreshSpaceIds) {
-    MobileSpaceListRefreshNotifier.instance.requestRefresh(spaceId);
+  if (PlatformInfo.isMobile) {
+    final refreshSpaceIds = <String>{
+      if (sourceSpaceId != null) sourceSpaceId,
+      if (toSpace != null) toSpace.id,
+    };
+    for (final spaceId in refreshSpaceIds) {
+      MobileSpaceListRefreshNotifier.instance.requestRefresh(spaceId);
+    }
+    Log.info(
+      '[CrossSpaceMove] 父级确认后刷新移动端涉及空间列表: '
+      '${refreshSpaceIds.join(',')}',
+    );
   }
-  Log.info(
-    '[CrossSpaceMove] 父级确认后刷新移动涉及空间列表: '
-    '${refreshSpaceIds.join(',')}',
-  );
   if (view.layout == ViewLayoutPB.Whiteboard && fromSection != toSection) {
     showToastNotification(
       message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),

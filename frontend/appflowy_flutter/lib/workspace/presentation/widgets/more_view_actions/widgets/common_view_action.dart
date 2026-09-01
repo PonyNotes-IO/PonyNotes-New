@@ -48,6 +48,9 @@ class ViewAction extends StatelessWidget {
       view,
       (controller, data) async {
         if (type == ViewMoreActionType.delete) {
+          // 先捕获业务 Bloc。弹层关闭后当前 context 可能被卸载，桌面端删除后的
+          // 侧栏刷新不能依赖届时再从 context 查找 Provider。
+          final refreshSpaceBloc = _tryReadSpaceBloc(context);
           final dialogContext = AppGlobals.rootNavKey.currentContext ?? context;
           FocusManager.instance.primaryFocus?.unfocus();
           mutex?.close();
@@ -60,8 +63,8 @@ class ViewAction extends StatelessWidget {
             return;
           }
           await _handleDeleteAction(
-            actionContext: dialogContext,
             dialogContext: dialogContext,
+            refreshSpaceBloc: refreshSpaceBloc,
           );
           return;
         }
@@ -131,8 +134,8 @@ class ViewAction extends StatelessWidget {
   }
 
   Future<void> _handleDeleteAction({
-    required BuildContext actionContext,
     required BuildContext dialogContext,
+    required SpaceBloc? refreshSpaceBloc,
   }) async {
     final (containPublishedPage, _) =
         await ViewBackendService.containPublishedPage(view);
@@ -151,7 +154,12 @@ class ViewAction extends StatelessWidget {
           Log.info(
             'Confirm delete published view from more actions: ${view.id}',
           );
-          unawaited(_onDeleteConfirmed(actionContext));
+          unawaited(
+            _onDeleteConfirmed(
+              navigationContext: dialogContext,
+              refreshSpaceBloc: refreshSpaceBloc,
+            ),
+          );
         },
       );
     } else {
@@ -160,13 +168,21 @@ class ViewAction extends StatelessWidget {
         name: view.nameOrDefault,
         onConfirm: () {
           Log.info('Confirm delete view from more actions: ${view.id}');
-          unawaited(_onDeleteConfirmed(actionContext));
+          unawaited(
+            _onDeleteConfirmed(
+              navigationContext: dialogContext,
+              refreshSpaceBloc: refreshSpaceBloc,
+            ),
+          );
         },
       );
     }
   }
 
-  Future<void> _onDeleteConfirmed(BuildContext actionContext) async {
+  Future<void> _onDeleteConfirmed({
+    required BuildContext navigationContext,
+    required SpaceBloc? refreshSpaceBloc,
+  }) async {
     // 删除后 Folder 无法再追溯父级链，必须在提交删除前保存所属空间。
     final mobileSpaceId =
         PlatformInfo.isMobile ? await resolveViewSpaceId(view) : null;
@@ -175,9 +191,13 @@ class ViewAction extends StatelessWidget {
       return;
     }
 
-    if (actionContext.mounted) {
-      _refreshSpaceListIfNeeded(actionContext);
-      _returnToMobileHomeIfDeletingCurrentView(actionContext);
+    // 移动端使用 MobileSpaceListRefreshNotifier；桌面端使用捕获的 SpaceBloc。
+    // 两套刷新机制互斥，避免移动端重复重建临时 SpaceBloc。
+    if (!PlatformInfo.isMobile) {
+      _refreshSpaceListIfNeeded(refreshSpaceBloc);
+    }
+    if (navigationContext.mounted) {
+      _returnToMobileHomeIfDeletingCurrentView(navigationContext);
     }
     _refreshMobileSpaceListIfNeeded(mobileSpaceId);
   }
@@ -201,22 +221,23 @@ class ViewAction extends StatelessWidget {
     GoRouter.of(actionContext).go(MobileHomeScreen.routeName);
   }
 
-  void _refreshSpaceListIfNeeded(BuildContext actionContext) {
+  void _refreshSpaceListIfNeeded(SpaceBloc? spaceBloc) {
     Future<void>.delayed(const Duration(milliseconds: 500), () {
-      if (!actionContext.mounted) {
+      if (spaceBloc == null || spaceBloc.isClosed) {
         return;
       }
 
-      try {
-        final spaceBloc = actionContext.read<SpaceBloc>();
-        if (!spaceBloc.isClosed) {
-          spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
-          Log.info('Refresh SpaceBloc after delete: ${view.id}');
-        }
-      } catch (_) {
-        // Ignore when current context is not inside SpaceHub.
-      }
+      spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+      Log.info('Refresh SpaceBloc after delete: ${view.id}');
     });
+  }
+
+  SpaceBloc? _tryReadSpaceBloc(BuildContext context) {
+    try {
+      return context.read<SpaceBloc>();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> _triggerDelete() async {
