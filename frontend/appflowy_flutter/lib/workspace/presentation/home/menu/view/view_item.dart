@@ -1563,6 +1563,47 @@ bool isReferencedDatabaseView(ViewPB view, ViewPB? parentView) {
   return view.layout.isDatabaseView && parentView.layout.isDatabaseView;
 }
 
+/// 移动请求完成后读取 Folder 的最终父级。
+///
+/// iOS 上 Folder 事件返回成功与本地视图索引更新之间可能存在短暂延迟。
+/// 单次立即读取会把已经提交成功的移动误判为失败，因此在提示错误前给
+/// 本地索引和同步事件一个有限的收敛窗口。
+Future<ViewPB?> _readMovedViewWithRetry({
+  required String viewId,
+  required String expectedParentId,
+}) async {
+  const retryDelays = <Duration>[
+    Duration.zero,
+    Duration(milliseconds: 300),
+    Duration(milliseconds: 1000),
+    Duration(milliseconds: 2000),
+    Duration(milliseconds: 4000),
+  ];
+
+  ViewPB? latestView;
+  for (var index = 0; index < retryDelays.length; index++) {
+    final delay = retryDelays[index];
+    if (delay > Duration.zero) {
+      await Future<void>.delayed(delay);
+    }
+
+    final result = await ViewBackendService.getView(viewId);
+    latestView = result.fold<ViewPB?>((view) => view, (_) => null);
+    final actualParentId = latestView?.parentViewId;
+    Log.info(
+      '[CrossSpaceMove] 移动结果校验第${index + 1}次: view=$viewId '
+      'expectedParent=$expectedParentId actualParent=$actualParentId',
+    );
+    if (actualParentId == expectedParentId) {
+      return latestView;
+    }
+  }
+
+  return latestView;
+}
+
+final CrossSpaceMoveGuard _viewMoveGuard = CrossSpaceMoveGuard();
+
 Future<void> moveViewCrossSpace(
   BuildContext context,
   ViewPB? toSpace,
@@ -1580,6 +1621,37 @@ Future<void> moveViewCrossSpace(
     return;
   }
 
+  if (!_viewMoveGuard.tryAcquire(from.id)) {
+    Log.warn(
+      '[CrossSpaceMove] 同一文档仍在移动中，忽略重复触发: view=${from.id}',
+    );
+    return;
+  }
+
+  try {
+    await _moveViewCrossSpaceOnce(
+      context,
+      toSpace,
+      view,
+      parentView,
+      spaceType,
+      from,
+      toId,
+    );
+  } finally {
+    _viewMoveGuard.release(from.id);
+  }
+}
+
+Future<void> _moveViewCrossSpaceOnce(
+  BuildContext context,
+  ViewPB? toSpace,
+  ViewPB view,
+  ViewPB? parentView,
+  FolderSpaceType spaceType,
+  ViewPB from,
+  String toId,
+) async {
   // 计算源、目标所属的 section（私有/协作），用于跨空间移动时同步切换 section。
   // 源 section 依据当前视图在侧栏所处的分区；目标 section 依据目标空间的权限类型。
   // 若源与目标 section 相同（同区内移动），后端会跳过 section 变更，无副作用。
@@ -1607,8 +1679,16 @@ Future<void> moveViewCrossSpace(
   final spaceBloc = context.read<SpaceBloc>();
   final sidebarRefresher = SidebarMoveStateRefresher.capture(context);
   final currentSpace = spaceBloc.state.currentSpace;
-  final movesToAnotherSpace =
-      currentSpace != null && toSpace != null && currentSpace.id != toSpace.id;
+  final sourceSpaceId = await resolveViewSpaceId(from);
+  if (!context.mounted) return;
+  final movesToAnotherSpace = toSpace != null &&
+      (sourceSpaceId != null
+          ? sourceSpaceId != toSpace.id
+          : currentSpace != null && currentSpace.id != toSpace.id);
+  Log.info(
+    '[CrossSpaceMove] 源空间解析: view=${from.id} source=$sourceSpaceId '
+    'target=${toSpace?.id} crossSpace=$movesToAnotherSpace',
+  );
 
   final outcome = await coordinateViewMove(
     context,
@@ -1631,16 +1711,58 @@ Future<void> moveViewCrossSpace(
     return;
   }
 
+  // 普通文档必须等本地 Folder 父级确认后再刷新列表和提示成功。新 Cloud
+  // 直接返回并应用 Folder 增量；旧 Cloud 由 Rust 客户端同步拉取完整 Folder
+  // 作为兼容路径。有限重试只吸收事件队列的短暂调度延迟。
+  if (outcome == CrossSpaceMoveOutcome.moved) {
+    ViewPB? confirmedView;
+    try {
+      confirmedView = await _readMovedViewWithRetry(
+        viewId: from.id,
+        expectedParentId: toId,
+      );
+    } catch (error) {
+      Log.error(
+        '[CrossSpaceMove] 移动结果校验异常: view=${from.id}, error=$error',
+      );
+    }
+    if (confirmedView == null || confirmedView.parentViewId != toId) {
+      Log.error(
+        '[CrossSpaceMove] 移动提交后父级未更新: view=${from.id} '
+        'expectedParent=$toId actualParent=${confirmedView?.parentViewId}',
+      );
+      showToastNotification(
+        message: LocaleKeys.document_plugins_subPage_errors_failedMovePage.tr(),
+        type: ToastificationType.error,
+      );
+      return;
+    }
+    Log.info(
+      '[CrossSpaceMove] 移动结果校验成功: view=${from.id} parent=$toId',
+    );
+    getIt<MenuSharedState>().refreshLatestOpenView(confirmedView);
+  }
+
   if (movesToAnotherSpace) {
     // 移出协作区时当前文档页和菜单 Overlay 可能先被删除通知卸载，依赖
     // switchToSpaceNotifier 的 Widget 监听器会有丢事件窗口。直接向移动开始前
     // 捕获的 SpaceBloc 打开目标空间，由 open 事件权威拉取目标子文档列表。
     spaceBloc.add(SpaceEvent.open(space: toSpace));
-    MobileSpaceListRefreshNotifier.instance.requestRefresh(toSpace.id);
-    Log.info(
-      '[CrossSpaceMove] 已通知移动端刷新目标空间文档列表: ${toSpace.id}',
-    );
   }
+
+  // 父级已经确认更新后，每个相关空间只重建一次列表。移动空间并没有改变
+  // 空间树本身，不再触发 SpaceBloc.initial，也不在同步前反复创建 ViewBloc。
+  final refreshSpaceIds = <String>{
+    if (sourceSpaceId != null) sourceSpaceId,
+    if (toSpace != null) toSpace.id,
+  };
+  for (final spaceId in refreshSpaceIds) {
+    MobileSpaceListRefreshNotifier.instance.requestRefresh(spaceId);
+  }
+  Log.info(
+    '[CrossSpaceMove] 父级确认后刷新移动涉及空间列表: '
+    '${refreshSpaceIds.join(',')}',
+  );
   if (view.layout == ViewLayoutPB.Whiteboard && fromSection != toSection) {
     showToastNotification(
       message: LocaleKeys.space_whiteboardMigrationSuccess.tr(),

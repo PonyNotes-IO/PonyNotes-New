@@ -60,7 +60,8 @@ class ViewMoreActionPopover extends StatelessWidget {
   }
 
   List<ViewMoreActionTypeWrapper> _buildActionTypeWrappers(
-      BuildContext context) {
+    BuildContext context,
+  ) {
     final actionTypes = _buildActionTypes(context);
     return actionTypes.map(
       (e) {
@@ -313,16 +314,23 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
                 child: MovePageMenu(
                   sourceView: sourceView,
                   onSelected: (space, view) async {
-                    // 必须从当前 Overlay 的 PopoverContainer 只关闭移动目标弹层。
-                    // 不能使用 BlocBuilder 内临时创建的 PopoverController：空间状态
-                    // 重建后新 controller 不会被 PopoverState 重新绑定，close 会失效。
-                    // 也不能 closeAll：父级“更多”菜单提供移动依赖的 Bloc 和 context，
-                    // 提前销毁父级会让异步移动在 mounted 检查处直接退出。
-                    final closed = closeMovePagePopover(movePopoverContext);
-                    Log.info(
-                      '[CrossSpaceMove] 已关闭移动目标二级弹层: $closed',
-                    );
+                    // 在异步移动开始前捕获实际的二级弹层容器，避免 await
+                    // 后再次使用已失效的 BuildContext。
+                    final movePopoverContainer =
+                        PopoverContainer.maybeOf(movePopoverContext);
+                    // iOS 上关闭二级弹层可能同步卸载父级 Popover 的业务上下文。
+                    // 移动流程需要先从该上下文解析源分区、读取父页面并提交后端，
+                    // 因此必须等异步移动完成后再关闭二级弹层。
                     await onTap(controller, (space, view));
+
+                    // 只关闭实际的移动目标弹层，不调用 closeAll，避免影响仍可能
+                    // 被异步流程使用的父级状态。移动完成后即使容器已被父级关闭，
+                    // 捕获的容器也只会执行一次安全的 close。
+                    final closed = movePopoverContainer != null;
+                    movePopoverContainer?.close();
+                    Log.info(
+                      '[CrossSpaceMove] 移动请求完成后关闭目标二级弹层: $closed',
+                    );
                   },
                 ),
               );

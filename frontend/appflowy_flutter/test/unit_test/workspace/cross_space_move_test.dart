@@ -80,6 +80,17 @@ void main() {
     expect(guard.tryAcquire('whiteboard-1'), isTrue);
   });
 
+  test('普通文档移动期间拒绝同一文档重复提交', () {
+    final guard = CrossSpaceMoveGuard();
+
+    expect(guard.tryAcquire('document-1'), isTrue);
+    expect(guard.tryAcquire('document-1'), isFalse);
+    expect(guard.tryAcquire('document-2'), isTrue);
+
+    guard.release('document-1');
+    expect(guard.tryAcquire('document-1'), isTrue);
+  });
+
   test('移动完成刷新器不依赖原菜单 context 仍可执行', () {
     var spacesRefreshCount = 0;
     var favoritesRefreshCount = 0;

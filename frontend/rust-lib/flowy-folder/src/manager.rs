@@ -1179,8 +1179,8 @@ impl FolderManager {
         .workspace_type
         .is_local()
     {
-      let folder_update = self
-        .cloud_service()?
+      let cloud_service = self.cloud_service()?;
+      let folder_update = cloud_service
         .move_view_cross_space(
           &workspace_id,
           &view_id,
@@ -1189,10 +1189,27 @@ impl FolderManager {
           to_section == Some(ViewSectionPB::Private),
         )
         .await?;
-
-      let Some(folder_update) = folder_update else {
-        // Older cloud versions return no update; their WebSocket sync remains the fallback.
-        return Ok(());
+      let folder_update = match folder_update {
+        Some(folder_update) => folder_update,
+        None => {
+          // 旧 Cloud 只返回成功状态，不携带本次 Folder 增量。若直接返回，
+          // 发起设备只能等待 WebSocket 回推；iOS 退到后台或连接切换时可能
+          // 延迟甚至漏掉该更新，表现为接口成功但目录没有移动。服务端已经在
+          // HTTP 返回前持久化 Folder，因此立即读取完整 Folder 文档并按远端
+          // 更新应用，既不产生重复本地 CRDT 操作，也不依赖 WebSocket 时序。
+          info!(
+            view_id = %view_id,
+            "Cross-space move returned no folder update; fetching authoritative folder state"
+          );
+          cloud_service
+            .get_folder_doc_state(
+              &workspace_id,
+              self.user.user_id()?,
+              CollabType::Folder,
+              &workspace_id,
+            )
+            .await?
+        },
       };
       let lock = self
         .mutex_folder

@@ -37,4 +37,12 @@ void main() {
 
     expect(notifier.revisionFor('private-a'), 2);
   });
+
+  test('删除文档后可显式请求所属空间列表刷新', () {
+    final notifier = MobileSpaceListRefreshNotifier.instance;
+
+    notifier.requestRefresh('space-containing-deleted-view');
+
+    expect(notifier.revisionFor('space-containing-deleted-view'), 1);
+  });
 }

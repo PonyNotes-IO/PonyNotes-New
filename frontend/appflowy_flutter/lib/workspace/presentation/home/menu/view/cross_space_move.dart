@@ -116,18 +116,21 @@ bool isOfflinePrivateMove(
 ) =>
     fromSection == ViewSectionPB.Private && toSection == ViewSectionPB.Private;
 
-/// 同一白板跨区移动的进程内互斥器。
-///
-/// 移动菜单、侧栏拖拽和分区占位符都能进入统一协调器；若手势/菜单回调在很短
-/// 时间内重复触发，会同时创建多个迁移 WebView，导致重复失败提示、弹窗互相关闭，
-/// 甚至同一份内容被并发写入。不同白板仍可独立迁移，不互相阻塞。
-class CrossSpaceWhiteboardMoveGuard {
+/// 同一视图移动的进程内互斥器。
+class CrossSpaceMoveGuard {
   final Set<String> _inFlight = <String>{};
 
   bool tryAcquire(String viewId) => _inFlight.add(viewId);
 
   void release(String viewId) => _inFlight.remove(viewId);
 }
+
+/// 同一白板跨区移动的进程内互斥器。
+///
+/// 移动菜单、侧栏拖拽和分区占位符都能进入统一协调器；若手势/菜单回调在很短
+/// 时间内重复触发，会同时创建多个迁移 WebView，导致重复失败提示、弹窗互相关闭，
+/// 甚至同一份内容被并发写入。不同白板仍可独立迁移，不互相阻塞。
+class CrossSpaceWhiteboardMoveGuard extends CrossSpaceMoveGuard {}
 
 final CrossSpaceWhiteboardMoveGuard _whiteboardMoveGuard =
     CrossSpaceWhiteboardMoveGuard();
@@ -204,9 +207,6 @@ Future<ViewSectionPB?> resolveViewSection(
     if (section != null) {
       return section;
     }
-    if (sectionsBloc == null) {
-      break;
-    }
     if (current.parentViewId.isEmpty) {
       break;
     }
@@ -229,6 +229,46 @@ Future<ViewSectionPB?> resolveViewSection(
         return ancestor.spacePermission == SpacePermission.private
             ? ViewSectionPB.Private
             : ViewSectionPB.Public;
+      }
+    }
+  }
+  return null;
+}
+
+/// 解析视图所属的顶层空间 ID。
+///
+/// 移动端文档页中的移动菜单会创建独立的 `SpaceBloc`，其 `currentSpace` 可能尚未
+/// 恢复。跨空间判断不能依赖这个临时状态，必须根据文档的父级链读取真实归属。
+Future<String?> resolveViewSpaceId(
+  ViewPB view,
+) async {
+  var current = view;
+  final visited = <String>{};
+
+  while (visited.add(current.id)) {
+    if (current.isSpace) {
+      return current.id;
+    }
+    if (current.parentViewId.isEmpty) {
+      break;
+    }
+
+    final parentResult = await ViewBackendService.getView(current.parentViewId);
+    final parent = parentResult.fold<ViewPB?>((value) => value, (_) => null);
+    if (parent == null) {
+      break;
+    }
+    current = parent;
+  }
+
+  // 某些移动端缓存只返回当前视图，父级链读取失败时再使用后端祖先接口兜底。
+  final ancestorsResult = await ViewBackendService.getViewAncestors(view.id);
+  final ancestors =
+      ancestorsResult.fold<List<ViewPB>?>((value) => value.items, (_) => null);
+  if (ancestors != null) {
+    for (final ancestor in ancestors) {
+      if (ancestor.isSpace) {
+        return ancestor.id;
       }
     }
   }

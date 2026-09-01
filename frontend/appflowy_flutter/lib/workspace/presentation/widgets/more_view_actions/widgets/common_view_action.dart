@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/home/mobile_home_page.dart';
+import 'package:appflowy/mobile/presentation/home/space/mobile_space_list_refresh.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
@@ -9,7 +11,9 @@ import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -20,6 +24,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flowy_infra/platform_extension.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../application/recent/cached_recent_service.dart';
 
@@ -46,9 +52,15 @@ class ViewAction extends StatelessWidget {
           FocusManager.instance.primaryFocus?.unfocus();
           mutex?.close();
           await Future<void>.delayed(const Duration(milliseconds: 16));
-          if (!context.mounted) return;
+          // iOS 会同步关闭弹层，菜单项上下文可能在当前帧前被销毁；
+          // 根导航上下文仍然有效，应由它承载删除确认弹窗。
+          if (!dialogContext.mounted) {
+            Log.warn('Skip delete confirmation because root navigator is gone: '
+                '${view.id}');
+            return;
+          }
           await _handleDeleteAction(
-            actionContext: context,
+            actionContext: dialogContext,
             dialogContext: dialogContext,
           );
           return;
@@ -124,22 +136,30 @@ class ViewAction extends StatelessWidget {
   }) async {
     final (containPublishedPage, _) =
         await ViewBackendService.containPublishedPage(view);
-    if (!actionContext.mounted) return;
+    // 异步检查期间弹层上下文可能已被销毁，后续只需要导航上下文。
+    if (!dialogContext.mounted) {
+      Log.warn('Skip delete confirmation after view check: ${view.id}');
+      return;
+    }
 
-    if (containPublishedPage && dialogContext.mounted) {
+    if (containPublishedPage) {
       await showConfirmDeletionDialog(
         context: dialogContext,
         name: view.nameOrDefault,
         description: LocaleKeys.publish_containsPublishedPage.tr(),
         onConfirm: () {
+          Log.info(
+            'Confirm delete published view from more actions: ${view.id}',
+          );
           unawaited(_onDeleteConfirmed(actionContext));
         },
       );
-    } else if (dialogContext.mounted) {
+    } else {
       await showDeleteViewToTrashConfirmDialog(
         context: dialogContext,
         name: view.nameOrDefault,
         onConfirm: () {
+          Log.info('Confirm delete view from more actions: ${view.id}');
           unawaited(_onDeleteConfirmed(actionContext));
         },
       );
@@ -147,10 +167,38 @@ class ViewAction extends StatelessWidget {
   }
 
   Future<void> _onDeleteConfirmed(BuildContext actionContext) async {
+    // 删除后 Folder 无法再追溯父级链，必须在提交删除前保存所属空间。
+    final mobileSpaceId =
+        PlatformInfo.isMobile ? await resolveViewSpaceId(view) : null;
     final didTriggerDelete = await _triggerDelete();
-    if (didTriggerDelete && actionContext.mounted) {
-      _refreshSpaceListIfNeeded(actionContext);
+    if (!didTriggerDelete) {
+      return;
     }
+
+    if (actionContext.mounted) {
+      _refreshSpaceListIfNeeded(actionContext);
+      _returnToMobileHomeIfDeletingCurrentView(actionContext);
+    }
+    _refreshMobileSpaceListIfNeeded(mobileSpaceId);
+  }
+
+  void _refreshMobileSpaceListIfNeeded(String? spaceId) {
+    if (!PlatformInfo.isMobile || spaceId == null) {
+      return;
+    }
+    MobileSpaceListRefreshNotifier.instance.requestRefresh(spaceId);
+    Log.info('Refresh mobile space list after delete: $spaceId/${view.id}');
+  }
+
+  void _returnToMobileHomeIfDeletingCurrentView(BuildContext actionContext) {
+    if (!PlatformInfo.isMobile ||
+        getIt<MenuSharedState>().latestOpenView?.id != view.id) {
+      return;
+    }
+
+    // 先清除旧入口，避免首页或最近访问继续指向已移入废纸篓的文档。
+    getIt<MenuSharedState>().latestOpenView = null;
+    GoRouter.of(actionContext).go(MobileHomeScreen.routeName);
   }
 
   void _refreshSpaceListIfNeeded(BuildContext actionContext) {
