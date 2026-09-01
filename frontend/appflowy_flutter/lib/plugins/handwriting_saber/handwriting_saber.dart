@@ -137,30 +137,38 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
     // navigation/business flow. Keep the compact mobile surface for phones.
     final isPhone = PlatformInfo.isMobile && !PlatformInfo.isTablet;
     if (isPhone || preferHostTopRightActions) {
-      return content;
+      return PluginDeletionListener(
+        notifier: notifier,
+        onDeleted: context.onDeleted,
+        child: content,
+      );
     }
 
-    return Stack(
-      children: [
-        content,
-        Positioned(
-          top: 0,
-          left: UniversalPlatform.isMacOS ? 100 : 16,
-          child: const _HandwritingSidebarExpandButton(),
-        ),
-        Positioned(
-          top: 0,
-          right: 0,
-          child: UnifiedViewTopRightActions(
-            view: view,
-            viewInfoBloc: bloc,
-            pageAccessLevelBloc: pageAccessLevelBloc,
-            showCollaborators: FeatureFlag.syncDocument.isOn,
-            useFloatingSurface: true,
-            showShareButton: false,
+    return PluginDeletionListener(
+      notifier: notifier,
+      onDeleted: context.onDeleted,
+      child: Stack(
+        children: [
+          content,
+          Positioned(
+            top: 0,
+            left: UniversalPlatform.isMacOS ? 100 : 16,
+            child: const _HandwritingSidebarExpandButton(),
           ),
-        ),
-      ],
+          Positioned(
+            top: 0,
+            right: 0,
+            child: UnifiedViewTopRightActions(
+              view: view,
+              viewInfoBloc: bloc,
+              pageAccessLevelBloc: pageAccessLevelBloc,
+              showCollaborators: FeatureFlag.syncDocument.isOn,
+              useFloatingSurface: true,
+              showShareButton: false,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

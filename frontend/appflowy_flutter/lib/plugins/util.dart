@@ -5,6 +5,62 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:protobuf/protobuf.dart';
 
+/// Forwards view deletion notifications to the page host.
+///
+/// Some plugins render their own page instead of using [DocumentPage], so
+/// they need the same deletion-to-host bridge that document plugins provide.
+class PluginDeletionListener extends StatefulWidget {
+  const PluginDeletionListener({
+    super.key,
+    required this.notifier,
+    required this.onDeleted,
+    required this.child,
+  });
+
+  final ViewPluginNotifier notifier;
+  final Function(ViewPB, int?)? onDeleted;
+  final Widget child;
+
+  @override
+  State<PluginDeletionListener> createState() => _PluginDeletionListenerState();
+}
+
+class _PluginDeletionListenerState extends State<PluginDeletionListener> {
+  @override
+  void initState() {
+    super.initState();
+    widget.notifier.isDeleted.addListener(_handleDeleted);
+  }
+
+  @override
+  void didUpdateWidget(covariant PluginDeletionListener oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.notifier != widget.notifier) {
+      oldWidget.notifier.isDeleted.removeListener(_handleDeleted);
+      widget.notifier.isDeleted.addListener(_handleDeleted);
+    }
+  }
+
+  void _handleDeleted() {
+    final deletedView = widget.notifier.isDeleted.value;
+    if (deletedView == null) {
+      return;
+    }
+
+    final index = deletedView.hasIndex() ? deletedView.index : null;
+    widget.onDeleted?.call(widget.notifier.view, index);
+  }
+
+  @override
+  void dispose() {
+    widget.notifier.isDeleted.removeListener(_handleDeleted);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class ViewPluginNotifier extends PluginNotifier<DeletedViewPB?> {
   ViewPluginNotifier({
     required ViewPB view,

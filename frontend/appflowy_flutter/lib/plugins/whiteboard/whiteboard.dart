@@ -167,7 +167,11 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
         ),
       ),
     );
-    return widget;
+    return PluginDeletionListener(
+      notifier: notifier,
+      onDeleted: context.onDeleted,
+      child: widget,
+    );
   }
 
   Widget _buildContentWithToolbar({
