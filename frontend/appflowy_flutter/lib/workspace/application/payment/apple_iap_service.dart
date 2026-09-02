@@ -473,9 +473,15 @@ class AppleIAPService {
     // 考虑跨设备续费/合并订单等情况）；拉取失败时会退回到 fallbackPlan。
     // 即便在最坏情况下（两次都取不到），_notifyWithPlan 也会跳过通知，
     // 所以传 data 里的 planCode 只做额外保证。
+    //
+    // 如果后端返回的 data 中没有 planCode，从商品 ID 中提取作为最终
+    // fallback（商品 ID 格式：com.ponynotes.{billingType}.{planCode}）。
     final data = verify.fold((m) => m, (_) => null);
+    final parts = pd.productID.split('.');
+    final productPlanCode = parts.isNotEmpty ? parts.last : null;
     final fallbackPlan = (data?['planCode'] as String?) ??
-        (data?['plan_code'] as String?);
+        (data?['plan_code'] as String?) ??
+        productPlanCode;
 
     if (verify.isFailure) {
       final err = verify.fold((_) => null, (e) => e);

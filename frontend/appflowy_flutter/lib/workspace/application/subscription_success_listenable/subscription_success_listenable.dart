@@ -106,7 +106,20 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
         final planCode = subscription.subscription!.planCode!;
         Log.info(
             '[SubscriptionSuccessListenable] fetched planCode from server: $planCode');
-        _notifyWithPlan(planCode);
+        // 如果服务器返回的 planCode 与当前 _plan 相同（去重会跳过），
+        // 但 fallbackPlan 不同（说明用户刚购买了不同套餐，服务器可能
+        // 还没处理完升级），则用 fallbackPlan 通知，确保用户看到升级成功。
+        if (_plan == planCode &&
+            fallbackPlan != null &&
+            fallbackPlan != planCode) {
+          Log.info(
+              '[SubscriptionSuccessListenable] server returned current plan '
+              '($planCode), but fallbackPlan ($fallbackPlan) is different — '
+              'using fallbackPlan (upgrade may not be processed yet)');
+          _notifyWithPlan(fallbackPlan);
+        } else {
+          _notifyWithPlan(planCode);
+        }
       } else {
         Log.warn(
             '[SubscriptionSuccessListenable] failed to fetch subscription, using fallback plan: $fallbackPlan');

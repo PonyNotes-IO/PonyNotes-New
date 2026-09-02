@@ -342,10 +342,17 @@ class AccountManagementBloc
       _subscriptionSuccessListenable.syncCurrentPlan(planCode);
     }
 
+    // 默认选中当前套餐的下一级更高套餐，引导用户升级
+    // （而非选中当前套餐导致"请勿重复购买"拦截）
     WorkspacePlanPB? selectedPlan;
     if (currentPlan == WorkspacePlanPB.FreePlan) {
       selectedPlan = WorkspacePlanPB.StandPlan;
+    } else if (currentPlan == WorkspacePlanPB.StandPlan) {
+      selectedPlan = WorkspacePlanPB.ProPlan;
+    } else if (currentPlan == WorkspacePlanPB.ProPlan) {
+      selectedPlan = WorkspacePlanPB.HiclassPlan;
     } else {
+      // Hiclass 已是最高级别，保持当前
       selectedPlan = currentPlan;
     }
 
