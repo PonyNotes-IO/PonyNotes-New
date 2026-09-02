@@ -1,4 +1,5 @@
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
+import 'package:appflowy/startup/tasks/deeplink/appflowy_invite_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/invitation_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_app_deeplink_handler.dart';
@@ -29,6 +30,51 @@ void main() {
         onError: (error) {
           expect(error, isNull);
         },
+      );
+    });
+
+    test('workspace invite deep link handler accepts the generated q/ws link',
+        () {
+      final handler = AppflowyInviteDeepLinkHandler();
+
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'ponynotes://invite/?q=invite-code&ws=workspace-id',
+          ),
+        ),
+        true,
+      );
+    });
+
+    test('workspace invite deep link handler keeps legacy aliases', () {
+      final handler = AppflowyInviteDeepLinkHandler();
+
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'ponynotes://invite?code=invite-code&workspaceId=workspace-id',
+          ),
+        ),
+        true,
+      );
+      expect(
+        handler.canHandle(
+          Uri.parse('ponynotes://invite?code=invite-code&ws=workspace-id'),
+        ),
+        true,
+      );
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'https://www.xiaomabiji.com/invited?q=invite-code&ws=workspace-id',
+          ),
+        ),
+        false,
+      );
+      expect(
+        handler.canHandle(Uri.parse('ponynotes://invite?q=invite-code')),
+        false,
       );
     });
 

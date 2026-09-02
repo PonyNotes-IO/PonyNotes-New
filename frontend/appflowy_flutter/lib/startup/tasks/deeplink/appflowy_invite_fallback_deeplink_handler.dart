@@ -8,15 +8,19 @@ import 'package:http/http.dart' as http;
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart' show getIt;
 import 'package:appflowy/user/application/auth/auth_service.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart' show WorkspaceTypePB;
-import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart' show ClipboardService;
+import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart'
+    show ClipboardService;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialogs.dart' show showToastNotification;
-import 'package:appflowy/shared/settings/show_settings.dart' show showSettingsDialog;
-import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart' show SettingsPage;
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/workspace_notifier.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart'
+    show showToastNotification;
+import 'package:appflowy/shared/settings/show_settings.dart'
+    show showSettingsDialog;
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart'
+    show SettingsPage;
 import 'package:appflowy/startup/tasks/deeplink/deeplink_loading_overlay.dart';
 
 /// Very permissive fallback handler to catch invite deep links with unexpected URI shapes.
@@ -56,7 +60,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       if (code == null || ws == null) {
-        Log.error('[InviteFallback] Could not extract code/ws from uri: ${uri.toString()}');
+        Log.error(
+            '[InviteFallback] Could not extract code/ws from uri: ${uri.toString()}');
         onStateChange(this, DeepLinkState.error);
         return FlowyResult.failure(FlowyError(msg: 'Missing code or ws'));
       }
@@ -103,12 +108,14 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
         try {
           final decoded = jsonDecode(resp.body);
           if (decoded is Map) {
-            joinedWorkspaceId = decoded['data']?['workspace_id'] ?? decoded['workspace_id'];
+            joinedWorkspaceId =
+                decoded['data']?['workspace_id'] ?? decoded['workspace_id'];
           }
         } catch (_) {}
         joinedWorkspaceId ??= ws;
 
-        Log.info('[InviteFallback] Joined workspace $joinedWorkspaceId via invite $code');
+        Log.info(
+            '[InviteFallback] Joined workspace $joinedWorkspaceId via invite $code');
         onStateChange(this, DeepLinkState.finish);
         DeepLinkLoadingOverlay.hide();
 
@@ -121,18 +128,15 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
                 title: const Text('已加入工作区'),
                 content: Text('已成功加入工作区 $joinedWorkspaceId，是否前往查看？'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.of(dialogCtx).pop(), child: const Text('稍后')),
+                  TextButton(
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: const Text('稍后')),
                   TextButton(
                     onPressed: () {
                       Navigator.of(dialogCtx).pop();
-                      try {
-                        context.read<UserWorkspaceBloc>().add(
-                          UserWorkspaceEvent.openWorkspace(
-                            workspaceId: joinedWorkspaceId!,
-                            workspaceType: WorkspaceTypePB.ServerW,
-                          ),
-                        );
-                      } catch (_) {}
+                      openWorkspaceNotifier.value = WorkspaceNotifyValue(
+                        workspaceId: joinedWorkspaceId,
+                      );
                     },
                     child: const Text('前往查看'),
                   ),
@@ -144,7 +148,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
 
         return FlowyResult.success(null);
       } else {
-        Log.error('[InviteFallback] join workspace failed: status ${resp.statusCode}, body: ${resp.body}');
+        Log.error(
+            '[InviteFallback] join workspace failed: status ${resp.statusCode}, body: ${resp.body}');
         onStateChange(this, DeepLinkState.error);
         DeepLinkLoadingOverlay.hide();
 
@@ -155,7 +160,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
             builder: (dialogCtx) {
               return AlertDialog(
                 title: const Text('加入失败'),
-                content: Text('自动加入工作区失败：${resp.statusCode} ${resp.body.isNotEmpty ? resp.body : ''}'),
+                content: Text(
+                    '自动加入工作区失败：${resp.statusCode} ${resp.body.isNotEmpty ? resp.body : ''}'),
                 actions: [
                   TextButton(
                     onPressed: () async {
@@ -169,11 +175,21 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
                     onPressed: () {
                       Navigator.of(dialogCtx).pop();
                       try {
-                        final userProfile = context.read<UserWorkspaceBloc>().state.userProfile;
-                        showSettingsDialog(context, userProfile, context.read<UserWorkspaceBloc>(), SettingsPage.member);
+                        final userProfile =
+                            context.read<UserWorkspaceBloc>().state.userProfile;
+                        showSettingsDialog(
+                            context,
+                            userProfile,
+                            context.read<UserWorkspaceBloc>(),
+                            SettingsPage.member);
                       } catch (_) {
-                        final maybeProfile = context.read<UserWorkspaceBloc>().state.userProfile;
-                        showSettingsDialog(context, maybeProfile, context.read<UserWorkspaceBloc>(), SettingsPage.member);
+                        final maybeProfile =
+                            context.read<UserWorkspaceBloc>().state.userProfile;
+                        showSettingsDialog(
+                            context,
+                            maybeProfile,
+                            context.read<UserWorkspaceBloc>(),
+                            SettingsPage.member);
                       }
                     },
                     child: const Text('去 人员管理'),
@@ -184,7 +200,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
           );
         }
 
-        return FlowyResult.failure(FlowyError(msg: 'Join workspace failed: ${resp.statusCode}'));
+        return FlowyResult.failure(
+            FlowyError(msg: 'Join workspace failed: ${resp.statusCode}'));
       }
     } catch (e, st) {
       Log.error('[InviteFallback] Exception: $e', st);
@@ -195,5 +212,3 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
     }
   }
 }
-
-

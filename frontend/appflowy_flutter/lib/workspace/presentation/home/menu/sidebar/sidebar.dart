@@ -36,6 +36,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_migration.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/workspace_notifier.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
@@ -61,6 +62,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:collection/collection.dart';
 
 import '../../../../../startup/plugin/plugin.dart';
 
@@ -854,6 +856,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   bool _isHeaderActionsPopoverVisible = false;
   // 用于标记收起按钮是否刚被点击，避免触发"..."按钮弹窗
   bool _isCollapseButtonTapped = false;
+  static const int _maxInvitationWorkspaceRetryCount = 3;
+  int _invitationWorkspaceRetryCount = 0;
 
   @override
   void initState() {
@@ -861,6 +865,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     // Ensure reminder state is warm before the compact popup renders badges.
     // 预热提醒状态，避免紧凑悬浮条首次渲染时徽标链路缺失。
     getIt<ReminderBloc>().add(const ReminderEvent.started());
+    openWorkspaceNotifier.addListener(_openWorkspaceFromInvitation);
+    // 深链可能早于侧边栏挂载，初始化时消费尚未处理的通知。
+    _openWorkspaceFromInvitation();
   }
 
   void _cancelHeaderActionsCloseTimer() {
@@ -881,7 +888,79 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   @override
   void dispose() {
     _cancelHeaderActionsCloseTimer();
+    openWorkspaceNotifier.removeListener(_openWorkspaceFromInvitation);
     super.dispose();
+  }
+
+  void _openWorkspaceFromInvitation() {
+    final value = openWorkspaceNotifier.value;
+    final workspaceId = value?.workspaceId;
+    final email = value?.email;
+
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return;
+    }
+
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
+    final state = workspaceBloc.state;
+    if (state.currentWorkspace?.workspaceId == workspaceId) {
+      Log.info('[Workspace] Invitation target is already open: $workspaceId');
+      openWorkspaceNotifier.value = null;
+      _invitationWorkspaceRetryCount = 0;
+      return;
+    }
+
+    if (email != null &&
+        email.isNotEmpty &&
+        email != widget.userProfile.email) {
+      Log.info(
+        '[Workspace] Invitation email does not match current user: $email',
+      );
+      return;
+    }
+
+    final workspace = state.workspaces.firstWhereOrNull(
+      (item) => item.workspaceId == workspaceId,
+    );
+    if (workspace == null) {
+      Log.info(
+        '[Workspace] Invitation target not loaded, refreshing workspaces',
+      );
+      workspaceBloc.add(
+        UserWorkspaceEvent.fetchWorkspaces(initialWorkspaceId: workspaceId),
+      );
+
+      Future.delayed(
+        Duration(milliseconds: 250 + _invitationWorkspaceRetryCount * 250),
+        () {
+          if (!mounted ||
+              openWorkspaceNotifier.value?.workspaceId != workspaceId) {
+            return;
+          }
+          if (_invitationWorkspaceRetryCount >=
+              _maxInvitationWorkspaceRetryCount) {
+            openWorkspaceNotifier.value = null;
+            _invitationWorkspaceRetryCount = 0;
+            Log.error(
+              '[Workspace] Failed to open invitation workspace: $workspaceId',
+            );
+            return;
+          }
+          _invitationWorkspaceRetryCount++;
+          _openWorkspaceFromInvitation();
+        },
+      );
+      return;
+    }
+
+    workspaceBloc.add(
+      UserWorkspaceEvent.openWorkspace(
+        workspaceId: workspaceId,
+        workspaceType: workspace.workspaceType,
+      ),
+    );
+    openWorkspaceNotifier.value = null;
+    _invitationWorkspaceRetryCount = 0;
   }
 
   bool _shouldCollapseSyncActions(HomeSettingState state) {
@@ -920,9 +999,8 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                         current.currentWorkspace?.workspaceId) {
                       return true;
                     }
-                    final prevIds = previous.workspaces
-                        .map((w) => w.workspaceId)
-                        .toSet();
+                    final prevIds =
+                        previous.workspaces.map((w) => w.workspaceId).toSet();
                     final currIds =
                         current.workspaces.map((w) => w.workspaceId).toSet();
                     if (prevIds.length != currIds.length) return true;
@@ -936,7 +1014,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     }
                     return WorkspacesMenu(
                       userProfile: widget.userProfile,
-                      currentWorkspace: currentWorkspace, 
+                      currentWorkspace: currentWorkspace,
                       workspaces: workspaces,
                     );
                   },
