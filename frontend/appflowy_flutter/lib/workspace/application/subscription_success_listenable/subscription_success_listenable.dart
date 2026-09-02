@@ -61,6 +61,21 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
     });
   }
 
+  /// 同步当前会员版本到内部去重基线（不触发通知）。
+  ///
+  /// 在用户订阅信息加载时调用，将当前 planCode 设置为 `_plan`，
+  /// 这样后续 `onPaymentSuccess` 如果返回的是同一个 planCode，
+  /// `_notifyWithPlan` 的去重逻辑会正确跳过，避免对已持有套餐
+  /// 重复弹出"升级成功"提示（典型场景：苹果内购 restored 事件
+  /// 对已有套餐重复 verify 后误弹）。
+  void syncCurrentPlan(String? plan) {
+    if (plan == null || plan.isEmpty) return;
+    if (_plan == plan) return;
+    _plan = plan;
+    Log.info(
+        '[SubscriptionSuccessListenable] synced current plan: $plan (no notification)');
+  }
+
   Future<void> _fetchAndNotify(String? fallbackPlan) async {
     try {
       final userService = getIt<AuthService>();

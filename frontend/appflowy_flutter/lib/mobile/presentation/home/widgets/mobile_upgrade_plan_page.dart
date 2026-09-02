@@ -681,11 +681,13 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     final priceText = '¥${formatCurrency(price)}$suffix';
 
     return GestureDetector(
-      onTap: () {
-        context.read<AccountManagementBloc>().add(
-              AccountManagementEvent.selectPlan(plan),
-            );
-      },
+      onTap: isBelowCurrent
+          ? null
+          : () {
+              context.read<AccountManagementBloc>().add(
+                    AccountManagementEvent.selectPlan(plan),
+                  );
+            },
       child: Opacity(
         opacity: isBelowCurrent ? 0.45 : 1.0,
         child: SizedBox(
@@ -1069,6 +1071,15 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     final config = planConfigs[selectedPlan];
     if (config == null) {
       showToastNotification(message: '无法获取计划配置');
+      return;
+    }
+
+    // 拦截重复购买：当前会员版本与选中版本一致
+    final currentPlan = subscriptionInfo?.plan;
+    if (currentPlan != null &&
+        currentPlan != WorkspacePlanPB.FreePlan &&
+        selectedPlan == currentPlan) {
+      showToastNotification(message: '请勿重复购买');
       return;
     }
 
