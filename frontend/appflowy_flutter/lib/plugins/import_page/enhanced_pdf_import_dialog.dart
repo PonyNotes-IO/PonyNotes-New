@@ -40,6 +40,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   Uint8List? _pdfBytes;
   String? _extractedContent;
   String? _processingError;
+  String? _processingStage;
   bool _isProcessing = false;
   PdfImportMode _importMode = PdfImportMode.professional;
   CancellationToken? _cancellationToken;
@@ -328,7 +329,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     if (_extractedContent == null || _extractedContent!.isEmpty) {
       String message = '选择文件并点击"开始处理"来预览提取的内容';
       if (_isProcessing) {
-        message = '正在处理中，请稍候...';
+        message = _processingStage ?? '正在处理中，请稍候...';
       }
       return Container(
         padding: const EdgeInsets.all(16),
@@ -459,6 +460,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       _cancellationToken!.cancel();
       setState(() {
         _isProcessing = false;
+        _processingStage = null;
         _processingError = '处理已取消';
       });
       Log.info('PDF处理任务已取消');
@@ -494,6 +496,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           _selectedFile = file;
           _extractedContent = null;
           _processingError = null;
+          _processingStage = null;
         });
       }
     } catch (e) {
@@ -518,6 +521,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   Future<void> _processFile() async {
     if (_selectedFile == null) return;
 
+    final stopwatch = Stopwatch()..start();
     // 创建新的取消令牌
     _cancellationToken = CancellationToken();
 
@@ -534,68 +538,48 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       _processingError = null;
       _extractedContent = null; // 重置提取内容
       _pdfBytes = pdfBytes; // 设置PDF bytes
+      _processingStage = Platform.isIOS ? '正在本地提取文本...' : '正在处理PDF...';
     });
 
     try {
-      String? content;
-
-      // 使用阿里云API处理PDF
-      // 注意：阿里云API会自动处理所有模式，不需要指定mode、language等参数
-      // content = await AliyunDocParseProcessor.processPdfFile(
-      //       _selectedFile!,
-      //       cancellationToken: _cancellationToken,
-      //     );
-      final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,
-          cancellationToken: _cancellationToken);
-      if (content1 != null) {
-        content = content1['text']?.toString();
-        final pages = content1['pages'];
-        final engine = content1['engine']?.toString() ?? 'unknown';
-
+      final localContent = Platform.isIOS ? _extractLocalText(pdfBytes) : null;
+      String? content = localContent;
+      if (_hasUsableLocalText(content)) {
         Log.info(
-            'PDF提取结果: pages=$pages, engine=$engine, textLength=${content?.length ?? 0}');
-
-        // 如果OCR返回的文本为空，尝试使用Syncfusion作为备用方案
-        if (content == null || content.isEmpty) {
-          Log.warn('OCR提取结果为空，尝试使用Syncfusion备用方案。文件: ${_selectedFile!.path}');
-          Log.warn('OCR提取结果详情: $content1');
-
-          try {
-            // 使用Syncfusion提取文本作为备用方案
-            final bytes = await _selectedFile!.readAsBytes();
-            final PdfDocument document = PdfDocument(inputBytes: bytes);
-            final PdfTextExtractor extractor = PdfTextExtractor(document);
-            final String rawText = extractor.extractText();
-            document.dispose();
-
-            if (rawText.isNotEmpty) {
-              // 清理文本
-              content = pdf_import_service.ImportService.cleanPdfText(rawText);
-              Log.info('Syncfusion备用方案成功提取文本，长度: ${content.length}');
-            } else {
-              Log.warn('Syncfusion备用方案也返回空文本');
-            }
-          } catch (fallbackError) {
-            Log.error('Syncfusion备用方案失败: $fallbackError');
-          }
-        }
+          'PDF本地文本提取成功: fileSize=${pdfBytes?.length ?? 0}, '
+          'textLength=${content!.length}, elapsedMs=${stopwatch.elapsedMilliseconds}',
+        );
       } else {
-        Log.warn('PDF提取返回null，可能后端服务不可用或处理失败，尝试使用Syncfusion备用方案');
+        if (mounted) {
+          setState(() {
+            _processingStage = '正在识别扫描内容，请稍候...';
+          });
+        }
+        Log.info(
+          'PDF本地文本不足，开始远程OCR: fileSize=${pdfBytes?.length ?? 0}, '
+          'elapsedMs=${stopwatch.elapsedMilliseconds}',
+        );
 
-        // 如果OCR完全失败，尝试使用Syncfusion
-        try {
-          final bytes = await _selectedFile!.readAsBytes();
-          final PdfDocument document = PdfDocument(inputBytes: bytes);
-          final PdfTextExtractor extractor = PdfTextExtractor(document);
-          final String rawText = extractor.extractText();
-          document.dispose();
+        final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,
+            cancellationToken: _cancellationToken);
+        if (content1 != null) {
+          content = content1['text']?.toString();
+          final pages = content1['pages'];
+          final engine = content1['engine']?.toString() ?? 'unknown';
 
-          if (rawText.isNotEmpty) {
-            content = pdf_import_service.ImportService.cleanPdfText(rawText);
-            Log.info('Syncfusion备用方案成功提取文本，长度: ${content.length}');
-          }
-        } catch (fallbackError) {
-          Log.error('Syncfusion备用方案失败: $fallbackError');
+          Log.info(
+            'PDF OCR提取结果: pages=$pages, engine=$engine, '
+            'textLength=${content?.length ?? 0}, '
+            'elapsedMs=${stopwatch.elapsedMilliseconds}',
+          );
+        } else {
+          Log.warn('PDF OCR提取返回null');
+        }
+
+        // OCR 失败或返回空文本时保留本地提取结果；iOS 已在前面完成解析，
+        // 因此不会重复解析同一份大文件。
+        if (content == null || content.trim().isEmpty) {
+          content = Platform.isIOS ? localContent : _extractLocalText(pdfBytes);
         }
       }
       // 检查是否已取消
@@ -603,6 +587,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         if (mounted) {
           setState(() {
             _isProcessing = false;
+            _processingStage = null;
             _processingError = '处理已取消';
           });
         }
@@ -610,11 +595,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
 
       // 验证内容是否为空
-      if (content == null || content.isEmpty) {
+      if (content == null || content.trim().isEmpty) {
         Log.warn('Extracted content is empty');
         if (mounted) {
           setState(() {
             _isProcessing = false;
+            _processingStage = null;
             _processingError = '提取的内容为空，请检查PDF文件是否包含文本内容';
           });
         }
@@ -625,8 +611,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         setState(() {
           _extractedContent = content;
           _isProcessing = false;
+          _processingStage = null;
         });
-        Log.info('Content preview updated, length: ${content.length}');
+        Log.info(
+          'Content preview updated, length: ${content.length}, '
+          'elapsedMs=${stopwatch.elapsedMilliseconds}',
+        );
       }
     } catch (e) {
       // 如果是取消操作，不记录错误
@@ -634,6 +624,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         if (mounted) {
           setState(() {
             _isProcessing = false;
+            _processingStage = null;
             _processingError = '处理已取消';
           });
         }
@@ -645,11 +636,38 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         setState(() {
           _processingError = 'PDF处理失败: $e';
           _isProcessing = false;
+          _processingStage = null;
         });
       }
     } finally {
       _cancellationToken = null;
+      stopwatch.stop();
     }
+  }
+
+  /// 从已读入的 PDF 字节中提取可复制文本，普通文本 PDF 无需等待远程 OCR。
+  String? _extractLocalText(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) return null;
+
+    try {
+      final document = PdfDocument(inputBytes: bytes);
+      try {
+        final rawText = PdfTextExtractor(document).extractText();
+        final cleanedText =
+            pdf_import_service.ImportService.cleanPdfText(rawText);
+        return cleanedText.trim().isEmpty ? null : cleanedText;
+      } finally {
+        document.dispose();
+      }
+    } catch (e) {
+      Log.warn('PDF本地文本提取失败，将继续使用远程OCR: $e');
+      return null;
+    }
+  }
+
+  bool _hasUsableLocalText(String? content) {
+    // 过滤扫描 PDF 可能携带的极少量元数据或不可用字符，避免误跳过 OCR。
+    return content != null && content.trim().length >= 20;
   }
 
   void _showHybridPreview() {
