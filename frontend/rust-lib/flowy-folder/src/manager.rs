@@ -1570,7 +1570,12 @@ impl FolderManager {
       let duplicate_params = CreateViewParams {
         parent_view_id,
         name,
-        layout: view.layout.clone().into(),
+        // Folder/Notebook/Whiteboard are stored internally as Document, but
+        // their dedicated handlers are selected from the protobuf layout.
+        // Preserve the original layout here so duplicated whiteboards are
+        // created by WhiteboardFolderOperationHandler instead of the document
+        // handler (which cannot consume whiteboard JSON data).
+        layout: layout_pb.clone(),
         initial_data: ViewData::DuplicateData(view_data),
         view_id: gen_view_id(),
         meta: Default::default(),

@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_room_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_migration_webview.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -21,6 +22,146 @@ import 'package:flutter/widgets.dart';
 ///   目标存储；返回 false 调用方必须放弃 moveViewV2。
 class WhiteboardMigrationService {
   WhiteboardMigrationService._();
+
+  /// 复制协作空间白板，不删除源白板。
+  ///
+  /// 协作白板的真实内容位于 xm-arts room，不能依赖 Rust duplicate_view
+  /// 读取本地 collab。这里先从源 room 拉取明文，再按目标空间类型写入新的
+  /// room 或目标本地 collab，并在写入后校验元素 id。
+  static Future<ViewPB?> duplicateCollaborativeWhiteboard({
+    required BuildContext context,
+    required ViewPB view,
+    required String targetParentId,
+    required bool targetIsPrivate,
+    required bool openAfterCreate,
+    String? name,
+  }) async {
+    ViewPB? created;
+    final dataService = WhiteboardDataService();
+    try {
+      final sourceRoom = await _resolveRoomForMigration(view.id, dataService);
+      if (sourceRoom == null || !context.mounted) {
+        Log.error('[WBMigration] 协作白板复制：源 room 不可用 view=${view.id}');
+        return null;
+      }
+
+      final pulled = await runWhiteboardMigrationWebView(
+        context: context,
+        roomId: sourceRoom.roomId,
+        roomKey: sourceRoom.roomKey,
+        isPush: false,
+      );
+      if (!pulled.ok || pulled.scene == null) {
+        Log.error('[WBMigration] 协作白板复制：读取源 room 失败 ${pulled.error}');
+        return null;
+      }
+
+      final scene = pulled.scene!;
+      final liveElements = _asList(scene['elements'])
+          .where((e) => !(e is Map && e['isDeleted'] == true))
+          .toList();
+      final payload = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'elements': liveElements,
+        'files': scene['files'] ?? const {},
+        'appState': scene['appState'] ?? const {},
+      };
+
+      String? roomId;
+      String? roomKey;
+      if (!targetIsPrivate) {
+        roomId = WhiteboardRoomService.generateRoomId();
+        roomKey = WhiteboardRoomService.generateRoomKey();
+      }
+
+      final createResult = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Whiteboard,
+        parentViewId: targetParentId,
+        name: name ?? '${view.name} (副本)',
+        // 内容迁移完成前不要把目标设为当前视图，失败回滚时避免当前视图
+        // 指向即将删除的空白目标。
+        openAfterCreate: false,
+        index: 0,
+        initialDataBytes: roomId == null
+            ? null
+            : WhiteboardRoomService.encodeInitialData(roomId, roomKey!),
+      );
+      created = createResult.fold((v) => v, (e) {
+        Log.error('[WBMigration] 协作白板复制：创建目标失败 ${e.msg}');
+        return null;
+      });
+      if (created == null) return null;
+
+      if (targetIsPrivate) {
+        final current = await dataService.loadWhiteboardData(
+          created.id,
+          source: 'duplicate-public-whiteboard-base',
+        );
+        final saved = await dataService.saveWhiteboardData(
+          created.id,
+          buildCompatibleReplacementPayload(
+            current: current,
+            replacement: payload,
+          ),
+          source: 'duplicate-public-whiteboard-private',
+        );
+        if (!saved) {
+          await _rollbackCreated(created.id);
+          return null;
+        }
+        final verify = await dataService.loadWhiteboardData(
+          created.id,
+          source: 'duplicate-public-whiteboard-private-verify',
+        );
+        if (!_sameElementIds(
+          liveElements,
+          _asList(verify['elements'])
+              .where((e) => !(e is Map && e['isDeleted'] == true))
+              .toList(),
+        )) {
+          Log.error('[WBMigration] 协作白板复制：私有目标内容校验失败');
+          await _rollbackCreated(created.id);
+          return null;
+        }
+      } else {
+        await WhiteboardRoomService.saveRoom(created.id, roomId!, roomKey!);
+        if (!context.mounted) {
+          await _rollbackCreated(created.id);
+          return null;
+        }
+        final pushed = await runWhiteboardMigrationWebView(
+          context: context,
+          roomId: roomId,
+          roomKey: roomKey,
+          isPush: true,
+          pushPayload: {
+            'elements': liveElements,
+            'files': _prepareFilesForPush(scene['files']),
+          },
+        );
+        if (!pushed.ok) {
+          Log.error('[WBMigration] 协作白板复制：目标 room 上传失败 ${pushed.error}');
+          await _rollbackCreated(created.id);
+          return null;
+        }
+      }
+
+      if (openAfterCreate) {
+        await FolderEventSetLatestView(ViewIdPB(value: created.id)).send();
+      }
+
+      Log.info(
+        '[WBMigration] 协作白板复制完成 源=${view.id} 新=${created.id} '
+        'targetPrivate=$targetIsPrivate',
+      );
+      return created;
+    } catch (e, s) {
+      Log.error('[WBMigration] 协作白板复制异常: $e\n$s');
+      if (created != null) await _rollbackCreated(created.id);
+      return null;
+    }
+  }
 
   /// 私有空间白板 → 协作区：**在协作区新建一块白板，复制内容，再删除源白板**。
   ///

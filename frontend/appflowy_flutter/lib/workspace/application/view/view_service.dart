@@ -1,9 +1,13 @@
 import 'dart:async';
 
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
+import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_bloc.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/workspace/application/permission/workspace_permission_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
@@ -222,6 +226,94 @@ class ViewBackendService {
     String? parentViewId,
     String? suffix,
     required bool syncAfterDuplicate,
+  }) async {
+    // 协作白板内容位于 xm-arts room。Rust duplicate_view 只能复制本地
+    // collab 元数据，会生成空白副本，因此在进入 Rust 前走 room 迁移。
+    if (view.layout == ViewLayoutPB.Whiteboard) {
+      final sourceIsPrivate = await _isViewInPrivateSpace(view);
+      if (sourceIsPrivate) {
+        return _duplicateWithRust(
+          view: view,
+          openAfterDuplicate: openAfterDuplicate,
+          includeChildren: includeChildren,
+          parentViewId: parentViewId,
+          suffix: suffix,
+          syncAfterDuplicate: syncAfterDuplicate,
+        );
+      }
+
+      final context = AppGlobals.rootNavKey.currentContext;
+      if (context == null || !context.mounted) {
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = '协作白板复制缺少可用页面上下文',
+        );
+      }
+      if (context.mounted) {
+        final targetId = parentViewId ?? view.parentViewId;
+        var targetIsPrivate = false;
+        if (targetId.isNotEmpty) {
+          final parentResult = await getView(targetId);
+          targetIsPrivate = parentResult.fold(
+            (parent) =>
+                parent.isSpace &&
+                parent.spacePermission == SpacePermission.private,
+            (_) => false,
+          );
+          if (!targetIsPrivate) {
+            final parent = parentResult.toNullable();
+            if (parent != null && !parent.isSpace) {
+              targetIsPrivate = await _isViewInPrivateSpace(parent);
+            }
+          }
+        }
+        if (!context.mounted) {
+          return FlowyResult.failure(
+            FlowyError.create()
+              ..code = ErrorCode.Internal
+              ..msg = '复制白板时页面已关闭',
+          );
+        }
+        final copied =
+            await WhiteboardMigrationService.duplicateCollaborativeWhiteboard(
+          context: context,
+          view: view,
+          targetParentId: targetId,
+          targetIsPrivate: targetIsPrivate,
+          openAfterCreate: openAfterDuplicate,
+          name: suffix == null || suffix.isEmpty
+              ? view.name
+              : '${view.name}$suffix',
+        );
+        if (copied != null) {
+          return FlowyResult.success(copied);
+        }
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = '协作白板内容复制失败',
+        );
+      }
+    }
+
+    return _duplicateWithRust(
+      view: view,
+      openAfterDuplicate: openAfterDuplicate,
+      includeChildren: includeChildren,
+      parentViewId: parentViewId,
+      suffix: suffix,
+      syncAfterDuplicate: syncAfterDuplicate,
+    );
+  }
+
+  static Future<FlowyResult<ViewPB, FlowyError>> _duplicateWithRust({
+    required ViewPB view,
+    required bool openAfterDuplicate,
+    required bool includeChildren,
+    required bool syncAfterDuplicate,
+    String? parentViewId,
+    String? suffix,
   }) {
     final payload = DuplicateViewPayloadPB.create()
       ..viewId = view.id
@@ -238,6 +330,24 @@ class ViewBackendService {
     }
 
     return FolderEventDuplicateView(payload).send();
+  }
+
+  static Future<bool> _isViewInPrivateSpace(ViewPB view) async {
+    if (view.isSpace) {
+      return view.spacePermission == SpacePermission.private;
+    }
+    final ancestors = await getViewAncestors(view.id);
+    return ancestors.fold(
+      (items) {
+        for (final ancestor in items.items) {
+          if (ancestor.isSpace) {
+            return ancestor.spacePermission == SpacePermission.private;
+          }
+        }
+        return false;
+      },
+      (_) => false,
+    );
   }
 
   static Future<FlowyResult<void, FlowyError>> favorite({

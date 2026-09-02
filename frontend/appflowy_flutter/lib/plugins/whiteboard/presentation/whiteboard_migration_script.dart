@@ -104,6 +104,67 @@ const String whiteboardMigrationScript = r'''
     return p;
   };
 
+  // xm-arts 的不同版本有的使用 fetch，有的使用 XMLHttpRequest。仅钩住
+  // fetch 会留下两个数据安全缺口：PULL 页面自动保存的空场景可能绕过拦截，
+  // PUSH 页面真正成功后 Flutter 又收不到状态，最终出现“副本已创建但内容为空”。
+  // XHR 这里复用同一份 allowPost 和状态字段，保持两种网络实现行为一致。
+  try {
+    var Xhr = window.XMLHttpRequest;
+    if (Xhr && Xhr.prototype && !Xhr.prototype.__xmMigPatched) {
+      var xhrOpen = Xhr.prototype.open;
+      var xhrSend = Xhr.prototype.send;
+      Xhr.prototype.open = function (method, url) {
+        this.__xmMigMethod = String(method || 'GET').toUpperCase();
+        this.__xmMigUrl = String(url || '');
+        return xhrOpen.apply(this, arguments);
+      };
+      Xhr.prototype.send = function (body) {
+        var xhr = this;
+        var method = xhr.__xmMigMethod || 'GET';
+        var url = xhr.__xmMigUrl || '';
+        var isGet = method === 'GET' && /\/api\/scenes(?:\/v2)?\/[A-Za-z0-9_-]+\/?($|[?#])/.test(url);
+        var isPost = method === 'POST' && /''' +
+    whiteboardMigrationScenePostPattern +
+    r'''/.test(url);
+        if (isPost && !state.allowPost) {
+          state.blockedPostCount++;
+          log('已拦截未授权的 XHR room 写入（第 ' + state.blockedPostCount + ' 次）');
+          // 不触发真实请求；异步触发完成回调，避免页面因请求永远 pending 而卡住。
+          setTimeout(function () {
+            try { if (typeof xhr.onload === 'function') xhr.onload(); } catch (e) {}
+            try { if (typeof xhr.onloadend === 'function') xhr.onloadend(); } catch (e) {}
+          }, 0);
+          return;
+        }
+        if (isGet || isPost) {
+          var onLoad = xhr.onload;
+          xhr.onload = function () {
+            try {
+              if (isGet) {
+                state.lastGetStatus = xhr.status;
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  var data = JSON.parse(xhr.responseText || '{}');
+                  var v = Number(data && data.sceneVersion);
+                  state.lastGetSceneVersion = isNaN(v) ? 0 : v;
+                } else {
+                  state.lastGetSceneVersion = 0;
+                }
+              } else {
+                state.lastPostStatus = xhr.status;
+                state.lastPostOk = xhr.status >= 200 && xhr.status < 300;
+              }
+            } catch (e) {}
+            if (typeof onLoad === 'function') return onLoad.apply(xhr, arguments);
+          };
+        }
+        return xhrSend.apply(this, arguments);
+      };
+      Xhr.prototype.__xmMigPatched = true;
+    }
+  } catch (e) {
+    log('XHR 迁移钩子安装失败: ' + (e && e.message));
+  }
+
   function log(msg) { try { console.log('[XMMig] ' + msg); } catch (e) {} }
 
   // xm-arts 部分版本通过 XHR/socket 拉场景，fetch 钩子观察不到 GET。主动做一次

@@ -37,6 +37,18 @@ void main() {
     expect(mobile, contains("handlerName: 'writeWhiteboardClipboard'"));
   });
 
+  test('whiteboard migration blocks and observes XHR scene writes', () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/whiteboard_migration_script.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('XMLHttpRequest'));
+    expect(source, contains('__xmMigPatched'));
+    expect(source, contains('已拦截未授权的 XHR room 写入'));
+    expect(source, contains('state.lastPostStatus = xhr.status'));
+    expect(source, contains('state.lastGetSceneVersion = isNaN(v) ? 0 : v'));
+  });
+
   test('whiteboard import reload token reaches the platform view key', () {
     final pageSource =
         File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
