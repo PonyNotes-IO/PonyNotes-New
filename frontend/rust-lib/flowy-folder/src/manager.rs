@@ -1500,6 +1500,7 @@ impl FolderManager {
     let mut stack = vec![(view_id.to_string(), parent_view_id.to_string())];
     let mut objects = vec![];
     let suffix = suffix.unwrap_or(" (copy)".to_string());
+    let workspace_id = self.user.workspace_id()?;
 
     let lock = match self.mutex_folder.load_full() {
       None => {
@@ -1532,20 +1533,33 @@ impl FolderManager {
       let view_id = Uuid::from_str(&view.id)?;
       let view_data = handler.duplicate_view(&view_id).await?;
 
-      let index = self
-        .get_view_relation(&current_parent_id)
-        .await
-        .and_then(|(_, _, views)| {
-          views
-            .iter()
-            .filter(|id| filtered_view_ids.contains(id))
-            .position(|id| *id == current_view_id)
-            .map(|i| i as u32)
-        });
+      // 所有类型复制产生的主视图都应出现在目标列表顶部。协作空间白板
+      // 通常由 Flutter 专用迁移流程创建，私有空间白板则会走这里。
+      let index = if is_source_view {
+        Some(0)
+      } else {
+        self
+          .get_view_relation(&current_parent_id)
+          .await
+          .and_then(|(_, _, views)| {
+            views
+              .iter()
+              .filter(|id| filtered_view_ids.contains(id))
+              .position(|id| *id == current_view_id)
+              .map(|i| i as u32)
+          })
+      };
 
       let section = {
         let folder = lock.read().await;
-        if folder.is_view_in_section(Section::Private, &view.id) {
+        // 根视图复制到工作区时沿用源视图归属；复制到具体父视图时，
+        // 归属由目标父视图决定，避免私有白板复制到私有空间后仍被标为公共。
+        let is_private = if current_parent_id == workspace_id.to_string() {
+          folder.is_view_in_section(Section::Private, &view.id)
+        } else {
+          folder.is_view_in_section(Section::Private, &current_parent_id)
+        };
+        if is_private {
           ViewSectionPB::Private
         } else {
           ViewSectionPB::Public
@@ -1593,6 +1607,16 @@ impl FolderManager {
 
       if is_source_view {
         new_view_id.clone_from(&duplicated_view.id);
+        // 创建流程和云端 folder 合并可能重新计算父子关系；再次以 prev=None
+        // 校正首位，确保私有空间白板复制完成后不会落到列表底部。
+        if let Some(lock) = self.mutex_folder.load_full() {
+          let mut folder = lock.write().await;
+          let _ = folder.move_nested_view(
+            &duplicated_view.id,
+            &current_parent_id,
+            None,
+          );
+        }
       }
 
       if sync_after_create {
@@ -1629,7 +1653,6 @@ impl FolderManager {
       is_source_view = false
     }
 
-    let workspace_id = self.user.workspace_id()?;
     let parent_view_id = Uuid::from_str(parent_view_id)?;
 
     // Sync the view to the cloud
