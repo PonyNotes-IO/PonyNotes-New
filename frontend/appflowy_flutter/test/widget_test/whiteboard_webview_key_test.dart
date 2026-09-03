@@ -617,6 +617,22 @@ void main() {
     expect(source, contains('syncFilesFromScene(pendingFilesSyncKey)'));
   });
 
+  test('whiteboard file picker intercepts image types and preserves imports', () {
+    final source =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(source, contains('installWhiteboardFilePicker();'));
+    expect(source, contains('window.showOpenFilePicker'));
+    expect(source, contains('_ponynotesIsImageFilePickerOptions(options)'));
+    expect(source, contains(r'/^image\//i.test(String(mimeType))'));
+    expect(source, contains('_ponynotesPickImageInto(null, null, false)'));
+    expect(
+      source,
+      contains("new DOMException('The user aborted a request.', 'AbortError')"),
+    );
+    expect(source, contains('return nativePicker.apply(this, arguments);'));
+  });
+
   test('whiteboard bridge recovers iOS image decode and stale viewport', () {
     final source =
         File('assets/excalidraw/flutter_bridge.js').readAsStringSync();

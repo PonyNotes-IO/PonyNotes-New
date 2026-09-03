@@ -22,6 +22,7 @@
     // 插图管线建元素（<4MB 时该管线已被实测可靠）。任何异常回退原始 click（原生
     // 面板），保证不劣化。仅在桌面 file input 生效，不触碰移动端/协作空间路径。
     installWhiteboardImagePicker();
+    installWhiteboardFilePicker();
     function installWhiteboardImagePicker() {
         try {
             if (typeof HTMLInputElement === 'undefined' ||
@@ -59,6 +60,59 @@
                 (err && err.message || err));
         }
     }
+
+    // File System Access API 的图片选择不会创建 input，因此补拦截
+    // window.showOpenFilePicker。场景和素材库导入仍透传原生 picker。
+    function installWhiteboardFilePicker() {
+        try {
+            const nativePicker = window.showOpenFilePicker;
+            if (typeof nativePicker !== 'function' ||
+                nativePicker.__ponynotesImagePickerPatched ||
+                !window.flutter_inappwebview ||
+                typeof window.flutter_inappwebview.callHandler !== 'function') {
+                return;
+            }
+            const patchedPicker = function (options) {
+                if (!_ponynotesIsImageFilePickerOptions(options)) {
+                    return nativePicker.apply(this, arguments);
+                }
+                // 图片已通过 API 写入场景，返回 AbortError 让 Excalidraw
+                // 按取消路径清理原本等待文件句柄的链路。
+                return Promise.resolve(
+                    _ponynotesPickImageInto(null, null, false),
+                ).then(
+                    () => { throw _ponynotesCreateAbortError(); },
+                    () => { throw _ponynotesCreateAbortError(); },
+                );
+            };
+            patchedPicker.__ponynotesImagePickerPatched = true;
+            window.showOpenFilePicker = patchedPicker;
+            console.log('[PonyNotes] whiteboard file picker installed');
+        } catch (err) {
+            console.warn('[PonyNotes] whiteboard file picker install error: ' +
+                (err && err.message || err));
+        }
+    }
+
+    function _ponynotesIsImageFilePickerOptions(options) {
+        const types = options && Array.isArray(options.types) ? options.types : [];
+        return types.some((type) => {
+            const accept = type && type.accept;
+            if (!accept || typeof accept !== 'object') return false;
+            return Object.keys(accept).some((mimeType) =>
+                /^image\//i.test(String(mimeType)));
+        });
+    }
+
+    function _ponynotesCreateAbortError() {
+        if (typeof DOMException === 'function') {
+            return new DOMException('The user aborted a request.', 'AbortError');
+        }
+        const error = new Error('The user aborted a request.');
+        error.name = 'AbortError';
+        return error;
+    }
+
     // 取消/失败时用 Excalidraw 自己的清理路径收尾：legacySetup 在 window focus
     // 时会检查 input.files，为空则触发 AbortError 并 clearInterval、移除监听、
     // 把工具切回选择态。派发一个 focus 事件即可复用这套收尾，避免选择器 Promise
@@ -69,17 +123,25 @@
         } catch (e) { /* 收尾失败不致命：仅工具态未复位 */ }
     }
 
-    async function _ponynotesPickImageInto(input, originalClick) {
+    async function _ponynotesPickImageInto(input, originalClick, fallbackToNative = true) {
         let picked;
         try {
             picked = await window.flutter_inappwebview.callHandler('pickWhiteboardImage');
         } catch (e) {
             console.warn('[PonyNotes] whiteboard image insert: native picker handler failed: ' +
                 (e && e.message || e));
+            if (!fallbackToNative) {
+                _ponynotesCancelImagePick();
+                return;
+            }
             return originalClick.apply(input, []);
         }
         if (!picked || typeof picked !== 'object') {
             // 宿主未实现或返回异常：回退原生面板，保证仍可插图。
+            if (!fallbackToNative) {
+                _ponynotesCancelImagePick();
+                return;
+            }
             return originalClick.apply(input, []);
         }
         if (picked.canceled) {
@@ -113,6 +175,10 @@
                     processed.blob.size + ' bytes)');
                 return;
             }
+            if (!fallbackToNative) {
+                _ponynotesCancelImagePick();
+                return;
+            }
             // API 未就绪：回退到 change 注入，仍走 Excalidraw 原生插图管线。
             const file = new File([processed.blob], processed.name,
                 { type: processed.type, lastModified: Date.now() });
@@ -123,6 +189,10 @@
         } catch (e) {
             console.warn('[PonyNotes] whiteboard image insert: insert failed, ' +
                 'falling back to native picker: ' + (e && e.message || e));
+            if (!fallbackToNative) {
+                _ponynotesCancelImagePick();
+                return;
+            }
             return originalClick.apply(input, []);
         }
     }
