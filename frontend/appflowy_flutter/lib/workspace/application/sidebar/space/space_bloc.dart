@@ -1408,7 +1408,9 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       return null;
     }
 
-    for (final view in space.childViews) {
+    // 单个视图复制固定插入目标列表顶部。复制整个空间时倒序处理，
+    // 才能在每次插入顶部的情况下保持源空间原有的目录顺序。
+    for (final view in space.childViews.reversed) {
       await ViewBackendService.duplicate(
         view: view,
         openAfterDuplicate: false,

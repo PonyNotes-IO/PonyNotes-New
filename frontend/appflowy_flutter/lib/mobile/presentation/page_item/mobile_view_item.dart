@@ -38,6 +38,7 @@ class MobileViewItem extends StatelessWidget {
     this.startActionPane,
     this.endActionPane,
     this.favoriteBloc,
+    this.onViewDuplicated,
   });
 
   final ViewPB view;
@@ -73,6 +74,7 @@ class MobileViewItem extends StatelessWidget {
   final ActionPaneBuilder? startActionPane;
   final ActionPaneBuilder? endActionPane;
   final FavoriteBloc? favoriteBloc;
+  final void Function(ViewPB duplicatedView)? onViewDuplicated;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +82,7 @@ class MobileViewItem extends StatelessWidget {
       create: (_) => ViewBloc(
         view: view,
         useNotificationViewUpdates: Platform.isIOS,
+        onViewDuplicated: onViewDuplicated,
       )..add(const ViewEvent.initial()),
       child: BlocConsumer<ViewBloc, ViewState>(
         listenWhen: (p, c) =>
@@ -106,6 +109,7 @@ class MobileViewItem extends StatelessWidget {
             startActionPane: startActionPane,
             endActionPane: endActionPane,
             favoriteBloc: favoriteBloc,
+            onViewDuplicated: onViewDuplicated,
           );
         },
       ),
@@ -131,6 +135,7 @@ class InnerMobileViewItem extends StatelessWidget {
     this.startActionPane,
     this.endActionPane,
     this.favoriteBloc,
+    this.onViewDuplicated,
   });
 
   final ViewPB view;
@@ -154,6 +159,7 @@ class InnerMobileViewItem extends StatelessWidget {
   final ActionPaneBuilder? startActionPane;
   final ActionPaneBuilder? endActionPane;
   final FavoriteBloc? favoriteBloc;
+  final void Function(ViewPB duplicatedView)? onViewDuplicated;
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +198,10 @@ class InnerMobileViewItem extends StatelessWidget {
             startActionPane: startActionPane,
             endActionPane: endActionPane,
             favoriteBloc: favoriteBloc,
+            onViewDuplicated: (duplicatedView) {
+              onViewDuplicated?.call(duplicatedView);
+              context.read<ViewBloc>().insertDuplicatedView(duplicatedView);
+            },
           );
         }).toList();
 
