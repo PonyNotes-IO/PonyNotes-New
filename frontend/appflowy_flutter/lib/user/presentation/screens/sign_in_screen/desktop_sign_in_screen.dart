@@ -1008,7 +1008,9 @@ class _CustomThirdPartyButtons extends StatelessWidget {
             // 微信登录
             _ThirdPartyIconButton(
               label: "微信登录",
-              url: "assets/images/login/icon_login_wx.png",
+              icon: Theme.of(context).brightness == Brightness.dark
+                  ? FlowySvgs.icon_login_wx_dark_xl
+                  : FlowySvgs.icon_login_wx_xl,
               backgroundColor: const Color(0xFF09BB07),
               onTap: state.isSubmitting
                   ? null
@@ -1036,7 +1038,9 @@ class _CustomThirdPartyButtons extends StatelessWidget {
             // 抖音登录
             _ThirdPartyIconButton(
               label: "抖音登录",
-              url: "assets/images/login/icon_login_dy.png",
+              icon: Theme.of(context).brightness == Brightness.dark
+                  ? FlowySvgs.icon_login_dy_dark_xl
+                  : FlowySvgs.icon_login_dy_xl,
               backgroundColor: Colors.black,
               onTap: state.isSubmitting
                   ? null
@@ -1089,14 +1093,14 @@ class _PonyNotesLogo extends StatelessWidget {
 class _ThirdPartyIconButton extends StatelessWidget {
   const _ThirdPartyIconButton({
     required this.label,
-    required this.url,
+    required this.icon,
     required this.backgroundColor,
     this.onTap,
     this.isLoading = false,
   });
 
   final String label;
-  final String url;
+  final FlowySvgData icon;
   final Color backgroundColor;
   final VoidCallback? onTap;
   final bool isLoading;
@@ -1126,10 +1130,10 @@ class _ThirdPartyIconButton extends StatelessWidget {
                     ),
                   )
                 : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Image.asset(
-                      url,
-                      width: 18,
-                      height: 18,
+                    FlowySvg(
+                      icon,
+                      size: const Size.square(18),
+                      blendMode: null,
                     ),
                     HSpace(4),
                     Text(

@@ -216,7 +216,9 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
           children: [
             _buildThirdPartyIconButton(
               icon: FlowySvg(
-                FlowySvgs.icon_login_wx_xl,
+                Theme.of(context).brightness == Brightness.dark
+                    ? FlowySvgs.icon_login_wx_dark_xl
+                    : FlowySvgs.icon_login_wx_xl,
                 size: const Size.square(_thirdPartyButtonSize),
                 blendMode: null,
               ),
@@ -225,7 +227,9 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
             const SizedBox(width: 20),
             _buildThirdPartyIconButton(
               icon: FlowySvg(
-                FlowySvgs.icon_login_dy_xl,
+                Theme.of(context).brightness == Brightness.dark
+                    ? FlowySvgs.icon_login_dy_dark_xl
+                    : FlowySvgs.icon_login_dy_xl,
                 size: const Size.square(_thirdPartyButtonSize),
                 blendMode: null,
               ),

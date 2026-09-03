@@ -51,6 +51,18 @@ enum ThirdPartySignInButtonType {
     }
   }
 
+  FlowySvgData iconFor(BuildContext context) {
+    if (Theme.of(context).brightness != Brightness.dark) return icon;
+    switch (this) {
+      case ThirdPartySignInButtonType.wechat:
+        return FlowySvgs.icon_login_wx_dark_xl;
+      case ThirdPartySignInButtonType.douyin:
+        return FlowySvgs.icon_login_dy_dark_xl;
+      default:
+        return icon;
+    }
+  }
+
   String get labelText {
     switch (this) {
       case ThirdPartySignInButtonType.apple:
@@ -136,7 +148,7 @@ class MobileThirdPartySignInButton extends StatelessWidget {
       size: AFButtonSize.l,
       iconBuilder: (context, isHovering, disabled) {
         return FlowySvg(
-          type.icon,
+          type.iconFor(context),
           size: Size.square(16),
           blendMode: type.blendMode,
         );

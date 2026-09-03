@@ -141,20 +141,20 @@ class _DesktopThirdPartySignIn extends StatelessWidget {
       children: [
         _ThirdPartyIconButton(
           label: "微信登录",
-          icon: Image.asset(
-            "assets/images/login/icon_login_wx.png",
-            width: 18,
-            height: 18,
+          icon: FlowySvg(
+            ThirdPartySignInButtonType.wechat.iconFor(context),
+            size: const Size.square(18),
+            blendMode: null,
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.wechat),
         ),
         const SizedBox(height: 12),
         _ThirdPartyIconButton(
           label: "抖音登录",
-          icon: Image.asset(
-            "assets/images/login/icon_login_dy.png",
-            width: 18,
-            height: 18,
+          icon: FlowySvg(
+            ThirdPartySignInButtonType.douyin.iconFor(context),
+            size: const Size.square(18),
+            blendMode: null,
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
         ),
@@ -179,7 +179,7 @@ class _MobileThirdPartySignIn extends StatelessWidget {
       children: [
         CircularIconButton(
           icon: FlowySvg(
-            ThirdPartySignInButtonType.wechat.icon,
+            ThirdPartySignInButtonType.wechat.iconFor(context),
             size: const Size.square(28),
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.wechat),
@@ -187,7 +187,7 @@ class _MobileThirdPartySignIn extends StatelessWidget {
         const SizedBox(width: 24),
         CircularIconButton(
           icon: FlowySvg(
-            ThirdPartySignInButtonType.douyin.icon,
+            ThirdPartySignInButtonType.douyin.iconFor(context),
             size: const Size.square(28),
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
