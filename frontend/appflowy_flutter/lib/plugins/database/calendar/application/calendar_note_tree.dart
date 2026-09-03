@@ -1,6 +1,20 @@
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 
+/// 日历列表支持所有可创建的页面布局，而不只限于普通文档。
+bool isCalendarEntryLayout(ViewLayoutPB layout) => switch (layout) {
+      ViewLayoutPB.Document ||
+      ViewLayoutPB.Grid ||
+      ViewLayoutPB.Board ||
+      ViewLayoutPB.Calendar ||
+      ViewLayoutPB.Chat ||
+      ViewLayoutPB.Folder ||
+      ViewLayoutPB.Notebook ||
+      ViewLayoutPB.Whiteboard =>
+        true,
+      _ => false,
+    };
+
 /// 日历当天文档的层级节点。
 ///
 /// [view] 既可能是当天创建的文档，也可能只是为了还原路径而补入的父工作区、
@@ -34,12 +48,11 @@ class CalendarNoteTreeNode {
   }
 }
 
-/// 只有普通文档允许从日历文档树跳转打开。
+/// 工作区只作为归属容器，其他受支持页面可从日历树跳转打开。
 ///
-/// 工作区在数据层同样使用 Document 布局，但它只是日历树中的归属容器，点击时
-/// 应展开或折叠子文档，不能按普通文档跳转。
+/// 工作区在数据层同样具有页面布局，但点击时应展开或折叠子页面，不能进入页面。
 bool canOpenCalendarNoteTreeNode(ViewPB view) =>
-    view.layout == ViewLayoutPB.Document && !view.isSpace;
+    isCalendarEntryLayout(view.layout) && !view.isSpace;
 
 /// 按电脑端日历的规则，把当天文档沿 parentViewId 还原成工作区文档树。
 ///

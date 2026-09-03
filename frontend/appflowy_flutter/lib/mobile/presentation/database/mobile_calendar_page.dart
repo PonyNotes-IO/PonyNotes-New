@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_edit_event_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
-import 'package:appflowy/mobile/presentation/editor/mobile_editor_screen.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_note_tree.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -27,7 +27,6 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 /// Mobile Calendar Page - Simplified full screen calendar for mobile
 class MobileCalendarPage extends StatefulWidget {
@@ -112,8 +111,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _onNoteTap(ViewPB note) {
-    context.push(
-        '${MobileDocumentScreen.routeName}?${MobileDocumentScreen.viewId}=${note.id}');
+    // 按视图布局选择移动端路由，确保数据库、白板、聊天等页面可正常打开。
+    context.pushView(note);
   }
 
   void _onScheduleTap(ScheduleItem schedule) {
@@ -827,8 +826,8 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
           if (!mounted) return;
           _viewById = {for (final v in allViews.items) v.id: v};
 
-          final documentViews = allViews.items.where((view) {
-            return view.layout == ViewLayoutPB.Document &&
+          final calendarViews = allViews.items.where((view) {
+            return isCalendarEntryLayout(view.layout) &&
                 view.name.isNotEmpty &&
                 !_isSystemView(view.name) &&
                 !_isChildOfDatabaseView(view) &&
@@ -843,7 +842,7 @@ class _MobileCalendarDayContentState extends State<MobileCalendarDayContent> {
           final selectedDateEnd =
               selectedDateStart.add(const Duration(days: 1));
 
-          final notesForDate = documentViews.where((view) {
+          final notesForDate = calendarViews.where((view) {
             final createTime = DateTime.fromMillisecondsSinceEpoch(
               view.createTime.toInt() * 1000,
             );
