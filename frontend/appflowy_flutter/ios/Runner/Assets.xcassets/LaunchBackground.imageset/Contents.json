@@ -15,6 +15,22 @@
       "filename" : "launch_screen_dark.png",
       "idiom" : "universal",
       "scale" : "1x"
+    },
+    {
+      "filename" : "launch_screen_light_ipad.png",
+      "idiom" : "ipad",
+      "scale" : "1x"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "launch_screen_dark_ipad.png",
+      "idiom" : "ipad",
+      "scale" : "1x"
     }
   ],
   "info" : {

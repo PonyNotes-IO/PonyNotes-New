@@ -131,6 +131,45 @@ void main() {
       contains('Preserved local edits while applying initial data'),
     );
     expect(bridgeSource, contains('_reconcileElements('));
+    expect(bridgeSource, contains('_mergeRemoteElements('));
+    expect(
+      bridgeSource,
+      contains('const merged = _mergeRemoteElements(current, data.value);'),
+    );
+    expect(bridgeSource, contains("'whiteboardImageSceneSnapshot'"));
+    expect(bridgeSource, contains('direct image scene delivered'));
+    expect(bridgeSource, contains('_ponynotesWaitForUsableAPI()'));
+    expect(
+        bridgeSource, contains('typeof candidate.addFiles === \'function\''));
+    expect(bridgeSource,
+        contains('typeof candidate.getSceneElements === \'function\''));
+    expect(bridgeSource, contains('await window.waitForWhiteboardDataReady();'));
+  });
+
+  test('initial whiteboard readiness waits for bridge scene restoration', () {
+    final webViewSource = File(
+      'lib/plugins/whiteboard/presentation/excalidraw_webview.dart',
+    ).readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+
+    expect(
+      bridgeSource,
+      contains('const _initialDataRestoreGate = new Promise'),
+    );
+    expect(
+      bridgeSource,
+      contains('window.waitForWhiteboardDataReady = async function'),
+    );
+    expect(bridgeSource, contains('_initialDataRestoreGateResolve?.()'));
+    expect(
+      webViewSource,
+      contains('await window.waitForWhiteboardDataReady();'),
+    );
+    expect(
+      webViewSource.indexOf('await window.waitForWhiteboardDataReady();'),
+      lessThan(webViewSource.indexOf('await _initializeExcalidraw();')),
+    );
   });
 
   test('private whiteboard blocks editing until initial data is ready', () {

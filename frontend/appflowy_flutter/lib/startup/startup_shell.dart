@@ -20,6 +20,19 @@ class _StartupShellState extends State<StartupShell>
       defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
 
+  static String _launchAsset(BuildContext context, {required bool isDark}) {
+    final size = MediaQuery.sizeOf(context);
+    final isTablet = size.shortestSide >= 600;
+    if (isTablet) {
+      return isDark
+          ? 'assets/images/launch_screen_tablet_dark.png'
+          : 'assets/images/launch_screen_tablet_light.png';
+    }
+    return isDark
+        ? 'assets/images/launch_screen_dark.png'
+        : 'assets/images/launch_screen_light.png';
+  }
+
   // On mobile we never render the entrance animation, so creating an
   // AnimationController would start a ticker whose only lifetime is the brief
   // window before this widget is replaced. Disposing that unused ticker from
@@ -53,9 +66,7 @@ class _StartupShellState extends State<StartupShell>
         home: Scaffold(
           body: SizedBox.expand(
             child: Image.asset(
-              isDark
-                  ? 'assets/images/launch_screen_dark.png'
-                  : 'assets/images/launch_screen_light.png',
+              _launchAsset(context, isDark: isDark),
               fit: BoxFit.cover,
             ),
           ),

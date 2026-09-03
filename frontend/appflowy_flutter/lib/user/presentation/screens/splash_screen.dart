@@ -537,14 +537,25 @@ class _DesktopSplashBody extends StatelessWidget {
 class _MobileSplashBody extends StatelessWidget {
   const _MobileSplashBody();
 
+  String _launchAsset(BuildContext context, {required bool isDark}) {
+    final size = MediaQuery.sizeOf(context);
+    final isTablet = size.shortestSide >= 600;
+    if (isTablet) {
+      return isDark
+          ? 'assets/images/launch_screen_tablet_dark.png'
+          : 'assets/images/launch_screen_tablet_light.png';
+    }
+    return isDark
+        ? 'assets/images/launch_screen_dark.png'
+        : 'assets/images/launch_screen_light.png';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return SizedBox.expand(
       child: Image.asset(
-        isDark
-            ? 'assets/images/launch_screen_dark.png'
-            : 'assets/images/launch_screen_light.png',
+        _launchAsset(context, isDark: isDark),
         fit: BoxFit.cover,
       ),
     );
