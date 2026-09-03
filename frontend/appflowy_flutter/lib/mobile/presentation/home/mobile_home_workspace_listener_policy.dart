@@ -7,6 +7,12 @@ bool didMobileCurrentWorkspaceChange(
     previous.currentWorkspace?.workspaceId !=
     current.currentWorkspace?.workspaceId;
 
+bool didMobileWorkspaceListChange(
+  UserWorkspaceState previous,
+  UserWorkspaceState current,
+) =>
+    previous.workspaces != current.workspaces;
+
 bool didMobileCurrentWorkspaceMetadataChange(
   UserWorkspaceState previous,
   UserWorkspaceState current,

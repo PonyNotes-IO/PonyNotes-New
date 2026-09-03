@@ -54,6 +54,19 @@ void main() {
       );
     });
 
+    test('工作区列表变化会触发邀请目标的重新匹配', () {
+      final previous = state(workspaceId: 'workspace-a');
+      final current = previous.copyWith(
+        workspaces: [UserWorkspacePB(workspaceId: 'workspace-b')],
+      );
+
+      expect(didMobileWorkspaceListChange(previous, current), isTrue);
+      expect(
+        didMobileWorkspaceListChange(previous, previous.copyWith()),
+        isFalse,
+      );
+    });
+
     test('工作区显示信息变化只刷新当前工作区展示', () {
       final previous = state(workspaceId: 'workspace-a');
       final current = previous.copyWith(

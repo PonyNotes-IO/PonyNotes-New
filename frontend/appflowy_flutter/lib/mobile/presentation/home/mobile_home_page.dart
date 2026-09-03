@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/home/mobile_home_page_header.dart';
@@ -17,6 +19,7 @@ import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_screen.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/workspace_notifier.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/util/performance_trace.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -167,17 +170,26 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
   Loading? loadingIndicator;
   DateTime? _lastRefreshTime;
   bool _homeReadyMarked = false;
+  Timer? _invitationWorkspaceRetryTimer;
+  String? _invitationWorkspaceRetryId;
+  int _invitationWorkspaceRetryCount = 0;
   static const Duration _refreshDebounceDuration = Duration(seconds: 1);
+  static const int _maxInvitationWorkspaceRetryCount = 5;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    openWorkspaceNotifier.addListener(_openWorkspaceFromInvitation);
+    // 深链可能早于移动端首页挂载，初始化时消费尚未处理的通知。
+    _openWorkspaceFromInvitation();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _invitationWorkspaceRetryTimer?.cancel();
+    openWorkspaceNotifier.removeListener(_openWorkspaceFromInvitation);
     super.dispose();
   }
 
@@ -208,8 +220,13 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
     return MultiBlocListener(
       listeners: [
         BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+          listenWhen: didMobileWorkspaceListChange,
+          listener: (_, __) => _openWorkspaceFromInvitation(),
+        ),
+        BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
           listenWhen: didMobileCurrentWorkspaceChange,
           listener: (context, state) {
+            _openWorkspaceFromInvitation();
             getIt<CachedRecentService>().reset();
             if (FeatureFlag.search.isOn) {
               context.read<CommandPaletteBloc>().add(
@@ -305,6 +322,118 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
         },
       ),
     );
+  }
+
+  void _openWorkspaceFromInvitation() {
+    if (!mounted) {
+      return;
+    }
+
+    final value = openWorkspaceNotifier.value;
+    final workspaceId = value?.workspaceId;
+    final email = value?.email;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return;
+    }
+
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
+    final state = workspaceBloc.state;
+    if (email != null &&
+        email.isNotEmpty &&
+        email != widget.userProfile.email) {
+      Log.info(
+        '[Workspace] Mobile invitation email does not match current user: $email',
+      );
+      return;
+    }
+
+    if (state.currentWorkspace == null) {
+      _scheduleInvitationWorkspaceRefresh(workspaceBloc, workspaceId);
+      return;
+    }
+
+    if (state.currentWorkspace?.workspaceId == workspaceId) {
+      Log.info(
+        '[Workspace] Mobile invitation target is already open: $workspaceId',
+      );
+      _clearInvitationWorkspace(workspaceId);
+      return;
+    }
+
+    UserWorkspacePB? workspace;
+    for (final item in state.workspaces) {
+      if (item.workspaceId == workspaceId) {
+        workspace = item;
+        break;
+      }
+    }
+
+    if (workspace == null) {
+      _scheduleInvitationWorkspaceRefresh(workspaceBloc, workspaceId);
+      return;
+    }
+
+    Log.info('[Workspace] Mobile opening invitation workspace: $workspaceId');
+    workspaceBloc.add(
+      UserWorkspaceEvent.openWorkspace(
+        workspaceId: workspaceId,
+        workspaceType: workspace.workspaceType,
+      ),
+    );
+    _clearInvitationWorkspace(workspaceId);
+  }
+
+  void _scheduleInvitationWorkspaceRefresh(
+    UserWorkspaceBloc workspaceBloc,
+    String workspaceId,
+  ) {
+    if (_invitationWorkspaceRetryId != workspaceId) {
+      _invitationWorkspaceRetryId = workspaceId;
+      _invitationWorkspaceRetryCount = 0;
+      _invitationWorkspaceRetryTimer?.cancel();
+      _invitationWorkspaceRetryTimer = null;
+    }
+
+    // 列表刷新可能仍在进行，等待列表监听或有限重试后再发起下一次请求。
+    if (_invitationWorkspaceRetryTimer != null) {
+      return;
+    }
+
+    Log.info(
+      '[Workspace] Mobile invitation target not loaded, refreshing workspaces',
+    );
+    workspaceBloc.add(UserWorkspaceEvent.fetchWorkspaces());
+
+    final delay = Duration(
+      milliseconds: 250 + (_invitationWorkspaceRetryCount * 250),
+    );
+    _invitationWorkspaceRetryTimer = Timer(delay, () {
+      _invitationWorkspaceRetryTimer = null;
+      if (!mounted || openWorkspaceNotifier.value?.workspaceId != workspaceId) {
+        return;
+      }
+
+      if (_invitationWorkspaceRetryCount >= _maxInvitationWorkspaceRetryCount) {
+        Log.error(
+          '[Workspace] Mobile failed to open invitation workspace: $workspaceId',
+        );
+        _clearInvitationWorkspace(workspaceId);
+        return;
+      }
+
+      _invitationWorkspaceRetryCount++;
+      _openWorkspaceFromInvitation();
+    });
+  }
+
+  void _clearInvitationWorkspace(String workspaceId) {
+    if (openWorkspaceNotifier.value?.workspaceId == workspaceId) {
+      openWorkspaceNotifier.value = null;
+    }
+    _invitationWorkspaceRetryTimer?.cancel();
+    _invitationWorkspaceRetryTimer = null;
+    _invitationWorkspaceRetryId = null;
+    _invitationWorkspaceRetryCount = 0;
   }
 
   void _markHomeReady() {

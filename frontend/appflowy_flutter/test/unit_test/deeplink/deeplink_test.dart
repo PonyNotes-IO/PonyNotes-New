@@ -70,6 +70,30 @@ void main() {
             'https://www.xiaomabiji.com/invited?q=invite-code&ws=workspace-id',
           ),
         ),
+        true,
+      );
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'https://www.xiaomabiji.com/invited/?q=invite-code&ws=workspace-id',
+          ),
+        ),
+        true,
+      );
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'https://untrusted.example.com/invited?q=invite-code&ws=workspace-id',
+          ),
+        ),
+        false,
+      );
+      expect(
+        handler.canHandle(
+          Uri.parse(
+            'https://www.xiaomabiji.com/download?q=invite-code&ws=workspace-id',
+          ),
+        ),
         false,
       );
       expect(
@@ -79,8 +103,7 @@ void main() {
     });
 
     test('login deep link handler', () {
-      final uri =
-          Uri.parse('ponynotes://login-callback#access_token=123');
+      final uri = Uri.parse('ponynotes://login-callback#access_token=123');
       expect(LoginDeepLinkHandler().canHandle(uri), true);
     });
 
@@ -90,8 +113,7 @@ void main() {
     });
 
     test('unknown deep link handler', () {
-      final uri =
-          Uri.parse('ponynotes://unknown-callback?workspace_id=123');
+      final uri = Uri.parse('ponynotes://unknown-callback?workspace_id=123');
       deepLinkHandlerRegistry.processDeepLink(
         uri: uri,
         onStateChange: (handler, state) {},
