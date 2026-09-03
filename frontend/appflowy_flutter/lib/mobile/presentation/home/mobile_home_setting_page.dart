@@ -63,8 +63,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../ai/service/ai_usage_summary.dart';
-
 enum MobileSettingsSection {
   menu,
   account,
@@ -1060,15 +1058,13 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (workspaceUsage != null) ...[
-              Divider(
-                color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
-                height: 0.5,
-                indent: 16,
-                endIndent: 16,
-              ),
-              _buildAIUsageRow(theme),
-            ],
+            Divider(
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+              height: 0.5,
+              indent: 16,
+              endIndent: 16,
+            ),
+            _buildAIUsageRow(theme),
           ],
         ));
   }
@@ -1107,22 +1103,20 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   }
 
   Widget _buildAIUsageRow(AppFlowyThemeData theme) {
-    final aiUsage = AiUsageSummary.fromUsage(workspaceUsage!);
+    final subscriptionUsage = currentSubscription?.usage;
+    final aiChatRemaining = subscriptionUsage?.aiChatRemaining;
 
     String usageText;
     Color usageColor;
 
-    if (aiUsage.isUnlimited) {
-      usageText = '不限';
-      usageColor = const Color(0xFFE85D04);
-    } else if (aiUsage.isUnsubscribed) {
-      usageText = '未订阅';
-      usageColor = theme.textColorScheme.secondary;
-    } else if (!aiUsage.hasUsage) {
+    if (subscriptionUsage == null) {
       usageText = '--';
       usageColor = theme.textColorScheme.secondary;
+    } else if (aiChatRemaining == null) {
+      usageText = '不限';
+      usageColor = const Color(0xFFE85D04);
     } else {
-      usageText = '${aiUsage.remaining}次';
+      usageText = '$aiChatRemaining次';
       usageColor = const Color(0xFFC46B3F);
     }
 
