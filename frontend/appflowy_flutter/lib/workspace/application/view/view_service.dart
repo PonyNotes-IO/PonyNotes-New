@@ -287,6 +287,7 @@ class ViewBackendService {
               : '${view.name}$suffix',
         );
         if (copied != null) {
+          await _moveDuplicatedViewToTop(copied);
           return FlowyResult.success(copied);
         }
         return FlowyResult.failure(
@@ -329,7 +330,35 @@ class ViewBackendService {
       payload.suffix = suffix;
     }
 
-    return FolderEventDuplicateView(payload).send();
+    return FolderEventDuplicateView(payload).send().then((result) async {
+      return result.fold(
+        (duplicatedView) async {
+          await _moveDuplicatedViewToTop(duplicatedView);
+          return FlowyResult.success(duplicatedView);
+        },
+        (error) => FlowyResult.failure(error),
+      );
+    });
+  }
+
+  /// 创建接口的 index 只决定初始关系。复制过程中可能紧接着收到 Folder
+  /// 合并/同步更新，因此再通过正式移动接口写入一次“首项”关系，确保 macOS、
+  /// iOS 以及私有/协作空间最终读取到的顺序一致。
+  static Future<void> _moveDuplicatedViewToTop(ViewPB view) async {
+    if (view.parentViewId.isEmpty) {
+      return;
+    }
+    final result = await moveViewV2(
+      viewId: view.id,
+      newParentId: view.parentViewId,
+      prevViewId: null,
+    );
+    result.fold(
+      (_) {},
+      (error) => Log.warn(
+        '[ViewBackendService] 复制文档置顶失败 view=${view.id}: ${error.msg}',
+      ),
+    );
   }
 
   static Future<bool> _isViewInPrivateSpace(ViewPB view) async {

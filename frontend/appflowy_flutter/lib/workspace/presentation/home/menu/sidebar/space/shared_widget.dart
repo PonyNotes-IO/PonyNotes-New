@@ -744,6 +744,18 @@ class SpacePages extends StatelessWidget {
                     // 悬停一直提示 space_cannotMovePageToDatabase，且无法点击完成移动。
                     shouldIgnoreView: shouldIgnoreView,
                     isTablet: isTablet,
+                    onViewDuplicated: (duplicatedView) {
+                      context
+                          .read<ViewBloc>()
+                          .insertDuplicatedView(duplicatedView);
+                      if (duplicatedView.parentViewId != space.id) {
+                        try {
+                          context
+                              .read<SpaceBloc>()
+                              .add(const SpaceEvent.didReceiveSpaceUpdate());
+                        } catch (_) {}
+                      }
+                    },
                   ),
                 )
                 .toList(),

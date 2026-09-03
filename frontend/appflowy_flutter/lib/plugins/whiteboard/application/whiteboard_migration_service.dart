@@ -83,6 +83,9 @@ class WhiteboardMigrationService {
         // 指向即将删除的空白目标。
         openAfterCreate: false,
         index: 0,
+        section: targetIsPrivate
+            ? ViewSectionPB.Private
+            : ViewSectionPB.Public,
         initialDataBytes: roomId == null
             ? null
             : WhiteboardRoomService.encodeInitialData(roomId, roomKey!),

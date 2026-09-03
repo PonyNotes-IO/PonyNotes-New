@@ -142,6 +142,7 @@ class ViewItem extends StatelessWidget {
     this.externallySelectedViewId,
     this.onExpandedChanged,
     this.style,
+    this.onViewDuplicated,
   });
 
   final ViewPB view;
@@ -232,6 +233,9 @@ class ViewItem extends StatelessWidget {
 
   final ViewItemStyle? style;
 
+  /// 复制成功后通知直接父级列表立即更新。
+  final void Function(ViewPB duplicatedView)? onViewDuplicated;
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -239,6 +243,7 @@ class ViewItem extends StatelessWidget {
         view: view,
         shouldLoadChildViews: shouldLoadChildViews,
         engagedInExpanding: engagedInExpanding,
+        onViewDuplicated: onViewDuplicated,
       )..add(const ViewEvent.initial()),
       child: BlocConsumer<ViewBloc, ViewState>(
         listenWhen: (p, c) {
@@ -303,6 +308,7 @@ class ViewItem extends StatelessWidget {
             externallySelectedViewId: externallySelectedViewId,
             onExpandedChanged: onExpandedChanged,
             style: style,
+            onViewDuplicated: onViewDuplicated,
           );
 
           if (shouldIgnoreView?.call(view) == IgnoreViewType.disable) {
@@ -363,6 +369,7 @@ class InnerViewItem extends StatefulWidget {
     this.externallySelectedViewId,
     this.onExpandedChanged,
     this.style,
+    this.onViewDuplicated,
   });
 
   final ViewPB view;
@@ -412,6 +419,7 @@ class InnerViewItem extends StatefulWidget {
   final VoidCallback? onExpandedChanged;
 
   final ViewItemStyle? style;
+  final void Function(ViewPB duplicatedView)? onViewDuplicated;
 
   @override
   State<InnerViewItem> createState() => _InnerViewItemState();
@@ -522,6 +530,10 @@ class _InnerViewItemState extends State<InnerViewItem> {
           externallySelectedViewId: widget.externallySelectedViewId,
           onExpandedChanged: widget.onExpandedChanged,
           style: widget.style,
+          onViewDuplicated: (duplicatedView) {
+            widget.onViewDuplicated?.call(duplicatedView);
+            context.read<ViewBloc>().insertDuplicatedView(duplicatedView);
+          },
         );
       }).toList();
 

@@ -770,6 +770,20 @@ class _MobileSpaceItemState extends State<MobileSpaceItem> {
                                   spaceRatio: actions.length == 1 ? 3 : 4,
                                 );
                               },
+                              onViewDuplicated: (duplicatedView) {
+                                context
+                                    .read<ViewBloc>()
+                                    .insertDuplicatedView(duplicatedView);
+                                if (duplicatedView.parentViewId !=
+                                    widget.space.id) {
+                                  try {
+                                    context.read<SpaceBloc>().add(
+                                          const SpaceEvent
+                                              .didReceiveSpaceUpdate(),
+                                        );
+                                  } catch (_) {}
+                                }
+                              },
                             ),
                           ],
                         );

@@ -97,6 +97,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     this.shouldLoadChildViews = true,
     this.engagedInExpanding = false,
     this.useNotificationViewUpdates = false,
+    this.onViewDuplicated,
     EmojiViewIconUpdater? updateViewIcon,
   })  : viewBackendSvc = ViewBackendService(),
         _viewIconUpdateExecutor = ViewIconUpdateExecutor(
@@ -127,7 +128,60 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
   final bool shouldLoadChildViews;
   final bool engagedInExpanding;
   final bool useNotificationViewUpdates;
+  final void Function(ViewPB duplicatedView)? onViewDuplicated;
+  final Set<String> _duplicatedViewIdsPendingTop = {};
   late ViewExpander expander;
+
+  ViewPB _prioritizePendingDuplicatedViews(ViewPB parent) {
+    if (_duplicatedViewIdsPendingTop.isEmpty) {
+      return parent;
+    }
+    final pending = _duplicatedViewIdsPendingTop.toList();
+    final childViews = parent.childViews.toList();
+    final found = <String>[];
+    for (final id in pending.reversed) {
+      final index = childViews.indexWhere((child) => child.id == id);
+      if (index >= 0) {
+        found.add(id);
+        childViews.removeAt(index);
+        childViews.insert(
+            0, parent.childViews.firstWhere((child) => child.id == id));
+      }
+    }
+    _duplicatedViewIdsPendingTop.removeAll(found);
+    if (found.isEmpty) {
+      return parent;
+    }
+    parent.freeze();
+    return parent.rebuild((builder) {
+      builder.childViews
+        ..clear()
+        ..addAll(childViews);
+    });
+  }
+
+  /// 复制完成后先把结果立即插入当前父视图，避免等待 Folder 通知或索引
+  /// 刷新导致新文档暂时显示在列表底部。
+  void insertDuplicatedView(ViewPB duplicatedView) {
+    if (isClosed || duplicatedView.parentViewId != view.id) {
+      return;
+    }
+    final currentView = state.view;
+    currentView.freeze();
+    _duplicatedViewIdsPendingTop.add(duplicatedView.id);
+    final childViews = [
+      ...currentView.childViews.where((child) => child.id != duplicatedView.id),
+    ]..insert(0, duplicatedView);
+    add(
+      ViewEvent.viewUpdateChildView(
+        currentView.rebuild((builder) {
+          builder.childViews
+            ..clear()
+            ..addAll(childViews);
+        }),
+      ),
+    );
+  }
 
   Future<void> reloadChildViews() async {
     final result = await ViewBackendService.getChildViews(viewId: view.id);
@@ -138,13 +192,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
         }
         final currentView = state.view;
         currentView.freeze();
+        final refreshedView = currentView.rebuild((builder) {
+          builder.childViews
+            ..clear()
+            ..addAll(childViews);
+        });
         add(
           ViewEvent.viewUpdateChildView(
-            currentView.rebuild((builder) {
-              builder.childViews
-                ..clear()
-                ..addAll(childViews);
-            }),
+            _prioritizePendingDuplicatedViews(refreshedView),
           ),
         );
       },
@@ -377,7 +432,8 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               ),
             );
             result.fold(
-              (_) {
+              (duplicatedView) {
+                onViewDuplicated?.call(duplicatedView);
                 showToastNotification(
                   message: LocaleKeys.disclosureAction_duplicateSuccess.tr(),
                 );
@@ -479,6 +535,10 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                   );
                 },
               ),
+            );
+            result.fold(
+              (duplicatedView) => onViewDuplicated?.call(duplicatedView),
+              (_) {},
             );
           },
           move: (value) async {
@@ -649,7 +709,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
         });
         emit(
           state.copyWith(
-            view: viewWithChildViews,
+            view: _prioritizePendingDuplicatedViews(viewWithChildViews),
             isExpanded: true,
             isLoading: false,
           ),
@@ -717,7 +777,10 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
       final fetchedView = await ViewBackendService.getView(
         update.parentViewId,
       );
-      return fetchedView.fold((l) => l, (r) => null);
+      return fetchedView.fold(
+        (l) => _prioritizePendingDuplicatedViews(l),
+        (r) => null,
+      );
     }
 
     final currentView = state.view;
