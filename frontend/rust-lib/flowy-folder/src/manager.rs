@@ -89,6 +89,14 @@ fn relation_parent_ids_for_view<T: ReadTxn>(
     .collect()
 }
 
+/// Folder collab synchronization only accepts collab payloads that can be
+/// decoded by the cloud's collab version. Whiteboards use the client-only
+/// whiteboard storage path, and their yrs payload is not compatible with the
+/// cloud folder-collab endpoint (the endpoint reports `unexpected EOF`).
+fn should_sync_collab_to_cloud(layout: &ViewLayoutPB) -> bool {
+  !matches!(layout, ViewLayoutPB::Whiteboard)
+}
+
 fn redundant_relation_parent_ids(
   canonical_parent_id: &str,
   parent_ids: Vec<String>,
@@ -1544,7 +1552,9 @@ impl FolderManager {
           .and_then(|(_, _, views)| {
             views
               .iter()
-              .filter(|id| filtered_view_ids.contains(id))
+              // `filtered_view_ids` contains trash/private entries that must
+              // be skipped, so only visible siblings can determine the index.
+              .filter(|id| !filtered_view_ids.contains(id))
               .position(|id| *id == current_view_id)
               .map(|i| i as u32)
           })
@@ -1619,7 +1629,7 @@ impl FolderManager {
         }
       }
 
-      if sync_after_create {
+      if sync_after_create && should_sync_collab_to_cloud(&layout_pb) {
         if let Some(encoded_collab) = encoded_collab {
           let object_id = Uuid::from_str(&duplicated_view.id)?;
           let collab_type = match duplicated_view.layout {
@@ -3500,12 +3510,15 @@ impl Display for FolderInitDataSource {
 
 #[cfg(test)]
 mod duplicate_relation_tests {
-  use super::{apply_cloud_folder_update, cleanup_duplicate_view_relations};
+  use super::{
+    apply_cloud_folder_update, cleanup_duplicate_view_relations, should_sync_collab_to_cloud,
+  };
   use collab::core::collab::DataSource;
   use collab::core::collab_plugin::{CollabPlugin, CollabPluginType};
   use collab::core::origin::{CollabClient, CollabOrigin};
   use collab::preclude::Collab;
   use collab_folder::{Folder, FolderData, FolderNotify, View, ViewLayout, Workspace};
+  use crate::entities::ViewLayoutPB;
   use std::sync::atomic::{AtomicUsize, Ordering};
   use std::sync::Arc;
 
@@ -3542,6 +3555,13 @@ mod duplicate_relation_tests {
       );
     }
     folder
+  }
+
+  #[test]
+  fn whiteboard_collab_is_not_sent_to_folder_cloud_endpoint() {
+    assert!(!should_sync_collab_to_cloud(&ViewLayoutPB::Whiteboard));
+    assert!(should_sync_collab_to_cloud(&ViewLayoutPB::Document));
+    assert!(should_sync_collab_to_cloud(&ViewLayoutPB::Grid));
   }
 
   #[test]
