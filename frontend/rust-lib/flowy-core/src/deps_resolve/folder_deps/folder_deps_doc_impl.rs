@@ -30,10 +30,12 @@ pub struct DocumentFolderOperation {
 }
 
 fn is_document_backed_layout(layout: &ViewLayoutPB) -> bool {
-  matches!(
-    layout,
-    ViewLayoutPB::Document | ViewLayoutPB::Folder | ViewLayoutPB::Notebook
-  )
+  match layout {
+    ViewLayoutPB::Document => true,
+    #[cfg(target_os = "windows")]
+    ViewLayoutPB::Folder | ViewLayoutPB::Notebook => true,
+    _ => false,
+  }
 }
 
 impl DocumentFolderOperation {
@@ -221,10 +223,18 @@ mod tests {
   use flowy_folder::entities::ViewLayoutPB;
 
   #[test]
-  fn document_backed_layouts_include_folder_and_notebook() {
+  fn document_backed_layouts_follow_platform_boundary() {
     assert!(is_document_backed_layout(&ViewLayoutPB::Document));
-    assert!(is_document_backed_layout(&ViewLayoutPB::Folder));
-    assert!(is_document_backed_layout(&ViewLayoutPB::Notebook));
+    #[cfg(target_os = "windows")]
+    {
+      assert!(is_document_backed_layout(&ViewLayoutPB::Folder));
+      assert!(is_document_backed_layout(&ViewLayoutPB::Notebook));
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+      assert!(!is_document_backed_layout(&ViewLayoutPB::Folder));
+      assert!(!is_document_backed_layout(&ViewLayoutPB::Notebook));
+    }
     assert!(!is_document_backed_layout(&ViewLayoutPB::Whiteboard));
   }
 }
