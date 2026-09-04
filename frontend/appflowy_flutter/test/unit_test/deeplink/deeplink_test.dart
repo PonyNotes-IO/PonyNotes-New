@@ -3,6 +3,7 @@ import 'package:appflowy/startup/tasks/deeplink/appflowy_invite_deeplink_handler
 import 'package:appflowy/startup/tasks/deeplink/invitation_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_app_deeplink_handler.dart';
+import 'package:appflowy/startup/tasks/deeplink/open_note_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/payment_deeplink_handler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -127,6 +128,28 @@ void main() {
     test('open app deep link handler', () {
       final uri = Uri.parse('ponynotes://');
       expect(OpenAppDeepLinkHandler().canHandle(uri), true);
+    });
+
+    test('shared HTTPS document link handler accepts the share URL', () {
+      final uri = Uri.parse(
+        'https://www.xiaomabiji.com/share?'
+        'viewId=417f9450-181e-409e-94f2-aab3a90c2931&'
+        'workspaceId=be6644fa-d603-4cad-912d-eea89dfe8858&'
+        'type=share&permission=1&layout=0',
+      );
+
+      expect(OpenNoteDeepLinkHandler().canHandle(uri), true);
+    });
+
+    test('protocol share document link from Android accepts the note URL', () {
+      final uri = Uri.parse(
+        'ponynotes://note?'
+        'viewId=417f9450-181e-409e-94f2-aab3a90c2931&'
+        'workspaceId=be6644fa-d603-4cad-912d-eea89dfe8858&'
+        'type=share&permission=1&layout=0',
+      );
+
+      expect(OpenNoteDeepLinkHandler().canHandle(uri), true);
     });
   });
 }

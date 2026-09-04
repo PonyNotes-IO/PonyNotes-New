@@ -34,14 +34,33 @@
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
       <meta-data android:name="flutter_deeplinking_enabled" android:value="true" />
-      <intent-filter android:autoVerify="true">
+      <intent-filter android:autoVerify="false">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="http" />
-        <data android:scheme="https" />
-        <data android:host="www.xiaomabiji.com" />
-        <data android:pathPrefix="/share" />
+        <data
+            android:scheme="https"
+            android:host="www.xiaomabiji.com"
+            android:pathPrefix="/share" />
+        <data
+            android:scheme="http"
+            android:host="www.xiaomabiji.com"
+            android:pathPrefix="/share" />
+      </intent-filter>
+      <!-- Keep invite links on HTTPS so the Flutter handler can validate the
+           trusted web origin before processing the invitation. -->
+      <intent-filter android:autoVerify="false">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data
+            android:scheme="https"
+            android:host="www.xiaomabiji.com"
+            android:pathPrefix="/invited" />
+        <data
+            android:scheme="http"
+            android:host="www.xiaomabiji.com"
+            android:pathPrefix="/invited" />
       </intent-filter>
       <intent-filter>
         <action android:name="android.intent.action.VIEW" />
@@ -56,6 +75,13 @@
         <category android:name="android.intent.category.BROWSABLE" />
         <data android:scheme="ponynotes" />
         <data android:host="open" />
+      </intent-filter>
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="ponynotes" />
+        <data android:host="invite" />
       </intent-filter>
 
     </activity>

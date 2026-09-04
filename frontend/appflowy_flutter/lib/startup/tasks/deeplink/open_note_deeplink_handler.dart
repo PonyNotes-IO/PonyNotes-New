@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
@@ -17,8 +18,10 @@ import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 
@@ -85,6 +88,14 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final layoutParam = uri.queryParameters['layout'];
       final permissionId =
           permissionParam != null ? int.tryParse(permissionParam) ?? 1 : 1;
+      final isOpenNoteLink = uri.host == 'note' ||
+          uri.host == 'open' ||
+          uri.path == 'note' ||
+          uri.path == 'open';
+      final isAndroidShareLink = linkType == 'share' &&
+          (((uri.scheme == 'http' || uri.scheme == 'https') &&
+                  (uri.path == '/share' || uri.path == 'share')) ||
+              (uri.scheme == 'ponynotes' && isOpenNoteLink));
       // 解析视图布局类型：0=Document, 1=Grid, 2=Board, 3=Calendar
       final viewLayoutValue =
           layoutParam != null ? int.tryParse(layoutParam) ?? 0 : 0;
@@ -219,37 +230,51 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       if (!isDatabaseView) {
-        bool documentOpened = false;
-        try {
-          final docResult = await DocumentService().openDocument(
-            documentId: effectiveViewId,
+        final skipAndroidSharePrewarm =
+            isAndroidShareLink &&
+            UniversalPlatform.isAndroid &&
+            PlatformInfo.isMobile;
+        if (skipAndroidSharePrewarm) {
+          // Shared documents are synced through the shared-view metadata path.
+          // Calling open_document first can wait for a local document that does
+          // not exist yet; MobileDocumentScreen will load it after navigation.
+          Log.info(
+            '[OpenNoteDeepLinkHandler] Android 手机共享文档跳过 open_document 预热，'
+            '直接进入移动端页面: viewId=$effectiveViewId',
           );
-          await docResult.fold(
-            (_) async {
-              documentOpened = true;
-              await Future.delayed(const Duration(milliseconds: 300));
-            },
-            (error) async {
-              Log.warn(
-                '📝 [OpenNoteDeepLinkHandler] open_document 失败: ${error.msg}',
-              );
-              documentOpened = false;
-            },
-          );
-        } catch (e, stackTrace) {
-          Log.error(
-              '[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
-          documentOpened = false;
-        }
+        } else {
+          bool documentOpened = false;
+          try {
+            final docResult = await DocumentService().openDocument(
+              documentId: effectiveViewId,
+            );
+            await docResult.fold(
+              (_) async {
+                documentOpened = true;
+                await Future.delayed(const Duration(milliseconds: 300));
+              },
+              (error) async {
+                Log.warn(
+                  '📝 [OpenNoteDeepLinkHandler] open_document 失败: ${error.msg}',
+                );
+                documentOpened = false;
+              },
+            );
+          } catch (e, stackTrace) {
+            Log.error(
+                '[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
+            documentOpened = false;
+          }
 
-        if (!documentOpened) {
-          Log.warn('📝 [OpenNoteDeepLinkHandler] 文档打开失败，无法显示视图');
-          onStateChange(this, DeepLinkState.error);
-          return FlowyResult.failure(
-            FlowyError()
-              ..msg = '文档打开失败，无法显示笔记'
-              ..code = ErrorCode.Internal,
-          );
+          if (!documentOpened) {
+            Log.warn('📝 [OpenNoteDeepLinkHandler] 文档打开失败，无法显示视图');
+            onStateChange(this, DeepLinkState.error);
+            return FlowyResult.failure(
+              FlowyError()
+                ..msg = '文档打开失败，无法显示笔记'
+                ..code = ErrorCode.Internal,
+            );
+          }
         }
       } else {
         Log.info(
@@ -310,9 +335,17 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
               Log.error('[OpenNoteDeepLinkHandler] 重试后仍无法获取BuildContext');
               return;
             }
-            _openView(retryContext, minimalView);
+            _openView(
+              retryContext,
+              minimalView,
+              useAndroidMobileRoute: isAndroidShareLink,
+            );
           } else {
-            _openView(navContext, minimalView);
+            _openView(
+              navContext,
+              minimalView,
+              useAndroidMobileRoute: isAndroidShareLink,
+            );
           }
         } catch (e, stackTrace) {
           Log.error('[OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
@@ -422,8 +455,26 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   }
 
   /// 打开视图
-  void _openView(BuildContext context, ViewPB view) {
+  void _openView(
+    BuildContext context,
+    ViewPB view, {
+    bool useAndroidMobileRoute = false,
+  }) {
     try {
+      // Android phones do not consume openView actions in ApplicationWidget.
+      // Push the existing mobile route only for Android phone share links;
+      // other platforms and Android tablets keep action-navigation behavior.
+      if (useAndroidMobileRoute &&
+          UniversalPlatform.isAndroid &&
+          PlatformInfo.isMobile) {
+        Log.info(
+          '[OpenNoteDeepLinkHandler] Android 手机分享链接直接打开移动端路由: '
+          'viewId=${view.id}',
+        );
+        unawaited(context.pushView(view));
+        return;
+      }
+
       // 通过 ActionNavigationBloc 触发打开逻辑，避免直接依赖 TabsBloc
       final actionBloc = context.read<ActionNavigationBloc?>();
 
