@@ -29,6 +29,13 @@ pub struct DocumentFolderOperation {
   pub storage_manager: Weak<StorageManager>,
 }
 
+fn is_document_backed_layout(layout: &ViewLayoutPB) -> bool {
+  matches!(
+    layout,
+    ViewLayoutPB::Document | ViewLayoutPB::Folder | ViewLayoutPB::Notebook
+  )
+}
+
 impl DocumentFolderOperation {
   fn document_manager(&self) -> Result<Arc<DocumentManager>, FlowyError> {
     self
@@ -134,7 +141,11 @@ impl FolderOperationHandler for DocumentFolderOperation {
     user_id: i64,
     params: CreateViewParams,
   ) -> Result<Option<EncodedCollab>, FlowyError> {
-    debug_assert_eq!(params.layout, ViewLayoutPB::Document);
+    debug_assert!(
+      is_document_backed_layout(&params.layout),
+      "DocumentFolderOperationHandler received unsupported layout: {:?}",
+      params.layout
+    );
     let data = match params.initial_data {
       ViewData::DuplicateData(data) => Some(DocumentDataPB::try_from(data)?),
       ViewData::Data(data) => Some(DocumentDataPB::try_from(data)?),
@@ -201,5 +212,19 @@ impl FolderOperationHandler for DocumentFolderOperation {
   ) -> Result<(), FlowyError> {
     // TODO(lucas): import file from local markdown file
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::is_document_backed_layout;
+  use flowy_folder::entities::ViewLayoutPB;
+
+  #[test]
+  fn document_backed_layouts_include_folder_and_notebook() {
+    assert!(is_document_backed_layout(&ViewLayoutPB::Document));
+    assert!(is_document_backed_layout(&ViewLayoutPB::Folder));
+    assert!(is_document_backed_layout(&ViewLayoutPB::Notebook));
+    assert!(!is_document_backed_layout(&ViewLayoutPB::Whiteboard));
   }
 }
