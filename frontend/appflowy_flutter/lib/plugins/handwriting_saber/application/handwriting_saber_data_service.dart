@@ -12,11 +12,25 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:path/path.dart' as p;
 
+class HandwritingSaberSnapshot {
+  const HandwritingSaberSnapshot({
+    required this.collabData,
+    required this.localData,
+  });
+
+  final List<int> collabData;
+  final List<int> localData;
+}
+
+typedef HandwritingSaberSnapshotProvider = HandwritingSaberSnapshot? Function();
+
 /// Saber 手写笔记数据服务
 /// 负责手写笔记数据的存储和加载（通过 Rust Collab 接口同步）
 class HandwritingSaberDataService {
   /// 页面注册的 reload 回调（导入成功后调用，触发页面重新加载数据）
   static final Map<String, void Function()> _reloadCallbacks = {};
+  static final Map<String, HandwritingSaberSnapshotProvider>
+      _snapshotProviders = {};
 
   static void registerReloadCallback(String viewId, void Function() cb) {
     _reloadCallbacks[viewId] = cb;
@@ -29,6 +43,82 @@ class HandwritingSaberDataService {
   static void triggerReload(String viewId) {
     _reloadCallbacks[viewId]?.call();
   }
+
+  static void registerSnapshotProvider(
+    String viewId,
+    HandwritingSaberSnapshotProvider provider,
+  ) {
+    _snapshotProviders[viewId] = provider;
+  }
+
+  static void unregisterSnapshotProvider(String viewId) {
+    _snapshotProviders.remove(viewId);
+  }
+
+  /// 获取用于复制的最新数据。当前画布已打开时直接抓取内存快照，避免尚在
+  /// 防抖窗口内的笔迹没有写入 Collab；否则从 Collab 和本地备份读取。
+  Future<HandwritingSaberSnapshot> captureSnapshotForDuplicate(
+    String viewId,
+  ) async {
+    final provider = _snapshotProviders[viewId];
+    if (provider != null) {
+      try {
+        final snapshot = provider();
+        if (snapshot != null) {
+          Log.info(
+            '[HandwritingSaber] Captured live duplicate snapshot: $viewId, '
+            'collab=${snapshot.collabData.length} bytes, '
+            'local=${snapshot.localData.length} bytes',
+          );
+          return snapshot;
+        }
+      } catch (e) {
+        Log.warn(
+          '[HandwritingSaber] Failed to capture live duplicate snapshot: $e',
+        );
+      }
+    }
+
+    final collabData = await loadHandwritingSaberData(viewId);
+    final localData = await loadLocalBackupData(viewId);
+    return HandwritingSaberSnapshot(
+      collabData: collabData.isNotEmpty ? collabData : localData,
+      localData: localData.isNotEmpty ? localData : collabData,
+    );
+  }
+
+  /// 将源手写笔记快照写入刚创建的副本。
+  Future<bool> restoreSnapshotToDuplicate(
+    String viewId,
+    HandwritingSaberSnapshot snapshot,
+  ) async {
+    final saved = await saveHandwritingSaberData(
+      viewId,
+      snapshot.collabData,
+    );
+    if (!saved) {
+      return false;
+    }
+
+    if (snapshot.localData.isNotEmpty) {
+      try {
+        final filePath = await _getHandwritingSaberFilePath(viewId);
+        await File(filePath).writeAsBytes(snapshot.localData, flush: true);
+        Log.info(
+          '[HandwritingSaber] Copied local backup to duplicate: $viewId, '
+          'size=${snapshot.localData.length} bytes',
+        );
+      } catch (e) {
+        Log.warn(
+          '[HandwritingSaber] Failed to copy local backup to duplicate: $e',
+        );
+      }
+    }
+
+    triggerReload(viewId);
+    return true;
+  }
+
   /// 获取手写笔记数据存储目录（用于本地文件缓存回退）
   Future<String> _getHandwritingSaberDirectory() async {
     final basePath = await getIt<ApplicationDataStorage>().getPath();

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_saber_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_migration_service.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_bloc.dart';
@@ -227,6 +229,17 @@ class ViewBackendService {
     String? suffix,
     required bool syncAfterDuplicate,
   }) async {
+    if (_isHandwritingSaberView(view)) {
+      return _duplicateHandwritingSaber(
+        view: view,
+        openAfterDuplicate: openAfterDuplicate,
+        includeChildren: includeChildren,
+        parentViewId: parentViewId,
+        suffix: suffix,
+        syncAfterDuplicate: syncAfterDuplicate,
+      );
+    }
+
     // 协作白板内容位于 xm-arts room。Rust duplicate_view 只能复制本地
     // collab 元数据，会生成空白副本，因此在进入 Rust 前走 room 迁移。
     if (view.layout == ViewLayoutPB.Whiteboard) {
@@ -305,6 +318,78 @@ class ViewBackendService {
       parentViewId: parentViewId,
       suffix: suffix,
       syncAfterDuplicate: syncAfterDuplicate,
+    );
+  }
+
+  static bool _isHandwritingSaberView(ViewPB view) {
+    if (view.layout != ViewLayoutPB.Document || view.extra.isEmpty) {
+      return false;
+    }
+    try {
+      final extra = jsonDecode(view.extra);
+      return extra is Map && extra['view_type'] == 'handwriting_saber';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<FlowyResult<ViewPB, FlowyError>> _duplicateHandwritingSaber({
+    required ViewPB view,
+    required bool openAfterDuplicate,
+    required bool includeChildren,
+    required bool syncAfterDuplicate,
+    String? parentViewId,
+    String? suffix,
+  }) async {
+    final dataService = HandwritingSaberDataService();
+    final snapshot = await dataService.captureSnapshotForDuplicate(view.id);
+    final result = await _duplicateWithRust(
+      view: view,
+      // 先完成 Saber 数据恢复再打开，避免副本页面抢先加载空 Document。
+      openAfterDuplicate: false,
+      includeChildren: includeChildren,
+      parentViewId: parentViewId,
+      suffix: suffix,
+      syncAfterDuplicate: syncAfterDuplicate,
+    );
+
+    return result.fold(
+      (duplicatedView) async {
+        final restored = await dataService.restoreSnapshotToDuplicate(
+          duplicatedView.id,
+          snapshot,
+        );
+        if (restored) {
+          if (openAfterDuplicate) {
+            final openResult = await FolderEventSetLatestView(
+              ViewIdPB(value: duplicatedView.id),
+            ).send();
+            openResult.onFailure(
+              (error) => Log.warn(
+                '[ViewBackendService] 手写笔记副本设置为当前视图失败: '
+                '${error.msg}',
+              ),
+            );
+          }
+          Log.info(
+            '[ViewBackendService] 手写笔记内容复制完成: '
+            '${view.id} -> ${duplicatedView.id}',
+          );
+          return FlowyResult.success(duplicatedView);
+        }
+
+        Log.error(
+          '[ViewBackendService] 手写笔记内容复制失败，清理空副本: '
+          '${duplicatedView.id}',
+        );
+        await deleteView(viewId: duplicatedView.id);
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = '手写笔记内容复制失败',
+        );
+      },
+      (error) async => FlowyResult.failure(error),
     );
   }
 

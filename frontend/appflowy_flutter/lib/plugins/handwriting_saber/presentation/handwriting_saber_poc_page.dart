@@ -445,6 +445,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       widget.view.id,
       _reloadAfterImport,
     );
+    HandwritingSaberDataService.registerSnapshotProvider(
+      widget.view.id,
+      _captureSnapshotForDuplicate,
+    );
     // 合并 repaint：当当前笔迹或激光笔列表变化时，更新 tick 以触发局部重绘
     _currentStrokeNotifier.addListener(() {
       _repaintTick.value++;
@@ -467,6 +471,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID CHANGED! Reloading data...');
       // ✅ 关键修复：切换视图前立即保存旧视图的数据，防止数据丢失
       _flushSaveForView(oldWidget.view.id);
+      HandwritingSaberDataService.unregisterReloadCallback(oldWidget.view.id);
+      HandwritingSaberDataService.unregisterSnapshotProvider(oldWidget.view.id);
+      HandwritingSaberDataService.registerReloadCallback(
+        widget.view.id,
+        _reloadAfterImport,
+      );
+      HandwritingSaberDataService.registerSnapshotProvider(
+        widget.view.id,
+        _captureSnapshotForDuplicate,
+      );
       // 清理旧视图的状态
       _cleanupViewState();
       // 重新初始化数据
@@ -526,6 +540,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint(
           '❌[HandwritingSaber] _flushSaveForView serialization error: $e');
     }
+  }
+
+  HandwritingSaberSnapshot? _captureSnapshotForDuplicate() {
+    if (!_isDataLoaded) {
+      return null;
+    }
+
+    return HandwritingSaberSnapshot(
+      collabData: utf8.encode(_coreInfo.toJsonStringForCollab()),
+      localData: utf8.encode(_coreInfo.toJsonString()),
+    );
   }
 
   /// ✅ 将数据写入本地文件作为备份
@@ -5447,6 +5472,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void dispose() {
     // 注销导入 reload 回调
     HandwritingSaberDataService.unregisterReloadCallback(widget.view.id);
+    HandwritingSaberDataService.unregisterSnapshotProvider(widget.view.id);
 
     // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
     // _flushSaveForView 会同步序列化数据，同时异步写入 Collab 和本地文件
