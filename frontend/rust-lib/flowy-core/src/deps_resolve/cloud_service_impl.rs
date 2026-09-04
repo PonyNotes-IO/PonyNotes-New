@@ -299,6 +299,10 @@ impl FolderCloudService for ServerProvider {
       .await
   }
 
+  async fn flush_pending_updates(&self, timeout: Duration) -> bool {
+    ServerProvider::flush_pending_updates(self, timeout).await
+  }
+
   async fn move_view_cross_space(
     &self,
     workspace_id: &Uuid,

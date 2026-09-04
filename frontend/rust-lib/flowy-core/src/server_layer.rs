@@ -82,12 +82,12 @@ impl ServerProvider {
     }
   }
 
-  pub fn force_sync(&self, timeout: Duration) {
+  fn wake_sync_triggers(&self) -> Option<Vec<SyncTrigger>> {
     let Ok(server) = self.get_server() else {
-      return;
+      return None;
     };
     if server.get_ws_state() != client_api::ws::ConnectState::Connected {
-      return;
+      return None;
     }
 
     let mut triggers = Vec::with_capacity(self.sync_triggers.len());
@@ -98,11 +98,32 @@ impl ServerProvider {
       }
       live
     });
+    Some(triggers)
+  }
+
+  pub fn force_sync(&self, timeout: Duration) {
+    let Some(triggers) = self.wake_sync_triggers() else {
+      return;
+    };
 
     let deadline = Instant::now() + timeout;
     while triggers.iter().any(|trigger| !trigger.is_finished()) && Instant::now() < deadline {
       std::thread::sleep(Duration::from_millis(10));
     }
+  }
+
+  /// Async variant used from the Rust event runtime. Sleeping asynchronously is
+  /// required here so the same runtime can continue sending and ACKing updates.
+  pub(crate) async fn flush_pending_updates(&self, timeout: Duration) -> bool {
+    let Some(triggers) = self.wake_sync_triggers() else {
+      return false;
+    };
+
+    let deadline = Instant::now() + timeout;
+    while triggers.iter().any(|trigger| !trigger.is_finished()) && Instant::now() < deadline {
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    triggers.iter().all(SyncTrigger::is_finished)
   }
 
   pub(crate) fn register_sync_trigger(&self, object_id: Uuid, trigger: SyncTrigger) {

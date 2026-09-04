@@ -65,6 +65,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use tokio::sync::RwLockWriteGuard;
 use tracing::{error, info, instrument};
 use uuid::Uuid;
@@ -1188,6 +1189,17 @@ impl FolderManager {
         .is_local()
     {
       let cloud_service = self.cloud_service()?;
+      // 新建视图先写本地 Folder，再经协作队列批量发送。若用户立即跨区移动，
+      // move-cross-space HTTP 可能抢在 Folder 更新之前到达服务端，服务端会认为
+      // 源视图不存在。先唤醒队列并异步等待 ACK，避免这一 iOS 高频竞态。
+      let sync_finished = cloud_service
+        .flush_pending_updates(Duration::from_secs(3))
+        .await;
+      info!(
+        view_id = %view_id,
+        sync_finished,
+        "Flushed pending updates before cross-space move"
+      );
       let folder_update = cloud_service
         .move_view_cross_space(
           &workspace_id,

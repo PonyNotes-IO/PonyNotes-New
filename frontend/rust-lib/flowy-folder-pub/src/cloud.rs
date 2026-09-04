@@ -13,6 +13,7 @@ use collab_entity::CollabType;
 pub use collab_folder::{Folder, FolderData, Workspace};
 use flowy_error::FlowyError;
 use lib_infra::async_trait::async_trait;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// 所有发布的文档列表项（包含发布者和接收者的信息）
@@ -78,6 +79,12 @@ pub trait FolderCloudService: Send + Sync + 'static {
     workspace_id: &Uuid,
     objects: Vec<FolderCollabParams>,
   ) -> Result<(), FlowyError>;
+
+  /// Flush pending collaboration updates before an HTTP operation that reads
+  /// the server-side Folder state. Returns whether all queued updates were ACKed.
+  async fn flush_pending_updates(&self, _timeout: Duration) -> bool {
+    false
+  }
 
   async fn move_view_cross_space(
     &self,
