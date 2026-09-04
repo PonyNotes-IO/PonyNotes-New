@@ -95,7 +95,9 @@ Future<T?> showMobileBottomSheet<T>(
 
       final Widget child = builder(context);
 
-      // if the children is only one, we don't need to wrap it with a column
+      // Some callers provide a self-sizing root widget, such as the calendar
+      // field picker's DraggableScrollableSheet. Preserve its constraints by
+      // returning it unchanged instead of wrapping it in another scroll view.
       if (!showDragHandle && !showHeader && !showDivider) {
         return child;
       }
@@ -175,62 +177,37 @@ Future<T?> showMobileBottomSheet<T>(
       }
 
       // ----- content area -----
-      if (enablePadding) {
-        // wrap content in Flexible(SingleChildScrollView) so the body's
-        // intrinsic height doesn't force the outer Column to overflow
-        // when the keyboard pops up and the available height shrinks.
-        // `Flexible(fit: FlexFit.loose)` lets the body shrink / scroll,
-        // and `mainAxisSize: min` on the outer Column still works
-        // because the Flexible takes whatever slack is left.
-        children.add(
-          Flexible(
-            child: SingleChildScrollView(
-              child: Padding(
+      // Keep the scroll view inside the sheet's bounded flex layout. Putting
+      // Flexible below an outer SingleChildScrollView gives it unbounded
+      // height, which causes the modal sheet to fail layout on iOS and leaves
+      // only its barrier visible.
+      final Widget content = SingleChildScrollView(
+        child: enablePadding
+            ? Padding(
                 padding: padding +
                     EdgeInsets.only(bottom: context.bottomSheetPadding()),
                 child: child,
-              ),
-            ),
-          ),
-        );
-      } else {
-        children.add(
-          Flexible(
-            child: SingleChildScrollView(
-              child: child,
-            ),
-          ),
-        );
-      }
-      // ----- content area -----
+              )
+            : child,
+      );
 
-      if (children.length == 1) {
-        return children.first;
+      // A sheet without a header has no flex siblings, so return the scroll
+      // view directly instead of using Flexible as a root widget.
+      if (children.isEmpty) {
+        return useSafeArea ? SafeArea(child: content) : content;
       }
 
-      // Wrap the whole sheet in a `SingleChildScrollView` so that when
-      // the keyboard pops up and the available height shrinks below the
-      // sheet's intrinsic height (drag handle + header + divider + body),
-      // the sheet can scroll instead of triggering a RenderFlex overflow.
-      //
-      // We keep the `mainAxisSize: min` Column semantics by using
-      // `Column(mainAxisSize: min)` inside the SCV — that way the
-      // SCV still sizes itself to fit content when there's room, and
-      // becomes scrollable when there isn't.
+      children.add(Flexible(child: content));
       return useSafeArea
           ? SafeArea(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: children,
-                ),
-              ),
-            )
-          : SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: children,
               ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: children,
             );
     },
   );
