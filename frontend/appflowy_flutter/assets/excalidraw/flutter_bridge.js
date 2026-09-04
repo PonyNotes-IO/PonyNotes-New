@@ -2268,7 +2268,7 @@
     setTimeout(installHighQualityClipboardPatch, 1500);
 
     // Flutter 调用：导出
-    window.exportExcalidraw = async function (format = 'png') {
+    window.exportExcalidraw = async function (format = 'png', options = {}) {
         try {
             const api = await waitForExcalidrawAPI();
 
@@ -2566,9 +2566,13 @@
             throw new Error(`不支持的导出格式: ${format}`);
         } catch (e) {
             console.error('[PonyNotes] exportExcalidraw failed', e);
-            window.flutter_inappwebview?.callHandler('onExportError', {
-                message: e?.message || String(e),
-            });
+            // 协作白板会在直接导出失败后回退原生导出面板。回退尝试不应
+            // 先弹出失败提示，否则后续导出成功时用户仍会看到瞬时误报。
+            if (options?.notifyError !== false) {
+                window.flutter_inappwebview?.callHandler('onExportError', {
+                    message: e?.message || String(e),
+                });
+            }
             throw e;
         }
     };

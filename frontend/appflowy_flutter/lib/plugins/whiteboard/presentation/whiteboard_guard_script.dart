@@ -357,7 +357,9 @@ const String whiteboardGuardScript = r'''
     // the bytes to the native save handler without opening a browser picker.
     if (typeof window.exportExcalidraw === 'function') {
       try {
-        await window.exportExcalidraw(format);
+        // 这是可回退的直接导出尝试，失败后会继续打开原生导出面板。
+        // 不要在回退成功前提前显示“导出失败”提示。
+        await window.exportExcalidraw(format, { notifyError: false });
         return { ok: true, direct: true };
       } catch (e) {
         log('直接导出失败，回退原生导出面板: ' + (e && e.message));

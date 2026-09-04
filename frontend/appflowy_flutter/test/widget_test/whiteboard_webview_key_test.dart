@@ -773,7 +773,23 @@ void main() {
     final exportSource = source.substring(exportStart, restoreStart);
     expect(exportSource, contains("callHandler('onExportError'"));
     expect(exportSource, contains('message: e?.message || String(e)'));
+    expect(exportSource, contains('options?.notifyError !== false'));
     expect(exportSource, contains('throw e;'));
+  });
+
+  test(
+      'collaboration export fallback suppresses transient direct-export errors',
+      () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/whiteboard_guard_script.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains(
+        'await window.exportExcalidraw(format, { notifyError: false });',
+      ),
+    );
   });
 
   test('remote Android image export localizes remote sources for PNG and SVG',
