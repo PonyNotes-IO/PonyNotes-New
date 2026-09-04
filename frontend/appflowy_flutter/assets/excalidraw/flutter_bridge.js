@@ -2563,14 +2563,13 @@
                 return;
             }
 
-            window.flutter_inappwebview?.callHandler('onExportError', {
-                message: `不支持的导出格式: ${format}`,
-            });
+            throw new Error(`不支持的导出格式: ${format}`);
         } catch (e) {
             console.error('[PonyNotes] exportExcalidraw failed', e);
             window.flutter_inappwebview?.callHandler('onExportError', {
                 message: e?.message || String(e),
             });
+            throw e;
         }
     };
 

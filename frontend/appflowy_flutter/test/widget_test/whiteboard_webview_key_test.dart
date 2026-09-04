@@ -117,6 +117,7 @@ void main() {
     expect(
       bridgeSource,
       contains('await _restoreWhiteboardData(api, payload, generation);'),
+    );
     expect(pageSource, isNot(contains('Duration(milliseconds: 80)')));
   });
 
@@ -686,7 +687,8 @@ void main() {
       contains("/^data:image\\//i.test(file.dataURL)"),
     );
     expect(source, contains("handlerName: 'localizeWindowsPngImages'"));
-    expect(windowsSource, contains('exportFiles[localized.id] = Object.assign('));
+    expect(
+        windowsSource, contains('exportFiles[localized.id] = Object.assign('));
     expect(
       windowsSource,
       contains("reason: 'windows-image-localization-invalid'"),
@@ -697,30 +699,81 @@ void main() {
     );
   });
 
-  test('remote macOS image export localizes remote sources for PNG and SVG',
+  test('remote Apple image export localizes remote sources for PNG and SVG',
       () {
     final source = File(
       'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
     ).readAsStringSync();
-    final macOSStart = source.indexOf('final macOSImagePreparation');
+    final appleStart = source.indexOf('final appleImagePreparation');
     final windowsStart = source.indexOf('final windowsPngPreparation');
 
-    expect(macOSStart, greaterThanOrEqualTo(0));
-    expect(windowsStart, greaterThan(macOSStart));
-    final macOSSource = source.substring(macOSStart, windowsStart);
+    expect(appleStart, greaterThanOrEqualTo(0));
+    expect(windowsStart, greaterThan(appleStart));
+    final appleSource = source.substring(appleStart, windowsStart);
 
-    expect(macOSSource, contains('Platform.isMacOS'));
+    expect(appleSource, contains('Platform.isMacOS || Platform.isIOS'));
     expect(
-      macOSSource,
-      contains("'localizeMacOSExportImages', remoteFiles"),
+      appleSource,
+      contains("'localizeAppleExportImages', remoteFiles"),
     );
-    expect(macOSSource, contains("reason: 'macos-image-localization-invalid'"));
-    expect(macOSSource, isNot(contains("format == 'png'")));
-    expect(source, contains("handlerName: 'localizeMacOSExportImages'"));
+    expect(appleSource, contains("reason: 'apple-image-localization-invalid'"));
+    expect(appleSource, isNot(contains("format == 'png'")));
+    expect(source, contains("handlerName: 'localizeAppleExportImages'"));
     expect(
       source,
-      contains('Duration(seconds: Platform.isMacOS ? 45 : 15)'),
+      contains('Platform.isMacOS || Platform.isIOS ? 45 : 15'),
     );
+  });
+
+  test('remote iOS image export is included in Apple preparation', () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    expect(source, contains('Platform.isMacOS || Platform.isIOS'));
+    expect(source, contains("handlerName: 'localizeAppleExportImages'"));
+    expect(source, contains("Platform.isIOS ? 'iOS' : 'macOS'"));
+  });
+
+  test(
+      'remote Apple export image download uses auth and refreshes expired token',
+      () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    final appleStart =
+        source.indexOf('handlerName: \'localizeAppleExportImages\'');
+    final windowsStart =
+        source.indexOf('handlerName: \'localizeWindowsPngImages\'');
+
+    expect(appleStart, greaterThanOrEqualTo(0));
+    expect(windowsStart, greaterThan(appleStart));
+    final appleHandlerSource = source.substring(appleStart, windowsStart);
+    expect(appleHandlerSource,
+        contains('FileUploadService.getValidAccessToken()'));
+    expect(appleHandlerSource, contains('HttpHeaders.authorizationHeader'));
+    expect(appleHandlerSource, contains('response.statusCode == 401'));
+    expect(appleHandlerSource, contains('response.statusCode == 403'));
+    expect(
+      appleHandlerSource,
+      contains('FileUploadService.forceRefreshAccessToken()'),
+    );
+  });
+
+  test('whiteboard export bridge reports and rethrows export errors', () {
+    final source = File(
+      'assets/excalidraw/flutter_bridge.js',
+    ).readAsStringSync();
+    final exportStart =
+        source.indexOf('window.exportExcalidraw = async function');
+    final restoreStart =
+        source.indexOf('window.loadExcalidrawData = async function');
+
+    expect(exportStart, greaterThanOrEqualTo(0));
+    expect(restoreStart, greaterThan(exportStart));
+    final exportSource = source.substring(exportStart, restoreStart);
+    expect(exportSource, contains("callHandler('onExportError'"));
+    expect(exportSource, contains('message: e?.message || String(e)'));
+    expect(exportSource, contains('throw e;'));
   });
 
   test('remote Android image export localizes remote sources for PNG and SVG',
