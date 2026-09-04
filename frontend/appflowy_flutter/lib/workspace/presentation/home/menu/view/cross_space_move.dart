@@ -12,6 +12,9 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -20,6 +23,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 /// 文档在「私有空间」与「协作区」之间移动的权限门禁和内容迁移协调器。
 ///
@@ -388,7 +392,7 @@ Future<CrossSpaceMoveOutcome> _coordinateViewMoveUnlocked(
       toSection: toSection,
       targetParentId: targetParentId,
       onWhiteboardRecreated: onWhiteboardRecreated ??
-          (createdView) => replaceCurrentMobileView(
+          (createdView) => replaceCurrentWhiteboardView(
                 context,
                 oldView: view,
                 newView: createdView,
@@ -465,6 +469,93 @@ Future<CrossSpaceMoveOutcome> _coordinateViewMoveUnlocked(
   return CrossSpaceMoveOutcome.moved;
 }
 
+/// 迁移成功后交接当前白板页面。
+///
+/// 移动端使用声明式路由替换；桌面端则通过 TabsBloc 打开新视图。两者都只在
+/// 源白板仍是当前打开视图时执行，侧栏后台移动不会打断用户正在看的页面。
+Future<void> replaceCurrentWhiteboardView(
+  BuildContext context, {
+  required ViewPB oldView,
+  required ViewPB newView,
+}) async {
+  if (PlatformInfo.isMobile) {
+    await replaceCurrentMobileView(
+      context,
+      oldView: oldView,
+      newView: newView,
+    );
+    return;
+  }
+
+  final tabsBloc = getIt<TabsBloc>();
+  final latestOpenView = getIt<MenuSharedState>().latestOpenView;
+  final currentPluginId = tabsBloc.state.currentPageManager.plugin.id;
+  if (latestOpenView?.id != oldView.id &&
+      currentPluginId != oldView.id &&
+      !MobileViewMigrationHandoff.isExpectedRemoval(oldView.id)) {
+    Log.info(
+      '[WhiteboardMigrationUI] 跳过桌面端白板交接：源白板不是当前打开页面 '
+      'old=${oldView.id} currentPlugin=$currentPluginId '
+      'latestOpen=${latestOpenView?.id}',
+    );
+    return;
+  }
+
+  Log.info(
+    '[WhiteboardMigrationUI] 桌面端白板路由交接: '
+    '${oldView.id} → ${newView.id}',
+  );
+  // 源视图删除会同时关闭移动菜单，不能依赖菜单 context 仍挂在树上。
+  tabsBloc.openPlugin(newView);
+}
+
+/// 在删除源白板前登记当前页面交接。
+///
+/// 桌面端的共享访问撤销监听也会收到迁移产生的源视图删除通知；若不先登记，
+/// 它会抢先打开主页并销毁白板。门闩让监听器只忽略这一次已知删除，目标数据
+/// 校验完成后由 [replaceCurrentWhiteboardView] 打开新白板。
+bool prepareCurrentWhiteboardReplacement(
+  BuildContext context, {
+  required ViewPB oldView,
+  required ViewPB newView,
+}) {
+  if (PlatformInfo.isMobile) {
+    return prepareCurrentMobileViewReplacement(
+      context,
+      oldView: oldView,
+      newView: newView,
+    );
+  }
+
+  final tabsBloc = getIt<TabsBloc>();
+  final latestOpenViewId = getIt<MenuSharedState>().latestOpenView?.id;
+  final currentPluginId = tabsBloc.state.currentPageManager.plugin.id;
+  if (!shouldPrepareDesktopWhiteboardReplacement(
+    oldViewId: oldView.id,
+    latestOpenViewId: latestOpenViewId,
+    currentPluginId: currentPluginId,
+  )) {
+    return false;
+  }
+
+  MobileViewMigrationHandoff.begin(
+    oldViewId: oldView.id,
+    newViewId: newView.id,
+  );
+  Log.info(
+    '[WhiteboardMigrationUI] 已登记桌面端白板交接：'
+    '${oldView.id} → ${newView.id}',
+  );
+  return true;
+}
+
+bool shouldPrepareDesktopWhiteboardReplacement({
+  required String oldViewId,
+  required String? latestOpenViewId,
+  required String currentPluginId,
+}) =>
+    latestOpenViewId == oldViewId || currentPluginId == oldViewId;
+
 Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
   BuildContext context, {
   required ViewPB view,
@@ -493,7 +584,7 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
       view: view,
       targetSpaceId: targetParentId,
       beforeSourceDelete: (createdView) {
-        handoffPrepared = prepareCurrentMobileViewReplacement(
+        handoffPrepared = prepareCurrentWhiteboardReplacement(
           context,
           oldView: view,
           newView: createdView,
@@ -535,7 +626,7 @@ Future<CrossSpaceMoveOutcome> ensureWhiteboardContentMigrated(
     view: view,
     targetSpaceId: targetParentId,
     beforeSourceDelete: (createdView) {
-      handoffPrepared = prepareCurrentMobileViewReplacement(
+      handoffPrepared = prepareCurrentWhiteboardReplacement(
         context,
         oldView: view,
         newView: createdView,

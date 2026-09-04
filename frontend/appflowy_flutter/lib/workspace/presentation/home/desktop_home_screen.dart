@@ -62,6 +62,7 @@ import 'home_stack.dart';
 import 'menu/sidebar/space/shared_widget.dart';
 import 'upgrade_success_toast.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/mobile/application/mobile_view_migration_handoff.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
@@ -93,6 +94,14 @@ class _SharedAccessRevocationListenerState
       }
       final revokedViewId = observable.id;
       if (revokedViewId.isEmpty) {
+        return;
+      }
+      if (MobileViewMigrationHandoff.isExpectedRemoval(revokedViewId)) {
+        Log.info(
+          '[WhiteboardMigrationUI] 忽略桌面端迁移中的源白板删除通知: '
+          'removed=$revokedViewId replacement='
+          '${MobileViewMigrationHandoff.replacementViewId(revokedViewId)}',
+        );
         return;
       }
       final tabsBloc = getIt<TabsBloc>();

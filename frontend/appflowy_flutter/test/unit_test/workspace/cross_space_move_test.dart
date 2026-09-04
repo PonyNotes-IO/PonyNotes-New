@@ -105,6 +105,33 @@ void main() {
     expect(favoritesRefreshCount, 1);
   });
 
+  test('桌面端仅在源白板仍是当前视图时登记迁移交接', () {
+    expect(
+      shouldPrepareDesktopWhiteboardReplacement(
+        oldViewId: 'old',
+        latestOpenViewId: 'old',
+        currentPluginId: 'home',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldPrepareDesktopWhiteboardReplacement(
+        oldViewId: 'old',
+        latestOpenViewId: 'other',
+        currentPluginId: 'old',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldPrepareDesktopWhiteboardReplacement(
+        oldViewId: 'old',
+        latestOpenViewId: 'other',
+        currentPluginId: 'home',
+      ),
+      isFalse,
+    );
+  });
+
   group('跨父节点移动的子列表更新', () {
     test('目标列表缺少通知中的文档时识别为结构移动', () {
       final existing = ViewPB()

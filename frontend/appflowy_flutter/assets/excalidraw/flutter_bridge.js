@@ -2688,8 +2688,24 @@
 
         for (const [id, data] of entries) {
             if (!data) continue;
-            const dataURL = data.dataURL || (typeof data.data === 'string' && data.data.startsWith('data:') ? data.data : null);
-            const url = data.url || (typeof data.data === 'string' && data.data.startsWith('http') ? data.data : null);
+            const candidateDataURL = data.dataURL ||
+                (typeof data.data === 'string' && data.data.startsWith('data:')
+                    ? data.data
+                    : null);
+            // Excalidraw 的 addFiles 只能接受可解码的图片 dataURL。
+            // 其它 data:（或损坏的文件字段）若直接注入，会生成白色图片占位，
+            // 而重新进入白板时又会被云端文件恢复掩盖，形成“退出后才正常”。
+            const dataURL = typeof candidateDataURL === 'string' &&
+                candidateDataURL.startsWith('data:image/')
+                ? candidateDataURL
+                : null;
+            const url = data.url ||
+                (typeof candidateDataURL === 'string' && candidateDataURL.startsWith('http')
+                    ? candidateDataURL
+                    : null) ||
+                (typeof data.data === 'string' && data.data.startsWith('http')
+                    ? data.data
+                    : null);
 
             if (dataURL) {
                 toAdd.push({ id, dataURL, mimeType: data.mimeType || 'image/png', created: data.created || Date.now() });
@@ -2703,6 +2719,7 @@
             console.log('[PonyNotes] ✅ Added ' + toAdd.length + ' dataURL files');
             // 回传给 Flutter 补全 dataURL
             _syncFilesToFlutter(filesMap, toAdd);
+            await _awaitImageDecodeAndRefresh(api, toAdd);
         }
 
         if (toFetch.length > 0) {
@@ -2719,10 +2736,49 @@
                     api.addFiles(downloaded);
                     console.log('[PonyNotes] ✅ Injected ' + downloaded.length + ' downloaded files');
                     _syncFilesToFlutter(filesMap, downloaded);
+                    await _awaitImageDecodeAndRefresh(api, downloaded);
                 }
             } catch (e) {
                 console.error('[PonyNotes] ❌ Cloud download failed:', e);
             }
+        }
+    }
+
+    // addFiles 会更新 Excalidraw 的文件仓库，但部分 WebView 版本不会立即触发
+    // 画布重绘。等待浏览器完成图片解码后主动刷新，确保迁移后首次渲染也能看到
+    // 原图，不必依赖退出重进再次建立内部 image cache。
+    async function _awaitImageDecodeAndRefresh(api, items) {
+        const imageLoads = (items || [])
+            .filter((item) => item && typeof item.dataURL === 'string' &&
+                item.dataURL.startsWith('data:image/'))
+            .map((item) => new Promise((resolve) => {
+                const image = new Image();
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+                image.onload = async () => {
+                    try {
+                        if (typeof image.decode === 'function') await image.decode();
+                    } catch (_) {
+                        // onload 已证明浏览器可读取图片，decode 失败不阻断刷新。
+                    }
+                    finish();
+                };
+                image.onerror = finish;
+                setTimeout(finish, 5000);
+                image.src = item.dataURL;
+            }));
+
+        if (imageLoads.length > 0) {
+            await Promise.all(imageLoads);
+        }
+        if (api && typeof api.refresh === 'function') {
+            api.refresh();
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            api.refresh();
         }
     }
 
