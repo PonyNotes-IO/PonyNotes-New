@@ -694,6 +694,32 @@ void main() {
     );
   });
 
+  test('remote macOS image export localizes remote sources for PNG and SVG',
+      () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    final macOSStart = source.indexOf('final macOSImagePreparation');
+    final windowsStart = source.indexOf('final windowsPngPreparation');
+
+    expect(macOSStart, greaterThanOrEqualTo(0));
+    expect(windowsStart, greaterThan(macOSStart));
+    final macOSSource = source.substring(macOSStart, windowsStart);
+
+    expect(macOSSource, contains('Platform.isMacOS'));
+    expect(
+      macOSSource,
+      contains("'localizeMacOSExportImages', remoteFiles"),
+    );
+    expect(macOSSource, contains("reason: 'macos-image-localization-invalid'"));
+    expect(macOSSource, isNot(contains("format == 'png'")));
+    expect(source, contains("handlerName: 'localizeMacOSExportImages'"));
+    expect(
+      source,
+      contains('Duration(seconds: Platform.isMacOS ? 45 : 15)'),
+    );
+  });
+
   test('remote Android image export localizes remote sources for PNG and SVG',
       () {
     final source = File(

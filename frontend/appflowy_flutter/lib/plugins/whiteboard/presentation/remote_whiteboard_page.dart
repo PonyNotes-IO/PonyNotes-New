@@ -432,6 +432,66 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
     _isExporting = true;
     try {
       final controller = _controller!;
+      // WKWebView allows remote images to render, but blocks reading an export
+      // canvas that contains them. Convert only the images used by this export
+      // to data URLs before Excalidraw renders its preview or output.
+      final macOSImagePreparation = Platform.isMacOS
+          ? r'''
+var exportApi = typeof window.__xmGetExcalidrawAPI === 'function'
+  ? window.__xmGetExcalidrawAPI()
+  : null;
+if (!exportApi || typeof exportApi.getFiles !== 'function' ||
+    typeof exportApi.getSceneElements !== 'function') {
+  return { ok: false, reason: 'macos-export-api-unavailable' };
+}
+var exportFiles = exportApi.getFiles() || {};
+var usedFileIds = {};
+var exportElements = exportApi.getSceneElements();
+for (var element of exportElements) {
+  if (!element.isDeleted && element.fileId) usedFileIds[element.fileId] = true;
+}
+var remoteFiles = [];
+for (var fileId in exportFiles) {
+  var file = exportFiles[fileId];
+  if (!usedFileIds[fileId] || !file) continue;
+  if (typeof file.dataURL === 'string' && /^data:image\//i.test(file.dataURL)) {
+    continue;
+  }
+  var source = null;
+  var candidates = [file.dataURL, file.url, file.data];
+  for (var index = 0; index < candidates.length; index++) {
+    if (typeof candidates[index] === 'string' &&
+        /^https?:\/\//i.test(candidates[index])) {
+      source = candidates[index];
+      break;
+    }
+  }
+  if (source) {
+    remoteFiles.push({ id: fileId, url: source, mimeType: file.mimeType });
+  }
+}
+if (remoteFiles.length) {
+  var localizedFiles = await window.flutter_inappwebview.callHandler(
+    'localizeMacOSExportImages', remoteFiles,
+  );
+  if (!Array.isArray(localizedFiles) ||
+      localizedFiles.length !== remoteFiles.length) {
+    return { ok: false, reason: 'macos-image-localization-failed' };
+  }
+  for (var localizedIndex = 0; localizedIndex < localizedFiles.length; localizedIndex++) {
+    var localized = localizedFiles[localizedIndex];
+    if (!localized || !exportFiles[localized.id] ||
+        typeof localized.dataURL !== 'string' ||
+        !/^data:image\//i.test(localized.dataURL)) {
+      return { ok: false, reason: 'macos-image-localization-invalid' };
+    }
+    exportFiles[localized.id] = Object.assign(
+      {}, exportFiles[localized.id], localized,
+    );
+  }
+}
+'''
+          : '';
       final windowsPngPreparation = Platform.isWindows && format == 'png'
           ? r'''
 var exportApi = typeof window.__xmGetExcalidrawAPI === 'function'
@@ -555,6 +615,7 @@ if (remoteFiles.length) {
       final result = await evaluateAsyncJavascript(
         controller,
         asyncBody: '''
+$macOSImagePreparation
 $windowsPngPreparation
 $androidImagePreparation
 if (typeof window.__xmExportImage !== 'function') {
@@ -562,7 +623,7 @@ if (typeof window.__xmExportImage !== 'function') {
 }
 return await window.__xmExportImage('$format');
 ''',
-        timeout: const Duration(seconds: 15),
+        timeout: Duration(seconds: Platform.isMacOS ? 45 : 15),
         isCancelled: () => _isDisposed,
         debugLabel: ' exportImage view=${widget.view.id} format=$format',
       );
@@ -1122,6 +1183,80 @@ return await window.__xmExportImage('$format');
   }
 
   void _setupDownloadHandler(InAppWebViewController controller) {
+    if (Platform.isMacOS) {
+      controller.addJavaScriptHandler(
+        handlerName: 'localizeMacOSExportImages',
+        callback: (args) async {
+          if (args.isEmpty || args.first is! List) return const [];
+
+          final client = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 15);
+          final localizedFiles = <Map<String, dynamic>>[];
+          try {
+            for (final item in args.first as List) {
+              if (item is! Map) return const [];
+              final file = Map<String, dynamic>.from(item);
+              final id = file['id']?.toString();
+              final source = file['url']?.toString();
+              if (id == null || source == null) return const [];
+
+              final uri = Uri.tryParse(source);
+              if (uri == null ||
+                  (uri.scheme != 'http' && uri.scheme != 'https')) {
+                return const [];
+              }
+              final request = await client.getUrl(uri);
+              request.headers.set(
+                HttpHeaders.userAgentHeader,
+                'PonyNotes macOS Whiteboard Export',
+              );
+              final response = await request.close();
+              if (response.statusCode < 200 || response.statusCode >= 300) {
+                Log.warn(
+                  '[RemoteWhiteboard] macOS 导出图片下载失败: '
+                  'id=$id status=${response.statusCode}',
+                );
+                return const [];
+              }
+              final bytes = await response.fold<List<int>>(
+                <int>[],
+                (buffer, chunk) => buffer..addAll(chunk),
+              );
+              final responseMimeType = response.headers.contentType?.mimeType;
+              final declaredMimeType = file['mimeType']?.toString();
+              final mimeType = responseMimeType?.startsWith('image/') == true
+                  ? responseMimeType!
+                  : declaredMimeType?.startsWith('image/') == true
+                      ? declaredMimeType!
+                      : null;
+              if (mimeType == null) {
+                Log.warn(
+                  '[RemoteWhiteboard] macOS 导出图片类型无效: '
+                  'id=$id contentType=$responseMimeType',
+                );
+                return const [];
+              }
+              localizedFiles.add({
+                'id': id,
+                'dataURL': 'data:$mimeType;base64,${base64Encode(bytes)}',
+                'mimeType': mimeType,
+              });
+            }
+            Log.info(
+              '[RemoteWhiteboard] macOS 导出图片本地化完成: '
+              '${localizedFiles.length} 个文件',
+            );
+            return localizedFiles;
+          } catch (e) {
+            Log.warn('[RemoteWhiteboard] macOS 导出图片本地化失败: $e');
+            return const [];
+          } finally {
+            client.close(force: true);
+          }
+        },
+      );
+    }
+
     if (Platform.isWindows) {
       controller.addJavaScriptHandler(
         handlerName: 'localizeWindowsPngImages',
