@@ -143,7 +143,8 @@ void main() {
         bridgeSource, contains('typeof candidate.addFiles === \'function\''));
     expect(bridgeSource,
         contains('typeof candidate.getSceneElements === \'function\''));
-    expect(bridgeSource, contains('await window.waitForWhiteboardDataReady();'));
+    expect(
+        bridgeSource, contains('await window.waitForWhiteboardDataReady();'));
   });
 
   test('initial whiteboard readiness waits for bridge scene restoration', () {
@@ -617,7 +618,8 @@ void main() {
     expect(source, contains('syncFilesFromScene(pendingFilesSyncKey)'));
   });
 
-  test('whiteboard file picker intercepts image types and preserves imports', () {
+  test('whiteboard file picker intercepts image types and preserves imports',
+      () {
     final source =
         File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
 
@@ -631,6 +633,84 @@ void main() {
       contains("new DOMException('The user aborted a request.', 'AbortError')"),
     );
     expect(source, contains('return nativePicker.apply(this, arguments);'));
+  });
+
+  test('remote whiteboard image picker is Android-only and persists files', () {
+    final pageSource = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    final bridgeSource =
+        File('assets/excalidraw/flutter_bridge.js').readAsStringSync();
+    final guardSource = File(
+      'lib/plugins/whiteboard/presentation/whiteboard_guard_script.dart',
+    ).readAsStringSync();
+
+    expect(pageSource, contains('if (Platform.isAndroid)'));
+    expect(pageSource, contains('_setupAndroidImagePickerHandler(controller)'));
+    expect(pageSource, contains("handlerName: 'pickWhiteboardImage'"));
+    expect(pageSource, contains('_androidCollaborativeImageBridgeScript'));
+    expect(pageSource, contains('withData: true'));
+    expect(
+      bridgeSource,
+      contains("status: isAndroidCollaborative ? 'pending' : 'saved'"),
+    );
+    expect(
+      bridgeSource,
+      contains('__ponynotesAfterCollaborativeImageInsert'),
+    );
+    expect(guardSource, contains('window.__xmCommitImageInsert'));
+    expect(guardSource, contains('c.triggerFileUpload()'));
+  });
+
+  test('remote Windows PNG export replaces existing remote image sources', () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+    final windowsStart = source.indexOf('final windowsPngPreparation');
+    final androidStart = source.indexOf('final androidImagePreparation');
+
+    expect(windowsStart, greaterThanOrEqualTo(0));
+    expect(androidStart, greaterThan(windowsStart));
+    final windowsSource = source.substring(windowsStart, androidStart);
+
+    expect(windowsSource, contains("Platform.isWindows && format == 'png'"));
+    expect(
+      windowsSource,
+      contains('var candidates = [file.dataURL, file.url, file.data];'),
+    );
+    expect(
+      windowsSource,
+      contains("/^data:image\\//i.test(file.dataURL)"),
+    );
+    expect(source, contains("handlerName: 'localizeWindowsPngImages'"));
+    expect(windowsSource, contains('exportFiles[localized.id] = Object.assign('));
+    expect(
+      windowsSource,
+      contains("reason: 'windows-image-localization-invalid'"),
+    );
+    expect(
+      windowsSource,
+      isNot(contains('typeof exportApi.addFiles !== \'function\'')),
+    );
+  });
+
+  test('remote Android image export localizes remote sources for PNG and SVG',
+      () {
+    final source = File(
+      'lib/plugins/whiteboard/presentation/remote_whiteboard_page.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains('final androidImagePreparation = Platform.isAndroid'),
+    );
+    expect(source, contains("handlerName: 'localizeAndroidExportImages'"));
+    expect(source, contains("'localizeAndroidExportImages', remoteFiles"));
+    expect(source, contains("reason: 'android-image-localization-invalid'"));
+    expect(
+      source,
+      isNot(contains("Platform.isAndroid && format == 'png'")),
+    );
   });
 
   test('whiteboard bridge recovers iOS image decode and stale viewport', () {

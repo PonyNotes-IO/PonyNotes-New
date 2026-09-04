@@ -323,6 +323,28 @@ const String whiteboardGuardScript = r'''
   // ---- 第 3 层：暴露给 Flutter 侧的退出保存入口（返回 Promise，保存真正完成后 resolve）----
   window.__xmForceSave = forceSave;
 
+  // Android 原生选图直插后，等待场景保存并显式启动文件上传。调用入口只由
+  // RemoteWhiteboardPage 的 Android 专用桥设置，其他平台不进入此路径。
+  window.__xmCommitImageInsert = function () {
+    return forceSave('android-image-insert').then(function (saved) {
+      var c = findCollab();
+      if (!c || typeof c.triggerFileUpload !== 'function') return saved;
+      try {
+        return Promise.resolve(c.triggerFileUpload()).then(function () {
+          return saved;
+        }).catch(function (e) {
+          console.warn('[XMGuard] Android 插图文件上传失败: ' +
+              (e && e.message));
+          return saved;
+        });
+      } catch (e) {
+        console.warn('[XMGuard] Android 插图文件上传触发失败: ' +
+            (e && e.message));
+        return saved;
+      }
+    });
+  };
+
   // ---- 协作白板图片导出桥接 ----
   // xm-arts 并不稳定地把 excalidrawAPI 暴露到 window。复用上面的 React fiber
   // 定位逻辑取得真实 API，再打开其原生图片导出面板并触发对应格式按钮。文件下载

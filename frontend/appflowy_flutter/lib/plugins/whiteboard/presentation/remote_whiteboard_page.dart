@@ -18,13 +18,56 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
 import 'whiteboard_clipboard_bridge.dart';
 
-const String _mobileExportBridgeScript = r'''
+String _androidWhiteboardImageMimeType(String extension) {
+  switch (extension.toLowerCase()) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'webp':
+      return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'ico':
+      return 'image/x-icon';
+    default:
+      return 'image/png';
+  }
+}
+
+// 仅协作白板 Android 启用。共享 flutter_bridge.js 根据此标记取得远程
+// Excalidraw API，并将图片保持为 pending，交给协作页面的文件上传链路落盘。
+const String _androidCollaborativeImageBridgeScript = '''
 (function () {
-  // Re-install on load stop as the remote app may replace these APIs later.
+  window.__ponynotesAndroidCollaborativeImage = true;
+  window.__ponynotesResolveCollaborativeImageApi = function () {
+    if (typeof window.__xmGetExcalidrawAPI === 'function') {
+      var api = window.__xmGetExcalidrawAPI();
+      if (api) return api;
+    }
+    return window.excalidrawAPI || null;
+  };
+  window.__ponynotesAfterCollaborativeImageInsert = function () {
+    if (typeof window.__xmCommitImageInsert === 'function') {
+      return window.__xmCommitImageInsert();
+    }
+    if (typeof window.__xmForceSave === 'function') {
+      return window.__xmForceSave('android-image-insert');
+    }
+    return Promise.resolve(false);
+  };
+})();
+''';
+
+// Windows WebView2 中异步触发的导出不再满足 showSaveFilePicker 的用户手势要求。
+// 仅替换保存 picker，导出内容仍由 Excalidraw 生成并交给现有保存 handler。
+const String _windowsSaveFilePickerBridgeScript = r'''
+(function () {
   var saveFilePicker = function (options) {
     var suggestedName = (options && options.suggestedName) || 'download';
     var accept = options && options.types && options.types[0] && options.types[0].accept;
@@ -34,7 +77,7 @@ const String _mobileExportBridgeScript = r'''
       kind: 'file',
       createWritable: function () {
         var chunks = [];
-        return Promise.resolve(new WritableStream({
+        var stream = new WritableStream({
           write: function (chunk) { chunks.push(chunk); },
           close: function () {
             var blob = new Blob(chunks, { type: mimeType });
@@ -51,7 +94,17 @@ const String _mobileExportBridgeScript = r'''
               reader.readAsDataURL(blob);
             });
           },
-        }));
+        });
+        var writer;
+        stream.write = function (chunk) {
+          writer = writer || stream.getWriter();
+          return writer.write(chunk);
+        };
+        stream.close = function () {
+          writer = writer || stream.getWriter();
+          return writer.close();
+        };
+        return Promise.resolve(stream);
       },
     });
   };
@@ -66,6 +119,13 @@ const String _mobileExportBridgeScript = r'''
     try { window.showSaveFilePicker = saveFilePicker; } catch (ignored) {}
   }
 
+})();
+''';
+
+// 移动端继续使用原有 picker + clipboard 行为；Windows 只注入上面的 picker 部分。
+const String _mobileExportBridgeScript = _windowsSaveFilePickerBridgeScript +
+    r'''
+(function () {
   var clipboard = navigator.clipboard;
   if (!clipboard) {
     clipboard = {};
@@ -372,9 +432,131 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
     _isExporting = true;
     try {
       final controller = _controller!;
+      final windowsPngPreparation = Platform.isWindows && format == 'png'
+          ? r'''
+var exportApi = typeof window.__xmGetExcalidrawAPI === 'function'
+  ? window.__xmGetExcalidrawAPI()
+  : null;
+if (!exportApi || typeof exportApi.getFiles !== 'function' ||
+    typeof exportApi.getSceneElements !== 'function') {
+  return { ok: false, reason: 'windows-export-api-unavailable' };
+}
+var exportFiles = exportApi.getFiles() || {};
+var usedFileIds = {};
+var exportElements = exportApi.getSceneElements();
+for (var element of exportElements) {
+  if (!element.isDeleted && element.fileId) usedFileIds[element.fileId] = true;
+}
+var remoteFiles = [];
+for (var fileId in exportFiles) {
+  var file = exportFiles[fileId];
+  if (!usedFileIds[fileId] || !file) continue;
+  if (typeof file.dataURL === 'string' && /^data:image\//i.test(file.dataURL)) {
+    continue;
+  }
+  var source = null;
+  var candidates = [file.dataURL, file.url, file.data];
+  for (var index = 0; index < candidates.length; index++) {
+    if (typeof candidates[index] === 'string' &&
+        /^https?:\/\//i.test(candidates[index])) {
+      source = candidates[index];
+      break;
+    }
+  }
+  if (source) {
+    remoteFiles.push({ id: fileId, url: source, mimeType: file.mimeType });
+  }
+}
+if (remoteFiles.length) {
+  var localizedFiles = await window.flutter_inappwebview.callHandler(
+    'localizeWindowsPngImages', remoteFiles,
+  );
+  if (!Array.isArray(localizedFiles) ||
+      localizedFiles.length !== remoteFiles.length) {
+    return { ok: false, reason: 'windows-image-localization-failed' };
+  }
+  // Excalidraw addFiles() only adds absent IDs. These files already exist in
+  // the collaboration scene, so directly replace their export source.
+  for (var localizedIndex = 0; localizedIndex < localizedFiles.length; localizedIndex++) {
+    var localized = localizedFiles[localizedIndex];
+    if (!localized || !exportFiles[localized.id] ||
+        typeof localized.dataURL !== 'string' ||
+        !/^data:image\//i.test(localized.dataURL)) {
+      return { ok: false, reason: 'windows-image-localization-invalid' };
+    }
+    exportFiles[localized.id] = Object.assign(
+      {}, exportFiles[localized.id], localized,
+    );
+  }
+}
+'''
+          : '';
+      // Android WebView treats HTTP(S) images drawn by Excalidraw as
+      // cross-origin canvas content. Localize every image used by this export
+      // before invoking the bridge so both PNG and SVG avoid a tainted canvas.
+      // This stays Android-only; other mobile and desktop clients retain their
+      // existing export sources and behavior.
+      final androidImagePreparation = Platform.isAndroid
+          ? r'''
+var exportApi = typeof window.__xmGetExcalidrawAPI === 'function'
+  ? window.__xmGetExcalidrawAPI()
+  : null;
+if (!exportApi || typeof exportApi.getFiles !== 'function' ||
+    typeof exportApi.getSceneElements !== 'function') {
+  return { ok: false, reason: 'android-export-api-unavailable' };
+}
+var exportFiles = exportApi.getFiles() || {};
+var usedFileIds = {};
+var exportElements = exportApi.getSceneElements();
+for (var element of exportElements) {
+  if (!element.isDeleted && element.fileId) usedFileIds[element.fileId] = true;
+}
+var remoteFiles = [];
+for (var fileId in exportFiles) {
+  var file = exportFiles[fileId];
+  if (!usedFileIds[fileId] || !file) continue;
+  var source = null;
+  var candidates = [file.dataURL, file.url, file.data];
+  for (var index = 0; index < candidates.length; index++) {
+    if (typeof candidates[index] === 'string' &&
+        /^https?:\/\//i.test(candidates[index])) {
+      source = candidates[index];
+      break;
+    }
+  }
+  if (source) {
+    remoteFiles.push({ id: fileId, url: source, mimeType: file.mimeType });
+  }
+}
+if (remoteFiles.length) {
+  var localizedFiles = await window.flutter_inappwebview.callHandler(
+    'localizeAndroidExportImages', remoteFiles,
+  );
+  if (!Array.isArray(localizedFiles) ||
+      localizedFiles.length !== remoteFiles.length) {
+    return { ok: false, reason: 'android-image-localization-failed' };
+  }
+  // Excalidraw addFiles() ignores IDs that already belong to the scene. Update
+  // the current file table so export receives same-origin data URLs instead.
+  for (var localizedIndex = 0; localizedIndex < localizedFiles.length; localizedIndex++) {
+    var localized = localizedFiles[localizedIndex];
+    if (!localized || !exportFiles[localized.id] ||
+        typeof localized.dataURL !== 'string' ||
+        !/^data:image\//i.test(localized.dataURL)) {
+      return { ok: false, reason: 'android-image-localization-invalid' };
+    }
+    exportFiles[localized.id] = Object.assign(
+      {}, exportFiles[localized.id], localized,
+    );
+  }
+}
+'''
+          : '';
       final result = await evaluateAsyncJavascript(
         controller,
         asyncBody: '''
+$windowsPngPreparation
+$androidImagePreparation
 if (typeof window.__xmExportImage !== 'function') {
   return { ok: false, reason: 'export-bridge-unavailable' };
 }
@@ -512,6 +694,12 @@ return await window.__xmExportImage('$format');
                     allowUniversalAccessFromFileURLs: true,
                   ),
                   initialUserScripts: UnmodifiableListView([
+                    if (Platform.isWindows)
+                      UserScript(
+                        source: _windowsSaveFilePickerBridgeScript,
+                        injectionTime:
+                            UserScriptInjectionTime.AT_DOCUMENT_START,
+                      ),
                     UserScript(
                       source: whiteboardClipboardBridgeScript,
                       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
@@ -522,6 +710,12 @@ return await window.__xmExportImage('$format');
                       source: whiteboardGuardScript,
                       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                     ),
+                    if (Platform.isAndroid)
+                      UserScript(
+                        source: _androidCollaborativeImageBridgeScript,
+                        injectionTime:
+                            UserScriptInjectionTime.AT_DOCUMENT_START,
+                      ),
                     UserScript(
                       source: '''
                         (function() {
@@ -651,6 +845,9 @@ return await window.__xmExportImage('$format');
                     _controller = controller;
                     _setupDownloadHandler(controller);
                     _setupMirrorHandler(controller);
+                    if (Platform.isAndroid) {
+                      _setupAndroidImagePickerHandler(controller);
+                    }
                   },
                   onLoadStart: (controller, url) {
                     setState(() {
@@ -663,6 +860,20 @@ return await window.__xmExportImage('$format');
                     setState(() {
                       _isLoading = false;
                     });
+                    if (Platform.isWindows) {
+                      // 页面导航后可能恢复原生 picker，因此仅在 Windows 重装兼容桥。
+                      unawaited(
+                        controller
+                            .evaluateJavascript(
+                          source: _windowsSaveFilePickerBridgeScript,
+                        )
+                            .catchError((error) {
+                          Log.warn(
+                              '[RemoteWhiteboard] Windows 保存桥重装失败: $error');
+                          return null;
+                        }),
+                      );
+                    }
                     if (Platform.isAndroid || Platform.isIOS) {
                       if (_flutterBridgeScript == null) {
                         await _loadFlutterBridgeScript();
@@ -911,6 +1122,146 @@ return await window.__xmExportImage('$format');
   }
 
   void _setupDownloadHandler(InAppWebViewController controller) {
+    if (Platform.isWindows) {
+      controller.addJavaScriptHandler(
+        handlerName: 'localizeWindowsPngImages',
+        callback: (args) async {
+          if (args.isEmpty || args.first is! List) return const [];
+
+          final client = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 15);
+          final localizedFiles = <Map<String, dynamic>>[];
+          try {
+            for (final item in args.first as List) {
+              if (item is! Map) return const [];
+              final file = Map<String, dynamic>.from(item);
+              final id = file['id']?.toString();
+              final source = file['url']?.toString();
+              if (id == null || source == null) return const [];
+
+              final uri = Uri.tryParse(source);
+              if (uri == null ||
+                  (uri.scheme != 'http' && uri.scheme != 'https')) {
+                return const [];
+              }
+              final request = await client.getUrl(uri);
+              request.headers.set(
+                HttpHeaders.userAgentHeader,
+                'PonyNotes Windows Whiteboard Export',
+              );
+              final response = await request.close();
+              if (response.statusCode < 200 || response.statusCode >= 300) {
+                Log.warn(
+                  '[RemoteWhiteboard] Windows PNG 图片下载失败: '
+                  '$source status=${response.statusCode}',
+                );
+                return const [];
+              }
+              final bytes = await response.fold<List<int>>(
+                <int>[],
+                (buffer, chunk) => buffer..addAll(chunk),
+              );
+              final responseMimeType = response.headers.contentType?.mimeType;
+              final declaredMimeType = file['mimeType']?.toString();
+              final mimeType = responseMimeType?.startsWith('image/') == true
+                  ? responseMimeType!
+                  : declaredMimeType?.startsWith('image/') == true
+                      ? declaredMimeType!
+                      : null;
+              if (mimeType == null) {
+                Log.warn(
+                  '[RemoteWhiteboard] Windows PNG 图片类型无效: '
+                  '$source contentType=$responseMimeType',
+                );
+                return const [];
+              }
+              localizedFiles.add({
+                'id': id,
+                'dataURL': 'data:$mimeType;base64,${base64Encode(bytes)}',
+                'mimeType': mimeType,
+              });
+            }
+            return localizedFiles;
+          } catch (e) {
+            Log.warn('[RemoteWhiteboard] Windows PNG 图片本地化失败: $e');
+            return const [];
+          } finally {
+            client.close(force: true);
+          }
+        },
+      );
+    }
+
+    if (Platform.isAndroid) {
+      controller.addJavaScriptHandler(
+        handlerName: 'localizeAndroidExportImages',
+        callback: (args) async {
+          if (args.isEmpty || args.first is! List) return const [];
+
+          final client = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 15);
+          final localizedFiles = <Map<String, dynamic>>[];
+          try {
+            for (final item in args.first as List) {
+              if (item is! Map) return const [];
+              final file = Map<String, dynamic>.from(item);
+              final id = file['id']?.toString();
+              final source = file['url']?.toString();
+              if (id == null || source == null) return const [];
+
+              final uri = Uri.tryParse(source);
+              if (uri == null ||
+                  (uri.scheme != 'http' && uri.scheme != 'https')) {
+                return const [];
+              }
+              final request = await client.getUrl(uri);
+              request.headers.set(
+                HttpHeaders.userAgentHeader,
+                'PonyNotes Android Whiteboard Export',
+              );
+              final response = await request.close();
+              if (response.statusCode < 200 || response.statusCode >= 300) {
+                Log.warn(
+                  '[RemoteWhiteboard] Android 导出图片下载失败: '
+                  '$source status=${response.statusCode}',
+                );
+                return const [];
+              }
+              final bytes = await response.fold<List<int>>(
+                <int>[],
+                (buffer, chunk) => buffer..addAll(chunk),
+              );
+              final responseMimeType = response.headers.contentType?.mimeType;
+              final declaredMimeType = file['mimeType']?.toString();
+              final mimeType = responseMimeType?.startsWith('image/') == true
+                  ? responseMimeType!
+                  : declaredMimeType?.startsWith('image/') == true
+                      ? declaredMimeType!
+                      : null;
+              if (mimeType == null) {
+                Log.warn(
+                  '[RemoteWhiteboard] Android 导出图片类型无效: '
+                  '$source contentType=$responseMimeType',
+                );
+                return const [];
+              }
+              localizedFiles.add({
+                'id': id,
+                'dataURL': 'data:$mimeType;base64,${base64Encode(bytes)}',
+                'mimeType': mimeType,
+              });
+            }
+            return localizedFiles;
+          } catch (e) {
+            Log.warn('[RemoteWhiteboard] Android 导出图片本地化失败: $e');
+            return const [];
+          } finally {
+            client.close(force: true);
+          }
+        },
+      );
+    }
+
     controller.addJavaScriptHandler(
       handlerName: 'downloadBlobFile',
       callback: (args) async {
@@ -1012,6 +1363,48 @@ return await window.__xmExportImage('$format');
             message: message == null ? '导出图片失败' : '导出图片失败: $message',
             type: ToastificationType.error,
           );
+        }
+      },
+    );
+  }
+
+  void _setupAndroidImagePickerHandler(
+    InAppWebViewController controller,
+  ) {
+    controller.addJavaScriptHandler(
+      handlerName: 'pickWhiteboardImage',
+      callback: (args) async {
+        if (_isDisposed) return null;
+        try {
+          final result = await GetIt.instance<FilePickerService>().pickFiles(
+            type: FileType.image,
+            allowMultiple: false,
+            withData: true,
+          );
+          if (result == null || result.files.isEmpty) {
+            return {'canceled': true};
+          }
+
+          final file = result.files.first;
+          Uint8List? bytes = file.bytes;
+          if ((bytes == null || bytes.isEmpty) && file.path != null) {
+            bytes = await File(file.path!).readAsBytes();
+          }
+          if (bytes == null || bytes.isEmpty) {
+            return {'error': 'empty file bytes'};
+          }
+
+          return {
+            'name': file.name,
+            'mimeType':
+                _androidWhiteboardImageMimeType(file.extension ?? 'png'),
+            'base64': base64Encode(bytes),
+          };
+        } catch (e, stack) {
+          Log.error(
+            '[RemoteWhiteboard] Android pickWhiteboardImage failed: $e\n$stack',
+          );
+          return {'error': e.toString()};
         }
       },
     );
@@ -1140,41 +1533,29 @@ return await window.__xmExportImage('$format');
       }
 
       final String finalFilename = _ensureFilenameExtension(filename, ext);
-      if (Platform.isAndroid || Platform.isIOS) {
-        final savePath = await GetIt.instance<FilePickerService>().saveFile(
-          dialogTitle: '保存白板图片',
-          fileName: finalFilename,
-          type: FileType.custom,
-          allowedExtensions: [ext],
-          bytes: Uint8List.fromList(bytes),
-        );
-        if (savePath == null) {
-          Log.info('[RemoteWhiteboard] 用户取消保存图片');
-          return;
-        }
-        Log.info('[RemoteWhiteboard] 图片已保存: $savePath');
-        showToastNotification(
-          message: '图片已保存',
-          type: ToastificationType.success,
-        );
+      // 所有平台的白板图片导出都由用户选择保存路径。移动端 picker 直接写入
+      // bytes，桌面端 picker 返回路径后由调用方写入。
+      final savePath = await GetIt.instance<FilePickerService>().saveFile(
+        dialogTitle: '保存白板图片',
+        fileName: finalFilename,
+        type: FileType.custom,
+        allowedExtensions: [ext],
+        bytes: Platform.isAndroid || Platform.isIOS
+            ? Uint8List.fromList(bytes)
+            : null,
+      );
+      if (savePath == null) {
+        Log.info('[RemoteWhiteboard] 用户取消保存图片');
         return;
       }
-
-      final Directory downloadsDir = await getDownloadsDirectory() ??
-          await getApplicationDocumentsDirectory();
-      await downloadsDir.create(recursive: true);
-      final File file = File('${downloadsDir.path}/$finalFilename');
-
-      await file.writeAsBytes(bytes);
-      Log.info('[RemoteWhiteboard] ✅ File saved: ${file.path}');
-
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        await File(savePath).writeAsBytes(bytes);
+      }
+      Log.info('[RemoteWhiteboard] 图片已保存: $savePath');
       showToastNotification(
-        message: '文件已保存到: ${file.path.split('/').last}',
+        message: '图片已保存',
         type: ToastificationType.success,
-        description: file.path,
       );
-
-      await OpenFilex.open(file.path);
     } catch (e) {
       Log.error('[RemoteWhiteboard] ❌ _saveBase64ToFile error: $e');
       showToastNotification(

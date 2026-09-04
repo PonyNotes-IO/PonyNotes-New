@@ -20,7 +20,7 @@
     // canvas 内降采样到 ≤1440px、照片转 JPEG，保证 <3.5MB（给 4MB 上限留余量），
     // 再经 DataTransfer 回填 input.files + dispatch change，交由 Excalidraw 原生
     // 插图管线建元素（<4MB 时该管线已被实测可靠）。任何异常回退原始 click（原生
-    // 面板），保证不劣化。仅在桌面 file input 生效，不触碰移动端/协作空间路径。
+    // 面板），保证不劣化。协作空间仅在 Android 宿主显式设置平台标记时启用。
     installWhiteboardImagePicker();
     installWhiteboardFilePicker();
     function installWhiteboardImagePicker() {
@@ -227,7 +227,12 @@
     // ---- 直接 API 插图（绕开 fileOpen/change 链）----------------------------
     // processed: { blob, type, name }。返回 true=已写入场景；false=API 未就绪需回退。
     async function _ponynotesInsertImageViaAPI(processed) {
-        const api = window._excalidrawAPI;
+        const isAndroidCollaborative =
+            window.__ponynotesAndroidCollaborativeImage === true;
+        const api = isAndroidCollaborative &&
+            typeof window.__ponynotesResolveCollaborativeImageApi === 'function'
+            ? window.__ponynotesResolveCollaborativeImageApi()
+            : window._excalidrawAPI;
         if (!api || typeof api.addFiles !== 'function' ||
             typeof api.updateScene !== 'function' ||
             typeof api.getSceneElementsIncludingDeleted !== 'function') {
@@ -281,7 +286,9 @@
             link: null,
             locked: false,
             customData: undefined,
-            status: 'saved',
+            // 协作白板必须保留 pending，让页面 onChange/Collab 上传二进制文件；
+            // 本地白板仍按原逻辑直接标记 saved。
+            status: isAndroidCollaborative ? 'pending' : 'saved',
             fileId,
             scale: [1, 1],
             crop: null,
@@ -304,6 +311,10 @@
         if (typeof api.refresh === 'function') {
             api.refresh();
             requestAnimationFrame(() => api.refresh());
+        }
+        if (isAndroidCollaborative &&
+            typeof window.__ponynotesAfterCollaborativeImageInsert === 'function') {
+            await window.__ponynotesAfterCollaborativeImageInsert();
         }
         return true;
     }
