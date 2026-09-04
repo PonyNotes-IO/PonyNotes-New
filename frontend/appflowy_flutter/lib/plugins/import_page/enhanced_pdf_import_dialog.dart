@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:appflowy/plugins/import_page/processor/custom_pdf_processor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:file_picker/file_picker.dart';
@@ -525,6 +525,13 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     // 创建新的取消令牌
     _cancellationToken = CancellationToken();
 
+    setState(() {
+      _isProcessing = true;
+      _processingError = null;
+      _extractedContent = null;
+      _processingStage = '正在读取PDF...';
+    });
+
     // 读取PDF文件bytes用于混合预览
     Uint8List? pdfBytes;
     try {
@@ -533,22 +540,23 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       Log.warn('Failed to read PDF bytes: $e');
     }
 
+    // 用户可能在读取大文件期间点击了取消，不能让后续状态更新重新进入处理中。
+    if (!mounted || _cancellationToken?.isCancelled == true) return;
+
     setState(() {
       _isProcessing = true;
       _processingError = null;
       _extractedContent = null; // 重置提取内容
       _pdfBytes = pdfBytes; // 设置PDF bytes
-      _processingStage = Platform.isAndroid
-          ? '正在本地提取文本...'
-          : Platform.isIOS
-              ? '正在本地提取文本...'
-              : '正在处理PDF...';
+      _processingStage =
+          Platform.isAndroid || Platform.isIOS ? '正在本地提取文本...' : '正在处理PDF...';
     });
 
     try {
       // Android 沿用 iOS 的本地优先策略；其他平台继续保留原有 OCR 优先行为。
       final preferLocalText = Platform.isAndroid || Platform.isIOS;
-      final localContent = preferLocalText ? _extractLocalText(pdfBytes) : null;
+      final localContent =
+          preferLocalText ? await _extractLocalText(pdfBytes) : null;
       String? content = localContent;
       if (_hasUsableLocalText(content)) {
         Log.info(
@@ -585,8 +593,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         // OCR 失败或返回空文本时保留本地提取结果；Android 和 iOS 已在前面
         // 完成解析，因此不会重复解析同一份大文件。
         if (content == null || content.trim().isEmpty) {
-          content =
-              preferLocalText ? localContent : _extractLocalText(pdfBytes);
+          content = preferLocalText
+              ? localContent
+              : await _extractLocalText(pdfBytes);
         }
       }
       // 检查是否已取消
@@ -653,19 +662,11 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   }
 
   /// 从已读入的 PDF 字节中提取可复制文本，普通文本 PDF 无需等待远程 OCR。
-  String? _extractLocalText(Uint8List? bytes) {
+  Future<String?> _extractLocalText(Uint8List? bytes) async {
     if (bytes == null || bytes.isEmpty) return null;
 
     try {
-      final document = PdfDocument(inputBytes: bytes);
-      try {
-        final rawText = PdfTextExtractor(document).extractText();
-        final cleanedText =
-            pdf_import_service.ImportService.cleanPdfText(rawText);
-        return cleanedText.trim().isEmpty ? null : cleanedText;
-      } finally {
-        document.dispose();
-      }
+      return await compute(_extractPdfTextInIsolate, bytes);
     } catch (e) {
       Log.warn('PDF本地文本提取失败，将继续使用远程OCR: $e');
       return null;
@@ -753,6 +754,18 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         );
       }
     }
+  }
+}
+
+/// 在后台 isolate 中解析 PDF，避免大文件解析阻塞 iOS 主线程。
+String? _extractPdfTextInIsolate(Uint8List bytes) {
+  final document = PdfDocument(inputBytes: bytes);
+  try {
+    final rawText = PdfTextExtractor(document).extractText();
+    final cleanedText = pdf_import_service.ImportService.cleanPdfText(rawText);
+    return cleanedText.trim().isEmpty ? null : cleanedText;
+  } finally {
+    document.dispose();
   }
 }
 
