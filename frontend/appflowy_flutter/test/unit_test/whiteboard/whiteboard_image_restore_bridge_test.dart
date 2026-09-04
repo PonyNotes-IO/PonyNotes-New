@@ -25,5 +25,13 @@ void main() {
     );
     expect(bridge, contains("typeof image.decode === 'function'"));
     expect(bridge, contains('requestAnimationFrame(resolve)'));
+    expect(bridge, contains('function _queueWhiteboardRestore(api)'));
+    expect(bridge, contains('let _restoreGeneration = 0'));
+    expect(
+      bridge,
+      contains('await _rebuildImageCacheForScene(api, generation)'),
+    );
+    expect(bridge, contains('delete files[fileId]'));
+    expect(bridge, contains('const existingFiles = typeof api.getFiles'));
   });
 }

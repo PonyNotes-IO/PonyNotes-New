@@ -1405,6 +1405,27 @@
     // 不再依赖 _safeEvalJs 的延迟调用，而是直接在 IIFE 中处理
     // 此时 localStorage 已被 initData 设置，且 _initPayload 已保存
     let _filesInjected = false;
+    // 白板切换时 initData、Collab 回调和 loadData 可能几乎同时到达。
+    // 恢复任务必须串行执行，并且旧任务在真正写场景前要确认自己仍是最新任务。
+    let _restoreGeneration = 0;
+    let _restoreChain = Promise.resolve();
+
+    function _queueWhiteboardRestore(api) {
+        const generation = ++_restoreGeneration;
+        // 只复制顶层字段，避免后续 loadData 替换 _initPayload 或清空
+        // _pendingElements 时改变已经排队的恢复任务；图片 dataURL 本身不重复复制。
+        const payload = _initPayload && typeof _initPayload === 'object'
+            ? { ..._initPayload }
+            : _initPayload;
+        const restoreTask = _restoreChain
+            .catch(() => undefined)
+            .then(async () => {
+                if (generation !== _restoreGeneration) return;
+                await _restoreWhiteboardData(api, payload, generation);
+            });
+        _restoreChain = restoreTask.catch(() => undefined);
+        return restoreTask;
+    }
 
     // 等待 Excalidraw API 就绪后立即恢复数据
     const waitForExcalidrawAndRestore = async () => {
@@ -1428,7 +1449,7 @@
                 if (!_filesInjected) {
                     _filesInjected = true;
                     try {
-                        await _restoreWhiteboardData(api);
+                        await _queueWhiteboardRestore(api);
                         if (_pendingHostTheme) {
                             const pendingTheme = _pendingHostTheme;
                             _pendingHostTheme = null;
@@ -2542,14 +2563,10 @@
                 return;
             }
 
-            window.flutter_inappwebview?.callHandler('onExportError', {
-                message: `不支持的导出格式: ${format}`,
-            });
+            throw new Error(`不支持的导出格式: ${format}`);
         } catch (e) {
             console.error('[PonyNotes] exportExcalidraw failed', e);
-            window.flutter_inappwebview?.callHandler('onExportError', {
-                message: e?.message || String(e),
-            });
+            throw e;
         }
     };
 
@@ -2570,7 +2587,7 @@
             }
             _initPayload = data || {};
             if (_forcedHostTheme) applyHostThemeToScene(_forcedHostTheme);
-            await _restoreWhiteboardData(api);
+            await _queueWhiteboardRestore(api);
             if (_forcedHostTheme) applyHostThemeToScene(_forcedHostTheme);
         } catch (e) {
             console.error('[PonyNotes] loadExcalidrawData failed', e);
@@ -2581,14 +2598,15 @@
      * ✅ 关键修复：白板数据恢复函数
      * 整合了 elements 恢复和文件注入逻辑
      */
-    async function _restoreWhiteboardData(api) {
+    async function _restoreWhiteboardData(api, payload, generation) {
         try {
+            if (generation !== _restoreGeneration) return;
             console.log('[PonyNotes] 🔄 Starting whiteboard data restoration...');
 
             // 1. 恢复场景 (elements & appState)
-            if (_initPayload) {
-                const elements = _initPayload.elements || _initPayload.excalidraw;
-                const appState = _initPayload.appState || _initPayload['excalidraw-state'];
+            if (payload) {
+                const elements = payload.elements || payload.excalidraw;
+                const appState = payload.appState || payload['excalidraw-state'];
 
                 let elementsToRestore = elements;
                 if (typeof elements === 'string') {
@@ -2639,6 +2657,7 @@
                 }
 
                 if (elementsToRestore || appStateToRestore) {
+                    if (generation !== _restoreGeneration) return;
                     console.log('[PonyNotes] 🎨 Applying scene from payload');
                     api.updateScene({
                         elements: elementsToRestore || [],
@@ -2649,11 +2668,17 @@
             }
 
             // 2. 注入文件
-            await _injectFilesFromStorage(api);
+            await _injectFilesFromStorage(api, payload, generation);
+            if (generation !== _restoreGeneration) return;
+            // 文件可能已经由 Collab 先于 elements 注入。此时 Excalidraw 的
+            // addFiles 会认为文件已存在而跳过缓存初始化，导致元素有尺寸但内容透明。
+            // 在场景已恢复后仅重建本次场景引用的文件缓存，避免改动持久化数据。
+            await _rebuildImageCacheForScene(api, generation);
+            if (generation !== _restoreGeneration) return;
 
-            if (_initPayload && Array.isArray(_initPayload._pendingElements) && _initPayload._pendingElements.length) {
-                const pending = _initPayload._pendingElements;
-                _initPayload._pendingElements = [];
+            if (payload && Array.isArray(payload._pendingElements) && payload._pendingElements.length) {
+                const pending = payload._pendingElements;
+                payload._pendingElements = [];
                 await window.pushWhiteboardElements(pending);
             }
 
@@ -2666,10 +2691,10 @@
     /**
      * 从存储加载并注入文件
      */
-    async function _injectFilesFromStorage(api) {
+    async function _injectFilesFromStorage(api, payload = _initPayload, generation = _restoreGeneration) {
         let filesMap = null;
-        if (_initPayload) {
-            filesMap = _initPayload.files || _initPayload['excalidraw-files'];
+        if (payload) {
+            filesMap = payload.files || payload['excalidraw-files'];
             if (typeof filesMap === 'string') {
                 try {
                     filesMap = JSON.parse(filesMap);
@@ -2680,14 +2705,14 @@
         }
 
         if (filesMap) {
-            await _injectFiles(api, filesMap);
+            await _injectFiles(api, filesMap, generation);
         }
     }
 
     /**
      * 注入文件到 Excalidraw，处理 dataURL 和云端下载
      */
-    async function _injectFiles(api, filesMap) {
+    async function _injectFiles(api, filesMap, generation = _restoreGeneration) {
         if (!filesMap || typeof filesMap !== 'object') return;
 
         const entries = Object.entries(filesMap);
@@ -2696,6 +2721,7 @@
         console.log('[PonyNotes] 📸 Injecting ' + entries.length + ' files...');
         const toAdd = [];
         const toFetch = [];
+        const existingFiles = typeof api.getFiles === 'function' ? (api.getFiles() || {}) : {};
 
         for (const [id, data] of entries) {
             if (!data) continue;
@@ -2718,6 +2744,14 @@
                     ? data.data
                     : null);
 
+            // addFiles 对已有 ID 是幂等忽略的。切换白板时如果重复走下载流程，
+            // 不仅浪费请求，还会让多个恢复任务交错刷新同一份 image cache。
+            const existing = existingFiles[id];
+            if (existing && typeof existing.dataURL === 'string' &&
+                existing.dataURL.startsWith('data:image/')) {
+                continue;
+            }
+
             if (dataURL) {
                 toAdd.push({ id, dataURL, mimeType: data.mimeType || 'image/png', created: data.created || Date.now() });
             } else if (url) {
@@ -2726,6 +2760,7 @@
         }
 
         if (toAdd.length > 0 && typeof api.addFiles === 'function') {
+            if (generation !== _restoreGeneration) return;
             api.addFiles(toAdd);
             console.log('[PonyNotes] ✅ Added ' + toAdd.length + ' dataURL files');
             // 回传给 Flutter 补全 dataURL
@@ -2734,10 +2769,12 @@
         }
 
         if (toFetch.length > 0) {
+            if (generation !== _restoreGeneration) return;
             console.log('[PonyNotes] 📸 Fetching ' + toFetch.length + ' cloud files...');
             try {
                 const results = await window.flutter_inappwebview.callHandler('downloadCloudImages', toFetch);
                 if (results && Array.isArray(results) && results.length > 0) {
+                    if (generation !== _restoreGeneration) return;
                     const downloaded = results.map(r => ({
                         id: r.fileId,
                         dataURL: r.dataURL,
@@ -2753,6 +2790,35 @@
                 console.error('[PonyNotes] ❌ Cloud download failed:', e);
             }
         }
+    }
+
+    async function _rebuildImageCacheForScene(api, generation = _restoreGeneration) {
+        if (!api || typeof api.getFiles !== 'function' ||
+            typeof api.getSceneElementsIncludingDeleted !== 'function' ||
+            typeof api.addFiles !== 'function' || generation !== _restoreGeneration) {
+            return;
+        }
+
+        const files = api.getFiles() || {};
+        const reload = [];
+        const fileIds = new Set(
+            (api.getSceneElementsIncludingDeleted() || [])
+                .filter((element) => element && !element.isDeleted && element.fileId)
+                .map((element) => element.fileId),
+        );
+        for (const fileId of fileIds) {
+            const file = files[fileId];
+            if (!file || typeof file.dataURL !== 'string' ||
+                !file.dataURL.startsWith('data:image/')) continue;
+            // Excalidraw 当前版本的 getFiles() 返回内部文件表。先移除再经
+            // 公开 addFiles() 回灌，才能覆盖“文件先到、元素后到”时遗漏的缓存。
+            delete files[fileId];
+            reload.push({ ...file, id: fileId });
+        }
+        if (!reload.length || generation !== _restoreGeneration) return;
+
+        api.addFiles(reload);
+        await _awaitImageDecodeAndRefresh(api, reload);
     }
 
     // addFiles 会更新 Excalidraw 的文件仓库，但部分 WebView 版本不会立即触发

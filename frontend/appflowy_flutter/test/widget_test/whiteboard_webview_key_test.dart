@@ -113,7 +113,10 @@ void main() {
         File('lib/plugins/whiteboard/whiteboard.dart').readAsStringSync();
 
     expect(bridgeSource, contains('_initPayload = data || {};'));
-    expect(bridgeSource, contains('await _restoreWhiteboardData(api);'));
+    expect(bridgeSource, contains('await _queueWhiteboardRestore(api);'));
+    expect(
+      bridgeSource,
+      contains('await _restoreWhiteboardData(api, payload, generation);'),
     expect(pageSource, isNot(contains('Duration(milliseconds: 80)')));
   });
 
