@@ -75,18 +75,29 @@ class _CardEnterRegion extends StatelessWidget {
       selector: (context, notifier) => notifier.onEnter,
       builder: (context, onEnter, _) {
         final shouldShowAccessory = PlatformInfo.isTablet || onEnter;
-        final List<Widget> children = [
-          child,
-          if (shouldShowAccessory && shouldBuildAccessory)
-            Positioned(
-              top: 7.0,
-              right: 7.0,
-              child: CardAccessoryContainer(
-                accessories: accessories,
-                onTapAccessory: onTapAccessory,
-              ),
-            ),
-        ];
+        final content = accessories.isEmpty
+            // Calendar event cards have no accessories. Let their text fields
+            // determine the height directly instead of relying on an intrinsic
+            // Stack measurement, which can be shorter on macOS font metrics.
+            ? child
+            : IntrinsicHeight(
+                child: Stack(
+                  alignment: AlignmentDirectional.topEnd,
+                  fit: StackFit.expand,
+                  children: [
+                    child,
+                    if (shouldShowAccessory && shouldBuildAccessory)
+                      Positioned(
+                        top: 7.0,
+                        right: 7.0,
+                        child: CardAccessoryContainer(
+                          accessories: accessories,
+                          onTapAccessory: onTapAccessory,
+                        ),
+                      ),
+                  ],
+                ),
+              );
 
         return MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -99,13 +110,7 @@ class _CardEnterRegion extends StatelessWidget {
                   .onEnter = false;
             }
           },
-          child: IntrinsicHeight(
-            child: Stack(
-              alignment: AlignmentDirectional.topEnd,
-              fit: StackFit.expand,
-              children: children,
-            ),
-          ),
+          child: content,
         );
       },
     );
