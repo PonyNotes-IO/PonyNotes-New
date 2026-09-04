@@ -538,11 +538,17 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       _processingError = null;
       _extractedContent = null; // 重置提取内容
       _pdfBytes = pdfBytes; // 设置PDF bytes
-      _processingStage = Platform.isIOS ? '正在本地提取文本...' : '正在处理PDF...';
+      _processingStage = Platform.isAndroid
+          ? '正在本地提取文本...'
+          : Platform.isIOS
+              ? '正在本地提取文本...'
+              : '正在处理PDF...';
     });
 
     try {
-      final localContent = Platform.isIOS ? _extractLocalText(pdfBytes) : null;
+      // Android 沿用 iOS 的本地优先策略；其他平台继续保留原有 OCR 优先行为。
+      final preferLocalText = Platform.isAndroid || Platform.isIOS;
+      final localContent = preferLocalText ? _extractLocalText(pdfBytes) : null;
       String? content = localContent;
       if (_hasUsableLocalText(content)) {
         Log.info(
@@ -576,10 +582,11 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           Log.warn('PDF OCR提取返回null');
         }
 
-        // OCR 失败或返回空文本时保留本地提取结果；iOS 已在前面完成解析，
-        // 因此不会重复解析同一份大文件。
+        // OCR 失败或返回空文本时保留本地提取结果；Android 和 iOS 已在前面
+        // 完成解析，因此不会重复解析同一份大文件。
         if (content == null || content.trim().isEmpty) {
-          content = Platform.isIOS ? localContent : _extractLocalText(pdfBytes);
+          content =
+              preferLocalText ? localContent : _extractLocalText(pdfBytes);
         }
       }
       // 检查是否已取消

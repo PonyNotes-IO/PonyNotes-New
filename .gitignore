@@ -182,3 +182,4 @@ frontend/scripts/windows_installer/AppFlowy/
 dsa_priv.pem
 frontend/artifacts/
 frontend/scripts/windows_installer/Output/
+frontend/scripts/windows_installer/PonyNotes
