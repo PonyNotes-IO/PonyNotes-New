@@ -1074,13 +1074,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
 
-    // Create and add question message
-    final questionStreamMessage = _messageHandler.createQuestionStreamMessage(
+    // 发起请求前必须先让临时问题进入消息列表。否则服务端快速确认带图问题时，
+    // 可能早于 receiveMessage 队列事件到达，留下两个 ID 不同的重复气泡。
+    final questionStreamMessage =
+        await _messageHandler.createAndInsertQuestionStreamMessage(
       _streamManager.questionStream!,
       metadata,
       text: message,
     );
-    add(ChatEvent.receiveMessage(questionStreamMessage));
 
     List<String>? images;
     bool hasImages = false;

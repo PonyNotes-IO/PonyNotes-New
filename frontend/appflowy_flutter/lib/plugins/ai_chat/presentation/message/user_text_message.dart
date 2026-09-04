@@ -34,7 +34,8 @@ class ChatUserMessageWidget extends StatelessWidget {
     // 但 Rust 侧 question_sink 只发 StreamMessage::MessageId、**从不发文本**
     // （flowy-ai/src/chat.rs 中 `question_sink.send(MessageId(...))`），
     // QuestionStream._text 初始化为 "" 后再无填充来源，因此恒为空串。
-    // 发送侧已把真实提问写入 message.text（createQuestionStreamMessage 的 text 入参），
+    // 发送侧已把真实提问写入 message.text
+    // （createAndInsertQuestionStreamMessage 的 text 入参），
     // 渲染侧却没同步改过来，导致用户的提问气泡渲染成一个空白框。
     //
     // 改为优先取 message.text，仅当它为空时才回退到 stream.text，

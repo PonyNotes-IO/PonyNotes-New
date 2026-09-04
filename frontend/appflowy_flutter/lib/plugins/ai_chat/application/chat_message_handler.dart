@@ -281,12 +281,15 @@ class ChatMessageHandler {
     );
   }
 
-  /// Create a streaming question message
-  Message createQuestionStreamMessage(
+  /// 在请求开始前创建并插入流式问题消息。
+  ///
+  /// 服务端可能立即确认问题。把创建与插入合并为一个操作，确保确认消息可以复用
+  /// 临时消息 ID，而不是让两条消息同时显示。
+  Future<Message> createAndInsertQuestionStreamMessage(
     QuestionStream stream,
     Map<String, dynamic>? sentMetadata, {
     required String text,
-  }) {
+  }) async {
     final now = DateTime.now();
     final questionStreamMsgId =
         DateTime.now().microsecondsSinceEpoch.toString();
@@ -316,13 +319,15 @@ class ChatMessageHandler {
       }
     }
 
-    return TextMessage(
+    final message = TextMessage(
       author: User(id: userId),
       metadata: metadata,
       id: questionStreamMsgId,
       createdAt: now,
       text: text,
     );
+    await chatController.insert(message);
+    return message;
   }
 
   String? _findTemporaryQuestionId(String content) {
