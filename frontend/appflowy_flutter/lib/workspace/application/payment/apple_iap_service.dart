@@ -88,7 +88,7 @@ class AppleIAPService {
   /// 的 key 前缀保持一致。
   /// 商品 ID 拼接格式：`com.ponynotes.{billingType}.{planCode}`
   /// 例如：com.ponynotes.monthly.pro、com.ponynotes.yearly.pro
-  static const String kAppleProductIdPrefix = 'com.ponynotes';
+  static const String kAppleProductIdPrefix = 'ponynotes';
 
   /// 根据套餐 planCode 和计费周期 billingType 拼接苹果商品 ID。
   /// ⚠️ 必须与 App Store Connect 中配置的 Product ID 完全一致。
