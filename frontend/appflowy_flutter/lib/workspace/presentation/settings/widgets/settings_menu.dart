@@ -170,18 +170,18 @@ class _SettingsMenuState extends State<SettingsMenu> {
             _buildUserInfoCard(context),
             const VSpace(16),
             SettingsMenuElement(
+              page: SettingsPage.workspace,
+              selectedPage: widget.currentPage,
+              label: "通用设置",
+              changeSelectedPage: widget.changeSelectedPage,
+            ),
+            SettingsMenuElement(
               page: SettingsPage.account,
               selectedPage: widget.currentPage,
               label: "我的账户",
               trailingText: storageUsage,
               changeSelectedPage: widget.changeSelectedPage,
               showArrow: false,
-            ),
-            SettingsMenuElement(
-              page: SettingsPage.workspace,
-              selectedPage: widget.currentPage,
-              label: "通用设置",
-              changeSelectedPage: widget.changeSelectedPage,
             ),
             SettingsMenuElement(
               page: SettingsPage.workspaceManagement,

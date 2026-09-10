@@ -118,41 +118,75 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
       );
     }
 
-    // 云端登录用户：显示"退出登录"按钮
-    return GestureDetector(
-      onTap: () async {
-        await showCancelAndConfirmDialog(
-          context: context,
-          title: '退出登录',
-          description: '确定要退出当前账号吗？',
-          confirmLabel: '退出登录',
-          cancelLabel: '取消',
-          onConfirm: (ctx) async {
-            try {
-              await getIt<AuthService>().signOut();
-            } catch (_) {}
-            widget.didLogout();
+    // 云端登录用户：显示"退出登录"按钮 + "注销账号"链接
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () async {
+            await showCancelAndConfirmDialog(
+              context: context,
+              title: '退出登录',
+              description: '确定要退出当前账号吗？',
+              confirmLabel: '退出登录',
+              cancelLabel: '取消',
+              onConfirm: (ctx) async {
+                try {
+                  await getIt<AuthService>().signOut();
+                } catch (_) {}
+                widget.didLogout();
+              },
+            );
           },
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(context).colorScheme.primary,
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(theme.spacing.s),
+            ),
+            child: Center(
+              child: FlowyText(
+                '退出登录',
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        GestureDetector(
+          onTap: () => _showDeleteAccountConfirmDialog(context),
+          child: Center(
+            child: FlowyText(
+              LocaleKeys.button_closeAccount.tr(),
+              fontSize: 14,
+              color: theme.textColorScheme.secondary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 注销账号确认弹窗（与移动端逻辑一致）
+  void _showDeleteAccountConfirmDialog(BuildContext context) {
+    showCancelAndConfirmDialog(
+      context: context,
+      title: LocaleKeys.button_closeAccount.tr(),
+      description: LocaleKeys.button_closeAccountPrompt.tr(),
+      confirmLabel: LocaleKeys.button_closeAccountConfirm.tr(),
+      cancelLabel: LocaleKeys.button_back.tr(),
+      onConfirm: (ctx) async {
+        await deleteMyAccount(
+          context,
+          LocaleKeys.newSettings_myAccount_deleteAccount_confirmHint3.tr(),
+          true,
         );
       },
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: Theme.of(context).colorScheme.primary,
-            width: 1,
-          ),
-          borderRadius: BorderRadius.circular(theme.spacing.s),
-        ),
-        child: Center(
-          child: FlowyText(
-            '退出登录',
-            fontSize: 16,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-      ),
     );
   }
 }

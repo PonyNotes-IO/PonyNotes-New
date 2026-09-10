@@ -381,7 +381,8 @@ class SettingsDialogState with _$SettingsDialogState {
   ) =>
       SettingsDialogState(
         userProfile: userProfile,
-        page: page ?? SettingsPage.account,
+        // 通用设置在菜单中位于第一位，作为默认选中页
+        page: page ?? SettingsPage.workspace,
         isBillingEnabled: false,
         currentSubscription: null,
         isLoadingCurrentSubscription: true,
