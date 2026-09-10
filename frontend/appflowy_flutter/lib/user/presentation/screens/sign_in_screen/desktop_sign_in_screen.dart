@@ -26,6 +26,7 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1064,6 +1065,31 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                     },
               isLoading: state.isSubmitting,
             ),
+            // Apple 登录：仅在 iOS 平台（含 iPad）显示，复用手机端原生 Apple 授权流程
+            if (defaultTargetPlatform == TargetPlatform.iOS && !kIsWeb) ...[
+              const SizedBox(height: 12),
+              _ThirdPartyIconButton(
+                label: "Apple 登录",
+                icon: Theme.of(context).brightness == Brightness.dark
+                    ? FlowySvgs.icon_login_iphone_dark_xl
+                    : FlowySvgs.icon_login_iphone_xl,
+                backgroundColor: Colors.white,
+                onTap: state.isSubmitting
+                    ? null
+                    : () async {
+                        // 检查协议同意
+                        if (!_checkTermsAgreement(context)) {
+                          return;
+                        }
+                        context.read<SignInBloc>().add(
+                              const SignInEvent.signInWithOAuth(
+                                platform: 'apple',
+                              ),
+                            );
+                      },
+                isLoading: state.isSubmitting,
+              ),
+            ],
           ],
         );
       },
@@ -1093,14 +1119,21 @@ class _PonyNotesLogo extends StatelessWidget {
 class _ThirdPartyIconButton extends StatelessWidget {
   const _ThirdPartyIconButton({
     required this.label,
-    required this.icon,
+    this.icon,
+    this.iconWidget,
     required this.backgroundColor,
     this.onTap,
     this.isLoading = false,
   });
 
   final String label;
-  final FlowySvgData icon;
+
+  /// 图标数据，当不提供 [iconWidget] 时使用。
+  final FlowySvgData? icon;
+
+  /// 自定义图标 Widget，优先于 [icon] 使用（用于需要额外装饰的图标，如 Apple 圆形边框）。
+  final Widget? iconWidget;
+
   final Color backgroundColor;
   final VoidCallback? onTap;
   final bool isLoading;
@@ -1130,11 +1163,12 @@ class _ThirdPartyIconButton extends StatelessWidget {
                     ),
                   )
                 : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    FlowySvg(
-                      icon,
-                      size: const Size.square(18),
-                      blendMode: null,
-                    ),
+                    iconWidget ??
+                        FlowySvg(
+                          icon!,
+                          size: const Size.square(18),
+                          blendMode: null,
+                        ),
                     HSpace(4),
                     Text(
                       label,
