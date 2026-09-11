@@ -1564,6 +1564,9 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
 
           return ListView.builder(
             controller: widget.scrollController,
+            // 显式清零 padding，避免 ListView 默认应用 MediaQuery.padding
+            // （iPad 横屏下状态栏 inset 会被加到第一项之前，造成列表顶部空白）
+            padding: EdgeInsets.zero,
             itemCount: childViews.length + 1,
             findChildIndexCallback: (key) => spaceHubDocumentListChildIndex(
               key,
@@ -1670,6 +1673,9 @@ class _SpaceDocumentListState extends State<_SpaceDocumentList> {
 
         return ListView.builder(
           controller: widget.scrollController,
+          // 显式清零 padding，避免 ListView 默认应用 MediaQuery.padding
+          // （iPad 横屏下状态栏 inset 会被加到第一项之前，造成列表顶部空白）
+          padding: EdgeInsets.zero,
           itemCount: childViews.length + 1,
           findChildIndexCallback: (key) => spaceHubDocumentListChildIndex(
             key,
