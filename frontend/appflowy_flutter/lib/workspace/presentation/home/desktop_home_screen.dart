@@ -267,80 +267,76 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                     );
                   },
                 ),
-                body: SafeArea(
-                  top: isTablet,
-                  bottom: isTablet,
-                  child: Stack(
-                    children: [
-                      BlocListener<HomeBloc, HomeState>(
-                        listenWhen: (previous, current) =>
-                            previous.latestView != current.latestView,
-                        listener: (context, state) {
-                          final view = state.latestView;
-                          if (view != null) {
-                            // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
-                            if (view.id.isEmpty) {
-                              Log.error(
-                                'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
-                              );
-                            } else {
-                              getIt<TabsBloc>().openPlugin(view);
-                            }
-
-                            _switchToSpace(view);
+                body: Stack(
+                  children: [
+                    BlocListener<HomeBloc, HomeState>(
+                      listenWhen: (previous, current) =>
+                          previous.latestView != current.latestView,
+                      listener: (context, state) {
+                        final view = state.latestView;
+                        if (view != null) {
+                          // 总是打开最新视图，确保启动时恢复上次的视图（包括日历视图）
+                          if (view.id.isEmpty) {
+                            Log.error(
+                              'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
+                            );
+                          } else {
+                            getIt<TabsBloc>().openPlugin(view);
                           }
-                        },
-                        child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                          buildWhen: (previous, current) => previous != current,
-                          builder: (context, state) => BlocProvider(
-                            create: (_) => UserWorkspaceBloc(
-                              userProfile: userProfile,
-                              repository: RustWorkspaceRepositoryImpl(
-                                userId: userProfile.id,
-                              ),
-                            )
-                              ..add(UserWorkspaceEvent.initialize())
-                              ..add(UserWorkspaceEvent.fetchWorkspaces()),
-                            child: BlocListener<UserWorkspaceBloc,
-                                UserWorkspaceState>(
-                              listenWhen: (previous, current) =>
-                                  previous.currentWorkspace !=
-                                      current.currentWorkspace ||
-                                  previous.workspaces.length !=
-                                      current.workspaces.length ||
-                                  _workspacesChanged(
-                                    previous.workspaces,
-                                    current.workspaces,
-                                  ) ||
-                                  (previous.actionResult?.actionType ==
-                                          WorkspaceActionType.create &&
-                                      current.actionResult?.actionType ==
-                                          WorkspaceActionType.create &&
-                                      previous.actionResult?.isLoading !=
-                                          current.actionResult?.isLoading),
-                              listener: (context, state) {
-                                if (!context.mounted) {
-                                  return;
-                                }
 
-                                CommandPalette.maybeOf(context)?.updateBlocs(
-                                  workspaceBloc:
-                                      context.read<UserWorkspaceBloc?>(),
-                                  spaceBloc: context.read<SpaceBloc?>(),
-                                );
+                          _switchToSpace(view);
+                        }
+                      },
+                      child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                        buildWhen: (previous, current) => previous != current,
+                        builder: (context, state) => BlocProvider(
+                          create: (_) => UserWorkspaceBloc(
+                            userProfile: userProfile,
+                            repository: RustWorkspaceRepositoryImpl(
+                              userId: userProfile.id,
+                            ),
+                          )
+                            ..add(UserWorkspaceEvent.initialize())
+                            ..add(UserWorkspaceEvent.fetchWorkspaces()),
+                          child: BlocListener<UserWorkspaceBloc,
+                              UserWorkspaceState>(
+                            listenWhen: (previous, current) =>
+                                previous.currentWorkspace !=
+                                    current.currentWorkspace ||
+                                previous.workspaces.length !=
+                                    current.workspaces.length ||
+                                _workspacesChanged(
+                                  previous.workspaces,
+                                  current.workspaces,
+                                ) ||
+                                (previous.actionResult?.actionType ==
+                                        WorkspaceActionType.create &&
+                                    current.actionResult?.actionType ==
+                                        WorkspaceActionType.create &&
+                                    previous.actionResult?.isLoading !=
+                                        current.actionResult?.isLoading),
+                            listener: (context, state) {
+                              if (!context.mounted) {
+                                return;
+                              }
 
-                                _checkAndHandleWorkspaceRemoved(context, state);
-                              },
-                              child: _WorkspaceLifecycleRefresher(
-                                child: HomeHotKeys(
-                                  userProfile: userProfile,
-                                  child: FlowyContainer(
-                                    Theme.of(context).colorScheme.surface,
-                                    child: _buildBody(
-                                      context,
-                                      userProfile,
-                                      workspaceLatest,
-                                    ),
+                              CommandPalette.maybeOf(context)?.updateBlocs(
+                                workspaceBloc:
+                                    context.read<UserWorkspaceBloc?>(),
+                                spaceBloc: context.read<SpaceBloc?>(),
+                              );
+
+                              _checkAndHandleWorkspaceRemoved(context, state);
+                            },
+                            child: _WorkspaceLifecycleRefresher(
+                              child: HomeHotKeys(
+                                userProfile: userProfile,
+                                child: FlowyContainer(
+                                  Theme.of(context).colorScheme.surface,
+                                  child: _buildBody(
+                                    context,
+                                    userProfile,
+                                    workspaceLatest,
                                   ),
                                 ),
                               ),
@@ -348,13 +344,13 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                           ),
                         ),
                       ),
-                      if (_upgradeSuccessMessage != null)
-                        UpgradeSuccessOverlay(
-                          planName: _upgradeSuccessMessage!,
-                          onDismiss: _dismissUpgradeToast,
-                        ),
-                    ],
-                  ),
+                    ),
+                    if (_upgradeSuccessMessage != null)
+                      UpgradeSuccessOverlay(
+                        planName: _upgradeSuccessMessage!,
+                        onDismiss: _dismissUpgradeToast,
+                      ),
+                  ],
                 ),
               ),
             ),

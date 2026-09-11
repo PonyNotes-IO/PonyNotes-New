@@ -29,6 +29,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
@@ -111,6 +112,8 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
+                    //增加pad端的顶部状态栏高度
+                    PlatformInfo.isTablet ? VSpace(MediaQuery.of(context).padding.top) : SizedBox.shrink(),
                     // 注意：避开 macOS 红绿灯按钮的顶部下移【不在这里做】。
                     // 若在此处用 SizedBox 下移整个 Column，会把右侧白板/内容区一起下推，
                     // 深色主题下白板顶部出现黑边。正确做法是只下移“中间栏(文档列表)”——

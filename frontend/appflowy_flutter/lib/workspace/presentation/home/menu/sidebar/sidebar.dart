@@ -553,6 +553,8 @@ class _SidebarState extends State<_Sidebar> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            //增加pad端的顶部状态栏高度
+            PlatformInfo.isTablet ? VSpace(MediaQuery.of(context).padding.top) : SizedBox.shrink(),
             // top menu (hide on Windows)
             Platform.isMacOS
                 ? Padding(
