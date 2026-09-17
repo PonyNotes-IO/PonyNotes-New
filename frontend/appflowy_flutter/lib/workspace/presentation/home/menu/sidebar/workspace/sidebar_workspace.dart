@@ -182,9 +182,17 @@ class _SidebarWorkspaceState extends State<SidebarWorkspace> {
         );
         break;
 
+      case WorkspaceActionType.leave:
+        message = result.fold(
+          (s) => LocaleKeys.settings_workspacePage_leaveWorkspacePrompt_success
+              .tr(),
+          (e) =>
+              '${LocaleKeys.settings_workspacePage_leaveWorkspacePrompt_fail.tr()}: ${e.msg}',
+        );
+        break;
+
       case WorkspaceActionType.fetchWorkspaces:
       case WorkspaceActionType.none:
-      case WorkspaceActionType.leave:
       case WorkspaceActionType.fetchSubscriptionInfo:
         message = null;
         break;
