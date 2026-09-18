@@ -16,6 +16,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:synchronized/synchronized.dart';
 
 import 'deps_resolver.dart';
+import 'android_privacy_consent.dart';
 import 'entry_point.dart';
 import 'launch_configuration.dart';
 import 'plugin/plugin.dart';
@@ -54,6 +55,9 @@ Future<void> runAppFlowy({bool isAnon = false}) async {
 }
 
 Future<void> _runAppFlowyImpl({bool isAnon = false}) async {
+  if (Platform.isAndroid) {
+    await AndroidPrivacyConsent.initializePlugins();
+  }
   Log.info('restart AppFlowy: isAnon: $isAnon');
 
   if (kReleaseMode) {

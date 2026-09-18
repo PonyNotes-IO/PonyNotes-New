@@ -90,6 +90,15 @@
 		This is used by the Flutter tool to generate GeneratedPluginRegistrant.java
 		-->
     <meta-data android:name="flutterEmbedding" android:value="2" />
+    <!-- Keep lifecycle bookkeeping, but defer SDK work until privacy consent. -->
+    <provider
+        android:name="androidx.startup.InitializationProvider"
+        android:authorities="${applicationId}.androidx-startup"
+        tools:node="merge">
+      <meta-data android:name="androidx.emoji2.text.EmojiCompatInitializer" tools:node="remove" />
+      <meta-data android:name="okhttp3.internal.platform.PlatformInitializer" tools:node="remove" />
+      <meta-data android:name="androidx.profileinstaller.ProfileInstallerInitializer" tools:node="remove" />
+    </provider>
     <meta-data android:name="io.flutter.embedding.android.EnableImpeller"
       android:value="false" />
 
@@ -111,6 +120,7 @@
          回调 Intent 永远不会进 WXEntryActivity。-->
     <activity
         android:name=".wechat.WXEntryActivity"
+        android:enabled="false"
         android:exported="true"
         android:launchMode="singleTask"
         android:taskAffinity="${applicationId}"
@@ -124,13 +134,18 @@
          必须用 tools:replace 强制覆盖，否则 manifest 合并会失败。-->
     <activity-alias
         android:name="${applicationId}.wxapi.WXEntryActivity"
+        android:enabled="false"
         android:exported="true"
         android:launchMode="singleTask"
         android:targetActivity=".wechat.WXEntryActivity"
         tools:replace="android:launchMode,android:targetActivity" />
 
     <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-    <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+    <!-- Enabled only while the consented user has a pending local reminder. -->
+    <receiver
+        android:name=".ReminderBootReceiver"
+        android:enabled="false"
+        android:exported="false">
       <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED"/>
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
@@ -138,15 +153,67 @@
         <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
       </intent-filter>
     </receiver>
+    <receiver
+        android:name=".ReminderRestoreCleanupReceiver"
+        android:enabled="true"
+        android:exported="false" />
 
+    <!-- Login/payment callbacks remain installed, but cannot associate-start the
+         app before privacy consent. AndroidPrivacyConsent enables them after consent. -->
+    <activity
+        android:name="com.postliu.douyin_login.DouyinCallbackActivity"
+        android:enabled="false" />
+    <activity-alias
+        android:name="${applicationId}.douyinapi.DouYinEntryActivity"
+        android:enabled="false" />
+    <!-- fluwx is used only by iOS in this project. Android login uses the local
+         WeChatBridge and Android payments use Alipay, so remove its callbacks. -->
+    <activity
+        android:name="com.jarvan.fluwx.wxapi.FluwxWXEntryActivity"
+        tools:node="remove" />
+    <activity-alias
+        android:name="${applicationId}.wxapi.WXPayEntryActivity"
+        tools:node="remove" />
+    <provider
+        android:name="com.jarvan.fluwx.FluwxFileProvider"
+        tools:node="remove" />
+    <activity
+        android:name="com.alipay.sdk.app.PayResultActivity"
+        android:enabled="false" />
+    <activity
+        android:name="com.alipay.sdk.app.AlipayResultActivity"
+        android:enabled="false" />
+
+    <!-- Android purchases use Alipay/WeChat. The generic in_app_purchase
+         dependency is retained for Apple platforms, so remove its unused
+         Android billing and telemetry entry points from this APK. -->
+    <meta-data
+        android:name="com.google.android.play.billingclient.version"
+        tools:node="remove" />
+    <activity
+        android:name="com.android.billingclient.api.ProxyBillingActivity"
+        tools:node="remove" />
+    <activity
+        android:name="com.android.billingclient.api.ProxyBillingActivityV2"
+        tools:node="remove" />
     <service
-        android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
-        android:exported="false"
-        android:stopWithTask="false"/>
+        android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+        tools:node="remove" />
+    <service
+        android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+        tools:node="remove" />
+    <receiver
+        android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+        tools:node="remove" />
 
   </application>
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- Required only while ScheduledNotificationBootReceiver is dynamically enabled. -->
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:node="remove" />
+  <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" tools:node="remove" />
   <uses-permission android:name="android.permission.READ_CALENDAR" />
   <uses-permission android:name="android.permission.WRITE_CALENDAR" />
   <!-- Permission to read files from external storage (outside application container).
@@ -182,5 +249,9 @@
     </intent>
     <!-- WeChat SDK Configuration -->
     <package android:name="com.tencent.mm" />
+    <!-- Exact visibility for the Douyin installation check; do not enumerate apps. -->
+    <package android:name="com.ss.android.ugc.aweme" />
+    <!-- Exact visibility for Tobias.isAliPayInstalled. -->
+    <package android:name="com.eg.android.AlipayGphone" />
   </queries>
 </manifest>

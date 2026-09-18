@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy/startup/android_privacy_consent.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -111,12 +112,38 @@ class NotificationService {
       }
 
       _initialized = true;
+      await _syncAndroidReminderRestoreReceiver();
       LogUtils.info('NotificationService initialized successfully');
     } catch (e, stackTrace) {
       LogUtils.error('Failed to initialize NotificationService: $e');
 
       // 即使初始化失败，也设置_initialized为true，避免重复初始化尝试
       _initialized = true;
+    }
+  }
+
+  Future<void> _setAndroidReminderRestoreEnabled(bool enabled) async {
+    if (!UniversalPlatform.isAndroid) return;
+    try {
+      await AndroidPrivacyConsent.setReminderRestoreEnabled(enabled);
+    } catch (e) {
+      LogUtils.warning(
+        'Failed to update Android reminder restore receiver: $e',
+      );
+    }
+  }
+
+  Future<void> _syncAndroidReminderRestoreReceiver() async {
+    if (!UniversalPlatform.isAndroid) return;
+    try {
+      final pending = await _notificationsPlugin.pendingNotificationRequests();
+      final hasPendingReminder = pending.any((request) {
+        final payload = _decodeReminderPayload(request.payload);
+        return payload?['notificationType'] == _reminderNotificationType;
+      });
+      await _setAndroidReminderRestoreEnabled(hasPendingReminder);
+    } catch (e) {
+      LogUtils.warning('Failed to inspect Android reminder restore state: $e');
     }
   }
 
@@ -178,6 +205,7 @@ class NotificationService {
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
       );
+      await _setAndroidReminderRestoreEnabled(true);
 
       LogUtils.info('Scheduled notification: $id at $scheduledTime');
     } catch (e, stackTrace) {
@@ -208,6 +236,7 @@ class NotificationService {
     try {
       await _initialize();
       await _notificationsPlugin.cancel(notificationId);
+      await _syncAndroidReminderRestoreReceiver();
       LogUtils.info('Cancelled notification: $notificationId');
     } catch (e, stackTrace) {
       LogUtils.error('Failed to cancel notification: $e');
@@ -219,6 +248,7 @@ class NotificationService {
     try {
       await _initialize();
       await _notificationsPlugin.cancelAll();
+      await _setAndroidReminderRestoreEnabled(false);
       LogUtils.info('Cancelled all notifications');
     } catch (e, stackTrace) {
       LogUtils.error('Failed to cancel all notifications: $e');
@@ -353,6 +383,7 @@ class NotificationService {
       }
       await scheduleReminderNotification(reminder);
     }
+    await _syncAndroidReminderRestoreReceiver();
   }
 
   Map<String, String>? _decodeReminderPayload(String? rawPayload) {

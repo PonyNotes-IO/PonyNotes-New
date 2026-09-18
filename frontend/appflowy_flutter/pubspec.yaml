@@ -196,7 +196,7 @@ dependencies:
   # 改用 MainActivity.kt 内自写的 WeChatBridge 通过 MethodChannel 调用)
   fluwx: ^5.7.5
   douyin_login: ^1.0.6
-  # Check if app is installed
+  # Android package checks are restricted to exact <queries> entries.
   installed_apps: ^2.1.1
   # 支付宝 App 支付（Android：alipaysdk-android 15.8.40；iOS：AlipaySDK）
   tobias: ^5.3.4

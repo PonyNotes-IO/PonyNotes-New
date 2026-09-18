@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/android_privacy_consent.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/webview2_task.dart';
@@ -418,7 +419,10 @@ class PaymentUtil {
 
       // ===== 唯一允许路径：Tobias().pay(orderInfo) =====
       final plan = extra?['plan'] as String?;
+      var callbackEnabled = false;
       try {
+        await AndroidPrivacyConsent.setAssociationFlowEnabled('alipay', true);
+        callbackEnabled = true;
         Log.info('[PaymentUtil][Alipay] 调用 Tobias().pay(orderInfo) 唤起支付宝 App'
             ' (orderId=$orderId)');
         final payResult = await tobias.pay(trimmed);
@@ -462,6 +466,13 @@ class PaymentUtil {
       } catch (e, s) {
         Log.error('[PaymentUtil][Alipay] ❌ 未知异常(Tobias 调用失败): $e\n$s');
         return PaymentResult.failure(message: '支付宝支付失败: ${e.toString()}');
+      } finally {
+        if (callbackEnabled) {
+          await AndroidPrivacyConsent.setAssociationFlowEnabled(
+            'alipay',
+            false,
+          );
+        }
       }
     }
 
@@ -543,7 +554,7 @@ class PaymentUtil {
   static Future<PaymentResult> _launchWeChatApp(String payUrl, String orderId) async {
     try {
       final wechatUrl = Uri.parse(payUrl);
-      
+
       if (await canLaunchUrl(wechatUrl)) {
         await launchUrl(wechatUrl, mode: LaunchMode.externalApplication);
         Log.info('[PaymentUtil] 已启动微信 App: $payUrl');
@@ -577,7 +588,7 @@ class PaymentUtil {
   static Future<PaymentResult> _launchAlipayApp(String payUrl, String orderId) async {
     try {
       final alipayUrl = Uri.parse(payUrl);
-      
+
       if (await canLaunchUrl(alipayUrl)) {
         await launchUrl(alipayUrl, mode: LaunchMode.externalApplication);
         Log.info('[PaymentUtil] 已启动支付宝 App: $payUrl');

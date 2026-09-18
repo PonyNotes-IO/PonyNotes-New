@@ -5,8 +5,11 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.util.Log
 import android.view.WindowManager
+import androidx.startup.AppInitializer
+import androidx.startup.Initializer
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -19,6 +22,7 @@ class MainActivity : FlutterActivity() {
     private var weChatBridge: WeChatBridge? = null
     private var handwritingExportResult: MethodChannel.Result? = null
     private var handwritingExportBytes: ByteArray? = null
+    private var initializedEngine: FlutterEngine? = null
 
     companion object {
         private const val HANDWRITING_EXPORT_CHANNEL =
@@ -46,6 +50,81 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        AndroidPrivacyConsent.syncConsentControlledComponents(this)
+        // FlutterActivity creates its engine with automatic registration disabled.
+        // Keep only this local consent channel until Dart explicitly releases startup.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.xiaomabiji.app.note/privacy")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "hasAccepted" -> result.success(AndroidPrivacyConsent.hasAccepted(this))
+                    "accept" -> {
+                        if (AndroidPrivacyConsent.accept(this)) {
+                            result.success(null)
+                        } else {
+                            result.error("CONSENT_WRITE_FAILED", "Could not persist consent", null)
+                        }
+                    }
+                    "initializePlugins", "deviceInfo" -> {
+                        if (!AndroidPrivacyConsent.hasAccepted(this)) {
+                            result.error("CONSENT_REQUIRED", "Privacy consent is required", null)
+                            return@setMethodCallHandler
+                        }
+                        if (call.method == "initializePlugins") {
+                            initializeConsentedEngine(flutterEngine)
+                            result.success(null)
+                        } else {
+                            // Do not call device_info_plus: it also reads Build.getSerial().
+                            result.success(mapOf(
+                                "sdkInt" to Build.VERSION.SDK_INT,
+                                "architecture" to (Build.SUPPORTED_ABIS.firstOrNull() ?: ""),
+                            ))
+                        }
+                    }
+                    "setReminderRestoreEnabled" -> {
+                        val enabled = call.argument<Boolean>("enabled")
+                        if (enabled == null) {
+                            result.error("INVALID_ARGUMENT", "enabled is required", null)
+                            return@setMethodCallHandler
+                        }
+                        if (enabled && !AndroidPrivacyConsent.hasAccepted(this)) {
+                            result.error("CONSENT_REQUIRED", "Privacy consent is required", null)
+                            return@setMethodCallHandler
+                        }
+                        AndroidPrivacyConsent.setReminderRestoreEnabled(this, enabled)
+                        result.success(null)
+                    }
+                    "setAssociationFlowEnabled" -> {
+                        val flow = call.argument<String>("flow")
+                        val enabled = call.argument<Boolean>("enabled")
+                        if (flow == null || enabled == null) {
+                            result.error("INVALID_ARGUMENT", "flow and enabled are required", null)
+                            return@setMethodCallHandler
+                        }
+                        if (!AndroidPrivacyConsent.setAssociationFlowEnabled(this, flow, enabled)) {
+                            result.error("INVALID_FLOW", "Unknown flow or consent is required", null)
+                            return@setMethodCallHandler
+                        }
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    private fun initializeConsentedEngine(flutterEngine: FlutterEngine) {
+        if (initializedEngine === flutterEngine) return
+        val initializer = AppInitializer.getInstance(applicationContext)
+        // These transitive SDKs are on the runtime classpath, as in AndroidX's
+        // manifest discovery. Keep their names in the release ProGuard rules.
+        for (name in listOf(
+            "okhttp3.internal.platform.PlatformInitializer",
+            "androidx.emoji2.text.EmojiCompatInitializer",
+            "androidx.profileinstaller.ProfileInstallerInitializer",
+        )) {
+            @Suppress("UNCHECKED_CAST")
+            val component = Class.forName(name) as Class<out Initializer<Any>>
+            initializer.initializeComponent(component)
+        }
         // Keep Flutter's generated plugin registration. In particular, the
         // QR login dialogs use flutter_inappwebview's platform view on Android.
         super.configureFlutterEngine(flutterEngine)
@@ -139,6 +218,7 @@ class MainActivity : FlutterActivity() {
         activeWeChatBridge = bridge
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WeChatBridge.CHANNEL_NAME)
             .setMethodCallHandler(bridge)
+        initializedEngine = flutterEngine
     }
 
     override fun onDestroy() {
@@ -147,6 +227,7 @@ class MainActivity : FlutterActivity() {
         weChatBridge?.dispose()
         weChatBridge = null
         activeWeChatBridge = null
+        initializedEngine = null
         super.onDestroy()
     }
 
@@ -296,6 +377,7 @@ class MainActivity : FlutterActivity() {
         window.setBackgroundDrawableResource(android.R.color.white)
         // Clear keep screen on flag once app is loaded
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (!AndroidPrivacyConsent.hasAccepted(this)) return
 
         // 检查是否有微信 SDK 的回调 intent。
         // 注意：用户从微信「允许」回到 MainActivity 时，getIntent() 拿到的是

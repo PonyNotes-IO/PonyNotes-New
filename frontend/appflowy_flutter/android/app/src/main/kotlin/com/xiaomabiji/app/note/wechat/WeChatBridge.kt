@@ -10,6 +10,7 @@ import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import com.xiaomabiji.app.note.AndroidPrivacyConsent
 
 /**
  * 微信登录 MethodChannel 桥接。
@@ -174,6 +175,15 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
 
                 pendingResult = result
                 pendingTimestamp = System.currentTimeMillis()
+                if (!AndroidPrivacyConsent.setAssociationFlowEnabled(
+                        activity,
+                        "wechatLogin",
+                        true,
+                    )) {
+                    clearPending()
+                    result.error("CONSENT_REQUIRED", "Privacy consent is required", null)
+                    return
+                }
                 val ok = api.startAuth(state)
                 if (!ok) {
                     clearPending()
@@ -192,6 +202,7 @@ class WeChatBridge(private val activity: FlutterActivity) : MethodChannel.Method
     }
 
     private fun clearPending() {
+        AndroidPrivacyConsent.setAssociationFlowEnabled(activity, "wechatLogin", false)
         pendingResult = null
         pendingTimeout?.let { handler.removeCallbacks(it) }
         pendingTimeout = null

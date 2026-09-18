@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import com.xiaomabiji.app.note.MainActivity
+import com.xiaomabiji.app.note.AndroidPrivacyConsent
 
 /**
  * 微信登录回调 Activity。
@@ -29,15 +30,40 @@ class WXEntryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         android.util.Log.i("WXEntryActivity", "onCreate, handling intent")
-        handleIntent(intent)
-        finish()
+        completeCallback(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         android.util.Log.i("WXEntryActivity", "onNewIntent, handling intent")
         setIntent(intent)
+        completeCallback(intent)
+    }
+
+    private fun completeCallback(intent: Intent?) {
+        if (!AndroidPrivacyConsent.hasAccepted(this)) {
+            finish()
+            return
+        }
+
         handleIntent(intent)
+
+        // When the Flutter host is still alive, finishing this transparent
+        // callback activity is enough: Android resumes the existing MainActivity
+        // and its Flutter engine receives the result through WeChatBridge. Do not
+        // start MainActivity unconditionally here. CLEAR_TOP can tear down or
+        // recreate the Flutter activity on some ROMs, which looks like a crash
+        // immediately after a successful WeChat login.
+        //
+        // Only restore the host when the process was recreated and there is no
+        // live bridge to receive the callback.
+        if (MainActivity.activeWeChatBridge == null) {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                },
+            )
+        }
         finish()
     }
 

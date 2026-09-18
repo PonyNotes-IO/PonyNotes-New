@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:version/version.dart';
 
 import '../startup.dart';
+import '../android_privacy_consent.dart';
 import '../../user/application/auth/device_id.dart';
 
 class ApplicationInfo {
@@ -60,7 +61,7 @@ class ApplicationInfoTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
     final DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
-    
+
     try {
       final PackageInfo packageInfo = await PackageInfo.fromPlatform();
       ApplicationInfo.applicationVersion = packageInfo.version;
@@ -79,18 +80,13 @@ class ApplicationInfoTask extends LaunchTask {
         ApplicationInfo.macOSMinorVersion = macInfo.minorVersion;
       }
 
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfoPlugin.androidInfo;
-        ApplicationInfo.androidSDKVersion = androidInfo.version.sdkInt;
-      }
-
       String? architecture;
       String? os;
       try {
         if (Platform.isAndroid) {
-          final AndroidDeviceInfo androidInfo =
-              await deviceInfoPlugin.androidInfo;
-          architecture = androidInfo.supportedAbis.firstOrNull;
+          final androidInfo = await AndroidPrivacyConsent.deviceInfo();
+          ApplicationInfo.androidSDKVersion = androidInfo['sdkInt'] as int;
+          architecture = androidInfo['architecture'] as String?;
           os = 'android';
         } else if (Platform.isIOS) {
           final IosDeviceInfo iosInfo = await deviceInfoPlugin.iosInfo;

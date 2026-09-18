@@ -7,3 +7,6 @@
 -keep class io.flutter.plugins.imagepicker.ImagePickerPlugin { *; }
 -keep class com.baseflow.permissionhandler.PermissionHandlerPlugin { *; }
 -keep class com.jarvan.tobias.TobiasPlugin { *; }
+-keep class okhttp3.internal.platform.PlatformInitializer { *; }
+-keep class androidx.emoji2.text.EmojiCompatInitializer { *; }
+-keep class androidx.profileinstaller.ProfileInstallerInitializer { *; }

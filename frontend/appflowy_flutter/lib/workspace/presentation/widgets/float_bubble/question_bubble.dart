@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:appflowy/startup/android_privacy_consent.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -147,6 +150,11 @@ class _DebugToast {
   }
 
   Future<String> _getDeviceInfo() async {
+    if (Platform.isAndroid) {
+      final info = await AndroidPrivacyConsent.deviceInfo();
+      return info.entries
+          .fold('', (prev, el) => '$prev${el.key}: ${el.value}\n');
+    }
     final deviceInfoPlugin = DeviceInfoPlugin();
     final deviceInfo = await deviceInfoPlugin.deviceInfo;
 

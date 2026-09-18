@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/startup/android_privacy_consent.dart';
 import 'package:douyin_login/douyin.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:installed_apps/installed_apps.dart';
@@ -64,6 +65,7 @@ class DouYinLoginService {
   ///
   /// For Android/iOS: Uses douyin_login plugin to integrate DouYin SDK
   Future<FlowyResult<String, String>> _getCodeFromMobileSDK() async {
+    var callbackEnabled = false;
     try {
       // 1. Initialize DouYin SDK
       await initPlatformState();
@@ -80,6 +82,13 @@ class DouYinLoginService {
       authorResultState(codeCompleter);
 
       // 4. Call DouYin login API
+      if (UniversalPlatform.isAndroid) {
+        await AndroidPrivacyConsent.setAssociationFlowEnabled(
+          'douyinLogin',
+          true,
+        );
+        callbackEnabled = true;
+      }
       await _douyinPlugin.authorLogin(
         scopeKey: 'trial.whitelist,user_info',
       );
@@ -97,6 +106,13 @@ class DouYinLoginService {
     } catch (e) {
       Log.error('🟢[DouYinLoginService] Error getting authorization code: $e');
       return FlowyResult.failure('Failed to get DouYin authorization code: $e');
+    } finally {
+      if (callbackEnabled) {
+        await AndroidPrivacyConsent.setAssociationFlowEnabled(
+          'douyinLogin',
+          false,
+        );
+      }
     }
   }
 
