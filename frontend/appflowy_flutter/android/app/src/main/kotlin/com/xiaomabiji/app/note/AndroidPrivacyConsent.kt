@@ -9,6 +9,9 @@ object AndroidPrivacyConsent {
     // Reuse the existing Flutter SharedPreferences key so upgrades retain consent.
     private const val PREFERENCES = "FlutterSharedPreferences"
     private const val ACCEPTED_KEY = "flutter.privacy_policy_accepted"
+    private val weChatCallbackLeaseLock = Any()
+    private var weChatCallbackLeaseCount = 0
+    private var weChatCallbackDisablePending = false
 
     fun hasAccepted(context: Context): Boolean =
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -35,24 +38,58 @@ object AndroidPrivacyConsent {
 
     fun setAssociationFlowEnabled(context: Context, flow: String, enabled: Boolean): Boolean {
         if (enabled && !hasAccepted(context)) return false
-        val packageName = context.packageName
-        val components = when (flow) {
-            "wechatLogin" -> listOf(
-                "$packageName.wechat.WXEntryActivity",
-                "$packageName.wxapi.WXEntryActivity",
-            )
-            "douyinLogin" -> listOf(
-                "com.postliu.douyin_login.DouyinCallbackActivity",
-                "$packageName.douyinapi.DouYinEntryActivity",
-            )
-            "alipay" -> listOf(
-                "com.alipay.sdk.app.PayResultActivity",
-                "com.alipay.sdk.app.AlipayResultActivity",
-            )
-            else -> return false
+        val components = associationComponents(context, flow) ?: return false
+        if (flow == "wechatLogin") {
+            return synchronized(weChatCallbackLeaseLock) {
+                if (enabled) {
+                    // A newer auth flow must not inherit an older callback's
+                    // deferred disable request.
+                    weChatCallbackDisablePending = false
+                    components.forEach { setComponentEnabled(context, it, true) }
+                } else if (weChatCallbackLeaseCount > 0) {
+                    // Disabling an Activity while it is dispatching the WeChat
+                    // response can make Android tear down the host task.
+                    weChatCallbackDisablePending = true
+                } else {
+                    components.forEach { setComponentEnabled(context, it, false) }
+                }
+                true
+            }
         }
         components.forEach { setComponentEnabled(context, it, enabled) }
         return true
+    }
+
+    /**
+     * Keeps the WeChat callback component enabled until the active callback
+     * Activity has finished. The component is still disabled before consent and
+     * immediately after all non-callback cleanup paths.
+     */
+    fun acquireWeChatCallbackLease(context: Context): Boolean {
+        if (!hasAccepted(context)) return false
+        synchronized(weChatCallbackLeaseLock) {
+            weChatCallbackLeaseCount += 1
+            // A callback can outlive the Flutter host after process recovery.
+            // Its own destruction must still close the temporary association.
+            weChatCallbackDisablePending = true
+        }
+        return true
+    }
+
+    fun releaseWeChatCallbackLease(context: Context) {
+        synchronized(weChatCallbackLeaseLock) {
+            if (weChatCallbackLeaseCount > 0) {
+                weChatCallbackLeaseCount -= 1
+                if (weChatCallbackLeaseCount == 0 && weChatCallbackDisablePending) {
+                    weChatCallbackDisablePending = false
+                    // Keep the state transition under the same lock as a new auth
+                    // flow. Otherwise an old callback can disable a newer flow's
+                    // freshly enabled callback component.
+                    associationComponents(context, "wechatLogin")
+                        ?.forEach { setComponentEnabled(context, it, false) }
+                }
+            }
+        }
     }
 
     fun setReminderRestoreEnabled(context: Context, enabled: Boolean) {
@@ -66,6 +103,25 @@ object AndroidPrivacyConsent {
     private fun setAssociationComponentsEnabled(context: Context, enabled: Boolean) {
         listOf("wechatLogin", "douyinLogin", "alipay").forEach { flow ->
             setAssociationFlowEnabled(context, flow, enabled)
+        }
+    }
+
+    private fun associationComponents(context: Context, flow: String): List<String>? {
+        val packageName = context.packageName
+        return when (flow) {
+            "wechatLogin" -> listOf(
+                "$packageName.wechat.WXEntryActivity",
+                "$packageName.wxapi.WXEntryActivity",
+            )
+            "douyinLogin" -> listOf(
+                "com.postliu.douyin_login.DouyinCallbackActivity",
+                "$packageName.douyinapi.DouYinEntryActivity",
+            )
+            "alipay" -> listOf(
+                "com.alipay.sdk.app.PayResultActivity",
+                "com.alipay.sdk.app.AlipayResultActivity",
+            )
+            else -> null
         }
     }
 

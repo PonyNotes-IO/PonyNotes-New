@@ -26,6 +26,7 @@ import com.xiaomabiji.app.note.AndroidPrivacyConsent
  * taskAffinity 独立避免与主 app 任务栈冲突。
  */
 class WXEntryActivity : Activity() {
+    private var holdsWeChatCallbackLease = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,6 +45,11 @@ class WXEntryActivity : Activity() {
         if (!AndroidPrivacyConsent.hasAccepted(this)) {
             finish()
             return
+        }
+
+        if (!holdsWeChatCallbackLease) {
+            holdsWeChatCallbackLease =
+                AndroidPrivacyConsent.acquireWeChatCallbackLease(this)
         }
 
         handleIntent(intent)
@@ -65,6 +71,14 @@ class WXEntryActivity : Activity() {
             )
         }
         finish()
+    }
+
+    override fun onDestroy() {
+        if (holdsWeChatCallbackLease) {
+            AndroidPrivacyConsent.releaseWeChatCallbackLease(this)
+            holdsWeChatCallbackLease = false
+        }
+        super.onDestroy()
     }
 
     private fun handleIntent(intent: Intent?) {
