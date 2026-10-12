@@ -22,6 +22,7 @@ class SidebarCloudSyncButton extends StatefulWidget {
     super.key,
     this.isHover = false,
     this.useHighContrastForeground = false,
+    this.showUpgradeSpaceButton = true,
     this.foregroundColorOverride,
     this.onBeforeAction,
     this.buttonSize = 28.0,
@@ -30,6 +31,7 @@ class SidebarCloudSyncButton extends StatefulWidget {
 
   final bool isHover;
   final bool useHighContrastForeground;
+  final bool showUpgradeSpaceButton;
   final Color? foregroundColorOverride;
   final VoidCallback? onBeforeAction;
   final double buttonSize;
@@ -333,6 +335,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               membershipStatus: membershipStatus,
               subscriptionInfo: subscriptionInfo,
               currentSubscription: currentSubscription,
+              showUpgradeSpaceButton: widget.showUpgradeSpaceButton,
               onToggle: (enabled) {
                 // 更新 UserWorkspaceBloc 中的云同步开关状态
                 if (workspaceBloc != null) {

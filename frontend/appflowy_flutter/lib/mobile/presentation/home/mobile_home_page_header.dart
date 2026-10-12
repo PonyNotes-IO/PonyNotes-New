@@ -1,3 +1,5 @@
+import 'dart:io' as io;
+
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -49,7 +51,8 @@ class MobileHomePageHeader extends StatelessWidget {
                       : _MobileUser(userProfile: userProfile),
                 ),
                 const HSpace(8.0),
-                const SidebarCloudSyncButton(
+                SidebarCloudSyncButton(
+                  showUpgradeSpaceButton: !io.Platform.isAndroid,
                   useHighContrastForeground: true,
                   iconSize: 22.0,
                 ),

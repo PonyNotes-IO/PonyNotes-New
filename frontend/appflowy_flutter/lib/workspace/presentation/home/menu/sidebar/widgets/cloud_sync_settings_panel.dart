@@ -25,6 +25,7 @@ class CloudSyncSettingsPanel extends StatefulWidget {
     this.subscriptionInfo,
     this.currentSubscription,
     this.onUpgrade,
+    this.showUpgradeSpaceButton = true,
     this.width = 320,
     this.storageTotal = '200G',
     this.maxFileSize = '3GB',
@@ -36,6 +37,7 @@ class CloudSyncSettingsPanel extends StatefulWidget {
   final WorkspaceSubscriptionInfoPB? subscriptionInfo;
   final CurrentSubscription? currentSubscription;
   final VoidCallback? onUpgrade;
+  final bool showUpgradeSpaceButton;
   final double width;
   final String storageTotal;
   final String maxFileSize;
@@ -235,7 +237,7 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
-        if (isFreePlan) ...[
+        if (isFreePlan && widget.showUpgradeSpaceButton) ...[
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
