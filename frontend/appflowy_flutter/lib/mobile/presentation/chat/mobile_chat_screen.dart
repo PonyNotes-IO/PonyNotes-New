@@ -30,6 +30,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class MobileChatScreen extends StatefulWidget {
   const MobileChatScreen({
@@ -289,7 +290,10 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
-                            '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                            // 安卓移动端使用免责声明文案，其他端保持原有引导文案
+                            UniversalPlatform.isAndroid
+                                ? '内容由AI生成，请仔细甄别'
+                                : '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       color: Theme.of(context)
