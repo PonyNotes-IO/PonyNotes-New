@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/back_to_login_in_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
@@ -11,6 +12,7 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileContinueWithPasswordPage extends StatefulWidget {
@@ -38,6 +40,7 @@ class _MobileContinueWithPasswordPageState
   final inputPasswordKey = GlobalKey<AFTextFieldState>();
 
   bool isSubmitting = false;
+  bool _isSendingCode = false;
 
   @override
   void dispose() {
@@ -68,8 +71,7 @@ class _MobileContinueWithPasswordPageState
                     });
                   } else if (state.passwordError != null) {
                     inputPasswordKey.currentState?.syncError(
-                      errorText:
-                          LocaleKeys.signIn_invalidLoginCredentials.tr(),
+                      errorText: LocaleKeys.signIn_invalidLoginCredentials.tr(),
                     );
                   } else {
                     inputPasswordKey.currentState?.clearError();
@@ -158,22 +160,13 @@ class _MobileContinueWithPasswordPageState
         ),
         const Spacer(),
         OutlinedButton(
-          onPressed: () {
-            final signInBloc = context.read<SignInBloc>();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                settings: const RouteSettings(name: '/continue-with-email-verification'),
-                builder: (context) => BlocProvider.value(
-                  value: signInBloc,
-                  child: ContinueWithMagicLinkOrPasscodePage(
-                    email: widget.email,
-                    backToLogin: widget.backToLogin,
-                  ),
-                ),
-              ),
-            );
-          },
+          onPressed: _isSendingCode ||
+                  (!kIsWeb &&
+                      defaultTargetPlatform == TargetPlatform.android &&
+                      Validator.isValidPhone(widget.email) &&
+                      isSubmitting)
+              ? null
+              : _switchToVerificationLogin,
           style: OutlinedButton.styleFrom(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
@@ -182,6 +175,57 @@ class _MobileContinueWithPasswordPageState
           child: FlowyText.small(LocaleKeys.signIn_verificationLogin.tr()),
         ),
       ],
+    );
+  }
+
+  Future<void> _switchToVerificationLogin() async {
+    final signInBloc = context.read<SignInBloc>();
+    final sendCode = !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        Validator.isValidPhone(widget.email);
+    if (sendCode) {
+      setState(() => _isSendingCode = true);
+      try {
+        final state = await waitSignInBlocSubmittingCycle(
+          signInBloc,
+          () => signInBloc.add(
+            SignInEvent.signInWithMagicLink(email: widget.email),
+          ),
+        );
+        if (!mounted) return;
+        String? error = state.emailError;
+        state.successOrFail?.onFailure((failure) => error = failure.msg);
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error!)),
+          );
+          return;
+        }
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('验证码发送失败，请重试')),
+        );
+        return;
+      } finally {
+        if (mounted) setState(() => _isSendingCode = false);
+      }
+    }
+
+    if (!mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings:
+            const RouteSettings(name: '/continue-with-email-verification'),
+        builder: (context) => BlocProvider.value(
+          value: signInBloc,
+          child: ContinueWithMagicLinkOrPasscodePage(
+            email: widget.email,
+            backToLogin: widget.backToLogin,
+          ),
+        ),
+      ),
     );
   }
 

@@ -9,12 +9,15 @@ import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/set_password_page.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 
@@ -411,6 +414,49 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
       if (successOrFail.isSuccess) {
         successOrFail.onSuccess((userProfile) async {
           if (!context.mounted) {
+            return;
+          }
+
+          if (!kIsWeb &&
+              defaultTargetPlatform == TargetPlatform.android &&
+              state.accessToken != null &&
+              Validator.isValidPhone(state.email ?? '')) {
+            if (_isNavigatingToHome) return;
+            _isNavigatingToHome = true;
+            try {
+              if (state.passwordIsSet == false) {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => SetPasswordPage(
+                      userProfile: userProfile,
+                      phoneOrEmail: state.email!,
+                      accessToken: state.accessToken!,
+                    ),
+                  ),
+                );
+                if (context.mounted) {
+                  context.read<SignInBloc>().add(const SignInEvent.cancel());
+                }
+              } else {
+                if (ModalRoute.of(context)?.isFirst == true) {
+                  // The login handler has already initialized the Rust session.
+                  await getIt<AuthRouter>().goHomeScreen(context, userProfile);
+                } else {
+                  // Signing in from a guest workspace still needs account cleanup.
+                  await runAppFlowy();
+                }
+              }
+            } catch (_) {
+              if (context.mounted) {
+                context.read<SignInBloc>().add(const SignInEvent.cancel());
+                showToastNotification(
+                  message: '登录页面初始化失败，请重试',
+                  type: ToastificationType.error,
+                );
+              }
+            } finally {
+              _isNavigatingToHome = false;
+            }
             return;
           }
 

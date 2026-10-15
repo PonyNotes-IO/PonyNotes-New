@@ -29,7 +29,9 @@ import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -50,6 +52,11 @@ class MobileHomeScreen extends StatelessWidget {
       ]),
       builder: (context, snapshots) {
         if (!snapshots.hasData) {
+          if (!kIsWeb &&
+              defaultTargetPlatform == TargetPlatform.android &&
+              !PlatformInfo.isTablet) {
+            return const Scaffold(body: _AndroidWorkspaceLoading());
+          }
           return const Center(child: CircularProgressIndicator.adaptive());
         }
 
@@ -85,6 +92,24 @@ class MobileHomeScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _AndroidWorkspaceLoading extends StatelessWidget {
+  const _AndroidWorkspaceLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator.adaptive(),
+          const SizedBox(height: 16),
+          Text('正在打开工作区…', style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      ),
     );
   }
 }
@@ -260,6 +285,11 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
         buildWhen: didMobileCurrentWorkspaceChange,
         builder: (context, state) {
           if (state.currentWorkspace == null) {
+            if (!kIsWeb &&
+                defaultTargetPlatform == TargetPlatform.android &&
+                !PlatformInfo.isTablet) {
+              return const _AndroidWorkspaceLoading();
+            }
             return const SizedBox.shrink();
           }
 

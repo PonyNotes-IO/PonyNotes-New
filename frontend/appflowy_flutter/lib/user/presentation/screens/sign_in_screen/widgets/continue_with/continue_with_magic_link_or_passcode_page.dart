@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,6 +49,13 @@ class _ContinueWithMagicLinkOrPasscodePageState
   );
 
   bool _isLoading = false;
+  bool _isEnteringWorkspace = false;
+
+  bool get _isAndroidPhoneLogin =>
+      !kIsWeb &&
+      defaultTargetPlatform == TargetPlatform.android &&
+      !PlatformInfo.isTablet &&
+      Validator.isValidPhone(widget.email);
   int _countdown = 60;
   Timer? _timer;
   String _errorMessage = '';
@@ -188,8 +197,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
     setState(() {
       _isLoading = true;
+      _isEnteringWorkspace = false;
       _errorMessage = '';
     });
+    if (_isAndroidPhoneLogin) FocusScope.of(context).unfocus();
 
     // 如果提供了 onEnterPasscode 回调，优先使用回调（用于忘记密码等场景）
     if (widget.onEnterPasscode != null) {
@@ -255,6 +266,14 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
           // 优先检查登录成功状态（无论 isSubmitting 如何）
           if (successOrFail != null && successOrFail.isSuccess) {
+            if (_isAndroidPhoneLogin) {
+              setState(() {
+                _isLoading = true;
+                _isEnteringWorkspace = true;
+                _errorMessage = '';
+              });
+              return;
+            }
             // 登录成功，清除 loading 状态
             if (mounted && _isLoading) {
               setState(() {
@@ -353,7 +372,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
           if (_isLoading && !state.isSubmitting) {
             // 从loading变为非loading状态
             if (mounted) {
-              setState(() => _isLoading = false);
+              setState(() {
+                _isLoading = false;
+                _isEnteringWorkspace = false;
+              });
             }
 
             // 检查是否有错误
@@ -383,7 +405,8 @@ class _ContinueWithMagicLinkOrPasscodePageState
                       ? Alignment.topCenter
                       : Alignment.center,
                   child: Container(
-                    width: PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
+                    width:
+                        PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: SingleChildScrollView(
                       child: Column(
@@ -675,6 +698,14 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
   Widget _buildNextButton() {
     final primaryColor = Theme.of(context).colorScheme.primary;
+    const progress = SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(
+        strokeWidth: 2,
+        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+      ),
+    );
     return SizedBox(
       width: 418,
       height: PlatformInfo.isMobile ? 46 : 52,
@@ -683,20 +714,25 @@ class _ContinueWithMagicLinkOrPasscodePageState
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
+          disabledBackgroundColor: _isAndroidPhoneLogin ? primaryColor : null,
+          disabledForegroundColor: _isAndroidPhoneLogin ? Colors.white : null,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PlatformInfo.isMobile ? 18 : 10),
+            borderRadius:
+                BorderRadius.circular(PlatformInfo.isMobile ? 18 : 10),
           ),
           elevation: 0,
         ),
         child: _isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
+            ? _isAndroidPhoneLogin
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      progress,
+                      const SizedBox(width: 12),
+                      Text(_isEnteringWorkspace ? '正在进入…' : '正在登录…'),
+                    ],
+                  )
+                : progress
             : Text(
                 '下一步',
                 style: TextStyle(
