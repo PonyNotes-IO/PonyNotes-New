@@ -1,16 +1,300 @@
 {
   "type": "page",
+  "data": {
+    "selected_icon": "🐴",
+    "image_type": "1",
+    "delta": []
+  },
   "children": [
+    {
+      "type": "quote",
+      "data": {
+        "delta": [
+          {
+            "insert": "你好呀。",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "\n很高兴你打开了它 ✨"
+          }
+        ]
+      },
+      "children": []
+    },
     {
       "type": "paragraph",
       "data": {
         "delta": [
           {
-            "insert": "您好，欢迎来到"
+            "insert": "现在 "
           },
           {
-            "insert": "小马笔记",
+            "insert": "macOS",
             "attributes": {
+              "bold": true,
+              "bg_color": "0x4c9c27b0"
+            }
+          },
+          {
+            "insert": "、",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "Windows",
+            "attributes": {
+              "bold": true,
+              "bg_color": "0x4c9e9e9e"
+            }
+          },
+          {
+            "insert": "、",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "iOS",
+            "attributes": {
+              "bold": true,
+              "bg_color": "0x4cffeb3b"
+            }
+          },
+          {
+            "insert": "、",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "Android",
+            "attributes": {
+              "bold": true,
+              "bg_color": "0x4c4caf50"
+            }
+          },
+          {
+            "insert": " 、",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "鸿蒙（开发中）",
+            "attributes": {
+              "bold": true,
+              "bg_color": "0x4c9e9e9e"
+            }
+          },
+          {
+            "insert": "全端可用",
+            "attributes": {
+              "bold": true
+            }
+          },
+          {
+            "insert": "，各大应用商店都能搜到我们 —— 电脑写的笔记，手机上随时能接着看，出门在外也不会漏掉刚冒出来的想法。"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "小马笔记是一个",
+            "attributes": {
+              "bold": true
+            }
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "🎯 "
+          },
+          {
+            "insert": "本地优先",
+            "attributes": {
+              "bold": true,
+              "font_color": "0xff795548"
+            }
+          },
+          {
+            "insert": "的知识库工具。我们想做的事很简单：帮你把想法、资料、零散的笔记整理成真正属于自己的东西，而不是被锁在某个平台的云里、哪天突然就用不了了。"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "到正式版为止，它已经能稳定地做这几件事："
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "📝 所有笔记默认先存在你自己的设备上，"
+          },
+          {
+            "insert": "断网也能正常写",
+            "attributes": {
+              "font_color": "0xff795548",
+              "bold": true
+            }
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "🗂️ 你可以随时整理、关联、查找存过的内容，不用把时间花在死记硬背上"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "☁️ 只有你主动开启云同步，多设备之间才会同步你的笔记"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "🤖 当你需要思考、总结、写提纲的时候，可以一键调用你选择的模型来辅助"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "🔒 "
+          },
+          {
+            "insert": "关于隐私，我们想先说清楚：",
+            "attributes": {
+              "bold": true
+            }
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "🔒 "
+          },
+          {
+            "insert": "不开同步，你的所有内容永远只在你本地设备上",
+            "attributes": {
+              "font_color": "0xff795548",
+              "bold": true
+            }
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "📤 只有你主动点击「使用 AI」的那一刻，对应的内容才会发送给你选的模型服务，"
+          },
+          {
+            "insert": "我们不会在后台偷偷上传",
+            "attributes": {
+              "bold": true
+            }
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "bulleted_list",
+      "data": {
+        "delta": [
+          {
+            "insert": "🚫 我们不会收集你的笔记内容做广告，也不会拿你的数据训练第三方模型"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "我们还在持续开发更多好用的功能，打磨细节肯定要花点时间，做慢了、考虑不周的地方，还请你多担待 🙏。如果你碰巧也会写代码，觉得哪里可以改得更好、加个什么功能更顺手，随时欢迎来给我们的代码提建议，一起把它做得更合心意。"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "paragraph",
+      "data": {
+        "delta": [
+          {
+            "insert": "遇到崩溃、卡顿，或者哪里用起来不顺手，直接反馈给我们就好。每一条留言我们都会认真看，大概率两天内就会有人回你。"
+          }
+        ]
+      },
+      "children": []
+    },
+    {
+      "type": "quote",
+      "data": {
+        "delta": [
+          {
+            "insert": "希望小马笔记能真的帮你把脑子里的东西，"
+          },
+          {
+            "insert": "安安稳稳留得久一点",
+            "attributes": {
+              "font_color": "0xff795548",
               "bold": true
             }
           },
@@ -18,162 +302,34 @@
             "insert": "。"
           }
         ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "你现在使用的还不是一个正式版本，而是一匹刚刚学会奔跑的小马。它已经可以记录、整理和思考，但偶尔也可能迷路、摔跤，甚至闹一点小脾气。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "小马笔记目前由一个三人团队开发。我们正在完善稳定性、设备适配和数据安全，也因此特别需要真实用户的帮助。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "测试期间，请注意："
-          }
-        ]
-      }
-    },
-    {
-      "type": "bulleted_list",
-      "data": {
-        "delta": [
-          {
-            "insert": "不要存放唯一且无法恢复的重要资料。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "bulleted_list",
-      "data": {
-        "delta": [
-          {
-            "insert": "建议定期导出或备份笔记。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "bulleted_list",
-      "data": {
-        "delta": [
-          {
-            "insert": "遇到崩溃、卡顿或数据异常，请尽快告诉我们。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "bulleted_list",
-      "data": {
-        "delta": [
-          {
-            "insert": "普通笔记以本地保存为主；主动使用AI时，相关内容可能发送给你选择的模型服务。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "bulleted_list",
-      "data": {
-        "delta": [
-          {
-            "insert": "提交截图或日志前，请检查并删除个人隐私。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "你的每一次反馈，都可能直接影响下一个版本。无论是一个Bug、一项建议，还是一句“这里用起来不太顺手”，对我们都很重要。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "我们无法保证测试版永远不出问题，但会认真对待每一条反馈，也会尽力保护你交给小马笔记的内容。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "谢谢你愿意在它还不完美的时候来到这里。"
-          }
-        ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "希望有一天，我们可以一起把这匹小马，养成真正可靠的工作伙伴。"
-          }
-        ]
-      }
+      },
+      "children": []
     },
     {
       "type": "paragraph",
       "data": {
         "delta": []
-      }
+      },
+      "children": []
     },
     {
       "type": "paragraph",
       "data": {
+        "align": "right",
         "delta": [
           {
-            "insert": "马同学与小马笔记团队",
-            "attributes": {
-              "bold": true
-            }
+            "insert": "马同学 和 小马笔记团队\n日期：[2026.10.14]"
           }
         ]
-      }
-    },
-    {
-      "type": "paragraph",
-      "data": {
-        "delta": [
-          {
-            "insert": "版本：[1.0.19]　日期：[2026.07.20]"
-          }
-        ]
-      }
+      },
+      "children": []
     },
     {
       "type": "paragraph",
       "data": {
         "delta": []
-      }
+      },
+      "children": []
     }
   ]
 }

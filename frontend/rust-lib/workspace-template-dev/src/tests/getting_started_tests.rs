@@ -37,6 +37,17 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn create_document_from_welcome_letter_json_test() {
+    let json_str = include_str!("../../assets/welcome_letter.json");
+    test_document_json(json_str).await;
+    let document = crate::document::parser::JsonToDocumentParser::json_str_to_document(json_str)
+      .unwrap();
+    assert_eq!(document.blocks.len(), 20);
+    let page = &document.blocks[&document.page_id];
+    assert_eq!(page.data["selected_icon"], "🐴");
+  }
+
+  #[tokio::test]
   async fn create_database_from_todos_json_test() {
     let json_str = include_str!("../../assets/to-dos.json");
     let template_data = test_database_json(json_str).await;
@@ -112,7 +123,7 @@ mod tests {
     assert_eq!(general_space.child_views.len(), 1);
     assert_eq!(
       general_space.child_views[0].parent_view.name,
-      "写给第一批测试用户的一封信"
+      "欢迎来到小马笔记"
     );
     // 欢迎信没有子视图
     assert!(general_space.child_views[0].child_views.is_empty());

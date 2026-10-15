@@ -9,7 +9,7 @@ use crate::{gen_view_id, TemplateData, WorkspaceTemplate};
 
 // Template Folder Structure:
 // |-- 默认的工作空间 (space)
-//     |-- 写给第一批测试用户的一封信 (document)
+//     |-- 🐴 欢迎来到小马笔记 (document)
 //
 // 【默认工作区精简 2026-07-20】原为 General + Shared 两个空间、共 7 个内置视图
 // （Getting started 及其 3 个子指南、To-dos 看板、空的 Shared 空间）。
@@ -32,8 +32,7 @@ impl GettingStartedTemplate {
     let general_data =
       create_document_from_json(general_view_uuid.clone(), default_space_json).await?;
 
-    // 欢迎信：由 assets/welcome_letter.json 生成，内容源自
-    // 项目根目录的《写给第一批测试用户的一封信.md》。
+    // 保留云端《欢迎来到小马笔记》的完整块结构、富文本样式和页面图标。
     let welcome_letter_json = include_str!("../../assets/welcome_letter.json");
     let welcome_letter_data =
       create_document_from_json(welcome_letter_view_uuid.clone(), welcome_letter_json).await?;
@@ -80,8 +79,8 @@ impl WorkspaceTemplate for GettingStartedTemplate {
           .with_child_view_builder(|child_view_builder| async {
             let child_view_builder = child_view_builder
               .with_view_id(welcome_letter_view_uuid.clone())
-              .with_name("写给第一批测试用户的一封信")
-              .with_icon("💌");
+              .with_name("欢迎来到小马笔记")
+              .with_icon("🐴");
             child_view_builder.build()
           })
           .await;

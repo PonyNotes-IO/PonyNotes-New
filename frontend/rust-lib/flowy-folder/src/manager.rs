@@ -564,6 +564,31 @@ impl FolderManager {
     if is_new {
       self.initialize(user_id, workspace_id, data_source).await?;
     } else {
+      #[cfg(target_os = "android")]
+      if matches!(
+        &data_source,
+        FolderInitDataSource::LocalDisk {
+          create_if_not_exist: false
+        }
+      ) {
+        // Reopen cached data with its sync plugins, as on launch, before fetching a full snapshot.
+        match self
+          .initialize(
+            user_id,
+            workspace_id,
+            FolderInitDataSource::LocalDisk {
+              create_if_not_exist: false,
+            },
+          )
+          .await
+        {
+          Ok(()) => {
+            debug_assert!(self.mutex_folder.load_full().is_some());
+            return Ok(());
+          },
+          Err(err) => error!("Android cached folder open failed, restoring from cloud: {:?}", err),
+        }
+      }
       // The folder updates should not be empty, as the folder data is stored
       // when the user signs up for the first time.
       let result = self
