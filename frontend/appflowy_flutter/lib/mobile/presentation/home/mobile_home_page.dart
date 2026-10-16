@@ -31,7 +31,6 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -52,10 +51,8 @@ class MobileHomeScreen extends StatelessWidget {
       ]),
       builder: (context, snapshots) {
         if (!snapshots.hasData) {
-          if (!kIsWeb &&
-              defaultTargetPlatform == TargetPlatform.android &&
-              !PlatformInfo.isTablet) {
-            return const Scaffold(body: _AndroidWorkspaceLoading());
+          if (PlatformInfo.isAndroidOrIOS && !PlatformInfo.isTablet) {
+            return const Scaffold(body: _MobileWorkspaceLoading());
           }
           return const Center(child: CircularProgressIndicator.adaptive());
         }
@@ -96,8 +93,8 @@ class MobileHomeScreen extends StatelessWidget {
   }
 }
 
-class _AndroidWorkspaceLoading extends StatelessWidget {
-  const _AndroidWorkspaceLoading();
+class _MobileWorkspaceLoading extends StatelessWidget {
+  const _MobileWorkspaceLoading();
 
   @override
   Widget build(BuildContext context) {
@@ -285,10 +282,8 @@ class _HomePageState extends State<_HomePage> with WidgetsBindingObserver {
         buildWhen: didMobileCurrentWorkspaceChange,
         builder: (context, state) {
           if (state.currentWorkspace == null) {
-            if (!kIsWeb &&
-                defaultTargetPlatform == TargetPlatform.android &&
-                !PlatformInfo.isTablet) {
-              return const _AndroidWorkspaceLoading();
+            if (PlatformInfo.isAndroidOrIOS && !PlatformInfo.isTablet) {
+              return const _MobileWorkspaceLoading();
             }
             return const SizedBox.shrink();
           }

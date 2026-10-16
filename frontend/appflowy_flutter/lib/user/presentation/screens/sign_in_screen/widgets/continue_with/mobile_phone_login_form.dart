@@ -4,9 +4,9 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../../env/cloud_env.dart';
@@ -305,24 +305,23 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 Navigator.pop(context);
               }
             },
-            onEnterPasscode: !kIsWeb &&
-                    defaultTargetPlatform == TargetPlatform.android &&
-                    Validator.isValidPhone(email)
-                ? null
-                : (passcode) {
-                    // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
-                    signInBloc.add(const SignInEvent.cancel());
+            onEnterPasscode:
+                PlatformInfo.isAndroidOrIOS && Validator.isValidPhone(email)
+                    ? null
+                    : (passcode) {
+                        // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
+                        signInBloc.add(const SignInEvent.cancel());
 
-                    // 给一点时间让cancel事件处理完成
-                    Future.delayed(const Duration(milliseconds: 100), () {
-                      signInBloc.add(
-                        SignInEvent.signInWithPasscode(
-                          email: email,
-                          passcode: passcode,
-                        ),
-                      );
-                    });
-                  },
+                        // 给一点时间让cancel事件处理完成
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          signInBloc.add(
+                            SignInEvent.signInWithPasscode(
+                              email: email,
+                              passcode: passcode,
+                            ),
+                          );
+                        });
+                      },
           ),
         ),
       ),

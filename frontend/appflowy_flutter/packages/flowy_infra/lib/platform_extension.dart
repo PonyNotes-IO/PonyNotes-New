@@ -97,6 +97,19 @@ class PlatformInfo {
     return !isMobile;
   }
 
+  /// Android or iOS (phone and tablet). Web and desktop return false.
+  ///
+  /// Uses [defaultTargetPlatform] rather than [io.Platform] so widget tests can
+  /// override the platform. Phone sign-in flows that apply to both mobile
+  /// platforms should use this instead of an Android-only check.
+  static bool get isAndroidOrIOS {
+    if (kIsWeb) {
+      return false;
+    }
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
   static bool _isIOSTablet() {
     try {
       final views = WidgetsBinding.instance.platformDispatcher.views;

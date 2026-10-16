@@ -191,71 +191,90 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('iOS keeps the existing switch behavior', (tester) async {
+  testWidgets('iOS also sends the first SMS and gates taps like Android',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final send = Completer<FlowyResult<bool, FlowyError>>();
+    when(() => password.sendOtp(phone: phone)).thenAnswer((_) => send.future);
     await tester.pumpWidget(passwordPage());
     await tester.pumpAndSettle();
+    expect(defaultTargetPlatform, TargetPlatform.iOS);
     await tester.tap(find.byType(OutlinedButton));
+    await tester.pump();
+    expect(find.byType(ContinueWithMagicLinkOrPasscodePage), findsNothing);
+    expect(
+      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+      isNull,
+    );
+    verify(() => password.sendOtp(phone: phone)).called(1);
+
+    send.complete(FlowyResult.success(true));
+    await tester.pump();
+    await tester.runAsync(() async => Future<void>.delayed(Duration.zero));
     await tester.pumpAndSettle();
+    expect(bloc.state.isSubmitting, isFalse, reason: 'send completed');
     expect(find.byType(ContinueWithMagicLinkOrPasscodePage), findsOneWidget);
-    verifyNever(() => password.sendOtp(phone: phone));
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
   });
 
-  test('Android publishes one success after session and password status finish',
-      () async {
-    final token = GotrueTokenResponsePB(accessToken: 'test-token');
-    final profile = UserProfilePB(phone: phone);
-    final passwordStatus = Completer<FlowyResult<bool, FlowyError>>();
-    final sessionStarted = Completer<void>();
-    final sessionReady = Completer<void>();
-    when(() => auth.signInWithPasscode(email: phone, passcode: '123456'))
-        .thenAnswer((_) async => FlowyResult.success(token));
-    when(() => password.checkPasswordStatus(phone: phone))
-        .thenAnswer((_) => passwordStatus.future);
-    when(() => deepLink.passGotrueTokenResponse(token)).thenAnswer((_) async {
-      onDeepLink(DeepLinkResult(state: DeepLinkState.loading));
-      onDeepLink(
-        DeepLinkResult(
-          state: DeepLinkState.finish,
-          result: FlowyResult.success(profile),
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    test(
+        '$platform publishes one success after session and password status finish',
+        () async {
+      debugDefaultTargetPlatformOverride = platform;
+      final token = GotrueTokenResponsePB(accessToken: 'test-token');
+      final profile = UserProfilePB(phone: phone);
+      final passwordStatus = Completer<FlowyResult<bool, FlowyError>>();
+      final sessionStarted = Completer<void>();
+      final sessionReady = Completer<void>();
+      when(() => auth.signInWithPasscode(email: phone, passcode: '123456'))
+          .thenAnswer((_) async => FlowyResult.success(token));
+      when(() => password.checkPasswordStatus(phone: phone))
+          .thenAnswer((_) => passwordStatus.future);
+      when(() => deepLink.passGotrueTokenResponse(token)).thenAnswer((_) async {
+        onDeepLink(DeepLinkResult(state: DeepLinkState.loading));
+        onDeepLink(
+          DeepLinkResult(
+            state: DeepLinkState.finish,
+            result: FlowyResult.success(profile),
+          ),
+        );
+        sessionStarted.complete();
+        await sessionReady.future;
+        completion.complete(FlowyResult.success(profile));
+      });
+      final states = <SignInState>[];
+      final subscription = bloc.stream.listen(states.add);
+      final finished = bloc.stream.firstWhere((s) => s.successOrFail != null);
+      bloc.add(
+        const SignInEvent.signInWithPasscode(
+          email: phone,
+          passcode: '123456',
         ),
       );
-      sessionStarted.complete();
-      await sessionReady.future;
-      completion.complete(FlowyResult.success(profile));
+      await sessionStarted.future;
+      verify(() => password.checkPasswordStatus(phone: phone)).called(1);
+      await Future<void>.delayed(Duration.zero);
+      expect(states.where((s) => s.successOrFail?.isSuccess == true), isEmpty);
+      expect(bloc.state.isSubmitting, isTrue);
+      passwordStatus.complete(FlowyResult.success(false));
+      await Future<void>.delayed(Duration.zero);
+      expect(states.where((s) => s.successOrFail?.isSuccess == true), isEmpty);
+      sessionReady.complete();
+      final state = await finished;
+      await Future<void>.delayed(Duration.zero);
+      expect(state.passwordIsSet, isFalse);
+      expect(state.accessToken, 'test-token');
+      expect(state.email, phone);
+      expect(
+        states.where((s) => s.successOrFail?.isSuccess == true),
+        hasLength(1),
+      );
+      verifyNever(() => auth.getUser());
+      await subscription.cancel();
     });
-    final states = <SignInState>[];
-    final subscription = bloc.stream.listen(states.add);
-    final finished = bloc.stream.firstWhere((s) => s.successOrFail != null);
-    bloc.add(
-      const SignInEvent.signInWithPasscode(
-        email: phone,
-        passcode: '123456',
-      ),
-    );
-    await sessionStarted.future;
-    verify(() => password.checkPasswordStatus(phone: phone)).called(1);
-    await Future<void>.delayed(Duration.zero);
-    expect(states.where((s) => s.successOrFail?.isSuccess == true), isEmpty);
-    expect(bloc.state.isSubmitting, isTrue);
-    passwordStatus.complete(FlowyResult.success(false));
-    await Future<void>.delayed(Duration.zero);
-    expect(states.where((s) => s.successOrFail?.isSuccess == true), isEmpty);
-    sessionReady.complete();
-    final state = await finished;
-    await Future<void>.delayed(Duration.zero);
-    expect(state.passwordIsSet, isFalse);
-    expect(state.accessToken, 'test-token');
-    expect(state.email, phone);
-    expect(
-      states.where((s) => s.successOrFail?.isSuccess == true),
-      hasLength(1),
-    );
-    verifyNever(() => auth.getUser());
-    await subscription.cancel();
-  });
+  }
 
   test('failed session initialization never publishes login success', () async {
     final token = GotrueTokenResponsePB(accessToken: 'test-token');

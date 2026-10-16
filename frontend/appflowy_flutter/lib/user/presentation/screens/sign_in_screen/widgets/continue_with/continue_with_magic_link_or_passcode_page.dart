@@ -6,7 +6,6 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -51,9 +50,8 @@ class _ContinueWithMagicLinkOrPasscodePageState
   bool _isLoading = false;
   bool _isEnteringWorkspace = false;
 
-  bool get _isAndroidPhoneLogin =>
-      !kIsWeb &&
-      defaultTargetPlatform == TargetPlatform.android &&
+  bool get _isMobilePhoneLogin =>
+      PlatformInfo.isAndroidOrIOS &&
       !PlatformInfo.isTablet &&
       Validator.isValidPhone(widget.email);
   int _countdown = 60;
@@ -200,7 +198,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
       _isEnteringWorkspace = false;
       _errorMessage = '';
     });
-    if (_isAndroidPhoneLogin) FocusScope.of(context).unfocus();
+    if (_isMobilePhoneLogin) FocusScope.of(context).unfocus();
 
     // 如果提供了 onEnterPasscode 回调，优先使用回调（用于忘记密码等场景）
     if (widget.onEnterPasscode != null) {
@@ -266,7 +264,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
           // 优先检查登录成功状态（无论 isSubmitting 如何）
           if (successOrFail != null && successOrFail.isSuccess) {
-            if (_isAndroidPhoneLogin) {
+            if (_isMobilePhoneLogin) {
               setState(() {
                 _isLoading = true;
                 _isEnteringWorkspace = true;
@@ -714,8 +712,8 @@ class _ContinueWithMagicLinkOrPasscodePageState
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: _isAndroidPhoneLogin ? primaryColor : null,
-          disabledForegroundColor: _isAndroidPhoneLogin ? Colors.white : null,
+          disabledBackgroundColor: _isMobilePhoneLogin ? primaryColor : null,
+          disabledForegroundColor: _isMobilePhoneLogin ? Colors.white : null,
           shape: RoundedRectangleBorder(
             borderRadius:
                 BorderRadius.circular(PlatformInfo.isMobile ? 18 : 10),
@@ -723,7 +721,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
           elevation: 0,
         ),
         child: _isLoading
-            ? _isAndroidPhoneLogin
+            ? _isMobilePhoneLogin
                 ? Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

@@ -10,9 +10,9 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/password_suffix_icon.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileContinueWithPasswordPage extends StatefulWidget {
@@ -161,8 +161,7 @@ class _MobileContinueWithPasswordPageState
         const Spacer(),
         OutlinedButton(
           onPressed: _isSendingCode ||
-                  (!kIsWeb &&
-                      defaultTargetPlatform == TargetPlatform.android &&
+                  (PlatformInfo.isAndroidOrIOS &&
                       Validator.isValidPhone(widget.email) &&
                       isSubmitting)
               ? null
@@ -180,9 +179,8 @@ class _MobileContinueWithPasswordPageState
 
   Future<void> _switchToVerificationLogin() async {
     final signInBloc = context.read<SignInBloc>();
-    final sendCode = !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android &&
-        Validator.isValidPhone(widget.email);
+    final sendCode =
+        PlatformInfo.isAndroidOrIOS && Validator.isValidPhone(widget.email);
     if (sendCode) {
       setState(() => _isSendingCode = true);
       try {

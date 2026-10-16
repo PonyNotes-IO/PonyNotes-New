@@ -32,7 +32,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     if (isAppFlowyCloudEnabled) {
       deepLinkStateListener =
           getIt<AppFlowyCloudDeepLink>().subscribeDeepLinkLoadingState((value) {
-        if (isClosed || _isCompletingAndroidPhonePasscode) return;
+        if (isClosed || _isCompletingMobilePhonePasscode) return;
 
         add(SignInEvent.deepLinkStateChange(value));
       });
@@ -157,7 +157,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
   final AuthService authService;
   PasswordHttpService? passwordService;
   VoidCallback? deepLinkStateListener;
-  bool _isCompletingAndroidPhonePasscode = false;
+  bool _isCompletingMobilePhonePasscode = false;
 
   @override
   Future<void> close() {
@@ -565,15 +565,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     final newState = await result.fold(
       (gotrueTokenResponse) async {
-        if (!kIsWeb &&
-            defaultTargetPlatform == TargetPlatform.android &&
+        if (PlatformInfo.isAndroidOrIOS &&
             !PlatformInfo.isTablet &&
             _isValidPhone(email)) {
           final deepLink = getIt<AppFlowyCloudDeepLink>();
           final completion =
               Completer<FlowyResult<UserProfilePB, FlowyError>>();
           // Let this event publish one success after the Rust session is ready.
-          _isCompletingAndroidPhonePasscode = true;
+          _isCompletingMobilePhonePasscode = true;
           deepLink.registerCompleter(completion);
           try {
             // These requests are independent once the passcode is accepted.
@@ -597,14 +596,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             );
           } catch (error, stackTrace) {
             Log.error(
-              'Android phone sign-in completion failed',
+              'Mobile phone sign-in completion failed',
               error,
               stackTrace,
             );
             return _stateFromCode(FlowyError(msg: '登录初始化失败，请重试'));
           } finally {
             deepLink.completer = null;
-            _isCompletingAndroidPhonePasscode = false;
+            _isCompletingMobilePhonePasscode = false;
           }
         }
         try {
@@ -1351,7 +1350,7 @@ Future<SignInState> waitSignInBlocSubmittingCycle(
   SignInBloc bloc,
   void Function() dispatch,
 ) async {
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+  if (PlatformInfo.isAndroidOrIOS) {
     // Keep one subscription so completion cannot fall between two waits.
     var started = false;
     final completion = bloc.stream.firstWhere((state) {

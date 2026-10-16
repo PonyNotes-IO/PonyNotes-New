@@ -15,9 +15,9 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 
@@ -417,8 +417,7 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
             return;
           }
 
-          if (!kIsWeb &&
-              defaultTargetPlatform == TargetPlatform.android &&
+          if (PlatformInfo.isAndroidOrIOS &&
               state.accessToken != null &&
               Validator.isValidPhone(state.email ?? '')) {
             if (_isNavigatingToHome) return;
