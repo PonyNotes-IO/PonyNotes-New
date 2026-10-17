@@ -264,10 +264,14 @@ dependency_overrides:
   # 2. 修复移动端文字选区左右拖拽手柄：将手柄手势层扩展到完整触摸区域并把触摸目标
   #    放大到 44pt(iOS)/48dp(Android)，同时吞掉点击手势，避免抬手时选区被塌缩成光标
   #    （c70a87b6 + 0a0b8450）。
+  # 3. iOS 句柄手感对齐系统原生：选区句柄与光标句柄改为按下即接管手势（
+  #    _ImmediatePanGestureRecognizer），去掉 36pt 的 pan 阈值和 500ms 长按抢占；
+  #    抓取句柄时立即收起浮动菜单；拖到视口边缘时选区随自动滚动继续延伸。
+  #    （56e655e8 + 7a3a723c + a0cafa84 + 8b3fec70 + 02a83896）
   appflowy_editor:
     git:
       url: https://github.com/PonyNotes-IO/appflowy-editor.git
-      ref: "30954652a28e5a530dc9af4391903c2b6ebce030"
+      ref: "8b3fec70353b6d31e3187ced6eae3222eda99388"
 
   appflowy_editor_plugins:
     git:
