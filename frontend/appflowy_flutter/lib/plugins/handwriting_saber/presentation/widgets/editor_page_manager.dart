@@ -302,30 +302,38 @@ class _PageItem extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _ActionButton(
-                      icon: Icons.add,
-                      tooltip: '在此后插入新页',
-                      onPressed: onInsert,
-                      colorScheme: colorScheme,
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.add,
+                        tooltip: '在此后插入新页',
+                        onPressed: onInsert,
+                        colorScheme: colorScheme,
+                      ),
                     ),
-                    _ActionButton(
-                      icon: Icons.content_copy,
-                      tooltip: '复制此页',
-                      onPressed: onDuplicate,
-                      colorScheme: colorScheme,
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.content_copy,
+                        tooltip: '复制此页',
+                        onPressed: onDuplicate,
+                        colorScheme: colorScheme,
+                      ),
                     ),
-                    _ActionButton(
-                      icon: Icons.cleaning_services,
-                      tooltip: '清空此页',
-                      onPressed: onClear,
-                      colorScheme: colorScheme,
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.cleaning_services,
+                        tooltip: '清空此页',
+                        onPressed: onClear,
+                        colorScheme: colorScheme,
+                      ),
                     ),
-                    _ActionButton(
-                      icon: Icons.delete_outline,
-                      tooltip: '删除此页',
-                      onPressed: onDelete,
-                      colorScheme: colorScheme,
-                      isDestructive: true,
+                    Expanded(
+                      child: _ActionButton(
+                        icon: Icons.delete_outline,
+                        tooltip: '删除此页',
+                        onPressed: onDelete,
+                        colorScheme: colorScheme,
+                        isDestructive: true,
+                      ),
                     ),
                   ],
                 ),

@@ -120,6 +120,7 @@ class SaberCoreCanvas extends StatelessWidget {
     this.editingTextBoxId, // ✅ 正在编辑的文本框ID（用于避免重影）
     this.drawBackground = true, // ✅ 是否绘制背景（默认true，如果需要将图片层置于笔迹层下方，则设为false）
     this.drawStrokes = true, // ✅ 是否绘制笔迹
+    this.renderPdfBackground = true, // ✅ 是否真正渲染 PDF 底图（离屏页面关闭以节省内存）
   });
 
   final EditorCoreInfo coreInfo;
@@ -137,6 +138,7 @@ class SaberCoreCanvas extends StatelessWidget {
   final String? editingTextBoxId; // ✅ 正在编辑的文本框ID（用于避免重影）
   final bool drawBackground; // ✅ 是否绘制背景
   final bool drawStrokes; // ✅ 是否绘制笔迹
+  final bool renderPdfBackground; // ✅ 是否真正渲染 PDF 底图
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +170,7 @@ class SaberCoreCanvas extends StatelessWidget {
           children: [
             // ✅ PDF背景层 - 使用专门的StatefulWidget，完全隔离重绘逻辑
             // 只有当 drawBackground 为 true 时才绘制 PDF 背景
-            if (drawBackground && page.backgroundImage != null)
+            if (drawBackground && page.backgroundImage != null && renderPdfBackground)
               _PdfBackground(
                 key: ValueKey(
                     'pdf_bg_${page.backgroundImage!.pdfFilePath}_${page.backgroundImage!.pdfPageIndex}'),
@@ -196,6 +198,8 @@ class SaberCoreCanvas extends StatelessWidget {
                 repaint: repaintListenable ?? currentStrokeListenable,
                 drawBackground: drawBackground, // ✅ 传递背景绘制标记
                 drawStrokes: drawStrokes, // ✅ 传递笔迹绘制标记
+                pdfBackgroundVisible:
+                    page.backgroundImage == null || renderPdfBackground,
               ),
               size: Size(constraints.maxWidth, constraints.maxHeight),
             ),
@@ -220,6 +224,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     Listenable? repaint,
     this.drawBackground = true, // ✅ 是否绘制背景
     this.drawStrokes = true, // ✅ 是否绘制笔迹
+    this.pdfBackgroundVisible = true, // ✅ PDF 底图是否可见（离屏页面只画底色）
   }) : super(repaint: repaint);
 
   final EditorPage page;
@@ -234,6 +239,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   final String? editingTextBoxId; // ✅ 正在编辑的文本框ID（用于避免重影）
   final bool drawBackground; // ✅ 是否绘制背景
   final bool drawStrokes; // ✅ 是否绘制笔迹
+  final bool pdfBackgroundVisible; // ✅ PDF 底图是否可见
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -375,7 +381,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   void _drawBackground(Canvas canvas, Size drawSize, double offsetX,
       double offsetY, double scale) {
     // ✅ 如果有 PDF 背景图片，不绘制背景色和背景图案
-    if (page.backgroundImage != null) {
+    // 离屏页面不渲染 PDF，但必须画底色，否则透明区域在 iOS 上会变成黑色
+    if (page.backgroundImage != null && pdfBackgroundVisible) {
       return;
     }
 
@@ -1446,6 +1453,11 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     else if (isSelecting != oldDelegate.isSelecting) {
       needsRepaint = true;
       repaintReason = 'isSelecting changed';
+    }
+    // PDF 底图渲染开关变化时重绘（离屏页面切回可见）
+    else if (pdfBackgroundVisible != oldDelegate.pdfBackgroundVisible) {
+      needsRepaint = true;
+      repaintReason = 'pdfBackgroundVisible changed';
     }
     // 缩放级别变化时重绘
     else if (currentScale != oldDelegate.currentScale) {

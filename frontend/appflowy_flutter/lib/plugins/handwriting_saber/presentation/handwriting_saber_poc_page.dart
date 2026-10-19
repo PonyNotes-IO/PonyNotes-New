@@ -16,6 +16,7 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../application/handwriting_saber_data_service.dart';
 import '../application/handwriting_pdf_cache_service.dart';
+import '../application/handwriting_pdf_asset_uploader.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
@@ -36,6 +37,7 @@ import 'handwriting_saber_toolbar.dart';
 import 'widgets/canvas_image.dart'; // ✅ 使用从Saber移植的CanvasImage组件
 import 'widgets/canvas_preview.dart'; // ✅ 导入页面预览组件
 import 'widgets/editor_page_manager.dart'; // ✅ 导入页面管理器组件
+import 'widgets/pdf_viewport_builder.dart';
 import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
 import 'widgets/canvas_webview_widget.dart';
 import 'dialogs/insert_webview_dialog.dart';
@@ -88,6 +90,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 简化版 Saber 核心数据
   EditorCoreInfo _coreInfo = EditorCoreInfo.empty();
+
+  final _pdfAssetUploader = HandwritingPdfAssetUploader();
 
   /// ✅ 数据是否已成功从存储加载完成。
   /// 防止在异步加载(_loadFromStorage)完成前 _coreInfo 仍为空时，
@@ -835,6 +839,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       debugPrint(
           '📖📖📖 [HandwritingSaber] Final _coreInfo.pages.length: ${_coreInfo.pages.length}');
+      LogUtils.info(
+          '[HandwritingSaber] 页面加载完成: view=${widget.view.id}, pages=${_coreInfo.pages.length}, pdfPages=${_coreInfo.pages.where((page) => page.backgroundImage != null).length}');
 
       // ✅ 初始化页面notifier（用于精确状态更新）
       _initPageNotifiers();
@@ -964,7 +970,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 上传后 toJson(forCollab: true) 会使用轻量 URL 格式，
   /// 大幅减少 Collab 同步数据量，避免 WebSocket 同步失败。
   Future<void> _uploadAssetsToCloud() async {
-    for (final page in _coreInfo.pages) {
+    final pages = List<EditorPage>.of(_coreInfo.pages);
+    for (final page in pages) {
       // 上传普通图片（PngEditorImage），失败时重试一次
       for (final img in page.images) {
         if (img is PngEditorImage) {
@@ -983,26 +990,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
       }
-
-      // 上传 PDF 底图，失败时重试一次
-      final bgImage = page.backgroundImage;
-      if (bgImage != null) {
-        if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
-          if (bgImage.pdfFilePath.isNotEmpty &&
-              !bgImage.pdfFilePath.startsWith('http') &&
-              File(bgImage.pdfFilePath).existsSync()) {
-            debugPrint(
-                '🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
-            await bgImage.uploadToCloud();
-            if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
-              debugPrint('🦋[HandwritingSaber] Retrying PDF upload...');
-              await Future.delayed(const Duration(milliseconds: 500));
-              await bgImage.uploadToCloud();
-            }
-          }
-        }
-      }
     }
+    await _pdfAssetUploader.upload(
+      pages.map((page) => page.backgroundImage).whereType<PdfEditorImage>(),
+    );
   }
 
   /// 打开笔记时，用本地完整备份（含 base64）按图片 id 回填缺失的字节，
@@ -1183,6 +1174,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 切换页面管理器侧边栏显示状态
   void _togglePageManager() {
     _showPageManagerNotifier.value = !_showPageManagerNotifier.value;
+    if (_showPageManagerNotifier.value) {
+      LogUtils.info(
+          '[HandwritingSaber] 页面管理打开: view=${widget.view.id}, pages=${_coreInfo.pages.length}, pdfPages=${_coreInfo.pages.where((page) => page.backgroundImage != null).length}');
+    }
   }
 
   /// ✅ 滚动到指定页面
@@ -4326,6 +4321,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   Widget _buildSinglePageCanvas({
     required EditorPage page,
     required int pageIndex,
+    required double pageTop,
+    required double viewportHeight,
     required double pageDisplayWidth,
     required double pageDisplayHeight,
     required double screenWidth,
@@ -4510,18 +4507,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               }),
 
               // ✅ [第1层] 背景层 (只绘制背景色、背景纹理或PDF背景)
-              SaberCoreCanvas(
-                coreInfo: EditorCoreInfo(
-                  pages: [page], // ✅ 只传递当前页面
-                  backgroundColor: _coreInfo.backgroundColor,
-                  backgroundPattern: _currentBackgroundPattern,
-                  lineHeight: _coreInfo.lineHeight,
-                  lineThickness: _coreInfo.lineThickness,
-                  laserStrokes: [], // 背景层不需要激光笔
+              PdfViewportBuilder(
+                pageIndex: pageIndex,
+                viewingPageIndex: _viewingPageIndexNotifier,
+                scrollController: _pageScrollController,
+                pageTop: pageTop,
+                pageHeight: pageDisplayHeight,
+                viewportHeight: viewportHeight,
+                builder: (context, renderPdf) => SaberCoreCanvas(
+                  coreInfo: EditorCoreInfo(
+                    pages: [page], // ✅ 只传递当前页面
+                    backgroundColor: _coreInfo.backgroundColor,
+                    backgroundPattern: _currentBackgroundPattern,
+                    lineHeight: _coreInfo.lineHeight,
+                    lineThickness: _coreInfo.lineThickness,
+                    laserStrokes: [], // 背景层不需要激光笔
+                  ),
+                  drawBackground: true,
+                  drawStrokes: false, // ❌ 不绘制笔迹
+                  renderPdfBackground: renderPdf,
                 ),
-                drawBackground: true,
-                drawStrokes: false, // ❌ 不绘制笔迹
-                // 不需要监听任何变化，只显示静态背景
               ),
 
               // ✅ [第2层] 画布层 (笔迹层)
@@ -5804,6 +5809,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                           if (screenWidth <= 0)
                                             screenWidth = 800;
                                           final List<Widget> pageWidgets = [];
+                                          double pageTop = 0;
 
                                           debugPrint(
                                               '🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}, zoomLevel: ${(zoomLevel * 100).toInt()}%');
@@ -5821,6 +5827,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                             }
 
                                             // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
+                                            final page =
+                                                _coreInfo.pages[pageIndex];
+                                            final pageOffset = pageTop;
+                                            if (page.size.width > 0 &&
+                                                page.size.height > 0) {
+                                              pageTop += screenWidth /
+                                                      page.size.width *
+                                                      page.size.height *
+                                                      zoomLevel +
+                                                  _gapBetweenPages;
+                                            } else {
+                                              pageTop += _gapBetweenPages;
+                                            }
                                             final pageWidget =
                                                 ListenableBuilder(
                                               listenable:
@@ -5856,6 +5875,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                                 return _buildSinglePageCanvas(
                                                   page: page,
                                                   pageIndex: pageIndex,
+                                                  pageTop: pageOffset,
+                                                  viewportHeight:
+                                                      constraints.maxHeight,
                                                   pageDisplayWidth:
                                                       pageDisplayWidth,
                                                   pageDisplayHeight:
