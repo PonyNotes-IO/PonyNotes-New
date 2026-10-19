@@ -1143,23 +1143,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       }
 
-      // 下载 PDF 底图（如果本地缓存不存在）
-      final bgImage = page.backgroundImage;
-      if (bgImage != null) {
-        if (bgImage.pdfUrl != null && bgImage.pdfUrl!.startsWith('http')) {
-          if (bgImage.pdfFilePath.isEmpty ||
-              !File(bgImage.pdfFilePath).existsSync()) {
-            debugPrint(
-                '🦋[HandwritingSaber] Downloading PDF from cloud: ${bgImage.pdfUrl}');
-            await bgImage.downloadFromCloud();
-            if (bgImage.pdfFilePath.isNotEmpty) {
-              hasDownloaded = true;
-              // 重置 PDF 加载状态，触发重新加载
-              bgImage.resetLoadStateAndPreload();
-            }
-          }
-        }
-      }
+      // PDF 的下载、解析、重试由 PdfEditorImage 的预加载任务统一管理，
+      // 避免此处与 _preloadPdfBackgrounds 同时下载并重置加载状态。
     }
 
     // 如果有资源下载完成，刷新页面显示

@@ -124,8 +124,14 @@ class EditorPage {
       final naturalSizeJson = bgImageJson['naturalSize'] as Map<String, dynamic>?;
       final dstRectJson = bgImageJson['dstRect'] as Map<String, dynamic>?;
       
-      // 有云 URL 时使用云 URL，否则使用本地路径
-      final effectivePath = (pdfUrl != null && pdfUrl.isNotEmpty) ? pdfUrl : pdfFilePath;
+      // 保留同设备的本地副本；其他设备上路径不存在时，加载器仍会按 pdfUrl
+      // 命中自己的缓存或回源。不能仅因存在云 URL 就丢弃有效的本地引用。
+      final hasLocalPath = pdfFilePath != null &&
+          pdfFilePath.isNotEmpty &&
+          !pdfFilePath.startsWith('http');
+      final effectivePath = hasLocalPath
+          ? pdfFilePath
+          : (pdfUrl != null && pdfUrl.isNotEmpty ? pdfUrl : pdfFilePath);
       
       if (effectivePath != null && naturalSizeJson != null) {
         final naturalSize = Size(
