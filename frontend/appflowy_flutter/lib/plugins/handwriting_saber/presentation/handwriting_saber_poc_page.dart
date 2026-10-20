@@ -4,6 +4,7 @@ import 'dart:io' show File, Platform;
 import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-handwriting-saber/entities.pb.dart';
 import 'package:defer_pointer/defer_pointer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flowy_infra/platform_extension.dart';
@@ -15,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 
 import '../application/handwriting_saber_data_service.dart';
+import '../application/handwriting_saber_listener.dart';
 import '../application/handwriting_pdf_cache_service.dart';
 import '../application/handwriting_pdf_asset_uploader.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
@@ -98,6 +100,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 因 deactivate/didUpdateWidget(全屏切换、视图树重建等)触发保存，
   /// 用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
   bool _isDataLoaded = false;
+
+  /// 远端更新监听。Rust 侧在 Collab 收到其他设备的更新后通知，画布据此重载。
+  HandwritingSaberListener? _remoteUpdateListener;
+
+  /// 收到远端更新时正在绘制，等抬手/保存结束后再重载
+  bool _pendingRemoteReload = false;
+
+  /// 本轮本地修改尚未落盘期间收到过远端更新：
+  /// 保存前先把远端内容备份成冲突副本，避免静默覆盖
+  bool _remoteUpdateDuringLocalEdit = false;
+
+  /// 防止并发重载
+  bool _isApplyingRemoteReload = false;
+
+  /// 最近一次触摸手势时间。iPad 上滚动/缩放/绘制非常频繁，
+  /// 若每次远端更新都重载画布会打断手势并反复重建 PDF 页视图。
+  DateTime _lastTouchActivityAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 判定"用户已空闲"的时间阈值
+  static const Duration _touchIdleThreshold = Duration(milliseconds: 1500);
+
+  /// 等待用户空闲后执行远端重载的定时器
+  Timer? _remoteReloadTimer;
 
   /// 当前数据初始化任务。PDF 导入必须等待它完成，避免旧数据加载完成后
   /// 覆盖刚刚导入的页面。
@@ -190,8 +215,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final ValueNotifier<String?> _editingTextBoxIdNotifier =
       ValueNotifier<String?>(null);
 
-  /// ✅ 文本框编辑控制器
-  final Map<String, TextEditingController> _textBoxControllers = {};
+  /// Quill 内容变化监听（按文本框 id 只订阅一次，重载时统一取消）
+  final Map<String, StreamSubscription<dynamic>> _textBoxChangeSubscriptions =
+      {};
 
   /// ✅ 当前视图的.sbn2文件路径（缓存，避免重复获取）
   String? _cachedSbnFilePath;
@@ -295,6 +321,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (!_isTouchGesturePlatform || event.kind != PointerDeviceKind.touch) {
       return;
     }
+    _lastTouchActivityAt = DateTime.now();
 
     if (event is PointerDownEvent) {
       if (_mobileTouchPointers.length >= 2) return;
@@ -443,6 +470,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     debugPrint('🚀🚀🚀 [HandwritingSaber] ===== initState =====');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewID: ${widget.view.id}');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewName: ${widget.view.name}');
+    // 先建立远端更新监听，再打开数据，避免错过 init sync 的通知
+    _startRemoteUpdateListener();
     _dataInitialization = _initLocalData();
     // 注册导入后 reload 回调，供 HandwritingImportAction 在导入成功后调用
     HandwritingSaberDataService.registerReloadCallback(
@@ -474,7 +503,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (oldWidget.view.id != widget.view.id) {
       debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID CHANGED! Reloading data...');
       // ✅ 关键修复：切换视图前立即保存旧视图的数据，防止数据丢失
-      _flushSaveForView(oldWidget.view.id);
+      unawaited(_flushSaveForView(oldWidget.view.id));
       HandwritingSaberDataService.unregisterReloadCallback(oldWidget.view.id);
       HandwritingSaberDataService.unregisterSnapshotProvider(oldWidget.view.id);
       HandwritingSaberDataService.registerReloadCallback(
@@ -485,6 +514,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         widget.view.id,
         _captureSnapshotForDuplicate,
       );
+      // 切换到新视图：换监听目标并清空远端重载状态
+      _pendingRemoteReload = false;
+      _remoteUpdateDuringLocalEdit = false;
+      _remoteReloadTimer?.cancel();
+      _remoteReloadTimer = null;
+      _startRemoteUpdateListener();
       // 清理旧视图的状态
       _cleanupViewState();
       // 重新初始化数据
@@ -498,13 +533,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void deactivate() {
     // ✅ 关键修复：Widget从树中移除前立即保存数据，防止切换视图时数据丢失
     debugPrint('🦋[HandwritingSaber] ===== deactivate: flushing save =====');
-    _flushSaveForView(widget.view.id);
+    unawaited(_flushSaveForView(widget.view.id));
     super.deactivate();
   }
 
   /// ✅ 立即保存当前数据到指定视图（同步捕获数据，异步发送到Collab和本地文件）
   /// 用于 deactivate / didUpdateWidget 等需要在状态清理前保存的场景
-  void _flushSaveForView(String viewId) {
+  Future<void> _flushSaveForView(String viewId) async {
     _saveDebounceTimer?.cancel();
     _saveDebounceTimer = null;
 
@@ -529,6 +564,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       debugPrint(
           '🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
+
+      // 离线/并发期间收到过远端更新：先备份远端内容，避免静默覆盖
+      if (_remoteUpdateDuringLocalEdit) {
+        final canOverwrite =
+            await _backupRemoteContentBeforeOverwrite(viewId, bytes);
+        if (!canOverwrite) {
+          // 备份失败：保留冲突标记，下一次保存继续尝试备份，
+          // 绝不因为一次失败就放开覆盖云端
+          await _saveToLocalFile(viewId, bytes);
+          return;
+        }
+        _remoteUpdateDuringLocalEdit = false;
+      }
 
       // 同时保存到 Collab 和本地文件（双保险）
       _dataService.saveHandwritingSaberData(viewId, bytes).then((ok) {
@@ -555,6 +603,191 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       collabData: utf8.encode(_coreInfo.toJsonStringForCollab()),
       localData: utf8.encode(_coreInfo.toJsonString()),
     );
+  }
+
+  // ============================================================
+  // 远端更新：其他设备写入后刷新画布，避免用旧内容覆盖对方
+  // ============================================================
+
+  void _startRemoteUpdateListener() {
+    _remoteUpdateListener?.stop();
+    final listener = HandwritingSaberListener(id: widget.view.id);
+    listener.start(onRemoteUpdate: _onRemoteUpdate);
+    _remoteUpdateListener = listener;
+  }
+
+  void _onRemoteUpdate(HandwritingSaberUpdatePB update) {
+    if (update.viewId != widget.view.id) {
+      return;
+    }
+
+    // 初始加载期间收到远端更新：本次读到的可能是旧内容，加载完成后补一次重载
+    if (!_isDataLoaded) {
+      _pendingRemoteReload = true;
+      return;
+    }
+
+    // 绘制/保存/文本输入中：等用户停下来再重载，
+    // 期间标记冲突，保存前会先备份远端内容。
+    final isEditingText = _editingTextBoxIdNotifier.value != null;
+    if (_currentStrokeNotifier.value != null ||
+        _isLaserFadeInProgress ||
+        _saveDebounceTimer != null ||
+        isEditingText) {
+      _pendingRemoteReload = true;
+      _remoteUpdateDuringLocalEdit = true;
+      _scheduleRemoteReloadAfterIdle();
+      debugPrint(
+          '🦋[HandwritingSaber] remote update deferred (drawing/saving/text): ${widget.view.id}');
+      return;
+    }
+
+    // iPad 上滚动/缩放/落笔非常密集：刚有触摸就重载会打断手势、
+    // 并反复销毁重建 PDF 页视图，先等用户空闲。
+    if (_isTouchGesturePlatform &&
+        DateTime.now().difference(_lastTouchActivityAt) < _touchIdleThreshold) {
+      _pendingRemoteReload = true;
+      _scheduleRemoteReloadAfterIdle();
+      debugPrint(
+          '🦋[HandwritingSaber] remote update deferred (touch active): ${widget.view.id}');
+      return;
+    }
+
+    _pendingRemoteReload = true;
+    unawaited(_applyRemoteReload());
+  }
+
+  /// 用户停止触摸/绘制/输入后再应用被推迟的远端重载
+  void _scheduleRemoteReloadAfterIdle() {
+    _remoteReloadTimer?.cancel();
+    _remoteReloadTimer = Timer(_touchIdleThreshold, () {
+      _remoteReloadTimer = null;
+      if (!mounted || !_pendingRemoteReload) return;
+
+      final stillBusy = _currentStrokeNotifier.value != null ||
+          _isLaserFadeInProgress ||
+          _editingTextBoxIdNotifier.value != null ||
+          (_isTouchGesturePlatform &&
+              DateTime.now().difference(_lastTouchActivityAt) <
+                  _touchIdleThreshold);
+      if (stillBusy) {
+        _scheduleRemoteReloadAfterIdle();
+        return;
+      }
+      unawaited(_applyRemoteReload());
+    });
+  }
+
+  /// 从 Collab 重新读取（已合并远端改动）并重建画布。
+  Future<void> _applyRemoteReload() async {
+    if (_isApplyingRemoteReload || !mounted) {
+      return;
+    }
+    _isApplyingRemoteReload = true;
+    _pendingRemoteReload = false;
+    try {
+      final bytes = await _dataService.loadHandwritingSaberData(widget.view.id);
+      if (bytes.isEmpty || !mounted) return;
+
+      final remote = EditorCoreInfo.fromJsonString(utf8.decode(bytes));
+      if (remote.pages.isEmpty) return;
+
+      // 读取/解析期间用户可能已经开始绘制或输入：放弃本次应用，
+      // 否则会替换掉正在编辑的页面对象
+      if (_currentStrokeNotifier.value != null ||
+          _isLaserFadeInProgress ||
+          _editingTextBoxIdNotifier.value != null) {
+        _pendingRemoteReload = true;
+        return;
+      }
+
+      final oldCoreInfo = _coreInfo;
+      // 先取消旧监听（此时 map 里全是旧文本框），再替换数据。
+      // 若放到 post-frame 里按 id 取消，可能误杀新页面同 id 文本框刚建立的订阅。
+      for (final subscription in _textBoxChangeSubscriptions.values) {
+        subscription.cancel();
+      }
+      _textBoxChangeSubscriptions.clear();
+      setState(() {
+        _coreInfo = remote;
+        _currentBackgroundPattern = remote.backgroundPattern;
+        _currentPageIndexNotifier.value = math.min(
+          _currentPageIndexNotifier.value ?? 0,
+          remote.pages.length - 1,
+        );
+        // 旧的撤销记录指向旧页面对象，跨重载撤销会把旧内容写回去
+        _history.clear();
+        _updateUndoRedoState();
+        _selectResult = null;
+        _selectStartPosition = null;
+        _isSelecting = false;
+        _initPageNotifiers();
+      });
+
+      // 旧页面的 Quill 控制器在当前帧结束后释放
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _disposePageResources(oldCoreInfo);
+      });
+      _preloadPdfBackgrounds();
+      await _hydrateImagesFromLocalBackup();
+      await _hydratePdfPathsFromLocalBackup();
+      debugPrint(
+          '🦋[HandwritingSaber] ✅ applied remote update: ${widget.view.id}, pages=${remote.pages.length}');
+    } catch (e) {
+      LogUtils.error('[HandwritingSaber] apply remote reload failed: $e');
+    } finally {
+      _isApplyingRemoteReload = false;
+      // 重载期间又收到远端更新：交给空闲定时器合并，避免背靠背重载
+      if (_pendingRemoteReload && mounted) {
+        _scheduleRemoteReloadAfterIdle();
+      }
+    }
+  }
+
+  /// 释放被替换掉的页面的文本编辑器资源（监听在替换前已取消）
+  void _disposePageResources(EditorCoreInfo coreInfo) {
+    for (final page in coreInfo.pages) {
+      for (final textBox in page.textBoxes) {
+        textBox.dispose();
+      }
+    }
+  }
+
+  /// 单字段 CRDT 无法合并远端与本地内容。写入本地前把远端版本另存为
+  /// 冲突副本，保证对方的内容不会静默消失。
+  ///
+  /// 返回 false 表示备份失败，调用方必须放弃覆盖云端。
+  Future<bool> _backupRemoteContentBeforeOverwrite(
+    String viewId,
+    List<int> localBytes,
+  ) async {
+    try {
+      final remoteBytes = await _dataService.loadHandwritingSaberData(viewId);
+      final path =
+          await _dataService.getHandwritingSaberFilePathForDebug(viewId);
+      final conflictPath = HandwritingSaberDataService.conflictFilePath(
+        filePath: path,
+        remoteBytes: remoteBytes,
+        localBytes: localBytes,
+        timestampMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      if (conflictPath == null) return true;
+
+      await File(conflictPath).writeAsBytes(remoteBytes, flush: true);
+      await _dataService.pruneConflictFiles(viewId);
+      LogUtils.warning(
+          '[HandwritingSaber] remote content backed up before overwrite: $conflictPath');
+      if (mounted) {
+        showToastNotification(message: '检测到其他设备的修改，已备份为冲突副本');
+      }
+      return true;
+    } catch (e) {
+      LogUtils.error('[HandwritingSaber] backup remote content failed: $e');
+      if (mounted) {
+        showToastNotification(message: '检测到其他设备的修改，但冲突备份失败，本次不会覆盖云端');
+      }
+      return false;
+    }
   }
 
   /// ✅ 将数据写入本地文件作为备份
@@ -661,11 +894,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _isSelecting = false;
     // 清理缓存的文件路径
     _cachedSbnFilePath = null;
-    // 清理文本框控制器
-    for (final controller in _textBoxControllers.values) {
-      controller.dispose();
+    // 清理文本框监听
+    for (final subscription in _textBoxChangeSubscriptions.values) {
+      subscription.cancel();
     }
-    _textBoxControllers.clear();
+    _textBoxChangeSubscriptions.clear();
     // 清理历史记录
     _history.clear();
     _updateUndoRedoState();
@@ -856,6 +1089,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 同理回填 PDF 底图的本地路径，修复历史数据（见方法注释）
       await _hydratePdfPathsFromLocalBackup();
 
+      // 初始化期间收到过远端更新：本次读到的是旧内容，补一次重载
+      if (_pendingRemoteReload) {
+        unawaited(_applyRemoteReload());
+      }
+
       // ✅ 从云端下载图片资源（仅本地确实缺失时，如跨设备首次打开）
       // 异步执行，不阻塞页面加载，下载完成后触发局部刷新
       unawaited(_downloadAssetsFromCloud());
@@ -927,26 +1165,43 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint(
           '🦋[HandwritingSaber] _saveToStorage: collab data size = ${collabBytes.length} bytes, skipCloudUpload=$skipCloudUpload');
 
-      final bool ok = await _dataService.saveHandwritingSaberData(
-        widget.view.id,
-        collabBytes,
-      );
+      // 本地修改期间收到过远端更新：单字段无法合并，先把远端内容备份成
+      // 冲突副本，再写本地，避免静默覆盖对方的内容。
+      var canOverwriteRemote = true;
+      if (_remoteUpdateDuringLocalEdit) {
+        canOverwriteRemote =
+            await _backupRemoteContentBeforeOverwrite(widget.view.id, collabBytes);
+        // 备份失败时保留标记，下一次保存继续尝试备份，绝不放开覆盖
+        if (canOverwriteRemote) {
+          _remoteUpdateDuringLocalEdit = false;
+        }
+      }
+
+      final bool ok = canOverwriteRemote
+          ? await _dataService.saveHandwritingSaberData(
+              widget.view.id,
+              collabBytes,
+            )
+          : false;
 
       // 本地文件备份用完整数据（含 base64 图片，确保本机离线也能显示）
       final String fullJson = _coreInfo.toJsonString();
       final List<int> fullBytes = utf8.encode(fullJson);
       unawaited(_saveToLocalFile(widget.view.id, fullBytes));
 
+      final String statusText = !canOverwriteRemote
+          ? '冲突备份失败，未覆盖云端'
+          : (ok ? '已保存' : '保存失败');
       if (!suppressStatusUpdate) {
         if (mounted) {
           setState(() {
-            _status = ok ? '已保存' : '保存失败';
+            _status = statusText;
           });
         } else {
-          _status = ok ? '已保存' : '保存失败';
+          _status = statusText;
         }
       } else {
-        _status = ok ? '已保存' : '保存失败';
+        _status = statusText;
       }
     } catch (e) {
       if (!suppressStatusUpdate) {
@@ -960,6 +1215,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       } else {
         _status = '保存失败：$e';
       }
+    }
+
+    // 保存完成后补做被推迟的远端重载
+    if (_pendingRemoteReload && !_isLaserFadeInProgress && mounted) {
+      unawaited(_applyRemoteReload());
     }
   }
 
@@ -1163,6 +1423,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     _saveDebounceTimer = Timer(_saveDebounceDuration, () {
+      _saveDebounceTimer = null;
       _saveToStorage(suppressStatusUpdate: true);
     });
   }
@@ -3433,7 +3694,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 导致 "setState() or markNeedsBuild() called during build" 错误
 
     // ✅ 监听 Quill 内容变化，同步到 TextBox 并动态调整宽度
-    textBox.quillContent.controller.changes.listen((event) {
+    // 只订阅一次：build 会反复调用，重复订阅会累积回调并在重载时随旧控制器泄漏
+    _textBoxChangeSubscriptions[textBox.id] ??=
+        textBox.quillContent.controller.changes.listen((event) {
       if (_editingTextBoxIdNotifier.value == textBox.id) {
         // ✅ 同步纯文本到 text 字段（向后兼容）
         final newText = textBox.quillContent.plainText;
@@ -3450,14 +3713,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         final textWidth = textPainter.width;
         // 文本框宽度 = 文本宽度 + 左右padding（20px），最小100px，最大页面宽度
         final minWidth = 100.0;
-        final maxWidth = page.size.width;
+        // 文本框可能已被移动到其他页，回调里按当前所在页计算
+        final currentPageIndex =
+            _coreInfo.pages.indexWhere((p) => p.textBoxes.contains(textBox));
+        if (currentPageIndex < 0) return;
+        final currentPage = _coreInfo.pages[currentPageIndex];
+        final maxWidth = currentPage.size.width;
         final newWidth = (textWidth + 20.0).clamp(minWidth, maxWidth);
         // 更新 TextBox 尺寸（使用页面坐标）
         textBox.size = Size(newWidth, textBox.size.height);
 
         // ✅ 触发页面重建以更新编辑器显示
-        if (mounted && pageIndex < _pageNotifiers.length) {
-          final currentPage = _coreInfo.pages[pageIndex];
+        if (mounted && currentPageIndex < _pageNotifiers.length) {
           final updatedPageForText = EditorPage(
             size: currentPage.size,
             strokes: currentPage.strokes,
@@ -3466,7 +3733,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             listBoxes: currentPage.listBoxes,
             taskListBoxes: currentPage.taskListBoxes,
           );
-          _pageNotifiers[pageIndex].updatePage(updatedPageForText);
+          _pageNotifiers[currentPageIndex].updatePage(updatedPageForText);
         }
         _scheduleSave();
       }
@@ -5463,11 +5730,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 注销导入 reload 回调
     HandwritingSaberDataService.unregisterReloadCallback(widget.view.id);
     HandwritingSaberDataService.unregisterSnapshotProvider(widget.view.id);
+    _remoteUpdateListener?.stop();
+    _remoteUpdateListener = null;
+    _remoteReloadTimer?.cancel();
+    _remoteReloadTimer = null;
 
     // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
     // _flushSaveForView 会同步序列化数据，同时异步写入 Collab 和本地文件
     debugPrint('🦋[HandwritingSaber] ===== dispose: final flush save =====');
-    _flushSaveForView(widget.view.id);
+    unawaited(_flushSaveForView(widget.view.id));
 
     // ✅ 清理所有激光笔淡出定时器
     for (final timer in _laserFadeOutTimers.values) {

@@ -165,17 +165,18 @@ impl HandwritingSaberManager {
     Ok(saber)
   }
 
-  /// 获取手写笔记数据（.sbn2 字节）
-  pub async fn get_handwriting_saber_data(&self, view_id: &Uuid) -> FlowyResult<Vec<u8>> {
+  /// 获取手写笔记数据（.sbn2 字节）与当前版本号
+  pub async fn get_handwriting_saber_data(&self, view_id: &Uuid) -> FlowyResult<(Vec<u8>, i64)> {
     info!(
       "[HandwritingSaber] 🔵 get_handwriting_saber_data: {}",
       view_id
     );
     let saber = self.open_handwriting_saber(view_id).await?;
     let saber_read = saber.read().await;
-    saber_read
+    let data = saber_read
       .get_sbn2_data()
-      .map_err(|e| internal_error(format!("Failed to get sbn2 data: {}", e)))
+      .map_err(|e| internal_error(format!("Failed to get sbn2 data: {}", e)))?;
+    Ok((data, saber_read.get_version()))
   }
 
   /// 保存手写笔记数据
@@ -332,6 +333,12 @@ impl HandwritingSaberManager {
     let arc_saber = collab_builder
       .finalize(object, builder_config, arc_saber)
       .map_err(internal_error)?;
+
+    // 订阅远端更新，让 Flutter 画布能刷新到其他设备的改动
+    arc_saber
+      .write()
+      .await
+      .subscribe_remote_update(view_id);
 
     info!(
       "[HandwritingSaber] ✅ Finalized with sync_enable={}: {}",

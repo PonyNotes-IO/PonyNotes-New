@@ -2,6 +2,7 @@ mod entities;
 mod event_handler;
 pub mod event_map;
 pub mod manager;
+pub mod notification;
 mod saber;
 
 pub use entities::*;

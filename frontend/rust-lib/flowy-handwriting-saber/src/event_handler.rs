@@ -99,17 +99,18 @@ pub(crate) async fn get_handwriting_saber_data_handler(
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  let sbn2_bytes = manager.get_handwriting_saber_data(&view_id).await?;
+  let (sbn2_bytes, version) = manager.get_handwriting_saber_data(&view_id).await?;
   info!(
-    "[HandwritingSaber] get data: {}, size={} bytes",
+    "[HandwritingSaber] get data: {}, size={} bytes, version={}",
     view_id,
-    sbn2_bytes.len()
+    sbn2_bytes.len(),
+    version
   );
 
   data_result_ok(HandwritingSaberDataPB {
     view_id: payload.value,
     sbn2_bytes,
-    version: 1,
+    version,
     updated_at: current_timestamp(),
   })
 }

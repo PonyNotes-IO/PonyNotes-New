@@ -45,3 +45,10 @@ pub struct SaveHandwritingSaberResponsePB {
   #[pb(index = 1)]
   pub new_version: i64,
 }
+
+/// 远端更新通知的 payload
+#[derive(Default, ProtoBuf)]
+pub struct HandwritingSaberUpdatePB {
+  #[pb(index = 1)]
+  pub view_id: String,
+}

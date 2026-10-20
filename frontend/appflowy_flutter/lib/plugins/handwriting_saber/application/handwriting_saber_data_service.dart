@@ -10,6 +10,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-handwriting-saber/entities.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:path/path.dart' as p;
 
 class HandwritingSaberSnapshot {
@@ -378,6 +379,46 @@ class HandwritingSaberDataService {
     } catch (e) {
       Log.error('[HandwritingSaber] Failed to delete handwriting saber: $e');
       return false;
+    }
+  }
+
+  /// 计算冲突副本路径。远端内容为空或与本地完全一致时返回 null，不需要备份。
+  static String? conflictFilePath({
+    required String filePath,
+    required List<int> remoteBytes,
+    required List<int> localBytes,
+    required int timestampMs,
+  }) {
+    if (remoteBytes.isEmpty) return null;
+    if (listEquals(remoteBytes, localBytes)) return null;
+    return filePath.replaceFirst(
+      RegExp(r'\.sbn2$'),
+      '.conflict.$timestampMs.sbn2',
+    );
+  }
+
+  /// 只保留最近 [keep] 个冲突副本，避免长期积累占满磁盘。
+  Future<void> pruneConflictFiles(String viewId, {int keep = 5}) async {
+    try {
+      final filePath = await _getHandwritingSaberFilePath(viewId);
+      final directory = Directory(p.dirname(filePath));
+      if (!directory.existsSync()) return;
+
+      final marker = '$viewId.conflict.';
+      final files = directory
+          .listSync()
+          .whereType<File>()
+          .where((file) => p.basename(file.path).startsWith(marker))
+          .toList()
+        ..sort((a, b) => b.path.compareTo(a.path));
+
+      for (final file in files.skip(keep)) {
+        try {
+          file.deleteSync();
+        } catch (_) {}
+      }
+    } catch (e) {
+      Log.error('[HandwritingSaber] prune conflict files failed: $e');
     }
   }
 
