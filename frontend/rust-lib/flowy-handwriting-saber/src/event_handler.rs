@@ -80,11 +80,20 @@ pub(crate) async fn save_handwriting_saber_handler(
   let view_id = Uuid::parse_str(&payload.view_id)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  let new_version = manager
-    .save_handwriting_saber_data(&view_id, payload.sbn2_bytes, payload.version)
+  let (new_version, local_snapshot) = manager
+    .save_handwriting_saber_data(
+      &view_id,
+      payload.sbn2_bytes,
+      payload.base_sbn2_bytes,
+      &payload.user_id,
+      &payload.workspace_id,
+    )
     .await?;
 
-  data_result_ok(SaveHandwritingSaberResponsePB { new_version })
+  data_result_ok(SaveHandwritingSaberResponsePB {
+    new_version,
+    local_snapshot,
+  })
 }
 
 /// 获取手写笔记数据处理器

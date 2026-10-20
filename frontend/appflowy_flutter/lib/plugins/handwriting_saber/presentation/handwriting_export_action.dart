@@ -1,3 +1,7 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:uuid/uuid.dart';
+import '../application/handwriting_pdf_cache_service.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -183,7 +187,8 @@ class HandwritingExportAction extends StatelessWidget {
       if (!context.mounted) return;
 
       final dataService = HandwritingSaberDataService();
-      final sbnData = await dataService.loadHandwritingSaberData(view.id);
+      final snapshot = await dataService.captureSnapshotForDuplicate(view.id);
+      final sbnData = snapshot.collabData;
 
       if (sbnData.isEmpty) {
         Log.error('[HandwritingExport] 手写笔记数据为空');
@@ -203,11 +208,57 @@ class HandwritingExportAction extends StatelessWidget {
       final jsonString = utf8.decode(sbnData);
       final jsonMap = jsonDecode(jsonString) as Map<String, dynamic>;
       final pages = jsonMap['pages'] as List<dynamic>? ?? [];
+      final localMap = snapshot.localData.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(utf8.decode(HandwritingSaberDataService.normalizeLegacy(
+              view.id, snapshot.localData))) as Map<String, dynamic>;
+      final localPages = {
+        for (final page in localMap['pages'] as List? ?? []) page['id']: page
+      };
+      final localImages = {
+        for (final page in localPages.values)
+          for (final image in page['images'] as List? ?? []) image['id']: image
+      };
+      for (final page in pages) {
+        for (final image in page['images'] as List? ?? []) {
+          if (image['type'] == 'svg' || image.containsKey('svgString'))
+            continue;
+          final local = localImages[image['id']];
+          if ((image['imageBase64'] as String? ?? '').isEmpty &&
+              (image['imageBytes'] as List? ?? []).isEmpty) {
+            if (local != null &&
+                (local['imageBase64'] as String? ?? '').isNotEmpty) {
+              image['imageBase64'] = local['imageBase64'];
+            } else if (local != null &&
+                (local['imageBytes'] as List? ?? []).isNotEmpty) {
+              image['imageBytes'] = local['imageBytes'];
+            } else {
+              final url = image['imageUrl'] as String?;
+              final bytes = url == null ? null : await _downloadPdfFromUrl(url);
+              if (bytes == null || bytes.isEmpty)
+                throw StateError(
+                    LocaleKeys.handwritingStorage_exportMissingImage.tr());
+              image['imageBase64'] = base64Encode(bytes);
+            }
+          }
+        }
+        final bg = page['backgroundImage'] as Map<String, dynamic>?;
+        final localBg =
+            localPages[page['id']]?['backgroundImage'] as Map<String, dynamic>?;
+        final localPath = localBg?['pdfFilePath'] as String?;
+        if (bg != null &&
+            localPath != null &&
+            await File(localPath).exists() &&
+            bg['pdfPageIndex'] == localBg?['pdfPageIndex']) {
+          bg['pdfFilePath'] = localPath;
+        }
+      }
 
       // 收集所有唯一的 PDF 路径（可能是URL或本地路径）
       final pdfPathSet = <String>{};
       for (final page in pages) {
-        if (page is Map<String, dynamic> && page.containsKey('backgroundImage')) {
+        if (page is Map<String, dynamic> &&
+            page.containsKey('backgroundImage')) {
           final bg = page['backgroundImage'] as Map<String, dynamic>?;
           if (bg != null) {
             final path = bg['pdfFilePath'] as String?;
@@ -226,7 +277,11 @@ class HandwritingExportAction extends StatelessWidget {
         try {
           List<int>? bytes;
           if (path.startsWith('http')) {
-            bytes = await _downloadPdfFromUrl(path);
+            final cached =
+                await HandwritingPdfCacheService().cachedPathIfExists(path);
+            bytes = cached != null
+                ? await File(cached).readAsBytes()
+                : await _downloadPdfFromUrl(path);
           } else {
             final file = File(path);
             if (await file.exists()) bytes = await file.readAsBytes();
@@ -263,7 +318,8 @@ class HandwritingExportAction extends StatelessWidget {
           pdfCounter++;
           archiveFiles[archiveName] = entry.value;
           pathToArchiveName[entry.key] = archiveName;
-          Log.info('[HandwritingExport] 添加PDF资源: $archiveName (${entry.value.length} bytes)');
+          Log.info(
+              '[HandwritingExport] 添加PDF资源: $archiveName (${entry.value.length} bytes)');
         }
       }
 
@@ -271,16 +327,20 @@ class HandwritingExportAction extends StatelessWidget {
 
       // 更新 JSON 中的 PDF 路径为归档文件名
       for (final page in pages) {
-        if (page is Map<String, dynamic> && page.containsKey('backgroundImage')) {
+        if (page is Map<String, dynamic> &&
+            page.containsKey('backgroundImage')) {
           final bg = page['backgroundImage'] as Map<String, dynamic>?;
           if (bg != null) {
             final path = bg['pdfFilePath'] as String?;
             final url = bg['pdfUrl'] as String?;
-            final archiveName = pathToArchiveName[path] ??
-                pathToArchiveName[url];
+            final archiveName =
+                pathToArchiveName[path] ?? pathToArchiveName[url];
             if (archiveName != null) {
               bg['pdfFilePath'] = archiveName;
               bg['pdfUrl'] = null;
+            } else {
+              throw StateError(
+                  LocaleKeys.handwritingStorage_exportMissingPdf.tr());
             }
           }
         }
@@ -372,7 +432,8 @@ class HandwritingExportAction extends StatelessWidget {
       );
 
       if (response.statusCode == 200) {
-        Log.info('[HandwritingExport] PDF下载成功: ${response.bodyBytes.length} bytes');
+        Log.info(
+            '[HandwritingExport] PDF下载成功: ${response.bodyBytes.length} bytes');
         return response.bodyBytes;
       } else {
         Log.error('[HandwritingExport] PDF下载失败: HTTP ${response.statusCode}');
@@ -479,8 +540,7 @@ class HandwritingExportAction extends StatelessWidget {
               image.imageBytes.isEmpty &&
               image.imageUrl != null &&
               image.imageUrl!.startsWith('http')) {
-            Log.info(
-                '[HandwritingExport] 预下载云端图片: ${image.imageUrl}');
+            Log.info('[HandwritingExport] 预下载云端图片: ${image.imageUrl}');
             try {
               await image.downloadFromCloud();
               if (image.imageBytes.isNotEmpty) {
@@ -700,8 +760,7 @@ class HandwritingImportAction extends StatelessWidget {
 
       // 保存到当前视图
       final dataService = HandwritingSaberDataService();
-      final success =
-          await dataService.saveHandwritingSaberData(view.id, sbnData);
+      final success = await dataService.replaceDocument(view.id, sbnData);
 
       if (success) {
         Log.info('[HandwritingImport] 导入成功');
@@ -763,7 +822,8 @@ class HandwritingImportAction extends StatelessWidget {
       final dataService = HandwritingSaberDataService();
       final samplePath =
           await dataService.getHandwritingSaberFilePathForDebug('dummy');
-      final targetDir = p.dirname(samplePath);
+      final targetDir =
+          p.join(p.dirname(samplePath), 'imports', const Uuid().v4());
 
       // 确保目标目录存在
       final dir = Directory(targetDir);
@@ -776,9 +836,10 @@ class HandwritingImportAction extends StatelessWidget {
       for (final entry in assets.entries) {
         final newPath = p.join(targetDir, entry.key);
         final file = File(newPath);
-        await file.writeAsBytes(entry.value);
+        await file.writeAsBytes(entry.value, flush: true);
         assetToLocalPath[entry.key] = newPath;
-        Log.info('[HandwritingImport] 已保存资源到本地: $newPath (${entry.value.length} bytes)');
+        Log.info(
+            '[HandwritingImport] 已保存资源到本地: $newPath (${entry.value.length} bytes)');
       }
 
       // 遍历页面查找 PDF 背景并更新路径
@@ -819,7 +880,7 @@ class HandwritingImportAction extends StatelessWidget {
       return modified ? utf8.encode(jsonEncode(jsonMap)) : sbnData;
     } catch (e) {
       Log.error('[HandwritingImport] 处理资源失败: $e');
-      return sbnData;
+      rethrow;
     }
   }
 

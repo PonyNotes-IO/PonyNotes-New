@@ -4,6 +4,7 @@ pub mod event_map;
 pub mod manager;
 pub mod notification;
 mod saber;
+mod storage;
 
 pub use entities::*;
 pub use manager::*;

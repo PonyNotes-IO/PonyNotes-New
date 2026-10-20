@@ -1,4 +1,8 @@
 {
+  "handwritingStorage": {
+    "exportMissingImage": "Image data is unavailable. Connect to the internet and try exporting again.",
+    "exportMissingPdf": "The original PDF is unavailable. Connect to the internet and try exporting again."
+  },
   "appName": "PonyNotes",
   "defaultUsername": "Me",
   "welcomeText": "Welcome to @:appName",

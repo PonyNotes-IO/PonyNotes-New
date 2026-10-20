@@ -40,8 +40,28 @@ class EditorHistory {
     if (_past.length > maxHistoryLength) {
       _past.removeAt(0);
     }
+
     /// 记录新操作时，清空恢复栈
     _future.clear();
+  }
+
+  /// Keep undo only where page objects survived the remote update.
+  void rebase(
+      List<EditorPage> oldPages, List<EditorPage> pages, Set<String> changed) {
+    final indices = {for (var i = 0; i < pages.length; i++) pages[i].id: i};
+    for (final stack in [_past, _future]) {
+      stack.removeWhere((item) {
+        if (item.type == EditorHistoryItemType.insertPage ||
+            item.type == EditorHistoryItemType.deletePage ||
+            item.pageIndex < 0 ||
+            item.pageIndex >= oldPages.length) return true;
+        final id = oldPages[item.pageIndex].id;
+        final index = indices[id];
+        if (index == null || changed.contains(id)) return true;
+        item.pageIndex = index;
+        return false;
+      });
+    }
   }
 
   /// 清空历史记录
@@ -49,11 +69,11 @@ class EditorHistory {
     _past.clear();
     _future.clear();
   }
-  
+
   // ============================================================
   // 页面操作历史记录方法
   // ============================================================
-  
+
   /// 记录插入页面操作
   void recordPageInsert(int pageIndex, EditorPage page) {
     recordChange(EditorHistoryItem.insertPage(
@@ -61,7 +81,7 @@ class EditorHistory {
       page: page,
     ));
   }
-  
+
   /// 记录删除页面操作
   void recordPageDelete(int pageIndex, EditorPage page) {
     recordChange(EditorHistoryItem.deletePage(
@@ -69,7 +89,7 @@ class EditorHistory {
       page: page,
     ));
   }
-  
+
   /// 记录擦除笔迹操作（简化版本，不需要pageIndex）
   void recordErase(List<Stroke> strokes) {
     if (strokes.isEmpty) return;
@@ -103,7 +123,7 @@ enum EditorHistoryItemType {
 /// 历史记录项
 class EditorHistoryItem {
   final EditorHistoryItemType type;
-  final int pageIndex;
+  int pageIndex;
   final List<Stroke> strokes;
   final List<saber_text.TextBox>? textBoxes;
   final List<Stroke>? deletedStrokes;
@@ -175,7 +195,7 @@ class EditorHistoryItem {
       textBoxes: textBoxes,
     );
   }
-  
+
   /// 创建插入页面操作的历史记录
   factory EditorHistoryItem.insertPage({
     required int pageIndex,
@@ -188,7 +208,7 @@ class EditorHistoryItem {
       page: page,
     );
   }
-  
+
   /// 创建删除页面操作的历史记录
   factory EditorHistoryItem.deletePage({
     required int pageIndex,

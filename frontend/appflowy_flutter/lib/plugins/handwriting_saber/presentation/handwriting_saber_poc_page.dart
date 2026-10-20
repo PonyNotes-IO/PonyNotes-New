@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show File, Platform;
 import 'dart:math' as math;
+import 'package:collection/collection.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-handwriting-saber/entities.pb.dart';
@@ -18,7 +20,8 @@ import 'package:flutter_quill/flutter_quill.dart' as quill;
 import '../application/handwriting_saber_data_service.dart';
 import '../application/handwriting_saber_listener.dart';
 import '../application/handwriting_pdf_cache_service.dart';
-import '../application/handwriting_pdf_asset_uploader.dart';
+import '../application/handwriting_asset_sync.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
@@ -82,8 +85,18 @@ class HandwritingSaberPocPage extends StatefulWidget {
 }
 
 class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
-  final HandwritingSaberDataService _dataService =
-      HandwritingSaberDataService();
+  String? _workspaceId;
+  String? _userId;
+  int _documentGeneration = 0;
+  int _localEditRevision = 0;
+  final Map<String, int> _savingViews = {};
+
+  bool _isCurrentDocument(String id, int generation) =>
+      mounted && widget.view.id == id && _documentGeneration == generation;
+
+  bool get _isSaving => (_savingViews[widget.view.id] ?? 0) > 0;
+
+  HandwritingSaberDataService _dataService = HandwritingSaberDataService();
 
   String _status = '初始化中...';
 
@@ -92,8 +105,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 简化版 Saber 核心数据
   EditorCoreInfo _coreInfo = EditorCoreInfo.empty();
-
-  final _pdfAssetUploader = HandwritingPdfAssetUploader();
 
   /// ✅ 数据是否已成功从存储加载完成。
   /// 防止在异步加载(_loadFromStorage)完成前 _coreInfo 仍为空时，
@@ -109,7 +120,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 本轮本地修改尚未落盘期间收到过远端更新：
   /// 保存前先把远端内容备份成冲突副本，避免静默覆盖
-  bool _remoteUpdateDuringLocalEdit = false;
 
   /// 防止并发重载
   bool _isApplyingRemoteReload = false;
@@ -516,12 +526,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       );
       // 切换到新视图：换监听目标并清空远端重载状态
       _pendingRemoteReload = false;
-      _remoteUpdateDuringLocalEdit = false;
       _remoteReloadTimer?.cancel();
       _remoteReloadTimer = null;
       _startRemoteUpdateListener();
+      _documentGeneration++;
       // 清理旧视图的状态
       _cleanupViewState();
+      _dataService = HandwritingSaberDataService();
       // 重新初始化数据
       _dataInitialization = _initLocalData();
     } else {
@@ -539,59 +550,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 立即保存当前数据到指定视图（同步捕获数据，异步发送到Collab和本地文件）
   /// 用于 deactivate / didUpdateWidget 等需要在状态清理前保存的场景
-  Future<void> _flushSaveForView(String viewId) async {
+  Future<void> _flushSaveForView(String viewId) {
     _saveDebounceTimer?.cancel();
     _saveDebounceTimer = null;
-
-    // ✅ 关键防丢失：数据尚未加载完成时（_coreInfo 仍为空），
-    // 全屏切换/视图重建触发的 deactivate 会调用本方法。此时若保存，
-    // 会用空文档(约287字节)覆盖云端真实内容，导致整篇手写笔记丢失。
-    if (!_isDataLoaded) {
-      debugPrint(
-          '🦋[HandwritingSaber] _flushSaveForView: data NOT loaded yet, skip to avoid overwriting cloud content ($viewId)');
-      return;
-    }
-
-    try {
-      final String json = _coreInfo.toJsonString();
-      final List<int> bytes = utf8.encode(json);
-
-      if (bytes.length <= 10) {
-        debugPrint(
-            '🦋[HandwritingSaber] _flushSaveForView: data too small (${bytes.length} bytes), skipping');
-        return;
-      }
-
-      debugPrint(
-          '🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
-
-      // 离线/并发期间收到过远端更新：先备份远端内容，避免静默覆盖
-      if (_remoteUpdateDuringLocalEdit) {
-        final canOverwrite =
-            await _backupRemoteContentBeforeOverwrite(viewId, bytes);
-        if (!canOverwrite) {
-          // 备份失败：保留冲突标记，下一次保存继续尝试备份，
-          // 绝不因为一次失败就放开覆盖云端
-          await _saveToLocalFile(viewId, bytes);
-          return;
-        }
-        _remoteUpdateDuringLocalEdit = false;
-      }
-
-      // 同时保存到 Collab 和本地文件（双保险）
-      _dataService.saveHandwritingSaberData(viewId, bytes).then((ok) {
-        debugPrint(
-            '🦋[HandwritingSaber] _flushSaveForView Collab: ${ok ? "✅" : "❌"} ($viewId)');
-      }).catchError((e) {
-        debugPrint('❌[HandwritingSaber] _flushSaveForView Collab error: $e');
-      });
-
-      // ✅ 同时写入本地文件作为备份（防止 Collab 同步失败导致数据丢失）
-      _saveToLocalFile(viewId, bytes);
-    } catch (e) {
-      debugPrint(
-          '❌[HandwritingSaber] _flushSaveForView serialization error: $e');
-    }
+    return _saveToStorage(
+      suppressStatusUpdate: true,
+      targetViewId: viewId,
+    );
   }
 
   HandwritingSaberSnapshot? _captureSnapshotForDuplicate() {
@@ -633,9 +598,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (_currentStrokeNotifier.value != null ||
         _isLaserFadeInProgress ||
         _saveDebounceTimer != null ||
+        _isSaving ||
         isEditingText) {
       _pendingRemoteReload = true;
-      _remoteUpdateDuringLocalEdit = true;
       _scheduleRemoteReloadAfterIdle();
       debugPrint(
           '🦋[HandwritingSaber] remote update deferred (drawing/saving/text): ${widget.view.id}');
@@ -664,7 +629,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _remoteReloadTimer = null;
       if (!mounted || !_pendingRemoteReload) return;
 
-      final stillBusy = _currentStrokeNotifier.value != null ||
+      final stillBusy = _isSaving ||
+          _saveDebounceTimer != null ||
+          _currentStrokeNotifier.value != null ||
           _isLaserFadeInProgress ||
           _editingTextBoxIdNotifier.value != null ||
           (_isTouchGesturePlatform &&
@@ -680,28 +647,57 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 从 Collab 重新读取（已合并远端改动）并重建画布。
   Future<void> _applyRemoteReload() async {
-    if (_isApplyingRemoteReload || !mounted) {
+    if (_isApplyingRemoteReload ||
+        !mounted ||
+        _isSaving ||
+        _saveDebounceTimer != null) {
       return;
     }
     _isApplyingRemoteReload = true;
     _pendingRemoteReload = false;
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
+    final revision = _localEditRevision;
     try {
-      final bytes = await _dataService.loadHandwritingSaberData(widget.view.id);
-      if (bytes.isEmpty || !mounted) return;
+      final bytes = await _dataService.loadHandwritingSaberData(viewId,
+          acceptAsBase: false);
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       final remote = EditorCoreInfo.fromJsonString(utf8.decode(bytes));
-      if (remote.pages.isEmpty) return;
+      // Empty page collections can be an intentional remote deletion.
 
       // 读取/解析期间用户可能已经开始绘制或输入：放弃本次应用，
       // 否则会替换掉正在编辑的页面对象
-      if (_currentStrokeNotifier.value != null ||
+      if (_isSaving ||
+          _saveDebounceTimer != null ||
+          revision != _localEditRevision ||
+          _currentStrokeNotifier.value != null ||
           _isLaserFadeInProgress ||
           _editingTextBoxIdNotifier.value != null) {
+        _disposePageResources(remote);
         _pendingRemoteReload = true;
         return;
       }
 
       final oldCoreInfo = _coreInfo;
+      final oldPages = {for (final page in oldCoreInfo.pages) page.id: page};
+      final changed = <String>{};
+      for (var i = 0; i < remote.pages.length; i++) {
+        final page = remote.pages[i];
+        final old = oldPages[page.id];
+        if (old != null &&
+            const DeepCollectionEquality().equals(
+              old.toJson(forCollab: true),
+              page.toJson(forCollab: true),
+            )) {
+          _disposePageResources(EditorCoreInfo(pages: [page]));
+          remote.pages[i] = old;
+        } else {
+          changed.add(page.id);
+        }
+      }
+      _dataService.acceptSnapshot(viewId, bytes);
+      _history.rebase(oldCoreInfo.pages, remote.pages, changed);
       // 先取消旧监听（此时 map 里全是旧文本框），再替换数据。
       // 若放到 post-frame 里按 id 取消，可能误杀新页面同 id 文本框刚建立的订阅。
       for (final subscription in _textBoxChangeSubscriptions.values) {
@@ -713,10 +709,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _currentBackgroundPattern = remote.backgroundPattern;
         _currentPageIndexNotifier.value = math.min(
           _currentPageIndexNotifier.value ?? 0,
-          remote.pages.length - 1,
+          math.max(0, remote.pages.length - 1),
         );
-        // 旧的撤销记录指向旧页面对象，跨重载撤销会把旧内容写回去
-        _history.clear();
+        // Unchanged pages retain both their objects and local undo history.
         _updateUndoRedoState();
         _selectResult = null;
         _selectStartPosition = null;
@@ -726,11 +721,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 旧页面的 Quill 控制器在当前帧结束后释放
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _disposePageResources(oldCoreInfo);
+        _disposePageResources(EditorCoreInfo(
+            pages: oldCoreInfo.pages
+                .where((page) => !remote.pages.contains(page))
+                .toList()));
       });
-      _preloadPdfBackgrounds();
+      for (final page
+          in remote.pages.where((page) => changed.contains(page.id))) {
+        page.backgroundImage?.preloadPdfDocument();
+      }
       await _hydrateImagesFromLocalBackup();
+      if (!_isCurrentDocument(viewId, generation)) return;
       await _hydratePdfPathsFromLocalBackup();
+      if (!_isCurrentDocument(viewId, generation)) return;
+      unawaited(_downloadAssetsFromCloud());
       debugPrint(
           '🦋[HandwritingSaber] ✅ applied remote update: ${widget.view.id}, pages=${remote.pages.length}');
     } catch (e) {
@@ -750,125 +754,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       for (final textBox in page.textBoxes) {
         textBox.dispose();
       }
-    }
-  }
-
-  /// 单字段 CRDT 无法合并远端与本地内容。写入本地前把远端版本另存为
-  /// 冲突副本，保证对方的内容不会静默消失。
-  ///
-  /// 返回 false 表示备份失败，调用方必须放弃覆盖云端。
-  Future<bool> _backupRemoteContentBeforeOverwrite(
-    String viewId,
-    List<int> localBytes,
-  ) async {
-    try {
-      final remoteBytes = await _dataService.loadHandwritingSaberData(viewId);
-      final path =
-          await _dataService.getHandwritingSaberFilePathForDebug(viewId);
-      final conflictPath = HandwritingSaberDataService.conflictFilePath(
-        filePath: path,
-        remoteBytes: remoteBytes,
-        localBytes: localBytes,
-        timestampMs: DateTime.now().millisecondsSinceEpoch,
-      );
-      if (conflictPath == null) return true;
-
-      await File(conflictPath).writeAsBytes(remoteBytes, flush: true);
-      await _dataService.pruneConflictFiles(viewId);
-      LogUtils.warning(
-          '[HandwritingSaber] remote content backed up before overwrite: $conflictPath');
-      if (mounted) {
-        showToastNotification(message: '检测到其他设备的修改，已备份为冲突副本');
-      }
-      return true;
-    } catch (e) {
-      LogUtils.error('[HandwritingSaber] backup remote content failed: $e');
-      if (mounted) {
-        showToastNotification(message: '检测到其他设备的修改，但冲突备份失败，本次不会覆盖云端');
-      }
-      return false;
-    }
-  }
-
-  /// ✅ 将数据写入本地文件作为备份
-  ///
-  /// 【退化写保护 2026-07-20】本地备份是 Collab 之外唯一的完整副本（含 base64 图片
-  /// 与本地 PDF 路径）。此前是无条件全量覆盖，一旦某次加载异常拿到空/残缺内容，
-  /// 这里会立刻把唯一的好副本抹掉，损坏变成不可逆。
-  /// 现在：新内容显著小于既有备份时拒绝覆盖，只告警。
-  Future<void> _saveToLocalFile(String viewId, List<int> bytes) async {
-    try {
-      final filePath =
-          await _dataService.getHandwritingSaberFilePathForDebug(viewId);
-      final file = File(filePath);
-
-      if (await _wouldDegradeLocalBackup(file, bytes)) {
-        debugPrint(
-          '⚠️[HandwritingSaber] _saveToLocalFile: 新内容无任何实质内容，'
-          '拒绝覆盖仍有内容的既有备份，已跳过：$filePath',
-        );
-        return;
-      }
-
-      await file.writeAsBytes(bytes);
-      debugPrint(
-          '🦋[HandwritingSaber] _saveToLocalFile: ✅ saved to $filePath (${bytes.length} bytes)');
-    } catch (e) {
-      debugPrint('❌[HandwritingSaber] _saveToLocalFile error: $e');
-    }
-  }
-
-  /// 判断这次写入是否会让本地备份「退化」。
-  ///
-  /// **按语义判断，不按体积。** 体积判断在这里是错的：PDF/图片上传成功后
-  /// base64 会被替换成云 URL，实测出现过 1669661 → 20865 字节（-98.7%）的
-  /// 合法收缩，用体积阈值会把正常保存也拦掉、让备份永远停在旧内容。
-  ///
-  /// 只拦一种情况：新内容**完全没有实质内容**（无笔迹/图片/文本框/PDF 底图），
-  /// 而既有备份**有**。这正对应「加载异常拿到空文档 → 回写抹掉好副本」的场景。
-  /// 用户真的清空一篇笔记时，走的是删除笔迹/页面的正常流程，
-  /// 会被这道守卫拦住，但代价仅是本地备份滞后一轮，不会丢数据。
-  Future<bool> _wouldDegradeLocalBackup(File file, List<int> bytes) async {
-    try {
-      if (!file.existsSync()) return false;
-      final oldBytes = await file.readAsBytes();
-      if (oldBytes.isEmpty) return false;
-      final newCount = _countSubstance(bytes);
-      if (newCount != 0) return false; // 新内容有东西(>0)，或解析失败(-1) → 放行
-      return _countSubstance(oldBytes) > 0; // 旧的有、新的没有 → 拦截
-    } catch (e) {
-      // 判断失败时不阻塞正常保存
-      debugPrint('⚠️[HandwritingSaber] _wouldDegradeLocalBackup 检查失败，放行：$e');
-      return false;
-    }
-  }
-
-  /// 统计一份 .sbn2 内容里的「实质内容」条目数（笔迹/图片/文本框/PDF 底图）。
-  /// 解析失败返回 -1，调用方据此放行，避免因格式变动误伤正常保存。
-  int _countSubstance(List<int> bytes) {
-    try {
-      final data = json.decode(utf8.decode(bytes));
-      if (data is! Map) return -1;
-      final pages = data['pages'];
-      if (pages is! List) return -1;
-      int n = 0;
-      for (final p in pages) {
-        if (p is! Map) continue;
-        for (final k in const [
-          'strokes',
-          'images',
-          'textBoxes',
-          'listBoxes',
-          'taskListBoxes'
-        ]) {
-          final v = p[k];
-          if (v is List) n += v.length;
-        }
-        if (p['backgroundImage'] != null) n++;
-      }
-      return n;
-    } catch (_) {
-      return -1;
     }
   }
 
@@ -916,15 +801,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 初始化页面状态notifier（用于精确更新，避免全量重建）
   void _initPageNotifiers() {
-    // 清理旧的notifier
-    for (final notifier in _pageNotifiers) {
+    final previous = {
+      for (final notifier in _pageNotifiers) notifier.page: notifier
+    };
+    _pageNotifiers
+      ..clear()
+      ..addAll(_coreInfo.pages
+          .map((page) => previous.remove(page) ?? EditorPageNotifier(page)));
+    for (final notifier in previous.values) {
       notifier.dispose();
-    }
-    _pageNotifiers.clear();
-
-    // 为每个页面创建notifier
-    for (final page in _coreInfo.pages) {
-      _pageNotifiers.add(EditorPageNotifier(page));
     }
   }
 
@@ -950,6 +835,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     setState(() {
       _isImporting = true;
     });
+    _documentGeneration++;
     _dataInitialization = _initLocalData();
     _dataInitialization!.then((_) {
       if (mounted)
@@ -964,20 +850,32 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// - 尝试从文件中加载 JSON 形式的 EditorCoreInfo；
   /// - 仅在 PoC 阶段使用 JSON 存储，后续会替换为真正的 .sbn2 二进制。
   Future<void> _initLocalData() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
+    _isDataLoaded = false;
     debugPrint('🦋🦋🦋 [HandwritingSaber] ===== _initLocalData START =====');
     debugPrint('🦋🦋🦋 [HandwritingSaber] ViewID: ${widget.view.id}');
     debugPrint('🦋🦋🦋 [HandwritingSaber] ViewName: ${widget.view.name}');
     try {
+      final workspace = await UserBackendService.getCurrentWorkspace();
+      final profile = await UserBackendService.getCurrentUserProfile();
+      if (!_isCurrentDocument(viewId, generation)) return;
+      _workspaceId = workspace.fold((w) => w.id, (_) => null);
+      _userId = profile.fold((u) => u.id.toString(), (_) => null);
       // 1. 打开或创建手写笔记数据文件（通过统一数据服务）
-      await _dataService.openHandwritingSaber(viewId: widget.view.id);
+      await _dataService.openHandwritingSaber(viewId: viewId);
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       // 1.1 获取并缓存.sbn2文件路径（用于WebView缓存）
-      _cachedSbnFilePath = await _dataService
-          .getHandwritingSaberFilePathForDebug(widget.view.id);
+      final localPath =
+          await _dataService.getHandwritingSaberFilePathForDebug(viewId);
+      if (!_isCurrentDocument(viewId, generation)) return;
+      _cachedSbnFilePath = localPath;
       debugPrint('🦋🦋🦋 [HandwritingSaber] SBN文件路径: $_cachedSbnFilePath');
 
       // 2. 加载已有数据（PoC 阶段按 JSON 文本解析）
       await _loadFromStorage();
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       debugPrint(
           '🦋🦋🦋 [HandwritingSaber] _initLocalData: Data loaded, pages=${_coreInfo.pages.length}');
@@ -989,9 +887,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     } catch (e) {
       debugPrint('❌❌❌ [HandwritingSaber] _initLocalData ERROR: $e');
-      setState(() {
-        _status = '本地数据初始化失败：$e';
-      });
+      if (_isCurrentDocument(viewId, generation))
+        setState(() {
+          _status = '本地数据初始化失败：$e';
+        });
     }
     debugPrint('🦋🦋🦋 [HandwritingSaber] ===== _initLocalData END =====');
   }
@@ -1002,6 +901,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// - 实际存储的还是 EditorCoreInfo 的 JSON 字符串；
   /// - 未来切换为 Saber 真正的 .sbn2 时，只需要替换序列化/反序列化实现。
   Future<void> _loadFromStorage() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
     debugPrint('📖📖📖 [HandwritingSaber] ===== _loadFromStorage START =====');
     debugPrint(
         '📖📖📖 [HandwritingSaber] 当前_coreInfo.pages.length: ${_coreInfo.pages.length}');
@@ -1010,8 +911,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _isDataLoaded = false;
 
     try {
+      var needsRepair = false;
       final List<int> bytes =
-          await _dataService.loadHandwritingSaberData(widget.view.id);
+          await _dataService.loadHandwritingSaberData(viewId);
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       debugPrint(
           '📖📖📖 [HandwritingSaber] Loaded ${bytes.length} bytes from storage');
@@ -1019,7 +922,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       if (bytes.isEmpty) {
         debugPrint(
             '📖📖📖 [HandwritingSaber] Empty data, creating new EditorCoreInfo');
-        _coreInfo = EditorCoreInfo.empty();
+        _coreInfo = EditorCoreInfo.empty(
+          pageId: const Uuid().v5(Namespace.oid.value, '$viewId/pages/0'),
+        );
         // 保证 UI 上的当前背景纸样式与核心数据一致（避免新建时工具栏/画布不一致）
         _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
@@ -1032,7 +937,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             '📖📖📖 [HandwritingSaber] Decoded: ${_coreInfo.pages.length} pages');
 
         // ✅ 修复无效的页面尺寸（兼容旧版本数据）
-        bool needsRepair = false;
         for (int i = 0; i < _coreInfo.pages.length; i++) {
           final page = _coreInfo.pages[i];
           debugPrint(
@@ -1041,25 +945,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             debugPrint(
                 '🔧🔧🔧 [HandwritingSaber] Repairing invalid page size at index $i: ${page.size} -> ${EditorPage.defaultSize}');
             // 创建新的页面对象with正确的尺寸
-            _coreInfo.pages[i] = EditorPage(
-              size: EditorPage.defaultSize,
-              strokes: page.strokes,
-              backgroundImage: page.backgroundImage,
-              images: page.images, // ✅ 补充：保留图片数据
-              webViews: page.webViews, // ✅ 补充：保留 WebView 数据
-              textBoxes: page.textBoxes,
-              listBoxes: page.listBoxes,
-              taskListBoxes: page.taskListBoxes,
-              quill: page.quill, // ✅ 补充：保留 Quill 富文本
-            );
+            _coreInfo.pages[i] = page.copyWith(size: EditorPage.defaultSize);
             needsRepair = true;
           }
-        }
-
-        // 如果修复了数据，保存回文件
-        if (needsRepair) {
-          debugPrint('🔧🔧🔧 [HandwritingSaber] Data repaired, saving...');
-          await _saveToStorage(suppressStatusUpdate: true);
         }
 
         // 同步当前背景纸样式，确保工具栏与数据一致
@@ -1069,6 +957,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // ✅ 数据已成功加载(新建空笔记或已有内容)，此后允许保存
       _isDataLoaded = true;
+      if (needsRepair) await _saveToStorage(suppressStatusUpdate: true);
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       debugPrint(
           '📖📖📖 [HandwritingSaber] Final _coreInfo.pages.length: ${_coreInfo.pages.length}');
@@ -1085,9 +975,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // ✅ 先用本地完整备份按 id 回填图片字节，命中则无需联网（修复本地图片加载慢/先红色"!"）
       await _hydrateImagesFromLocalBackup();
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       // ✅ 同理回填 PDF 底图的本地路径，修复历史数据（见方法注释）
       await _hydratePdfPathsFromLocalBackup();
+      if (!_isCurrentDocument(viewId, generation)) return;
 
       // 初始化期间收到过远端更新：本次读到的是旧内容，补一次重载
       if (_pendingRemoteReload) {
@@ -1097,6 +989,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 从云端下载图片资源（仅本地确实缺失时，如跨设备首次打开）
       // 异步执行，不阻塞页面加载，下载完成后触发局部刷新
       unawaited(_downloadAssetsFromCloud());
+      unawaited(_uploadAndSaveAssets(viewId, generation));
 
       // ✅ 强制刷新界面，确保加载的数据能正确显示
       if (mounted) {
@@ -1106,8 +999,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         });
       }
     } catch (e) {
+      if (!_isCurrentDocument(viewId, generation)) return;
       debugPrint('❌❌❌ [HandwritingSaber] _loadFromStorage ERROR: $e');
-      _coreInfo = EditorCoreInfo.empty();
       // 如果读取失败，也同步当前背景样式为默认
       _currentBackgroundPattern = _coreInfo.backgroundPattern;
       _status = '读取本地文件失败：$e';
@@ -1124,136 +1017,69 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 将当前 EditorCoreInfo 保存到本地数据文件
   ///
   /// [suppressStatusUpdate] 为 true 时不触发界面刷新
-  /// [skipCloudUpload] 为 true 时跳过云上传（仅本地快速保存，用于 dispose 场景）
   Future<void> _saveToStorage({
     bool suppressStatusUpdate = false,
-    bool skipCloudUpload = false,
+    String? targetViewId,
   }) async {
-    // 【防空覆盖 2026-07-20】数据尚未加载完成时禁止保存。
-    // 此前只有 _flushSaveForView 有这道守卫，而 _saveToStorage 有 30+ 个调用点
-    // 却完全没有，是空内容覆盖真实数据的主要入口。
-    if (!_isDataLoaded) {
-      debugPrint(
-        '🦋[HandwritingSaber] _saveToStorage: data NOT loaded yet, skip to avoid overwriting real content',
-      );
-      return;
-    }
-
-    // 如果正在进行激光淡出，延迟保存以避免 I/O 干扰渲染
+    if (!_isDataLoaded) return;
     if (_isLaserFadeInProgress) {
       _pendingSave = true;
-      debugPrint(
-          '🦋[HandwritingSaber] _saveToStorage deferred due to laser fade in progress');
       return;
     }
+    final viewId = targetViewId ?? widget.view.id;
+    final generation = _documentGeneration;
+    final collabBytes = utf8.encode(_coreInfo.toJsonStringForCollab());
+    final localBytes = utf8.encode(_coreInfo.toJsonString());
+    final backupPath = _cachedSbnFilePath;
+    final workspace = _workspaceId;
+    final user = _userId;
+    _savingViews[viewId] = (_savingViews[viewId] ?? 0) + 1;
+    _localEditRevision++;
     try {
-      // 在序列化前上传所有尚未上传的图片和 PDF 底图到云存储
-      // 上传后 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量
-      if (!skipCloudUpload) {
-        try {
-          await _uploadAssetsToCloud();
-        } catch (uploadError) {
-          debugPrint(
-              '⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
-        }
-      }
-
-      // Collab 同步用精简数据（不含 base64 图片，只含云 URL）
-      // 避免大量图片数据导致 Yrs CRDT 更新包过大、WebSocket 同步失败
-      final String collabJson = _coreInfo.toJsonStringForCollab();
-      final List<int> collabBytes = utf8.encode(collabJson);
-      debugPrint(
-          '🦋[HandwritingSaber] _saveToStorage: collab data size = ${collabBytes.length} bytes, skipCloudUpload=$skipCloudUpload');
-
-      // 本地修改期间收到过远端更新：单字段无法合并，先把远端内容备份成
-      // 冲突副本，再写本地，避免静默覆盖对方的内容。
-      var canOverwriteRemote = true;
-      if (_remoteUpdateDuringLocalEdit) {
-        canOverwriteRemote =
-            await _backupRemoteContentBeforeOverwrite(widget.view.id, collabBytes);
-        // 备份失败时保留标记，下一次保存继续尝试备份，绝不放开覆盖
-        if (canOverwriteRemote) {
-          _remoteUpdateDuringLocalEdit = false;
-        }
-      }
-
-      final bool ok = canOverwriteRemote
-          ? await _dataService.saveHandwritingSaberData(
-              widget.view.id,
-              collabBytes,
-            )
-          : false;
-
-      // 本地文件备份用完整数据（含 base64 图片，确保本机离线也能显示）
-      final String fullJson = _coreInfo.toJsonString();
-      final List<int> fullBytes = utf8.encode(fullJson);
-      unawaited(_saveToLocalFile(widget.view.id, fullBytes));
-
-      final String statusText = !canOverwriteRemote
-          ? '冲突备份失败，未覆盖云端'
-          : (ok ? '已保存' : '保存失败');
-      if (!suppressStatusUpdate) {
-        if (mounted) {
-          setState(() {
-            _status = statusText;
-          });
-        } else {
-          _status = statusText;
-        }
-      } else {
-        _status = statusText;
-      }
+      final ok = await _dataService.saveHandwritingSaberData(
+        viewId,
+        collabBytes,
+        localData: localBytes,
+        backupPath: backupPath,
+      );
+      unawaited(_syncAssets(viewId, generation, backupPath, workspace, user));
+      if (!_isCurrentDocument(viewId, generation)) return;
+      _status = ok ? '已保存在本机' : '同步提交失败，本地副本已保留';
+      if (!suppressStatusUpdate) setState(() {});
     } catch (e) {
-      if (!suppressStatusUpdate) {
-        if (mounted) {
-          setState(() {
-            _status = '保存失败：$e';
-          });
-        } else {
-          _status = '保存失败：$e';
-        }
-      } else {
+      if (_isCurrentDocument(viewId, generation)) {
         _status = '保存失败：$e';
+        if (!suppressStatusUpdate) setState(() {});
       }
-    }
-
-    // 保存完成后补做被推迟的远端重载
-    if (_pendingRemoteReload && !_isLaserFadeInProgress && mounted) {
-      unawaited(_applyRemoteReload());
+    } finally {
+      _savingViews[viewId] = (_savingViews[viewId] ?? 1) - 1;
+      if (_isCurrentDocument(viewId, generation) && _pendingRemoteReload) {
+        _scheduleRemoteReloadAfterIdle();
+      }
     }
   }
 
-  /// 上传所有尚未上传的图片和 PDF 底图到云存储
-  ///
-  /// 遍历所有页面的图片列表和 PDF 背景图片，
-  /// 对于还没有云 URL 的资源，上传并记录 URL。
-  /// 上传后 toJson(forCollab: true) 会使用轻量 URL 格式，
-  /// 大幅减少 Collab 同步数据量，避免 WebSocket 同步失败。
-  Future<void> _uploadAssetsToCloud() async {
-    final pages = List<EditorPage>.of(_coreInfo.pages);
-    for (final page in pages) {
-      // 上传普通图片（PngEditorImage），失败时重试一次
-      for (final img in page.images) {
-        if (img is PngEditorImage) {
-          if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
-            if (img.imageBytes.isNotEmpty) {
-              debugPrint('🦋[HandwritingSaber] Uploading image ${img.id}...');
-              await img.uploadToCloud();
-              // 首次失败则重试一次
-              if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
-                debugPrint(
-                    '🦋[HandwritingSaber] Retrying image upload ${img.id}...');
-                await Future.delayed(const Duration(milliseconds: 500));
-                await img.uploadToCloud();
-              }
-            }
-          }
-        }
+  Future<void> _uploadAndSaveAssets(String viewId, int generation) =>
+      _syncAssets(
+          viewId, generation, _cachedSbnFilePath, _workspaceId, _userId);
+
+  Future<void> _syncAssets(String viewId, int generation, String? path,
+      String? workspace, String? user) async {
+    if (path == null || workspace == null || user == null) return;
+    try {
+      final changed = await HandwritingAssetSync.resume(
+        viewId: viewId,
+        path: path,
+        workspaceId: workspace,
+        userId: user,
+      );
+      if (changed && _isCurrentDocument(viewId, generation)) {
+        _pendingRemoteReload = true;
+        _scheduleRemoteReloadAfterIdle();
       }
+    } catch (e) {
+      LogUtils.error('[HandwritingSaber] Assets remain local for retry: $e');
     }
-    await _pdfAssetUploader.upload(
-      pages.map((page) => page.backgroundImage).whereType<PdfEditorImage>(),
-    );
   }
 
   /// 打开笔记时，用本地完整备份（含 base64）按图片 id 回填缺失的字节，
@@ -1263,9 +1089,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 云端下载。本方法在下载前先从本地备份文件命中字节，命中则完全无需联网。
   /// 图片上传后内容不可变，按 id 命中的字节与云端一致，回填永远正确。
   Future<void> _hydrateImagesFromLocalBackup() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
+    final core = _coreInfo;
     // 1. 收集需要回填的图片（无字节但有云 URL）
     final List<PngEditorImage> missing = [];
-    for (final page in _coreInfo.pages) {
+    for (final page in core.pages) {
       for (final img in page.images) {
         if (img is PngEditorImage &&
             img.imageBytes.isEmpty &&
@@ -1279,11 +1108,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     try {
       // 2. 读取并解析本地完整备份（仅本地，不走 Collab）
       final List<int> localBytes =
-          await _dataService.loadLocalBackupData(widget.view.id);
-      if (localBytes.isEmpty) return;
+          await _dataService.loadLocalBackupData(viewId);
+      if (!_isCurrentDocument(viewId, generation) ||
+          !identical(core, _coreInfo) ||
+          localBytes.isEmpty) return;
 
-      final EditorCoreInfo localInfo =
-          EditorCoreInfo.fromJsonString(utf8.decode(localBytes));
+      final EditorCoreInfo localInfo = EditorCoreInfo.fromJsonString(
+          utf8.decode(
+              HandwritingSaberDataService.normalizeLegacy(viewId, localBytes)));
 
       // 3. 建立 id → 字节 映射
       final Map<String, Uint8List> bytesById = {};
@@ -1325,10 +1157,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 完整备份里把路径捞回来。本方法即做这件事：按「页序 + pdfPageIndex」匹配，
   /// 仅在当前底图确实无法定位（路径与 URL 都为空）时才回填，不覆盖有效值。
   Future<void> _hydratePdfPathsFromLocalBackup() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
+    final core = _coreInfo;
     // 1. 找出无法定位的底图
     final List<int> brokenPageIndexes = [];
-    for (int i = 0; i < _coreInfo.pages.length; i++) {
-      final bg = _coreInfo.pages[i].backgroundImage;
+    for (int i = 0; i < core.pages.length; i++) {
+      final bg = core.pages[i].backgroundImage;
       if (bg == null) continue;
       final hasUrl = (bg.pdfUrl ?? '').isNotEmpty;
       if (!hasUrl && bg.pdfFilePath.isEmpty) {
@@ -1339,17 +1174,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     try {
       final List<int> localBytes =
-          await _dataService.loadLocalBackupData(widget.view.id);
-      if (localBytes.isEmpty) return;
+          await _dataService.loadLocalBackupData(viewId);
+      if (!_isCurrentDocument(viewId, generation) ||
+          !identical(core, _coreInfo) ||
+          localBytes.isEmpty) return;
 
-      final EditorCoreInfo localInfo =
-          EditorCoreInfo.fromJsonString(utf8.decode(localBytes));
+      final EditorCoreInfo localInfo = EditorCoreInfo.fromJsonString(
+          utf8.decode(
+              HandwritingSaberDataService.normalizeLegacy(viewId, localBytes)));
 
       int repaired = 0;
       for (final i in brokenPageIndexes) {
-        if (i >= localInfo.pages.length) continue;
-        final localBg = localInfo.pages[i].backgroundImage;
-        final bg = _coreInfo.pages[i].backgroundImage;
+        final candidates =
+            localInfo.pages.where((p) => p.id == core.pages[i].id);
+        if (candidates.isEmpty) continue;
+        final localBg = candidates.first.backgroundImage;
+        final bg = core.pages[i].backgroundImage;
         if (localBg == null || bg == null) continue;
         // 页序之外再校验页码，避免页数变动时张冠李戴
         if (localBg.pdfPageIndex != bg.pdfPageIndex) continue;
@@ -1375,17 +1215,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 当从另一台设备同步过来的数据中图片只有云 URL 时（无本地字节），
   /// 异步下载字节数据后触发界面刷新，确保图片能正确显示。
   Future<void> _downloadAssetsFromCloud() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
+    final core = _coreInfo;
     bool hasDownloaded = false;
 
-    for (final page in _coreInfo.pages) {
+    for (final page in List<EditorPage>.of(core.pages)) {
       // 下载普通图片
-      for (final img in page.images) {
+      for (final img in List<EditorImage>.of(page.images)) {
         if (img is PngEditorImage) {
           if (img.imageBytes.isEmpty &&
               img.imageUrl != null &&
               img.imageUrl!.startsWith('http')) {
             debugPrint(
                 '🦋[HandwritingSaber] Downloading image ${img.id} from cloud...');
+            if (!_isCurrentDocument(viewId, generation) ||
+                !identical(core, _coreInfo)) return;
             await img.downloadFromCloud();
             if (img.imageBytes.isNotEmpty) {
               hasDownloaded = true;
@@ -1399,7 +1244,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
 
     // 如果有资源下载完成，刷新页面显示
-    if (hasDownloaded && mounted) {
+    if (hasDownloaded &&
+        _isCurrentDocument(viewId, generation) &&
+        identical(core, _coreInfo)) {
       debugPrint('🦋[HandwritingSaber] ✅ Assets downloaded, refreshing UI...');
       setState(() {});
     }
@@ -1412,6 +1259,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 调度保存，如果 [immediate] 为 true 则立即保存，否则在最后一次调用后延迟 [_saveDebounceDuration] 保存
   void _scheduleSave({bool immediate = false}) {
+    _localEditRevision++;
     _saveDebounceTimer?.cancel();
     if (immediate) {
       _saveToStorage();
@@ -1604,25 +1452,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     final sourcePage = _coreInfo.pages[pageIndex];
 
-    // 深拷贝页面数据
-    final newStrokes = sourcePage.strokes.map((s) {
-      // 创建笔迹的副本
-      return Stroke(
-        points: List.from(s.points),
-        color: s.color,
-        strokeWidth: s.strokeWidth,
-        toolId: s.toolId,
-        pressureEnabled: s.pressureEnabled,
-      );
-    }).toList();
-
-    // 创建新页面（带有复制的数据）
-    final newPage = EditorPage(
-      size: sourcePage.size,
-      strokes: newStrokes,
-      backgroundImage: sourcePage.backgroundImage,
-      // 其他元素暂不复制（可以根据需要扩展）
-    );
+    final copy =
+        jsonDecode(jsonEncode(sourcePage.toJson())) as Map<String, dynamic>;
+    HandwritingSaberDataService.assignNewPageIds(copy);
+    final newPage = EditorPage.fromJson(copy, sbnPath: _cachedSbnFilePath);
 
     // 插入到源页面之后
     final insertIndex = pageIndex + 1;
@@ -3101,15 +2934,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 这里的实现根据 EditorPage 是否允许直接修改列表而定。
     // 如果需要创建新页面对象：
     if (pageStructureChanged) {
-      final updatedPage = EditorPage(
-        size: page.size,
-        strokes: page.strokes,
+      final updatedPage = page.copyWith(
         backgroundImage: newBackgroundImage,
-        images: page.images,
-        textBoxes: page.textBoxes,
-        listBoxes: page.listBoxes,
-        taskListBoxes: page.taskListBoxes,
-        quill: page.quill,
+        removeBackground: newBackgroundImage == null,
       );
       _coreInfo.pages[pageIndex] = updatedPage;
     }
@@ -3481,19 +3308,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         '🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
 
     // ✅ 更新页面数据（使用EditorPageNotifier，只触发该页面的局部重建）
-    final updatedPage = EditorPage(
-      size: page.size,
-      strokes: page.strokes,
-      backgroundImage: page.backgroundImage,
+    final updatedPage = page.copyWith(
       textBoxes: List<saber_text.TextBox>.from(page.textBoxes)..add(textBox),
-      listBoxes: page.listBoxes,
-      taskListBoxes: page.taskListBoxes,
     );
 
     // ✅ 更新coreInfo中的页面数据
     final updatedPages = List<EditorPage>.from(_coreInfo.pages);
     updatedPages[pageIdx] = updatedPage;
     _coreInfo = EditorCoreInfo(
+      extra: _coreInfo.extra,
       pages: updatedPages,
       backgroundColor: _coreInfo.backgroundColor,
       backgroundPattern: _coreInfo.backgroundPattern,
@@ -3725,14 +3548,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
         // ✅ 触发页面重建以更新编辑器显示
         if (mounted && currentPageIndex < _pageNotifiers.length) {
-          final updatedPageForText = EditorPage(
-            size: currentPage.size,
-            strokes: currentPage.strokes,
-            backgroundImage: currentPage.backgroundImage,
-            textBoxes: currentPage.textBoxes,
-            listBoxes: currentPage.listBoxes,
-            taskListBoxes: currentPage.taskListBoxes,
-          );
+          final updatedPageForText = currentPage.copyWith();
           _pageNotifiers[currentPageIndex].updatePage(updatedPageForText);
         }
         _scheduleSave();
@@ -4507,6 +4323,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     setState(() {
       _currentBackgroundPattern = pattern;
       _coreInfo = EditorCoreInfo(
+        extra: _coreInfo.extra,
         pages: _coreInfo.pages,
         backgroundColor: _coreInfo.backgroundColor,
         backgroundPattern: pattern,
@@ -5086,6 +4903,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 导入图片
   Future<void> _importImage() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
     try {
       // 选择图片文件
       final result = await FilePicker.platform.pickFiles(
@@ -5102,7 +4921,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         withData: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (!_isCurrentDocument(viewId, generation) ||
+          result == null ||
+          result.files.isEmpty) return;
 
       // 获取当前查看的页面索引
       final currentPageIndex = _viewingPageIndexNotifier.value;
@@ -5234,6 +5055,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 导入 PDF 文件（参考 Saber 的 importPdfFromFilePath）
   Future<void> _importPdf() async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
     try {
       // 使用 file_picker 选择 PDF 文件
       final result = await FilePicker.platform.pickFiles(
@@ -5241,7 +5064,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         allowedExtensions: ['pdf'],
       );
 
-      if (result == null || result.files.single.path == null) {
+      if (!_isCurrentDocument(viewId, generation) ||
+          result == null ||
+          result.files.single.path == null) {
         return; // 用户取消选择
       }
 
@@ -5256,6 +5081,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 从文件路径导入 PDF（参考 Saber 的实现，支持多页）
   Future<void> _importPdfFromFilePath(String pdfFilePath) async {
+    final viewId = widget.view.id;
+    final generation = _documentGeneration;
     try {
       // initState 中的数据加载是异步的。必须等待它结束，否则旧数据返回后
       // 会把本次导入的页面列表覆盖掉，表现为仍然只有原来的手写页。
@@ -5263,7 +5090,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       if (dataInitialization != null) {
         await dataInitialization;
       }
-      if (!mounted || !_isDataLoaded) {
+      if (!_isCurrentDocument(viewId, generation)) return;
+      if (!_isDataLoaded) {
         throw Exception('手写笔记数据尚未加载完成，请稍后重试');
       }
 
@@ -5286,8 +5114,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       if (pdfBytes.isEmpty) {
         throw Exception('PDF 文件为空');
       }
-      debugPrint(
-          '🦋[HandwritingSaber] PDF文件读取完成: ${pdfBytes.length} bytes');
+      debugPrint('🦋[HandwritingSaber] PDF文件读取完成: ${pdfBytes.length} bytes');
       LogUtils.info('[HandwritingSaber] PDF文件读取完成: ${pdfBytes.length} bytes');
       final cachedPdfPath =
           await HandwritingPdfCacheService().cacheImportedPdf(pdfBytes);
@@ -5355,6 +5182,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         isFirstPdfPage = false;
       }
 
+      if (!_isCurrentDocument(viewId, generation)) {
+        _disposePageResources(EditorCoreInfo(pages: importedPages));
+        return;
+      }
+
       // ✅ 添加一个空页面（参考 Saber 的实现）
       importedPages.add(EditorPage(
         size: EditorPage.defaultSize,
@@ -5396,18 +5228,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 先保存页面结构，不等待云端 PDF 上传，确保导入结果立即持久化。
       // 云端上传完成后再补写一次带 pdfUrl 的精简数据。
-      await _saveToStorage(suppressStatusUpdate: true, skipCloudUpload: true);
+      await _saveToStorage(suppressStatusUpdate: true);
       LogUtils.info('[HandwritingSaber] 导入页面已保存（等待云端资源上传）');
-      unawaited(() async {
-        try {
-          await _uploadAssetsToCloud();
-          await _saveToStorage(suppressStatusUpdate: true, skipCloudUpload: true);
-          LogUtils.info('[HandwritingSaber] PDF云端上传及索引补写完成');
-        } catch (e, stackTrace) {
-          LogUtils.error('[HandwritingSaber] PDF云端上传失败（本地导入仍保留）: $e\n$stackTrace');
-        }
-      }());
-
       final totalImportTime = DateTime.now().difference(importStartTime);
       debugPrint(
           '🦋[HandwritingSaber] PDF导入完成: 总用时 ${totalImportTime.inMilliseconds}ms');
@@ -5532,17 +5354,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   /// ✅ 获取下一个WebView ID
-  int _getNextWebViewId() {
-    int maxId = 0;
-    for (final page in _coreInfo.pages) {
-      for (final webView in page.webViews) {
-        if (webView.id > maxId) {
-          maxId = webView.id;
-        }
-      }
-    }
-    return maxId + 1;
-  }
+  int _getNextWebViewId() => HandwritingSaberDataService.newWebViewId();
 
   /// ✅ 选中WebView
   void _selectWebView(WebViewEditorElement webView) {

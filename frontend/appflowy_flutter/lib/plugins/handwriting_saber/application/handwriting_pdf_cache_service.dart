@@ -8,6 +8,8 @@ import 'package:appflowy/workspace/application/settings/application_data_storage
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 
 typedef HandwritingPdfCacheEntry = ({String? path, Uint8List? bytes});
 
@@ -20,7 +22,7 @@ typedef HandwritingPdfCacheEntry = ({String? path, Uint8List? bytes});
 /// 此前的 downloadFromCloud 虽写过缓存，但用的是 getTemporaryDirectory()
 /// （系统临时目录、会被清理、非工作区），且下载前未按 URL 命中已存在的缓存。
 ///
-/// 本服务提供工作区持久缓存：以 pdfUrl 的稳定末段文件名为 key，将 PDF 缓存到
+/// 本服务提供工作区持久缓存：以 pdfUrl 完整路径的 SHA-256 为 key，将 PDF 缓存到
 /// {appData}/{userId}/handwriting_saber/pdf_cache/。与 WebView origin、临时目录
 /// 无关，天然跨重启可用。加载时优先命中本地缓存（不联网），未命中再回源云端，
 /// 下载后写入缓存。
@@ -29,7 +31,8 @@ class HandwritingPdfCacheService {
 
   @visibleForTesting
   HandwritingPdfCacheService.forTesting(String directory)
-      : _cachedDir = directory;
+      : _cachedDir = directory,
+        _testing = true;
 
   factory HandwritingPdfCacheService() => instance;
 
@@ -38,6 +41,7 @@ class HandwritingPdfCacheService {
 
   static int _temporaryFileId = 0;
   String? _cachedDir;
+  bool _testing = false;
   final Map<String, Future<HandwritingPdfCacheEntry>> _pendingLoads = {};
 
   /// 缓存总容量上限（默认 500MB，PDF 通常较大），超出按最近最少使用(mtime)淘汰
@@ -47,9 +51,7 @@ class HandwritingPdfCacheService {
 
   Future<String> _getCacheDirectory() async {
     final cached = _cachedDir;
-    if (cached != null) {
-      return cached;
-    }
+    if (_testing && cached != null) return cached;
 
     final basePath = await getIt<ApplicationDataStorage>().getPath();
     final userProfileResult = await UserBackendService.getCurrentUserProfile();
@@ -75,7 +77,7 @@ class HandwritingPdfCacheService {
     return cachePath;
   }
 
-  /// 由 pdfUrl 推导稳定缓存文件名（取末段 blob 文件名，跨重启稳定）
+  /// 由完整 URL（不含临时查询参数）推导缓存名，避免同名资源串用
   String _keyForUrl(String pdfUrl) {
     var seg = pdfUrl;
     final qIdx = seg.indexOf('?');
@@ -93,7 +95,8 @@ class HandwritingPdfCacheService {
     if (!seg.toLowerCase().endsWith('.pdf')) {
       seg = '$seg.pdf';
     }
-    return seg;
+    final digest = sha256.convert(utf8.encode(pdfUrl.split('?').first));
+    return '${digest}_$seg';
   }
 
   Future<String> resolvedPath(String pdfUrl) async {
@@ -155,7 +158,13 @@ class HandwritingPdfCacheService {
       final path = await resolvedPath(pdfUrl);
       final file = File(path);
       if (!file.existsSync() || file.lengthSync() == 0) {
-        return null;
+        final legacyName = Uri.parse(pdfUrl).pathSegments.lastOrNull;
+        if (legacyName == null) return null;
+        final legacy = File(p.join(await _getCacheDirectory(),
+            legacyName.replaceAll(_unsafeChars, '_')));
+        if (!await legacy.exists()) return null;
+        final bytes = await legacy.readAsBytes();
+        return _hasPdfHeader(bytes) ? put(pdfUrl, bytes) : null;
       }
       final reader = await file.open();
       try {
@@ -209,11 +218,12 @@ class HandwritingPdfCacheService {
   /// 立即读取，但不适合交给 PDFium 长时间、按需访问。这里生成唯一的纯 ASCII
   /// 文件名，后续解析、渲染和上传都只访问应用目录中的稳定副本。
   Future<String> cacheImportedPdf(Uint8List bytes) async {
-    if (bytes.isEmpty) {
-      throw ArgumentError.value(bytes.length, 'bytes', 'PDF 文件为空');
+    if (!_hasPdfHeader(bytes)) {
+      throw const FormatException('Imported content has no PDF header');
     }
 
-    final dir = await _getCacheDirectory();
+    final dir = p.join(await _getCacheDirectory(), 'originals');
+    await Directory(dir).create(recursive: true);
     final importId = DateTime.now().microsecondsSinceEpoch;
     final path = p.join(dir, 'import_${importId}_${bytes.length}.pdf');
     final file = File(path);
@@ -229,7 +239,6 @@ class HandwritingPdfCacheService {
       } catch (_) {}
     }
 
-    unawaited(_enforceLimit(protectedPath: path));
     return path;
   }
 
@@ -243,7 +252,8 @@ class HandwritingPdfCacheService {
       final files = dir
           .listSync()
           .whereType<File>()
-          .where((file) => file.path.endsWith('.pdf'))
+          .where((file) =>
+              RegExp(r'^[a-f0-9]{64}_.*\.pdf$').hasMatch(p.basename(file.path)))
           .toList();
       var totalBytes = 0;
       for (final f in files) {

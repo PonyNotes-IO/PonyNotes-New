@@ -1,4 +1,8 @@
 {
+  "handwritingStorage": {
+    "exportMissingImage": "图片资源不可用，请联网后重试导出",
+    "exportMissingPdf": "PDF 原件不可用，请联网后重试导出"
+  },
   "appName": "小马AI笔记",
   "defaultUsername": "我",
   "welcomeText": "欢迎使用 @:appName",

@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+
+import 'handwriting_file_store.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -10,7 +14,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-handwriting-saber/entities.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart';
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:path/path.dart' as p;
 
 class HandwritingSaberSnapshot {
@@ -27,7 +31,102 @@ typedef HandwritingSaberSnapshotProvider = HandwritingSaberSnapshot? Function();
 
 /// Saber 手写笔记数据服务
 /// 负责手写笔记数据的存储和加载（通过 Rust Collab 接口同步）
+typedef HandwritingSession = ({String userId, String workspaceId});
+
 class HandwritingSaberDataService {
+  HandwritingSaberDataService()
+      : _readRemote = null,
+        _writeRemote = null,
+        _pathFor = null,
+        _readSession = currentSession;
+
+  @visibleForTesting
+  HandwritingSaberDataService.forTesting({
+    required Future<List<int>> Function(String) readRemote,
+    required Future<SaveHandwritingSaberResponsePB> Function(
+            SaveHandwritingSaberPayloadPB)
+        writeRemote,
+    required Future<String> Function(String) pathFor,
+    required Future<HandwritingSession> Function() readSession,
+  })  : _readRemote = readRemote,
+        _writeRemote = writeRemote,
+        _pathFor = pathFor,
+        _readSession = readSession;
+
+  final Future<List<int>> Function(String)? _readRemote;
+  final Future<SaveHandwritingSaberResponsePB> Function(
+      SaveHandwritingSaberPayloadPB)? _writeRemote;
+  final Future<String> Function(String)? _pathFor;
+  final Future<HandwritingSession> Function() _readSession;
+  Future<HandwritingSession>? _session;
+
+  static Future<HandwritingSession> currentSession() async {
+    final profile = await UserBackendService.getCurrentUserProfile();
+    final workspace = await UserBackendService.getCurrentWorkspace();
+    return (
+      userId:
+          profile.fold((u) => u.id.toString(), (e) => throw StateError(e.msg)),
+      workspaceId: workspace.fold((w) => w.id, (e) => throw StateError(e.msg)),
+    );
+  }
+
+  Future<void> _checkSession(HandwritingSession expected) async {
+    if (await _readSession() != expected)
+      throw StateError('Handwriting session changed');
+  }
+
+  Future<SaveHandwritingSaberResponsePB> _submit(
+      SaveHandwritingSaberPayloadPB payload) async {
+    if (_writeRemote != null) return _writeRemote(payload);
+    final result =
+        await HandwritingSaberEventSaveHandwritingSaber(payload).send();
+    return result.fold((r) => r, (e) => throw StateError(e.msg));
+  }
+
+  Future<List<int>> _fetch(String viewId) async {
+    if (_readRemote != null) return _readRemote(viewId);
+    final result = await HandwritingSaberEventGetHandwritingSaberData(
+            ViewIdPB()..value = viewId)
+        .send();
+    return result.fold((r) => r.sbn2Bytes, (e) => throw StateError(e.msg));
+  }
+
+  final Map<String, List<int>> _bases = {};
+  final Map<String, Future<bool>> _saves = {};
+  final Set<String> _localOnly = {};
+
+  void acceptSnapshot(String viewId, List<int> bytes) {
+    _bases[viewId] = List<int>.of(bytes);
+  }
+
+  /// Match Rust's deterministic legacy IDs before the editor creates any objects.
+  static List<int> normalizeLegacy(String viewId, List<int> bytes) {
+    if (bytes.isEmpty) return bytes;
+    final doc = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+    final pages = doc['pages'] as List;
+    for (var i = 0; i < pages.length; i++) {
+      final page = pages[i] as Map<String, dynamic>;
+      page['id'] ??= const Uuid().v5(Namespace.oid.value, '$viewId/pages/$i');
+      for (final kind in const [
+        'strokes',
+        'images',
+        'webViews',
+        'textBoxes',
+        'listBoxes',
+        'taskListBoxes'
+      ]) {
+        final items = page[kind] as List? ?? [];
+        for (var j = 0; j < items.length; j++) {
+          final item = items[j] as Map<String, dynamic>;
+          final id =
+              const Uuid().v5(Namespace.oid.value, '$viewId/pages/$i/$kind/$j');
+          item['id'] ??= kind == 'webViews' ? _numericId(id) : id;
+        }
+      }
+    }
+    return utf8.encode(jsonEncode(doc));
+  }
+
   /// 页面注册的 reload 回调（导入成功后调用，触发页面重新加载数据）
   static final Map<String, void Function()> _reloadCallbacks = {};
   static final Map<String, HandwritingSaberSnapshotProvider>
@@ -96,24 +195,11 @@ class HandwritingSaberDataService {
     final saved = await saveHandwritingSaberData(
       viewId,
       snapshot.collabData,
+      localData:
+          snapshot.localData.isEmpty ? snapshot.collabData : snapshot.localData,
     );
     if (!saved) {
       return false;
-    }
-
-    if (snapshot.localData.isNotEmpty) {
-      try {
-        final filePath = await _getHandwritingSaberFilePath(viewId);
-        await File(filePath).writeAsBytes(snapshot.localData, flush: true);
-        Log.info(
-          '[HandwritingSaber] Copied local backup to duplicate: $viewId, '
-          'size=${snapshot.localData.length} bytes',
-        );
-      } catch (e) {
-        Log.warn(
-          '[HandwritingSaber] Failed to copy local backup to duplicate: $e',
-        );
-      }
     }
 
     triggerReload(viewId);
@@ -127,7 +213,8 @@ class HandwritingSaberDataService {
     final userId = userProfileResult.fold(
       (profile) => profile.id.toString(),
       (error) {
-        Log.error('[HandwritingSaber] Failed to get user profile: ${error.msg}');
+        Log.error(
+            '[HandwritingSaber] Failed to get user profile: ${error.msg}');
         return '';
       },
     );
@@ -142,6 +229,7 @@ class HandwritingSaberDataService {
   }
 
   Future<String> _getHandwritingSaberFilePath(String viewId) async {
+    if (_pathFor != null) return _pathFor(viewId);
     final directory = await _getHandwritingSaberDirectory();
     return p.join(directory, '$viewId.sbn2');
   }
@@ -210,94 +298,121 @@ class HandwritingSaberDataService {
     }
   }
 
-  /// 保存手写笔记数据（通过 Rust Collab 接口）
+  /// Serialize local snapshots; the next save must include the preceding local commit.
   Future<bool> saveHandwritingSaberData(
     String viewId,
     List<int> sbn2Data, {
     int? version,
-  }) async {
-    Log.info('[HandwritingSaber] saveHandwritingSaberData() ViewID=$viewId, '
-        'size=${sbn2Data.length} bytes');
-
-    try {
-      final payload = SaveHandwritingSaberPayloadPB()
-        ..viewId = viewId
-        ..sbn2Bytes = sbn2Data
-        ..version = Int64(version ?? 1);
-
-      final result =
-          await HandwritingSaberEventSaveHandwritingSaber(payload).send();
-
-      return result.fold(
-        (response) {
-          Log.info(
-            '[HandwritingSaber] ✅ Saved to Rust/Collab, new version: ${response.newVersion}',
-          );
-          return true;
-        },
-        (error) {
-          Log.error(
-            '[HandwritingSaber] ❌ Failed to save to Rust/Collab: ${error.msg}',
-          );
-          return false;
-        },
-      );
-    } catch (e, stackTrace) {
-      Log.error('[HandwritingSaber] ❌ Exception in saveHandwritingSaberData: $e');
-      Log.error('[HandwritingSaber] Stack trace: $stackTrace');
-      return false;
-    }
+    List<int>? localData,
+    String? backupPath,
+  }) {
+    final snapshot = List<int>.of(sbn2Data);
+    final full = List<int>.of(localData ?? sbn2Data);
+    final session = _session ??= _readSession();
+    final previous = _saves[viewId];
+    late final Future<bool> task;
+    task = () async {
+      if (previous != null) await previous;
+      try {
+        final identity = await session;
+        await _checkSession(identity);
+        normalizeLegacy(viewId,
+            snapshot); // Reject corrupt input before replacing a backup.
+        final editedBase = _localOnly.contains(viewId)
+            ? <int>[]
+            : (_bases[viewId] ?? await loadHandwritingSaberData(viewId));
+        final path = backupPath ?? await _getHandwritingSaberFilePath(viewId);
+        await _checkSession(identity);
+        await HandwritingFileStore.write(
+            '$path.pending',
+            utf8.encode(jsonEncode({
+              'base': base64Encode(editedBase),
+              'next': base64Encode(snapshot),
+              'userId': identity.userId,
+              'workspaceId': identity.workspaceId,
+            })),
+            keepBackups: false);
+        await HandwritingFileStore.write(path, full);
+        final response = await _submit(SaveHandwritingSaberPayloadPB()
+          ..viewId = viewId
+          ..sbn2Bytes = snapshot
+          ..baseSbn2Bytes = editedBase
+          ..userId = identity.userId
+          ..workspaceId = identity.workspaceId
+          ..version = Int64(version ?? 0));
+        final pending = File('$path.pending');
+        if (await pending.exists()) await pending.delete();
+        _localOnly.remove(viewId);
+        acceptSnapshot(viewId, response.localSnapshot);
+        return true;
+      } catch (e) {
+        Log.error(
+            '[HandwritingSaber] Save failed; recovery files retained: $e');
+        return false;
+      }
+    }()
+        .whenComplete(() {
+      if (identical(_saves[viewId], task)) _saves.remove(viewId);
+    });
+    _saves[viewId] = task;
+    return task;
   }
 
-  /// 加载手写笔记数据（从 Rust Collab 接口，Collab 为空或失败时回退到本地文件）
-  Future<List<int>> loadHandwritingSaberData(String viewId) async {
-    Log.info('[HandwritingSaber] loadHandwritingSaberData() ViewID=$viewId');
-
+  /// Read a merged snapshot, replaying any durable local delta before exposing it.
+  Future<List<int>> loadHandwritingSaberData(String viewId,
+      {bool acceptAsBase = true}) async {
+    final identity = await (_session ??= _readSession());
+    await _checkSession(identity);
+    final path = await _getHandwritingSaberFilePath(viewId);
+    final pending = File('$path.pending');
+    Map<String, dynamic>? journal;
+    if (await pending.exists()) {
+      journal =
+          jsonDecode(utf8.decode(await HandwritingFileStore.read(pending.path)))
+              as Map<String, dynamic>;
+      if (journal['userId'] != identity.userId ||
+          journal['workspaceId'] != identity.workspaceId) {
+        throw StateError('Pending handwriting belongs to a different session');
+      }
+    }
     try {
-      final payload = ViewIdPB()..value = viewId;
-      final result =
-          await HandwritingSaberEventGetHandwritingSaberData(payload).send();
-
-      return await result.fold(
-        (data) async {
-          Log.info(
-            '[HandwritingSaber] ✅ Loaded from Rust/Collab: $viewId, '
-            'size: ${data.sbn2Bytes.length} bytes',
-          );
-
-          // Collab 返回空数据时回退到本地文件
-          if (data.sbn2Bytes.isEmpty) {
-            Log.warn(
-              '[HandwritingSaber] ⚠️ Collab returned empty data for $viewId, '
-              'trying local file backup',
-            );
-            final localData = await _loadFromFile(viewId);
-            if (localData.isNotEmpty) {
-              Log.info(
-                '[HandwritingSaber] ✅ Recovered from local file: $viewId, '
-                'size: ${localData.length} bytes',
-              );
-              return localData;
-            }
-          }
-
-          // Collab 有数据则优先使用（跨设备同步的数据源）
-          // Collab 中的数据是精简版（云 URL 模式），加载后会从云端下载图片
-          return data.sbn2Bytes;
-        },
-        (error) {
-          Log.warn(
-            '[HandwritingSaber] ⚠️ Failed to load from Rust/Collab: ${error.msg}, '
-            'falling back to local file',
-          );
-          return _loadFromFile(viewId);
-        },
-      );
-    } catch (e, stackTrace) {
-      Log.error('[HandwritingSaber] ❌ Exception in loadHandwritingSaberData: $e');
-      Log.error('[HandwritingSaber] Stack trace: $stackTrace');
-      // ✅ 异常时也尝试从本地文件恢复
-      return _loadFromFile(viewId);
+      var bytes = await _fetch(viewId);
+      await _checkSession(identity);
+      if (journal != null && _saves[viewId] == null) {
+        await _submit(SaveHandwritingSaberPayloadPB()
+          ..viewId = viewId
+          ..userId = identity.userId
+          ..workspaceId = identity.workspaceId
+          ..baseSbn2Bytes = base64Decode(journal['base'] as String)
+          ..sbn2Bytes = base64Decode(journal['next'] as String));
+        await pending.delete();
+        bytes = await _fetch(viewId);
+        await _checkSession(identity);
+      }
+      if (bytes.isEmpty) {
+        bytes = await _readLocalBackup(path, viewId);
+        if (bytes.isNotEmpty) _localOnly.add(viewId);
+      }
+      bytes = normalizeLegacy(viewId, bytes);
+      if (acceptAsBase) acceptSnapshot(viewId, bytes);
+      return bytes;
+    } catch (e) {
+      await _checkSession(identity);
+      var local = await _readLocalBackup(path, viewId);
+      if (local.isEmpty && journal != null)
+        local = base64Decode(journal['next'] as String);
+      if (local.isEmpty) rethrow;
+      final bytes = normalizeLegacy(viewId, local);
+      if (acceptAsBase) {
+        if (journal != null) {
+          acceptSnapshot(viewId, base64Decode(journal['base'] as String));
+        } else {
+          _localOnly.add(
+              viewId); // No known cloud base: publish all local entities without deleting remote ones.
+        }
+      }
+      Log.warn('[HandwritingSaber] Loaded durable local copy: $e');
+      return bytes;
     }
   }
 
@@ -308,23 +423,58 @@ class HandwritingSaberDataService {
   Future<List<int>> loadLocalBackupData(String viewId) => _loadFromFile(viewId);
 
   /// 从文件系统加载（回退方案）
-  Future<List<int>> _loadFromFile(String viewId) async {
-    try {
-      final filePath = await _getHandwritingSaberFilePath(viewId);
-      final file = File(filePath);
-      if (!file.existsSync()) {
-        Log.info('[HandwritingSaber] File not found, returning empty: $viewId');
-        return <int>[];
+  Future<List<int>> _readLocalBackup(String path, String viewId) async {
+    var found = false;
+    for (final candidate in [path, '$path.previous', '$path.legacy']) {
+      if (!await File(candidate).exists()) continue;
+      found = true;
+      try {
+        final bytes = await HandwritingFileStore.read(candidate);
+        normalizeLegacy(viewId, bytes);
+        if (bytes.isNotEmpty) return bytes;
+      } catch (e) {
+        Log.warn(
+            '[HandwritingSaber] Invalid backup retained at $candidate: $e');
       }
-      final data = await file.readAsBytes();
-      Log.info(
-        '[HandwritingSaber] ✅ Loaded from file: $viewId, size: ${data.length} bytes',
-      );
-      return data;
-    } catch (e) {
-      Log.error('[HandwritingSaber] ❌ Failed to load from file: $e');
-      return <int>[];
     }
+    if (found)
+      throw const FormatException(
+          'No valid handwriting backup; original files retained');
+    return <int>[];
+  }
+
+  Future<List<int>> _loadFromFile(String viewId) async {
+    return _readLocalBackup(await _getHandwritingSaberFilePath(viewId), viewId);
+  }
+
+  static int _numericId(String uuid) =>
+      int.parse(uuid.replaceAll('-', '').substring(0, 13), radix: 16);
+
+  static int newWebViewId() => _numericId(const Uuid().v4());
+
+  static void assignNewPageIds(Map<String, dynamic> page) {
+    page['id'] = const Uuid().v4();
+    for (final kind in const [
+      'strokes',
+      'images',
+      'webViews',
+      'textBoxes',
+      'listBoxes',
+      'taskListBoxes'
+    ]) {
+      for (final item in page[kind] as List? ?? []) {
+        item['id'] = kind == 'webViews' ? newWebViewId() : const Uuid().v4();
+      }
+    }
+  }
+
+  Future<bool> replaceDocument(String viewId, List<int> bytes) async {
+    await loadHandwritingSaberData(viewId);
+    final doc = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+    for (final page in doc['pages'] as List) {
+      assignNewPageIds(page as Map<String, dynamic>);
+    }
+    return saveHandwritingSaberData(viewId, utf8.encode(jsonEncode(doc)));
   }
 
   /// 关闭手写笔记

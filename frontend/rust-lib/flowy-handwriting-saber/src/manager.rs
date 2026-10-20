@@ -33,7 +33,8 @@ pub struct HandwritingSaberManager {
   collab_builder: Weak<AppFlowyCollabBuilder>,
   cloud_service: Arc<dyn HandwritingSaberCloudService>,
   /// 已打开的手写笔记缓存
-  handwriting_sabers: Arc<DashMap<Uuid, Arc<RwLock<HandwritingSaber>>>>,
+  handwriting_sabers: Arc<DashMap<(i64, Uuid, Uuid), Arc<RwLock<HandwritingSaber>>>>,
+  open_lock: tokio::sync::Mutex<()>,
 }
 
 impl Drop for HandwritingSaberManager {
@@ -53,6 +54,7 @@ impl HandwritingSaberManager {
       collab_builder,
       cloud_service,
       handwriting_sabers: Arc::new(Default::default()),
+      open_lock: tokio::sync::Mutex::new(()),
     }
   }
 
@@ -72,6 +74,7 @@ impl HandwritingSaberManager {
 
   /// 初始化
   pub async fn initialize(&self, _uid: i64) -> FlowyResult<()> {
+    let _opening = self.open_lock.lock().await;
     trace!("[HandwritingSaber] initialize manager");
     self.handwriting_sabers.clear();
     Ok(())
@@ -153,13 +156,19 @@ impl HandwritingSaberManager {
   ) -> FlowyResult<Arc<RwLock<HandwritingSaber>>> {
     info!("[HandwritingSaber] 🔵 open_handwriting_saber: {}", view_id);
 
-    if let Some(saber) = self.handwriting_sabers.get(view_id) {
+    let _opening = self.open_lock.lock().await;
+    let uid = self.user_service.user_id()?;
+    let workspace_id = self.user_service.workspace_id()?;
+    if let Some(saber) = self.handwriting_sabers.get(&(uid, workspace_id, *view_id)) {
       trace!("[HandwritingSaber] Found in cache: {}", view_id);
       return Ok(saber.clone());
     }
 
     let saber = self.create_saber_instance(view_id, true).await?;
-    self.handwriting_sabers.insert(*view_id, saber.clone());
+    self.check_session(&uid.to_string(), &workspace_id.to_string())?;
+    self
+      .handwriting_sabers
+      .insert((uid, workspace_id, *view_id), saber.clone());
 
     info!("[HandwritingSaber] ✅ Opened: {}", view_id);
     Ok(saber)
@@ -171,46 +180,67 @@ impl HandwritingSaberManager {
       "[HandwritingSaber] 🔵 get_handwriting_saber_data: {}",
       view_id
     );
+    let uid = self.user_service.user_id()?;
+    let workspace = self.user_service.workspace_id()?;
     let saber = self.open_handwriting_saber(view_id).await?;
     let saber_read = saber.read().await;
+    self.check_session(&uid.to_string(), &workspace.to_string())?;
     let data = saber_read
       .get_sbn2_data()
       .map_err(|e| internal_error(format!("Failed to get sbn2 data: {}", e)))?;
     Ok((data, saber_read.get_version()))
   }
 
-  /// 保存手写笔记数据
+  /// Persist the caller's changes without replacing unseen remote edits.
   pub async fn save_handwriting_saber_data(
     &self,
     view_id: &Uuid,
     sbn2_bytes: Vec<u8>,
-    version: i64,
-  ) -> FlowyResult<i64> {
-    info!(
-      "[HandwritingSaber] 🔵 save_handwriting_saber_data: {}, size: {} bytes, version: {}",
-      view_id,
-      sbn2_bytes.len(),
-      version
-    );
-
+    base_sbn2_bytes: Vec<u8>,
+    user_id: &str,
+    workspace_id: &str,
+  ) -> FlowyResult<(i64, Vec<u8>)> {
+    self.check_session(user_id, workspace_id)?;
+    let uid = self.user_service.user_id()?;
+    let workspace = self.user_service.workspace_id()?;
+    let db = self.user_service.collab_db(uid)?;
     let saber = self.open_handwriting_saber(view_id).await?;
-    let new_version = version + 1;
+    let mut saber = saber.write().await;
+    self.check_session(user_id, workspace_id)?;
+    let (version, local_snapshot) = saber
+      .apply_snapshot(&base_sbn2_bytes, &sbn2_bytes)
+      .map_err(internal_error)?;
+    self
+      .collab_builder()?
+      .write_collab_to_disk(
+        uid,
+        &workspace.to_string(),
+        &view_id.to_string(),
+        db,
+        &CollabType::Document,
+        &*saber,
+      )
+      .map_err(internal_error)?;
+    Ok((version, local_snapshot))
+  }
 
+  fn check_session(&self, user_id: &str, workspace_id: &str) -> FlowyResult<()> {
+    if user_id != self.user_service.user_id()?.to_string()
+      || workspace_id != self.user_service.workspace_id()?.to_string()
     {
-      let mut saber_write = saber.write().await;
-      saber_write
-        .update_sbn2_data(sbn2_bytes, new_version)
-        .map_err(|e| internal_error(format!("Failed to update sbn2 data: {}", e)))?;
+      return Err(FlowyError::invalid_data().with_context("Handwriting session changed"));
     }
-
-    info!("[HandwritingSaber] ✅ Saved, new version: {}", new_version);
-    Ok(new_version)
+    Ok(())
   }
 
   /// 关闭手写笔记（从内存中移除）
   pub async fn close_handwriting_saber(&self, view_id: &Uuid) -> FlowyResult<()> {
     info!("[HandwritingSaber] 🔵 close_handwriting_saber: {}", view_id);
-    self.handwriting_sabers.remove(view_id);
+    self.handwriting_sabers.remove(&(
+      self.user_service.user_id()?,
+      self.user_service.workspace_id()?,
+      *view_id,
+    ));
     Ok(())
   }
 
@@ -220,7 +250,11 @@ impl HandwritingSaberManager {
       "[HandwritingSaber] 🔵 delete_handwriting_saber: {}",
       view_id
     );
-    self.handwriting_sabers.remove(view_id);
+    self.handwriting_sabers.remove(&(
+      self.user_service.user_id()?,
+      self.user_service.workspace_id()?,
+      *view_id,
+    ));
 
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
@@ -281,64 +315,27 @@ impl HandwritingSaberManager {
           );
           DataSource::DocStateV1(doc_state)
         },
-        _ => {
-          info!(
-            "[HandwritingSaber] Cloud empty or error, creating new for: {}",
-            view_id
-          );
-          DataSource::Disk(None)
+        Ok(_) => {
+          return Err(FlowyError::invalid_data().with_context("Empty cloud handwriting state"))
         },
+        Err(err) => return Err(err),
       }
     };
 
+    self.check_session(&uid.to_string(), &workspace_id.to_string())?;
     let collab = self.build_collab(uid, view_id, data_source).await?;
+    self.check_session(&uid.to_string(), &workspace_id.to_string())?;
 
-    let saber = match HandwritingSaber::open(collab) {
-      Ok(s) => {
-        info!("[HandwritingSaber] ✅ Opened existing: {}", view_id);
-        s
-      },
-      Err(e) => {
-        info!(
-          "[HandwritingSaber] ⚠️ Failed to open ({}), creating new: {}",
-          e, view_id
-        );
-        let data_source = if exists {
-          CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id).into_data_source()
-        } else {
-          DataSource::Disk(None)
-        };
-        let collab = self.build_collab(uid, view_id, data_source).await?;
-        let s = HandwritingSaber::create(collab)
-          .map_err(|e| internal_error(format!("Failed to create saber: {}", e)))?;
-
-        let encoded = s.encode_collab().map_err(internal_error)?;
-        self
-          .persistence()?
-          .save_collab_to_disk(&view_id.to_string(), encoded)
-          .map_err(internal_error)?;
-
-        info!(
-          "[HandwritingSaber] ✅ Initialized and saved new saber: {}",
-          view_id
-        );
-        s
-      },
-    };
+    let saber = HandwritingSaber::open(collab).map_err(internal_error)?;
 
     let arc_saber = Arc::new(RwLock::new(saber));
 
-    // ✅ 关键：调用 finalize() 添加 WebSocket 云端实时同步插件
+    // Observe before initialize/finalize, so initial remote sync cannot be missed.
+    arc_saber.write().await.subscribe_remote_update(view_id);
     let builder_config = CollabBuilderConfig::default().sync_enable(sync_enable);
     let arc_saber = collab_builder
       .finalize(object, builder_config, arc_saber)
       .map_err(internal_error)?;
-
-    // 订阅远端更新，让 Flutter 画布能刷新到其他设备的改动
-    arc_saber
-      .write()
-      .await
-      .subscribe_remote_update(view_id);
 
     info!(
       "[HandwritingSaber] ✅ Finalized with sync_enable={}: {}",
@@ -387,7 +384,11 @@ impl HandwritingSaberManager {
 
   /// 检查手写笔记是否存在于本地磁盘
   async fn is_handwriting_saber_exist(&self, view_id: &Uuid) -> FlowyResult<bool> {
-    if self.handwriting_sabers.contains_key(view_id) {
+    if self.handwriting_sabers.contains_key(&(
+      self.user_service.user_id()?,
+      self.user_service.workspace_id()?,
+      *view_id,
+    )) {
       return Ok(true);
     }
 

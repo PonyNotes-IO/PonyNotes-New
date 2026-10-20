@@ -19,7 +19,11 @@ class FileUploadService {
   /// Upload file to AppFlowy Cloud storage and get URL
   /// Requires user to be logged in to AppFlowy Cloud
   /// Maximum file size: 3GB
-  static Future<String> uploadFile(Uint8List fileBytes, String fileName) async {
+  static Future<String> uploadFile(
+    Uint8List fileBytes,
+    String fileName, {
+    String? workspaceId,
+  }) async {
     try {
       Log.info('Uploading file to AppFlowy Cloud: $fileName (${getFileSizeString(fileBytes.length)})');
       
@@ -41,11 +45,11 @@ class FileUploadService {
       }
       
       // Get current workspace
-      final workspaceResult = await UserBackendService.getCurrentWorkspace();
-      final workspace = workspaceResult.fold(
-        (workspace) => workspace,
-        (error) => throw Exception('无法获取当前工作区: $error'),
-      );
+      final targetWorkspaceId = workspaceId ??
+          (await UserBackendService.getCurrentWorkspace()).fold(
+            (workspace) => workspace.id,
+            (error) => throw Exception('无法获取当前工作区: $error'),
+          );
       
       // Get AppFlowy Cloud base URL from DI container (includes port for dev environments)
       final baseUrl = _getCloudBaseUrl();
@@ -53,12 +57,11 @@ class FileUploadService {
       final String baseOrigin = _buildBaseOrigin(uri);
       
       // Use PUT method directly: PUT /api/file_storage/{workspace_id}/blob/{file_id}
-      final workspaceId = workspace.id;
       final fileId = Uri.encodeComponent(fileName);
-      final putUrl = '$baseOrigin/api/file_storage/$workspaceId/blob/$fileId';
+      final putUrl = '$baseOrigin/api/file_storage/$targetWorkspaceId/blob/$fileId';
       
       Log.info('Uploading file using PUT method: $putUrl');
-      Log.info('Workspace ID: $workspaceId, File ID: $fileId');
+      Log.info('Workspace ID: $targetWorkspaceId, File ID: $fileId');
       
       // 每次重试都必须新建 Request。package:http 的 Request 只能 finalize/send 一次，
       // 复用已发送的 Request 会在第二次 attempt 抛出 finalized 状态异常。
@@ -132,7 +135,7 @@ class FileUploadService {
         }
         
         // Construct accessible URL (same as upload endpoint)
-        final constructed = '$baseOrigin/api/file_storage/$workspaceId/blob/$fileId';
+        final constructed = '$baseOrigin/api/file_storage/$targetWorkspaceId/blob/$fileId';
         Log.info('File uploaded successfully (constructed URL): $constructed');
         return constructed;
       }

@@ -8,6 +8,8 @@ import '../tools/tool.dart';
 /// ✅ 直线笔迹
 class LineStroke extends Stroke {
   LineStroke({
+    super.id,
+    super.extra,
     required Offset startPoint,
     required Offset endPoint,
     required Color color,
@@ -52,6 +54,8 @@ class LineStroke extends Stroke {
 
     if (stroke.points.length < 2) {
       return LineStroke(
+        id: stroke.id,
+        extra: json,
         startPoint:
             stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
@@ -62,6 +66,8 @@ class LineStroke extends Stroke {
       );
     }
     return LineStroke(
+      id: stroke.id,
+      extra: json,
       startPoint: stroke.points.first,
       endPoint: stroke.points[1],
       color: stroke.color,
@@ -75,6 +81,8 @@ class LineStroke extends Stroke {
 /// ✅ 带箭头直线笔迹
 class ArrowLineStroke extends LineStroke {
   ArrowLineStroke({
+    super.id,
+    super.extra,
     required Offset startPoint,
     required Offset endPoint,
     required Color color,
@@ -129,6 +137,8 @@ class ArrowLineStroke extends LineStroke {
 
     if (stroke.points.length < 2) {
       return ArrowLineStroke(
+        id: stroke.id,
+        extra: json,
         startPoint:
             stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
@@ -140,6 +150,8 @@ class ArrowLineStroke extends LineStroke {
       );
     }
     return ArrowLineStroke(
+      id: stroke.id,
+      extra: json,
       startPoint: stroke.points.first,
       endPoint: stroke.points[1],
       color: stroke.color,
@@ -154,6 +166,8 @@ class ArrowLineStroke extends LineStroke {
 /// ✅ 矩形笔迹
 class RectangleStroke extends Stroke {
   RectangleStroke({
+    super.id,
+    super.extra,
     required Offset startPoint,
     required Offset endPoint,
     required Color color,
@@ -226,6 +240,8 @@ class RectangleStroke extends Stroke {
     // ✅ 修复：计算所有点的边界框，确保无论点的顺序如何都能正确重建矩形
     if (stroke.points.isEmpty) {
       return RectangleStroke(
+        id: stroke.id,
+        extra: json,
         startPoint: Offset.zero,
         endPoint: Offset.zero,
         color: stroke.color,
@@ -249,6 +265,8 @@ class RectangleStroke extends Stroke {
     }
 
     return RectangleStroke(
+      id: stroke.id,
+      extra: json,
       startPoint: Offset(minX, minY), // 左上角
       endPoint: Offset(maxX, maxY), // 右下角
       color: stroke.color,
@@ -263,6 +281,8 @@ class RectangleStroke extends Stroke {
 /// ✅ 圆形笔迹
 class CircleStroke extends Stroke {
   CircleStroke({
+    super.id,
+    super.extra,
     required Offset startPoint,
     required Offset endPoint,
     required Color color,
@@ -331,8 +351,7 @@ class CircleStroke extends Stroke {
   factory CircleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
-    final fillColor =
-        fillColorValue != null ? Color(fillColorValue) : null;
+    final fillColor = fillColorValue != null ? Color(fillColorValue) : null;
 
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -345,6 +364,8 @@ class CircleStroke extends Stroke {
 
     if (stroke.points.length < 2) {
       return CircleStroke(
+        id: stroke.id,
+        extra: json,
         startPoint:
             stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
@@ -371,6 +392,8 @@ class CircleStroke extends Stroke {
     }
 
     return CircleStroke(
+      id: stroke.id,
+      extra: json,
       startPoint: Offset(minX, minY),
       endPoint: Offset(maxX, maxY),
       color: stroke.color,
@@ -385,6 +408,8 @@ class CircleStroke extends Stroke {
 /// ✅ 三角形笔迹（支持一笔画出任意三角形）
 class TriangleStroke extends Stroke {
   TriangleStroke({
+    super.id,
+    super.extra,
     required List<Offset> points,
     required Color color,
     required double strokeWidth,
@@ -602,6 +627,8 @@ class TriangleStroke extends Stroke {
 
     // ✅ 从保存的点列表创建三角形（会自动优化为三个顶点）
     return TriangleStroke(
+      id: stroke.id,
+      extra: json,
       points: stroke.points,
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
@@ -616,6 +643,8 @@ class TriangleStroke extends Stroke {
 /// ✅ 菱形笔迹
 class DiamondStroke extends Stroke {
   DiamondStroke({
+    super.id,
+    super.extra,
     required Offset startPoint,
     required Offset endPoint,
     required Color color,
@@ -680,6 +709,8 @@ class DiamondStroke extends Stroke {
 
     if (stroke.points.length < 4) {
       return DiamondStroke(
+        id: stroke.id,
+        extra: json,
         startPoint:
             stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
@@ -694,6 +725,8 @@ class DiamondStroke extends Stroke {
     final firstPoint = stroke.points.first;
     final lastPoint = stroke.points[stroke.points.length - 2]; // 倒数第二个点
     return DiamondStroke(
+      id: stroke.id,
+      extra: json,
       startPoint: firstPoint,
       endPoint: lastPoint,
       color: stroke.color,
@@ -708,6 +741,8 @@ class DiamondStroke extends Stroke {
 /// ✅ 自由多边形笔迹（使用普通 Stroke，但标记为 freePolygon）
 class FreePolygonStroke extends Stroke {
   FreePolygonStroke({
+    super.id,
+    super.extra,
     required List<Offset> points,
     required Color color,
     required double strokeWidth,
@@ -730,6 +765,8 @@ class FreePolygonStroke extends Stroke {
   factory FreePolygonStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     return FreePolygonStroke(
+      id: stroke.id,
+      extra: json,
       points: stroke.points,
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,

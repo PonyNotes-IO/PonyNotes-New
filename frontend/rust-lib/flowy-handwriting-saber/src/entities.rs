@@ -21,6 +21,16 @@ pub struct SaveHandwritingSaberPayloadPB {
 
   #[pb(index = 3)]
   pub version: i64,
+
+  /// Exact snapshot the caller edited; remote changes since then are preserved.
+  #[pb(index = 4)]
+  pub base_sbn2_bytes: Vec<u8>,
+
+  #[pb(index = 5)]
+  pub workspace_id: String,
+
+  #[pb(index = 6)]
+  pub user_id: String,
 }
 
 /// 手写笔记数据响应
@@ -44,6 +54,10 @@ pub struct HandwritingSaberDataPB {
 pub struct SaveHandwritingSaberResponsePB {
   #[pb(index = 1)]
   pub new_version: i64,
+
+  /// Canonical caller snapshot, excluding unseen remote edits, for the next delta.
+  #[pb(index = 2)]
+  pub local_snapshot: Vec<u8>,
 }
 
 /// 远端更新通知的 payload

@@ -1,7 +1,6 @@
 use crate::entities::HandwritingSaberUpdatePB;
-use crate::notification::{
-  handwriting_saber_notification_builder, HandwritingSaberNotification,
-};
+use crate::notification::{handwriting_saber_notification_builder, HandwritingSaberNotification};
+use crate::storage::{self, Records};
 use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use collab::core::collab::{DataSource, MapSubscription};
@@ -11,11 +10,10 @@ use collab::util::MapExt;
 use collab_entity::define::DOCUMENT_ROOT;
 use collab_entity::EncodedCollab;
 use std::borrow::BorrowMut;
-use tracing::trace;
 use uuid::Uuid;
 
 /// 手写笔记 Collab 对象
-/// 使用 CRDT (Yrs) 存储 .sbn2 二进制数据（base64 编码）
+/// Legacy JSON remains immutable; Yrs records merge page and element changes.
 pub struct HandwritingSaber {
   collab: Collab,
   data: MapRef,
@@ -48,11 +46,18 @@ impl HandwritingSaber {
   /// 从现有 Collab 打开手写笔记
   pub fn open(collab: Collab) -> Result<Self, Error> {
     let txn = collab.context.transact();
-    let data = collab
-      .data
-      .get_with_txn(&txn, Self::DATA_KEY)
-      .ok_or_else(|| anyhow!("HandwritingSaber data not found"))?;
+    let data = collab.data.get_with_txn(&txn, Self::DATA_KEY);
+    if data.is_none() && collab.data.get(&txn, Self::DATA_KEY).is_some() {
+      return Err(anyhow!(
+        "Invalid handwriting namespace; original data retained"
+      ));
+    }
     drop(txn);
+    // New folder views/duplicates begin as a regular Document. Initialize only
+    // the absent handwriting namespace on the successfully loaded collab.
+    let Some(data) = data else {
+      return Self::create(collab);
+    };
     Ok(Self {
       collab,
       data,
@@ -67,8 +72,9 @@ impl HandwritingSaber {
     Ok(saber)
   }
 
-  /// 更新 .sbn2 数据（版本号自动递增）
+  /// Import/create preserves the original bytes; subsequent edits use entity records.
   pub fn update_sbn2_data(&mut self, sbn2_bytes: Vec<u8>, version: i64) -> Result<(), Error> {
+    storage::flatten(&sbn2_bytes, &self.object_id(), None)?;
     let base64_data = BASE64.encode(&sbn2_bytes);
     let mut txn = self.collab.context.transact_mut();
     self
@@ -77,13 +83,31 @@ impl HandwritingSaber {
     self
       .data
       .insert(&mut txn, Self::VERSION_FIELD, version.to_string().as_str());
-    trace!(
-      "[HandwritingSaber] Updated sbn2 data: {} bytes (base64: {} chars), version: {}",
-      sbn2_bytes.len(),
-      base64_data.len(),
-      version
-    );
     Ok(())
+  }
+
+  /// A save carries the editor's base, so unseen remote entities are never deleted.
+  pub fn apply_snapshot(&mut self, base: &[u8], next: &[u8]) -> Result<(i64, Vec<u8>), Error> {
+    let scope = self.object_id();
+    let base = storage::flatten(base, &scope, None)?;
+    let next = storage::flatten(next, &scope, Some(&base))?;
+    let edits = storage::changes(&base, &next)?;
+    let version = self.get_version().saturating_add(1);
+    let mut txn = self.collab.context.transact_mut();
+    let mut local = base;
+    local.extend(next);
+    for (key, value) in edits {
+      self
+        .collab
+        .data
+        .insert(&mut txn, key.clone(), serde_json::to_string(&value)?);
+      local.insert(key, value);
+    }
+    self.collab.data.insert(&mut txn, "handwriting_schema", "2");
+    self
+      .data
+      .insert(&mut txn, Self::VERSION_FIELD, version.to_string());
+    Ok((version, storage::project(&local)?))
   }
 
   fn get_str_field_read(data: &MapRef, txn: &collab::preclude::Transaction, key: &str) -> String {
@@ -95,18 +119,25 @@ impl HandwritingSaber {
     String::new()
   }
 
-  /// 获取 .sbn2 数据
+  /// Project legacy content plus independent records into the existing editor format.
   pub fn get_sbn2_data(&self) -> Result<Vec<u8>, Error> {
     let txn = self.collab.context.transact();
     let base64_data = Self::get_str_field_read(&self.data, &txn, Self::SBN2_FIELD);
-
-    if base64_data.is_empty() {
-      return Ok(Vec::new());
+    let legacy = if base64_data.is_empty() {
+      Vec::new()
+    } else {
+      BASE64.decode(base64_data)?
+    };
+    let mut records: Records = storage::flatten(&legacy, &self.object_id(), None)?;
+    for (key, value) in self.collab.data.iter(&txn) {
+      if key.starts_with(storage::PREFIX) {
+        records.insert(
+          key.to_string(),
+          serde_json::from_str(&value.to_string(&txn))?,
+        );
+      }
     }
-
-    BASE64
-      .decode(&base64_data)
-      .map_err(|e| anyhow!("Failed to decode base64 sbn2 data: {}", e))
+    storage::project(&records)
   }
 
   /// 获取版本号
@@ -214,6 +245,8 @@ mod tests {
   use super::*;
   use collab::core::collab::DataSource;
   use collab::core::origin::CollabClient;
+  use collab::preclude::updates::decoder::Decode;
+  use collab::preclude::Transact;
   use collab::preclude::Update;
   use flowy_notification::entities::SubscribeObject;
   use flowy_notification::{
@@ -221,8 +254,6 @@ mod tests {
   };
   use std::sync::mpsc::{channel, Sender};
   use std::time::Duration;
-  use collab::preclude::updates::decoder::Decode;
-  use collab::preclude::Transact;
 
   struct TestSender(Sender<SubscribeObject>);
 
@@ -251,15 +282,20 @@ mod tests {
     saber.subscribe_remote_update(&view_id);
 
     // 构造一个来自另一台设备的更新
-    let remote_collab = CollabBuilder::new(uid, &object_id, DataSource::Disk(None))
-      .with_device_id("device-b")
-      .build()
+    let remote_collab = CollabBuilder::new(
+      uid,
+      &object_id,
+      DataSource::DocStateV1(saber.encode_collab().unwrap().doc_state.to_vec()),
+    )
+    .with_device_id("device-b")
+    .build()
+    .unwrap();
+    let mut remote_saber = HandwritingSaber::open(remote_collab).unwrap();
+    remote_saber
+      .update_sbn2_data(br#"{"pages":[]}"#.to_vec(), 1)
       .unwrap();
-    let mut remote_saber = HandwritingSaber::create(remote_collab).unwrap();
-    remote_saber.update_sbn2_data(vec![1, 2, 3], 1).unwrap();
     let remote_state = remote_saber.encode_collab().unwrap();
-    let update =
-      Update::decode_v1(&remote_state.doc_state).expect("decode remote update");
+    let update = Update::decode_v1(&remote_state.doc_state).expect("decode remote update");
 
     let remote_origin = CollabOrigin::Client(CollabClient::new(uid, "device-b"));
     let mut txn = saber
@@ -280,10 +316,11 @@ mod tests {
     // 第二次远端更新只改嵌套字段（data.sbn2_data），
     // 这是真实同步的常态，必须同样触发通知
     while rx.try_recv().is_ok() {}
-    remote_saber.update_sbn2_data(vec![7, 8, 9], 2).unwrap();
+    remote_saber
+      .update_sbn2_data(br#"{"pages":[{"id":"remote"}]}"#.to_vec(), 2)
+      .unwrap();
     let remote_state = remote_saber.encode_collab().unwrap();
-    let update =
-      Update::decode_v1(&remote_state.doc_state).expect("decode remote update");
+    let update = Update::decode_v1(&remote_state.doc_state).expect("decode remote update");
     let mut txn = saber
       .collab
       .get_awareness()
@@ -296,9 +333,144 @@ mod tests {
       .expect("nested remote update should emit a notification");
 
     // 本地写入不应触发通知
-    saber.update_sbn2_data(vec![4, 5], 2).unwrap();
+    saber
+      .update_sbn2_data(br#"{"pages":[]}"#.to_vec(), 2)
+      .unwrap();
     assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
 
     unregister_all_notification_sender();
+  }
+}
+
+#[cfg(test)]
+mod entity_sync_tests {
+  use super::*;
+  use collab::preclude::{updates::decoder::Decode, Transact, Update};
+  use serde_json::{json, Value};
+
+  fn replica(source: &HandwritingSaber, device: &str) -> HandwritingSaber {
+    let collab = CollabBuilder::new(
+      1,
+      &source.object_id(),
+      DataSource::DocStateV1(source.encode_collab().unwrap().doc_state.to_vec()),
+    )
+    .with_device_id(device)
+    .build()
+    .unwrap();
+    HandwritingSaber::open(collab).unwrap()
+  }
+
+  fn exchange(target: &mut HandwritingSaber, source: &HandwritingSaber) {
+    let update = Update::decode_v1(&source.encode_collab().unwrap().doc_state).unwrap();
+    target
+      .collab
+      .get_awareness()
+      .doc()
+      .transact_mut()
+      .apply_update(update);
+  }
+
+  fn source() -> HandwritingSaber {
+    let collab = CollabBuilder::new(1, &Uuid::new_v4().to_string(), DataSource::Disk(None))
+      .with_device_id("original")
+      .build()
+      .unwrap();
+    HandwritingSaber::create_with_data(
+      collab,
+      serde_json::to_vec(&json!({
+        "pages":[{"width":595,"height":842,"strokes":[],
+        "backgroundImage":{"pdfFilePath":"/original.pdf","pdfUrl":null,"pdfPageIndex":1}}]
+      }))
+      .unwrap(),
+    )
+    .unwrap()
+  }
+
+  fn add(bytes: &[u8], id: &str) -> Vec<u8> {
+    let mut value: Value = serde_json::from_slice(bytes).unwrap();
+    value["pages"][0]["strokes"]
+      .as_array_mut()
+      .unwrap()
+      .push(json!({"id":id,"points":[{"x":1,"y":2}]}));
+    serde_json::to_vec(&value).unwrap()
+  }
+
+  #[test]
+  fn offline_additions_merge_even_when_remote_arrives_before_local_save() {
+    let original = source();
+    let mut a = replica(&original, "a");
+    let mut b = replica(&original, "b");
+    let base = a.get_sbn2_data().unwrap();
+    let legacy = HandwritingSaber::get_str_field_read(
+      &a.data,
+      &a.collab.context.transact(),
+      HandwritingSaber::SBN2_FIELD,
+    );
+    b.apply_snapshot(&base, &add(&base, "b")).unwrap();
+    exchange(&mut a, &b);
+    a.apply_snapshot(&base, &add(&base, "a")).unwrap();
+    exchange(&mut b, &a);
+    exchange(&mut a, &b);
+    exchange(&mut b, &a);
+    assert_eq!(a.get_sbn2_data().unwrap(), b.get_sbn2_data().unwrap());
+    let out: Value = serde_json::from_slice(&a.get_sbn2_data().unwrap()).unwrap();
+    assert_eq!(out["pages"][0]["strokes"].as_array().unwrap().len(), 2);
+    assert_eq!(
+      out["pages"][0]["backgroundImage"]["pdfFilePath"],
+      "/original.pdf"
+    );
+    assert_eq!(
+      legacy,
+      HandwritingSaber::get_str_field_read(
+        &a.data,
+        &a.collab.context.transact(),
+        HandwritingSaber::SBN2_FIELD
+      )
+    );
+  }
+
+  #[test]
+  fn simultaneous_offline_edits_converge_and_survive_reopen() {
+    let original = source();
+    let mut a = replica(&original, "a");
+    let mut b = replica(&original, "b");
+    let base = a.get_sbn2_data().unwrap();
+    a.apply_snapshot(&base, &add(&base, "a")).unwrap();
+    b.apply_snapshot(&base, &add(&base, "b")).unwrap();
+    exchange(&mut a, &b);
+    exchange(&mut b, &a);
+    assert_eq!(a.get_sbn2_data().unwrap(), b.get_sbn2_data().unwrap());
+    let reopened = replica(&a, "reopened");
+    assert_eq!(
+      reopened.get_sbn2_data().unwrap(),
+      a.get_sbn2_data().unwrap()
+    );
+    let out: Value = serde_json::from_slice(&reopened.get_sbn2_data().unwrap()).unwrap();
+    assert_eq!(out["pages"][0]["strokes"].as_array().unwrap().len(), 2);
+  }
+
+  #[test]
+  fn independent_initialization_does_not_hide_entity_records() {
+    let object_id = Uuid::new_v4().to_string();
+    let new = |device| {
+      HandwritingSaber::create(
+        CollabBuilder::new(1, &object_id, DataSource::Disk(None))
+          .with_device_id(device)
+          .build()
+          .unwrap(),
+      )
+      .unwrap()
+    };
+    let mut a = new("a");
+    let mut b = new("b");
+    a.apply_snapshot(&[], br#"{"pages":[{"id":"a","strokes":[]}]}"#)
+      .unwrap();
+    b.apply_snapshot(&[], br#"{"pages":[{"id":"b","strokes":[]}]}"#)
+      .unwrap();
+    exchange(&mut a, &b);
+    exchange(&mut b, &a);
+    let out: Value = serde_json::from_slice(&a.get_sbn2_data().unwrap()).unwrap();
+    assert_eq!(out["pages"].as_array().unwrap().len(), 2);
+    assert_eq!(a.get_sbn2_data().unwrap(), b.get_sbn2_data().unwrap());
   }
 }

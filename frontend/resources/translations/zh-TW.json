@@ -1,4 +1,8 @@
 {
+  "handwritingStorage": {
+    "exportMissingImage": "圖片資源無法取得，請連線後重新匯出",
+    "exportMissingPdf": "PDF 原檔無法取得，請連線後重新匯出"
+  },
   "appName": "PonyNotes",
   "defaultUsername": "我",
   "welcomeText": "歡迎使用 @:appName",

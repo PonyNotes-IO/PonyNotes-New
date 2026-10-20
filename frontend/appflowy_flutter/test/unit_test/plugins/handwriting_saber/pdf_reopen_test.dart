@@ -323,6 +323,50 @@ void main() {
 
     setUp(() => cache = HandwritingPdfCacheService.forTesting(directory.path));
 
+    test('same filename in different cloud paths has isolated cache entries',
+        () async {
+      const first = 'https://example.com/workspace-a/file.pdf';
+      const second = 'https://example.com/workspace-b/file.pdf';
+      final a = await cache.put(first, bytes);
+      final bBytes = Uint8List.fromList(utf8.encode('%PDF-1.7\nother'));
+      final b = await cache.put(second, bBytes);
+      expect(a, isNot(b));
+      expect(await File(a!).readAsBytes(), bytes);
+      expect(await File(b!).readAsBytes(), bBytes);
+      expect(await cache.resolvedPath('$first?temporary=1'), a);
+    });
+
+    test('legacy cache remains readable without deleting the only old copy',
+        () async {
+      final legacy = File('${directory.path}/cache.pdf')
+        ..writeAsBytesSync(bytes);
+      final migrated = await cache.cachedPathIfExists(url);
+      expect(migrated, isNotNull);
+      expect(migrated, isNot(legacy.path));
+      expect(await File(migrated!).readAsBytes(), bytes);
+      expect(await legacy.readAsBytes(), bytes);
+    });
+
+    test('LRU evicts downloads while imported originals and old files survive',
+        () async {
+      final original = await cache.cacheImportedPdf(bytes);
+      final old = File('${directory.path}/old-original.pdf')
+        ..writeAsBytesSync(bytes);
+      final expired =
+          File((await cache.resolvedPath('https://example.com/expired.pdf')));
+      final sparse = expired.openSync(mode: FileMode.write);
+      sparse.truncateSync(HandwritingPdfCacheService.maxCacheBytes + 1);
+      sparse.closeSync();
+      await expired.setLastModified(DateTime(2000));
+      await cache.put(url, bytes);
+      for (var i = 0; i < 100 && await expired.exists(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(await expired.exists(), isFalse);
+      expect(await File(original).readAsBytes(), bytes);
+      expect(await old.readAsBytes(), bytes);
+    });
+
     test('concurrent pages share a complete download', () async {
       var downloads = 0;
       final pending = Completer<Uint8List>();
