@@ -278,6 +278,7 @@ class _MobileRechargeRecordsPageState extends State<MobileRechargeRecordsPage> {
       case 'APPLE_PAY':
         return 'Apple Pay';
       case 'WECHAT_PAY':
+      case 'WECHAT_APP':
         return '微信支付';
       case 'ALIPAY':
         return '支付宝';
