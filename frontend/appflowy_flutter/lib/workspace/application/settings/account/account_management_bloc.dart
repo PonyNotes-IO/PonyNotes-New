@@ -1394,7 +1394,7 @@ class AccountManagementBloc
           if (PaymentPlatformSupport.isApplePayAvailable) {
             method = PaymentMethod.applePay;
             paymentType = PaymentType.applePay;
-          } else if (PaymentPlatformSupport.isWeChatPayAvailable) {
+          } else if (!Platform.isAndroid && PaymentPlatformSupport.isWeChatPayAvailable) {
             method = PaymentMethod.wechatPay;
             paymentType = PaymentType.wechatPay;
           } else {

@@ -9,6 +9,8 @@ import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/webview2_task.dart';
 import 'package:appflowy/workspace/application/payment/apple_iap_service.dart';
+import 'package:appflowy/workspace/application/payment/payment_api.dart';
+import 'package:appflowy/workspace/application/payment/wechat_app_payment.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -67,7 +69,7 @@ class PaymentPlatformSupport {
     }
 
     if (Platform.isAndroid) {
-      return [PaymentMethod.alipay];
+      return [PaymentMethod.alipay, PaymentMethod.wechatPay];
     }
 
     if (PlatformInfo.isDesktopOrTablet) {
@@ -84,7 +86,7 @@ class PaymentPlatformSupport {
       Platform.isIOS && getAvailableMethods().contains(PaymentMethod.applePay);
 
   static bool get isWeChatPayAvailable =>
-      Platform.isWindows &&
+      (Platform.isWindows || Platform.isAndroid) &&
       getAvailableMethods().contains(PaymentMethod.wechatPay);
 
   static bool get isAlipayAvailable =>
@@ -186,6 +188,26 @@ class PaymentUtil {
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
+    if (Platform.isAndroid) {
+      final payInfo = extra?['payUrl'] as String?;
+      if (payInfo == null || payInfo.isEmpty) {
+        return PaymentResult.failure(message: '缺少微信App支付参数');
+      }
+      final result = await WeChatAppPayment.pay(
+        payInfo: payInfo,
+        orderNo: orderId,
+        queryStatus: (orderNo) async {
+          final response = await PaymentApi.queryPaymentStatus(orderNo);
+          return response.fold((status) => status, (_) => null);
+        },
+      );
+      if (!result.success) return PaymentResult.failure(message: result.message);
+      final planCode = extra?['plan'] as String?;
+      if (planCode != null && planCode.isNotEmpty) {
+        getIt<SubscriptionSuccessListenable>().onPaymentSuccess(planCode);
+      }
+      return PaymentResult.success(message: result.message, orderId: orderId);
+    }
     if (Platform.isWindows) {
       try {
         final result = await _channel.invokeMapMethod<String, dynamic>(
@@ -256,8 +278,6 @@ class PaymentUtil {
     }
 
     if (Platform.isAndroid) {
-      //支付宝支付需要上线后增加支付功能
-      return PaymentResult.failure(message: '功能开发中');
       // ═══════════════════════════════════════════════════════════════════
       // 严格模式：Android 手机端只允许走 Tobias，不允许任何降级。
       //

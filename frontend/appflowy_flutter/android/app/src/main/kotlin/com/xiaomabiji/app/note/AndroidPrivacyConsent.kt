@@ -12,6 +12,8 @@ object AndroidPrivacyConsent {
     private val weChatCallbackLeaseLock = Any()
     private var weChatCallbackLeaseCount = 0
     private var weChatCallbackDisablePending = false
+    private var weChatPayCallbackCount = 0
+    private var weChatPayDisablePending = false
 
     fun hasAccepted(context: Context): Boolean =
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -39,6 +41,15 @@ object AndroidPrivacyConsent {
     fun setAssociationFlowEnabled(context: Context, flow: String, enabled: Boolean): Boolean {
         if (enabled && !hasAccepted(context)) return false
         val components = associationComponents(context, flow) ?: return false
+        if (flow == "wechatPay") {
+            if (enabled) weChatPayDisablePending = false
+            if (!enabled && weChatPayCallbackCount > 0) {
+                weChatPayDisablePending = true
+            } else {
+                components.forEach { setComponentEnabled(context, it, enabled) }
+            }
+            return true
+        }
         if (flow == "wechatLogin") {
             return synchronized(weChatCallbackLeaseLock) {
                 if (enabled) {
@@ -100,8 +111,25 @@ object AndroidPrivacyConsent {
         }
     }
 
+    // Payment callbacks run on the main thread, independently of login leases.
+    fun acquireWeChatPayCallback(context: Context): Boolean {
+        if (!hasAccepted(context)) return false
+        weChatPayCallbackCount += 1
+        weChatPayDisablePending = true
+        return true
+    }
+
+    fun releaseWeChatPayCallback(context: Context) {
+        if (weChatPayCallbackCount > 0) weChatPayCallbackCount -= 1
+        if (weChatPayCallbackCount == 0 && weChatPayDisablePending) {
+            weChatPayDisablePending = false
+            associationComponents(context, "wechatPay")
+                ?.forEach { setComponentEnabled(context, it, false) }
+        }
+    }
+
     private fun setAssociationComponentsEnabled(context: Context, enabled: Boolean) {
-        listOf("wechatLogin", "douyinLogin", "alipay").forEach { flow ->
+        listOf("wechatLogin", "wechatPay", "douyinLogin", "alipay").forEach { flow ->
             setAssociationFlowEnabled(context, flow, enabled)
         }
     }
@@ -113,6 +141,7 @@ object AndroidPrivacyConsent {
                 "$packageName.wechat.WXEntryActivity",
                 "$packageName.wxapi.WXEntryActivity",
             )
+            "wechatPay" -> listOf("$packageName.wxapi.WXPayEntryActivity")
             "douyinLogin" -> listOf(
                 "com.postliu.douyin_login.DouyinCallbackActivity",
                 "$packageName.douyinapi.DouYinEntryActivity",

@@ -16,10 +16,12 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodChannel
 import com.xiaomabiji.app.note.wechat.WeChatApi
 import com.xiaomabiji.app.note.wechat.WeChatBridge
+import com.xiaomabiji.app.note.wechat.WeChatPayBridge
 
 class MainActivity : FlutterActivity() {
     private val channelName = "com.xiaomabiji.app.note/open_url"
     private var weChatBridge: WeChatBridge? = null
+    private var weChatPayBridge: WeChatPayBridge? = null
     private var handwritingExportResult: MethodChannel.Result? = null
     private var handwritingExportBytes: ByteArray? = null
     private var initializedEngine: FlutterEngine? = null
@@ -39,6 +41,8 @@ class MainActivity : FlutterActivity() {
          */
         @Volatile
         var activeWeChatBridge: WeChatBridge? = null
+        @Volatile
+        var activeWeChatPayBridge: WeChatPayBridge? = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -218,6 +222,11 @@ class MainActivity : FlutterActivity() {
         activeWeChatBridge = bridge
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WeChatBridge.CHANNEL_NAME)
             .setMethodCallHandler(bridge)
+        val payBridge = WeChatPayBridge(this)
+        weChatPayBridge = payBridge
+        activeWeChatPayBridge = payBridge
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WeChatPayBridge.CHANNEL_NAME)
+            .setMethodCallHandler(payBridge)
         initializedEngine = flutterEngine
     }
 
@@ -227,6 +236,9 @@ class MainActivity : FlutterActivity() {
         weChatBridge?.dispose()
         weChatBridge = null
         activeWeChatBridge = null
+        weChatPayBridge?.dispose()
+        weChatPayBridge = null
+        activeWeChatPayBridge = null
         initializedEngine = null
         super.onDestroy()
     }
@@ -424,5 +436,6 @@ class MainActivity : FlutterActivity() {
             "MainActivity.onResume, calling resetOnResume (pendingResult=${weChatBridge?.pendingResultForLog() ?: "no-bridge"})",
         )
         weChatBridge?.resetOnResume()
+        weChatPayBridge?.onResume()
     }
 }
