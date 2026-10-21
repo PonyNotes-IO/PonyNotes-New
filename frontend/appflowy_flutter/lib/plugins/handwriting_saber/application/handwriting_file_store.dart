@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 /// Serialize commits to one file; a failed or interrupted write keeps the last copy.
 class HandwritingFileStore {
@@ -8,7 +9,7 @@ class HandwritingFileStore {
 
   static Future<void> write(String path, List<int> bytes,
       {bool keepBackups = true}) {
-    final snapshot = List<int>.of(bytes);
+    final snapshot = Uint8List.fromList(bytes);
     final previous = _writes[path];
     late final Future<void> task;
     task = () async {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:convert';
 
 import 'handwriting_file_store.dart';
@@ -96,7 +97,7 @@ class HandwritingSaberDataService {
   final Set<String> _localOnly = {};
 
   void acceptSnapshot(String viewId, List<int> bytes) {
-    _bases[viewId] = List<int>.of(bytes);
+    _bases[viewId] = Uint8List.fromList(bytes);
   }
 
   /// Match Rust's deterministic legacy IDs before the editor creates any objects.
@@ -306,8 +307,8 @@ class HandwritingSaberDataService {
     List<int>? localData,
     String? backupPath,
   }) {
-    final snapshot = List<int>.of(sbn2Data);
-    final full = List<int>.of(localData ?? sbn2Data);
+    final snapshot = Uint8List.fromList(sbn2Data);
+    final full = Uint8List.fromList(localData ?? sbn2Data);
     final session = _session ??= _readSession();
     final previous = _saves[viewId];
     late final Future<bool> task;
