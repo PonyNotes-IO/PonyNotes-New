@@ -11,6 +11,7 @@ class PopoverController {
 
   void close() => _state?.close();
   void show() => _state?.showOverlay();
+  void toggle() => _state?._toggleOverlay();
   void showAt(Offset position) => _state?.showOverlay(position);
 }
 
@@ -216,6 +217,15 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
     }
 
     super.reassemble();
+  }
+
+  void _toggleOverlay() {
+    if (rootEntry.contains(this) &&
+        animationController.status != AnimationStatus.reverse) {
+      close(withAnimation: true);
+    } else {
+      showOverlay();
+    }
   }
 
   void showOverlay([Offset? position]) {

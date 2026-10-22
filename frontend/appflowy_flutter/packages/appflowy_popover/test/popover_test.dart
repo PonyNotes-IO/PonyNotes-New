@@ -8,6 +8,7 @@ const _menuKey = ValueKey('workspace-menu');
 Widget _buildPopover(
   PopoverController controller, {
   VoidCallback? onClose,
+  VoidCallback? onTap,
   Duration animationDuration = Durations.short3,
 }) {
   return MaterialApp(
@@ -26,7 +27,7 @@ Widget _buildPopover(
             child: Text('工作区菜单'),
           ),
           child: GestureDetector(
-            onTap: controller.show,
+            onTap: onTap ?? controller.show,
             child: const SizedBox(
               width: 150,
               height: 30,
@@ -40,6 +41,57 @@ Widget _buildPopover(
 }
 
 void main() {
+  testWidgets('连点入口时收起和展开均播放动画，反转时不误报关闭', (tester) async {
+    final controller = PopoverController();
+    var closeCount = 0;
+    await tester.pumpWidget(
+      _buildPopover(
+        controller,
+        onTap: controller.toggle,
+        onClose: () => closeCount++,
+      ),
+    );
+
+    await tester.tap(find.text('工作区'));
+    await tester.pump();
+    await tester.pump(Durations.short3);
+    final expandedTop = tester.getTopLeft(find.byKey(_menuKey)).dy;
+
+    await tester.tap(find.text('工作区'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(find.byKey(_menuKey), findsOneWidget);
+    final closingTop = tester.getTopLeft(find.byKey(_menuKey)).dy;
+    expect(closingTop, lessThan(expandedTop));
+    expect(closeCount, 0);
+
+    await tester.tap(find.text('工作区'));
+    await tester.pump();
+    expect(
+      tester.getTopLeft(find.byKey(_menuKey)).dy,
+      closeTo(closingTop, 0.01),
+    );
+    await tester.pump(const Duration(milliseconds: 15));
+    expect(tester.getTopLeft(find.byKey(_menuKey)).dy, greaterThan(closingTop));
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(
+      tester.getTopLeft(find.byKey(_menuKey)).dy,
+      closeTo(expandedTop, 0.01),
+    );
+    expect(closeCount, 0);
+
+    await tester.tap(find.text('工作区'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(find.byKey(_menuKey), findsOneWidget);
+    expect(tester.getTopLeft(find.byKey(_menuKey)).dy, lessThan(expandedTop));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(find.byKey(_menuKey), findsNothing);
+    expect(closeCount, 1);
+    expect(PopoverState.rootEntry.isEmpty, isTrue);
+  });
+
   testWidgets('快速重复打开后仅保留一个菜单，点击外部可完全关闭', (tester) async {
     final controller = PopoverController();
     var closeCount = 0;

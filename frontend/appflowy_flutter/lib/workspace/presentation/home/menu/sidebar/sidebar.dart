@@ -1027,7 +1027,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
                 onTap: () {
-                  _popoverController.show();
+                  _popoverController.toggle();
                   // 弹框显示后延迟再 fetch，确保 OverlayEntry 先稳定渲染，
                   // 避免 iPad 上因弹框内容立即重建而被错误关闭
                   WidgetsBinding.instance.addPostFrameCallback((_) {
