@@ -80,6 +80,7 @@ class Popover extends StatefulWidget {
       color: Color.fromARGB(0, 244, 67, 54),
     ),
     this.showAtCursor = false,
+    this.keepTargetInteractive = false,
   });
 
   final PopoverController? controller;
@@ -145,6 +146,9 @@ class Popover extends StatefulWidget {
   /// secondary click, consider showing the popover programatically with [PopoverController.showAt].
   ///
   final bool showAtCursor;
+
+  /// Whether taps on the target can pass through the popover mask.
+  final bool keepTargetInteractive;
 
   /// The content area of the popover.
   final Widget child;
@@ -220,11 +224,13 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
   }
 
   void _toggleOverlay() {
-    if (rootEntry.contains(this) &&
-        animationController.status != AnimationStatus.reverse) {
-      close(withAnimation: true);
-    } else {
+    if (!rootEntry.contains(this)) {
       showOverlay();
+    } else if (animationController.status == AnimationStatus.reverse) {
+      _closeToken++;
+      animationController.forward();
+    } else {
+      close(withAnimation: true);
     }
   }
 
@@ -395,6 +401,7 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
   Widget _buildMask() {
     return _PopoverMaskWithGracePeriod(
       decoration: widget.maskDecoration,
+      interactiveTarget: widget.keepTargetInteractive ? popoverLink : null,
       onTap: () async {
         if (await widget.canClose?.call() ?? true) {
           _removeRootOverlay();
@@ -599,10 +606,12 @@ class _PopoverMaskWithGracePeriod extends StatefulWidget {
   const _PopoverMaskWithGracePeriod({
     required this.onTap,
     this.decoration,
+    this.interactiveTarget,
   });
 
   final Decoration? decoration;
   final VoidCallback onTap;
+  final PopoverLink? interactiveTarget;
 
   @override
   State<_PopoverMaskWithGracePeriod> createState() =>
@@ -632,6 +641,7 @@ class _PopoverMaskWithGracePeriodState
       child: PopoverMask(
         decoration: widget.decoration,
         onTap: widget.onTap,
+        interactiveTarget: widget.interactiveTarget,
       ),
     );
   }

@@ -2,6 +2,9 @@ import 'dart:collection';
 
 import 'package:appflowy_popover/appflowy_popover.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+
+import 'layout.dart';
 
 typedef _EntryMap = LinkedHashMap<PopoverState, OverlayEntryContext>;
 
@@ -88,18 +91,59 @@ class PopoverMask extends StatelessWidget {
     super.key,
     required this.onTap,
     this.decoration,
+    this.interactiveTarget,
   });
 
   final VoidCallback onTap;
   final Decoration? decoration;
+  final PopoverLink? interactiveTarget;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final mask = GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: decoration,
       ),
     );
+    final target = interactiveTarget;
+    return target == null
+        ? mask
+        : _InteractivePopoverTarget(link: target, child: mask);
+  }
+}
+
+class _InteractivePopoverTarget extends SingleChildRenderObjectWidget {
+  const _InteractivePopoverTarget({required this.link, required super.child});
+
+  final PopoverLink link;
+
+  @override
+  _InteractivePopoverTargetRenderBox createRenderObject(BuildContext context) =>
+      _InteractivePopoverTargetRenderBox(link);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _InteractivePopoverTargetRenderBox renderObject,
+  ) =>
+      renderObject.link = link;
+}
+
+class _InteractivePopoverTargetRenderBox extends RenderProxyBox {
+  _InteractivePopoverTargetRenderBox(this.link);
+
+  PopoverLink link;
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final offset = link.leaderOffset;
+    final size = link.leaderSize;
+    if (offset != null &&
+        size != null &&
+        (offset & size).contains(localToGlobal(position))) {
+      return false;
+    }
+    return super.hitTest(result, position: position);
   }
 }

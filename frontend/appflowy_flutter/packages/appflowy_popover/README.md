@@ -104,4 +104,5 @@ class MyWidgetState extends State<GridDateCell> {
 | mutex          | If multiple popovers are exclusive, pass the same mutex to them. | `PopoverMutex`                          |
 | direction      | The direction where the popover should be placed                 | `PopoverDirection`                      |
 | onClose        | The callback will be called after the popover is closed          | `void Function()`                       |
+| keepTargetInteractive | Allow taps on the target through the mask (defaults to false) | `bool` |
 | child          | The child to trigger the popover                                 | `Widget`                                |

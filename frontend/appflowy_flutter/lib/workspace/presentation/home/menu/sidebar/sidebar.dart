@@ -990,6 +990,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             beginOpacity: 0.8,
             controller: _popoverController,
             triggerActions: PopoverTriggerFlags.none,
+            keepTargetInteractive: true,
             popupBuilder: (_) {
               return BlocProvider<UserWorkspaceBloc>.value(
                 value: context.read<UserWorkspaceBloc>(),

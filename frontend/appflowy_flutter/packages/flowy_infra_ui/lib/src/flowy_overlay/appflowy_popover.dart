@@ -50,6 +50,7 @@ class AppFlowyPopover extends StatelessWidget {
     this.beginOpacity = 0.0,
     this.endOpacity = 1.0,
     this.showAtCursor = false,
+    this.keepTargetInteractive = false,
   });
 
   final Widget child;
@@ -97,6 +98,9 @@ class AppFlowyPopover extends StatelessWidget {
   ///
   final bool showAtCursor;
 
+  /// Whether taps on the target can pass through the popover mask.
+  final bool keepTargetInteractive;
+
   @override
   Widget build(BuildContext context) {
     return Popover(
@@ -127,6 +131,7 @@ class AppFlowyPopover extends StatelessWidget {
         child: popupBuilder(context),
       ),
       showAtCursor: showAtCursor,
+      keepTargetInteractive: keepTargetInteractive,
       child: child,
     );
   }
