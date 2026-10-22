@@ -219,7 +219,8 @@ class PopoverState extends State<Popover> with SingleTickerProviderStateMixin {
   }
 
   void showOverlay([Offset? position]) {
-    close(withAnimation: true);
+    // 同步移除旧弹层，并保留带动画菜单重复打开时不通知关闭的行为。
+    close(notify: widget.animationDuration == Duration.zero);
     // Invalidate any pending async close callback so it won't
     // remove the new entry we are about to insert.
     _closeToken++;

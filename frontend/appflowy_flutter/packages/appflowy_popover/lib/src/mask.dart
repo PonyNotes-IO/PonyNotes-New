@@ -43,8 +43,10 @@ class RootOverlayEntry {
 
     final lastEntry = _entries.values.last;
     _entries.remove(lastEntry.popoverState);
-    lastEntry.animationController.reverse().then((_) {
-      lastEntry.overlayEntry.remove();
+    final animation = lastEntry.animationController.reverse();
+    // 重新打开会取消关闭动画，旧弹层仍须清理；关闭通知只在动画完成时发送。
+    animation.whenCompleteOrCancel(lastEntry.overlayEntry.remove);
+    animation.then((_) {
       lastEntry.popoverState.widget.onClose?.call();
     });
 
