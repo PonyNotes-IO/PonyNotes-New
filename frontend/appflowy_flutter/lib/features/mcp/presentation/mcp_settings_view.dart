@@ -720,39 +720,78 @@ class _McpSettingsViewState extends State<McpSettingsView> {
                       ),
                     ),
                     const VSpace(20),
+                    if (ready) ...[
+                      Text(
+                        '将连接提示词发给 AI，让它帮你配置并验证连接。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: theme.textColorScheme.secondary,
+                        ),
+                      ),
+                      const VSpace(12),
+                    ],
                     Align(
                       alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: theme.fillColorScheme.infoThick,
-                          foregroundColor: theme.textColorScheme.onFill,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6),
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          if (ready)
+                            OutlinedButton.icon(
+                              onPressed: () => _copy(
+                                preset.aiConnectionPrompt,
+                                'AI 连接提示词已复制，可直接发送给 AI',
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: theme.textColorScheme.primary,
+                                side: BorderSide(
+                                  color: theme.borderColorScheme.primary,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.auto_awesome_outlined,
+                                size: 16,
+                              ),
+                              label: const Text('复制 AI 连接提示词'),
+                            ),
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: theme.fillColorScheme.infoThick,
+                              foregroundColor: theme.textColorScheme.onFill,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            onPressed: _service.isStarting
+                                ? null
+                                : ready
+                                    ? () => _copy(
+                                          preset.json,
+                                          '${preset.name} 配置已复制',
+                                        )
+                                    : () async {
+                                        if (_service.isRunning) {
+                                          await _resetToken();
+                                        } else {
+                                          await _toggle(true);
+                                        }
+                                      },
+                            child: Text(
+                              ready
+                                  ? '复制配置'
+                                  : _service.isStarting
+                                      ? '正在开启…'
+                                      : _service.isRunning
+                                          ? '生成连接凭证'
+                                          : '开启本机服务',
+                            ),
                           ),
-                        ),
-                        onPressed: _service.isStarting
-                            ? null
-                            : ready
-                                ? () => _copy(
-                                      preset.json,
-                                      '${preset.name} 配置已复制',
-                                    )
-                                : () async {
-                                    if (_service.isRunning) {
-                                      await _resetToken();
-                                    } else {
-                                      await _toggle(true);
-                                    }
-                                  },
-                        child: Text(
-                          ready
-                              ? '复制配置'
-                              : _service.isStarting
-                                  ? '正在开启…'
-                                  : _service.isRunning
-                                      ? '生成连接凭证'
-                                      : '开启本机服务',
-                        ),
+                        ],
                       ),
                     ),
                   ],
@@ -1045,6 +1084,35 @@ class _AgentPreset {
   final String hint;
   final String json;
   final String? asset;
+
+  String get aiConnectionPrompt {
+    final client = id == 'other' ? '你当前所在的 AI 客户端' : name;
+    final location = id == 'other'
+        ? '请先识别当前客户端支持的 MCP 配置格式与保存位置。以下是通用 HTTP 配置，请按客户端要求适配。'
+        : '配置文件：$hint';
+    final bridgeInstructions = id == 'claude'
+        ? '\n此配置使用本机 stdio 桥接：请检查 Dart 是否可用，找到 PonyNotes-New 项目目录，'
+            '将配置中的 <PonyNotes-New> 替换为实际绝对路径，并确认桥接脚本存在。'
+            '找不到目录时请向我询问，不要猜测路径。\n'
+        : '';
+    final format = id == 'codex' ? 'toml' : 'json';
+    return '''请帮我将小马笔记（PonyNotes）的 MCP 服务接入$client，服务名称为 ponynotes，并完成连接验证。
+
+$location
+$bridgeInstructions
+请按以下步骤操作：
+1. 在运行小马笔记的这台电脑上检查现有 MCP 配置，保留其他服务，将下面的 ponynotes 配置合并到正确位置。若你不能操作本机文件或管理 MCP 连接，请给我对应客户端的具体操作步骤。
+2. 保存配置后重新加载 MCP 服务；若需要我启用服务或重启客户端，请告诉我具体操作。
+3. 连接后先发现可用工具，再实际调用 ponynotes 的 get_context，向我确认当前账号、工作区和连接状态。只有真实调用成功后，才能报告连接成功；本次验证只读取信息，不修改笔记。
+4. 如果连接失败，请根据实际错误检查小马笔记是否已打开、MCP 服务是否已开启、地址是否可达、Authorization 是否正确，以及客户端是否支持此连接方式。配置中的 127.0.0.1 是运行小马笔记的本机地址，云端 AI 无法直接访问；无法访问时请说明原因，不要虚构结果。
+
+以下配置已包含连接地址和访问凭证，请直接用于本机配置，不要在回复中回显 Token，也不要将凭证提交到代码仓库。
+
+```$format
+$json
+```
+''';
+  }
 }
 
 class _ClientLogo extends StatelessWidget {
