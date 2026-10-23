@@ -58,6 +58,9 @@ enum InternalAiErrorKind {
   /// 模型服务返回 429，配额耗尽——这部分成本由用户自己承担。
   quotaExhausted,
 
+  /// 用户主动中断。
+  canceled,
+
   /// 模型服务返回其他错误。
   serverError,
 
@@ -85,10 +88,15 @@ class InternalAiService {
     http.Client? httpClient,
     this.writeConfirmationRequired = true,
   })  : _tools = tools ?? McpTools(endpoint: 'internal', version: '1.0.0'),
-        _http = httpClient ?? http.Client();
+        _clientFactory = httpClient == null ? http.Client.new : (() => httpClient);
 
   final McpTools _tools;
-  final http.Client _http;
+
+  /// 每次请求新建一个 client，取消时直接 close 掉当前这个，
+  /// 下一个请求不受影响。
+  final http.Client Function() _clientFactory;
+  http.Client? _activeClient;
+  bool _canceled = false;
 
   /// 写操作是否需要用户确认。默认开启：内部 AI 具备删页面、删块的能力，
   /// 全自动执行的风险不可接受。
@@ -96,6 +104,15 @@ class InternalAiService {
 
   /// 单次提问允许的最大工具调用轮次，防止模型陷入无限循环。
   static const int maxRounds = 8;
+
+  /// 用户是否中断了当前请求。
+  bool get isCanceled => _canceled;
+
+  /// 中断当前请求：关掉连接，正在等待的请求会抛 canceled。
+  void cancel() {
+    _canceled = true;
+    _activeClient?.close();
+  }
 
   static const Duration _requestTimeout = Duration(seconds: 60);
 
@@ -107,6 +124,19 @@ class InternalAiService {
 
   /// 判断配置是否可用。
   bool isConfigured(AiProviderConfig config) => config.isComplete;
+
+  /// 系统提示：告诉模型它在哪、工具怎么用、写操作要确认。
+  /// 模型不知道训练截止之后的日期，所以当前时间按运行时生成。
+  static String buildSystemPrompt({DateTime? now}) {
+    final time = (now ?? DateTime.now()).toIso8601String().substring(0, 16);
+    return '你是小马笔记（PonyNotes）的内置 AI 助手，通过工具读写用户的笔记。\n'
+        '当前时间：$time。\n'
+        '- 调用其他工具前先用 get_context 取 current_workspace.workspace_id，之后每个工具都带上它。\n'
+        '- 页面 ID、块 ID 一律通过 list_pages / search_notes / get_page / list_blocks 查询，不要编造。\n'
+        '- 写操作需要用户确认，确认前不会执行；一次只提交一个写操作，等结果再继续。\n'
+        '- 用户说「这个页面」「当前页面」但上下文里没有页面 ID 时，先用 search_notes 查找或直接问清楚。\n'
+        '- 用中文回答，简洁直接；工具报错时如实说明，不要假装成功。';
+  }
 
   /// 发起一次带工具能力的对话。
   ///
@@ -120,6 +150,7 @@ class InternalAiService {
     Future<bool> Function(AiToolCallRecord pending)? confirmWrite,
     AiProviderConfig? configOverride,
   }) async {
+    _canceled = false;
     final config = configOverride ?? await loadConfig();
     if (!isConfigured(config)) {
       throw InternalAiException(
@@ -129,6 +160,7 @@ class InternalAiService {
     }
 
     final messages = <Map<String, dynamic>>[
+      {'role': 'system', 'content': buildSystemPrompt()},
       ...history,
       {'role': 'user', 'content': question},
     ];
@@ -246,9 +278,11 @@ class InternalAiService {
       'tool_choice': 'auto',
     });
 
+    final client = _clientFactory();
+    _activeClient = client;
     http.Response response;
     try {
-      response = await _http
+      response = await client
           .post(
             uri,
             headers: {
@@ -264,10 +298,15 @@ class InternalAiService {
         '模型服务响应超时，请稍后重试。',
       );
     } catch (e) {
+      if (_canceled) {
+        throw InternalAiException(InternalAiErrorKind.canceled, '已取消。');
+      }
       throw InternalAiException(
         InternalAiErrorKind.network,
         '连接模型服务失败：$e',
       );
+    } finally {
+      if (identical(_activeClient, client)) _activeClient = null;
     }
 
     switch (response.statusCode) {
@@ -354,7 +393,8 @@ class InternalAiService {
   }
 
   void dispose() {
-    _http.close();
+    _activeClient?.close();
+    _activeClient = null;
   }
 }
 

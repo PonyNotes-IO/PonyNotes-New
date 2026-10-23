@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/ai_internal/application/internal_ai_chat_store.dart';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart';
@@ -130,6 +131,8 @@ class AppFlowyCloudAuthService implements AuthService {
     } catch (_) {
       // MCP 清理失败不能阻断退出登录
     }
+    // 对话内容属于上一个账号，退出时清掉
+    InternalAiChatStore.instance.reset();
     await _backendAuthService.signOut();
     // Clear stored refresh token on logout
     await _clearRefreshToken();

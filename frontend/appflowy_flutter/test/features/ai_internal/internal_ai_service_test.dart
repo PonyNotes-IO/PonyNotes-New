@@ -350,6 +350,36 @@ void main() {
       (tools.first as Map<String, dynamic>)['function']['name'],
       'get_context',
     );
+    // 系统提示要排在历史之前，告诉模型先取 workspace_id、写操作要确认
+    final messages = body['messages'] as List<dynamic>;
+    expect((messages.first as Map<String, dynamic>)['role'], 'system');
+    expect(
+      (messages.first as Map<String, dynamic>)['content'],
+      contains('get_context'),
+    );
+  });
+
+  test('取消标记会在下一次请求前重置', () async {
+    final svc = _TestableInternalAi(
+      setting: _validSetting(),
+      tools: _FakeMcpTools(),
+      client: MockClient((request) async => _completion({'content': 'ok'})),
+    );
+
+    svc.cancel();
+    expect(svc.isCanceled, isTrue);
+
+    final result = await svc.ask(question: 'hi');
+    expect(result.text, 'ok');
+    expect(svc.isCanceled, isFalse);
+  });
+
+  test('系统提示带上当前时间，避免模型按训练截止日期算相对时间', () {
+    final prompt = InternalAiService.buildSystemPrompt(
+      now: DateTime(2026, 10, 23, 9, 30),
+    );
+    expect(prompt, contains('2026-10-23T09:30'));
+    expect(prompt, contains('workspace_id'));
   });
 
   test('模型返回非法 JSON 参数时不中断，当作空参数', () async {

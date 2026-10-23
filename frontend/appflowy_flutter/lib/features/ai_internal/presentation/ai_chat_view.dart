@@ -1,6 +1,8 @@
+import 'package:appflowy/features/ai_internal/application/internal_ai_chat_store.dart';
 import 'package:appflowy/features/ai_internal/application/internal_ai_service.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import 'package:flutter/material.dart';
 
 /// 内部 AI 的对话界面：一问一答，工具调用逐条展示，写操作先确认。
@@ -17,27 +19,29 @@ class _AiChatViewState extends State<AiChatView> {
   final _service = InternalAiService();
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
-  final _turns = <_ChatTurn>[];
-
-  /// 供下一轮使用的 OpenAI 格式历史，只放 user/assistant 文本。
-  final _history = <Map<String, dynamic>>[];
+  final _store = InternalAiChatStore.instance;
 
   bool _sending = false;
   bool _configured = true;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
+    _store.addListener(_onStoreChanged);
     _refreshConfigured();
   }
 
   @override
   void dispose() {
+    _store.removeListener(_onStoreChanged);
     _service.dispose();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onStoreChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _refreshConfigured() async {
@@ -51,35 +55,32 @@ class _AiChatViewState extends State<AiChatView> {
     if (question.isEmpty || _sending) return;
 
     _controller.clear();
-    setState(() {
-      _sending = true;
-      _error = null;
-      _turns.add(_ChatTurn.user(question));
-    });
+    setState(() => _sending = true);
+    _store.setError(null);
+    _store.addTurn(AiChatTurn.user(question));
     _scrollToEnd();
 
     try {
       final result = await _service.ask(
         question: question,
-        history: List<Map<String, dynamic>>.of(_history),
+        history: List<Map<String, dynamic>>.of(_store.history),
         confirmWrite: _confirmWrite,
       );
-      _history.add({'role': 'user', 'content': question});
-      _history.add({'role': 'assistant', 'content': result.text});
+      _store.addHistory(question, result.text);
       if (!mounted) return;
-      setState(() {
-        _turns.add(_ChatTurn.assistant(result.text, result.toolCalls));
-        _configured = true;
-      });
+      _store.addTurn(AiChatTurn.assistant(result.text, result.toolCalls));
+      setState(() => _configured = true);
     } on InternalAiException catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        if (e.kind == InternalAiErrorKind.notConfigured) _configured = false;
-      });
+      // 用户主动中断，不当作错误展示
+      if (e.kind == InternalAiErrorKind.canceled) return;
+      _store.setError(e.message);
+      if (e.kind == InternalAiErrorKind.notConfigured) {
+        setState(() => _configured = false);
+      }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '请求失败：$e');
+      _store.setError('请求失败：$e');
     } finally {
       if (mounted) setState(() => _sending = false);
       _scrollToEnd();
@@ -122,6 +123,45 @@ class _AiChatViewState extends State<AiChatView> {
     return allowed ?? false;
   }
 
+
+  /// markdown_widget 的默认主题不跟随应用主题，深色模式下代码块和引用几乎是白的。
+  MarkdownConfig _markdownConfig(AppFlowyThemeData theme) {
+    final primary = theme.textColorScheme.primary;
+    final secondary = theme.textColorScheme.secondary;
+    final body = theme.textStyle.body.standard(color: primary);
+    final codeBackground = theme.fillColorScheme.contentHover;
+    return MarkdownConfig(
+      configs: [
+        PConfig(textStyle: body.copyWith(fontSize: 13)),
+        H1Config(style: body.copyWith(fontSize: 20, fontWeight: FontWeight.bold)),
+        H2Config(style: body.copyWith(fontSize: 17, fontWeight: FontWeight.bold)),
+        H3Config(style: body.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        CodeConfig(style: TextStyle(backgroundColor: codeBackground)),
+        PreConfig(
+          decoration: BoxDecoration(
+            color: codeBackground,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          textStyle: body.copyWith(fontSize: 12, fontFamily: 'monospace'),
+          language: 'plaintext',
+        ),
+        BlockquoteConfig(sideColor: secondary, textColor: secondary),
+        LinkConfig(
+          style: body.copyWith(
+            fontSize: 13,
+            color: secondary,
+            decoration: TextDecoration.underline,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _stop() {
+    _service.cancel();
+    _scrollToEnd();
+  }
+
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -150,15 +190,9 @@ class _AiChatViewState extends State<AiChatView> {
                   color: theme.textColorScheme.primary,
                 ),
               ),
-              if (_turns.isNotEmpty)
+              if (_store.turns.isNotEmpty)
                 TextButton(
-                  onPressed: _sending
-                      ? null
-                      : () => setState(() {
-                            _turns.clear();
-                            _history.clear();
-                            _error = null;
-                          }),
+                  onPressed: _sending ? null : _store.reset,
                   child: const Text('新对话'),
                 ),
             ],
@@ -172,19 +206,19 @@ class _AiChatViewState extends State<AiChatView> {
           const VSpace(12),
           if (!_configured) _buildNotConfigured(context),
           Expanded(
-            child: _turns.isEmpty && _error == null
+            child: _store.turns.isEmpty && _store.error == null
                 ? _buildEmpty(context)
                 : ListView.builder(
                     controller: _scrollController,
-                    itemCount: _turns.length,
+                    itemCount: _store.turns.length,
                     itemBuilder: (context, index) =>
-                        _buildTurn(context, _turns[index]),
+                        _buildTurn(context, _store.turns[index]),
                   ),
           ),
-          if (_error != null) ...[
+          if (_store.error != null) ...[
             const VSpace(8),
             FlowyText(
-              _error!,
+              _store.error!,
               fontSize: 13,
               color: Theme.of(context).colorScheme.error,
             ),
@@ -205,7 +239,7 @@ class _AiChatViewState extends State<AiChatView> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: FlowyText(
-        '还没有配置模型。先在左侧「内部 AI 模型」里填地址、模型名称和 API Key。',
+        '还没有配置模型。先在设置里的「内部 AI 模型」填写地址、模型名称和 API Key。',
         fontSize: 12,
         color: AppFlowyTheme.of(context).textColorScheme.secondary,
       ),
@@ -224,7 +258,7 @@ class _AiChatViewState extends State<AiChatView> {
     );
   }
 
-  Widget _buildTurn(BuildContext context, _ChatTurn turn) {
+  Widget _buildTurn(BuildContext context, AiChatTurn turn) {
     final theme = AppFlowyTheme.of(context);
     final isUser = turn.isUser;
     return Padding(
@@ -241,11 +275,17 @@ class _AiChatViewState extends State<AiChatView> {
                   : theme.surfaceColorScheme.layer01,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: FlowyText(
-              turn.text,
-              fontSize: 13,
-              color: theme.textColorScheme.primary,
-            ),
+            child: turn.isUser
+                ? FlowyText(
+                    turn.text,
+                    fontSize: 13,
+                    color: theme.textColorScheme.primary,
+                  )
+                : MarkdownWidget(
+                    data: turn.text,
+                    shrinkWrap: true,
+                    config: _markdownConfig(theme),
+                  ),
           ),
           for (final record in turn.toolCalls)
             Padding(
@@ -284,12 +324,9 @@ class _AiChatViewState extends State<AiChatView> {
         ),
         const HSpace(8),
         FilledButton(
-          onPressed: _sending ? null : _send,
+          onPressed: _sending ? _stop : _send,
           child: _sending
-              ? const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const Icon(Icons.stop, size: 18)
               : const Text('发送'),
         ),
       ],
@@ -303,21 +340,4 @@ String _argumentSummary(Map<String, dynamic> arguments) {
       .map((entry) => '${entry.key}=${entry.value}')
       .join(', ');
   return text.length <= 120 ? text : '${text.substring(0, 120)}…';
-}
-
-class _ChatTurn {
-  _ChatTurn({
-    required this.isUser,
-    required this.text,
-    this.toolCalls = const [],
-  });
-
-  factory _ChatTurn.user(String text) => _ChatTurn(isUser: true, text: text);
-
-  factory _ChatTurn.assistant(String text, List<AiToolCallRecord> toolCalls) =>
-      _ChatTurn(isUser: false, text: text, toolCalls: toolCalls);
-
-  final bool isUser;
-  final String text;
-  final List<AiToolCallRecord> toolCalls;
 }

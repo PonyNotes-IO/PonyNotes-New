@@ -1,10 +1,13 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-search/result.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flowy_infra_ui/widget/spacing.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -238,6 +241,63 @@ class _AIOverview extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// 命令面板里的「内部 AI 对话」入口：打开设置里的内部 AI 对话页。
+class SearchInternalAiEntrance extends StatelessWidget {
+  const SearchInternalAiEntrance({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: theme.spacing.xs),
+      child: AFBaseButton(
+        borderRadius: theme.spacing.m,
+        padding: EdgeInsets.all(theme.spacing.l),
+        backgroundColor: (context, isHovering, disable) {
+          if (isHovering) return theme.fillColorScheme.contentHover;
+          return Colors.transparent;
+        },
+        borderColor: (context, isHovering, disable, isFocused) =>
+            Colors.transparent,
+        builder: (ctx, isHovering, disable) {
+          return Row(
+            children: [
+              SizedBox.square(
+                dimension: 20,
+                child: Center(
+                  child: FlowySvg(
+                    FlowySvgs.m_home_ai_chat_icon_m,
+                    size: Size.square(20),
+                    blendMode: null,
+                  ),
+                ),
+              ),
+              const HSpace(8),
+              Text(
+                '内部 AI 对话',
+                style: theme.textStyle.body
+                    .enhanced(color: theme.textColorScheme.primary)
+                    .copyWith(height: 22 / 14),
+              ),
+            ],
+          );
+        },
+        onTap: () => _open(context),
+      ),
+    );
+  }
+
+  void _open(BuildContext context) {
+    final bloc = context.read<UserWorkspaceBloc?>();
+    final profile = bloc?.state.userProfile;
+    if (profile == null) return;
+    // pop 之后本组件的 context 会失效，先拿到仍然有效的 Navigator
+    final navigator = Navigator.of(context, rootNavigator: true);
+    FlowyOverlay.pop(context);
+    showSettingsDialog(navigator.context, profile, bloc, SettingsPage.aiChat);
   }
 }
 
