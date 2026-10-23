@@ -25,6 +25,8 @@ import 'package:appflowy/mobile/presentation/setting/support_setting_group.dart'
 import 'package:appflowy/mobile/presentation/setting/user_session_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/workspace_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_space_management_page.dart';
+import 'package:appflowy/mobile/presentation/setting/ai_internal/mobile_internal_ai_page.dart';
+import 'package:appflowy/mobile/presentation/setting/ai_internal/mobile_internal_ai_provider_page.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_sharing_page.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_item_widget.dart';
@@ -541,6 +543,16 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 _SettingsItem(
                   label: '存储设置',
                   onTap: () => onNavigate(MobileSettingsSection.storage),
+                ),
+                _SettingsItem(
+                  label: '内部 AI 模型',
+                  onTap: () =>
+                      context.push(MobileInternalAiProviderPage.routeName),
+                ),
+                _SettingsItem(
+                  label: '内部 AI 对话',
+                  onTap: () =>
+                      context.push(MobileInternalAiPage.routeName),
                 ),
                 _SettingsItem(
                   label: LocaleKeys.legal_aboutXiaoma.tr(),

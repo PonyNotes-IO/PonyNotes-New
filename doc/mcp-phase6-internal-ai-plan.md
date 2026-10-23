@@ -9,11 +9,11 @@
 
 ## 0. 结论
 
-阶段六端到端可用：**配置 → 连通性测试 → 对话 → 工具读写 → 写操作确认**，17 个工具全部接上，24 个测试通过。
+阶段六端到端可用：**配置 → 连通性测试 → 对话 → 工具读写 → 写操作确认**，27 个工具全部接上，30 个测试通过。
 
-配置从「和 Ollama 共用一份」改为**独立存储**（`SharedPreferences`），两边互不覆盖；对话界面挂在设置侧栏「内部 AI 对话」。
+配置从「和 Ollama 共用一份」改为**独立存储**（`SharedPreferences`），两边互不覆盖；对话界面挂在设置侧栏「内部 AI 对话」，桌面命令面板和移动端设置也都有入口（见 §9、§10）。
 
-仍未做的两件小事：文案没走本地化、命令面板里还没有入口（现在只能从设置进）。见 §5.1。
+后续补充：系统提示词、会话跨页面保留、中断请求、移动端入口，见 §9、§10。文案按产品决定不做本地化。
 
 ---
 
@@ -30,10 +30,10 @@
 | 写操作确认 | 已实现（默认开启） | `internal_ai_service.dart:88` / `:173` |
 | 凭据隔离（MCP Token ↔ 模型 Key） | 已实现（两套独立字段） | 见 §2 |
 | 失败原因可读（401/429/超时） | 已实现 | `internal_ai_service.dart:50` 起 |
-| 工具覆盖面：17 / 17 | 已实现（含 11 个写工具） | `mcp_tools.dart:317` 的 `_toolSpecs` |
+| 工具覆盖面 | 已实现，现为 27 个（含 19 个非只读工具） | `mcp_tools.dart` 的 `toolSpecs` |
 | MCP 与内部 AI 共用同一份工具表 | 已实现，`registerAll` 遍历 `toolSpecs` | `mcp_tools.dart:354` |
 | 对话界面 | 已实现（设置侧栏「内部 AI 对话」） | `ai_chat_view.dart` → `settings_dialog.dart` |
-| 文案本地化 | 未实现（硬编码中文） | 与旁边 MCP 项风格一致，见 §5 |
+| 文案本地化 | 不做（产品决定，见 §5.1） | 小马自有功能一律硬编码中文 |
 
 ---
 
@@ -100,8 +100,8 @@
 
 ## 5.1 仍未解决
 
-1. **文案硬编码中文**（`settings_menu.dart`、设置页与对话页 0 处 `LocaleKeys`）。与相邻 MCP 项风格一致，但与计划 §3「走本地化流程」不符。
-2. **命令面板里没有入口。** 对话只能从设置侧栏进；palette 的「问 AI」目前硬绑云端 AI（`goingToAskAI` → 云端 `/api/ai/chat/session`），要接内部 AI 得先拆那层耦合。
+1. **文案硬编码中文**——按产品决定不再接 `LocaleKeys`（仓库只跟踪 `zh-CN.json`，实际就是中文单语），此项关闭。
+2. ~~命令面板里没有入口~~ **已补**：命令面板空查询状态下新增「内部 AI 对话」入口（`SearchInternalAiEntrance`），点击后关闭面板并直接打开设置里的 `SettingsPage.aiChat`。palette 原有的「问 AI」仍走云端会话，两者并存、互不影响。
 
 ---
 
@@ -122,7 +122,7 @@ flutter test --no-pub --concurrency=1 test/features/mcp test/features/ai_interna
 
 对话界面（`ai_chat_view_test.dart`，2 个）：未配置时给出提示、已配置时显示可输入的初始态。
 
-MCP 侧（`mcp_server_service_test.dart`，含新增 1 个）：`工具注册表覆盖全部 17 个工具，只读/破坏性标记正确` 钉住 17 个工具名、6 个只读、2 个破坏性、11 个写，以及未知工具返回 `isError`——防止工具表再次缩水。
+MCP 侧（`mcp_server_service_test.dart`，含新增 1 个）：`工具注册表覆盖全部 27 个工具，只读/破坏性标记正确` 钉住工具名、只读/破坏性标记（当时为 17 个工具、6 只读、2 破坏性，现已扩到 27 个），以及未知工具返回 `isError`——防止工具表再次缩水。
 
 ### Rust 侧：`cargo check -p flowy-ai` 通过（先修掉一个环境问题）
 
@@ -168,6 +168,27 @@ error: could not compile `flowy-error` (lib) due to 2 previous errors
 
 ## 8. 后续待办
 
-1. 文案走本地化（`settings_menu.dart` + 设置页 + 对话页，目前 0 处 `LocaleKeys`）
-2. 命令面板加内部 AI 入口：需要先把 palette 的「问 AI」与云端会话拆开
+1. ~~文案走本地化~~：产品决定不做，小马自有功能一律硬编码中文（仓库只跟踪 `zh-CN.json`）。
+2. ~~命令面板加内部 AI 入口~~：已补，见 §9。
 3. 可选加固：`build-tool/flowy-derive/src/proto_buf/util.rs:62` 的 cache 路径改为展开时解析，并在缓存缺失时直接报错，避免换机器/换 checkout 后静默降级成 Primitive（详见 §6）
+
+---
+
+## 9. 2026-10-23 补充：提示词与会话保持
+
+1. **系统提示词**（`InternalAiService.buildSystemPrompt`）。此前请求里只有 history + 用户问题，模型不知道自己在小马笔记里，也不知道要先取 `workspace_id`。现在首条消息是 system：说明身份、当前时间（运行时生成，避免模型按训练截止日期算「明天」）、先用 `get_context` 拿工作区 ID、ID 必须查询不得编造、写操作要等确认、报错要如实说。
+2. **中断请求**。发送中按钮变成停止键，点了会 `close()` 当前 HTTP client，正在等待的请求抛 `canceled`，界面不显示错误。每次请求新建 client，所以中断不影响下一次提问。
+3. **回复按 Markdown 渲染**。模型返回的是 Markdown（列表、代码块、加粗），之前用纯文本控件原样显示，用户看到的是 `**加粗**`。现在助手消息走 `markdown_widget`（项目已有依赖，导入对话框在用），用户消息仍按纯文本显示。
+4. **会话跨页面保留**（`InternalAiChatStore`）。设置对话框按 `switch (page)` 重建子树，切到别的设置页再回来对话就没了。现在轮次、OpenAI 历史、错误信息都放在单例 `ChangeNotifier` 里，`AiChatView` 监听重建；「新对话」按钮调用 `reset()`。
+
+验证：`flutter test test/features/ai_internal` 通过，新增 `buildSystemPrompt` 断言（当前时间、workspace_id 指引）和 store 的 reset 通知断言。
+
+## 10. 2026-10-23 补充：移动端入口
+
+此前内部 AI 只能从桌面端设置侧栏进入，移动端完全没有入口，而本仓库的主分支是 `dev_mobile_new`。
+
+- 新增 `MobileInternalAiPage`（`/mobile-internal-ai`）和 `MobileInternalAiProviderPage`（`/mobile-internal-ai-provider`），分别复用桌面端的 `AiChatView` 和 `AiProviderSettingsView`。
+- 移动端设置页新增「内部 AI 模型」「内部 AI 对话」两项，路由注册在 `generate_router.dart`。
+- 对话页未配置时的提示从「左侧『内部 AI 模型』」改为「设置里的『内部 AI 模型』」，桌面和移动都说得通。
+
+未验证：移动端页面布局只在 analyze 层面通过，没有在模拟器/真机上跑过；`AiProviderSettingsView` 依赖 `SettingsBody` 的 `Expanded`，在 `Scaffold.body` 下高度有界，理论上没问题，实际需要点一次确认。
