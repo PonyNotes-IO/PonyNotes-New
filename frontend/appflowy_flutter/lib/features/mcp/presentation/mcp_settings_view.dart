@@ -25,6 +25,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
   int _selectedTab = 0;
   bool _showSearch = false;
   bool _showToken = false;
+  bool _resettingToken = false;
 
   /// 只用来读取工具清单，不参与实际注册。
   final _registry = McpTools(endpoint: '', version: '');
@@ -115,6 +116,8 @@ class _McpSettingsViewState extends State<McpSettingsView> {
                       _buildAgentCards(context),
                     ] else ...[
                       _buildTokenCard(context),
+                      const VSpace(24),
+                      _buildDisconnectAll(context),
                       const VSpace(24),
                       _buildToolPermissions(context),
                       const VSpace(24),
@@ -222,7 +225,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
                     child: Switch.adaptive(
                       value: _service.isRunning,
                       activeTrackColor: theme.fillColorScheme.infoThick,
-                      onChanged: _toggle,
+                      onChanged: _resettingToken ? null : _toggle,
                     ),
                   ),
                 ),
@@ -332,7 +335,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
     return _Section(
       title: '连接凭证',
       trailing: TextButton(
-        onPressed: _resetToken,
+        onPressed: _resettingToken || _service.isStarting ? null : _resetToken,
         child: Text(_service.hasToken ? '重置' : '生成'),
       ),
       children: [
@@ -391,7 +394,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
               child: const Text('服务自检'),
             ),
             TextButton(
-              onPressed: _service.hasToken ? _revoke : null,
+              onPressed: _service.hasToken && !_resettingToken ? _revoke : null,
               style: TextButton.styleFrom(
                 foregroundColor: theme.textColorScheme.error,
               ),
@@ -804,6 +807,56 @@ class _McpSettingsViewState extends State<McpSettingsView> {
     );
   }
 
+  Widget _buildDisconnectAll(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final description = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '解除所有与小马笔记 MCP 的连接',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: theme.textColorScheme.primary,
+          ),
+        ),
+        const VSpace(6),
+        Text(
+          '断开所有客户端连接并刷新 Token。客户端需使用新凭证重新配置后才能连接。',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.5,
+            color: theme.textColorScheme.secondary,
+          ),
+        ),
+      ],
+    );
+    final button = TextButton(
+      onPressed: _service.hasToken && !_service.isStarting && !_resettingToken
+          ? _resetToken
+          : null,
+      style: TextButton.styleFrom(
+        foregroundColor: theme.textColorScheme.error,
+        backgroundColor: theme.textColorScheme.error.withValues(alpha: 0.08),
+      ),
+      child: Text(_resettingToken ? '正在断开…' : '断开所有连接'),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth >= 520
+          ? Row(
+              children: [
+                Expanded(child: description),
+                const HSpace(24),
+                button,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [description, const VSpace(12), button],
+            ),
+    );
+  }
+
   // ------------------------------------------------------------ 工具权限
 
   Widget _buildToolPermissions(BuildContext context) {
@@ -1004,11 +1057,22 @@ class _McpSettingsViewState extends State<McpSettingsView> {
   }
 
   Future<void> _resetToken() async {
+    if (_resettingToken) return;
+    final wasRunning = _service.isRunning;
+    setState(() => _resettingToken = true);
     try {
       await _service.resetToken();
-      _showMessage('已生成新 Token，旧 Token 立即失效');
+      _showMessage(
+        wasRunning && !_service.isRunning
+            ? '已刷新 Token 并断开所有连接，但服务重启失败：${_service.lastError}'
+            : '已刷新 Token 并断开所有连接，请使用新凭证重新配置客户端',
+      );
     } on StateError catch (e) {
       _showMessage(e.message.toString());
+    } catch (e) {
+      _showMessage('刷新连接凭证失败：$e');
+    } finally {
+      if (mounted) setState(() => _resettingToken = false);
     }
   }
 

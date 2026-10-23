@@ -99,6 +99,18 @@ void main() {
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
+    await tester.ensureVisible(find.text('连接与权限'));
+    await tester.tap(find.text('连接与权限'));
+    await tester.pumpAndSettle();
+    final disconnect = find.widgetWithText(TextButton, '断开所有连接');
+    await tester.ensureVisible(disconnect);
+    expect(tester.widget<TextButton>(disconnect).onPressed, isNull);
+    expect(
+      tester.getTopLeft(disconnect).dx,
+      greaterThan(
+        tester.getTopLeft(find.text('解除所有与小马笔记 MCP 的连接')).dx,
+      ),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -124,6 +136,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('连接凭证'), findsOneWidget);
     expect(find.text('工具权限'), findsOneWidget);
+    final disconnect = find.widgetWithText(TextButton, '断开所有连接');
+    await tester.ensureVisible(disconnect);
+    expect(
+      tester.getTopLeft(disconnect).dy,
+      greaterThan(
+        tester.getBottomLeft(find.text('解除所有与小马笔记 MCP 的连接')).dy,
+      ),
+    );
+    expect(tester.takeException(), isNull);
     final tool = find.text('get_context');
     await tester.ensureVisible(tool);
     await tester.pumpAndSettle();

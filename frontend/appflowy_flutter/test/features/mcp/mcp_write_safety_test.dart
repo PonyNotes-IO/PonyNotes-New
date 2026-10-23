@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/env/backend_env.dart';
+import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
@@ -18,6 +19,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:protobuf/protobuf.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -28,6 +30,7 @@ void main() {
   const resourceTypes = ['sub_page', 'grid', 'board', 'calendar'];
 
   setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
     Log.shared.disableLog = true;
     data = Directory.systemTemp.createTempSync('ponynotes-mcp-write-test-');
     await sdk.init(
@@ -99,6 +102,28 @@ void main() {
   Map<String, dynamic> body(CallToolResult result) =>
       jsonDecode((result.content.single as TextContent).text)
           as Map<String, dynamic>;
+
+  test('disconnecting rotates persisted credentials while keeping service off',
+      () async {
+    final service = McpServerService.instance;
+    addTearDown(service.revoke);
+    final previous = await service.generateToken();
+    final current = await service.resetToken();
+    expect(current, isNot(previous));
+    expect(service.token, current);
+    expect(service.isRunning, isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('mcp_token_plain'), current);
+    expect(
+      prefs.getString('mcp_token_hash'),
+      McpServerService.hashToken(current),
+    );
+    expect(
+      prefs.getString('mcp_token_hash'),
+      isNot(McpServerService.hashToken(previous)),
+    );
+    expect(prefs.getBool('mcp_server_enabled'), isNot(true));
+  });
 
   test('successful inserts confirm backend data for every resource type',
       () async {
