@@ -33,18 +33,54 @@ test "" = "$(grep '^Signed-off-by: ' "$1" |
 	exit 1
 }
 
-.githooks/gitlint \
-	 --msg-file=$1 \
-	 --subject-regex="^(build|chore|ci|docs|feat|feature|fix|perf|refactor|revert|style|test)(.*)?:\s?.*" \
-    --subject-maxlen=150 \
-    --subject-minlen=10 \
-    --body-regex=".*" \
-    --max-parents=1
+# ── 提交信息格式检查（内联实现，不依赖外部工具） ──────────────────────
+#
+# 原实现调用 `.githooks/gitlint`，但该文件在仓库历史中从未存在过
+# （git log --all -- .githooks/gitlint 零命中），钩子若启用必然报错退出。
+# 这里改为纯 shell 实现，校验规则与原 gitlint 参数保持一致：
+#   --subject-regex  类型前缀（含中文冒号，兼容「fix：xxx」写法）
+#   --subject-minlen 10 / --subject-maxlen 150
+#   --max-parents=1  merge 提交放行
+#   --body-regex     为 ".*"，即 body 不做限制
 
-if [ $? -ne 0 ]
-then
-    printError "Please fix your commit message to match AppFlowy coding standards"
-    printError "https://docs.appflowy.io/docs/documentation/software-contributions/conventions/git-conventions"
+SUBJECT_MINLEN=10
+SUBJECT_MAXLEN=150
+
+# merge 提交（父提交多于 1 个）放行：此时 COMMIT_SOURCE 为 merge
+if [ "$2" = "merge" ]; then
+    printSuccess "merge 提交，跳过格式检查"
+    exit 0
+fi
+
+subject="$(head -n 1 "$1")"
+
+# 空提交信息，或全部被注释（如 git commit --amend 未改动时）
+case "$subject" in
+    ''|'#'*)
+        printError "提交信息不能为空"
+        exit 1
+        ;;
+esac
+
+# 类型前缀：build|chore|ci|docs|feat|feature|fix|perf|refactor|revert|style|test
+# 冒号接受半角「:」与全角「：」，其后允许 0 或 1 个空格
+if ! printf '%s' "$subject" | grep -qE '^(build|chore|ci|docs|feat|feature|fix|perf|refactor|revert|style|test)(\(.+\))?[:：][[:space:]]?.+'; then
+    printError "提交信息缺少类型前缀：${subject}"
+    printError "允许的类型：build chore ci docs feat feature fix perf refactor revert style test"
+    printError "示例：fix: 修复工作区菜单连点残留"
     exit 1
 fi
+
+# 长度按字符数计（中文字符不应按字节放大）
+subject_len="$(printf '%s' "$subject" | awk '{print length($0)}')"
+if [ "$subject_len" -lt "$SUBJECT_MINLEN" ]; then
+    printError "提交信息过短（${subject_len} < ${SUBJECT_MINLEN}）：${subject}"
+    exit 1
+fi
+if [ "$subject_len" -gt "$SUBJECT_MAXLEN" ]; then
+    printError "提交信息过长（${subject_len} > ${SUBJECT_MAXLEN}）：${subject}"
+    exit 1
+fi
+
+printSuccess "提交信息格式检查通过"
 
