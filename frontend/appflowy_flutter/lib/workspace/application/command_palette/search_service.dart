@@ -13,8 +13,9 @@ import 'package:fixnum/fixnum.dart';
 
 class SearchBackendService {
   static Future<FlowyResult<SearchResponseStream, FlowyError>> performSearch(
-    String keyword,
-  ) async {
+    String keyword, {
+    int? limit,
+  }) async {
     final searchId = DateTime.now().millisecondsSinceEpoch.toString();
     final stream = SearchResponseStream(searchId: searchId);
 
@@ -23,6 +24,9 @@ class SearchBackendService {
       searchId: searchId,
       streamPort: Int64(stream.nativePort),
     );
+    if (limit != null) {
+      request.limit = Int64(limit);
+    }
 
     unawaited(SearchEventStreamSearch(request).send());
     return FlowyResult.success(stream);

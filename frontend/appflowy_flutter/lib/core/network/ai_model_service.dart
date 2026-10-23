@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/env/env.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 
@@ -66,11 +68,9 @@ class AIModelService {
     }
 
     try {
-      // 从环境变量或配置获取API地址
-      const apiBaseUrl = String.fromEnvironment(
-        'API_BASE_URL',
-        defaultValue: 'https://api.xiaomabiji.com',
-      );
+      // 走环境配置的 API 地址，本地部署（dev.env 指向 localhost）时不会打到生产域名。
+      final apiBaseUrl =
+          Env.afCloudUrl.isNotEmpty ? Env.afCloudUrl : kAppflowyCloudUrl;
 
       debugPrint('🔍 正在从 $apiBaseUrl 获取AI模型列表...');
 

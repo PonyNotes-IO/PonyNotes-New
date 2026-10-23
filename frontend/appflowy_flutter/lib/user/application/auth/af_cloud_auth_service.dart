@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -124,6 +125,11 @@ class AppFlowyCloudAuthService implements AuthService {
 
   @override
   Future<void> signOut() async {
+    try {
+      await McpServerService.instance.revoke();
+    } catch (_) {
+      // MCP 清理失败不能阻断退出登录
+    }
     await _backendAuthService.signOut();
     // Clear stored refresh token on logout
     await _clearRefreshToken();
@@ -204,8 +210,10 @@ class AppFlowyCloudAuthService implements AuthService {
             final gotrueTokenResponse = GotrueTokenResponsePB.create()
               ..accessToken = tokenMap['access_token'] as String? ?? ''
               ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
-              ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
-              ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+              ..expiresIn =
+                  Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+              ..expiresAt =
+                  Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
               ..refreshToken = tokenMap['refresh_token'] as String? ?? '';
 
             // Store the new refresh token
@@ -214,7 +222,8 @@ class AppFlowyCloudAuthService implements AuthService {
             }
 
             // Pass the new tokens to the deep link handler to update the session
-            getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(gotrueTokenResponse);
+            getIt<AppFlowyCloudDeepLink>()
+                .passGotrueTokenResponse(gotrueTokenResponse);
 
             return FlowyResult.success(gotrueTokenResponse);
           } catch (e) {
@@ -225,7 +234,8 @@ class AppFlowyCloudAuthService implements AuthService {
             );
           }
         },
-        (error) => FlowyResult<GotrueTokenResponsePB, FlowyError>.failure(error),
+        (error) =>
+            FlowyResult<GotrueTokenResponsePB, FlowyError>.failure(error),
       );
     } catch (e) {
       return FlowyResult.failure(

@@ -125,6 +125,8 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   markdown: ^7.3.0
   markdown_widget: ^2.3.2+8
+  # 本地 MCP Server（lib/features/mcp），提供 Streamable HTTP 传输
+  mcp_dart: ^2.4.3
   mime: ^2.0.0
   nanoid: ^1.0.0
   numerus: ^2.1.2

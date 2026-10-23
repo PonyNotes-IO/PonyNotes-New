@@ -724,6 +724,11 @@ pub struct LocalAISettingPB {
   #[pb(index = 3)]
   #[validate(custom(function = "required_not_empty_str"))]
   pub embedding_model_name: String,
+
+  /// 外部模型服务的 API Key（OpenAI 兼容端点）。
+  /// 不加 required 校验：Ollama 本地部署无需密钥，密钥缺失是合法状态。
+  #[pb(index = 4)]
+  pub api_key: String,
 }
 
 impl From<LocalAISetting> for LocalAISettingPB {
@@ -732,6 +737,7 @@ impl From<LocalAISetting> for LocalAISettingPB {
       server_url: value.ollama_server_url,
       global_chat_model: value.chat_model_name,
       embedding_model_name: value.embedding_model_name,
+      api_key: value.api_key,
     }
   }
 }
@@ -742,6 +748,7 @@ impl From<LocalAISettingPB> for LocalAISetting {
       ollama_server_url: value.server_url,
       chat_model_name: value.global_chat_model,
       embedding_model_name: value.embedding_model_name,
+      api_key: value.api_key,
     }
   }
 }

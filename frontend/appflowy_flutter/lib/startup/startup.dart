@@ -23,6 +23,7 @@ import 'plugin/plugin.dart';
 import 'tasks/af_navigator_observer.dart';
 import 'tasks/baidu_cloud_task.dart';
 import 'tasks/file_storage_task.dart';
+import 'tasks/mcp_server_task.dart';
 import 'tasks/prelude.dart';
 
 final getIt = GetIt.instance;
@@ -191,6 +192,8 @@ class FlowyRunner {
           const HotKeyTask(),
           if (isAppFlowyCloudEnabled) InitAppFlowyCloudTask(),
           const InitAppWidgetTask(),
+          // 恢复本地 MCP Server（仅桌面端；用户开启过才启动）
+          const McpServerTask(),
           if (mode.isTest)
             InitPlatformServiceTask()
           else ...[

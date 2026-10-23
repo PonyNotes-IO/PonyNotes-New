@@ -172,6 +172,17 @@ impl AIManager {
 
   #[instrument(skip_all, err)]
   pub async fn on_launch_if_authenticated(&self, workspace_id: &Uuid) -> Result<(), FlowyError> {
+    // 用户上下文就绪后绑定本地 AI 设置目录，使 get/update_local_ai_setting 真正读写磁盘。
+    // 登录前 application_root_dir 会返回 UserNotLogin，此处失败不应阻断启动。
+    if let Ok(root) = self.user_service.application_root_dir() {
+      let local_ai = Arc::downgrade(&self.local_ai);
+      if let Some(local_ai) = local_ai.upgrade() {
+        local_ai.bind_root_dir(root);
+      }
+    } else {
+      info!("[AI Manager] application_root_dir unavailable, local ai setting stays in memory");
+    }
+
     let is_enabled = self
       .local_ai
       .is_enabled_on_workspace(&workspace_id.to_string());

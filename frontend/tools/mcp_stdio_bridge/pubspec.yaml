@@ -1,0 +1,14 @@
+name: mcp_stdio_bridge
+description: Forward a stdio MCP session to the local PonyNotes Streamable HTTP endpoint.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.4.0
+
+dependencies:
+  mcp_dart: ^2.4.3
+
+dev_dependencies:
+  lints: ^4.0.0
+  test: ^1.24.0

@@ -1,6 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/ai_internal/presentation/ai_chat_view.dart';
+import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
+import 'package:appflowy/features/mcp/presentation/mcp_settings_view.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -118,8 +121,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   @override
   void dispose() {
-    _subscriptionSuccessListenable
-        .removeListener(_subscriptionSuccessListener);
+    _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
     super.dispose();
   }
 
@@ -215,7 +217,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             // caused by rounding or inner padding of children.
                             color: theme.backgroundColorScheme.primary,
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
                               child: currentWorkspace == null
                                   ? const Center(
                                       child:
@@ -352,6 +355,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
         );
       case SettingsPage.featureFlags:
         return const FeatureFlagsPage();
+      case SettingsPage.mcp:
+        return const McpSettingsView();
+      case SettingsPage.aiProvider:
+        return const AiProviderSettingsView();
+      case SettingsPage.aiChat:
+        return const AiChatView();
       // return const SizedBox.shrink();
     }
   }

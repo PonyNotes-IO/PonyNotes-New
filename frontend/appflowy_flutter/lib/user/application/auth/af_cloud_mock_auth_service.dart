@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/auth/backend_auth_service.dart';
 import 'package:appflowy/user/application/auth/device_id.dart';
@@ -87,6 +88,11 @@ class AppFlowyCloudMockAuthService implements AuthService {
 
   @override
   Future<void> signOut() async {
+    try {
+      await McpServerService.instance.revoke();
+    } catch (_) {
+      // MCP 清理失败不能阻断退出登录
+    }
     await _appFlowyAuthService.signOut();
     UserBackendService.clearCurrentUserProfileCache();
   }
