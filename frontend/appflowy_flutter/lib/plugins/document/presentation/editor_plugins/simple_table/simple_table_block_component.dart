@@ -123,6 +123,8 @@ Node createSimpleTableBlockNode({
   required int rowCount,
   String? defaultContent,
   String Function(int rowIndex, int columnIndex)? contentBuilder,
+  bool enableHeaderRow = false,
+  bool enableHeaderColumn = false,
 }) {
   final rows = List.generate(rowCount, (rowIndex) {
     final cells = List.generate(
@@ -138,7 +140,11 @@ Node createSimpleTableBlockNode({
     return simpleTableRowBlockNode(children: cells);
   });
 
-  return simpleTableBlockNode(children: rows);
+  return simpleTableBlockNode(
+    enableHeaderRow: enableHeaderRow,
+    enableHeaderColumn: enableHeaderColumn,
+    children: rows,
+  );
 }
 
 class SimpleTableBlockComponentBuilder extends BlockComponentBuilder {

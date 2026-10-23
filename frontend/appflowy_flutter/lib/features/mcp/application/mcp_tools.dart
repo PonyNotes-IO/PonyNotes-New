@@ -2,7 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
+import 'package:appflowy/plugins/database/application/row/row_service.dart';
+import 'package:appflowy/plugins/database/domain/cell_service.dart';
+import 'package:appflowy/plugins/database/domain/checklist_cell_service.dart';
+import 'package:appflowy/plugins/database/domain/date_cell_service.dart';
 import 'package:appflowy/plugins/database/domain/database_view_service.dart';
+import 'package:appflowy/plugins/database/domain/field_service.dart';
+import 'package:appflowy/plugins/database/domain/select_option_cell_service.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -17,6 +24,8 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/util/int64_extension.dart';
+import 'package:appflowy/util/time.dart';
 import 'package:appflowy/workspace/application/command_palette/search_service.dart';
 import 'package:appflowy/workspace/application/permission/workspace_permission_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -25,6 +34,7 @@ import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/remi
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:collection/collection.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart'
@@ -103,6 +113,19 @@ class McpTools {
   static const Duration _writeTimeout = Duration(seconds: 10);
   static const Duration _toolTimeout = Duration(seconds: 60);
 
+  /// create_database_field 接受的类型名到后端字段类型的映射。
+  static const Map<String, FieldType> _fieldTypes = {
+    'text': FieldType.RichText,
+    'number': FieldType.Number,
+    'date': FieldType.DateTime,
+    'single_select': FieldType.SingleSelect,
+    'multi_select': FieldType.MultiSelect,
+    'checkbox': FieldType.Checkbox,
+    'url': FieldType.URL,
+    'checklist': FieldType.Checklist,
+    'time': FieldType.Time,
+  };
+
   static const JsonObject _noArgsSchema =
       JsonObject(additionalProperties: false);
 
@@ -143,6 +166,119 @@ class McpTools {
       'offset': JsonInteger(description: '跳过前 N 项，默认 0', minimum: 0),
     },
     required: ['workspace_id', 'page_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _queryDatabaseSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(
+        description: '数据库视图 ID，来自 grid/board/calendar 块 attributes.view_id',
+      ),
+      'limit': JsonInteger(
+        description: '返回行数上限，默认 20，最大 100',
+        minimum: 1,
+        maximum: 100,
+      ),
+      'field_ids': JsonArray(
+        items: JsonString(),
+        description: '只返回这些字段 ID；省略时返回全部字段',
+      ),
+    },
+    required: ['workspace_id', 'view_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _createDatabaseRowSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'cells': JsonArray(
+        description: '要写入的单元格；字段名或字段 ID 均可',
+        items: JsonObject(
+          properties: {
+            'field': JsonString(description: '字段名或字段 ID'),
+            'value': JsonString(description: '文本值'),
+          },
+          required: ['field', 'value'],
+          additionalProperties: false,
+        ),
+      ),
+      'include_time': JsonBoolean(description: '日期字段是否包含时间，默认 false'),
+    },
+    required: ['workspace_id', 'view_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _updateDatabaseCellSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'row_id': JsonString(description: '行 ID'),
+      'field': JsonString(description: '字段名或字段 ID'),
+      'value': JsonString(
+        description: '文本值；日期用 ISO 8601，勾选字段用 true/false，'
+            '多选和检查清单用逗号分隔，关联和附件字段不支持写入',
+      ),
+      'include_time': JsonBoolean(description: '日期字段是否包含时间，默认 false'),
+    },
+    required: ['workspace_id', 'view_id', 'row_id', 'field', 'value'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _deleteDatabaseRowSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'row_id': JsonString(description: '要删除的行 ID'),
+    },
+    required: ['workspace_id', 'view_id', 'row_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _createDatabaseFieldSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'name': JsonString(description: '字段名'),
+      'type': JsonString(
+        description: '字段类型',
+        enumValues: [
+          'text',
+          'number',
+          'date',
+          'single_select',
+          'multi_select',
+          'checkbox',
+          'url',
+          'checklist',
+          'time',
+        ],
+      ),
+      'before_field': JsonString(description: '插入到该字段之前；省略时追加到末尾'),
+    },
+    required: ['workspace_id', 'view_id', 'name', 'type'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _updateDatabaseFieldSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'field': JsonString(description: '字段名或字段 ID'),
+      'name': JsonString(description: '新的字段名'),
+    },
+    required: ['workspace_id', 'view_id', 'field', 'name'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _deleteDatabaseFieldSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'view_id': JsonString(description: '数据库视图 ID'),
+      'field': JsonString(description: '字段名或字段 ID'),
+    },
+    required: ['workspace_id', 'view_id', 'field'],
     additionalProperties: false,
   );
 
@@ -250,6 +386,7 @@ class McpTools {
           'sub_page',
           'columns',
           'table',
+          'outline',
           'grid',
           'board',
           'calendar',
@@ -278,7 +415,8 @@ class McpTools {
         items: JsonArray(items: JsonString()),
         description: 'table 的单元格文本，按行给出；每行列数需一致，首行作为表头',
       ),
-      'header_row': JsonBoolean(description: 'table 是否启用表头行，暂不支持'),
+      'header_row': JsonBoolean(description: 'table 是否启用表头行，默认 true'),
+      'header_column': JsonBoolean(description: 'table 是否启用表头列，默认 false'),
       'database_id': JsonString(
         description: 'database_id 可以是数据库 ID 或数据库视图 ID；传入视图 ID 会自动解析',
       ),
@@ -318,11 +456,15 @@ class McpTools {
       'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
       'page_id': JsonString(description: '页面 ID'),
       'block_id': JsonString(description: '要更新的块 ID'),
-      'text': JsonString(description: '新的块文本，空字符串表示清空'),
+      'text': JsonString(description: '新的块文本，空字符串表示清空；省略时保留原文本'),
       'checked': JsonBoolean(description: 'todo_list 新的勾选状态，可选'),
       'collapsed': JsonBoolean(description: 'toggle 类块新的折叠状态，可选'),
+      'language': JsonString(description: 'code 块新的语言，如 dart、python'),
+      'icon': JsonString(description: 'callout 块新的图标 emoji'),
+      'header_row': JsonBoolean(description: 'table 是否启用表头行'),
+      'header_column': JsonBoolean(description: 'table 是否启用表头列'),
     },
-    required: ['workspace_id', 'page_id', 'block_id', 'text'],
+    required: ['workspace_id', 'page_id', 'block_id'],
     additionalProperties: false,
   );
 
@@ -336,13 +478,52 @@ class McpTools {
     additionalProperties: false,
   );
 
+  static const JsonObject _listTrashSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+    },
+    required: ['workspace_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _duplicatePageSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'page_id': JsonString(description: '要复制的页面 ID'),
+      'parent_page_id': JsonString(
+        description: '副本放在哪个页面下；省略时与源页面同级',
+      ),
+      'include_children': JsonBoolean(
+        description: '是否连同子页面一起复制，默认 true',
+      ),
+    },
+    required: ['workspace_id', 'page_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _moveBlockSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+      'page_id': JsonString(description: '页面 ID'),
+      'block_id': JsonString(description: '要移动的块 ID，会连同子块一起移动'),
+      'parent_block_id': JsonString(
+        description: '目标父块；省略时沿用当前父块',
+      ),
+      'after_block_id': JsonString(
+        description: '移动到该块之后；省略时追加到目标父块末尾。给出时以它的父块为目标父块',
+      ),
+    },
+    required: ['workspace_id', 'page_id', 'block_id'],
+    additionalProperties: false,
+  );
+
   /// 工具注册表：MCP 传输层与内部 AI 共用同一份定义与处理函数。
   ///
   /// 内部 AI 通过 [executeTool] 调用，不经过 MCP 协议，但走完全相同的业务逻辑，
   /// 避免两套入口各自实现笔记操作。
   List<McpToolSpec> get toolSpecs => _toolSpecs;
 
-  /// 17 个工具的唯一来源。新增工具只需在此追加一条，MCP 与内部 AI 同时生效。
+  /// 27 个工具的唯一来源。新增工具只需在此追加一条，MCP 与内部 AI 同时生效。
   late final List<McpToolSpec> _toolSpecs = [
     McpToolSpec(
       name: 'get_context',
@@ -380,6 +561,51 @@ class McpTools {
       inputSchema: _listBlocksSchema,
       readOnly: true,
       handler: _listBlocks,
+    ),
+    McpToolSpec(
+      name: 'query_database',
+      description: '读取表格/看板/日历视图的行数据，按字段名返回每个单元格的文本。',
+      inputSchema: _queryDatabaseSchema,
+      readOnly: true,
+      handler: _queryDatabase,
+    ),
+    McpToolSpec(
+      name: 'create_database_row',
+      description: '在表格/看板/日历视图中新增一行，可同时写入若干单元格。',
+      inputSchema: _createDatabaseRowSchema,
+      handler: _createDatabaseRow,
+    ),
+    McpToolSpec(
+      name: 'update_database_cell',
+      description: '按字段名或字段 ID 更新某一行的单元格值。',
+      inputSchema: _updateDatabaseCellSchema,
+      handler: _updateDatabaseCell,
+    ),
+    McpToolSpec(
+      name: 'delete_database_row',
+      description: '删除表格/看板/日历视图中的一行。',
+      inputSchema: _deleteDatabaseRowSchema,
+      destructive: true,
+      handler: _deleteDatabaseRow,
+    ),
+    McpToolSpec(
+      name: 'create_database_field',
+      description: '在数据库视图中新增一个字段（列）。',
+      inputSchema: _createDatabaseFieldSchema,
+      handler: _createDatabaseField,
+    ),
+    McpToolSpec(
+      name: 'update_database_field',
+      description: '重命名数据库字段。',
+      inputSchema: _updateDatabaseFieldSchema,
+      handler: _updateDatabaseField,
+    ),
+    McpToolSpec(
+      name: 'delete_database_field',
+      description: '删除数据库字段及其数据。',
+      inputSchema: _deleteDatabaseFieldSchema,
+      destructive: true,
+      handler: _deleteDatabaseField,
     ),
     McpToolSpec(
       name: 'search_notes',
@@ -427,6 +653,19 @@ class McpTools {
       handler: _deletePage,
     ),
     McpToolSpec(
+      name: 'list_trash',
+      description: '列出回收站里的页面，可用于找到要恢复的页面 ID。',
+      inputSchema: _listTrashSchema,
+      readOnly: true,
+      handler: _listTrash,
+    ),
+    McpToolSpec(
+      name: 'duplicate_page',
+      description: '复制页面（含子页面），副本标题追加「副本」后缀。',
+      inputSchema: _duplicatePageSchema,
+      handler: _duplicatePage,
+    ),
+    McpToolSpec(
       name: 'restore_page',
       description: '从回收站恢复页面。',
       inputSchema: _pageIdSchema,
@@ -446,7 +685,7 @@ class McpTools {
     ),
     McpToolSpec(
       name: 'update_block',
-      description: '按块 ID 替换文本块的文本内容；不支持修改块类型。',
+      description: '按块 ID 更新文本或块属性；不支持修改块类型。',
       inputSchema: _updateBlockSchema,
       handler: _updateBlock,
     ),
@@ -456,6 +695,12 @@ class McpTools {
       inputSchema: _deleteBlockSchema,
       destructive: true,
       handler: _deleteBlock,
+    ),
+    McpToolSpec(
+      name: 'move_block',
+      description: '把块（连同子块）移动到另一个父块下或调整同级顺序。',
+      inputSchema: _moveBlockSchema,
+      handler: _moveBlock,
     ),
   ];
 
@@ -756,6 +1001,552 @@ class McpTools {
       'has_more': offset + page.length < blocks.length,
     });
   }
+
+  Future<CallToolResult> _queryDatabase(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    if (workspaceId.isEmpty || viewId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id 或 view_id。');
+    }
+    final contextError = await _validateWorkspace(workspaceId);
+    if (contextError != null) return contextError;
+
+    final opened =
+        await DatabaseViewBackendService(viewId: viewId).openDatabase();
+    final database = opened.fold((db) => db, (err) => null);
+    if (database == null) {
+      return _error('not_found', '数据库视图不存在或无权访问。');
+    }
+
+    final requested = (args['field_ids'] as List?)
+            ?.whereType<String>()
+            .where((id) => id.isNotEmpty)
+            .toSet() ??
+        const <String>{};
+    final fields = await _databaseFields(viewId);
+    if (fields == null) {
+      return _error('internal', '读取数据库字段失败。');
+    }
+    final visibleFields = fields
+        .where((field) => requested.isEmpty || requested.contains(field.id))
+        .toList();
+    if (visibleFields.isEmpty) {
+      return _error('not_found', '没有匹配的字段。');
+    }
+
+    final limit = _intArg(args, 'limit', 20, 1, 100);
+    final rows = database.rows.toList();
+    final visible = rows.take(limit);
+    final rowJson = <Map<String, dynamic>>[];
+    for (final row in visible) {
+      final cells = <String, String>{};
+      for (final field in visibleFields) {
+        final cellResult = await DatabaseEventGetCell(
+          CellIdPB()
+            ..viewId = viewId
+            ..rowId = row.id
+            ..fieldId = field.id,
+        ).send();
+        final cell = cellResult.fold((value) => value, (err) => null);
+        if (cell == null) continue;
+        cells[field.name] = formatCellValue(cell.fieldType, cell.data);
+      }
+      rowJson.add({'row_id': row.id, 'cells': cells});
+    }
+
+    return _ok({
+      'view_id': viewId,
+      'layout': database.layoutType.name,
+      'fields': visibleFields
+          .map(
+            (field) => {
+              'id': field.id,
+              'name': field.name,
+              'type': field.fieldType.name,
+            },
+          )
+          .toList(),
+      'rows': rowJson,
+      'row_count': rows.length,
+      'returned': rowJson.length,
+      'truncated': rows.length > rowJson.length,
+    });
+  }
+
+  Future<CallToolResult> _createDatabaseRow(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    if (workspaceId.isEmpty || viewId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id 或 view_id。');
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final fields = await _databaseFields(viewId);
+    if (fields == null) {
+      return _error('not_found', '数据库视图不存在或无权访问。');
+    }
+
+    // 先解析全部字段再建行，避免字段名写错时留下空行
+    final pending = <(FieldPB, String)>[];
+    final rawCells = args['cells'];
+    if (rawCells is List) {
+      for (final entry in rawCells) {
+        if (entry is! Map) continue;
+        final key = '${entry['field'] ?? ''}';
+        final value = '${entry['value'] ?? ''}';
+        final field = _findField(fields, key);
+        if (field == null) {
+          return _error('invalid_params', '字段不存在：$key');
+        }
+        pending.add((field, value));
+      }
+    }
+
+    final created = await RowBackendService.createRow(viewId: viewId);
+    final row = created.fold((value) => value, (err) => null);
+    if (row == null) {
+      return _error('internal', '创建行失败。');
+    }
+
+    final includeTime = args['include_time'] == true;
+    final errors = <String>[];
+    for (final (field, value) in pending) {
+      final error = await _writeCell(
+        viewId: viewId,
+        rowId: row.id,
+        field: field,
+        value: value,
+        includeTime: includeTime,
+      );
+      if (error != null) errors.add('${field.name}: $error');
+    }
+
+    return _ok({
+      'row_id': row.id,
+      'written': pending.length - errors.length,
+      if (errors.isNotEmpty) 'errors': errors,
+    });
+  }
+
+  Future<CallToolResult> _updateDatabaseCell(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    final rowId = _stringArg(args, 'row_id')?.trim() ?? '';
+    final fieldKey = _stringArg(args, 'field')?.trim() ?? '';
+    final value = _stringArg(args, 'value') ?? '';
+    if (workspaceId.isEmpty ||
+        viewId.isEmpty ||
+        rowId.isEmpty ||
+        fieldKey.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、view_id、row_id 或 field。');
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final fields = await _databaseFields(viewId);
+    if (fields == null) {
+      return _error('not_found', '数据库视图不存在或无权访问。');
+    }
+    final field = _findField(fields, fieldKey);
+    if (field == null) {
+      return _error('invalid_params', '字段不存在：$fieldKey');
+    }
+
+    final error = await _writeCell(
+      viewId: viewId,
+      rowId: rowId,
+      field: field,
+      value: value,
+      includeTime: args['include_time'] == true,
+    );
+    if (error != null) {
+      return _error('write_failed', error);
+    }
+
+    // 回读一次，把实际落盘的值返回给调用方
+    final cellResult = await DatabaseEventGetCell(
+      CellIdPB()
+        ..viewId = viewId
+        ..rowId = rowId
+        ..fieldId = field.id,
+    ).send();
+    final saved = cellResult.fold(
+      (cell) => formatCellValue(cell.fieldType, cell.data),
+      (err) => null,
+    );
+
+    return _ok({
+      'row_id': rowId,
+      'field_id': field.id,
+      'field_name': field.name,
+      'value': value,
+      if (saved != null) 'saved_value': saved,
+    });
+  }
+
+  Future<CallToolResult> _deleteDatabaseRow(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    final rowId = _stringArg(args, 'row_id')?.trim() ?? '';
+    if (workspaceId.isEmpty || viewId.isEmpty || rowId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、view_id 或 row_id。');
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final result = await RowBackendService.deleteRows(viewId, [rowId]);
+    final error = result.fold((_) => null, (err) => err.msg);
+    if (error != null) {
+      return _error('delete_failed', error);
+    }
+
+    final opened =
+        await DatabaseViewBackendService(viewId: viewId).openDatabase();
+    final database = opened.fold((db) => db, (err) => null);
+    final stillExists = database?.rows.any((row) => row.id == rowId) ?? false;
+    return _ok({'row_id': rowId, 'deleted': !stillExists});
+  }
+
+  Future<CallToolResult> _createDatabaseField(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    final name = _stringArg(args, 'name')?.trim() ?? '';
+    final typeKey = _stringArg(args, 'type')?.trim().toLowerCase() ?? '';
+    if (workspaceId.isEmpty ||
+        viewId.isEmpty ||
+        name.isEmpty ||
+        typeKey.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、view_id、name 或 type。');
+    }
+    final fieldType = _fieldTypes[typeKey];
+    if (fieldType == null) {
+      return _error(
+        'invalid_params',
+        '不支持的字段类型：$typeKey。可用：${_fieldTypes.keys.join('、')}',
+      );
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final created = await FieldBackendService.createField(
+      viewId: viewId,
+      fieldType: fieldType,
+      fieldName: name,
+    );
+    final field = created.fold((value) => value, (err) => null);
+    if (field == null) {
+      return _error('internal', '创建字段失败。');
+    }
+
+    final beforeKey = _stringArg(args, 'before_field')?.trim() ?? '';
+    String? warning;
+    if (beforeKey.isNotEmpty) {
+      final fields = await _databaseFields(viewId);
+      final before = fields == null ? null : _findField(fields, beforeKey);
+      if (before == null) {
+        warning = '字段已创建，但 before_field=$beforeKey 不存在，已追加到末尾。';
+      } else {
+        await FieldBackendService.moveField(
+          viewId: viewId,
+          fromFieldId: field.id,
+          toFieldId: before.id,
+        );
+      }
+    }
+
+    return _ok({
+      'field_id': field.id,
+      'name': field.name,
+      'type': field.fieldType.name,
+      if (warning != null) 'warning': warning,
+    });
+  }
+
+  Future<CallToolResult> _updateDatabaseField(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    final fieldKey = _stringArg(args, 'field')?.trim() ?? '';
+    final newName = _stringArg(args, 'name')?.trim() ?? '';
+    if (workspaceId.isEmpty ||
+        viewId.isEmpty ||
+        fieldKey.isEmpty ||
+        newName.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、view_id、field 或 name。');
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final fields = await _databaseFields(viewId);
+    if (fields == null) {
+      return _error('not_found', '数据库视图不存在或无权访问。');
+    }
+    final field = _findField(fields, fieldKey);
+    if (field == null) {
+      return _error('invalid_params', '字段不存在：$fieldKey');
+    }
+
+    final result = await FieldBackendService(
+      viewId: viewId,
+      fieldId: field.id,
+    ).updateField(name: newName);
+    final error = result.fold((_) => null, (err) => err.msg);
+    if (error != null) {
+      return _error('write_failed', error);
+    }
+    return _ok({
+      'field_id': field.id,
+      'old_name': field.name,
+      'name': newName,
+    });
+  }
+
+  Future<CallToolResult> _deleteDatabaseField(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final viewId = _stringArg(args, 'view_id')?.trim() ?? '';
+    final fieldKey = _stringArg(args, 'field')?.trim() ?? '';
+    if (workspaceId.isEmpty || viewId.isEmpty || fieldKey.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、view_id 或 field。');
+    }
+    final contextError = await _requireWriteAccess(workspaceId);
+    if (contextError != null) return contextError;
+
+    final fields = await _databaseFields(viewId);
+    if (fields == null) {
+      return _error('not_found', '数据库视图不存在或无权访问。');
+    }
+    final field = _findField(fields, fieldKey);
+    if (field == null) {
+      return _error('invalid_params', '字段不存在：$fieldKey');
+    }
+    if (field.isPrimary) {
+      return _error('invalid_params', '主字段不能删除。');
+    }
+
+    final result = await FieldBackendService.deleteField(
+      viewId: viewId,
+      fieldId: field.id,
+    );
+    final error = result.fold((_) => null, (err) => err.msg);
+    if (error != null) {
+      return _error('delete_failed', error);
+    }
+
+    final remaining = await _databaseFields(viewId);
+    final stillExists =
+        remaining?.any((item) => item.id == field.id) ?? false;
+    return _ok({
+      'field_id': field.id,
+      'name': field.name,
+      'deleted': !stillExists,
+    });
+  }
+
+  /// 读取视图的全部字段定义；视图不存在时返回 null。
+  Future<List<FieldPB>?> _databaseFields(String viewId) async {
+    final opened =
+        await DatabaseViewBackendService(viewId: viewId).openDatabase();
+    final database = opened.fold((db) => db, (err) => null);
+    if (database == null) return null;
+    final fieldIds = database.fields
+        .map((field) => field.fieldId)
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (fieldIds.isEmpty) return const [];
+    final result = await DatabaseEventGetFields(
+      GetFieldPayloadPB()
+        ..viewId = viewId
+        ..fieldIds = (RepeatedFieldIdPB()
+          ..items.addAll(fieldIds.map((id) => FieldIdPB(fieldId: id)))),
+    ).send();
+    return result.fold((value) => value.items.toList(), (err) => null);
+  }
+
+  /// 按字段 ID 或字段名匹配；两者都不命中时返回 null。
+  static FieldPB? _findField(List<FieldPB> fields, String key) {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) return null;
+    return fields.firstWhereOrNull((field) => field.id == trimmed) ??
+        fields.firstWhereOrNull((field) => field.name == trimmed);
+  }
+
+  /// 按字段类型写入一个单元格；失败时返回可读原因。
+  Future<String?> _writeCell({
+    required String viewId,
+    required String rowId,
+    required FieldPB field,
+    required String value,
+    bool includeTime = false,
+  }) async {
+    final cellContext = CellContext(fieldId: field.id, rowId: rowId);
+    switch (field.fieldType) {
+      case FieldType.RichText:
+      case FieldType.Number:
+      case FieldType.URL:
+      case FieldType.Time:
+      case FieldType.Translate:
+      case FieldType.Summary:
+        final result = await CellBackendService.updateCell(
+          viewId: viewId,
+          cellContext: cellContext,
+          data: value,
+        );
+        return result.fold((_) => null, (err) => err.msg);
+      case FieldType.Checkbox:
+        final result = await CellBackendService.updateCell(
+          viewId: viewId,
+          cellContext: cellContext,
+          data: asBool(value) ? 'Yes' : 'No',
+        );
+        return result.fold((_) => null, (err) => err.msg);
+      case FieldType.DateTime:
+        final date = DateTime.tryParse(value.trim());
+        if (date == null) {
+          return '日期格式无法解析：$value（用 ISO 8601，如 2026-10-23T09:00:00）';
+        }
+        final result = await DateCellBackendService(
+          viewId: viewId,
+          fieldId: field.id,
+          rowId: rowId,
+        ).update(date: date, includeTime: includeTime);
+        return result.fold((_) => null, (err) => err.msg);
+      case FieldType.SingleSelect:
+      case FieldType.MultiSelect:
+        final names = splitValues(value);
+        if (names.isEmpty) return '选项值为空。';
+        final service = SelectOptionCellBackendService(
+          viewId: viewId,
+          fieldId: field.id,
+          rowId: rowId,
+        );
+        final options = _selectOptions(field);
+        for (final name in names) {
+          final existing = options.firstWhereOrNull(
+            (option) => option.name == name,
+          );
+          final result = existing != null
+              ? await service.select(optionIds: [existing.id])
+              : await service.create(name: name);
+          final error = result.fold((_) => null, (err) => err.msg);
+          if (error != null) return error;
+        }
+        return null;
+      case FieldType.Checklist:
+        final names = splitValues(value);
+        if (names.isEmpty) return '检查清单值为空。';
+        final service = ChecklistCellBackendService(
+          viewId: viewId,
+          fieldId: field.id,
+          rowId: rowId,
+        );
+        for (final name in names) {
+          final result = await service.create(name: name);
+          final error = result.fold((_) => null, (err) => err.msg);
+          if (error != null) return error;
+        }
+        return null;
+      default:
+        return '字段类型 ${field.fieldType.name} 暂不支持通过 MCP 写入。';
+    }
+  }
+
+  @visibleForTesting
+  static bool asBool(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+
+  @visibleForTesting
+  static List<String> splitValues(String value) => value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
+
+  static List<SelectOptionPB> _selectOptions(FieldPB field) {
+    if (field.typeOptionData.isEmpty) return const [];
+    try {
+      if (field.fieldType == FieldType.SingleSelect) {
+        return SingleSelectTypeOptionPB.fromBuffer(field.typeOptionData).options;
+      }
+      return MultiSelectTypeOptionPB.fromBuffer(field.typeOptionData).options;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// 把数据库单元格的原始字节转成可读文本；未知类型退回 UTF-8 解码。
+  @visibleForTesting
+  static String formatCellValue(FieldType type, List<int> data) {
+    if (data.isEmpty) return '';
+    try {
+      switch (type) {
+        case FieldType.RichText:
+        case FieldType.Number:
+        case FieldType.Translate:
+          return utf8.decode(data);
+        case FieldType.Checkbox:
+          return CheckboxCellDataPB.fromBuffer(data).isChecked ? 'true' : 'false';
+        case FieldType.DateTime:
+          final date = DateCellDataPB.fromBuffer(data);
+          final start = _formatTimestamp(
+            date.timestamp,
+            includeTime: date.includeTime,
+          );
+          if (!date.isRange) return start;
+          final end = _formatTimestamp(
+            date.endTimestamp,
+            includeTime: date.includeTime,
+          );
+          return end.isEmpty ? start : '$start ~ $end';
+        case FieldType.CreatedTime:
+        case FieldType.LastEditedTime:
+          final stamp = TimestampCellDataPB.fromBuffer(data);
+          if (stamp.dateTime.isNotEmpty) return stamp.dateTime;
+          return _formatTimestamp(stamp.timestamp, includeTime: true);
+        case FieldType.SingleSelect:
+        case FieldType.MultiSelect:
+          return SelectOptionCellDataPB.fromBuffer(data)
+              .selectOptions
+              .map((option) => option.name)
+              .where((name) => name.isNotEmpty)
+              .join(', ');
+        case FieldType.Checklist:
+          return ChecklistCellDataPB.fromBuffer(data)
+              .selectedOptions
+              .map((option) => option.name)
+              .where((name) => name.isNotEmpty)
+              .join(', ');
+        case FieldType.URL:
+          return URLCellDataPB.fromBuffer(data).content;
+        case FieldType.Time:
+          return formatTime(TimeCellDataPB.fromBuffer(data).time.toInt());
+        case FieldType.Relation:
+          return RelationCellDataPB.fromBuffer(data).rowIds.join(', ');
+        case FieldType.Media:
+          return MediaCellDataPB.fromBuffer(data)
+              .files
+              .map((file) => file.name)
+              .where((name) => name.isNotEmpty)
+              .join(', ');
+        default:
+          return utf8.decode(data, allowMalformed: true);
+      }
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static String _formatTimestamp(Int64 seconds, {required bool includeTime}) {
+    if (seconds <= 0) return '';
+    final date = DateTime.fromMillisecondsSinceEpoch(seconds.toInt() * 1000);
+    final day =
+        '${date.year}-${_two(date.month)}-${_two(date.day)}';
+    if (!includeTime) return day;
+    return '$day ${_two(date.hour)}:${_two(date.minute)}';
+  }
+
+  static String _two(int value) => value.toString().padLeft(2, '0');
 
   Future<CallToolResult> _searchNotes(Map<String, dynamic> args) async {
     final query = _stringArg(args, 'query')?.trim();
@@ -1109,6 +1900,78 @@ class McpTools {
       'page_id': pageId,
       'title': view.name,
       'trashed': true,
+    });
+  }
+
+  Future<CallToolResult> _listTrash(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    if (workspaceId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id。');
+    }
+    final contextError = await _validateWorkspace(workspaceId);
+    if (contextError != null) return contextError;
+
+    final result = await TrashService().readTrash();
+    final items = result.fold((trash) => trash.items, (error) {
+      Log.error('[MCP] list_trash failed: $error');
+      return null;
+    });
+    if (items == null) {
+      return _error('internal', '读取回收站失败。');
+    }
+
+    final list = items
+        .map(
+          (item) => {
+            'page_id': item.id,
+            'name': item.name,
+            'deleted_at': item.modifiedTime.toDateTime().toIso8601String(),
+          },
+        )
+        .toList();
+    return _ok({'items': list, 'total': list.length});
+  }
+
+  Future<CallToolResult> _duplicatePage(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final pageId = _stringArg(args, 'page_id')?.trim() ?? '';
+    if (workspaceId.isEmpty || pageId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id 或 page_id。');
+    }
+    final accessError = await _requireWriteAccess(workspaceId);
+    if (accessError != null) return accessError;
+
+    final view = await _view(pageId);
+    if (view == null) {
+      return _error('not_found', '页面不存在或无权访问。');
+    }
+    if (view.workspaceId.isNotEmpty && view.workspaceId != workspaceId) {
+      return _error('workspace_mismatch', '页面不属于指定工作区。');
+    }
+
+    final parentId = _stringArg(args, 'parent_page_id')?.trim() ?? '';
+    final includeChildren = args['include_children'] != false;
+    final result = await ViewBackendService.duplicate(
+      view: view,
+      openAfterDuplicate: false,
+      includeChildren: includeChildren,
+      parentViewId: parentId.isEmpty ? null : parentId,
+      suffix: ' (副本)',
+      syncAfterDuplicate: true,
+    );
+    final copy = result.fold((value) => value, (error) {
+      Log.error('[MCP] duplicate_page failed: $error');
+      return null;
+    });
+    if (copy == null) {
+      return _error('internal', '复制页面失败。');
+    }
+    return _ok({
+      'source_page_id': pageId,
+      'page_id': copy.id,
+      'title': copy.name,
+      'parent_id': copy.parentViewId,
+      'include_children': includeChildren,
     });
   }
 
@@ -1541,9 +2404,28 @@ class McpTools {
     final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
     final pageId = _stringArg(args, 'page_id')?.trim() ?? '';
     final blockId = _stringArg(args, 'block_id')?.trim() ?? '';
-    final text = _stringArg(args, 'text') ?? '';
+    final textArg = args['text'];
+    final hasText = textArg is String;
+    final text = hasText ? textArg : '';
     final hasChecked = args['checked'] is bool;
     final hasCollapsed = args['collapsed'] is bool;
+    final hasLanguage = args['language'] is String;
+    final hasIcon = args['icon'] is String;
+    final hasHeaderRow = args['header_row'] is bool;
+    final hasHeaderColumn = args['header_column'] is bool;
+    if (!hasText &&
+        !hasChecked &&
+        !hasCollapsed &&
+        !hasLanguage &&
+        !hasIcon &&
+        !hasHeaderRow &&
+        !hasHeaderColumn) {
+      return _error(
+        'invalid_params',
+        '至少需要提供一个要更新的字段：text、checked、collapsed、'
+        'language、icon、header_row、header_column。',
+      );
+    }
     if (workspaceId.isEmpty || pageId.isEmpty || blockId.isEmpty) {
       return _error('invalid_params', '缺少 workspace_id、page_id 或 block_id。');
     }
@@ -1563,24 +2445,12 @@ class McpTools {
       state.dispose();
       return _error('invalid_params', '不能通过 update_block 修改页面根块。');
     }
-    final attributes = <String, Object?>{};
-    if (node.delta != null) {
-      attributes[blockComponentDelta] = (Delta()..insert(text)).toJson();
+    final built = buildUpdateAttributes(node, args);
+    if (built.error != null) {
+      state.dispose();
+      return _error('invalid_params', built.error!);
     }
-    if (hasChecked) {
-      if (node.type != TodoListBlockKeys.type) {
-        state.dispose();
-        return _error('invalid_params', 'checked 仅适用于 todo_list 块。');
-      }
-      attributes[TodoListBlockKeys.checked] = args['checked'];
-    }
-    if (hasCollapsed) {
-      if (!node.type.startsWith('toggle')) {
-        state.dispose();
-        return _error('invalid_params', 'collapsed 仅适用于 toggle 类块。');
-      }
-      attributes[ToggleListBlockKeys.collapsed] = args['collapsed'];
-    }
+    final attributes = built.attributes;
     if (attributes.isEmpty) {
       state.dispose();
       return _error('unsupported_block', '该块不是可编辑的文本块。');
@@ -1615,6 +2485,25 @@ class McpTools {
                   args['collapsed']) {
             return false;
           }
+          if (hasLanguage &&
+              updated.attributes[CodeBlockKeys.language] != args['language']) {
+            return false;
+          }
+          if (hasIcon &&
+              updated.attributes[CalloutBlockKeys.icon] !=
+                  (args['icon'] as String)) {
+            return false;
+          }
+          if (hasHeaderRow &&
+              updated.attributes[SimpleTableBlockKeys.enableHeaderRow] !=
+                  args['header_row']) {
+            return false;
+          }
+          if (hasHeaderColumn &&
+              updated.attributes[SimpleTableBlockKeys.enableHeaderColumn] !=
+                  args['header_column']) {
+            return false;
+          }
           return true;
         },
       );
@@ -1628,6 +2517,10 @@ class McpTools {
       if (attributes.containsKey(blockComponentDelta)) 'text': text,
       if (hasChecked) 'checked': args['checked'],
       if (hasCollapsed) 'collapsed': args['collapsed'],
+      if (hasLanguage) 'language': args['language'],
+      if (hasIcon) 'icon': args['icon'],
+      if (hasHeaderRow) 'header_row': args['header_row'],
+      if (hasHeaderColumn) 'header_column': args['header_column'],
     });
   }
 
@@ -1682,6 +2575,119 @@ class McpTools {
       'page_id': pageId,
       'deleted_block_ids': deletedIds,
       'deleted_count': deletedIds.length,
+    });
+  }
+
+  Future<CallToolResult> _moveBlock(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final pageId = _stringArg(args, 'page_id')?.trim() ?? '';
+    final blockId = _stringArg(args, 'block_id')?.trim() ?? '';
+    if (workspaceId.isEmpty || pageId.isEmpty || blockId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id、page_id 或 block_id。');
+    }
+    final pageError = await _requireWritableDocument(workspaceId, pageId);
+    if (pageError != null) return pageError;
+
+    final state = await _loadEditorState(pageId, workspaceId);
+    if (state == null) {
+      return _error('document_unavailable', '无法读取页面正文，文档可能尚未同步到本机。');
+    }
+    final node = _findNode(state.document, blockId);
+    final currentParent = node?.parent;
+    if (node == null || currentParent == null) {
+      state.dispose();
+      return _error('not_found', '块不存在。');
+    }
+    if (node.id == state.document.root.id) {
+      state.dispose();
+      return _error('invalid_params', '不能移动页面根块。');
+    }
+
+    final afterKey = _stringArg(args, 'after_block_id')?.trim() ?? '';
+    final parentKey = _stringArg(args, 'parent_block_id')?.trim() ?? '';
+    Node? after;
+    Node? targetParent;
+    if (afterKey.isNotEmpty) {
+      after = _findNode(state.document, afterKey);
+      if (after == null) {
+        state.dispose();
+        return _error('not_found', 'after_block_id 指向的块不存在。');
+      }
+      if (after.id == node.id) {
+        state.dispose();
+        return _error('invalid_params', '不能把块移动到自身之后。');
+      }
+      targetParent = after.parent;
+    } else if (parentKey.isNotEmpty) {
+      targetParent = _findNode(state.document, parentKey);
+    } else {
+      targetParent = currentParent;
+    }
+    if (targetParent == null) {
+      state.dispose();
+      return _error('not_found', '目标父块不存在。');
+    }
+
+    // 目标父块不能是自身或自身的子孙
+    for (Node? cursor = targetParent; cursor != null; cursor = cursor.parent) {
+      if (cursor.id == node.id) {
+        state.dispose();
+        return _error('invalid_params', '不能把块移动到自身或其子块下。');
+      }
+    }
+
+    final targetParentId = targetParent.id;
+    final oldIndex = currentParent.children.indexOf(node);
+    var targetIndex = after != null
+        ? targetParent.children.indexOf(after) + 1
+        : targetParent.children.length;
+    // 同一父块内向后移动时，删掉自身后索引要回退一位
+    if (targetParentId == currentParent.id && targetIndex > oldIndex) {
+      targetIndex -= 1;
+    }
+    if (targetParentId == currentParent.id && targetIndex == oldIndex) {
+      state.dispose();
+      return _ok({
+        'page_id': pageId,
+        'block_id': blockId,
+        'parent_block_id': targetParentId,
+        'moved': false,
+      });
+    }
+
+    final destination = <int>[...targetParent.path, targetIndex];
+    final transaction = state.transaction..deleteNode(node);
+    if (targetParentId != currentParent.id &&
+        currentParent.children.length == 1 &&
+        currentParent.id != state.document.root.id) {
+      // 移走唯一子块后父块会变空，补一个空段落避免块校验失败
+      transaction.insertNode([...currentParent.path, 0], paragraphNode());
+    }
+    transaction.insertNode(destination, node, deepCopy: false);
+
+    try {
+      final error = await _persistDocument(
+        pageId: pageId,
+        workspaceId: workspaceId,
+        state: state,
+        transaction: transaction,
+        verify: (document) {
+          final parsed = document.toDocument();
+          final moved = parsed == null ? null : _findNode(parsed, blockId);
+          return moved?.parent?.id == targetParentId;
+        },
+      );
+      if (error != null) return error;
+    } finally {
+      state.dispose();
+    }
+
+    return _ok({
+      'page_id': pageId,
+      'block_id': blockId,
+      'parent_block_id': targetParentId,
+      'index': targetIndex,
+      'moved': true,
     });
   }
 
@@ -1887,6 +2893,59 @@ class McpTools {
     }
   }
 
+  /// 按 args 计算 update_block 要写入的属性；块类型不匹配时返回错误文案。
+  @visibleForTesting
+  static ({Map<String, Object?> attributes, String? error})
+      buildUpdateAttributes(Node node, Map<String, dynamic> args) {
+    final attributes = <String, Object?>{};
+    final textArg = args['text'];
+    if (textArg is String && node.delta != null) {
+      attributes[blockComponentDelta] = (Delta()..insert(textArg)).toJson();
+    }
+    if (args['checked'] is bool) {
+      if (node.type != TodoListBlockKeys.type) {
+        return (attributes: attributes, error: 'checked 仅适用于 todo_list 块。');
+      }
+      attributes[TodoListBlockKeys.checked] = args['checked'];
+    }
+    if (args['collapsed'] is bool) {
+      if (!node.type.startsWith('toggle')) {
+        return (attributes: attributes, error: 'collapsed 仅适用于 toggle 类块。');
+      }
+      attributes[ToggleListBlockKeys.collapsed] = args['collapsed'];
+    }
+    if (args['language'] is String) {
+      if (node.type != CodeBlockKeys.type) {
+        return (attributes: attributes, error: 'language 仅适用于 code 块。');
+      }
+      attributes[CodeBlockKeys.language] = args['language'];
+    }
+    if (args['icon'] is String) {
+      if (node.type != CalloutBlockKeys.type) {
+        return (attributes: attributes, error: 'icon 仅适用于 callout 块。');
+      }
+      final emoji = EmojiIconData.emoji(args['icon'] as String);
+      attributes[CalloutBlockKeys.icon] = emoji.emoji;
+      attributes[CalloutBlockKeys.iconType] = emoji.type;
+    }
+    if (args['header_row'] is bool || args['header_column'] is bool) {
+      if (node.type != SimpleTableBlockKeys.type) {
+        return (
+          attributes: attributes,
+          error: 'header_row / header_column 仅适用于 table 块。',
+        );
+      }
+      if (args['header_row'] is bool) {
+        attributes[SimpleTableBlockKeys.enableHeaderRow] = args['header_row'];
+      }
+      if (args['header_column'] is bool) {
+        attributes[SimpleTableBlockKeys.enableHeaderColumn] =
+            args['header_column'];
+      }
+    }
+    return (attributes: attributes, error: null);
+  }
+
   /// 按 block_type 和参数构造编辑器的块节点，覆盖斜杠菜单可插入的全部块类型。
   @visibleForTesting
   static Node? createBlockNode(String type, Map<String, dynamic> args) {
@@ -2005,6 +3064,8 @@ class McpTools {
         return simpleColumnsNode(
           columnCount: columnCount is int ? columnCount.clamp(2, 4) : 2,
         );
+      case 'outline':
+        return outlineBlockNode();
       case 'table':
         final rows = args['rows'];
         if (rows is! List || rows.isEmpty) return null;
@@ -2021,6 +3082,9 @@ class McpTools {
         return createSimpleTableBlockNode(
           columnCount: columnCount,
           rowCount: cells.length,
+          // schema 约定首行即表头，未显式关闭时启用
+          enableHeaderRow: args['header_row'] != false,
+          enableHeaderColumn: args['header_column'] == true,
           contentBuilder: (rowIndex, columnIndex) =>
               cells[rowIndex][columnIndex],
         );
@@ -2335,6 +3399,8 @@ class McpTools {
       'is_document': view.layout == ViewLayoutPB.Document,
       'is_space': view.isSpace,
       'last_edited': view.lastEdited.toInt(),
+      if (view.icon.value.isNotEmpty) 'icon': view.icon.value,
+      if (view.isLocked) 'is_locked': true,
     };
   }
 

@@ -27,7 +27,7 @@ class McpServerService extends ChangeNotifier {
 
   static const int port = 27861;
   static const String path = '/mcp';
-  static const String version = '0.6.4';
+  static const String version = '0.6.8';
 
   static const String _prefsEnabled = 'mcp_server_enabled';
   static const String _prefsTokenHash = 'mcp_token_hash';

@@ -76,6 +76,8 @@ Agent 配置：
 - HTTP 接入：工具发现 17 个，读取、创建、追加、块修改、重命名、删除/恢复页面均通过。
 - stdio 桥接：对运行中的客户端启动桥接进程，完成 initialize、tools/list（17 个工具）和 `get_context` 调用。
 
+> 上述实测覆盖的是当时的 17 个工具。当前（服务版本 0.6.8）工具数为 27 个，新增的数据库、块移动、回收站和复制工具尚未在真实 Agent 上验证。
+
 ## 4. 命令行冒烟检查
 
 先开启服务并准备好 Token：
@@ -88,7 +90,7 @@ curl -s http://127.0.0.1:27861/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
 ```
 
-不带 Token 时应返回 403；带正确 Token 时应返回 17 个工具。也可以在设置页点击「服务自检」，它会验证端点可达且鉴权生效。
+不带 Token 时应返回 403；带正确 Token 时应返回 27 个工具。也可以在设置页点击「服务自检」，它会验证端点可达且鉴权生效。
 
 ## 5. 目标 Agent 实测清单
 
@@ -96,7 +98,7 @@ curl -s http://127.0.0.1:27861/mcp \
 
 | 目标 | 接入方式 | 检查项 | 结果 |
 | --- | --- | --- | --- |
-| Claude Code | Streamable HTTP + Bearer；stdio 桥接 | 工具发现 17 个、上下文读取、页面读写全流程 | 通过（2026-10-21，Linux 客户端） |
+| Claude Code | Streamable HTTP + Bearer；stdio 桥接 | 工具发现（实测时 17 个，现 27 个）、上下文读取、页面读写全流程 | 通过（2026-10-21，Linux 客户端） |
 | Codex | Streamable HTTP + Bearer | 工具发现、`get_context`、`create_page`、页面写入可见 | 待实测 |
 | OpenClaw | 优先 HTTP，必要时 stdio 桥接 | 自定义 header、协议版本协商、工具调用 | 待实测 |
 | WorkBuddy | 优先 HTTP，必要时 stdio 桥接 | 本机地址访问、Token 配置方式 | 待实测 |
@@ -118,4 +120,6 @@ curl -s http://127.0.0.1:27861/mcp \
 - 需要完整 OAuth 授权流程的 Agent 不能直接使用当前的手工 Bearer Token 模式。
 - 同一时刻只支持客户端当前工作区；跨工作区操作需先 `open_workspace`。
 - 写入与界面编辑的并发只做了写后重读确认，尚未做并发实测。
+- 数据库相关工具（`query_database` 及 5 个写工具）尚未在运行中的客户端上验证；单元格逐格读取是 N+1 次 FFI 调用。
+- MCP 服务仅在桌面端启动（Linux/macOS/Windows），移动端没有入口。
 - `search_notes` 的本地搜索来自 tantivy，只返回页面 ID 和标题，没有命中摘要；中文查询可能返回较宽的结果集。

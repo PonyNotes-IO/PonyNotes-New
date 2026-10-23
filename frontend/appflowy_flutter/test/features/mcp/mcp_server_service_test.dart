@@ -4,12 +4,15 @@ import 'dart:convert';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
+import 'package:appflowy/util/time.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart'
     hide quoteNode;
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 
@@ -86,12 +89,12 @@ void main() {
   });
 
   // 回归：注册表一度只填了 3 个工具，内部 AI 因此看不到检索与写操作。
-  test('工具注册表覆盖全部 17 个工具，只读/破坏性标记正确', () async {
+  test('工具注册表覆盖全部 27 个工具，只读/破坏性标记正确', () async {
     final tools = McpTools(endpoint: 'test', version: '1.0.0');
     final specs = tools.toolSpecs;
 
-    expect(specs.length, 17);
-    expect(specs.map((spec) => spec.name).toSet().length, 17,
+    expect(specs.length, 27);
+    expect(specs.map((spec) => spec.name).toSet().length, 27,
         reason: '工具名不应重复');
     expect(
       specs.where((spec) => spec.readOnly).map((spec) => spec.name),
@@ -101,14 +104,21 @@ void main() {
         'list_pages',
         'get_page',
         'list_blocks',
+        'query_database',
+        'list_trash',
         'search_notes',
       ]),
     );
     expect(
       specs.where((spec) => spec.destructive).map((spec) => spec.name),
-      unorderedEquals(['delete_page', 'delete_block']),
+      unorderedEquals([
+        'delete_page',
+        'delete_block',
+        'delete_database_row',
+        'delete_database_field',
+      ]),
     );
-    expect(specs.where((spec) => !spec.readOnly).length, 11);
+    expect(specs.where((spec) => !spec.readOnly).length, 19);
 
     final unknown = await tools.executeTool('no_such_tool', const {});
     expect(unknown.isError, isTrue);
@@ -214,6 +224,31 @@ void main() {
       table?.children.first.children.first.children.first.delta?.toPlainText(),
       '名称',
     );
+    // 首行默认作为表头
+    expect(table?.attributes[SimpleTableBlockKeys.enableHeaderRow], isTrue);
+    expect(table?.attributes[SimpleTableBlockKeys.enableHeaderColumn], isFalse);
+    final tableNoHeader = McpTools.createBlockNode(
+      'table',
+      {
+        'rows': [
+          ['a', 'b'],
+        ],
+        'header_row': false,
+        'header_column': true,
+      },
+    );
+    expect(
+      tableNoHeader?.attributes[SimpleTableBlockKeys.enableHeaderRow],
+      isFalse,
+    );
+    expect(
+      tableNoHeader?.attributes[SimpleTableBlockKeys.enableHeaderColumn],
+      isTrue,
+    );
+    expect(
+      McpTools.createBlockNode('outline', const {})?.type,
+      OutlineBlockKeys.type,
+    );
     expect(
       McpTools.createBlockNode('grid', {
         'view_id_ref': 'view-1',
@@ -269,6 +304,111 @@ void main() {
       'fiveMinsBefore',
     );
     expect(McpTools.createBlockNode('grid', const {}), isNull);
+  });
+
+  test('buildUpdateAttributes 只写入请求的字段并按块类型校验', () {
+    final code = codeBlockNode(delta: Delta()..insert('print(1)'));
+    final codeAttrs = McpTools.buildUpdateAttributes(
+      code,
+      {'language': 'python'},
+    );
+    expect(codeAttrs.error, isNull);
+    expect(codeAttrs.attributes[CodeBlockKeys.language], 'python');
+    // 没传 text 时不动正文
+    expect(codeAttrs.attributes.containsKey(blockComponentDelta), isFalse);
+
+    final callout = calloutNode();
+    final calloutAttrs = McpTools.buildUpdateAttributes(
+      callout,
+      {'icon': '🔥'},
+    );
+    expect(calloutAttrs.attributes[CalloutBlockKeys.icon], '🔥');
+
+    final table = simpleTableBlockNode(
+      children: [
+        simpleTableRowBlockNode(children: [simpleTableCellBlockNode()]),
+      ],
+    );
+    final tableAttrs = McpTools.buildUpdateAttributes(
+      table,
+      {'header_row': false, 'header_column': true},
+    );
+    expect(
+      tableAttrs.attributes[SimpleTableBlockKeys.enableHeaderRow],
+      isFalse,
+    );
+    expect(
+      tableAttrs.attributes[SimpleTableBlockKeys.enableHeaderColumn],
+      isTrue,
+    );
+
+    final paragraph = paragraphNode(text: 'hi');
+    expect(
+      McpTools.buildUpdateAttributes(paragraph, {'language': 'dart'}).error,
+      contains('code'),
+    );
+    expect(
+      McpTools.buildUpdateAttributes(paragraph, {'header_row': true}).error,
+      contains('table'),
+    );
+    expect(
+      McpTools.buildUpdateAttributes(paragraph, const {}).attributes,
+      isEmpty,
+    );
+  });
+
+  test('formatCellValue 按字段类型输出文本', () {
+    expect(
+      McpTools.formatCellValue(FieldType.RichText, utf8.encode('你好')),
+      '你好',
+    );
+    expect(McpTools.formatCellValue(FieldType.Number, utf8.encode('42')), '42');
+    expect(
+      McpTools.formatCellValue(
+        FieldType.Checkbox,
+        CheckboxCellDataPB(isChecked: true).writeToBuffer(),
+      ),
+      'true',
+    );
+    expect(
+      McpTools.formatCellValue(
+        FieldType.SingleSelect,
+        SelectOptionCellDataPB(
+          selectOptions: [
+            SelectOptionPB(name: '高'),
+            SelectOptionPB(name: '急'),
+          ],
+        ).writeToBuffer(),
+      ),
+      '高, 急',
+    );
+    expect(
+      McpTools.formatCellValue(
+        FieldType.Time,
+        TimeCellDataPB(time: Int64(90)).writeToBuffer(),
+      ),
+      formatTime(90),
+    );
+    expect(
+      McpTools.formatCellValue(
+        FieldType.Relation,
+        RelationCellDataPB(rowIds: ['r1', 'r2']).writeToBuffer(),
+      ),
+      'r1, r2',
+    );
+    // 空单元格不报错
+    expect(McpTools.formatCellValue(FieldType.DateTime, const []), '');
+  });
+
+  test('数据库写入的值解析：勾选与多值', () {
+    expect(McpTools.asBool('true'), isTrue);
+    expect(McpTools.asBool(' YES '), isTrue);
+    expect(McpTools.asBool('1'), isTrue);
+    expect(McpTools.asBool('false'), isFalse);
+    expect(McpTools.asBool(''), isFalse);
+
+    expect(McpTools.splitValues('高, 急 ,,低'), ['高', '急', '低']);
+    expect(McpTools.splitValues('  '), isEmpty);
   });
 
   test('blockAttributes exposes resource urls', () {

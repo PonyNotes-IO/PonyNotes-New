@@ -1,7 +1,7 @@
 # 小马笔记二期第一章：客户端本地 MCP 实现计划
 
 - 日期：2026-10-21
-- 状态：阶段二（最小接入闭环）、阶段三（读取与检索）、阶段四（创建与修改）、阶段五（授权与接入兼容）已实现，真实 Agent 实测待完成；阶段六待实施。
+- 状态：阶段二～阶段六全部实现（27 个工具，服务版本 0.6.8）。真实目标 Agent（OpenClaw、WorkBuddy、豆包办公、千问办公）联调、并发编辑实测、移动端与数据库工具的真机验证仍待完成。
 - 需求来源：工作区根目录《小马笔记二期功能.docx》第一章，以及用户对客户端本地 MCP、独立功能工具和 Token 接入方式的说明。
 - 主要实施仓库：`PonyNotes-New`。
 
@@ -134,6 +134,16 @@ flowchart LR
 | `insert_block` | 在指定父块和位置插入内容块 |
 | `update_block` | 根据块 ID 更新内容或支持的属性 |
 | `delete_block` | 删除指定块，明确对子块的影响 |
+| `move_block` | 移动块（含子块）到其他父块下或调整同级顺序 |
+| `list_trash` | 列出回收站页面，拿到可恢复的页面 ID |
+| `duplicate_page` | 复制页面（可含子页面），副本标题追加「副本」 |
+| `query_database` | 读取 grid/board/calendar 视图的行数据，按字段名返回单元格文本（后续追加，见 §10） |
+| `create_database_row` | 在视图中新增一行并写入若干单元格 |
+| `update_database_cell` | 按字段名或字段 ID 更新某个单元格 |
+| `delete_database_row` | 删除视图中的一行 |
+| `create_database_field` | 新增字段（文本、数字、日期、单选、多选、勾选、URL、检查清单、时间） |
+| `update_database_field` | 重命名字段 |
+| `delete_database_field` | 删除字段及其数据，主字段不可删 |
 
 通用约定：
 
@@ -439,3 +449,80 @@ Rust 仅补齐现有业务接口确实缺失的能力。第一版没有已确认
 已用用户实际页面验证：三张 PNG 截图块都返回了完整的云存储 URL，直接下载可以正常打开；此前只能看到“这是一个图片块”。
 
 已知限制：`search_notes` 的本地搜索结果来自 tantivy，只返回页面 ID/标题，没有命中摘要，且中文查询可能返回较宽的结果集；云端搜索未实测。测试过程中在 `ceshi` 工作区留下了“MCP 测试页”和“MCP 验收页（已改名）”两篇测试页面。
+
+### 2026-10-23：表格表头、大纲块与块属性更新（服务版本 0.6.5）
+
+- `insert_block` 的 `table` 支持 `header_row`（默认 `true`）和 `header_column`（默认 `false`）。此前 schema 里写着「首行作为表头」，实际没有写入 `enable_header_row`，这次补上，参数与约定一致。
+- 新增 `block_type=outline`，插入目录块（`outlineBlockNode()`），与斜杠菜单的「大纲」一致。
+- `createSimpleTableBlockNode` 透传两个表头开关；其它调用方不传时默认 `false`，行为不变。
+- `update_block` 从「只能改文本/勾选/折叠」扩展到支持 `language`（code 块）、`icon`（callout 块）、`header_row` / `header_column`（table 块），插入后可以再改这些属性。
+- `update_block` 的 `text` 改为可选：不传时保留原文本，避免「只想改表头却把正文清空」。一个字段都不传会返回 `invalid_params`。
+- 属性拼装抽成 `McpTools.buildUpdateAttributes(node, args)`，块类型不匹配时返回明确错误（例如 `language 仅适用于 code 块。`）。
+
+未接入的两项及原因：
+
+- **AI 写作块**：编辑器以 `inMemoryUpdate` 插入，依赖当前编辑会话，无法持久化。保持现状——`insert_block` 返回明确的参数错误，而不是静默插入一个坏块。
+- **Emoji**：斜杠菜单的 emoji 不是独立块，只是往当前文本块插入字符，`text` 参数已经覆盖，不需要新增类型。
+
+验证：`flutter analyze` 干净；`flutter test test/features/mcp` 10 个用例通过，新增断言覆盖表头默认值、显式关闭表头行、表头列、outline 类型，以及 `buildUpdateAttributes` 的字段过滤和类型校验。
+
+### 2026-10-23：数据库读取工具 query_database（服务版本 0.6.6）
+
+此前 Agent 能看到 grid/board/calendar 块，但读不到里面的行数据——对笔记类应用来说这是个实打实的功能洞。新增只读工具 `query_database`（第 18 个工具）：
+
+- 入参：`workspace_id`、`view_id`（来自块的 `attributes.view_id`），可选 `limit`（默认 20，上限 100）和 `field_ids`（只返回指定字段）。
+- 一次 `DatabaseViewBackendService.openDatabase()` 拿到字段 ID 和行 ID，再用 `DatabaseEventGetFields` 取字段名/类型，逐格 `DatabaseEventGetCell` 取单元格。
+- 输出：`layout`、`fields`（id/name/type）、`rows`（`row_id` + 按字段名组织的单元格文本）、`row_count`、`returned`、`truncated`。
+- 单元格按 `FieldType` 转文本：文本/数字/翻译走 UTF-8；日期按秒级时间戳格式化为 `yyyy-MM-dd[ HH:mm]`，区间用 `~` 连接；创建/编辑时间优先用后端给的字符串；单选/多选/检查清单取选项名并用 `, ` 拼接；URL 取内容；时间用 `formatTime`；关联返回行 ID；附件返回文件名；未知类型退回 UTF-8 解码，解析失败返回空串而不是报错。
+
+限制：
+
+- 逐格查询是 N+1 次 FFI 调用（行数 × 字段数），`limit` 默认 20、上限 100 就是为了兜住这个开销；后端目前没有批量取单元格的事件。
+- 行顺序沿用视图自身的排序，工具不做二次排序或过滤。
+- 只读，不提供新增/修改行的能力。
+
+验证：`flutter analyze` 干净；`flutter test test/features/mcp` 11 个用例通过，新增 `formatCellValue` 的类型映射断言（文本、数字、勾选、单选、时间、关联、空单元格）和工具注册表 18 项检查。
+
+### 2026-10-23：数据库读写、字段管理与块移动（服务版本 0.6.7）
+
+把数据库补成完整闭环：建视图 → 加字段 → 加行 → 改单元格 → 删行/删字段。工具从 18 个增加到 25 个。
+
+**数据库写入**
+
+- `create_database_row`：先解析全部字段名（写错字段名不会留下空行），再 `RowBackendService.createRow`，最后逐格写入；返回 `row_id`、`written` 和逐条 `errors`。
+- `update_database_cell`：按字段名或字段 ID 定位，写完后回读一次，把实际落盘的 `saved_value` 一起返回。
+- `delete_database_row`：`deleteRows` 后重新打开视图确认行已消失，返回 `deleted`。
+- 字段类型写入规则：文本/数字/URL/时间/翻译/摘要走 `CellBackendService.updateCell`；勾选转 `Yes`/`No`；日期走 `DateCellBackendService`（ISO 8601 输入，秒级时间戳写入）；单选/多选优先匹配已有选项名，不存在才新建；检查清单按逗号拆分逐项插入；关联、附件、创建/编辑时间返回明确的“不支持写入”。
+
+**字段管理**
+
+- `create_database_field`：类型名映射到 `FieldType`，可选 `before_field` 定位（用 `moveField` 调整顺序，落在目标字段之前）；`before_field` 不存在时字段仍然创建，返回 `warning`。
+- `update_database_field`：重命名，返回 `old_name`。
+- `delete_database_field`：主字段直接拒绝；删除后重新读取字段列表确认消失。
+
+**块移动**
+
+- `move_block`：支持换父块或调整同级顺序；拒绝移入自身或自身子孙；同父块内向后移动时自动修正索引；移走唯一子块时给原父块补一个空段落，避免空块校验失败；写入后确认块的父块 ID。
+
+**验证**
+
+- `flutter analyze` 干净；`flutter test test/features/mcp` 12 个用例通过。
+- 工具注册表检查更新到 25 项：7 个只读、4 个破坏性（`delete_page`、`delete_block`、`delete_database_row`、`delete_database_field`）、18 个非只读。
+- 新增值解析断言：`asBool`（true/YES/1 为真，false/空为假）、`splitValues`（逗号拆分、去空项）。
+
+**已知限制**
+
+- 单元格写入是逐格调用，新增一行带 N 个字段就是 N 次 FFI；没有批量接口。
+- 单选/多选写入时，若选项名不存在会**新建选项**而不是报错，这是为了 Agent 能直接写值；需要注意别拼错造成重复选项。
+- 关联和附件字段只读不写。
+- 以上全部只经过类型检查和单测，**尚未在运行中的客户端上实测**。
+
+### 2026-10-23：回收站列表与页面复制（服务版本 0.6.8）
+
+补上页面生命周期的两个缺口：
+
+- `list_trash`（只读）：列出回收站里的页面 ID、标题和删除时间。此前 `restore_page` 要求调用方自己知道页面 ID，删完再想恢复只能靠记忆。回收站是账号级的，`workspace_id` 只用于校验登录和工作区。
+- `duplicate_page`：复制页面，默认连同子页面一起复制（与界面右键复制一致），副本标题追加「 (副本)」。可指定 `parent_page_id` 放到别的页面下；复制完可以再调 `rename_page` 改名。
+- 页面 JSON 增加 `icon`（emoji）和 `is_locked`（锁定页写入会被拒绝），`get_page`、`list_pages`、`create_page`、`duplicate_page` 都会带上。
+
+验证：`flutter analyze` 干净；`flutter test test/features/mcp` 12 个用例通过，注册表检查更新到 27 项（8 只读、4 破坏性、19 非只读）。
