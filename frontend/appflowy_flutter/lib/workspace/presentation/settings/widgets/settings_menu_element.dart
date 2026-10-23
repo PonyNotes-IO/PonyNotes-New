@@ -1,5 +1,6 @@
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 
@@ -138,11 +139,9 @@ class SettingsMenuElement extends StatelessWidget {
     double? fontSize,
   }) {
     return theme.textStyle.body.standard(color: color).copyWith(
-          // Settings menu only: SimHei avoids uneven Chinese glyph weight on
-          // Windows; Microsoft YaHei remains as a stable fallback.
-          // 仅设置页菜单使用黑体优先，微软雅黑保留为兜底字体。
-          fontFamily: 'SimHei',
-          fontFamilyFallback: _fontFamilyFallback,
+          // Windows follows the workspace font; keep other platforms' menu style.
+          fontFamily: platformFontFamilyFallback == null ? 'SimHei' : null,
+          fontFamilyFallback: platformFontFamilyFallback ?? _fontFamilyFallback,
           fontSize: fontSize,
           fontWeight: FontWeight.w400,
         );

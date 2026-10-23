@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:universal_platform/universal_platform.dart';
 
@@ -40,13 +41,18 @@ class AdaptiveDisplayMetrics {
       );
     }
 
-    final textScale = switch (windowClass) {
-      AdaptiveWindowClass.compact => 1.0,
-      AdaptiveWindowClass.medium => 1.02,
-      AdaptiveWindowClass.expanded => 1.04,
-      AdaptiveWindowClass.large => UniversalPlatform.isDesktop ? 1.02 : 1.04,
-      AdaptiveWindowClass.extraLarge => 1.04,
-    };
+    // Windows already renders at the monitor's devicePixelRatio. Avoid adding
+    // a hidden 2-4% font scale when the window crosses a layout breakpoint.
+    final textScale = !kIsWeb && defaultTargetPlatform == TargetPlatform.windows
+        ? 1.0
+        : switch (windowClass) {
+            AdaptiveWindowClass.compact => 1.0,
+            AdaptiveWindowClass.medium => 1.02,
+            AdaptiveWindowClass.expanded => 1.04,
+            AdaptiveWindowClass.large =>
+              UniversalPlatform.isDesktop ? 1.02 : 1.04,
+            AdaptiveWindowClass.extraLarge => 1.04,
+          };
 
     final layoutScale = switch (windowClass) {
       AdaptiveWindowClass.compact => 1.0,

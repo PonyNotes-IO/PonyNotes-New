@@ -2,6 +2,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/google_fonts_extension.dart';
 import 'package:appflowy/shared/patterns/common_patterns.dart';
 import 'package:appflowy/workspace/application/settings/appearance/base_appearance.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 extension FontFamilyExtension on String {
@@ -23,6 +24,6 @@ extension FontFamilyExtension on String {
   // for example, the display name is "Noto Sans HK"
   // the font family name is "NotoSansHK_Regular"
   String get fontFamilyName => isEmpty || this == defaultFontFamily
-      ? defaultFontFamily
+      ? resolvePlatformFontFamily(defaultFontFamily)
       : getGoogleFontSafely(this).fontFamily ?? defaultFontFamily;
 }

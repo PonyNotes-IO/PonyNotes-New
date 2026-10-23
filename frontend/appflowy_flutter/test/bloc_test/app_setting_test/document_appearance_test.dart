@@ -52,6 +52,28 @@ void main() {
       expect(cubit.state.fontSize, 20.0);
     });
 
+    for (final scale in [0.9, 1.0, 1.3]) {
+      test('Document font size survives reload at display scale $scale',
+          () async {
+        await preferences.setString(KVKeys.textScaleFactor, scale.toString());
+
+        await cubit.fetch();
+        expect(cubit.state.fontSize, 16.0);
+
+        await cubit.syncFontSize(20.0);
+        await cubit.fetch();
+        expect(cubit.state.fontSize, 20.0);
+
+        final restartedCubit = DocumentAppearanceCubit();
+        addTearDown(restartedCubit.close);
+        await restartedCubit.fetch();
+
+        expect(restartedCubit.state.fontSize, 20.0);
+        expect(preferences.getDouble(KVKeys.kDocumentAppearanceFontSize), 20.0);
+        expect(preferences.getString(KVKeys.textScaleFactor), scale.toString());
+      });
+    }
+
     test('Sync font family to SharedPreferences', () async {
       await cubit.syncFontFamily('Helvetica');
 

@@ -1,4 +1,5 @@
 import 'package:appflowy/shared/google_fonts_extension.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra/theme.dart';
 import 'package:flutter/material.dart';
@@ -14,20 +15,21 @@ const builtInCodeFontFamily = 'RobotoMono';
 
 /// 系统常用中文字体（字体族名称 -> 显示名），Windows/macOS 常见
 const systemChineseFontKeys = [
-  'SimSun',        // 宋体 (Windows)
-  'SimHei',        // 黑体 (Windows)
-  'KaiTi',         // 楷体 (Windows)
-  'FangSong',      // 仿宋 (Windows)
+  'SimSun', // 宋体 (Windows)
+  'SimHei', // 黑体 (Windows)
+  'KaiTi', // 楷体 (Windows)
+  'FangSong', // 仿宋 (Windows)
   'Microsoft YaHei', // 微软雅黑 (Windows)
-  'DengXian',      // 等线 (Windows)
-  'NSimSun',       // 新宋体 (Windows)
-  'Songti SC',     // 宋体-简 (macOS)
-  'Heiti SC',      // 黑体-简 (macOS)
-  'Kaiti SC',      // 楷体-简 (macOS)
-  'PingFang SC',   // 苹方 (macOS)
-  'STSong',        // 华文宋体
-  'STHeiti',       // 华文黑体
-  'STKaiti',       // 华文楷体
+  'Microsoft YaHei UI', // 微软雅黑 UI (Windows)
+  'DengXian', // 等线 (Windows)
+  'NSimSun', // 新宋体 (Windows)
+  'Songti SC', // 宋体-简 (macOS)
+  'Heiti SC', // 黑体-简 (macOS)
+  'Kaiti SC', // 楷体-简 (macOS)
+  'PingFang SC', // 苹方 (macOS)
+  'STSong', // 华文宋体
+  'STHeiti', // 华文黑体
+  'STKaiti', // 华文楷体
 ];
 
 /// 系统中文字体显示名（用于下拉列表显示）
@@ -37,6 +39,7 @@ const chineseFontDisplayNames = <String, String>{
   'KaiTi': '楷体',
   'FangSong': '仿宋',
   'Microsoft YaHei': '微软雅黑',
+  'Microsoft YaHei UI': '微软雅黑 UI',
   'DengXian': '等线',
   'NSimSun': '新宋体',
   'Songti SC': '宋体-简',
@@ -88,8 +91,10 @@ abstract class BaseAppearance {
     fontWeight = fontWeight ?? FontWeight.w400;
     letterSpacing = fontSize * (letterSpacing ?? 0.005);
 
+    final resolvedFamily = resolvePlatformFontFamily(fontFamily);
     final textStyle = TextStyle(
-      fontFamily: fontFamily.isEmpty ? null : fontFamily,
+      fontFamily: resolvedFamily.isEmpty ? null : resolvedFamily,
+      fontFamilyFallback: platformFontFamilyFallback,
       fontSize: fontSize,
       color: fontColor,
       fontWeight: fontWeight,
