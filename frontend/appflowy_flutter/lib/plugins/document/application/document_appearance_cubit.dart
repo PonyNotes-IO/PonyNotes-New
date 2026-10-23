@@ -94,16 +94,15 @@ class DocumentAppearanceCubit extends Cubit<DocumentAppearance> {
         : null;
     final double? width = prefs.getDouble(KVKeys.kDocumentAppearanceWidth);
 
-    final textScaleFactor =
-        double.parse(prefs.getString(KVKeys.textScaleFactor) ?? '1.0');
-
     if (isClosed) {
       return;
     }
 
     emit(
       state.copyWith(
-        fontSize: fontSize * textScaleFactor,
+        // EditorStyle applies the display scale when rendering text.
+        // Keep the base size unchanged so reloading cannot apply it twice.
+        fontSize: fontSize,
         fontFamily: fontFamily,
         cursorColor: cursorColor,
         selectionColor: selectionColor,

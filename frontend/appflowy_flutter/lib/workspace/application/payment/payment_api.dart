@@ -18,7 +18,8 @@ import '../../../startup/startup.dart';
 /// 常量值使用 snake_case / 自定义，对应后端 /api/payment/create 接口
 /// 要求的 `paymentType` 字段取值：
 ///   - apple_pay       : iOS/macOS App Store 内购
-///   - wechat_pay      : 微信支付（桌面端 H5 / 未来 Android）
+///   - wechat_pay      : 桌面端微信支付
+///   - wechat_app      : Android 微信App支付
 ///   - alipay_app      : Android 手机 App 支付（alipay.trade.app.pay → QUICK_MSECURITY_PAY）
 ///   - alipay_h5       : 桌面端 H5 网页支付（后端返回 HTML form）
 ///
@@ -28,6 +29,7 @@ import '../../../startup/startup.dart';
 class PaymentType {
   static const String applePay = 'apple_pay';
   static const String wechatPay = 'wechat_pay';
+  static const String wechatApp = 'wechat_app';
   static const String alipayApp = 'alipay_app';
   static const String alipayH5 = 'alipay_h5';
 
@@ -107,7 +109,14 @@ class PaymentCreateRequest {
       json['planId'] = planId;
     }
     if (billingType != null && billingType!.isNotEmpty) {
-      json['billingType'] = billingType;
+      json['billingType'] =
+          paymentType == PaymentType.wechatApp || paymentType == PaymentType.alipayApp
+              ? switch (billingType) {
+                  'monthly' => '0',
+                  'yearly' => '1',
+                  _ => billingType,
+                }
+              : billingType;
     }
     if (openid != null && openid!.isNotEmpty) {
       json['openid'] = openid; // 注意：字段名是小写 openid
@@ -341,6 +350,49 @@ class PaymentRecordPage {
 
 /// 支付相关云端 API 调用
 class PaymentApi {
+  // Java 服务根地址，不带 /api；省略时沿用线上 /prod-api 网关。
+  // 本地真机：--dart-define=PAYMENT_API_BASE_URL=http://192.168.1.96:9081
+  static const _paymentApiBaseUrl =
+      String.fromEnvironment('PAYMENT_API_BASE_URL');
+
+  static Uri paymentApiUri(
+    String baseUrl,
+    String path, {
+    String apiBaseUrl = _paymentApiBaseUrl,
+  }) {
+    final override = apiBaseUrl.trim();
+    final server = Uri.parse(override.isEmpty ? baseUrl : override);
+    if (!{'http', 'https'}.contains(server.scheme) ||
+        server.host.isEmpty ||
+        server.userInfo.isNotEmpty ||
+        server.hasQuery ||
+        server.hasFragment) {
+      throw const FormatException('支付后端地址必须为不含账号、查询参数或片段的 HTTP(S) 地址');
+    }
+    final prefix = server.path.replaceFirst(RegExp(r'/+$'), '');
+    return server.replace(
+      path: '$prefix${override.isEmpty ? '/prod-api' : ''}$path',
+    );
+  }
+
+  static Uri paymentStatusUri(
+    String baseUrl,
+    String orderNo, {
+    String apiBaseUrl = _paymentApiBaseUrl,
+  }) =>
+      paymentApiUri(baseUrl, '/api/payment/status', apiBaseUrl: apiBaseUrl)
+          .replace(queryParameters: {'orderNo': orderNo});
+
+  static String parsePaymentStatus(dynamic data) {
+    final value = data is Map ? data['status'] ?? data['orderStatus'] : data;
+    final status = value is String ? value.toLowerCase() : '';
+    if (!{'pending', 'success', 'paid', 'failed', 'expired', 'canceled', 'invalid'}
+        .contains(status)) {
+      throw const FormatException('支付订单状态无效');
+    }
+    return status;
+  }
+
   /// 存储测试模式下的模拟订单信息（用于关联 planId 和 billingType）
   static final Map<String, Map<String, String>> _mockOrderInfo = {};
   
@@ -461,8 +513,9 @@ class PaymentApi {
         );
       }
       final token = _normalizeToken(accessToken);
-      final uri = Uri.parse(
-        '$baseUrl/prod-api/api/payment/myPaymentList',
+      final uri = paymentApiUri(
+        baseUrl,
+        '/api/payment/myPaymentList',
       ).replace(
         queryParameters: {
           'pageNum': '$pageNum',
@@ -556,7 +609,7 @@ class PaymentApi {
       //
       // final token = userProfile.token;
 
-      if (baseUrl.isEmpty) {
+      if (baseUrl.isEmpty && _paymentApiBaseUrl.trim().isEmpty) {
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -564,7 +617,7 @@ class PaymentApi {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/prod-api/api/payment/create');
+      final uri = paymentApiUri(baseUrl, '/api/payment/create');
       Log.info('[PaymentApi] Calling $uri');
 
       final payload = request.toJson();
@@ -754,9 +807,11 @@ class PaymentApi {
         (error) => throw error,
       );
 
-      final token = userProfile.token;
+      final token = _extractAccessToken(userProfile.token);
 
-      if (baseUrl.isEmpty || token.isEmpty) {
+      if ((baseUrl.isEmpty && _paymentApiBaseUrl.trim().isEmpty) ||
+          token == null ||
+          token.isEmpty) {
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -764,7 +819,7 @@ class PaymentApi {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/prod-api/api/payment/status/orderNo=$orderNo');
+      final uri = paymentStatusUri(baseUrl, orderNo);
       Log.info('[PaymentApi] Querying payment status: $uri');
 
       final response = await http.get(
@@ -801,7 +856,7 @@ class PaymentApi {
         }
 
         // 解析订单状态
-        final data = json['data'] as Map<String, dynamic>?;
+        final data = json['data'];
         if (data == null) {
           return FlowyResult.failure(
             FlowyError()
@@ -811,7 +866,7 @@ class PaymentApi {
         }
 
         // 订单状态字段可能是 status 或 orderStatus
-        final status = (data['status'] ?? data['orderStatus'] ?? 'pending').toString().toLowerCase();
+        final status = parsePaymentStatus(data);
         Log.info('[PaymentApi] Payment status: $status');
         return FlowyResult.success(status);
       } else {
@@ -959,9 +1014,9 @@ class PaymentApi {
   //      verify 返回为准。
   // ======================================================================
 
-  static const String _kAppleVerifyPath = '/prod-api/api/payment/apple/verify';
-  static const String _kAppleRestorePath = '/prod-api/api/payment/apple/restore';
-  static const String _kSubscriptionPath = '/prod-api/api/ponynotes/order/subscription';
+  static const String _kAppleVerifyPath = '/api/payment/apple/verify';
+  static const String _kAppleRestorePath = '/api/payment/apple/restore';
+  static const String _kSubscriptionPath = '/api/ponynotes/order/subscription';
 
   /// 提交 StoreKit 2 签名交易给后端验签 / 开通订阅。
   ///
@@ -986,7 +1041,7 @@ class PaymentApi {
             ..msg = 'Apple verify: 缺少服务器地址或客户端 token',
         );
       }
-      final uri = Uri.parse('$baseUrl$_kAppleVerifyPath');
+      final uri = paymentApiUri(baseUrl, _kAppleVerifyPath);
 
       // 后端用 @RequestParam 接收（form 或 query 字段），必须按
       // application/x-www-form-urlencoded 发送。
@@ -1043,7 +1098,7 @@ class PaymentApi {
             ..msg = 'Apple restore: 缺少服务器地址或客户端 token',
         );
       }
-      final uri = Uri.parse('$baseUrl$_kAppleRestorePath').replace(
+      final uri = paymentApiUri(baseUrl, _kAppleRestorePath).replace(
         queryParameters: <String, String>{'userInfo': userInfo},
       );
 
@@ -1090,7 +1145,7 @@ class PaymentApi {
             ..msg = 'getSubscription: 缺少服务器地址或客户端 token',
         );
       }
-      final uri = Uri.parse('$baseUrl$_kSubscriptionPath');
+      final uri = paymentApiUri(baseUrl, _kSubscriptionPath);
 
       final response = await http.get(
         uri,
@@ -1191,7 +1246,10 @@ class PaymentApi {
   static Future<(String baseUrl, String token)> _resolveBaseUrlAndToken() async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      var baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      var baseUrl = _paymentApiBaseUrl.trim();
+      if (baseUrl.isEmpty) {
+        baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      }
       if (baseUrl.isEmpty) {
         final cloudConfigResult = await UserEventGetCloudConfig().send();
         baseUrl = cloudConfigResult.fold(

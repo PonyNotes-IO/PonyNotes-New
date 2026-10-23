@@ -1028,8 +1028,10 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (!io.Platform.isAndroid)
-                          GestureDetector(
+                        // 暂时隐藏会员升级入口，后续恢复时设为 true。
+                        Visibility(
+                          visible: false,
+                          child: GestureDetector(
                             onTap: onUpgrade,
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -1047,11 +1049,13 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                                       color: const Color(0xFF4B1B03),
                                     )
                                     .copyWith(
-                                        fontSize: 12.0,
-                                        fontWeight: FontWeight.w600),
+                                      fontSize: 12.0,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                               ),
                             ),
                           ),
+                        ),
                       ],
                     ),
                   ],

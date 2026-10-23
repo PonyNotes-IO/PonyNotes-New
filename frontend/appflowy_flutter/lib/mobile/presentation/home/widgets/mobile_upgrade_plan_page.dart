@@ -179,6 +179,37 @@ class _MobileUpgradePlanPageState extends State<MobileUpgradePlanPage> {
   }
 }
 
+class MobilePaymentMethodSelector extends StatelessWidget {
+  const MobilePaymentMethodSelector({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final PaymentMethod value;
+  final ValueChanged<PaymentMethod>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<PaymentMethod>(
+      segments: const [
+        ButtonSegment(
+          value: PaymentMethod.wechatPay,
+          label: Text('微信支付'),
+        ),
+        ButtonSegment(
+          value: PaymentMethod.alipay,
+          label: Text('支付宝支付'),
+        ),
+      ],
+      selected: {value},
+      onSelectionChanged: onChanged == null
+          ? null
+          : (selection) => onChanged!(selection.single),
+    );
+  }
+}
+
 class _UpgradePlanBody extends StatefulWidget {
   const _UpgradePlanBody({
     required this.workspaceId,
@@ -194,6 +225,7 @@ class _UpgradePlanBody extends StatefulWidget {
 
 class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   bool _isProcessingPayment = false;
+  PaymentMethod _selectedPaymentMethod = PaymentMethod.alipay;
 
   @override
   Widget build(BuildContext context) {
@@ -340,6 +372,19 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
                     Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
                         child: _buildBenefitIcons(theme)),
+                    if (Platform.isAndroid) ...[
+                      const SizedBox(height: 16),
+                      Center(
+                        child: MobilePaymentMethodSelector(
+                          value: _selectedPaymentMethod,
+                          onChanged: isProcessingPayment || _isProcessingPayment
+                              ? null
+                              : (method) => setState(() {
+                                    _selectedPaymentMethod = method;
+                                  }),
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),
@@ -1068,6 +1113,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     WorkspacePlanPB selectedPlan,
     PurchaseDurationOption selectedDuration,
   ) async {
+    final paymentMethod = _selectedPaymentMethod;
     final config = planConfigs[selectedPlan];
     if (config == null) {
       showToastNotification(message: '无法获取计划配置');
@@ -1102,10 +1148,13 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
         await _handleIOSPayment(
             PaymentMethod.applePay, config, price, billingType, userUuid);
       } else {
-        // Android 手机直接走支付宝应用支付，无需选择支付方式
-        Log.info('[MobileUpgradePlan] Android 直接调用支付宝支付');
         await _handleAndroidPayment(
-            PaymentMethod.alipay, config, price, billingType, userUuid);
+          paymentMethod,
+          config,
+          price,
+          billingType,
+          userUuid,
+        );
       }
     } catch (e) {
       Log.error('[MobileUpgradePlan] 支付异常: $e');
@@ -1115,98 +1164,11 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     }
   }
 
-  /// Android 端弹出支付方式选择弹框，返回用户选择的支付方式
-  Future<PaymentMethod?> _showAndroidPaymentSelector() {
-    final theme = AppFlowyTheme.of(context);
-    return showModalBottomSheet<PaymentMethod>(
-      context: context,
-      backgroundColor: theme.surfaceColorScheme.layer01,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (BuildContext sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: theme.textColorScheme.tertiary,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Text(
-                  '选择支付方式',
-                  style: theme.textStyle.body
-                      .standard(color: theme.textColorScheme.primary)
-                      .copyWith(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 16),
-                _buildPaymentOptionTile(
-                  theme,
-                  icon: FlowySvgs.m_rights_ai_xl,
-                  label: '支付宝',
-                  onTap: () => Navigator.of(sheetContext).pop(PaymentMethod.alipay),
-                ),
-                _buildPaymentOptionTile(
-                  theme,
-                  icon: FlowySvgs.m_rights_ai_xl,
-                  label: '微信支付',
-                  onTap: () => Navigator.of(sheetContext).pop(PaymentMethod.wechatPay),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPaymentOptionTile(
-    AppFlowyThemeData theme, {
-    required FlowySvgData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        child: Row(
-          children: [
-            FlowySvg(icon, size: const Size(24, 24), blendMode: null),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: theme.textStyle.body
-                    .standard(color: theme.textColorScheme.primary)
-                    .copyWith(fontSize: 15),
-              ),
-            ),
-            FlowySvg(
-              FlowySvgs.arrow_right_s,
-              size: const Size(6, 12),
-              color: theme.iconColorScheme.secondary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   /// 创建支付订单（Android / iOS 共用）。
   ///
   /// 支付方式与平台对应关系：
   ///   - iOS     → apple_pay（App Store 内购）
-  ///   - Android → alipay_app（支付宝 App 支付）/ wechat_pay
+  ///   - Android → alipay_app（支付宝 App 支付）/ wechat_app
   ///
   /// 返回完整订单数据（含 orderNo、payUrl），创建失败时返回 null 并已弹出 toast。
   Future<PaymentCreateResponse?> _createPaymentOrder({
@@ -1218,7 +1180,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
   }) async {
     final paymentType = switch (paymentMethod) {
       PaymentMethod.applePay => PaymentType.applePay,
-      PaymentMethod.wechatPay => PaymentType.wechatPay,
+      PaymentMethod.wechatPay => PaymentType.wechatApp,
       PaymentMethod.alipay => PaymentType.alipayApp,
     };
 
@@ -1333,10 +1295,10 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
     if (orderData == null) return;
 
-    // ② 用订单中的 payUrl 唤起支付宝 App 支付
+    // ② 用后端签名参数唤起所选支付App。
     final extra = <String, dynamic>{
       'payUrl': orderData.data?.payUrl,
-      'plan': config.planName,
+      'plan': config.planCode,
       'userUuid': userUuid,
     };
 
@@ -1349,11 +1311,7 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
     );
 
     if (mounted) {
-      if (paymentResult.success) {
-        showToastNotification(message: paymentResult.message);
-      } else {
-        showToastNotification(message: '支付失败: ${paymentResult.message}');
-      }
+      showToastNotification(message: paymentResult.message);
     }
   }
 

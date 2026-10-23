@@ -166,14 +166,21 @@
     <activity-alias
         android:name="${applicationId}.douyinapi.DouYinEntryActivity"
         android:enabled="false" />
-    <!-- fluwx is used only by iOS in this project. Android login uses the local
-         WeChatBridge and Android payments use Alipay, so remove its callbacks. -->
+    <!-- Android uses local WeChat login/payment bridges; remove fluwx callbacks. -->
     <activity
         android:name="com.jarvan.fluwx.wxapi.FluwxWXEntryActivity"
         tools:node="remove" />
     <activity-alias
         android:name="${applicationId}.wxapi.WXPayEntryActivity"
         tools:node="remove" />
+    <activity
+        android:name=".wxapi.WXPayEntryActivity"
+        android:enabled="false"
+        android:exported="true"
+        android:launchMode="singleTask"
+        android:taskAffinity="${applicationId}"
+        android:excludeFromRecents="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     <provider
         android:name="com.jarvan.fluwx.FluwxFileProvider"
         tools:node="remove" />
