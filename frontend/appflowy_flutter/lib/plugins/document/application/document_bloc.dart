@@ -589,7 +589,16 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
         }
 
         // apply transaction to backend
-        await _transactionAdapter.apply(transaction, editorState);
+        try {
+          await _transactionAdapter.apply(transaction, editorState);
+        } on FlowyError catch (e) {
+          Log.error('[DocumentBloc] save transaction failed: $e');
+          showToastNotification(
+            message: '保存失败：${e.msg}',
+            type: ToastificationType.error,
+          );
+          return;
+        }
 
         // check if the document is empty.
         await _documentRules.applyRules(value: value);

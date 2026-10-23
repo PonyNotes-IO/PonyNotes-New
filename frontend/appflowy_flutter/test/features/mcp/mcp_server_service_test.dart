@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
+import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
+import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/util/time.dart';
@@ -9,14 +12,133 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
     hide quoteNode;
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mcp_dart/mcp_dart.dart';
+import 'package:protobuf/protobuf.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('revoking a tool blocks calls on an existing MCP session', () async {
+    SharedPreferences.setMockInitialValues({});
+    await McpPermissions.instance.load();
+    addTearDown(McpPermissions.instance.allowAll);
+    final tools =
+        McpTools(endpoint: 'test', version: 'test', isAgentChannel: true);
+    var calls = 0;
+    final spec = McpToolSpec(
+      name: 'permission_probe',
+      description: 'No backend access',
+      inputSchema: const JsonObject(additionalProperties: false),
+      handler: (_) async {
+        calls++;
+        return CallToolResult(content: [TextContent(text: 'executed')]);
+      },
+    );
+    tools.toolSpecs
+      ..clear()
+      ..add(spec);
+    final toServer = StreamController<List<int>>();
+    final toClient = StreamController<List<int>>();
+    final server =
+        McpServer(const Implementation(name: 'server', version: 'test'));
+    tools.registerAll(server);
+    final client =
+        McpClient(const Implementation(name: 'client', version: 'test'));
+    addTearDown(() async {
+      await client.close();
+      await server.close();
+      await toServer.close();
+      await toClient.close();
+    });
+    await server.connect(
+      IOStreamTransport(stream: toServer.stream, sink: toClient.sink),
+    );
+    await client.connect(
+      IOStreamTransport(stream: toClient.stream, sink: toServer.sink),
+    );
+    const request = CallToolRequest(name: 'permission_probe');
+    expect((await client.callTool(request)).isError, isFalse);
+    await McpPermissions.instance.setAllowed(spec.name, false);
+    final blocked = await client.callTool(request);
+    expect(blocked.isError, isTrue);
+    expect(
+      (jsonDecode((blocked.content.single as TextContent).text) as Map)['error']
+          ['code'],
+      'permission_denied',
+    );
+    expect(calls, 1);
+    // Internal AI intentionally has its own authorization path.
+    final internal = McpTools(endpoint: 'test', version: 'test');
+    internal.toolSpecs
+      ..clear()
+      ..add(spec);
+    expect((await internal.executeTool(spec.name, {})).isError, isFalse);
+    await McpPermissions.instance.setAllowed(spec.name, true);
+    expect((await client.callTool(request)).isError, isFalse);
+    expect(calls, 3);
+  });
+
+  test('write confirmation uses backend data, never the submitted memory state',
+      () async {
+    final service = _WriteTestDocumentService();
+    final tools =
+        McpTools(endpoint: 'test', version: 'test', documentService: service);
+    for (final save in [false, true]) {
+      final state = EditorState.blank();
+      addTearDown(state.dispose);
+      service.saved = DocumentDataPBFromTo.fromDocument(state.document)!;
+      service.saveWrites = save;
+      service.failRead = false;
+      final transaction = state.transaction
+        ..insertNode([1], paragraphNode(text: 'new'));
+      final inserted = transaction.operations
+          .whereType<InsertOperation>()
+          .single
+          .nodes
+          .single
+          .id;
+      final result = await tools.persistDocument(
+        pageId: 'page',
+        workspaceId: 'workspace',
+        state: state,
+        transaction: transaction,
+        verify: (doc) => doc.blocks.containsKey(inserted),
+      );
+      if (save) {
+        expect(result, isNull);
+      } else {
+        expect(result?.isError, isTrue);
+        expect(
+          (jsonDecode((result!.content.single as TextContent).text)
+              as Map)['error']['code'],
+          'write_unconfirmed',
+        );
+      }
+    }
+    final state = EditorState.blank();
+    addTearDown(state.dispose);
+    service.saved = DocumentDataPBFromTo.fromDocument(state.document)!;
+    service.failRead = true;
+    service.saveWrites = false;
+    final result = await tools.persistDocument(
+      pageId: 'page',
+      workspaceId: 'workspace',
+      state: state,
+      transaction: state.transaction
+        ..insertNode([1], paragraphNode(text: 'new')),
+      verify: (_) => true,
+    );
+    expect(result?.isError, isTrue);
+  });
+
   test('hashToken returns stable SHA-256 hex', () {
     expect(
       McpServerService.hashToken('abc'),
@@ -94,8 +216,11 @@ void main() {
     final specs = tools.toolSpecs;
 
     expect(specs.length, 27);
-    expect(specs.map((spec) => spec.name).toSet().length, 27,
-        reason: '工具名不应重复');
+    expect(
+      specs.map((spec) => spec.name).toSet().length,
+      27,
+      reason: '工具名不应重复',
+    );
     expect(
       specs.where((spec) => spec.readOnly).map((spec) => spec.name),
       unorderedEquals([
@@ -503,4 +628,40 @@ void main() {
 
     expect(McpTools.blockText(BlockPB(data: 'not-json'), null), '');
   });
+}
+
+class _WriteTestDocumentService extends DocumentService {
+  late DocumentDataPB saved;
+  bool saveWrites = false;
+  bool failRead = false;
+
+  @override
+  Future<FlowyResult<void, FlowyError>> createExternalText({
+    required String documentId,
+    required String textId,
+    String? delta,
+  }) async =>
+      FlowyResult.success(null);
+
+  @override
+  Future<FlowyResult<void, FlowyError>> applyAction({
+    required String documentId,
+    required Iterable<BlockActionPB> actions,
+  }) async {
+    if (saveWrites) {
+      for (final action in actions) {
+        saved.blocks[action.payload.block.id] = action.payload.block.deepCopy();
+      }
+    }
+    return FlowyResult.success(null);
+  }
+
+  @override
+  Future<FlowyResult<DocumentDataPB, FlowyError>> getDocument({
+    required String documentId,
+    String? workspaceId,
+  }) async {
+    if (failRead) throw StateError('backend read failed');
+    return FlowyResult.success(saved);
+  }
 }

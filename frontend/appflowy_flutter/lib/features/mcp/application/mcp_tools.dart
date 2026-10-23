@@ -92,7 +92,10 @@ class McpTools {
     required this.version,
     this.isAgentChannel = false,
     this.agentName,
-  });
+    DocumentService? documentService,
+  }) : _documentService = documentService ?? DocumentService();
+
+  final DocumentService _documentService;
 
   final String endpoint;
   final String version;
@@ -744,7 +747,9 @@ class McpTools {
     final stopwatch = Stopwatch()..start();
     final target = _targetIds(args);
     try {
-      final result = await handler(args).timeout(_toolTimeout);
+      final result = isAgentChannel && !McpPermissions.instance.isAllowed(name)
+          ? _error('permission_denied', '该工具的权限已关闭：$name。')
+          : await handler(args).timeout(_toolTimeout);
       Log.info(
         '[MCP] tool=$name target=[$target] ok=${!result.isError} '
         'ms=${stopwatch.elapsedMilliseconds}',
@@ -755,6 +760,9 @@ class McpTools {
       Log.error('[MCP] tool=$name target=[$target] timeout');
       _recordAudit(name, target, true, stopwatch);
       return _error('tool_timeout', '工具执行超时，请稍后查询确认结果，不要直接重试写入。');
+    } on FlowyError catch (e) {
+      _recordAudit(name, target, true, stopwatch);
+      return _error('write_failed', '操作失败：${e.msg}');
     } catch (e, st) {
       Log.error(
         '[MCP] tool=$name target=[$target] error=$e ms=${stopwatch.elapsedMilliseconds}\n$st',
@@ -1139,7 +1147,10 @@ class McpTools {
         viewId.isEmpty ||
         rowId.isEmpty ||
         fieldKey.isEmpty) {
-      return _error('invalid_params', '缺少 workspace_id、view_id、row_id 或 field。');
+      return _error(
+        'invalid_params',
+        '缺少 workspace_id、view_id、row_id 或 field。',
+      );
     }
     final contextError = await _requireWriteAccess(workspaceId);
     if (contextError != null) return contextError;
@@ -1333,8 +1344,7 @@ class McpTools {
     }
 
     final remaining = await _databaseFields(viewId);
-    final stillExists =
-        remaining?.any((item) => item.id == field.id) ?? false;
+    final stillExists = remaining?.any((item) => item.id == field.id) ?? false;
     return _ok({
       'field_id': field.id,
       'name': field.name,
@@ -1467,7 +1477,8 @@ class McpTools {
     if (field.typeOptionData.isEmpty) return const [];
     try {
       if (field.fieldType == FieldType.SingleSelect) {
-        return SingleSelectTypeOptionPB.fromBuffer(field.typeOptionData).options;
+        return SingleSelectTypeOptionPB.fromBuffer(field.typeOptionData)
+            .options;
       }
       return MultiSelectTypeOptionPB.fromBuffer(field.typeOptionData).options;
     } catch (_) {
@@ -1486,7 +1497,9 @@ class McpTools {
         case FieldType.Translate:
           return utf8.decode(data);
         case FieldType.Checkbox:
-          return CheckboxCellDataPB.fromBuffer(data).isChecked ? 'true' : 'false';
+          return CheckboxCellDataPB.fromBuffer(data).isChecked
+              ? 'true'
+              : 'false';
         case FieldType.DateTime:
           final date = DateCellDataPB.fromBuffer(data);
           final start = _formatTimestamp(
@@ -1540,8 +1553,7 @@ class McpTools {
   static String _formatTimestamp(Int64 seconds, {required bool includeTime}) {
     if (seconds <= 0) return '';
     final date = DateTime.fromMillisecondsSinceEpoch(seconds.toInt() * 1000);
-    final day =
-        '${date.year}-${_two(date.month)}-${_two(date.day)}';
+    final day = '${date.year}-${_two(date.month)}-${_two(date.day)}';
     if (!includeTime) return day;
     return '$day ${_two(date.hour)}:${_two(date.minute)}';
   }
@@ -2021,7 +2033,7 @@ class McpTools {
     final content = customMarkdownToDocument(markdown, tableWidth: 250.0);
     final contentNodes = content.root.children.toList();
     if (contentNodes.isEmpty) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('invalid_params', 'Markdown 未解析出任何内容。');
     }
 
@@ -2047,7 +2059,7 @@ class McpTools {
         .toList();
 
     try {
-      final error = await _persistDocument(
+      final error = await persistDocument(
         pageId: pageId,
         workspaceId: workspaceId,
         state: state,
@@ -2057,7 +2069,7 @@ class McpTools {
       );
       if (error != null) return error;
     } finally {
-      state.dispose();
+      await _closeEditorState(pageId, state);
     }
     return _ok({
       'page_id': pageId,
@@ -2073,134 +2085,35 @@ class McpTools {
     if (workspaceId.isEmpty || pageId.isEmpty || blockType.isEmpty) {
       return _error('invalid_params', '缺少 workspace_id、page_id 或 block_type。');
     }
-    String? subPageViewId;
-    if (blockType == 'sub_page') {
-      // 子页面块需要真实的视图，先在当前页面下创建子页面
-      final subPageError = await _requireWriteAccess(workspaceId);
-      if (subPageError != null) return subPageError;
-      final title = _stringArg(args, 'text')?.trim() ?? '';
-      if (title.isEmpty) {
-        return _error('invalid_params', 'sub_page 需要通过 text 提供子页面标题。');
-      }
-      final created = await ViewBackendService.createView(
-        layoutType: ViewLayoutPB.Document,
-        parentViewId: pageId,
-        name: title,
-        openAfterCreate: false,
-      );
-      FlowyError? failure;
-      subPageViewId = created.fold((view) => view.id, (error) {
-        failure = error;
-        return null;
-      });
-      if (subPageViewId == null) {
-        return _error('internal', '创建子页面失败：${failure?.msg ?? '未知错误'}');
-      }
-      args = {...args, 'page_id_ref': subPageViewId};
-    }
-    String? databaseViewId;
-    String? databaseId;
-    if (const {'grid', 'board', 'calendar'}.contains(blockType)) {
-      final databaseError = await _requireWriteAccess(workspaceId);
-      if (databaseError != null) return databaseError;
-      final layout = switch (blockType) {
-        'grid' => ViewLayoutPB.Grid,
-        'board' => ViewLayoutPB.Board,
-        _ => ViewLayoutPB.Calendar,
-      };
-      // database_id 兼容数据库 ID 或数据库视图 ID
-      final databaseRef = _stringArg(args, 'database_id')?.trim() ?? '';
-      databaseId =
-          databaseRef.isEmpty ? null : await _resolveDatabaseId(databaseRef);
-      if (databaseId != null) {
-        // 引用已有数据库：在页面下建一个关联该数据库的视图
-        final name = _stringArg(args, 'text')?.trim() ?? '';
-        final reference = await ViewBackendService.createDatabaseLinkedView(
-          parentViewId: pageId,
-          databaseId: databaseId,
-          layoutType: layout,
-          name: name.isNotEmpty ? name : blockType,
-        );
-        FlowyError? failure;
-        databaseViewId = reference.fold((view) => view.id, (error) {
-          failure = error;
-          return null;
-        });
-        if (databaseViewId == null) {
-          return _error('internal', '引用数据库失败：${failure?.msg ?? '未知错误'}');
-        }
-        args = {...args, 'parent_view_id': pageId};
-      } else {
-        // 独立视图：与界面插入行内数据库一致，先建视图再插入块
-        final name = _stringArg(args, 'text')?.trim() ?? '';
-        final created = await ViewBackendService.createView(
-          parentViewId: pageId,
-          name: name.isNotEmpty ? name : blockType,
-          layoutType: layout,
-          openAfterCreate: false,
-        );
-        FlowyError? failure;
-        final view = created.fold((view) => view, (error) {
-          failure = error;
-          return null;
-        });
-        if (view == null) {
-          return _error('internal', '创建数据库视图失败：${failure?.msg ?? '未知错误'}');
-        }
-        databaseViewId = view.id;
-        args = {...args, 'parent_view_id': pageId};
-      }
-      args = {...args, 'view_id_ref': databaseViewId};
-    }
-    // date 是行内元素，需要在已加载的文档里定位承载块后再构造
-    final node = blockType == 'date' ? null : createBlockNode(blockType, args);
-    if (node == null && blockType != 'date') {
-      final urlRequired =
-          const {'image', 'video', 'file', 'link_preview'}.contains(blockType);
-      return _error(
-        'invalid_params',
-        urlRequired
-            ? 'block_type=$blockType 需要 url。'
-            : switch (blockType) {
-                'gallery' => 'block_type=gallery 需要 image_urls。',
-                'table' => 'block_type=table 需要 rows。',
-                'ai_writer' => 'AI 写作块只在编辑器会话内有效，无法通过 MCP 持久化插入。',
-                _ => '不支持的 block_type：$blockType。',
-              },
-      );
-    }
-    final text = _stringArg(args, 'text') ?? '';
     final pageError = await _requireWritableDocument(workspaceId, pageId);
     if (pageError != null) return pageError;
-
     final state = await _loadEditorState(pageId, workspaceId);
     if (state == null) {
       return _error('document_unavailable', '无法读取页面正文，文档可能尚未同步到本机。');
     }
-    final parentBlockId = _stringArg(args, 'parent_block_id')?.trim() ?? '';
-    final afterBlockId = _stringArg(args, 'after_block_id')?.trim() ?? '';
-    final parent = parentBlockId.isEmpty || parentBlockId == pageId
-        ? state.document.root
-        : _findNode(state.document, parentBlockId);
-    if (parent == null) {
-      state.dispose();
-      return _error('not_found', '父块不存在。');
-    }
-    Node? after;
-    if (afterBlockId.isNotEmpty) {
-      after = _findNode(state.document, afterBlockId);
-      if (after == null) {
-        state.dispose();
-        return _error('not_found', 'after_block_id 指向的块不存在。');
-      }
-      if (after.parent?.id != parent.id) {
-        state.dispose();
-        return _error('invalid_params', 'after_block_id 不是父块的直接子块。');
-      }
-    }
 
-    if (blockType == 'date') {
-      try {
+    String? createdViewId;
+    String? nodeId;
+    var writeStarted = false;
+    try {
+      // 先验证所有定位参数，再创建子页面或数据库，失败时不留下新资源。
+      final parentBlockId = _stringArg(args, 'parent_block_id')?.trim() ?? '';
+      final afterBlockId = _stringArg(args, 'after_block_id')?.trim() ?? '';
+      final parent = parentBlockId.isEmpty || parentBlockId == pageId
+          ? state.document.root
+          : _findNode(state.document, parentBlockId);
+      if (parent == null) return _error('not_found', '父块不存在。');
+      Node? after;
+      if (afterBlockId.isNotEmpty) {
+        after = _findNode(state.document, afterBlockId);
+        if (after == null) {
+          return _error('not_found', 'after_block_id 指向的块不存在。');
+        }
+        if (after.parent?.id != parent.id) {
+          return _error('invalid_params', 'after_block_id 不是父块的直接子块。');
+        }
+      }
+      if (blockType == 'date') {
         return await _appendDateMention(
           pageId: pageId,
           workspaceId: workspaceId,
@@ -2209,45 +2122,155 @@ class McpTools {
           after: after,
           args: args,
         );
-      } finally {
-        state.dispose();
       }
-    }
 
-    final path = after != null
-        ? after.path.next
-        : parent.path.child(parent.children.length);
-    final blockNode = node!;
-    final transaction = state.transaction..insertNode(path, blockNode);
-    // insertNode 会深拷贝节点并生成新 ID，必须从操作中取实际写入的块 ID
-    final nodeId = transaction.operations
-        .whereType<InsertOperation>()
-        .first
-        .nodes
-        .first
-        .id;
+      final isSubPage = blockType == 'sub_page';
+      final isDatabase =
+          const {'grid', 'board', 'calendar'}.contains(blockType);
+      final text = _stringArg(args, 'text') ?? '';
+      String? databaseId;
+      if (isSubPage || isDatabase) {
+        if (isSubPage && text.trim().isEmpty) {
+          return _error('invalid_params', 'sub_page 需要通过 text 提供子页面标题。');
+        }
+        final layout = switch (blockType) {
+          'grid' => ViewLayoutPB.Grid,
+          'board' => ViewLayoutPB.Board,
+          'calendar' => ViewLayoutPB.Calendar,
+          _ => ViewLayoutPB.Document,
+        };
+        final databaseRef = _stringArg(args, 'database_id')?.trim() ?? '';
+        if (isDatabase && databaseRef.isNotEmpty) {
+          databaseId = await _resolveDatabaseId(databaseRef);
+        }
+        final view = await ViewBackendService.createView(
+          parentViewId: pageId,
+          name: text.trim().isNotEmpty ? text.trim() : blockType,
+          layoutType: layout,
+          openAfterCreate: false,
+          ext: {if (databaseId != null) 'database_id': databaseId},
+        ).getOrThrow();
+        createdViewId = view.id;
+        args = {
+          ...args,
+          if (isSubPage) 'page_id_ref': view.id,
+          if (isDatabase) 'view_id_ref': view.id,
+          if (isDatabase) 'parent_view_id': pageId,
+        };
+      }
+      final node = createBlockNode(blockType, args);
+      if (node == null) {
+        final urlRequired = const {'image', 'video', 'file', 'link_preview'}
+            .contains(blockType);
+        final error = _error(
+          'invalid_params',
+          urlRequired
+              ? 'block_type=$blockType 需要 url。'
+              : switch (blockType) {
+                  'gallery' => 'block_type=gallery 需要 image_urls。',
+                  'table' => 'block_type=table 需要 rows。',
+                  'ai_writer' => 'AI 写作块只在编辑器会话内有效，无法通过 MCP 持久化插入。',
+                  _ => '不支持的 block_type：$blockType。',
+                },
+        );
+        return createdViewId == null
+            ? error
+            : await _rollbackCreatedView(createdViewId, error);
+      }
 
-    try {
-      final error = await _persistDocument(
+      final path = after != null
+          ? after.path.next
+          : parent.path.child(parent.children.length);
+      final transaction = state.transaction..insertNode(path, node);
+      nodeId = transaction.operations
+          .whereType<InsertOperation>()
+          .first
+          .nodes
+          .first
+          .id;
+      final insertedId = nodeId;
+      writeStarted = true;
+      final error = await persistDocument(
         pageId: pageId,
         workspaceId: workspaceId,
         state: state,
         transaction: transaction,
-        verify: (document) => document.blocks.containsKey(nodeId),
+        verify: (document) => document.blocks.containsKey(insertedId),
       );
-      if (error != null) return error;
+      if (error != null) {
+        return createdViewId == null
+            ? error
+            : await _rollbackCreatedView(
+                createdViewId,
+                error,
+                canRollback: false,
+                pageId: pageId,
+                blockId: nodeId,
+              );
+      }
+      return _ok({
+        'block_id': nodeId,
+        'parent_id': parent.id,
+        'type': node.type,
+        'text': text,
+        if (isSubPage) 'sub_page_id': createdViewId,
+        if (isDatabase) 'database_view_id': createdViewId,
+        if (databaseId != null) 'database_id': databaseId,
+      });
+    } catch (e) {
+      if (createdViewId == null) rethrow;
+      final failure = await _rollbackCreatedView(
+        createdViewId,
+        _error('write_failed', '插入失败：$e'),
+        canRollback: !writeStarted || e is FlowyError,
+        pageId: pageId,
+        blockId: writeStarted ? nodeId : null,
+      );
+      return failure;
     } finally {
-      state.dispose();
+      await _closeEditorState(pageId, state);
     }
-    return _ok({
-      'block_id': nodeId,
-      'parent_id': parent.id,
-      'type': blockNode.type,
-      'text': text,
-      if (subPageViewId != null) 'sub_page_id': subPageViewId,
-      if (databaseViewId != null) 'database_view_id': databaseViewId,
-      if (databaseId != null) 'database_id': databaseId,
-    });
+  }
+
+  /// 仅撤回本次创建的视图；写入结果不明时保留资源并返回恢复所需的 ID。
+  Future<CallToolResult> _rollbackCreatedView(
+    String viewId,
+    CallToolResult failure, {
+    bool canRollback = true,
+    String? pageId,
+    String? blockId,
+  }) async {
+    if (canRollback) {
+      try {
+        // 已提交过写入时，先确认资源未被文档引用，避免误删成功写入的资源。
+        if (blockId != null) {
+          final document = await _documentService
+              .getDocument(
+                documentId: pageId!,
+              )
+              .getOrThrow();
+          canRollback = !document.blocks.containsKey(blockId);
+        }
+        if (canRollback) {
+          await ViewBackendService.deleteView(viewId: viewId).getOrThrow();
+          if (await _findTrashItem(viewId) != null) return failure;
+        }
+      } catch (e) {
+        Log.error('[MCP] rollback created view $viewId failed: $e');
+      }
+    }
+    return _error(
+      'insert_unconfirmed',
+      '插入或资源清理尚未确认；已保留新建资源，请查询确认后再操作，不要直接重试。',
+      details: {
+        'created_view_id': viewId,
+        if (blockId != null) 'block_id': blockId,
+        'original_error': failure.content
+            .whereType<TextContent>()
+            .map((c) => c.text)
+            .join('\n'),
+      },
+    );
   }
 
   Future<CallToolResult> _appendDateMention({
@@ -2344,7 +2367,7 @@ class McpTools {
     transaction.updateNode(host, {
       blockComponentDelta: node.attributes[blockComponentDelta],
     });
-    final error = await _persistDocument(
+    final error = await persistDocument(
       pageId: pageId,
       workspaceId: workspaceId,
       state: state,
@@ -2423,7 +2446,7 @@ class McpTools {
       return _error(
         'invalid_params',
         '至少需要提供一个要更新的字段：text、checked、collapsed、'
-        'language、icon、header_row、header_column。',
+            'language、icon、header_row、header_column。',
       );
     }
     if (workspaceId.isEmpty || pageId.isEmpty || blockId.isEmpty) {
@@ -2438,21 +2461,21 @@ class McpTools {
     }
     final node = _findNode(state.document, blockId);
     if (node == null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('not_found', '块不存在。');
     }
     if (node.id == state.document.root.id) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('invalid_params', '不能通过 update_block 修改页面根块。');
     }
     final built = buildUpdateAttributes(node, args);
     if (built.error != null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('invalid_params', built.error!);
     }
     final attributes = built.attributes;
     if (attributes.isEmpty) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('unsupported_block', '该块不是可编辑的文本块。');
     }
     final transaction = state.transaction..updateNode(node, attributes);
@@ -2462,7 +2485,7 @@ class McpTools {
         : const <String>{};
 
     try {
-      final error = await _persistDocument(
+      final error = await persistDocument(
         pageId: pageId,
         workspaceId: workspaceId,
         state: state,
@@ -2509,7 +2532,7 @@ class McpTools {
       );
       if (error != null) return error;
     } finally {
-      state.dispose();
+      await _closeEditorState(pageId, state);
     }
     _removeReminders(reminderIds);
     return _ok({
@@ -2540,12 +2563,12 @@ class McpTools {
     }
     final node = _findNode(state.document, blockId);
     if (node == null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('not_found', '块不存在。');
     }
     final parent = node.parent;
     if (node.id == state.document.root.id || parent == null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('invalid_params', '不能删除页面根块。');
     }
 
@@ -2558,7 +2581,7 @@ class McpTools {
     transaction.deleteNode(node);
 
     try {
-      final error = await _persistDocument(
+      final error = await persistDocument(
         pageId: pageId,
         workspaceId: workspaceId,
         state: state,
@@ -2568,7 +2591,7 @@ class McpTools {
       );
       if (error != null) return error;
     } finally {
-      state.dispose();
+      await _closeEditorState(pageId, state);
     }
     _removeReminders(reminderIds);
     return _ok({
@@ -2595,11 +2618,11 @@ class McpTools {
     final node = _findNode(state.document, blockId);
     final currentParent = node?.parent;
     if (node == null || currentParent == null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('not_found', '块不存在。');
     }
     if (node.id == state.document.root.id) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('invalid_params', '不能移动页面根块。');
     }
 
@@ -2610,11 +2633,11 @@ class McpTools {
     if (afterKey.isNotEmpty) {
       after = _findNode(state.document, afterKey);
       if (after == null) {
-        state.dispose();
+        await _closeEditorState(pageId, state);
         return _error('not_found', 'after_block_id 指向的块不存在。');
       }
       if (after.id == node.id) {
-        state.dispose();
+        await _closeEditorState(pageId, state);
         return _error('invalid_params', '不能把块移动到自身之后。');
       }
       targetParent = after.parent;
@@ -2624,14 +2647,14 @@ class McpTools {
       targetParent = currentParent;
     }
     if (targetParent == null) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _error('not_found', '目标父块不存在。');
     }
 
     // 目标父块不能是自身或自身的子孙
     for (Node? cursor = targetParent; cursor != null; cursor = cursor.parent) {
       if (cursor.id == node.id) {
-        state.dispose();
+        await _closeEditorState(pageId, state);
         return _error('invalid_params', '不能把块移动到自身或其子块下。');
       }
     }
@@ -2646,7 +2669,7 @@ class McpTools {
       targetIndex -= 1;
     }
     if (targetParentId == currentParent.id && targetIndex == oldIndex) {
-      state.dispose();
+      await _closeEditorState(pageId, state);
       return _ok({
         'page_id': pageId,
         'block_id': blockId,
@@ -2666,7 +2689,7 @@ class McpTools {
     transaction.insertNode(destination, node, deepCopy: false);
 
     try {
-      final error = await _persistDocument(
+      final error = await persistDocument(
         pageId: pageId,
         workspaceId: workspaceId,
         state: state,
@@ -2679,7 +2702,7 @@ class McpTools {
       );
       if (error != null) return error;
     } finally {
-      state.dispose();
+      await _closeEditorState(pageId, state);
     }
 
     return _ok({
@@ -2764,8 +2787,8 @@ class McpTools {
     String workspaceId,
   ) async {
     // ApplyAction 要求文档处于打开状态，写入期间保持打开，
-    // 完成后由 _persistDocument 按需关闭。
-    final service = DocumentService();
+    // 调用方在所有退出路径通过 _closeEditorState 按需关闭。
+    final service = _documentService;
     final opened = await service.openDocument(
       documentId: pageId,
       workspaceId: workspaceId,
@@ -2775,12 +2798,26 @@ class McpTools {
       return null;
     });
     final document = data?.toDocument();
-    if (document == null) return null;
+    if (document == null) {
+      await _closeEditorState(pageId, null);
+      return null;
+    }
     return EditorState(document: document);
   }
 
+  Future<void> _closeEditorState(String pageId, EditorState? state) async {
+    state?.dispose();
+    if (DocumentBloc.findOpen(pageId) != null) return;
+    try {
+      await _documentService.closeDocument(viewId: pageId).getOrThrow();
+    } catch (e) {
+      Log.warn('[MCP] close document $pageId failed: $e');
+    }
+  }
+
   /// 先提交到业务层，再更新本地状态，最后重新读取确认保存结果。
-  Future<CallToolResult?> _persistDocument({
+  @visibleForTesting
+  Future<CallToolResult?> persistDocument({
     required String pageId,
     required String workspaceId,
     required EditorState state,
@@ -2789,7 +2826,7 @@ class McpTools {
   }) async {
     final adapter = TransactionAdapter(
       documentId: pageId,
-      documentService: DocumentService(),
+      documentService: _documentService,
     );
     try {
       await adapter.apply(transaction, state).timeout(_writeTimeout);
@@ -2798,9 +2835,6 @@ class McpTools {
         'write_timeout',
         '写入超时，无法确认是否已保存；请用 get_page 或 list_blocks 查询确认，不要直接重试创建。',
       );
-    } catch (e, st) {
-      Log.error('[MCP] persist document $pageId failed: $e\n$st');
-      return _error('internal', '写入失败：$e');
     }
     try {
       await state.apply(transaction);
@@ -2811,16 +2845,17 @@ class McpTools {
         '写入已提交但本地状态更新失败；请用 get_page 或 list_blocks 查询确认。',
       );
     }
-    final fresh = await _freshDocument(pageId, workspaceId, state);
+    DocumentDataPB? fresh;
+    try {
+      fresh = await _readDocument(pageId, workspaceId);
+    } catch (e) {
+      Log.warn('[MCP] verify document $pageId failed: $e');
+    }
     if (fresh == null || !verify(fresh)) {
       return _error(
         'write_unconfirmed',
         '写入已提交但未能确认保存结果；请用 get_page 或 list_blocks 查询确认。',
       );
-    }
-    // 界面没有打开该文档时，写入确认后关闭，避免长期占用内存
-    if (DocumentBloc.findOpen(pageId) == null) {
-      await DocumentService().closeDocument(viewId: pageId);
     }
     return null;
   }
@@ -3211,7 +3246,7 @@ class McpTools {
     String pageId,
     String workspaceId,
   ) async {
-    final service = DocumentService();
+    final service = _documentService;
     final local = await service.getDocument(
       documentId: pageId,
       workspaceId: workspaceId,
@@ -3251,40 +3286,6 @@ class McpTools {
       Log.error('[MCP] read document $pageId failed: $error');
       return null;
     });
-  }
-
-  /// 重新读取并确认刚落库的内容：本地数据未刷新时合并内存中的编辑器状态。
-  Future<DocumentDataPB?> _freshDocument(
-    String pageId,
-    String workspaceId,
-    EditorState state,
-  ) async {
-    final fresh = await _readDocument(pageId, workspaceId);
-    if (fresh == null) return null;
-    final freshIds = fresh.blocks.keys.toSet();
-    final memoryIds =
-        state.document.root.copyWith().children.map((node) => node.id).toSet();
-    if (memoryIds.difference(freshIds).isEmpty) return fresh;
-    // 本地文档的增量写入可能还在异步落库，确认时以内存中的编辑器状态为准
-    final merged = DocumentDataPBFromTo.fromDocument(state.document);
-    if (merged == null) return fresh;
-    if (merged.pageId != fresh.pageId) {
-      // 页面根块可能沿用随机 ID，合并时需要与磁盘数据保持同一个根
-      final oldRoot = merged.pageId;
-      final root = merged.blocks.remove(oldRoot);
-      if (root != null) {
-        root.id = fresh.pageId;
-        root.childrenId = fresh.pageId;
-        merged.blocks[fresh.pageId] = root;
-        final children = merged.meta.childrenMap.remove(oldRoot);
-        if (children != null) merged.meta.childrenMap[fresh.pageId] = children;
-        for (final block in merged.blocks.values) {
-          if (block.parentId == oldRoot) block.parentId = fresh.pageId;
-        }
-        merged.pageId = fresh.pageId;
-      }
-    }
-    return merged;
   }
 
   /// 用编辑器同一套转换构建块树，确保外部长文本也能提取。
@@ -3474,9 +3475,17 @@ class McpTools {
     return CallToolResult(content: [TextContent(text: jsonEncode(data))]);
   }
 
-  CallToolResult _error(String code, String message) {
+  CallToolResult _error(
+    String code,
+    String message, {
+    Map<String, dynamic>? details,
+  }) {
     final body = jsonEncode({
-      'error': {'code': code, 'message': message},
+      'error': {
+        'code': code,
+        'message': message,
+        if (details != null) 'details': details,
+      },
     });
     return CallToolResult(
       isError: true,

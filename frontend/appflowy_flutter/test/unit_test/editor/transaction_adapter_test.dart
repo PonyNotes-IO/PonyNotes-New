@@ -1,13 +1,50 @@
 import 'dart:async';
 
 import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/editor_transaction_adapter.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('TransactionAdapter:', () {
+    test('backend failures abort text creation, text update and block writes',
+        () async {
+      for (final failureAt in ['create', 'update', 'blocks']) {
+        final node = paragraphNode(text: 'old');
+        if (failureAt == 'update') {
+          node.externalValues =
+              const ExternalValues(externalId: 'text', externalType: 'text');
+        }
+        final state =
+            EditorState(document: Document(root: pageNode(children: [node])));
+        addTearDown(state.dispose);
+        final transaction = state.transaction;
+        if (failureAt == 'create') {
+          transaction.insertNode([1], paragraphNode(text: 'new'));
+        } else if (failureAt == 'update') {
+          transaction.updateNode(
+            node,
+            {blockComponentDelta: (Delta()..insert('new')).toJson()},
+          );
+        } else {
+          transaction.insertNode([1], Node(type: 'divider'));
+        }
+        final service = _FailingDocumentService();
+        final adapter =
+            TransactionAdapter(documentId: 'doc', documentService: service);
+        await expectLater(
+          adapter.apply(transaction, state),
+          throwsA(same(service.failure)),
+        );
+        expect(service.calls, [failureAt]);
+        expect(state.document.root.children.length, 1);
+      }
+    });
+
     test('toBlockAction insert node with children operation', () {
       final editorState = EditorState.blank();
 
@@ -393,4 +430,37 @@ void main() {
       await completer.future;
     });
   });
+}
+
+class _FailingDocumentService extends DocumentService {
+  final failure = FlowyError(msg: 'backend rejected write');
+  final calls = <String>[];
+  @override
+  Future<FlowyResult<void, FlowyError>> createExternalText({
+    required String documentId,
+    required String textId,
+    String? delta,
+  }) async {
+    calls.add('create');
+    return FlowyResult.failure(failure);
+  }
+
+  @override
+  Future<FlowyResult<void, FlowyError>> updateExternalText({
+    required String documentId,
+    required String textId,
+    String? delta,
+  }) async {
+    calls.add('update');
+    return FlowyResult.failure(failure);
+  }
+
+  @override
+  Future<FlowyResult<void, FlowyError>> applyAction({
+    required String documentId,
+    required Iterable<BlockActionPB> actions,
+  }) async {
+    calls.add('blocks');
+    return FlowyResult.failure(failure);
+  }
 }

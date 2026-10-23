@@ -822,7 +822,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
             ),
       children: [
         FlowyText(
-          '选择客户端可以使用的工具。关闭后，客户端将无法发现和调用该工具；改动对新连接生效。',
+          '选择客户端可以使用的工具。关闭后立即阻止后续调用；工具列表的变化对新连接生效。',
           maxLines: null,
           fontSize: 12,
           color: theme.textColorScheme.secondary,

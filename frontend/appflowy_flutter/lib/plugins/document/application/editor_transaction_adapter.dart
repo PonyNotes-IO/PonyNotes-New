@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:nanoid/nanoid.dart';
 
@@ -59,22 +60,26 @@ class TransactionAdapter {
       final payload = textAction.textDeltaPayloadPB!;
       final type = textAction.textDeltaType;
       if (type == TextDeltaType.create) {
-        await documentService.createExternalText(
-          documentId: payload.documentId,
-          textId: payload.textId,
-          delta: payload.delta,
-        );
+        await documentService
+            .createExternalText(
+              documentId: payload.documentId,
+              textId: payload.textId,
+              delta: payload.delta,
+            )
+            .getOrThrow();
         if (enableDocumentInternalLog) {
           Log.info(
             '[editor_transaction_adapter] create external text: id: ${payload.textId} delta: ${payload.delta}',
           );
         }
       } else if (type == TextDeltaType.update) {
-        await documentService.updateExternalText(
-          documentId: payload.documentId,
-          textId: payload.textId,
-          delta: payload.delta,
-        );
+        await documentService
+            .updateExternalText(
+              documentId: payload.documentId,
+              textId: payload.textId,
+              delta: payload.delta,
+            )
+            .getOrThrow();
         if (enableDocumentInternalLog) {
           Log.info(
             '[editor_transaction_adapter] update external text: id: ${payload.textId} delta: ${payload.delta}',
@@ -93,10 +98,12 @@ class TransactionAdapter {
       }
     }
 
-    await documentService.applyAction(
-      documentId: documentId,
-      actions: blockActions,
-    );
+    await documentService
+        .applyAction(
+          documentId: documentId,
+          actions: blockActions,
+        )
+        .getOrThrow();
 
     final elapsed = stopwatch.elapsedMilliseconds;
     stopwatch.stop();
