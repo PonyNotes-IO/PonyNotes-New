@@ -1,7 +1,7 @@
 # 小马笔记二期第一章：客户端本地 MCP 实现计划
 
 - 日期：2026-10-21
-- 状态：阶段二～阶段六全部实现（27 个工具，服务版本 0.6.8）。真实目标 Agent（OpenClaw、WorkBuddy、豆包办公、千问办公）联调、并发编辑实测、移动端与数据库工具的真机验证仍待完成。
+- 状态：阶段二～阶段六全部实现（27 个工具，服务版本 0.6.9）。2026-10-23 已在运行中的客户端对 27 个工具做过全量实测；真实目标 Agent（OpenClaw、WorkBuddy、豆包办公、千问办公）联调、并发编辑实测仍待完成。
 - 需求来源：工作区根目录《小马笔记二期功能.docx》第一章，以及用户对客户端本地 MCP、独立功能工具和 Token 接入方式的说明。
 - 主要实施仓库：`PonyNotes-New`。
 
@@ -526,3 +526,32 @@ Rust 仅补齐现有业务接口确实缺失的能力。第一版没有已确认
 - 页面 JSON 增加 `icon`（emoji）和 `is_locked`（锁定页写入会被拒绝），`get_page`、`list_pages`、`create_page`、`duplicate_page` 都会带上。
 
 验证：`flutter analyze` 干净；`flutter test test/features/mcp` 12 个用例通过，注册表检查更新到 27 项（8 只读、4 破坏性、19 非只读）。
+
+### 2026-10-23：27 个工具全量实测与三项修复（服务版本 0.6.9）
+
+在运行中的 Linux 客户端、`mcp-测试空间-tmp` 工作区里通过 MCP 协议逐个调用了全部 27 个工具：
+
+- 只读 8 个、页面生命周期 8 个、内容块 7 个、数据库 7 个、工作区 3 个（部分工具跨组统计），基础读写全部通过。
+- 负向路径：非当前工作区返回 `workspace_mismatch`；删除主字段返回 `invalid_params`。
+- 数据库 0.6.7 新增的写入、字段管理与块移动工具此前只有单测，这次全部在真实客户端验证通过。
+
+本轮发现并修复：
+
+1. **`duplicate_page` 副本沿用源文档的根块与块 ID。** 副本内容独立，但 `get_page` 返回的块 `parent_id` 指向源页面，块 ID 与源文档重复。根因在 `flowy-core/src/deps_resolve/folder_deps/folder_deps_doc_impl.rs`：`duplicate_view` 原样导出 `DocumentDataPB`，创建新视图时没有重映射。新增 `remap_document_ids`，为副本重建全部块 ID（根块使用新页面 ID，其余生成新 ID），同步修正 `parent_id`、`children_id` 与 `children_map`；`text_map` 的键是文本 `external_id`，保持不变。`DuplicateData` 与 `Data` 两条路径都生效，新增 3 个单元测试。
+
+   第一次实现只改了根块 ID，线上回归时副本读出来是空的：根块的 `children_id` 才是正文挂载到 `children_map` 的键，只改块 ID 会让正文留在旧键下。`children_id` 现已一并重映射。
+2. **`get_context` / `open_workspace` 的工作区名恒为 “Workspace”。** `WorkspacePB.name` 是账号级默认名，实际展示名在 `UserWorkspacePB` 上。两处改为按 ID 从工作区列表取名字，找不到才回退。`list_workspaces` 行为不变。
+3. **刚写入的内容搜不到。** 有两个叠加原因：
+
+   - 本地索引由 30 秒轮询的即时索引器更新，只处理轮询时仍存活的文档；MCP 写入后立即关闭文档，内容常常落在窗口外。现在 `DocumentManager` 记录本次打开期间写过内容的文档（`apply_action`、文本增量、撤销/重做都会标记），关闭时同步编码并交给索引器；新建文档在 `create_document` 里直接索引。30 秒轮询保留，负责长时间打开文档的持续更新。
+   - `flowy-search-pub/src/tantivy_state.rs` 的所有写入路径只 `commit` 不 `reader.reload`，已创建的 IndexReader 看不到新 segment，运行期新增的文档要等进程重启才可见。现在 5 处提交后都调用 `reader.reload()`，并新增“写入后不手动 reload 也能立即搜到正文”的单元测试。
+
+验证：
+
+- `cargo check -p flowy-core` 通过；`cargo test -p flowy-core --lib` 6 个用例通过；`cargo test -p flowy-search-pub --lib` 5 个用例通过；`flutter analyze lib/features/mcp` 干净；`flutter test test/features/mcp` 24 个用例通过。
+- 在重新构建的 Linux 客户端（0.6.9）上完成线上回归：
+  - `get_context` 与 `open_workspace` 返回真实工作区名「MCP 工具测试空间 1023」，不再返回 “Workspace”。
+  - 复制源页（标题 + 段落 + 2 个列表项）后，副本 4 个块全部是新生成的 ID，`parent_id` 指向副本页面，正文完整。
+  - 新建页面后立即按正文里的中文标记搜索，能命中；追加一段后再立即搜索新标记，同样命中。
+
+测试页面已全部移入回收站。外部 Agent 联调与并发编辑测试仍未进行。

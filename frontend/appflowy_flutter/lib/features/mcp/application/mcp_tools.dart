@@ -822,6 +822,10 @@ class McpTools {
       return _error('not_logged_in', '客户端未登录，请先在小马笔记中登录账号。');
     }
     final workspace = await _currentWorkspace();
+    // WorkspacePB.name 是账号级工作区名（常为默认值 "Workspace"），实际展示名
+    // 在 UserWorkspacePB 上，这里以工作区列表里的名字为准。
+    final listedWorkspace =
+        workspace == null ? null : await _workspaceById(profile, workspace.id);
     return _ok({
       'user': {
         'id': profile.id.toString(),
@@ -830,7 +834,10 @@ class McpTools {
       },
       'current_workspace': workspace == null
           ? null
-          : {'workspace_id': workspace.id, 'name': workspace.name},
+          : {
+              'workspace_id': workspace.id,
+              'name': listedWorkspace?.name ?? workspace.name,
+            },
       'server': {'endpoint': endpoint, 'version': version},
     });
   }
@@ -1689,7 +1696,7 @@ class McpTools {
     if (current?.id == workspaceId) {
       return _ok({
         'workspace_id': current!.id,
-        'name': current.name,
+        'name': target.name,
         'type': target.workspaceType.name,
         'switched': false,
       });
@@ -1711,7 +1718,7 @@ class McpTools {
     }
     return _ok({
       'workspace_id': after!.id,
-      'name': after.name,
+      'name': target.name,
       'type': target.workspaceType.name,
       'switched': true,
     });
