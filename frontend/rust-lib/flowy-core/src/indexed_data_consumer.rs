@@ -314,7 +314,14 @@ impl InstantIndexedDataConsumer for SearchInstantIndexImpl {
       .folder_manager
       .upgrade()
       .ok_or_else(FlowyError::ref_drop)?;
-    let view = folder_manager.get_view(&object_id.to_string()).await?;
+    // 新建文档的初始内容会在视图写入文件夹之前就交给索引器，此时查不到
+    // 视图名和图标。先按无标题写入正文，标题随后由文件夹观察者补齐。
+    let view = folder_manager.get_view(&object_id.to_string()).await.ok();
+    let view_name = view
+      .as_ref()
+      .map(|view| view.name.clone())
+      .unwrap_or_default();
+    let view_icon = view.as_ref().and_then(|view| view.icon.clone());
 
     // Create a combined hash that includes content + view name + icon
     let content_hash = match &data {
@@ -322,8 +329,8 @@ impl InstantIndexedDataConsumer for SearchInstantIndexImpl {
       Some(data) => data.content_hash(),
     };
 
-    let name_hash = format!("{}:{}", content_hash, view.name);
-    let combined_hash = if let Some(icon) = &view.icon {
+    let name_hash = format!("{}:{}", content_hash, view_name);
+    let combined_hash = if let Some(icon) = &view_icon {
       format!("{}:{}:{}", name_hash, icon.ty.clone() as u8, icon.value)
     } else {
       name_hash
@@ -343,8 +350,12 @@ impl InstantIndexedDataConsumer for SearchInstantIndexImpl {
     state.write().await.add_document(
       &object_id.to_string(),
       data.map(|v| v.into_string()),
-      Some(view.name.clone()),
-      view.icon.clone().map(|v| ViewIcon {
+      if view_name.is_empty() {
+        None
+      } else {
+        Some(view_name)
+      },
+      view_icon.map(|v| ViewIcon {
         ty: IconType::from(v.ty as u8),
         value: v.value,
       }),

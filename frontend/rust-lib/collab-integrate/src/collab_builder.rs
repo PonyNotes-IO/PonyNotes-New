@@ -298,6 +298,29 @@ impl AppFlowyCollabBuilder {
     self.finalize(object, builder_config, workspace)
   }
 
+  /// 立即把一份已编码的 collab 交给即时索引消费者，供文档写入/关闭时
+  /// 同步刷新搜索索引。索引组件尚未注册时返回 `false`。
+  pub async fn index_encoded_collab_now(
+    &self,
+    workspace_id: Uuid,
+    object_id: Uuid,
+    data: EncodedCollab,
+    collab_type: CollabType,
+  ) -> Result<bool, FlowyError> {
+    let writer = match self
+      .embeddings_writer
+      .as_ref()
+      .and_then(|writer| writer.upgrade())
+    {
+      Some(writer) => writer,
+      None => return Ok(false),
+    };
+    writer
+      .index_encoded_collab(workspace_id, object_id, data, collab_type)
+      .await?;
+    Ok(true)
+  }
+
   pub async fn build_collab(
     &self,
     object: &CollabObject,

@@ -190,6 +190,8 @@ impl DocumentTantivyState {
 
     self.writer.add_document(doc_builder)?;
     self.writer.commit()?;
+    // commit 只写入新 segment，已创建的 IndexReader 需要 reload 才能看到。
+    self.reader.reload()?;
 
     Ok(())
   }
@@ -286,6 +288,8 @@ impl DocumentTantivyState {
 
     self.writer.add_document(doc_builder)?;
     self.writer.commit()?;
+    // commit 只写入新 segment，已创建的 IndexReader 需要 reload 才能看到。
+    self.reader.reload()?;
 
     Ok(())
   }
@@ -294,6 +298,8 @@ impl DocumentTantivyState {
     let term = Term::from_field_text(self.field_workspace_id, &workspace_id.to_string());
     self.writer.delete_term(term);
     self.writer.commit()?;
+    // commit 只写入新 segment，已创建的 IndexReader 需要 reload 才能看到。
+    self.reader.reload()?;
 
     Ok(())
   }
@@ -304,6 +310,8 @@ impl DocumentTantivyState {
     let term = Term::from_field_text(self.field_object_id, id);
     self.writer.delete_term(term);
     self.writer.commit()?;
+    // commit 只写入新 segment，已创建的 IndexReader 需要 reload 才能看到。
+    self.reader.reload()?;
 
     Ok(())
   }
@@ -315,6 +323,8 @@ impl DocumentTantivyState {
       self.writer.delete_term(term);
     }
     self.writer.commit()?;
+    // commit 只写入新 segment，已创建的 IndexReader 需要 reload 才能看到。
+    self.reader.reload()?;
 
     Ok(())
   }
@@ -549,5 +559,32 @@ mod tests {
         Some(expected_id)
       );
     }
+  }
+
+  #[test]
+  fn content_is_searchable_right_after_add_without_manual_reload() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let workspace_id = Uuid::new_v4();
+    let mut state =
+      DocumentTantivyState::new(&workspace_id, temp_dir.path().to_path_buf()).unwrap();
+
+    state
+      .add_document(
+        "doc-content",
+        Some("马同学 和 小马笔记团队".to_string()),
+        Some("无关标题".to_string()),
+        None,
+      )
+      .unwrap();
+
+    // 不手动 reload：生产环境依赖 add_document 内部的 reader.reload()
+    let results = state
+      .search(&workspace_id, "马同学", None, 10, 0.4)
+      .unwrap();
+
+    assert_eq!(
+      results.first().map(|item| item.id.as_str()),
+      Some("doc-content")
+    );
   }
 }

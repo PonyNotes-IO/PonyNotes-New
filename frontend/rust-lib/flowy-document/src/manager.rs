@@ -22,12 +22,13 @@ use collab_integrate::collab_builder::{
 };
 use collab_plugins::CollabKVDB;
 use dashmap::DashMap;
+use dashmap::DashSet;
 use flowy_document_pub::cloud::DocumentCloudService;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
 use flowy_storage_pub::storage::{CreatedUpload, StorageService};
 use lib_infra::util::timestamp;
 use tracing::{event, instrument};
-use tracing::{info, trace};
+use tracing::{info, trace, warn};
 use uuid::Uuid;
 
 use crate::entities::UpdateDocumentAwarenessStatePB;
@@ -67,6 +68,9 @@ pub struct DocumentManager {
   collab_builder: Weak<AppFlowyCollabBuilder>,
   documents: Arc<DashMap<Uuid, Arc<RwLock<Document>>>>,
   removing_documents: Arc<DashMap<Uuid, Arc<RwLock<Document>>>>,
+  /// 本轮打开后发生过写入的文档。关闭时据此立即刷新搜索索引，
+  /// 避免只改一次的文档落在 30 秒轮询窗口之外。
+  dirty_documents: Arc<DashSet<Uuid>>,
   cloud_service: Arc<dyn DocumentCloudService>,
   storage_service: Weak<dyn StorageService>,
   snapshot_service: Arc<dyn DocumentSnapshotService>,
@@ -91,6 +95,7 @@ impl DocumentManager {
       collab_builder,
       documents: Arc::new(Default::default()),
       removing_documents: Arc::new(Default::default()),
+      dirty_documents: Arc::new(DashSet::new()),
       cloud_service,
       storage_service,
       snapshot_service,
@@ -102,6 +107,39 @@ impl DocumentManager {
       .collab_builder
       .upgrade()
       .ok_or_else(FlowyError::ref_drop)
+  }
+
+  /// 标记文档在本次打开期间发生过写入，关闭时立即刷新索引。
+  pub fn mark_document_dirty(&self, doc_id: &Uuid) {
+    self.dirty_documents.insert(*doc_id);
+  }
+
+  async fn index_encoded_collab(&self, doc_id: &Uuid, encoded_collab: &EncodedCollab) {
+    let builder = match self.collab_builder() {
+      Ok(builder) => builder,
+      Err(err) => {
+        warn!("[Indexing] skip indexing document {}: {:?}", doc_id, err);
+        return;
+      },
+    };
+    let workspace_id = match self.user_service.workspace_id() {
+      Ok(workspace_id) => workspace_id,
+      Err(err) => {
+        warn!("[Indexing] skip indexing document {}: {:?}", doc_id, err);
+        return;
+      },
+    };
+    if let Err(err) = builder
+      .index_encoded_collab_now(
+        workspace_id,
+        *doc_id,
+        encoded_collab.clone(),
+        CollabType::Document,
+      )
+      .await
+    {
+      warn!("[Indexing] failed to index document {}: {:?}", doc_id, err);
+    }
   }
 
   /// Get the encoded collab of the document.
@@ -198,6 +236,7 @@ impl DocumentManager {
               .persistence()?
               .save_collab_to_disk(doc_id.to_string().as_str(), encoded_collab.clone())
               .map_err(internal_error)?;
+            self.index_encoded_collab(doc_id, &encoded_collab).await;
 
             // Send the collab data to server with a background task to ensure cloud has the collab.
             let cloud_service = self.cloud_service.clone();
@@ -225,6 +264,7 @@ impl DocumentManager {
         .persistence()?
         .save_collab_to_disk(doc_id.to_string().as_str(), encoded_collab.clone())
         .map_err(internal_error)?;
+      self.index_encoded_collab(doc_id, &encoded_collab).await;
 
       // Send the collab data to server with a background task.
       let cloud_service = self.cloud_service.clone();
@@ -439,6 +479,14 @@ impl DocumentManager {
         // clear the awareness state when close the document
         let mut lock = document.write().await;
         lock.clean_awareness_local_state();
+      }
+
+      // 这次打开期间写过内容：关闭前同步刷新索引，让紧接着的搜索能命中。
+      if self.dirty_documents.remove(&doc_id).is_some() {
+        match document.read().await.encode_collab() {
+          Ok(encoded_collab) => self.index_encoded_collab(&doc_id, &encoded_collab).await,
+          Err(err) => warn!("[Indexing] failed to encode document {}: {:?}", doc_id, err),
+        }
       }
 
       let clone_doc_id = doc_id;

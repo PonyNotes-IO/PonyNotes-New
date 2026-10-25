@@ -152,6 +152,7 @@ pub(crate) async fn apply_action_handler(
   let actions = params.actions;
   sync_trace!("{} applying action: {:?}", doc_id, actions);
   document.write().await.apply_action(actions)?;
+  manager.mark_document_dirty(&doc_id);
   Ok(())
 }
 
@@ -167,6 +168,7 @@ pub(crate) async fn create_text_handler(
   let mut document = document.write().await;
   sync_trace!("{} creating text: {:?}", doc_id, params.delta);
   document.apply_text_delta(&params.text_id, params.delta);
+  manager.mark_document_dirty(&doc_id);
   Ok(())
 }
 
@@ -184,6 +186,7 @@ pub(crate) async fn apply_text_delta_handler(
   let mut document = document.write().await;
   sync_trace!("{} applying delta: {:?}", doc_id, delta);
   document.apply_text_delta(&text_id, delta);
+  manager.mark_document_dirty(&doc_id);
   Ok(())
 }
 
@@ -222,6 +225,10 @@ pub(crate) async fn redo_handler(
   let redo = document.redo();
   let can_redo = document.can_redo();
   let can_undo = document.can_undo();
+  if redo {
+    drop(document);
+    manager.mark_document_dirty(&doc_id);
+  }
   data_result_ok(DocumentRedoUndoResponsePB {
     can_redo,
     can_undo,
@@ -241,6 +248,10 @@ pub(crate) async fn undo_handler(
   let undo = document.undo();
   let can_redo = document.can_redo();
   let can_undo = document.can_undo();
+  if undo {
+    drop(document);
+    manager.mark_document_dirty(&doc_id);
+  }
   data_result_ok(DocumentRedoUndoResponsePB {
     can_redo,
     can_undo,
