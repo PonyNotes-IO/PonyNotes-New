@@ -134,6 +134,12 @@ frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.arm64
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.orig
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.backup
 
+# Rust FFI 静态库与本机构建备份（每个 80-90MB，超过钩子 1MB 上限）
+# macos/libdart_ffi.a.x86_64 与 ios/libdart_ffi.a.backup.<时间戳> 之前漏挡，
+# 已跟踪的旧文件需要另行 git rm --cached 才会生效
+frontend/appflowy_flutter/packages/appflowy_backend/*/libdart_ffi.a.*
+!frontend/appflowy_flutter/packages/appflowy_backend/*/libdart_ffi.a
+
 # 敏感信息和凭证（安全加固）
 常用/
 **/账号.txt

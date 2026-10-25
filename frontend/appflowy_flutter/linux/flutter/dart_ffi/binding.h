@@ -5,6 +5,8 @@
 
 int64_t init_sdk(int64_t port, char *data);
 
+void dispose_sdk(void);
+
 void async_event(int64_t port, const uint8_t *input, uintptr_t len);
 
 const uint8_t *sync_event(const uint8_t *input, uintptr_t len);
