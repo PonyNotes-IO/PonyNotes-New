@@ -542,7 +542,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   @override
   void deactivate() {
-    // ✅ 关键修复：Widget从树中移除前立即保存数据，防止切换视图时数据丢失
+    // Flutter 在 dispose 前一定会先调用 deactivate，在这里捕获退出快照。
+    // dispose 只释放资源，避免同一次退出重复序列化整份笔记。
     debugPrint('🦋[HandwritingSaber] ===== deactivate: flushing save =====');
     unawaited(_flushSaveForView(widget.view.id));
     super.deactivate();
@@ -5546,11 +5547,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _remoteUpdateListener = null;
     _remoteReloadTimer?.cancel();
     _remoteReloadTimer = null;
-
-    // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
-    // _flushSaveForView 会同步序列化数据，同时异步写入 Collab 和本地文件
-    debugPrint('🦋[HandwritingSaber] ===== dispose: final flush save =====');
-    unawaited(_flushSaveForView(widget.view.id));
 
     // ✅ 清理所有激光笔淡出定时器
     for (final timer in _laserFadeOutTimers.values) {
