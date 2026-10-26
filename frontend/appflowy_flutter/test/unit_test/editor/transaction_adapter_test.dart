@@ -11,6 +11,27 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('TransactionAdapter:', () {
+    test('empty and unchanged transactions succeed without backend writes',
+        () async {
+      final node = paragraphNode(text: 'unchanged');
+      final state =
+          EditorState(document: Document(root: pageNode(children: [node])));
+      addTearDown(state.dispose);
+      final adapter = TransactionAdapter(
+        documentId: 'doc',
+        documentService: DocumentService(),
+      );
+
+      await adapter.apply(state.transaction, state);
+
+      final transaction = state.transaction;
+      transaction.operations.add(
+        UpdateOperation(node.path, {...node.attributes}, {...node.attributes}),
+      );
+      await adapter.apply(transaction, state);
+      expect(node.delta!.toPlainText(), 'unchanged');
+    });
+
     test('backend failures abort text creation, text update and block writes',
         () async {
       for (final failureAt in ['create', 'update', 'blocks']) {

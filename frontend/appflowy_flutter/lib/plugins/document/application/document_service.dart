@@ -139,6 +139,9 @@ class DocumentService {
       documentId: documentId,
       actions: actions,
     );
+    if (payload.actions.isEmpty) {
+      return FlowyResult.success(null);
+    }
     final result = await DocumentEventApplyAction(payload).send();
     return result;
   }
