@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/features/mcp/application/mcp_audit_log.dart';
@@ -22,6 +23,7 @@ class _McpSettingsViewState extends State<McpSettingsView> {
   final _service = McpServerService.instance;
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
+  late final Timer _statusTimer;
   int _selectedTab = 0;
   bool _showSearch = false;
   bool _showToken = false;
@@ -31,7 +33,24 @@ class _McpSettingsViewState extends State<McpSettingsView> {
   final _registry = McpTools(endpoint: '', version: '');
 
   @override
+  void initState() {
+    super.initState();
+    _refreshClientStatuses();
+    _statusTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshClientStatuses(),
+    );
+  }
+
+  void _refreshClientStatuses() {
+    for (final client in _service.clients) {
+      unawaited(_service.refreshClientStatus(client.name));
+    }
+  }
+
+  @override
   void dispose() {
+    _statusTimer.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -248,19 +267,14 @@ class _McpSettingsViewState extends State<McpSettingsView> {
 
   Widget _buildRecentClients(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final agents = <String, McpAuditEntry>{};
-    for (final entry in McpAuditLog.instance.entries) {
-      if (entry.agent.trim().isNotEmpty) {
-        agents.putIfAbsent(entry.agent, () => entry);
-      }
-    }
+    final clients = _service.clients;
     final presets = _agentPresets(_service.token ?? '');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle(context, '最近使用的客户端 (${agents.length})'),
+        _sectionTitle(context, '最近使用的客户端 (${clients.length})'),
         const VSpace(16),
-        if (agents.isEmpty)
+        if (clients.isEmpty)
           Text(
             '还没有使用记录。从下方选择客户端，完成配置后即可开始。',
             style: TextStyle(
@@ -274,48 +288,194 @@ class _McpSettingsViewState extends State<McpSettingsView> {
             spacing: 20,
             runSpacing: 16,
             children: [
-              for (final agent in agents.entries.take(8))
+              for (final client in clients.take(8))
                 SizedBox(
                   width: 88,
-                  child: Column(
-                    children: [
-                      _ClientLogo(
-                        asset: presets
-                            .where(
-                              (p) => agent.key.toLowerCase().contains(p.id),
-                            )
-                            .firstOrNull
-                            ?.asset,
-                        size: 44,
+                  child: TextButton(
+                    onPressed: () => _openClientDetails(client.name),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      const VSpace(8),
-                      Tooltip(
-                        message: agent.key,
-                        child: Text(
-                          agent.key,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.textColorScheme.primary,
+                    ),
+                    child: Column(
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _ClientLogo(
+                              asset: presets
+                                  .where(
+                                    (p) => client.name
+                                        .toLowerCase()
+                                        .contains(p.id),
+                                  )
+                                  .firstOrNull
+                                  ?.asset,
+                              size: 44,
+                            ),
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Semantics(
+                                label: _service.isClientOnline(client.name)
+                                    ? '在线'
+                                    : '离线',
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _service.isClientOnline(client.name)
+                                        ? theme.textColorScheme.success
+                                        : Colors.grey,
+                                    border: Border.all(
+                                      color:
+                                          theme.backgroundColorScheme.primary,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const VSpace(8),
+                        Tooltip(
+                          message: client.name,
+                          child: Text(
+                            client.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.textColorScheme.primary,
+                            ),
                           ),
                         ),
-                      ),
-                      const VSpace(3),
-                      Text(
-                        '上次 ${_formatTime(agent.value.at)}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: theme.textColorScheme.tertiary,
+                        const VSpace(3),
+                        Text(
+                          client.lastUsedAt == null
+                              ? '尚未使用'
+                              : '上次 ${_formatTime(client.lastUsedAt!.toLocal())}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: theme.textColorScheme.tertiary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
             ],
           ),
       ],
     );
+  }
+
+  Future<void> _openClientDetails(String name) async {
+    final theme = AppFlowyTheme.of(context);
+    final initialCheck = _service.refreshClientStatus(name);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => FutureBuilder<void>(
+        future: initialCheck,
+        builder: (context, snapshot) => ListenableBuilder(
+          listenable: _service,
+          builder: (context, _) {
+            final client = _service.client(name);
+            final checking = snapshot.connectionState != ConnectionState.done;
+            final online = _service.isClientOnline(name);
+            final stateless = _service.isStatelessClient(name);
+            return AlertDialog(
+              backgroundColor: theme.backgroundColorScheme.primary,
+              scrollable: true,
+              title: Text(name, maxLines: 3, overflow: TextOverflow.ellipsis),
+              titleTextStyle: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: theme.textColorScheme.primary,
+              ),
+              contentTextStyle: TextStyle(
+                fontSize: 13,
+                color: theme.textColorScheme.primary,
+              ),
+              content: SizedBox(
+                width: 360,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('连接状态'),
+                    const VSpace(8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.circle,
+                          size: 8,
+                          color: online && !checking
+                              ? theme.textColorScheme.success
+                              : theme.textColorScheme.tertiary,
+                        ),
+                        const HSpace(8),
+                        Text(
+                          checking
+                              ? '检测中…'
+                              : online
+                                  ? stateless
+                                      ? '近期活跃'
+                                      : '在线'
+                                  : stateless
+                                      ? '未活跃'
+                                      : '离线',
+                        ),
+                      ],
+                    ),
+                    const VSpace(20),
+                    const Text('首次连接时间'),
+                    const VSpace(8),
+                    SelectableText(
+                      _formatConnectionTime(client?.firstConnectedAt) ??
+                          '未知（历史记录未保存）',
+                    ),
+                    const VSpace(20),
+                    const Text('上次使用时间'),
+                    const VSpace(8),
+                    SelectableText(
+                      _formatConnectionTime(client?.lastUsedAt) ?? '尚未使用',
+                    ),
+                    const VSpace(20),
+                    Text(
+                      stateless
+                          ? '客户端未保持长连接，按最近 60 秒的请求显示活跃状态，每 15 秒更新。'
+                          : '在线状态每 15 秒更新。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.textColorScheme.secondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('关闭'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  String? _formatConnectionTime(DateTime? at) {
+    if (at == null) return null;
+    final local = at.toLocal();
+    return '${local.year}/${_formatTime(local)}:'
+        '${local.second.toString().padLeft(2, '0')}';
   }
 
   Widget _sectionTitle(BuildContext context, String text) => Text(

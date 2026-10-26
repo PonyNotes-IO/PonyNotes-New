@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:appflowy/features/mcp/application/mcp_audit_log.dart';
 import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/presentation/mcp_settings_view.dart';
@@ -8,8 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
+  setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    await McpAuditLog.instance.clear();
+    await McpServerService.instance.restore();
   });
 
   Future<void> pumpSettings(
@@ -42,6 +47,60 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('recent client opens live details and preserves unknown history',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'mcp_clients': jsonEncode([
+        McpClientConnection(
+          name: 'status-test-client',
+          firstConnectedAt: DateTime(2026, 10, 23, 14, 18, 30),
+          lastUsedAt: DateTime(2026, 10, 26, 10, 20, 15),
+        ).toJson(),
+      ]),
+      'mcp_audit_log': jsonEncode([
+        McpAuditEntry(
+          at: DateTime(2026, 10, 22),
+          tool: 'get_context',
+          agent: 'legacy-client',
+          target: '',
+          isError: false,
+          durationMs: 1,
+        ).toJson(),
+      ]),
+    });
+    await McpServerService.instance.restore();
+    await pumpSettings(tester, width: 320, dark: true, textScale: 1.3);
+    await tester.tap(find.text('status-test-client'));
+    await tester.pumpAndSettle();
+    expect(find.text('连接状态'), findsOneWidget);
+    expect(find.text('离线'), findsOneWidget);
+    expect(find.text('首次连接时间'), findsOneWidget);
+    expect(find.text('2026/10/23 14:18:30'), findsOneWidget);
+    expect(find.text('上次使用时间'), findsOneWidget);
+    expect(find.text('2026/10/26 10:20:15'), findsOneWidget);
+    McpAuditLog.instance.record(
+      McpAuditEntry(
+        at: DateTime(2026, 10, 26, 11, 30, 45),
+        tool: 'get_context',
+        agent: 'status-test-client',
+        target: '',
+        isError: false,
+        durationMs: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2026/10/26 11:30:45'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, '关闭'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('legacy-client'));
+    await tester.pumpAndSettle();
+    expect(find.text('未知（历史记录未保存）'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.widgetWithText(TextButton, '关闭'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('client discovery, search, setup dialog and address copying',
       (tester) async {
@@ -112,6 +171,7 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('narrow dark layout wraps clients and keeps permissions usable',
@@ -158,5 +218,6 @@ void main() {
     await McpPermissions.instance.allowAll();
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 }
