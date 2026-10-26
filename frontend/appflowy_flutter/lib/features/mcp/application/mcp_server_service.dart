@@ -16,12 +16,40 @@ import 'package:flutter/foundation.dart';
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class McpClientConnection {
+  const McpClientConnection({
+    required this.name,
+    this.firstConnectedAt,
+    this.lastUsedAt,
+  });
+
+  factory McpClientConnection.fromJson(Map<String, dynamic> json) =>
+      McpClientConnection(
+        name: json['name'] as String,
+        firstConnectedAt:
+            DateTime.tryParse(json['firstConnectedAt'] as String? ?? ''),
+        lastUsedAt: DateTime.tryParse(json['lastUsedAt'] as String? ?? ''),
+      );
+
+  final String name;
+  final DateTime? firstConnectedAt;
+  final DateTime? lastUsedAt;
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'firstConnectedAt': firstConnectedAt?.toIso8601String(),
+        'lastUsedAt': lastUsedAt?.toIso8601String(),
+      };
+}
+
 /// 本地 MCP Server：生命周期、Bearer Token 鉴权与工具注册。
 ///
 /// 只绑定回环地址；Token 只保存 SHA-256 摘要，并绑定生成时的账号，
 /// 切换账号或重置 Token 后旧凭据失效。
 class McpServerService extends ChangeNotifier {
-  McpServerService._();
+  McpServerService._() {
+    McpAuditLog.instance.addListener(_updateClientUsage);
+  }
 
   static final McpServerService instance = McpServerService._();
 
@@ -34,14 +62,18 @@ class McpServerService extends ChangeNotifier {
   static const String _prefsTokenPlain = 'mcp_token_plain';
   static const String _prefsTokenUserId = 'mcp_token_user_id';
   static const String _prefsTokenBackend = 'mcp_token_backend';
+  static const String _prefsClients = 'mcp_clients';
   static const int _maxRequestBytes = 1024 * 1024;
 
   StreamableMcpServer? _server;
   String? _tokenHash;
   String? _tokenPlain;
 
-  /// 最近一次鉴权请求的 User-Agent，用来在审计日志里标识调用方。
-  String? _lastAgentUserAgent;
+  // ponytail: 同名客户端合并展示；需要区分设备时再增加客户端实例标识。
+  final _clients = <String, McpClientConnection>{};
+  final _sessions = <McpServer, String>{};
+  final _onlineSessions = <McpServer>{};
+  final _statelessLastSeen = <String, DateTime>{};
   String? _tokenUserId;
   String? _tokenBackend;
   String? _lastError;
@@ -58,6 +90,51 @@ class McpServerService extends ChangeNotifier {
   String? get lastError => _lastError;
   String get endpoint => 'http://127.0.0.1:$port$path';
 
+  List<McpClientConnection> get clients {
+    final clients = _clients.values.toList();
+    clients.sort(
+      (a, b) => (b.lastUsedAt ?? b.firstConnectedAt ?? DateTime(0))
+          .compareTo(a.lastUsedAt ?? a.firstConnectedAt ?? DateTime(0)),
+    );
+    return clients;
+  }
+
+  McpClientConnection? client(String name) => _clients[name];
+
+  bool isClientOnline(String name) =>
+      _onlineSessions.any((server) => _sessions[server] == name) ||
+      (_statelessLastSeen[name] != null &&
+          DateTime.now().difference(_statelessLastSeen[name]!) <
+              const Duration(minutes: 1));
+
+  bool isStatelessClient(String name) =>
+      _statelessLastSeen.containsKey(name) && !_sessions.containsValue(name);
+
+  /// MCP 会话可能在客户端意外退出后仍存在，使用协议 ping 检查存活。
+  Future<void> refreshClientStatus(String name) async {
+    final sessions = _sessions.entries.where((e) => e.value == name).toList();
+    await Future.wait(
+      sessions.map((entry) async {
+        var online = false;
+        try {
+          await entry.key.server.ping(
+            const RequestOptions(timeout: Duration(seconds: 3)),
+          );
+          online = true;
+        } catch (_) {
+          // 保留会话，允许临时超时的客户端在下次检测时恢复。
+        }
+        if (_sessions[entry.key] != name) return;
+        if (online) {
+          _onlineSessions.add(entry.key);
+        } else {
+          _onlineSessions.remove(entry.key);
+        }
+      }),
+    );
+    notifyListeners();
+  }
+
   /// 启动时恢复上次的开关状态与 Token。
   Future<void> restore() async {
     final prefs = await SharedPreferences.getInstance();
@@ -66,7 +143,20 @@ class McpServerService extends ChangeNotifier {
     _tokenUserId = prefs.getString(_prefsTokenUserId);
     _tokenBackend = prefs.getString(_prefsTokenBackend);
     await McpPermissions.instance.load();
+    _clients.clear();
+    try {
+      final stored = jsonDecode(prefs.getString(_prefsClients) ?? '[]') as List;
+      for (final json in stored) {
+        final client =
+            McpClientConnection.fromJson(json as Map<String, dynamic>);
+        _clients[client.name] = client;
+      }
+    } catch (e) {
+      Log.warn('[MCP] client history load failed: $e');
+    }
     await McpAuditLog.instance.load();
+    _updateClientUsage();
+    notifyListeners();
     if (prefs.getBool(_prefsEnabled) != true) return;
     if (_tokenHash == null) return;
     await start();
@@ -108,6 +198,10 @@ class McpServerService extends ChangeNotifier {
   Future<void> stop() async {
     final server = _server;
     _server = null;
+    _sessions.clear();
+    _onlineSessions.clear();
+    _statelessLastSeen.clear();
+    notifyListeners();
     await server?.stop();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefsEnabled, false);
@@ -119,6 +213,9 @@ class McpServerService extends ChangeNotifier {
   Future<void> shutdown() async {
     final server = _server;
     _server = null;
+    _sessions.clear();
+    _onlineSessions.clear();
+    _statelessLastSeen.clear();
     await server?.stop();
     notifyListeners();
   }
@@ -188,10 +285,6 @@ class McpServerService extends ChangeNotifier {
       );
       return false;
     }
-    final userAgent = request.headers.value(HttpHeaders.userAgentHeader);
-    if (userAgent != null && userAgent.trim().isNotEmpty) {
-      _lastAgentUserAgent = userAgent.trim();
-    }
     final header = request.headers.value(HttpHeaders.authorizationHeader);
     final expected = _tokenHash;
     if (header == null || expected == null) return false;
@@ -252,21 +345,97 @@ class McpServerService extends ChangeNotifier {
   McpServer buildServer() => _createMcpServer();
 
   McpServer _createMcpServer() {
-    final server = McpServer(
+    String? requestAgent;
+    final server = _McpTrackedServer(
       const Implementation(name: 'ponynotes-mcp', version: version),
+      onRequest: (request) {
+        final protocol = request.meta?[McpMetaKey.protocolVersion];
+        if (protocol is! String || !isStatelessProtocolVersion(protocol)) {
+          return;
+        }
+        final info = request.meta?[McpMetaKey.clientInfo] as Map?;
+        final name = (info?['name'] as String?)?.trim() ?? '';
+        requestAgent = name.isEmpty ? '未识别客户端' : name;
+        final now = DateTime.now();
+        _statelessLastSeen[requestAgent!] = now;
+        final isNew = !_clients.containsKey(requestAgent);
+        _clients.putIfAbsent(
+          requestAgent!,
+          () => McpClientConnection(name: requestAgent!, firstConnectedAt: now),
+        );
+        notifyListeners();
+        if (isNew) unawaited(_persistClients());
+      },
       options: const McpServerOptions(
         capabilities: ServerCapabilities(
           tools: ServerCapabilitiesTools(),
         ),
       ),
     );
+    String agentName() {
+      final name =
+          server.server.getClientVersion()?.name.trim() ?? requestAgent ?? '';
+      return name.isEmpty ? '未识别客户端' : name;
+    }
+
+    server.server.oninitialized = () {
+      final name = agentName();
+      _sessions[server] = name;
+      _onlineSessions.add(server);
+      _clients.putIfAbsent(
+        name,
+        () => McpClientConnection(name: name, firstConnectedAt: DateTime.now()),
+      );
+      notifyListeners();
+      unawaited(_persistClients());
+    };
+    server.server.onclose = () {
+      _sessions.remove(server);
+      _onlineSessions.remove(server);
+      notifyListeners();
+    };
     McpTools(
       endpoint: endpoint,
       version: version,
       isAgentChannel: true,
-      agentName: () => _lastAgentUserAgent ?? '',
+      agentName: agentName,
     ).registerAll(server);
     return server;
+  }
+
+  void _updateClientUsage() {
+    var changed = false;
+    for (final entry in McpAuditLog.instance.entries) {
+      final name = entry.agent.trim();
+      if (name.isEmpty) continue;
+      final previous = _clients[name];
+      if (previous?.lastUsedAt != null &&
+          !entry.at.isAfter(previous!.lastUsedAt!)) {
+        continue;
+      }
+      // 历史日志无法还原首次握手时间，未知值保留为空。
+      _clients[name] = McpClientConnection(
+        name: name,
+        firstConnectedAt: previous?.firstConnectedAt,
+        lastUsedAt: entry.at,
+      );
+      changed = true;
+    }
+    if (!changed) return;
+    notifyListeners();
+    unawaited(_persistClients());
+  }
+
+  Future<void> _persistClients() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _prefsClients,
+        jsonEncode(_clients.values.map((client) => client.toJson()).toList()),
+      );
+    } catch (e) {
+      Log.warn('[MCP] client history save failed: $e');
+    }
   }
 
   Future<UserProfilePB?> _currentProfile() async {
@@ -286,5 +455,31 @@ class McpServerService extends ChangeNotifier {
       diff |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
     }
     return diff == 0;
+  }
+}
+
+/// 保留 SDK 的传输和校验，仅观察请求以记录无会话客户端的首次访问。
+class _McpTrackedServer extends McpServer {
+  _McpTrackedServer(super.serverInfo, {super.options, required this.onRequest});
+
+  final void Function(JsonRpcRequest) onRequest;
+
+  @override
+  Future<void> connect(Transport transport) {
+    // SDK 在启动传输前同步安装消息回调，保留该回调继续处理协议。
+    final connected = super.connect(transport);
+    final handleMessage = transport.onmessage;
+    transport.onmessage = (message) {
+      try {
+        if (message is JsonRpcRequest &&
+            server.validateIncomingRequest(message) == null) {
+          onRequest(message);
+        }
+      } catch (e) {
+        Log.warn('[MCP] client tracking failed: $e');
+      }
+      handleMessage?.call(message);
+    };
+    return connected;
   }
 }

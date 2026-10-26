@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:appflowy/features/mcp/application/mcp_audit_log.dart';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -25,6 +27,142 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('client history survives reconnects; ping detects silent disconnects',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final service = McpServerService.instance;
+    await McpAuditLog.instance.clear();
+    await service.restore();
+    addTearDown(() async {
+      await McpPermissions.instance.allowAll();
+      await McpAuditLog.instance.clear();
+    });
+
+    Future<(McpServer, McpClient)> connect(
+      String name, {
+      bool Function()? responding,
+    }) async {
+      final toServer = StreamController<List<int>>();
+      final toClient = StreamController<List<int>>();
+      final server = service.buildServer();
+      final client = McpClient(
+        Implementation(name: name, version: 'test'),
+        options: const McpClientOptions(protocol: McpProtocol.legacy),
+      );
+      addTearDown(() async {
+        await client.close();
+        await server.close();
+        await toServer.close();
+        await toClient.close();
+      });
+      await server.connect(
+        IOStreamTransport(
+          stream: toServer.stream.where((_) => responding?.call() ?? true),
+          sink: toClient.sink,
+        ),
+      );
+      await client.connect(
+        IOStreamTransport(stream: toClient.stream, sink: toServer.sink),
+      );
+      await client.listTools();
+      return (server, client);
+    }
+
+    final first = await connect('client-a');
+    final firstConnected = service.client('client-a')!.firstConnectedAt;
+    expect(firstConnected, isNotNull);
+    expect(service.client('client-a')!.lastUsedAt, isNull);
+    var responding = true;
+    final second = await connect('client-a', responding: () => responding);
+    final other = await connect('client-b');
+    expect(service.clients, hasLength(2));
+    await service.refreshClientStatus('client-a');
+    expect(service.isClientOnline('client-a'), isTrue);
+
+    // Permission rejection exercises a real tool call without the native backend.
+    await McpPermissions.instance.setAllowed('get_context', false);
+    await first.$2.callTool(const CallToolRequest(name: 'get_context'));
+    final lastUsed = service.client('client-a')!.lastUsedAt;
+    expect(lastUsed, isNotNull);
+    expect(service.client('client-a')!.firstConnectedAt, firstConnected);
+    expect(McpAuditLog.instance.entries.first.agent, 'client-a');
+    expect(service.client('client-b')!.lastUsedAt, isNull);
+
+    await first.$1.close();
+    expect(service.isClientOnline('client-a'), isTrue);
+    responding = false;
+    await service.refreshClientStatus('client-a');
+    expect(service.isClientOnline('client-a'), isFalse);
+    expect(service.isClientOnline('client-b'), isTrue);
+    responding = true;
+    await service.refreshClientStatus('client-a');
+    expect(service.isClientOnline('client-a'), isTrue);
+    expect(service.client('client-a')!.lastUsedAt, lastUsed);
+
+    await second.$1.close();
+    await other.$1.close();
+    expect(service.isClientOnline('client-a'), isFalse);
+    await McpAuditLog.instance.clear();
+    await service.restore();
+    expect(service.client('client-a')!.firstConnectedAt, firstConnected);
+    expect(service.client('client-a')!.lastUsedAt, lastUsed);
+    expect(service.isClientOnline('client-a'), isFalse);
+  });
+
+  test('HTTP tracks both session and stateless clients by protocol identity',
+      () async {
+    final httpOverrides = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = httpOverrides);
+    SharedPreferences.setMockInitialValues({});
+    final service = McpServerService.instance;
+    await McpAuditLog.instance.clear();
+    await service.restore();
+    final http = StreamableMcpServer(
+      host: '127.0.0.1',
+      port: 0,
+      serverFactory: (_) => service.buildServer(),
+    );
+    await http.start();
+    addTearDown(() async {
+      await http.stop();
+      await service.shutdown();
+      await McpAuditLog.instance.clear();
+    });
+
+    for (final protocol in [McpProtocol.legacy, McpProtocol.stable]) {
+      final name = 'http-${protocol.name}';
+      final client = McpClient(
+        Implementation(name: name, version: 'test'),
+        options: McpClientOptions(protocol: protocol),
+      );
+      addTearDown(client.close);
+      await client.connect(
+        StreamableHttpClientTransport(
+          Uri.parse('http://127.0.0.1:${http.boundPort}/mcp'),
+        ),
+      );
+      await client.listTools();
+      final firstConnected = service.client(name)!.firstConnectedAt;
+      expect(firstConnected, isNotNull);
+      expect(service.client(name)!.lastUsedAt, isNull);
+      await service.refreshClientStatus(name);
+      expect(service.isClientOnline(name), isTrue);
+      expect(service.isStatelessClient(name), protocol == McpProtocol.stable);
+      // Empty IDs return before accessing the native backend.
+      await client.callTool(
+        const CallToolRequest(
+          name: 'get_page',
+          arguments: {'workspace_id': '', 'page_id': ''},
+        ),
+      );
+      expect(service.client(name)!.lastUsedAt, isNotNull);
+      expect(service.client(name)!.firstConnectedAt, firstConnected);
+      expect(McpAuditLog.instance.entries.first.agent, name);
+      await client.close();
+    }
+  });
 
   test('revoking a tool blocks calls on an existing MCP session', () async {
     SharedPreferences.setMockInitialValues({});
