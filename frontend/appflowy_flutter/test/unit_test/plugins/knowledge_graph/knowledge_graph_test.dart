@@ -236,6 +236,24 @@ void main() {
     expect(result.edges, isEmpty);
   });
 
+  test('repulsion separates neighbors and overlaps with equal opposite forces',
+      () {
+    final close = knowledgeGraphRepulsion([Offset.zero, const Offset(30, 0)]);
+    final distant = knowledgeGraphRepulsion([Offset.zero, const Offset(90, 0)]);
+    expect(close.first.dx, lessThan(distant.first.dx));
+    expect(distant.first.dx, lessThan(0));
+    expect(close.first + close.last, Offset.zero);
+    final overlap = knowledgeGraphRepulsion([Offset.zero, Offset.zero]);
+    expect(overlap.first.distance.isFinite, isTrue);
+    expect(overlap.first.distance, greaterThan(0));
+    expect(overlap.first + overlap.last, Offset.zero);
+    expect(
+      knowledgeGraphRepulsion([Offset.zero, const Offset(180, 0)]),
+      [Offset.zero, Offset.zero],
+    );
+    expect(knowledgeGraphRepulsion([]), isEmpty);
+  });
+
   test(
       'layout is deterministic and finite for a large workspace and an empty graph',
       () {

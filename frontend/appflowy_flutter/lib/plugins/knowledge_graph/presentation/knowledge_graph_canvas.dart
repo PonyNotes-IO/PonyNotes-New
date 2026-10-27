@@ -87,7 +87,9 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
       );
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) fit();
+      if (!mounted) return;
+      fit();
+      if (!MediaQuery.disableAnimationsOf(context)) _startSprings();
     });
   }
 
@@ -109,14 +111,17 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
     final steps = math.max(1, (duration * 120).ceil());
     final dt = duration / steps;
     final next = Map.of(_positions);
+    final ids = next.keys.toList();
     var maxForce = 0.0;
     var maxSpeed = 0.0;
     for (var step = 0; step < steps; step++) {
+      final repulsion = knowledgeGraphRepulsion(next.values.toList());
       final forces = {
-        for (final id in next.keys)
-          id: (_anchors[id]! - next[id]!) * (id == _dragged ? 180 : 42),
+        for (var i = 0; i < ids.length; i++)
+          ids[i]: (_anchors[ids[i]]! - next[ids[i]]!) *
+                  (ids[i] == _dragged ? 180 : 42) +
+              repulsion[i] * 200,
       };
-      // ponytail: springs along existing links; add local repulsion if overlaps become a problem.
       for (final entry in _restLengths.entries) {
         final edge = entry.key;
         final delta = next[edge.target]! - next[edge.source]!;

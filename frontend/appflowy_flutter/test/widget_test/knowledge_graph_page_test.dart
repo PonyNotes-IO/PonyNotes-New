@@ -93,7 +93,7 @@ void main() {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 10)),
       );
-      await tester.pump();
+      await tester.pumpAndSettle(const Duration(milliseconds: 16));
       final paints = tester.widgetList<CustomPaint>(
         find.descendant(
           of: find.byType(KnowledgeGraphCanvas),
@@ -127,7 +127,7 @@ void main() {
   });
 
   testWidgets(
-      'node dragging pulls linked nodes, settles, and preserves viewport and click behavior',
+      'node dragging attracts links, repels unlinked neighbors, and settles without panning or opening',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(1100, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -192,7 +192,6 @@ void main() {
     final held = positions();
     expect((held['a']! - initial['a']!).distance, greaterThan(10));
     expect((held['b']! - initial['b']!).distance, greaterThan(0.1));
-    expect(held['isolated'], initial['isolated']);
     expect(controller.value, viewport);
     expect(opened, isNull);
     await gesture.up();
@@ -226,25 +225,32 @@ void main() {
     );
     expect(opened, isNull);
     final isolatedStart = positions()['isolated']!;
+    final neighborStart = positions()['b']!;
+    final isolatedTarget = neighborStart + const Offset(12, 0);
     final isolatedDrag = await tester.startGesture(
       global(isolatedStart),
       kind: ui.PointerDeviceKind.mouse,
     );
     await tester.pump();
-    await isolatedDrag.moveBy(const Offset(70, -60));
-    for (var frame = 0; frame < 6; frame++) {
+    await isolatedDrag.moveTo(global(isolatedTarget));
+    for (var frame = 0; frame < 30; frame++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
-    final isolatedTarget = isolatedStart +
-        const Offset(70, -60) / controller.value.getMaxScaleOnAxis();
     expect((positions()['isolated']! - isolatedStart).distance, greaterThan(1));
+    expect(positions()['b']!.dx, lessThan(neighborStart.dx - 1));
     expect(
       (positions()['isolated']! - isolatedTarget).distance,
       greaterThan(1),
     );
     await isolatedDrag.up();
     await tester.pumpAndSettle(const Duration(milliseconds: 16));
-    expect((positions()['isolated']! - isolatedTarget).distance, lessThan(0.1));
+    final separated = positions();
+    expect(
+      (separated['isolated']! - separated['b']!).distance,
+      greaterThan(20),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(positions(), separated);
     expect(controller.value, viewport);
     expect(opened, isNull);
     expect(tester.takeException(), isNull);
