@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_graph_button.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
@@ -69,6 +70,8 @@ class SidebarSpace extends StatelessWidget {
             // calendar button
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarCalendarButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarKnowledgeGraphButton(),
             // favorite button
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),

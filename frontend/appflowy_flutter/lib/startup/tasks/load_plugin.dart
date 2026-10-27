@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/ai_chat/chat.dart';
+import 'package:appflowy/plugins/knowledge_graph/knowledge_graph_plugin.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
 import 'package:appflowy/plugins/database/board/board.dart';
 import 'package:appflowy/plugins/database/grid/grid.dart';
@@ -29,6 +30,10 @@ class PluginLoadTask extends LaunchTask {
     await super.initialize(context);
 
     registerPlugin(builder: BlankPluginBuilder(), config: BlankPluginConfig());
+    registerPlugin(
+      builder: KnowledgeGraphPluginBuilder(),
+      config: KnowledgeGraphPluginConfig(),
+    );
     registerPlugin(builder: TrashPluginBuilder(), config: TrashPluginConfig());
     registerPlugin(builder: DocumentPluginBuilder());
     registerPlugin(builder: GridPluginBuilder(), config: GridPluginConfig());
