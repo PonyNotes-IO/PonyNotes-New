@@ -1,4 +1,28 @@
 {
+  "knowledgeGraph": {
+    "title": "关系图谱",
+    "search": "搜索文档",
+    "filters": "筛选与显示",
+    "refresh": "刷新图谱",
+    "fit": "适应画布",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "labels": "显示名称",
+    "hierarchy": "显示父子页面关系",
+    "orphans": "显示独立文档",
+    "empty": "工作区内还没有文档",
+    "emptyHint": "创建文档后，即可在这里查看它们的关系。",
+    "noResults": "没有符合筛选条件的文档",
+    "reset": "重置筛选",
+    "error": "无法加载图谱，请重试",
+    "retry": "重试",
+    "indexing": "正在读取文档关系",
+    "partial": "部分文档内容暂不可用，刷新可重试",
+    "hint": "拖动节点调整布局 · 空白处拖动平移 · 滚轮缩放 · 点击打开文档",
+    "nodes": "篇文档",
+    "edges": "条关系",
+    "untitled": "未命名"
+  },
   "handwritingStorage": {
     "exportMissingImage": "图片资源不可用，请联网后重试导出",
     "exportMissingPdf": "PDF 原件不可用，请联网后重试导出"
