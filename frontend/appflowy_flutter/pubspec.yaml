@@ -270,10 +270,13 @@ dependency_overrides:
   #    _ImmediatePanGestureRecognizer），去掉 36pt 的 pan 阈值和 500ms 长按抢占；
   #    抓取句柄时立即收起浮动菜单；拖到视口边缘时选区随自动滚动继续延伸。
   #    （56e655e8 + 7a3a723c + a0cafa84 + 8b3fec70 + 02a83896）
+  # 4. 输入法组合（composing）期间不再吞掉退格/删除键：手写输入法的“返回/退格”
+  #    是按键事件而不是编辑值更新，被吞后输入法等不到文档更新，候选区内容删不掉
+  #    （8cfa322f，分支 fix/ime-delete-while-composing）。
   appflowy_editor:
     git:
       url: https://github.com/PonyNotes-IO/appflowy-editor.git
-      ref: "8b3fec70353b6d31e3187ced6eae3222eda99388"
+      ref: "8cfa322f437be050f82c1ed2a92707504641cfe1"
 
   appflowy_editor_plugins:
     git:

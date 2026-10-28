@@ -195,6 +195,15 @@ class _MobileToolbarState extends State<_MobileToolbar>
 
   bool closeKeyboardInitiative = false;
 
+  /// 手写输入法（部分第三方输入法也一样）在按键、切换输入模式时会瞬时上报一帧 0
+  /// 高度。这里是唯一会把 selection 置空的地方，而 selection 一清，键盘服务就会
+  /// 关闭输入法连接（TextInput.clearClient）；输入法面板本身还开着，之后它的
+  /// 退格/删除按钮发什么都不会落到文档里，必须点回编辑区才能恢复。所以 0 高度
+  /// 要延迟确认，确认仍为 0 才当作“用户真的收起了键盘”。
+  Timer? _keyboardHiddenTimer;
+
+  static const _keyboardHiddenConfirmDelay = Duration(milliseconds: 300);
+
   final ScrollOffsetListener offsetListener = ScrollOffsetListener.create();
   late final StreamSubscription offsetSubscription;
   ValueNotifier<double> toolbarOffset = ValueNotifier(0.0);
@@ -227,6 +236,7 @@ class _MobileToolbarState extends State<_MobileToolbar>
   void dispose() {
     showMenuNotifier.dispose();
     cachedKeyboardHeight.dispose();
+    _keyboardHiddenTimer?.cancel();
     KeyboardHeightObserver.instance.removeListener(_onKeyboardHeightChanged);
     offsetSubscription.cancel();
     toolbarOffset.dispose();
@@ -280,12 +290,21 @@ class _MobileToolbarState extends State<_MobileToolbar>
 
   void _onKeyboardHeightChanged(double height) {
     // if the keyboard is not closed initiative, we need to close the menu at same time
-    if (!closeKeyboardInitiative &&
+    if (height > 0) {
+      _keyboardHiddenTimer?.cancel();
+      _keyboardHiddenTimer = null;
+    } else if (!closeKeyboardInitiative &&
         cachedKeyboardHeight.value != 0 &&
-        height == 0) {
-      if (!widget.editorState.isDisposed) {
+        _keyboardHiddenTimer == null) {
+      _keyboardHiddenTimer = Timer(_keyboardHiddenConfirmDelay, () {
+        _keyboardHiddenTimer = null;
+        if (!mounted ||
+            widget.editorState.isDisposed ||
+            KeyboardHeightObserver.currentKeyboardHeight != 0) {
+          return;
+        }
         widget.editorState.selection = null;
-      }
+      });
     }
 
     // if the menu is shown and the height is not 0, we need to close the menu
