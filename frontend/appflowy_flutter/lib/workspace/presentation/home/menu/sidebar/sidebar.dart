@@ -42,6 +42,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sideba
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/number_red_dot.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/shared/version_checker/version_checker.dart';
@@ -929,14 +930,15 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         '[Workspace] Invitation target not loaded, refreshing workspaces',
       );
       workspaceBloc.add(
-        UserWorkspaceEvent.fetchWorkspaces(initialWorkspaceId: workspaceId),
+        // 仅刷新列表，由当前通知的重试回调打开，避免旧请求再次切换工作区。
+        UserWorkspaceEvent.fetchWorkspaces(),
       );
 
       Future.delayed(
         Duration(milliseconds: 250 + _invitationWorkspaceRetryCount * 250),
         () {
           if (!mounted ||
-              openWorkspaceNotifier.value?.workspaceId != workspaceId) {
+              !identical(openWorkspaceNotifier.value, value)) {
             return;
           }
           if (_invitationWorkspaceRetryCount >=
@@ -945,6 +947,10 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             _invitationWorkspaceRetryCount = 0;
             Log.error(
               '[Workspace] Failed to open invitation workspace: $workspaceId',
+            );
+            showToastNotification(
+              message: LocaleKeys.workspace_notFoundError.tr(),
+              type: ToastificationType.error,
             );
             return;
           }

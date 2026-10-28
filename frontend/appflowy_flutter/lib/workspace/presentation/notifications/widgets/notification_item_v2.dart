@@ -8,6 +8,7 @@ import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/workspace_notifier.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_tab_bar.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
@@ -93,12 +94,23 @@ class NotificationItemV2 extends StatelessWidget {
                         reminder.meta['cloud_notification_type']?.isNotEmpty ??
                             false;
                     if (view == null) {
-                      if (isGlobalNotification && !reminder.isRead) {
-                        reminderBloc.add(
-                          ReminderEvent.update(
-                            ReminderUpdate(id: reminder.id, isRead: true),
-                          ),
-                        );
+                      if (isGlobalNotification) {
+                        if (!reminder.isRead) {
+                          reminderBloc.add(
+                            ReminderEvent.update(
+                              ReminderUpdate(id: reminder.id, isRead: true),
+                            ),
+                          );
+                        }
+                        // 云通知的 objectId 是来源工作区 ID，不是文档 ID。
+                        if (reminder.objectId.isNotEmpty) {
+                          homeSetting.add(
+                            HomeSettingEvent.collapseNotificationPanel(),
+                          );
+                          openWorkspaceNotifier.value = WorkspaceNotifyValue(
+                            workspaceId: reminder.objectId,
+                          );
+                        }
                       }
                       return;
                     }
