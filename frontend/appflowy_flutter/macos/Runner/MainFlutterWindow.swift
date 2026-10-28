@@ -54,12 +54,6 @@ class MainFlutterWindow: NSWindow {
     self.layoutTrafficLightButton(titlebarView: titlebarView, button: closeButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 12)
     self.layoutTrafficLightButton(titlebarView: titlebarView, button: minButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 32)
     self.layoutTrafficLightButton(titlebarView: titlebarView, button: zoomButton, offsetTop: CGFloat(kTrafficLightOffetTop), offsetLeft: 52)
-
-    let customToolbar = NSTitlebarAccessoryViewController()
-    let newView = NSView()
-    newView.frame = NSRect(origin: CGPoint(), size: CGSize(width: 0, height: 40))  // only the height is cared
-    customToolbar.view = newView
-    self.addTitlebarAccessoryViewController(customToolbar)
   }
 
   override func awakeFromNib() {
@@ -73,7 +67,8 @@ class MainFlutterWindow: NSWindow {
     self.titlebarAppearsTransparent = true
     self.titleVisibility = .hidden
     self.styleMask.insert(StyleMask.fullSizeContentView)
-    self.isMovableByWindowBackground = true
+    // Flutter controls must handle drags without also moving the window.
+    self.isMovableByWindowBackground = false
 
     // For the macOS version 15 or higher, set it to true to enable the window tiling
     if #available(macOS 15.0, *) {
