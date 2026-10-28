@@ -621,6 +621,8 @@ class _MobileChatInputState extends State<MobileChatInput> {
     }
 
     textController.clear();
+    // 发送后收起输入法，避免键盘继续挡住刚发出的消息
+    focusNode.unfocus();
     onSubmitText(trimmedText);
   }
 
