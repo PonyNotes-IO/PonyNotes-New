@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/util/keyboard_inset.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -37,7 +38,8 @@ class ContinueWithMagicLinkOrPasscodePage extends StatefulWidget {
 }
 
 class _ContinueWithMagicLinkOrPasscodePageState
-    extends State<ContinueWithMagicLinkOrPasscodePage> {
+    extends State<ContinueWithMagicLinkOrPasscodePage>
+    with WidgetsBindingObserver {
   final List<TextEditingController> _codeControllers = List.generate(
     6,
     (index) => TextEditingController(),
@@ -46,6 +48,9 @@ class _ContinueWithMagicLinkOrPasscodePageState
     6,
     (index) => FocusNode(),
   );
+
+  /// 验证码输入框的锚点，用于平板端把输入框滚到键盘上方。
+  final GlobalKey _codeInputsKey = GlobalKey();
 
   bool _isLoading = false;
   bool _isEnteringWorkspace = false;
@@ -63,6 +68,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startCountdown();
     // 自动聚焦到第一个验证码输入框
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -71,7 +77,32 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   @override
+  void didChangeMetrics() {
+    // 平板端 MediaQuery.viewInsets 被冻结为 0，Layout 不会因为键盘变化而重排。
+    // 键盘尺寸变化后主动把验证码输入框滚到键盘上方的可视区域内。
+    if (!PlatformInfo.isTablet) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || rawKeyboardBottomInset(context) <= 0) {
+        return;
+      }
+      final codeInputsContext = _codeInputsKey.currentContext;
+      if (codeInputsContext == null) {
+        return;
+      }
+      Scrollable.ensureVisible(
+        codeInputsContext,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     for (final controller in _codeControllers) {
       controller.dispose();
     }
@@ -254,6 +285,20 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
   @override
   Widget build(BuildContext context) {
+    // 平板端 AppWidget 把 MediaQuery.viewInsets 冻结为 0，Scaffold 不会为键盘
+    // 让位，键盘会直接盖住验证码输入框。这里用真实键盘高度收缩页面。
+    return KeyboardInsetBuilder(
+      builder: (context, bottomInset) => ColoredBox(
+        color: AppFlowyTheme.of(context).surfaceColorScheme.layer01,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: _buildPage(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPage(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return Scaffold(
       backgroundColor: theme.surfaceColorScheme.layer01,
@@ -509,6 +554,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
         ? appTheme.badgeColorScheme.color19Light1
         : const Color(0xFF3A3A3A);
     return Row(
+      key: _codeInputsKey,
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
         return Container(

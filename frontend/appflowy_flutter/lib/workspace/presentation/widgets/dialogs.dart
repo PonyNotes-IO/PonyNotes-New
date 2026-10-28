@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/util/keyboard_inset.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy_backend/log.dart';
@@ -154,6 +155,18 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // 平板端 AppWidget 把 MediaQuery.viewInsets 冻结为 0（避免键盘动画期间全树
+    // 重建），showDialog 不会为键盘让位，弹窗会被键盘盖住。这里按真实键盘高度
+    // 把弹窗整体抬到键盘上方。
+    return KeyboardInsetBuilder(
+      builder: (context, bottomInset) => Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: _buildDialog(context),
+      ),
+    );
+  }
+
+  Widget _buildDialog(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return StyledDialog(
       maxWidth: widget.dialogMaxWidth,
@@ -210,8 +223,9 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
                 maxLength: widget.maxLength,
                 maxLines: 1,
                 textAlign: TextAlign.center,
-                autocorrect: false,
-                enableSuggestions: false,
+                // 不要在这里设置 enableSuggestions: false。Flutter 会把它映射成
+                // InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD，MIUI/EMUI 会
+                // 当作密码框，把输入法换成「安全键盘」。
                 onChanged: (text) {
                   newValue = text;
                 },
