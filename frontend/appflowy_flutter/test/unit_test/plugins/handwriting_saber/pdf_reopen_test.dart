@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_cache_service.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/page.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -37,6 +38,22 @@ class _RecoverablePdfImage extends PdfEditorImage {
   }
 }
 
+class _DownloadingPdfImage extends PdfEditorImage {
+  _DownloadingPdfImage()
+      : super(
+          pdfFilePath: 'https://example.com/pending.pdf',
+          pdfPageIndex: 0,
+          naturalSize: const Size(595, 842),
+        );
+
+  final downloadedPath = Completer<String>();
+
+  @override
+  Future<void> downloadFromCloud({bool forceDownload = false}) async {
+    pdfFilePath = await downloadedPath.future;
+  }
+}
+
 void main() {
   final manager = PdfDocumentCacheManager();
   final images = <PdfEditorImage>[];
@@ -44,9 +61,10 @@ void main() {
   late PdfrxEntryFunctions originalEntryFunctions;
   late _PdfEntryFunctions entryFunctions;
 
-  PdfDocument document() {
+  PdfDocument document({int pageCount = 1}) {
     final result = _PdfDocument();
-    when(() => result.pages).thenReturn([_PdfPage()]);
+    when(() => result.pages)
+        .thenReturn(List.generate(pageCount, (_) => _PdfPage()));
     when(result.dispose).thenAnswer((_) async {});
     return result;
   }
@@ -178,6 +196,150 @@ void main() {
   });
 
   group('PDF page reopening', () {
+    testWidgets('云地址尚未同步时显示同步中，不解析源设备路径或提前报错', (tester) async {
+      final missingPath = '${directory.path}/source-device.pdf';
+      final original = image(missingPath);
+      final sourcePage = EditorPage(
+        size: const Size(595, 842),
+        backgroundImage: original,
+      );
+      addTearDown(sourcePage.quill.dispose);
+      final received = EditorPage.fromJson(sourcePage.toJson(forCollab: true));
+      addTearDown(received.quill.dispose);
+      final pending = received.backgroundImage!;
+      images.add(pending);
+      await pending.loadPdfDocument();
+      expect(pending.loadState, PdfLoadState.waitingForSync);
+      expect(pending.isFailed, isFalse);
+      expect(pending.loadError, isNull);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: pending.buildPdfPageWidget(boxFit: BoxFit.contain),
+        ),
+      );
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(
+        find.text(LocaleKeys.newSettings_syncState_syncing),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.error_outline), findsNothing);
+      await tester.pump(const Duration(seconds: 5));
+      expect(pending.loadState, PdfLoadState.waitingForSync);
+      expect(manager.getCacheStats()['cachedDocuments'], 0);
+      verifyNever(() => entryFunctions.openFile(any()));
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    test('云地址后续到达可从等待同步继续加载，页面引用不被修改', () async {
+      final original = image('${directory.path}/source-device.pdf');
+      final sourcePage = EditorPage(
+        size: const Size(595, 842),
+        backgroundImage: original,
+      );
+      addTearDown(sourcePage.quill.dispose);
+      final beforeUpload = sourcePage.toJson(forCollab: true);
+      final received = EditorPage.fromJson(beforeUpload);
+      addTearDown(received.quill.dispose);
+      final pending = received.backgroundImage!;
+      images.add(pending);
+      await pending.loadPdfDocument();
+      expect(pending.loadState, PdfLoadState.waitingForSync);
+      expect(received.toJson(forCollab: true), beforeUpload);
+
+      original.pdfUrl = 'https://example.com/synced.pdf';
+      final updated = EditorPage.fromJson(sourcePage.toJson(forCollab: true));
+      addTearDown(updated.quill.dispose);
+      final ready = updated.backgroundImage!;
+      images.add(ready);
+      final downloaded = File('${directory.path}/downloaded.pdf')
+        ..writeAsStringSync('%PDF-1.7');
+      // 模拟现有磁盘缓存已准备好，真实下载由独立流测试覆盖。
+      ready.pdfFilePath = downloaded.path;
+      final opened = document();
+      when(() => entryFunctions.openFile(downloaded.path))
+          .thenAnswer((_) async => opened);
+      await ready.loadPdfDocument();
+      expect(ready.loadState, PdfLoadState.loaded);
+      expect(ready.synchronousPdfDocument, same(opened));
+      expect(updated.id, received.id);
+      expect(ready.pdfPageIndex, pending.pdfPageIndex);
+    });
+
+    testWidgets('真正下载期间显示加载中，下载完成后可正常解析', (tester) async {
+      final page = _DownloadingPdfImage();
+      images.add(page);
+      final load = page.loadPdfDocument();
+      expect(page.loadState, PdfLoadState.loading);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: page.buildPdfPageWidget(boxFit: BoxFit.contain),
+        ),
+      );
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.text(LocaleKeys.editor_loading), findsOneWidget);
+      expect(find.byIcon(Icons.error_outline), findsNothing);
+      await tester.pump(const Duration(seconds: 10));
+      expect(page.loadState, PdfLoadState.loading);
+      await tester.pumpWidget(const SizedBox.shrink());
+      final file = File('${directory.path}/cloud.pdf')
+        ..writeAsStringSync('%PDF-1.7');
+      final opened = document();
+      when(() => entryFunctions.openFile(file.path))
+          .thenAnswer((_) async => opened);
+      page.downloadedPath.complete(file.path);
+      await load;
+      expect(page.loadState, PdfLoadState.loaded);
+    });
+
+    testWidgets('空引用仍显示失败，不会被无限归入等待同步', (tester) async {
+      final page = image('');
+      await page.loadPdfDocument();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      expect(page.loadState, PdfLoadState.failed);
+      expect(page.loadError, contains('PDF file path is empty'));
+    });
+
+    test('没有本地文件时保留内存解析所需的完整字节', () async {
+      final bytes = Uint8List.fromList(utf8.encode('%PDF-1.7\nmemory only'));
+      final opened = document();
+      when(() => entryFunctions.openData(bytes, sourceName: 'memory:only'))
+          .thenAnswer((_) async => opened);
+      final page = image('memory:only', bytes: bytes);
+      await page.loadPdfDocument();
+      expect(page.isLoaded, isTrue);
+      expect(page.pdfBytes, same(bytes));
+      expect(page.synchronousPdfDocument, same(opened));
+    });
+
+    test('300页共用一次文件解析，打开后释放额外的整份字节', () async {
+      final bytes = Uint8List.fromList(utf8.encode('%PDF-1.7\n300 pages'));
+      final file = File('${directory.path}/300pages.pdf')
+        ..writeAsBytesSync(bytes);
+      final opened = document(pageCount: 300);
+      when(() => entryFunctions.openFile(file.path))
+          .thenAnswer((_) async => opened);
+      final pages = List.generate(
+        300,
+        (index) => PdfEditorImage(
+          pdfFilePath: file.path,
+          pdfPageIndex: index,
+          naturalSize: const Size(595, 842),
+          pdfBytes: bytes,
+        ),
+      );
+      images.addAll(pages);
+      await Future.wait(pages.map((page) => page.loadPdfDocument()));
+      expect(pages.every((page) => page.isLoaded), isTrue);
+      expect(pages.every((page) => page.pdfBytes == null), isTrue);
+      expect(
+        pages.every((page) => page.synchronousPdfDocument == opened),
+        isTrue,
+      );
+      verify(() => entryFunctions.openFile(file.path)).called(1);
+    });
+
     test('overlapping preload and reset share one open task', () async {
       final file = File('${directory.path}/shared.pdf')
         ..writeAsStringSync('%PDF-1.7');
@@ -226,13 +388,25 @@ void main() {
           .thenAnswer((_) async => throw const FormatException('invalid PDF'));
       final page = image('memory:invalid', bytes: bytes);
       await page.loadPdfDocument();
+      expect(page.loadState, PdfLoadState.loading);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: page.buildPdfPageWidget(boxFit: BoxFit.contain),
+        ),
+      );
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byIcon(Icons.error_outline), findsNothing);
       await tester.pump(const Duration(seconds: 1));
+      expect(page.loadState, PdfLoadState.loading);
       await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 5));
 
       expect(page.loadState, PdfLoadState.failed);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byIcon(Icons.error_outline), findsOneWidget);
       verify(() => entryFunctions.openData(any(), sourceName: 'memory:invalid'))
           .called(3);
+      await tester.pumpWidget(const SizedBox.shrink());
       page.dispose();
     });
 

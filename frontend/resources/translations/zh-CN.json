@@ -1,5 +1,13 @@
 {
   "handwritingStorage": {
+    "uploadingPdf": "正在上传 PDF",
+    "preparingPdfUpload": "正在准备上传 PDF…",
+    "confirmingPdfUpload": "文件已发送，正在等待服务器确认…",
+    "savingPdfReference": "正在保存 PDF 同步信息…",
+    "pdfUploadProgress": "{percent}% · {sent} / {total} MiB",
+    "pdfUploadRetry": "上传尚未完成，请检查网络、登录状态和云空间后重试。本地 PDF 会保留。",
+    "pdfUploadSuccess": "PDF 上传成功",
+    "pdfSaveFailed": "PDF 笔记保存失败，请重试。",
     "exportMissingImage": "图片资源不可用，请联网后重试导出",
     "exportMissingPdf": "PDF 原件不可用，请联网后重试导出"
   },
@@ -161,7 +169,7 @@
   "workspace": {
     "chooseWorkspace": "选择您的工作区",
     "defaultName": "我的工作区",
-    "create": "新建工作区",
+    "create": "新建空间",
     "new": "新的工作空间",
     "importFromNotion": "从 Notion 导入",
     "learnMore": "了解更多",
@@ -462,7 +470,7 @@
     "openSidebar": "打开侧边栏",
     "personal": "个人的",
     "private": "私人的",
-    "workspace": "协作空间",
+    "workspace": "协作",
     "favorites": "收藏夹",
     "clickToHidePrivate": "点击以隐藏私人空间\n您在此处创建的页面仅对您可见",
     "clickToHideWorkspace": "点击以隐藏私人空间\n您在此处创建的页面对所有人可见",
@@ -3066,7 +3074,7 @@
     "enableSpacesForYourWorkspace": "启用工作区的 Spaces",
     "title": "空间",
     "defaultSpaceName": "一般",
-    "privateSpace": "私有空间",
+    "privateSpace": "私有",
     "mySpace": "我的空间",
     "upgradeSpaceTitle": "启用空间",
     "upgradeSpaceDescription": "建立多个公开和私人空间，以更好地组织您的工作区。",

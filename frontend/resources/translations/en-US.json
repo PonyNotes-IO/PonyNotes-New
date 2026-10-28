@@ -1,5 +1,13 @@
 {
   "handwritingStorage": {
+    "uploadingPdf": "Uploading PDF",
+    "preparingPdfUpload": "Preparing the PDF upload…",
+    "confirmingPdfUpload": "File sent. Waiting for server confirmation…",
+    "savingPdfReference": "Saving the PDF sync information…",
+    "pdfUploadProgress": "{percent}% · {sent} / {total} MiB",
+    "pdfUploadRetry": "The upload is incomplete. Check your network, sign-in status and cloud storage, then retry. Your local PDF is retained.",
+    "pdfUploadSuccess": "PDF uploaded successfully",
+    "pdfSaveFailed": "Unable to save the PDF note. Please retry.",
     "exportMissingImage": "Image data is unavailable. Connect to the internet and try exporting again.",
     "exportMissingPdf": "The original PDF is unavailable. Connect to the internet and try exporting again."
   },

@@ -200,6 +200,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     if (event.initialWorkspaceId != null) {
       final currentWorkspace = result.currentWorkspace;
       if (currentWorkspace != null &&
+          currentWorkspace.workspaceId == event.initialWorkspaceId &&
           currentWorkspace.workspaceId != state.currentWorkspace?.workspaceId) {
         add(
           UserWorkspaceEvent.openWorkspace(

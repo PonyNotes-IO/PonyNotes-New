@@ -4,6 +4,8 @@ import 'dart:io' show File, Platform;
 import 'dart:math' as math;
 import 'package:collection/collection.dart';
 import 'package:uuid/uuid.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-handwriting-saber/entities.pb.dart';
@@ -46,6 +48,7 @@ import 'widgets/pdf_viewport_builder.dart';
 import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
 import 'widgets/canvas_webview_widget.dart';
 import 'dialogs/insert_webview_dialog.dart';
+import 'dialogs/pdf_upload_dialog.dart';
 import 'handwriting_export_action.dart';
 import '../widgets/pdf_text_selection_dialog.dart';
 import '../services/pdf_text_extraction_service.dart';
@@ -90,11 +93,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   int _documentGeneration = 0;
   int _localEditRevision = 0;
   final Map<String, int> _savingViews = {};
+  bool _isImportingPdf = false;
 
   bool _isCurrentDocument(String id, int generation) =>
       mounted && widget.view.id == id && _documentGeneration == generation;
 
-  bool get _isSaving => (_savingViews[widget.view.id] ?? 0) > 0;
+  // Import owns an unsaved snapshot until the upload dialog finishes.
+  bool get _isSaving =>
+      _isImportingPdf || (_savingViews[widget.view.id] ?? 0) > 0;
 
   HandwritingSaberDataService _dataService = HandwritingSaberDataService();
 
@@ -727,10 +733,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                 .where((page) => !remote.pages.contains(page))
                 .toList()));
       });
-      for (final page
-          in remote.pages.where((page) => changed.contains(page.id))) {
-        page.backgroundImage?.preloadPdfDocument();
-      }
       await _hydrateImagesFromLocalBackup();
       if (!_isCurrentDocument(viewId, generation)) return;
       await _hydratePdfPathsFromLocalBackup();
@@ -811,22 +813,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           .map((page) => previous.remove(page) ?? EditorPageNotifier(page)));
     for (final notifier in previous.values) {
       notifier.dispose();
-    }
-  }
-
-  /// ✅ 预加载所有页面的PDF背景图（视图切换时调用，确保PDF图片能正确显示）
-  void _preloadPdfBackgrounds() {
-    int pdfPageCount = 0;
-    for (final page in _coreInfo.pages) {
-      if (page.backgroundImage != null) {
-        // ✅ 使用resetLoadStateAndPreload强制重新加载，确保视图切换后PDF能正确显示
-        page.backgroundImage!.resetLoadStateAndPreload();
-        pdfPageCount++;
-      }
-    }
-    if (pdfPageCount > 0) {
-      debugPrint(
-          '🦋[HandwritingSaber] _preloadPdfBackgrounds: Preloading $pdfPageCount PDF background images');
     }
   }
 
@@ -971,9 +957,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint(
           '📖📖📖 [HandwritingSaber] Page notifiers initialized: ${_pageNotifiers.length}');
 
-      // ✅ 预加载所有页面的PDF背景图
-      _preloadPdfBackgrounds();
-
       // ✅ 先用本地完整备份按 id 回填图片字节，命中则无需联网（修复本地图片加载慢/先红色"!"）
       await _hydrateImagesFromLocalBackup();
       if (!_isCurrentDocument(viewId, generation)) return;
@@ -1018,14 +1001,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 将当前 EditorCoreInfo 保存到本地数据文件
   ///
   /// [suppressStatusUpdate] 为 true 时不触发界面刷新
-  Future<void> _saveToStorage({
+  Future<bool> _saveToStorage({
     bool suppressStatusUpdate = false,
     String? targetViewId,
+    bool syncAssets = true,
   }) async {
-    if (!_isDataLoaded) return;
+    if (!_isDataLoaded) return false;
     if (_isLaserFadeInProgress) {
       _pendingSave = true;
-      return;
+      return false;
     }
     final viewId = targetViewId ?? widget.view.id;
     final generation = _documentGeneration;
@@ -1043,15 +1027,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         localData: localBytes,
         backupPath: backupPath,
       );
-      unawaited(_syncAssets(viewId, generation, backupPath, workspace, user));
-      if (!_isCurrentDocument(viewId, generation)) return;
+      if (syncAssets) {
+        unawaited(_syncAssets(viewId, generation, backupPath, workspace, user));
+      }
+      if (!_isCurrentDocument(viewId, generation)) return ok;
       _status = ok ? '已保存在本机' : '同步提交失败，本地副本已保留';
       if (!suppressStatusUpdate) setState(() {});
+      return ok;
     } catch (e) {
       if (_isCurrentDocument(viewId, generation)) {
         _status = '保存失败：$e';
         if (!suppressStatusUpdate) setState(() {});
       }
+      return false;
     } finally {
       _savingViews[viewId] = (_savingViews[viewId] ?? 1) - 1;
       if (_isCurrentDocument(viewId, generation) && _pendingRemoteReload) {
@@ -1240,8 +1228,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       }
 
-      // PDF 的下载、解析、重试由 PdfEditorImage 的预加载任务统一管理，
-      // 避免此处与 _preloadPdfBackgrounds 同时下载并重置加载状态。
+      // PDF 由可见画布的 PdfEditorImage 统一加载，避免全量下载离屏页面。
     }
 
     // 如果有资源下载完成，刷新页面显示
@@ -5082,6 +5069,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 从文件路径导入 PDF（参考 Saber 的实现，支持多页）
   Future<void> _importPdfFromFilePath(String pdfFilePath) async {
+    if (_isImportingPdf) return;
+    _isImportingPdf = true;
     final viewId = widget.view.id;
     final generation = _documentGeneration;
     try {
@@ -5165,12 +5154,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           pdfFilePath: cachedPdfPath,
           pdfPageIndex: pdfPage.pageNumber - 1, // PDF 页面索引（从 0 开始）
           naturalSize: Size(pdfPage.width, pdfPage.height),
-          pdfBytes: pdfBytes,
           dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
         );
-
-        // ✅ 预加载PDF文档，避免首次显示时的闪烁
-        pdfImage.preloadPdfDocument();
 
         // ✅ 创建新页面：仅将 existingStrokes 保留到导入前的"第一页"，其余页面不保留旧笔迹
         final page = EditorPage(
@@ -5208,36 +5193,55 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 触发UI更新（此时PDF还未完全加载，但页面结构已建立）
       setState(() {});
 
-      // ✅ 使用智能页面管理器进行预加载优化
-      final pageManager = PdfMultiPageManager();
-      final visiblePageKeys = <String>[];
-
-      // 收集所有页面键，用于智能加载
-      for (final page in _coreInfo.pages) {
-        if (page.backgroundImage != null) {
-          final pageKey =
-              '${page.backgroundImage!.pdfFilePath}|${page.backgroundImage!.pdfPageIndex}';
-          visiblePageKeys.add(pageKey);
-        }
-      }
-
-      // 更新可见页面，启动智能加载策略
-      pageManager.updateVisiblePages(visiblePageKeys);
-
-      debugPrint(
-          '🦋[HandwritingSaber] 已启动智能PDF预加载，页面数: ${visiblePageKeys.length}');
-
-      // 先保存页面结构，不等待云端 PDF 上传，确保导入结果立即持久化。
-      // 云端上传完成后再补写一次带 pdfUrl 的精简数据。
-      await _saveToStorage(suppressStatusUpdate: true);
-      LogUtils.info('[HandwritingSaber] 导入页面已保存（等待云端资源上传）');
+      _saveDebounceTimer?.cancel();
+      _saveDebounceTimer = null;
+      final path = _cachedSbnFilePath;
+      final workspace = _workspaceId;
+      final user = _userId;
+      var saved = false;
+      if (!mounted) return;
+      await PdfUploadDialog.show(
+        context: context,
+        upload: (onProgress) async {
+          if (!_isCurrentDocument(viewId, generation) ||
+              path == null ||
+              workspace == null ||
+              user == null) {
+            throw StateError(LocaleKeys.handwritingStorage_pdfSaveFailed.tr());
+          }
+          if (!saved) {
+            saved = await _saveToStorage(
+              suppressStatusUpdate: true,
+              syncAssets: false,
+            );
+            if (!saved) {
+              throw StateError(
+                LocaleKeys.handwritingStorage_pdfSaveFailed.tr(),
+              );
+            }
+          }
+          await HandwritingAssetSync.resume(
+            viewId: viewId,
+            path: path,
+            workspaceId: workspace,
+            userId: user,
+            onProgress: onProgress,
+          );
+          if (_isCurrentDocument(viewId, generation)) {
+            _pendingRemoteReload = true;
+            _scheduleRemoteReloadAfterIdle();
+          }
+        },
+      );
+      LogUtils.info('[HandwritingSaber] PDF 上传及笔记引用保存完成');
       final totalImportTime = DateTime.now().difference(importStartTime);
       debugPrint(
-          '🦋[HandwritingSaber] PDF导入完成: 总用时 ${totalImportTime.inMilliseconds}ms');
+        '🦋[HandwritingSaber] PDF导入完成: 总用时 ${totalImportTime.inMilliseconds}ms',
+      );
 
-      if (mounted) {
+      if (_isCurrentDocument(viewId, generation)) {
         showToastNotification(
-          message: 'PDF导入成功（${pdfDocument.pages.length}页），正在加载页面内容...',
+          message: LocaleKeys.handwritingStorage_pdfUploadSuccess.tr(),
         );
       }
     } catch (e) {
@@ -5248,6 +5252,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           message: '导入 PDF 失败：$e',
         );
       }
+    } finally {
+      _isImportingPdf = false;
+      if (mounted && _pendingRemoteReload) _scheduleRemoteReloadAfterIdle();
     }
   }
 
