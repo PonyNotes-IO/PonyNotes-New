@@ -1,5 +1,13 @@
 {
   "handwritingStorage": {
+    "uploadingPdf": "正在上传 PDF",
+    "preparingPdfUpload": "正在准备上传 PDF…",
+    "confirmingPdfUpload": "文件已发送，正在等待服务器确认…",
+    "savingPdfReference": "正在保存 PDF 同步信息…",
+    "pdfUploadProgress": "{percent}% · {sent} / {total} MiB",
+    "pdfUploadRetry": "上传尚未完成，请检查网络、登录状态和云空间后重试。本地 PDF 会保留。",
+    "pdfUploadSuccess": "PDF 上传成功",
+    "pdfSaveFailed": "PDF 笔记保存失败，请重试。",
     "exportMissingImage": "图片资源不可用，请联网后重试导出",
     "exportMissingPdf": "PDF 原件不可用，请联网后重试导出"
   },

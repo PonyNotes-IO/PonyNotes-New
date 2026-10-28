@@ -108,6 +108,7 @@ void main() {
     ScrollController? scrollController,
     double pageHeight = 300,
     double viewportHeight = 300,
+    int pageCount = 15,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -121,14 +122,14 @@ void main() {
                 viewingPageIndex.value =
                     (notification.metrics.pixels / pageHeight)
                         .floor()
-                        .clamp(0, 14);
+                        .clamp(0, pageCount - 1);
                 return false;
               },
               child: SingleChildScrollView(
                 controller: scrollController,
                 child: Column(
                   children: List.generate(
-                    15,
+                    pageCount,
                     (pageIndex) => SizedBox(
                       height: pageHeight,
                       child: PdfViewportBuilder(
@@ -155,6 +156,31 @@ void main() {
       ),
     );
   }
+
+  testWidgets('300页仅挂载可见与相邻背景，首尾跳转仍可显示', (tester) async {
+    final viewingPage = ValueNotifier(0);
+    final scrollController = ScrollController();
+    final activePages = <int>{};
+    addTearDown(viewingPage.dispose);
+    addTearDown(scrollController.dispose);
+    await showPages(
+      tester,
+      viewingPageIndex: viewingPage,
+      activePages: activePages,
+      scrollController: scrollController,
+      pageCount: 300,
+    );
+    expect(activePages, {0, 1});
+    for (final index in [1, 149, 298, 299, 0]) {
+      scrollController.jumpTo(index * 300.0);
+      await tester.pump();
+      expect(viewingPage.value, index);
+      expect(activePages, contains(index));
+      expect(activePages.length, lessThanOrEqualTo(3));
+      expect(activePages, everyElement(inInclusiveRange(index - 1, index + 1)));
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('all 15 PDF pages activate when scrolling forward and back',
       (tester) async {

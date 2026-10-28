@@ -10,6 +10,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
+import 'file_upload_request.dart';
 
 /// File upload service for AppFlowy Cloud storage
 class FileUploadService {
@@ -23,6 +24,7 @@ class FileUploadService {
     Uint8List fileBytes,
     String fileName, {
     String? workspaceId,
+    FileUploadProgress? onProgress,
   }) async {
     try {
       Log.info('Uploading file to AppFlowy Cloud: $fileName (${getFileSizeString(fileBytes.length)})');
@@ -66,13 +68,14 @@ class FileUploadService {
       // 每次重试都必须新建 Request。package:http 的 Request 只能 finalize/send 一次，
       // 复用已发送的 Request 会在第二次 attempt 抛出 finalized 状态异常。
       final putResp = await _sendWithRetry(() async {
-        final putReq = http.Request('PUT', Uri.parse(putUrl));
+        final putReq = FileUploadRequest(
+          'PUT', Uri.parse(putUrl), fileBytes, onProgress: onProgress,
+        );
         putReq.headers.addAll({
           'Authorization': 'Bearer ${await _getAuthToken()}',
           'Content-Type': 'application/octet-stream',
           'Accept': 'application/json',
         });
-        putReq.bodyBytes = fileBytes;
         return putReq.send();
       }, onBeforeRetry: (attempt, code, body) {
         Log.warn('File upload (PUT) retry#$attempt due to ${code ?? 'network'} - ${body ?? ''}');
@@ -127,7 +130,7 @@ class FileUploadService {
               }
             }
           } catch (e) {
-            if (e.toString().contains('文件上传失败')) {
+            if (e is! FormatException) {
               rethrow;
             }
             // 如果解析失败，继续尝试构造 URL

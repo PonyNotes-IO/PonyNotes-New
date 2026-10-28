@@ -1,5 +1,13 @@
 {
   "handwritingStorage": {
+    "uploadingPdf": "正在上傳 PDF",
+    "preparingPdfUpload": "正在準備上傳 PDF…",
+    "confirmingPdfUpload": "檔案已傳送，正在等待伺服器確認…",
+    "savingPdfReference": "正在儲存 PDF 同步資訊…",
+    "pdfUploadProgress": "{percent}% · {sent} / {total} MiB",
+    "pdfUploadRetry": "上傳尚未完成，請檢查網路、登入狀態與雲端空間後重試。本機 PDF 會保留。",
+    "pdfUploadSuccess": "PDF 上傳成功",
+    "pdfSaveFailed": "PDF 筆記儲存失敗，請重試。",
     "exportMissingImage": "圖片資源無法取得，請連線後重新匯出",
     "exportMissingPdf": "PDF 原檔無法取得，請連線後重新匯出"
   },
