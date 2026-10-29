@@ -20,10 +20,10 @@ import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/color_to_hex_string.dart';
 import 'package:appflowy/util/debounce.dart';
 import 'package:appflowy/util/diagnostic_build.dart';
-import 'package:appflowy/util/throttle.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/document_sessions.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
@@ -47,7 +47,7 @@ part 'document_bloc.freezed.dart';
 /// - document awareness states
 bool enableDocumentInternalLog = false;
 
-final Map<String, DocumentBloc> _documentBlocMap = {};
+final Map<String, Set<DocumentBloc>> _documentBlocMap = {};
 
 class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   DocumentBloc({
@@ -63,11 +63,20 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
     _viewListener = databaseViewId == null && rowId == null
         ? ViewListener(viewId: documentId)
         : null;
+    _sessionReady = DocumentSessions.retain(documentId);
     on<DocumentEvent>(_onDocumentEvent);
   }
 
   static DocumentBloc? findOpen(String documentId) =>
-      _documentBlocMap[documentId];
+      _documentBlocMap[documentId]?.firstOrNull;
+
+  static Future<void> flushPendingChanges() async {
+    await Future.wait(
+      _documentBlocMap.values.expand((editors) => editors).map(
+            (editor) => editor._transactionsDrained?.future ?? Future<void>.value(),
+          ),
+    );
+  }
 
   /// For a normal document, the document id is the same as the view id
   final String documentId;
@@ -85,6 +94,11 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   late final ViewListener? _viewListener;
 
   final DocumentService _documentService = DocumentService();
+  late final Future<void> _sessionReady;
+  int _pendingLocalTransactions = 0;
+  int _localTransactionVersion = 0;
+  Completer<void>? _transactionsDrained;
+  bool _isSyncingDocument = false;
   final TrashService _trashService = TrashService();
   DocumentCollabAdapter? _documentCollabAdapter;
   bool _isInitializing = false;
@@ -104,11 +118,9 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   static const _syncDuration = Duration(milliseconds: 250);
   final _updateSelectionDebounce = Debounce(duration: _syncDuration);
-  final _syncThrottle = Throttler(duration: _syncDuration);
-
-  // The conflict handle logic is not fully implemented yet
-  // use the syncTimer to force to reload the document state when the conflict happens.
+  // Coalesce notifications while retaining the last update in each interval.
   Timer? _syncTimer;
+  DocEventPB? _pendingDocEvent;
 
   bool get isLocalMode {
     final userProfilePB = state.userProfilePB;
@@ -120,7 +132,9 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   Future<void> close() async {
     isClosing = true;
     if (_saveToBlocMap) {
-      _documentBlocMap.remove(documentId);
+      final editors = _documentBlocMap[documentId];
+      editors?.remove(this);
+      if (editors?.isEmpty == true) _documentBlocMap.remove(documentId);
     }
     await checkDocumentIntegrity();
     await _cancelSubscriptions();
@@ -129,17 +143,20 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   }
 
   Future<void> _cancelSubscriptions() async {
-    await _documentService.syncAwarenessStates(documentId: documentId);
+    await _sessionReady;
     await _documentListener.stop();
     await _syncStateListener.stop();
     await _viewListener?.stop();
     await _transactionSubscription?.cancel();
-    await _documentService.closeDocument(viewId: documentId);
+    await _transactionsDrained?.future;
+    if (await DocumentSessions.release(documentId)) {
+      await _documentService.syncAwarenessStates(documentId: documentId);
+      await _documentService.closeDocument(viewId: documentId);
+    }
   }
 
   void _clearEditorState() {
     _updateSelectionDebounce.dispose();
-    _syncThrottle.dispose();
 
     _syncTimer?.cancel();
     _syncTimer = null;
@@ -155,8 +172,9 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   ) async {
     await event.when(
       initial: () async {
+        await _sessionReady;
         if (_saveToBlocMap) {
-          _documentBlocMap[documentId] = this;
+          _documentBlocMap.putIfAbsent(documentId, () => {}).add(this);
         }
         _onViewChanged();
         _onDocumentChanged();
@@ -211,7 +229,6 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
               if (currentEditorState != null) {
                 // 删除成功后再销毁 editor 资源，避免失败时落入错误页。
                 _updateSelectionDebounce.dispose();
-                _syncThrottle.dispose();
                 _syncTimer?.cancel();
                 _syncTimer = null;
                 currentEditorState.selectionNotifier
@@ -589,6 +606,11 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
         }
 
         // apply transaction to backend
+        _localTransactionVersion++;
+        if (_pendingLocalTransactions == 0) {
+          _transactionsDrained = Completer<void>();
+        }
+        _pendingLocalTransactions++;
         try {
           await _transactionAdapter.apply(transaction, editorState);
         } on FlowyError catch (e) {
@@ -598,6 +620,11 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
             type: ToastificationType.error,
           );
           return;
+        } finally {
+          _pendingLocalTransactions--;
+          if (_pendingLocalTransactions == 0) {
+            _transactionsDrained?.complete();
+          }
         }
 
         // check if the document is empty.
@@ -631,11 +658,32 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   }
 
   Future<void> _onDocumentStateUpdate(DocEventPB docEvent) async {
-    if (!docEvent.isRemote || !FeatureFlag.syncDocument.isOn) {
+    if (isClosing || (docEvent.isRemote && !FeatureFlag.syncDocument.isOn)) {
+      return;
+    }
+    if (_pendingLocalTransactions > 0 || _isSyncingDocument) {
+      _throttleSyncDoc(docEvent);
       return;
     }
     if (_documentCollabAdapter != null) {
-      unawaited(_documentCollabAdapter!.syncV3(docEvent: docEvent));
+      _isSyncingDocument = true;
+      final version = _localTransactionVersion;
+      try {
+        await _documentCollabAdapter!.syncV3(
+          docEvent: docEvent,
+          shouldApply: () {
+            if (isClosing) return false;
+            if (_pendingLocalTransactions > 0 ||
+                version != _localTransactionVersion) {
+              _throttleSyncDoc(docEvent);
+              return false;
+            }
+            return true;
+          },
+        );
+      } finally {
+        _isSyncingDocument = false;
+      }
     } else {
       Log.debug(
           '[DocumentBloc] _onDocumentStateUpdate called but _documentCollabAdapter is not initialized yet for documentId: $documentId');
@@ -671,8 +719,10 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
     if (enableDocumentInternalLog) {
       Log.info('[DocumentBloc] throttle sync doc: ${docEvent.toProto3Json()}');
     }
-    _syncThrottle.call(() {
-      _onDocumentStateUpdate(docEvent);
+    _pendingDocEvent = docEvent;
+    _syncTimer ??= Timer(_syncDuration, () {
+      _syncTimer = null;
+      unawaited(_onDocumentStateUpdate(_pendingDocEvent!));
     });
   }
 

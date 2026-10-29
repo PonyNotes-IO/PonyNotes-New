@@ -53,6 +53,10 @@ class DispatchException implements Exception {
 
 class Dispatch {
   static bool enableTracing = false;
+  static Future<Uint8List> Function(Uint8List)? requestProxy;
+
+  static Future<Uint8List> sendRequestBytes(Uint8List bytes) =>
+      _sendToRust(FFIRequest.fromBuffer(bytes)).future;
 
   static Future<FlowyResult<Uint8List, Uint8List>> asyncRequest(
     FFIRequest request,
@@ -123,6 +127,11 @@ Completer<Uint8List> _sendToRust(FFIRequest request) {
   assert(bytes.isEmpty == false);
   if (bytes.isEmpty) {
     throw DispatchException(FFIException.RequestIsEmpty);
+  }
+
+  final proxy = Dispatch.requestProxy;
+  if (proxy != null) {
+    return Completer<Uint8List>()..complete(proxy(bytes));
   }
 
   final Pointer<Uint8> input = calloc.allocate<Uint8>(bytes.length);

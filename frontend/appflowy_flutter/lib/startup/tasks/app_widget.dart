@@ -26,6 +26,7 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
 import 'package:appflowy_backend/appflowy_backend.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -81,7 +82,7 @@ class InitAppWidgetTask extends LaunchTask {
     PaintingBinding.instance.imageCache.maximumSize = 500;
     PaintingBinding.instance.imageCache.maximumSizeBytes = 100 * 1024 * 1024;
 
-    if (UniversalPlatform.isDesktop) {
+    if (UniversalPlatform.isDesktop && Dispatch.requestProxy == null) {
       await NotificationService.initialize();
     }
 

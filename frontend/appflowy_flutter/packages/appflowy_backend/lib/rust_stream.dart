@@ -36,6 +36,9 @@ class RustStreamReceiver {
     return RustStreamReceiver.shared.observable.stream.listen(callback);
   }
 
+  static void receiveFromMainWindow(Uint8List bytes) =>
+      shared._streamCallback(bytes);
+
   void _streamCallback(Uint8List bytes) {
     try {
       final observable = SubscribeObject.fromBuffer(bytes);

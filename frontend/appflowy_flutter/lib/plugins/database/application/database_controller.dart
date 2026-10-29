@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/database/domain/group_listener.dart';
 import 'package:appflowy/plugins/database/domain/layout_service.dart';
 import 'package:appflowy/plugins/database/domain/layout_setting_listener.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/document_sessions.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -80,6 +81,7 @@ class DatabaseController {
       viewId: viewId,
       fieldController: fieldController,
     );
+    _sessionReady = DocumentSessions.retain(view.id);
 
     _listenOnRowsChanged();
     _listenOnFieldsChanged();
@@ -88,6 +90,7 @@ class DatabaseController {
   }
 
   final ViewPB view;
+  late final Future<void> _sessionReady;
   final DatabaseViewBackendService _databaseViewBackendSvc;
   final FieldController fieldController;
   DatabaseLayoutPB databaseLayout;
@@ -177,6 +180,7 @@ class DatabaseController {
   }
 
   Future<FlowyResult<void, FlowyError>> open() async {
+    await _sessionReady;
     return _databaseViewBackendSvc.openDatabase().then((result) {
       return result.fold(
         (DatabasePB database) async {
@@ -266,7 +270,10 @@ class DatabaseController {
       return;
     }
     _isDisposed = true;
-    await _databaseViewBackendSvc.closeView();
+    await _sessionReady;
+    if (await DocumentSessions.release(viewId)) {
+      await _databaseViewBackendSvc.closeView();
+    }
     await fieldController.dispose();
     await _groupListener.stop();
     await _viewCache.dispose();

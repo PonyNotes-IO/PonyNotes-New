@@ -11,6 +11,8 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-storage/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-notification/subject.pb.dart';
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:fixnum/fixnum.dart';
@@ -33,7 +35,21 @@ class FileStorageTask extends LaunchTask {
 
 class FileStorageService {
   FileStorageService() {
-    _port.handler = _controller.add;
+    _port.handler = (event) {
+      _controller.add(event);
+      // Share progress with page windows without replacing Rust's native port.
+      RustStreamReceiver.receiveFromMainWindow(
+        SubscribeObject(source: 'FileProgress', payload: utf8.encode(event))
+            .writeToBuffer(),
+      );
+    };
+    if (Dispatch.requestProxy != null) {
+      _forwardedProgress = RustStreamReceiver.listen((event) {
+        if (event.source == 'FileProgress') {
+          _controller.add(utf8.decode(event.payload));
+        }
+      });
+    }
     _subscription = _controller.stream.listen(
       (event) {
         final fileProgress = FileProgress.fromJsonString(event);
@@ -54,7 +70,7 @@ class FileStorageService {
       },
     );
 
-    if (!integrationMode().isTest) {
+    if (!integrationMode().isTest && Dispatch.requestProxy == null) {
       final payload = RegisterStreamPB()
         ..port = Int64(_port.sendPort.nativePort);
       FileStorageEventRegisterStream(payload).send();
@@ -65,6 +81,7 @@ class FileStorageService {
   final RawReceivePort _port = RawReceivePort();
   final StreamController<String> _controller = StreamController.broadcast();
   late StreamSubscription<String> _subscription;
+  StreamSubscription<SubscribeObject>? _forwardedProgress;
   DateTime? _lastErrorToastTime;
 
   /// 断网 / 连接失败属于**稍后续传**，不是上传失败。
@@ -168,6 +185,7 @@ class FileStorageService {
       notifier.dispose();
     }
 
+    await _forwardedProgress?.cancel();
     await _controller.close();
     await _subscription.cancel();
     _port.close();

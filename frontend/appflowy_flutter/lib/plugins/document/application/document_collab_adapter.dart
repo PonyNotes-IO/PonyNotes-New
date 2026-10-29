@@ -73,10 +73,13 @@ class DocumentCollabAdapter {
   /// Sync version 3
   ///
   /// Diff the local document with the remote document and apply the changes
-  Future<void> syncV3({DocEventPB? docEvent}) async {
+  Future<void> syncV3({
+    DocEventPB? docEvent,
+    bool Function()? shouldApply,
+  }) async {
     final result = await _service.getDocument(documentId: docId);
     final document = result.fold((s) => s.toDocument(), (f) => null);
-    if (document == null) {
+    if (document == null || shouldApply?.call() == false) {
       return;
     }
 
