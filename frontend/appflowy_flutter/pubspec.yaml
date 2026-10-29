@@ -44,6 +44,7 @@ dependencies:
       url: https://github.com/Xazin/flutter_calendar_view
       ref: "6fe0c98"
   collection: ^1.17.1
+  desktop_multi_window: ^0.3.1
   connectivity_plus: ^5.0.2
   cross_file: ^0.3.4+1
   crypto: ^3.0.3

@@ -8,6 +8,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'startup/startup.dart';
 import 'startup/android_privacy_consent.dart';
 import 'startup/startup_shell.dart';
+import 'workspace/presentation/home/page_windows.dart';
 import 'util/performance_trace.dart';
 
 // Stores the initial deep link passed from the native runner.
@@ -60,6 +61,11 @@ Future<void> main(List<String> args) async {
   }
   pdfrxFlutterInitialize();
   PerformanceTrace.mark('flutter_binding_ready');
+
+  if ((Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+      await PageWindows.initialize()) {
+    return;
+  }
 
   if (Platform.isAndroid || Platform.isIOS) {
     // Render a Flutter frame before the dependency-heavy application startup.

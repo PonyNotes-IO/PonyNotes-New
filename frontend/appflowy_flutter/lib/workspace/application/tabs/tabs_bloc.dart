@@ -13,9 +13,11 @@ import 'package:appflowy/workspace/application/view/expanded_views_cache.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/home/page_windows.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
@@ -32,7 +34,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // 初始化 ExpandedViewsCache（异步，不阻塞）
     ExpandedViewsCache.instance.initialize();
     // 尝试恢复上次打开的视图
-    _restoreLastOpenView();
+    if (Dispatch.requestProxy == null) _restoreLastOpenView();
     _dispatch();
   }
 
@@ -86,6 +88,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   void _dispatch() {
     on<TabsEvent>(
       (event, emit) async {
+        if (event.maybeWhen(
+          switchWorkspace: (_) => true,
+          orElse: () => false,
+        )) {
+          await PageWindows.closeAll();
+        }
         // 【慢机器多人协作丢最后编辑修复】切换/关闭标签会同步 dispose 当前 plugin
         // （含 A 套协作白板 RemoteWhiteboardPage 的 InAppWebView）。在真正 emit
         // 触发 dispose 之前，先 await 一次已挂载协作白板的退出冲刷保存（各自带 2s
