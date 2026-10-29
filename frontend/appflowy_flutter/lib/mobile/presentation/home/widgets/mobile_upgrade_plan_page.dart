@@ -1120,15 +1120,6 @@ class _UpgradePlanBodyState extends State<_UpgradePlanBody> {
       return;
     }
 
-    // 拦截重复购买：当前会员版本与选中版本一致
-    final currentPlan = subscriptionInfo?.plan;
-    if (currentPlan != null &&
-        currentPlan != WorkspacePlanPB.FreePlan &&
-        selectedPlan == currentPlan) {
-      showToastNotification(message: '请勿重复购买');
-      return;
-    }
-
     final billingType = selectedDuration == PurchaseDurationOption.monthly
         ? 'monthly'
         : 'yearly';
