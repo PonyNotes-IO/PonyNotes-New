@@ -20,11 +20,11 @@ void main() {
 
   late UserProfilePB userProfile;
 
-  setUp(() {
+  setUp(() async {
     userProfile = UserProfilePB()
       ..token = jsonEncode({'access_token': 'mock-access-token'});
 
-    getIt.reset();
+    await getIt.reset();
     getIt.registerSingleton<AppFlowyCloudSharedEnv>(
       AppFlowyCloudSharedEnv(
         authenticatorType: AuthenticatorType.appflowyCloudSelfHost,
@@ -113,6 +113,7 @@ void main() {
             ),
           ),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;
@@ -143,6 +144,7 @@ void main() {
             ),
           ),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;
@@ -175,6 +177,7 @@ void main() {
             ),
           ),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;
@@ -210,6 +213,7 @@ void main() {
             ),
           ),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;
@@ -229,6 +233,7 @@ void main() {
         return http.Response(
           jsonEncode({'code': 1, 'message': '订阅不存在', 'data': null}),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;
@@ -268,6 +273,7 @@ void main() {
             ),
           ),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       });
       SubscriptionService().httpClientForTesting = mockClient;

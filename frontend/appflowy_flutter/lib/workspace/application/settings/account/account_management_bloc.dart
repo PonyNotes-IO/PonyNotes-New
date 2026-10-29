@@ -339,11 +339,13 @@ class AccountManagementBloc
     // 将当前 planCode 同步到 SubscriptionSuccessListenable 的去重基线，
     // 避免苹果内购 restored 事件对已有套餐重复弹出"升级成功"提示。
     if (planCode != 'free_local') {
-      _subscriptionSuccessListenable.syncCurrentPlan(planCode);
+      _subscriptionSuccessListenable.syncCurrentPlan(
+        planCode,
+        endDate: subscription?.subscription?.endDate,
+      );
     }
 
     // 默认选中当前套餐的下一级更高套餐，引导用户升级
-    // （而非选中当前套餐导致"请勿重复购买"拦截）
     WorkspacePlanPB? selectedPlan;
     if (currentPlan == WorkspacePlanPB.FreePlan) {
       selectedPlan = WorkspacePlanPB.StandPlan;
@@ -1228,32 +1230,10 @@ class AccountManagementBloc
             return;
           }
 
-          // 发起支付前的硬校验：
-          // 1) 会员版本与当前选中版本一致 → 拦截重复购买
-          // 2) 高级别会员生效期间禁止购买更低级别套餐 → 静默拦截
+          // 同版本允许续费；高级别会员生效期间禁止购买更低级别套餐。
           // 支付链路走 H5 网页（不经过云端 subscribe 接口的规则校验），
           // 一旦放行支付成功就会被支付后端直接入账，因此必须在这里拦截。
           final currentPlan = subscriptionInfo?.plan;
-          if (currentPlan != null &&
-              currentPlan != WorkspacePlanPB.FreePlan &&
-              effectivePlan == currentPlan) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isProcessingPayment: false,
-                error: '请勿重复购买',
-                paymentResult: paymentResult,
-              ),
-            );
-            return;
-          }
           if (_isDowngradePurchase(effectivePlan, currentPlan)) {
             return;
           }

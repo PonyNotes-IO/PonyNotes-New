@@ -13,6 +13,8 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
   SubscriptionSuccessListenable();
 
   String? _plan;
+  DateTime? _endDate;
+  bool _isRenewal = false;
   bool _isProcessing = false;
 
   SubscriptionPlanPB? get subscribedPlan => switch (_plan?.toLowerCase()) {
@@ -33,6 +35,7 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
       };
 
   String get upgradeSuccessMessage {
+    if (_isRenewal) return '会员续费成功，有效期已延长';
     final planCode = _plan?.toLowerCase();
     return switch (planCode) {
       'standard' => '您已升级到小马笔记标准版',
@@ -61,17 +64,12 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
     });
   }
 
-  /// 同步当前会员版本到内部去重基线（不触发通知）。
-  ///
-  /// 在用户订阅信息加载时调用，将当前 planCode 设置为 `_plan`，
-  /// 这样后续 `onPaymentSuccess` 如果返回的是同一个 planCode，
-  /// `_notifyWithPlan` 的去重逻辑会正确跳过，避免对已持有套餐
-  /// 重复弹出"升级成功"提示（典型场景：苹果内购 restored 事件
-  /// 对已有套餐重复 verify 后误弹）。
-  void syncCurrentPlan(String? plan) {
+  /// 同步套餐和有效期，区分同版本续费与历史交易重放。
+  void syncCurrentPlan(String? plan, {DateTime? endDate}) {
     if (plan == null || plan.isEmpty) return;
-    if (_plan == plan) return;
+    if (_plan == plan && _endDate == endDate) return;
     _plan = plan;
+    _endDate = endDate;
     Log.info(
         '[SubscriptionSuccessListenable] synced current plan: $plan (no notification)');
   }
@@ -118,7 +116,10 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
               'using fallbackPlan (upgrade may not be processed yet)');
           _notifyWithPlan(fallbackPlan);
         } else {
-          _notifyWithPlan(planCode);
+          _notifyWithPlan(
+            planCode,
+            endDate: subscription.subscription!.endDate,
+          );
         }
       } else {
         Log.warn(
@@ -134,20 +135,26 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
     }
   }
 
-  void _notifyWithPlan(String? plan) {
+  void _notifyWithPlan(String? plan, {DateTime? endDate}) {
     if (plan == null) {
       Log.warn(
           '[SubscriptionSuccessListenable] plan is null, skipping notification');
       return;
     }
 
-    if (_plan == plan) {
+    final isRenewal = _plan == plan &&
+        _endDate != null &&
+        endDate != null &&
+        endDate.isAfter(_endDate!);
+    if (_plan == plan && !isRenewal) {
       Log.info(
           '[SubscriptionSuccessListenable] plan is same as current, skipping duplicate notification');
       return;
     }
 
+    _isRenewal = isRenewal;
     _plan = plan;
+    _endDate = endDate;
     Log.info(
         '[SubscriptionSuccessListenable] notifying listeners with plan: $plan, message: $upgradeSuccessMessage');
     notifyListeners();
