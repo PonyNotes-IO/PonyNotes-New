@@ -3558,5 +3558,13 @@
   },
   "shareSection": {
     "shared": "與我分享"
+  },
+  "viewPanes": {
+    "splitRight": "左右分屏",
+    "splitDown": "上下分屏",
+    "openInNewWindow": "在新視窗中開啟",
+    "closePane": "關閉分屏",
+    "resizePanes": "調整分屏大小",
+    "openWindowFailed": "無法開啟新視窗，請重試"
   }
 }

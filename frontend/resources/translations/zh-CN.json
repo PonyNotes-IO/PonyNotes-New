@@ -3792,5 +3792,13 @@
     "offlineReadOnlyTitle": "离线只读",
     "offlineReadOnlyHint": "当前网络不可用，展示本地镜像，仅供浏览",
     "offlineMirrorMissing": "暂无本地镜像可供离线浏览"
+  },
+  "viewPanes": {
+    "splitRight": "左右分屏",
+    "splitDown": "上下分屏",
+    "openInNewWindow": "在新窗口中打开",
+    "closePane": "关闭分屏",
+    "resizePanes": "调整分屏大小",
+    "openWindowFailed": "无法打开新窗口，请重试"
   }
 }

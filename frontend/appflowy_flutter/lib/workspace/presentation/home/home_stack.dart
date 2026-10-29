@@ -6,6 +6,7 @@ import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/space_hub/space_hub_plugin_view.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
@@ -43,6 +44,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../../user/presentation/reminder/notification_permission_banner.dart';
 import 'home_layout.dart';
 import 'full_window_controller.dart';
+import 'view_panes.dart';
 
 typedef NavigationCallback = void Function(String id);
 
@@ -1072,6 +1074,7 @@ class PageManager {
 
   final PageNotifier _notifier = PageNotifier();
   final PageNotifier _secondaryNotifier = PageNotifier();
+  final viewPanesKey = GlobalKey<ViewPanesState>();
 
   PageNotifier get notifier => _notifier;
   PageNotifier get secondaryNotifier => _secondaryNotifier;
@@ -1163,6 +1166,36 @@ class PageManager {
           }
 
           final activePlugin = notifier.plugin;
+          final viewNotifier = activePlugin.notifier;
+          if (PlatformInfo.isDesktop &&
+              viewNotifier is ViewPluginNotifier &&
+              !viewNotifier.view.isSpace) {
+            return ViewPanes(
+              key: viewPanesKey,
+              view: viewNotifier.view,
+              onActiveViewChanged: (view) {
+                if (view.id != plugin.id) setPlugin(view.plugin(), true);
+              },
+              builder: (context, view) => SpaceHubPluginView(
+                key: ValueKey('${view.id}:${view.layout.value}'),
+                view: view,
+                createPlugin: () => view.plugin(),
+                builder: (context, plugin) {
+                  final builder = plugin.widgetBuilder;
+                  return Padding(
+                    padding: builder.contentPadding,
+                    child: builder.buildWidget(
+                      context: PluginContext(
+                        userProfile: userProfile,
+                        onDeleted: onDeleted,
+                      ),
+                      shrinkWrap: false,
+                    ),
+                  );
+                },
+              ),
+            );
+          }
           final activePluginKey =
               ValueKey('${activePlugin.pluginType.name}:${activePlugin.id}');
 
@@ -1181,6 +1214,10 @@ class PageManager {
                       userProfile: userProfile,
                     ),
                     shrinkWrap: false,
+                    data: viewNotifier is ViewPluginNotifier &&
+                            viewNotifier.view.isSpace
+                        ? {'viewPanesKey': viewPanesKey}
+                        : null,
                   );
 
                   return Padding(

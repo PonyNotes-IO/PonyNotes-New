@@ -30,6 +30,7 @@ import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/view_panes.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/unified_view_top_right_actions.dart';
@@ -274,6 +275,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           onDeleted: (deletedView, index) =>
               context.onDeleted?.call(deletedView, index),
           pluginContext: context,
+          viewPanesKey: data?['viewPanesKey'] as GlobalKey<ViewPanesState>?,
           bloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
           currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
@@ -345,11 +347,13 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.bloc,
     required this.pageAccessLevelBloc,
     required this.currentViewInfoBlocNotifier,
+    this.viewPanesKey,
     this.initialSelectedView,
     this.tabView,
   });
 
   final ViewPB spaceView;
+  final GlobalKey<ViewPanesState>? viewPanesKey;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
   final PluginContext pluginContext;
@@ -417,6 +421,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
     return MultiBlocProvider(
       providers: providers,
       child: _SpaceHubContent(
+        viewPanesKey: widget.viewPanesKey,
         spaceView: widget.spaceView,
         selectedViewNotifier: widget.selectedViewNotifier,
         onDeleted: widget.onDeleted,
@@ -435,11 +440,13 @@ class _SpaceHubContent extends StatefulWidget {
     required this.selectedViewNotifier,
     required this.onDeleted,
     required this.currentViewInfoBlocNotifier,
+    this.viewPanesKey,
     this.initialSelectedView,
     this.tabView,
   });
 
   final ViewPB spaceView;
+  final GlobalKey<ViewPanesState>? viewPanesKey;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
   final ValueNotifier<ViewInfoBloc?>
@@ -671,7 +678,18 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     // 右侧内容区域使用本地的 _selectedView 变量
     final rightPanel = Expanded(
       child: _selectedView != null
-          ? _buildSelectedViewContent(_selectedView!)
+          ? PlatformInfo.isDesktop
+              ? ViewPanes(
+                  key: widget.viewPanesKey,
+                  view: _selectedView!,
+                  onActiveViewChanged: (view) {
+                    setState(() => _selectedView = view);
+                    widget.selectedViewNotifier.value = view;
+                    spaceHubSelectedViewLayoutNotifier.value = view.layout;
+                  },
+                  builder: (_, view) => _buildSelectedViewContent(view),
+                )
+              : _buildSelectedViewContent(_selectedView!)
           : _buildEmptyState(),
     );
 
@@ -867,7 +885,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
         // ✅ 在 build 完成后更新 currentViewInfoBlocNotifier
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
+          if (mounted && _selectedView?.id == view.id) {
             widget.currentViewInfoBlocNotifier.value = viewInfoBloc;
           }
         });

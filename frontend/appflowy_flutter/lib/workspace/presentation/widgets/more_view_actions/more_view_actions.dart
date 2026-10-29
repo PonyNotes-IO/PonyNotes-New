@@ -5,12 +5,17 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/handwriting_saber/presentation/handwriting_export_action.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy/shared/feature_flags.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/home/page_windows.dart';
+import 'package:appflowy/workspace/presentation/home/view_panes.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/common_view_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/database_export_action.dart';
@@ -24,6 +29,8 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class MoreViewActions extends StatefulWidget {
   const MoreViewActions({
@@ -176,6 +183,13 @@ class _MoreViewActionsState extends State<MoreViewActions> {
       pageAccessLevelBloc: pageAccessLevelBloc,
       customActions: widget.customActions,
       popoverMutex: popoverMutex,
+      splitPane: ViewPaneScope.maybeOf(context)?.split ??
+          getIt<TabsBloc>()
+              .state
+              .currentPageManager
+              .viewPanesKey
+              .currentState
+              ?.split,
     );
   }
 }
@@ -190,6 +204,7 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
     this.pageAccessLevelBloc,
     required this.customActions,
     required this.popoverMutex,
+    required this.splitPane,
   });
 
   final ViewPB view;
@@ -200,6 +215,7 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
   final PageAccessLevelBloc? pageAccessLevelBloc;
   final List<Widget> customActions;
   final PopoverMutex popoverMutex;
+  final void Function(Axis)? splitPane;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +304,52 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
           !pageAccessLevelState.isReadOnly &&
           !isHandwriting) ...[
         LockPageAction(view: viewFromState),
+        ViewAction(
+          type: ViewMoreActionType.divider,
+          view: viewFromState,
+          mutex: popoverMutex,
+        ),
+      ],
+      if (UniversalPlatform.isDesktop && !view.isSpace) ...[
+        for (final (label, icon, axis) in [
+          (
+            'viewPanes.splitRight',
+            Icons.vertical_split_outlined,
+            Axis.horizontal
+          ),
+          (
+            'viewPanes.splitDown',
+            Icons.horizontal_split_outlined,
+            Axis.vertical
+          ),
+          ('viewPanes.openInNewWindow', Icons.open_in_new, null),
+        ])
+          Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: FlowyButton(
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              disable: axis != null && splitPane == null,
+              leftIcon: Icon(icon, size: 16),
+              iconPadding: 10,
+              text: FlowyText(label.tr(), figmaLineHeight: 18),
+              onTap: () async {
+                popoverMutex.close();
+                if (axis != null) {
+                  splitPane?.call(axis);
+                } else {
+                  try {
+                    await PageWindows.open(viewFromState);
+                  } catch (error) {
+                    showToastNotification(
+                      message: 'viewPanes.openWindowFailed'.tr(),
+                      type: ToastificationType.error,
+                    );
+                  }
+                }
+              },
+            ),
+          ),
         ViewAction(
           type: ViewMoreActionType.divider,
           view: viewFromState,

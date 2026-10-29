@@ -3725,5 +3725,13 @@
     "offlineReadOnlyTitle": "Offline (read-only)",
     "offlineReadOnlyHint": "Network unavailable. Showing local mirror for viewing only.",
     "offlineMirrorMissing": "No local mirror available for offline viewing"
+  },
+  "viewPanes": {
+    "splitRight": "Split right",
+    "splitDown": "Split down",
+    "openInNewWindow": "Open in new window",
+    "closePane": "Close pane",
+    "resizePanes": "Resize panes",
+    "openWindowFailed": "Could not open a new window. Please try again."
   }
 }
