@@ -3,6 +3,12 @@ project(appflowy_flutter LANGUAGES CXX)
 
 set(BINARY_NAME "PonyNotes")
 
+# Direct `flutter run/build windows` must bundle the current source translations.
+file(GLOB PONYNOTES_TRANSLATIONS CONFIGURE_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../resources/translations/*.json")
+file(COPY ${PONYNOTES_TRANSLATIONS}
+  DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/../assets/translations")
+
 # 抑制 flutter_inappwebview_windows、media_kit_libs_windows_video 等插件的 CMP0175 警告
 if(POLICY CMP0175)
   cmake_policy(SET CMP0175 OLD)

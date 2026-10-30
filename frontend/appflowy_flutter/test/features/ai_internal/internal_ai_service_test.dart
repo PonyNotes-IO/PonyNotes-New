@@ -86,6 +86,70 @@ http.Response _completion(Map<String, dynamic> message) {
 }
 
 void main() {
+  test('structured extraction sends no tools and decodes UTF-8 evidence',
+      () async {
+    final tools = _FakeMcpTools();
+    final service = _TestableInternalAi(
+      setting: _validSetting(),
+      tools: tools,
+      client: MockClient((request) async {
+        final body = jsonDecode(request.body) as Map;
+        expect(body.containsKey('tools'), isFalse);
+        expect(body.containsKey('tool_choice'), isFalse);
+        expect(body['messages'], [
+          {'role': 'system', 'content': 'Extract JSON only'},
+          {'role': 'user', 'content': '小马笔记'},
+        ]);
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'choices': [
+                {
+                  'message': {'content': '{"name":"小马笔记"}'},
+                }
+              ],
+            }),
+          ),
+          200,
+        );
+      }),
+    );
+    expect(
+      await service.complete(systemPrompt: 'Extract JSON only', text: '小马笔记'),
+      '{"name":"小马笔记"}',
+    );
+    expect(tools.executed, isEmpty);
+    service.dispose();
+  });
+
+  test('structured extraction rejects a truncated model reply', () async {
+    final service = _TestableInternalAi(
+      setting: _validSetting(),
+      tools: _FakeMcpTools(),
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'finish_reason': 'length',
+                'message': {'content': '{"node":[]'},
+              }
+            ],
+          }),
+          200,
+        ),
+      ),
+    );
+    await expectLater(
+      service.complete(systemPrompt: 'JSON', text: 'note'),
+      throwsA(
+        isA<InternalAiException>()
+            .having((e) => e.kind, 'kind', InternalAiErrorKind.serverError),
+      ),
+    );
+    service.dispose();
+  });
+
   test('未配置时抛 notConfigured，不发请求', () async {
     var called = false;
     final client = MockClient((_) async {

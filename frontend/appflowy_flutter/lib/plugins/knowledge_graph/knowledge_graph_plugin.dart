@@ -53,6 +53,9 @@ class KnowledgeGraphWidgetBuilder extends PluginWidgetBuilder {
   EdgeInsets get contentPadding => EdgeInsets.zero;
 
   @override
+  bool get handlesFullWindowOverlayActionsInternally => true;
+
+  @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) => leftBarItem;
 
   @override

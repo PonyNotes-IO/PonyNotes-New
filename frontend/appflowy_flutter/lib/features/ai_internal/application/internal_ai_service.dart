@@ -88,13 +88,16 @@ class InternalAiService {
     http.Client? httpClient,
     this.writeConfirmationRequired = true,
   })  : _tools = tools ?? McpTools(endpoint: 'internal', version: '1.0.0'),
-        _clientFactory = httpClient == null ? http.Client.new : (() => httpClient);
+        _ownsClient = httpClient == null,
+        _clientFactory =
+            httpClient == null ? http.Client.new : (() => httpClient);
 
   final McpTools _tools;
 
   /// 每次请求新建一个 client，取消时直接 close 掉当前这个，
   /// 下一个请求不受影响。
   final http.Client Function() _clientFactory;
+  final bool _ownsClient;
   http.Client? _activeClient;
   bool _canceled = false;
 
@@ -121,6 +124,49 @@ class InternalAiService {
   /// 存在 Dart 侧的 `SharedPreferences`，与 Ollama 的 `LocalAISetting` 互不影响。
   Future<AiProviderConfig> loadConfig() =>
       const AiProviderConfigStorage().load();
+
+  /// A single completion without tools, for structured document extraction.
+  Future<String> complete({
+    required String systemPrompt,
+    required String text,
+    AiProviderConfig? configOverride,
+  }) async {
+    _canceled = false;
+    final config = configOverride ?? await loadConfig();
+    if (!config.isComplete) {
+      throw InternalAiException(
+        InternalAiErrorKind.notConfigured,
+        '尚未配置模型地址、模型名称或 API Key。',
+      );
+    }
+    if (_canceled) {
+      throw InternalAiException(InternalAiErrorKind.canceled, '已取消。');
+    }
+    final response = await _postChatCompletion(
+      config,
+      [
+        {'role': 'system', 'content': systemPrompt},
+        {'role': 'user', 'content': text},
+      ],
+      withTools: false,
+    );
+    final choice = _firstChoice(response);
+    if (choice['finish_reason'] == 'length') {
+      throw InternalAiException(
+        InternalAiErrorKind.serverError,
+        '模型回复被截断，请重试。',
+      );
+    }
+    final message = choice['message'];
+    final content = message is Map ? message['content'] : null;
+    if (content is! String || content.trim().isEmpty) {
+      throw InternalAiException(
+        InternalAiErrorKind.serverError,
+        '模型服务没有返回任何回复内容。',
+      );
+    }
+    return content.trim();
+  }
 
   /// 判断配置是否可用。
   bool isConfigured(AiProviderConfig config) => config.isComplete;
@@ -268,14 +314,15 @@ class InternalAiService {
 
   Future<Map<String, dynamic>> _postChatCompletion(
     AiProviderConfig config,
-    List<Map<String, dynamic>> messages,
-  ) async {
+    List<Map<String, dynamic>> messages, {
+    bool withTools = true,
+  }) async {
     final uri = _chatCompletionsUri(config.baseUrl);
     final body = jsonEncode({
       'model': config.modelName,
       'messages': messages,
-      'tools': _toolsPayload(),
-      'tool_choice': 'auto',
+      if (withTools) 'tools': _toolsPayload(),
+      if (withTools) 'tool_choice': 'auto',
     });
 
     final client = _clientFactory();
@@ -292,6 +339,9 @@ class InternalAiService {
             body: body,
           )
           .timeout(_requestTimeout);
+      if (_canceled) {
+        throw InternalAiException(InternalAiErrorKind.canceled, '已取消。');
+      }
     } on TimeoutException {
       throw InternalAiException(
         InternalAiErrorKind.network,
@@ -306,13 +356,15 @@ class InternalAiService {
         '连接模型服务失败：$e',
       );
     } finally {
+      if (_ownsClient) client.close();
       if (identical(_activeClient, client)) _activeClient = null;
     }
 
     switch (response.statusCode) {
       case 200:
         try {
-          return jsonDecode(response.body) as Map<String, dynamic>;
+          return jsonDecode(utf8.decode(response.bodyBytes))
+              as Map<String, dynamic>;
         } catch (e) {
           throw InternalAiException(
             InternalAiErrorKind.serverError,

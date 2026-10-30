@@ -6,6 +6,7 @@ import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_cub
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_data.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_canvas.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_page.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -15,17 +16,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-class _SourceTranslations extends AssetLoader {
-  const _SourceTranslations();
-
-  @override
-  Future<Map<String, dynamic>> load(String path, Locale locale) async =>
-      jsonDecode(
-        File('../resources/translations/${locale.languageCode}-${locale.countryCode}.json')
-            .readAsStringSync(),
-      ) as Map<String, dynamic>;
-}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +33,13 @@ void main() {
               .then(ByteData.sublistView),
         );
       await loader.load();
+      final icons = FontLoader('MaterialIcons')
+        ..addFont(
+          File('E:/fly/FlyEnv-Data/env/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf')
+              .readAsBytes()
+              .then(ByteData.sublistView),
+        );
+      await icons.load();
     }
   });
 
@@ -50,7 +47,16 @@ void main() {
     WidgetTester tester,
     KnowledgeGraphCubit cubit, {
     ValueChanged<GraphNode>? onOpen,
+    void Function(ViewPB, String)? onOpenSource,
+    VoidCallback? onConfigureModel,
+    ViewPB? focusView,
+    bool documentLinks = false,
   }) async {
+    await tester.runAsync(() async {
+      for (final locale in ['en-US', 'zh-CN']) {
+        await rootBundle.loadString('assets/translations/$locale.json');
+      }
+    });
     await tester.pumpWidget(
       EasyLocalization(
         supportedLocales: const [Locale('en', 'US'), Locale('zh', 'CN')],
@@ -59,7 +65,6 @@ void main() {
             : const Locale('zh', 'CN'),
         fallbackLocale: const Locale('en', 'US'),
         path: 'assets/translations',
-        assetLoader: const _SourceTranslations(),
         child: Builder(
           builder: (context) => MaterialApp(
             locale: context.locale,
@@ -77,7 +82,12 @@ void main() {
                 key: previewKey,
                 child: BlocProvider.value(
                   value: cubit,
-                  child: KnowledgeGraphView(onOpen: onOpen ?? (_) {}),
+                  child: KnowledgeGraphView(
+                    onOpen: onOpen ?? (_) {},
+                    onOpenSource: onOpenSource,
+                    onConfigureModel: onConfigureModel,
+                    focusView: focusView,
+                  ),
                 ),
               ),
             ),
@@ -86,9 +96,26 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The production loader decodes large asset files outside the fake clock.
+    for (var attempt = 0;
+        attempt < 50 && find.byType(KnowledgeGraphView).evaluate().isEmpty;
+        attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pumpAndSettle();
+    }
+    if (documentLinks) {
+      await tester
+          .tap(find.text(previewPath == null ? 'Document links' : '文档关系'));
+      await tester.pumpAndSettle();
+    }
   }
 
-  Future<List<CustomPainterSemantics>> waitForNodes(WidgetTester tester) async {
+  Future<List<CustomPainterSemantics>> waitForNodes(
+    WidgetTester tester, {
+    int? count,
+  }) async {
     for (var attempt = 0; attempt < 100; attempt++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 10)),
@@ -103,11 +130,171 @@ void main() {
       for (final paint in paints) {
         final nodes =
             paint.painter?.semanticsBuilder?.call(const Size(800, 600));
-        if (nodes != null && nodes.isNotEmpty) return nodes;
+        if (nodes != null &&
+            nodes.isNotEmpty &&
+            (count == null || nodes.length == count)) {
+          return nodes;
+        }
       }
     }
     throw StateError('Graph layout did not complete');
   }
+
+  Future<void> openAction(WidgetTester tester, String label) async {
+    await tester.tap(find.byType(PopupMenuButton<VoidCallback>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PopupMenuItem<VoidCallback>, label));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('note graph stays scoped after searching and resetting filters',
+      (tester) async {
+    final note = ViewPB(id: 'note', name: 'Current note');
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async => [
+        note,
+        ViewPB(id: 'linked', name: 'Direct neighbor', parentViewId: 'note'),
+        ViewPB(id: 'distant', name: 'Two hops away', parentViewId: 'linked'),
+        ViewPB(id: 'unrelated', name: 'Unrelated'),
+      ],
+      loadDocument: (_) async => DocumentDataPB(),
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    await mount(tester, cubit, focusView: note);
+    final nodes = await waitForNodes(tester, count: 2);
+    expect(nodes.map((node) => node.properties.label).toSet(), {
+      'Current note',
+      'Direct neighbor',
+    });
+    await openAction(
+      tester,
+      previewPath == null ? 'Filters and display' : '筛选与显示',
+    );
+    await tester.enterText(find.byType(TextField), 'no matching note');
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeGraphCanvas), findsNothing);
+    await tester.tap(
+      find
+          .widgetWithText(
+            TextButton,
+            previewPath == null ? 'Reset filters' : '重置筛选',
+          )
+          .first,
+    );
+    final resetNodes = await waitForNodes(tester, count: 2);
+    expect(resetNodes.map((node) => node.properties.label).toSet(), {
+      'Current note',
+      'Direct neighbor',
+    });
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('handwriting graph shows note links and disables text extraction',
+      (tester) async {
+    final note = ViewPB(
+      id: 'hand',
+      name: 'Handwriting',
+      extra: '{"view_type":"handwriting_saber"}',
+    );
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      focusViewId: note.id,
+      loadViews: () async => [note],
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    await mount(tester, cubit, focusView: note);
+    await waitForNodes(tester, count: 1);
+    await tester.binding.setSurfaceSize(const Size(160, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(previewPath == null ? 'Entity graph' : '实体图谱'),
+      findsNothing,
+    );
+    await tester.tap(find.byType(PopupMenuButton<VoidCallback>));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<PopupMenuItem<VoidCallback>>(
+            find.widgetWithText(
+              PopupMenuItem<VoidCallback>,
+              previewPath == null
+                  ? 'Extract entities and relationships'
+                  : '抽取实体与关系',
+            ),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('graph toolbar has four actions and preserves graph commands',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1007, 681));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    addTearDown(FullWindowController.exit);
+    var loads = 0;
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async {
+        loads++;
+        return [
+          ViewPB(id: 'notes', name: 'Project notes'),
+          ViewPB(id: 'research', name: 'Research notes'),
+          ViewPB(id: 'meeting', name: 'Meeting notes'),
+        ];
+      },
+      loadDocument: (_) async => DocumentDataPB(),
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    await mount(tester, cubit, documentLinks: true);
+    await waitForNodes(tester, count: 3);
+    for (final icon in [Icons.send_outlined, Icons.star_border]) {
+      expect(
+        tester
+            .widget<IconButton>(find.widgetWithIcon(IconButton, icon))
+            .onPressed,
+        isNull,
+      );
+    }
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    expect(find.byIcon(Icons.more_horiz), findsOneWidget);
+    expect(find.byIcon(Icons.auto_awesome), findsNothing);
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    expect(find.byIcon(Icons.tune), findsNothing);
+    await tester.tap(find.byIcon(Icons.fullscreen));
+    await tester.pumpAndSettle();
+    expect(FullWindowController.isFullWindow.value, isTrue);
+    await tester.tap(find.byIcon(Icons.fullscreen_exit));
+    await tester.pumpAndSettle();
+    expect(FullWindowController.isFullWindow.value, isFalse);
+    if (previewPath != null) {
+      await tester.runAsync(() async {
+        final boundary = previewKey.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary;
+        final image = await boundary.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(previewPath).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+    await openAction(tester, previewPath == null ? 'Refresh graph' : '刷新图谱');
+    await waitForNodes(tester, count: 3);
+    expect(loads, 2);
+    await openAction(
+      tester,
+      previewPath == null ? 'Filters and display' : '筛选与显示',
+    );
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('empty workspaces show a useful empty state', (tester) async {
     final cubit = KnowledgeGraphCubit(
@@ -124,6 +311,82 @@ void main() {
       findsOneWidget,
     );
     expect(find.byType(InteractiveViewer), findsNothing);
+  });
+
+  testWidgets('bundled graph translations match source translations',
+      (tester) async {
+    await tester.runAsync(() async {
+      for (final locale in ['en-US', 'zh-CN']) {
+        final bundled = jsonDecode(
+          await rootBundle.loadString('assets/translations/$locale.json'),
+        ) as Map;
+        final source = jsonDecode(
+          File('../resources/translations/$locale.json').readAsStringSync(),
+        ) as Map;
+        expect(
+          bundled['knowledgeGraph'],
+          source['knowledgeGraph'],
+          reason: 'Sync source translations before bundling the app',
+        );
+      }
+    });
+  });
+
+  testWidgets(
+      'defaults to entity setup, separates document links and translates missing model errors',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async => [ViewPB(id: 'notes', name: 'Project notes')],
+      loadDocument: (_) async => DocumentDataPB()
+        ..blocks['block'] = BlockPB(
+          id: 'block',
+          data: jsonEncode({
+            'delta': [
+              {'insert': 'Alice founded PonyNotes.'},
+            ],
+          }),
+        ),
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    var configured = false;
+    await mount(tester, cubit, onConfigureModel: () => configured = true);
+    expect(
+      find.text(
+        previewPath == null ? 'Build your knowledge graph' : '尚未生成知识图谱',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(KnowledgeGraphCanvas), findsNothing);
+    await tester
+        .tap(find.text(previewPath == null ? 'Document links' : '文档关系'));
+    await waitForNodes(tester, count: 1);
+    await tester.tap(find.text(previewPath == null ? 'Entity graph' : '实体图谱'));
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeGraphCanvas), findsNothing);
+    await tester.tap(
+      find.text(
+        previewPath == null ? 'Extract entities and relationships' : '抽取实体与关系',
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(cubit.state.extractionError, 'notConfigured');
+    expect(
+      find.text(
+        previewPath == null
+            ? 'Configure an AI model to build the graph'
+            : '先配置 AI 模型，再生成知识图谱',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('knowledgeGraph.'), findsNothing);
+    await tester.tap(
+      find.text(previewPath == null ? 'Configure AI model' : '配置 AI 模型').first,
+    );
+    expect(configured, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -155,7 +418,12 @@ void main() {
     addTearDown(cubit.close);
     await cubit.refresh();
     GraphNode? opened;
-    await mount(tester, cubit, onOpen: (node) => opened = node);
+    await mount(
+      tester,
+      cubit,
+      onOpen: (node) => opened = node,
+      documentLinks: true,
+    );
     await waitForNodes(tester);
     await tester.pump();
     await tester.tap(find.byTooltip(previewPath == null ? 'Zoom in' : '放大'));
@@ -312,7 +580,12 @@ void main() {
     await cubit.refresh();
     addTearDown(cubit.close);
     GraphNode? opened;
-    await mount(tester, cubit, onOpen: (node) => opened = node);
+    await mount(
+      tester,
+      cubit,
+      onOpen: (node) => opened = node,
+      documentLinks: true,
+    );
     final nodes = await waitForNodes(tester);
     await tester.pump();
     expect(nodes, hasLength(2));
@@ -352,8 +625,9 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(transform.value, isNot(beforePan));
-    await tester.tap(
-      find.byTooltip(previewPath == null ? 'Filters and display' : '筛选与显示'),
+    await openAction(
+      tester,
+      previewPath == null ? 'Filters and display' : '筛选与显示',
     );
     await tester.pumpAndSettle();
     expect(find.byType(CheckboxListTile), findsNothing);
@@ -389,5 +663,132 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(560, 640));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'extracts entities, inspects directed relationships and opens source blocks',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1100, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const text = 'Alice founded PonyNotes.';
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async => [ViewPB(id: 'notes', name: 'Project notes')],
+      loadDocument: (_) async => DocumentDataPB()
+        ..blocks['evidence-block'] = BlockPB(
+          id: 'evidence-block',
+          data: jsonEncode({
+            'delta': [
+              {'insert': text},
+            ],
+          }),
+        ),
+      extractChunk: (_) async => {
+        'node': [
+          {
+            'name': 'Alice',
+            'type': 'Person',
+            'attributes': ['Founder of PonyNotes'],
+          },
+          {'name': 'PonyNotes', 'type': 'Product', 'attributes': []},
+        ],
+        'relation': [
+          {
+            'node1': 'Alice',
+            'node2': 'PonyNotes',
+            'type': 'founded',
+            'evidence': text,
+          },
+        ],
+      },
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    (String, String)? opened;
+    await mount(
+      tester,
+      cubit,
+      onOpenSource: (view, block) => opened = (view.id, block),
+    );
+    expect(find.byType(KnowledgeGraphCanvas), findsNothing);
+    await openAction(
+      tester,
+      previewPath == null ? 'Extract entities and relationships' : '抽取实体与关系',
+    );
+    final nodes = await waitForNodes(tester, count: 2);
+    final alice = nodes.singleWhere((n) => n.properties.label == 'Alice');
+    final paintFinder = find
+        .descendant(
+          of: find.byType(KnowledgeGraphCanvas),
+          matching: find.byType(CustomPaint),
+        )
+        .first;
+    final position = tester
+        .renderObject<RenderBox>(paintFinder)
+        .localToGlobal(alice.rect.center);
+    await tester.tapAt(position);
+    await tester.pumpAndSettle();
+    expect(find.text('Alice → PonyNotes'), findsOneWidget);
+    expect(find.text('Founder of PonyNotes'), findsOneWidget);
+    await tester.tap(find.text('Alice → PonyNotes'));
+    await tester.pumpAndSettle();
+    expect(find.text(text), findsOneWidget);
+    await tester.tap(find.text('Project notes'));
+    expect(opened, ('notes', 'evidence-block'));
+    await tester
+        .tap(find.text(previewPath == null ? 'Show neighbors' : '查看一跳邻居'));
+    await tester.pumpAndSettle();
+    await waitForNodes(tester, count: 2);
+    if (previewPath != null) {
+      await tester.runAsync(() async {
+        final boundary = previewKey.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 1.5);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(previewPath).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    await tester.pumpAndSettle();
+    expect(find.text(text), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(
+      find.byTooltip(
+        MaterialLocalizations.of(
+          tester.element(find.byType(KnowledgeGraphView)),
+        ).closeButtonTooltip,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await openAction(
+      tester,
+      previewPath == null ? 'Filters and display' : '筛选与显示',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(previewPath == null ? 'Person' : '人物').last);
+    await tester.pumpAndSettle();
+    await waitForNodes(tester, count: 1);
+    expect(tester.takeException(), isNull);
+    await tester.binding.setSurfaceSize(const Size(1100, 720));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(
+        TextButton,
+        previewPath == null ? 'Reset filters' : '重置筛选',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await waitForNodes(tester, count: 2);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String>>(
+            find.byType(DropdownButtonFormField<String>),
+          )
+          .initialValue,
+      '',
+    );
   });
 }

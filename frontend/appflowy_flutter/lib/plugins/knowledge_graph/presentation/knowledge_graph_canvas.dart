@@ -15,11 +15,13 @@ class KnowledgeGraphCanvas extends StatefulWidget {
     required this.data,
     required this.showLabels,
     required this.onOpen,
+    this.selectedId,
   });
 
   final KnowledgeGraphData data;
   final bool showLabels;
   final ValueChanged<GraphNode> onOpen;
+  final String? selectedId;
 
   @override
   State<KnowledgeGraphCanvas> createState() => KnowledgeGraphCanvasState();
@@ -316,7 +318,7 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
                                 ? const Color(0xFF747474)
                                 : const Color(0xFFAAAAAA),
                         highlight: Theme.of(context).colorScheme.primary,
-                        hovered: _hovered,
+                        hovered: _hovered ?? widget.selectedId,
                         labels: widget.showLabels,
                         unnamed: graphText(context, 'untitled'),
                         onOpen: widget.onOpen,
@@ -366,6 +368,7 @@ class _GraphPainter extends CustomPainter {
       if (edge.target == hovered) neighbors.add(edge.source);
     }
     final line = Paint()..strokeCap = StrokeCap.round;
+    final lanes = <(String, String), int>{};
     for (final edge in data.edges) {
       final a = positions[edge.source];
       final b = positions[edge.target];
@@ -377,14 +380,81 @@ class _GraphPainter extends CustomPainter {
               ? lineColor.withValues(alpha: 0.3)
               : lineColor;
       line.strokeWidth = active ? 2.2 : 1.4;
-      canvas.drawLine(a, b, line);
+      if (edge.kind == GraphEdgeKind.relation) {
+        final delta = b - a;
+        if (delta.distance < 1) continue;
+        final direction = delta / delta.distance;
+        final normal = Offset(-direction.dy, direction.dx);
+        final pair = edge.source.compareTo(edge.target) < 0
+            ? (edge.source, edge.target)
+            : (edge.target, edge.source);
+        final lane =
+            lanes.update(pair, (value) => value + 1, ifAbsent: () => 1);
+        final control = (a + b) / 2 + normal * (22 * lane.toDouble());
+        final end = b - (b - control) / (b - control).distance * 12;
+        final path = Path()
+          ..moveTo(a.dx, a.dy)
+          ..quadraticBezierTo(control.dx, control.dy, end.dx, end.dy);
+        line.style = PaintingStyle.stroke;
+        canvas.drawPath(path, line);
+        line.style = PaintingStyle.fill;
+        final angle = math.atan2(end.dy - control.dy, end.dx - control.dx);
+        canvas.drawPath(
+          Path()
+            ..moveTo(end.dx, end.dy)
+            ..lineTo(
+              end.dx - 8 * math.cos(angle - 0.45),
+              end.dy - 8 * math.sin(angle - 0.45),
+            )
+            ..lineTo(
+              end.dx - 8 * math.cos(angle + 0.45),
+              end.dy - 8 * math.sin(angle + 0.45),
+            )
+            ..close(),
+          line,
+        );
+        if (labels || active) {
+          final label = TextPainter(
+            text: TextSpan(
+              text: edge.label,
+              style: textStyle.copyWith(fontSize: 11, color: line.color),
+            ),
+            textDirection: TextDirection.ltr,
+            maxLines: 1,
+            ellipsis: '…',
+          )..layout(maxWidth: 130);
+          label.paint(
+            canvas,
+            (a + b) / 4 +
+                control / 2 +
+                Offset(-label.width / 2, -label.height - 3),
+          );
+          label.dispose();
+        }
+      } else {
+        canvas.drawLine(a, b, line);
+      }
     }
     for (final node in data.nodes) {
       final position = positions[node.id];
       if (position == null) continue;
       final active = hovered == node.id;
       final faded = hovered != null && !neighbors.contains(node.id);
-      final color = active ? highlight : nodeColor;
+      const entityColors = {
+        'Person': Color(0xFF4C88D4),
+        'Organization': Color(0xFF8B6DCD),
+        'Location': Color(0xFF39A38B),
+        'Product': Color(0xFFD28745),
+        'Event': Color(0xFFD46F88),
+        'Date': Color(0xFF7B8D55),
+        'Work': Color(0xFF5A9DAF),
+        'Concept': Color(0xFFB18B36),
+        'Resource': Color(0xFF7C86C1),
+        'Category': Color(0xFFAA7FAD),
+        'Operation': Color(0xFFAF7661),
+      };
+      final color =
+          active ? highlight : entityColors[node.entityType] ?? nodeColor;
       if (active) {
         canvas.drawCircle(
           position,
@@ -394,7 +464,7 @@ class _GraphPainter extends CustomPainter {
       }
       canvas.drawCircle(
         position,
-        7,
+        node.entityType == null ? 7 : 10,
         Paint()..color = color.withValues(alpha: faded ? 0.25 : 1),
       );
       if (labels || active) {
