@@ -350,11 +350,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                 Navigator.of(dialogContext).pop();
               },
               onUpgrade: () {
-                final settingsContext = this.context;
+                // 保留普通入口的焦点通知；菜单按钮销毁后使用根导航。
+                final settingsContext = mounted
+                    ? this.context
+                    : Navigator.of(dialogContext, rootNavigator: true).context;
                 // 关闭云同步弹框
                 Navigator.of(dialogContext).pop();
                 // 打开设置对话框，并跳转到会员升级页面
-                if (workspaceBloc != null && mounted) {
+                if (workspaceBloc != null && settingsContext.mounted) {
                   // 使用原始 context（不是 dialogContext）来打开设置对话框
                   final userProfile = workspaceBloc.state.userProfile;
                   showSettingsDialog(
