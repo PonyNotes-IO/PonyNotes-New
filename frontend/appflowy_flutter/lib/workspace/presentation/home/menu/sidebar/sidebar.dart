@@ -1211,7 +1211,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       children: [
         _buildHeaderActionSlot(
           SidebarCloudSyncButton(
-            showUpgradeSpaceButton: !Platform.isAndroid,
+            showUpgradeSpaceButton: !Platform.isAndroid || PlatformInfo.isTablet,
             useHighContrastForeground: highContrastOnDarkBackground,
             foregroundColorOverride: foregroundColorOverride,
           ),
@@ -1401,7 +1401,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
         children: [
           _buildHeaderActionSlot(
             SidebarCloudSyncButton(
-              showUpgradeSpaceButton: !Platform.isAndroid,
+              showUpgradeSpaceButton: !Platform.isAndroid || PlatformInfo.isTablet,
               foregroundColorOverride: foregroundColor,
               onBeforeAction: _headerActionsPopoverController.close,
               buttonSize: _headerActionsPopupButtonSize,
