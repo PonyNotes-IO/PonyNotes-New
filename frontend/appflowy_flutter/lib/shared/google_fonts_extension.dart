@@ -1,4 +1,5 @@
 import 'package:appflowy/workspace/application/settings/appearance/base_appearance.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -21,7 +22,10 @@ TextStyle getGoogleFontSafely(
   if (_defaultFontFamilies.contains(fontFamily) ||
       systemChineseFontKeys.contains(fontFamily)) {
     return TextStyle(
+      // Callers also use this style to identify font picker options. Keep the
+      // default sentinel here; resolve the platform default when rendering.
       fontFamily: fontFamily.isEmpty ? null : fontFamily,
+      fontFamilyFallback: platformFontFamilyFallback,
       fontWeight: fontWeight,
       fontSize: fontSize,
       color: fontColor,
@@ -30,7 +34,7 @@ TextStyle getGoogleFontSafely(
     );
   } else {
     try {
-      return GoogleFonts.getFont(
+      final style = GoogleFonts.getFont(
         fontFamily,
         fontWeight: fontWeight,
         fontSize: fontSize,
@@ -38,11 +42,21 @@ TextStyle getGoogleFontSafely(
         letterSpacing: letterSpacing,
         height: lineHeight,
       );
+      final fallback = platformFontFamilyFallback;
+      return fallback == null
+          ? style
+          : style.copyWith(
+              fontFamilyFallback: [
+                ...?style.fontFamilyFallback,
+                ...fallback,
+              ],
+            );
     } catch (_) {}
   }
 
   return TextStyle(
     fontFamily: fontFamily,
+    fontFamilyFallback: platformFontFamilyFallback,
     fontWeight: fontWeight,
     fontSize: fontSize,
     color: fontColor,

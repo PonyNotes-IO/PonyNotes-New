@@ -1,4 +1,5 @@
 import 'package:appflowy/workspace/application/settings/appearance/base_appearance.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra/theme.dart';
 import 'package:flowy_infra/theme_extension.dart';
@@ -49,6 +50,10 @@ class DesktopAppearance extends BaseAppearance {
 
     // Due to Desktop version has multiple themes, it relies on the current theme to build the ThemeData
     return ThemeData(
+      fontFamily: platformFontFamilyFallback == null
+          ? null
+          : getFontStyle(fontFamily: fontFamily).fontFamily,
+      fontFamilyFallback: platformFontFamilyFallback,
       visualDensity: VisualDensity.standard,
       useMaterial3: false,
       brightness: brightness,

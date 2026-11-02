@@ -46,13 +46,15 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
           },
           toggleShowPredefinedFormat: () {
             final showPredefinedFormats = !state.showPredefinedFormats;
-            final predefinedFormat =
-                showPredefinedFormats && state.predefinedFormat == null
-                    ? PredefinedFormat(
+            // 保留用户已选的格式：此前收起时会把选择清成 null，再展开又重置成
+            // "段落"，导致选好的表格/有序列表被悄悄丢掉。
+            final predefinedFormat = state.predefinedFormat ??
+                (showPredefinedFormats
+                    ? const PredefinedFormat(
                         imageFormat: ImageFormat.text,
                         textFormat: TextFormat.paragraph,
                       )
-                    : null;
+                    : null);
             emit(
               state.copyWith(
                 showPredefinedFormats: showPredefinedFormats,
@@ -61,10 +63,15 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
             );
           },
           updatePredefinedFormat: (format) {
-            if (!state.showPredefinedFormats) {
-              return;
-            }
-            emit(state.copyWith(predefinedFormat: format));
+            // 不再因为格式栏收起就静默丢弃选择：以前点击既没有提示也不生效，
+            // 表现就是"这个功能点了没反应"。
+            // 选中即视为启用（格式入口收进弹出菜单后没有单独的开关了）。
+            emit(
+              state.copyWith(
+                predefinedFormat: format,
+                showPredefinedFormats: true,
+              ),
+            );
           },
           attachFile: (filePath, fileName) {
             final newFile = ChatFile.fromFilePath(filePath);
@@ -154,7 +161,7 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
     // 识别并处理图片文件
     final List<String> imageBase64List = [];
     final List<ChatFile> nonImageFiles = [];
-    
+
     for (final file in state.attachedFiles) {
       if (_isImageFile(file.filePath)) {
         try {

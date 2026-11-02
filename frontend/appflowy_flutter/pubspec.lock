@@ -93,8 +93,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "8b3fec70353b6d31e3187ced6eae3222eda99388"
-      resolved-ref: "8b3fec70353b6d31e3187ced6eae3222eda99388"
+      ref: "8cfa322f437be050f82c1ed2a92707504641cfe1"
+      resolved-ref: "8cfa322f437be050f82c1ed2a92707504641cfe1"
       url: "https://github.com/PonyNotes-IO/appflowy-editor.git"
     source: git
     version: "6.0.0"

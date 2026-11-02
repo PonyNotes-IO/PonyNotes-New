@@ -4,18 +4,22 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:uuid/uuid.dart';
 import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_cache_service.dart';
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_download.dart';
 import '../../../../../../../util/log_utils.dart';
 
 /// PDF加载状态枚举
 enum PdfLoadState {
   notLoaded, // 未加载
+  waitingForSync, // 等待源设备上传并同步云地址
   loading, // 正在加载
   loaded, // 已加载成功
   failed, // 加载失败
@@ -516,21 +520,15 @@ class PdfEditorImage {
         final userResult = await UserBackendService.getCurrentUserProfile();
         final rawToken = userResult.fold((u) => u.token, (_) => '');
         final token = _normalizeToken(rawToken);
-        final response = await http
-            .get(
-              Uri.parse(pdfUrl!),
-              headers:
-                  token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
-            )
-            .timeout(const Duration(seconds: 60));
-        if (response.statusCode != 200) {
-          throw HttpException('PDF download HTTP ${response.statusCode}');
-        }
-        return response.bodyBytes;
+        return downloadHandwritingPdf(
+          Uri.parse(pdfUrl!),
+          headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
+          client: http.Client(),
+        );
       },
     );
     if (_isDisposed) return;
-    pdfBytes = entry.bytes;
+    pdfBytes = entry.path == null ? entry.bytes : null;
     if (entry.path != null) {
       pdfFilePath = entry.path!;
     } else {
@@ -616,6 +614,18 @@ class PdfEditorImage {
   /// 异步加载 PDF 文档（参考saber的firstLoad实现）
   Future<void> _loadPdfDocumentAsync() async {
     try {
+      // 页面结构可能先于云地址同步到达，源设备的本地路径无法在这里打开。
+      if (!(pdfUrl?.startsWith('http') ?? false) &&
+          (pdfBytes == null || pdfBytes!.isEmpty) &&
+          pdfFilePath.isNotEmpty &&
+          !File(pdfFilePath).existsSync()) {
+        _loadError = null;
+        _loadState.value = PdfLoadState.waitingForSync;
+        Log.info(
+          '[PdfEditorImage] Waiting for cloud reference: page=$pdfPageIndex',
+        );
+        return;
+      }
       debugPrint(
         '🦋[PdfEditorImage] 开始异步加载 PDF: $pdfFilePath (pdfUrl: $pdfUrl)',
       );
@@ -656,13 +666,16 @@ class PdfEditorImage {
       );
 
       _document = document;
+      if (File(pdfFilePath).existsSync()) pdfBytes = null;
       _loadError = null;
       _retryCount = 0;
       _loadState.value = PdfLoadState.loaded;
     } catch (e, stackTrace) {
       if (_isDisposed) return;
       _loadError = e.toString();
-      _loadState.value = PdfLoadState.failed;
+      final willRetry =
+          _retryCount < maxAutomaticRetries && e is! TimeoutException;
+      _loadState.value = willRetry ? PdfLoadState.loading : PdfLoadState.failed;
       Log.error(
         '[PdfEditorImage] Load failed: page=$pdfPageIndex, '
         'hasCloud=${pdfUrl != null}, retry=$_retryCount: $e',
@@ -670,11 +683,11 @@ class PdfEditorImage {
         stackTrace,
       );
 
-      if (_retryCount < maxAutomaticRetries && e is! TimeoutException) {
+      if (willRetry) {
         _retryCount++;
         _retryTimer = Timer(const Duration(seconds: 1), () {
           if (_isDisposed) return;
-          if (_loadState.value == PdfLoadState.failed) {
+          if (_loadState.value == PdfLoadState.loading) {
             unawaited(loadPdfDocument());
           }
         });
@@ -781,14 +794,27 @@ class PdfEditorImage {
         );
         switch (loadState) {
           case PdfLoadState.notLoaded:
+          case PdfLoadState.waitingForSync:
           case PdfLoadState.loading:
             // 显示加载状态
             return SizedBox.fromSize(
               size: naturalSize,
               child: Container(
                 color: Colors.grey[100],
-                child: const Center(
-                  child: CircularProgressIndicator(),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 8),
+                      Text(
+                        (loadState == PdfLoadState.waitingForSync
+                                ? LocaleKeys.newSettings_syncState_syncing
+                                : LocaleKeys.editor_loading)
+                            .tr(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

@@ -2,6 +2,7 @@ import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:window_manager/window_manager.dart';
 
 class CocoaWindowChannel {
   CocoaWindowChannel._();
@@ -49,10 +50,12 @@ class MoveWindowDetectorState extends State<MoveWindowDetector> {
       return widget.child ?? const SizedBox.shrink();
     }
 
-    // For the macOS version 15 or higher, we can control the window position by using system APIs
+    // Native dragging is limited to these title areas so controls keep their gestures.
     if (ApplicationInfo.macOSMajorVersion != null &&
         ApplicationInfo.macOSMajorVersion! >= 15) {
-      return widget.child ?? const SizedBox.shrink();
+      return DragToMoveArea(
+        child: widget.child ?? const SizedBox.shrink(),
+      );
     }
 
     return GestureDetector(

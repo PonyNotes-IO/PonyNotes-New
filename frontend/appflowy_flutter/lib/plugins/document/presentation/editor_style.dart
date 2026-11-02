@@ -14,6 +14,7 @@ import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/appearance_defaults.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/settings/appearance/base_appearance.dart';
+import 'package:appflowy_ui/platform_font.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:collection/collection.dart';
@@ -52,8 +53,7 @@ class EditorStyleCustomizer {
           right: 40 + EditorStyleCustomizer.optionMenuWidth,
         );
 
-  static double get nodeHorizontalPadding =>
-      PlatformInfo.isMobile ? 24 : 0;
+  static double get nodeHorizontalPadding => PlatformInfo.isMobile ? 24 : 0;
 
   static EdgeInsets get documentPaddingWithOptionMenu =>
       documentPadding + EdgeInsets.only(left: optionMenuWidth);
@@ -324,19 +324,33 @@ class EditorStyleCustomizer {
 
   TextStyle baseTextStyle(String? fontFamily, {FontWeight? fontWeight}) {
     if (fontFamily == null) {
-      return TextStyle(fontWeight: fontWeight);
+      return TextStyle(
+        fontWeight: fontWeight,
+        fontFamilyFallback: platformFontFamilyFallback,
+      );
     } else if (fontFamily == defaultFontFamily) {
-      return TextStyle(fontFamily: fontFamily, fontWeight: fontWeight);
+      return TextStyle(
+        fontFamily: resolvePlatformFontFamily(fontFamily),
+        fontWeight: fontWeight,
+        fontFamilyFallback: platformFontFamilyFallback,
+      );
     }
 
     try {
       return getGoogleFontSafely(fontFamily, fontWeight: fontWeight);
     } on Exception {
       if ([defaultFontFamily, builtInCodeFontFamily].contains(fontFamily)) {
-        return TextStyle(fontFamily: fontFamily, fontWeight: fontWeight);
+        return TextStyle(
+          fontFamily: resolvePlatformFontFamily(fontFamily),
+          fontWeight: fontWeight,
+          fontFamilyFallback: platformFontFamilyFallback,
+        );
       }
 
-      return TextStyle(fontWeight: fontWeight);
+      return TextStyle(
+        fontWeight: fontWeight,
+        fontFamilyFallback: platformFontFamilyFallback,
+      );
     }
   }
 

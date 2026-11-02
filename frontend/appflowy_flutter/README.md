@@ -43,6 +43,20 @@ We have detailed documentation on how to [get started](https://docs.appflowy.io/
 - [Making Your First PR](https://docs.appflowy.io/docs/documentation/software-contributions/submitting-code/submitting-your-first-pull-request)
 - [All AppFlowy Documentation](https://docs.appflowy.io/docs/documentation/appflowy) - Contribution guide, build and run, debugging, testing, localization, etc.
 
+### 本地支付后端联调
+
+在本目录运行 App 时，可以单独指定 `PonyNotes-Web-Desktop` 的 Java 服务地址：
+
+```powershell
+flutter run --dart-define=PAYMENT_API_BASE_URL=http://192.168.1.96:9081
+```
+
+将 IP 和端口换成自己的电脑地址和 Java 实际监听端口。真机与电脑需在同一局域网，电脑防火墙需允许该端口；Android 模拟器访问宿主机可使用 `http://10.0.2.2:9081`。
+
+此参数覆盖下单、查单、充值记录及 `PaymentApi` 中的 Apple 校验/恢复、订阅查询；登录和笔记同步仍使用原云服务。直连 Java 时地址不带 `/api` 或 `/prod-api`，接口会自动拼接 `/api/...`；如果经过反向代理，则在地址中填写实际前缀，例如 `https://测试域名/prod-api`。
+
+不传此参数即沿用原线上支付地址。参数在编译时生效，切换后需重新运行或构建 App；构建 APK 时同样可传给 `flutter build apk`。真实微信支付通知仍需单独配置公网 HTTPS 地址转发到本地的 `/api/payment/callback/wechat/app`。
+
 ### Need Help?
 
 - New to GitHub? Follow [these](https://docs.appflowy.io/docs/documentation/software-contributions/submitting-code/setting-up-your-repositories) steps to get started

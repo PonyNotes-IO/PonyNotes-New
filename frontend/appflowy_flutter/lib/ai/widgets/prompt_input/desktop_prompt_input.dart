@@ -71,6 +71,7 @@ class DesktopPromptInput extends StatefulWidget {
 
 class _DesktopPromptInputState extends State<DesktopPromptInput> {
   static const double _extraInputHeight = 30.0;
+
   final textFieldKey = GlobalKey();
   final layerLink = LayerLink();
   final overlayController = OverlayPortalController();
@@ -176,46 +177,18 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
                         Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: ConstrainedBox(
-                            constraints: getTextFieldConstraints(
-                              state.showPredefinedFormats && !widget.hideFormats,
-                            ),
+                            constraints: getTextFieldConstraints(),
                             child: inputTextField(),
                           ),
                         ),
-                        if (state.showPredefinedFormats && !widget.hideFormats)
-                          Positioned.fill(
-                            bottom: null,
-                            child: TextFieldTapRegion(
-                              child: Padding(
-                                padding: const EdgeInsetsDirectional.only(
-                                  start: 8.0,
-                                ),
-                                child: ChangeFormatBar(
-                                  showImageFormats:
-                                      state.modelState.type == AiType.cloud,
-                                  predefinedFormat: state.predefinedFormat,
-                                  spacing: 4.0,
-                                  onSelectPredefinedFormat: (format) =>
-                                      context.read<AIPromptInputBloc>().add(
-                                            AIPromptInputEvent
-                                                .updatePredefinedFormat(format),
-                                          ),
-                                ),
-                              ),
-                            ),
-                          ),
                         Positioned.fill(
                           top: null,
                           child: TextFieldTapRegion(
                             child: _PromptBottomActions(
-                              showPredefinedFormatBar:
-                                  state.showPredefinedFormats,
                               showPredefinedFormatButton: !widget.hideFormats,
-                              onTogglePredefinedFormatSection: () =>
-                                  context.read<AIPromptInputBloc>().add(
-                                        AIPromptInputEvent
-                                            .toggleShowPredefinedFormat(),
-                                      ),
+                              showImageFormats:
+                                  state.modelState.type == AiType.cloud,
+                              predefinedFormat: state.predefinedFormat,
                               onStartMention: startMentionPageFromButton,
                               sendButtonState: sendButtonState,
                               onSendPressed: handleSend,
@@ -273,7 +246,10 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     final promptBloc = context.read<AIPromptInputBloc?>();
     final promptId = promptBloc?.promptId;
     final promptState = promptBloc?.state;
-    final predefinedFormat = promptState?.predefinedFormat;
+    // 与发送路径保持一致：格式栏收起时不带格式，避免状态里保留的选择被误用
+    final predefinedFormat = promptState?.showPredefinedFormats == true
+        ? promptState?.predefinedFormat
+        : null;
     if (sources.isNotEmpty) {
       widget.onUpdateSelectedSources(sources);
     }
@@ -331,6 +307,12 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     widget.textController.clear();
     if (userInput.isEmpty) {
       return;
+    }
+
+    // 手机/平板：发送后立刻收起输入法，避免键盘继续挡住刚发出的消息。
+    // 桌面端保持焦点，方便连续输入。
+    if (PlatformInfo.isMobile || PlatformInfo.isTablet) {
+      focusNode.unfocus();
     }
 
     // get the attached files and mentioned pages (异步处理图片)
@@ -488,8 +470,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
                 cubit: inputControlCubit,
                 textController: widget.textController,
                 textFieldFocusNode: focusNode,
-                contentPadding:
-                    calculateContentPadding(state.showPredefinedFormats),
+                contentPadding: calculateContentPadding(),
                 hintText: state.modelState.hintText,
               );
 
@@ -508,34 +489,24 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     );
   }
 
-  BoxConstraints getTextFieldConstraints(bool showPredefinedFormats) {
-    double minHeight = DesktopAIPromptSizes.textFieldMinHeight +
+  BoxConstraints getTextFieldConstraints() {
+    // 格式栏已从输入框内移出（收进底部操作栏的弹出菜单），不再为它预留高度
+    final minHeight = DesktopAIPromptSizes.textFieldMinHeight +
         DesktopAIPromptSizes.actionBarSendButtonSize +
         DesktopAIChatSizes.inputActionBarMargin.vertical +
         _extraInputHeight;
-    double maxHeight = 300;
-    if (showPredefinedFormats) {
-      minHeight += DesktopAIPromptSizes.predefinedFormatButtonHeight;
-      maxHeight += DesktopAIPromptSizes.predefinedFormatButtonHeight;
-    }
+    const maxHeight = 300.0;
     return BoxConstraints(minHeight: minHeight, maxHeight: maxHeight);
   }
 
-  EdgeInsetsGeometry calculateContentPadding(bool showPredefinedFormats) {
-    final top = showPredefinedFormats
-        ? DesktopAIPromptSizes.predefinedFormatButtonHeight
-        : 0.0;
+  EdgeInsetsGeometry calculateContentPadding() {
     final bottom = DesktopAIPromptSizes.actionBarSendButtonSize +
         DesktopAIChatSizes.inputActionBarMargin.vertical;
 
-    // 修复：将top padding设置为0，确保文字从顶部开始显示
-    // textAlignVertical.top 需要配合 top padding = 0 才能生效
     final basePadding = DesktopAIPromptSizes.textFieldContentPadding;
     return EdgeInsets.only(
       left: basePadding.horizontal / 2,
       right: basePadding.horizontal / 2,
-      top: top,
-      // top padding 设置为0（当showPredefinedFormats为false时）或predefinedFormatButtonHeight
       bottom: bottom,
     );
   }
@@ -608,12 +579,6 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
         offset: content.length,
       ),
     );
-
-    if (bloc.state.showPredefinedFormats) {
-      bloc.add(
-        AIPromptInputEvent.toggleShowPredefinedFormat(),
-      );
-    }
   }
 }
 
@@ -699,9 +664,9 @@ class PromptInputTextField extends StatelessWidget {
 class _PromptBottomActions extends StatelessWidget {
   const _PromptBottomActions({
     required this.sendButtonState,
-    required this.showPredefinedFormatBar,
     required this.showPredefinedFormatButton,
-    required this.onTogglePredefinedFormatSection,
+    required this.showImageFormats,
+    required this.predefinedFormat,
     required this.onStartMention,
     required this.onSendPressed,
     required this.onStopStreaming,
@@ -711,9 +676,9 @@ class _PromptBottomActions extends StatelessWidget {
     this.extraBottomActionButton,
   });
 
-  final bool showPredefinedFormatBar;
   final bool showPredefinedFormatButton;
-  final void Function() onTogglePredefinedFormatSection;
+  final bool showImageFormats;
+  final PredefinedFormat? predefinedFormat;
   final void Function() onStartMention;
   final SendButtonState sendButtonState;
   final void Function() onSendPressed;
@@ -734,7 +699,7 @@ class _PromptBottomActions extends StatelessWidget {
             spacing: DesktopAIChatSizes.inputActionBarButtonSpacing,
             children: [
               // PonyNotes: 精简底部工具栏，移除"浏览提示词"和来源选择，只保留必要功能
-              if (showPredefinedFormatButton) _predefinedFormatButton(),
+              if (showPredefinedFormatButton) _predefinedFormatButton(context),
               _selectModelButton(context),
               // PonyNotes: 添加深度思考按钮
               const SizedBox(width: 10),
@@ -760,10 +725,16 @@ class _PromptBottomActions extends StatelessWidget {
     );
   }
 
-  Widget _predefinedFormatButton() {
-    return PromptInputDesktopToggleFormatButton(
-      showFormatBar: showPredefinedFormatBar,
-      onTap: onTogglePredefinedFormatSection,
+  /// 输出格式：折叠成一个小图标按钮，点击弹出格式选项。
+  Widget _predefinedFormatButton(BuildContext context) {
+    return PromptInputFormatMenuButton(
+      predefinedFormat: predefinedFormat,
+      showImageFormats: showImageFormats,
+      onSelectPredefinedFormat: (format) {
+        context.read<AIPromptInputBloc>().add(
+              AIPromptInputEvent.updatePredefinedFormat(format),
+            );
+      },
     );
   }
 
@@ -844,7 +815,8 @@ class _PromptBottomActions extends StatelessWidget {
   }
 
   /// PonyNotes: 构建附件上传按钮（支持图片和文件）
-  Widget _buildAttachmentButton(BuildContext context, AIPromptInputState state) {
+  Widget _buildAttachmentButton(
+      BuildContext context, AIPromptInputState state) {
     // 直接从外层 BlocBuilder 已传入的 state 读取，避免在 BlocBuilder builder 内
     // 再次调用 context.select 造成双重订阅的反模式。
     final hasAttachments = state.attachedFiles.isNotEmpty;
@@ -887,7 +859,8 @@ class _PromptBottomActions extends StatelessWidget {
                   for (final xFile in xFiles) {
                     if (context.mounted) {
                       context.read<AIPromptInputBloc>().add(
-                          AIPromptInputEvent.attachFile(xFile.path, xFile.name));
+                          AIPromptInputEvent.attachFile(
+                              xFile.path, xFile.name));
                     }
                   }
                 }
