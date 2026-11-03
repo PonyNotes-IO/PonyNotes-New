@@ -266,6 +266,12 @@ class AppleIAPService {
           //    loading，提示用户等批准结果（会通过 purchaseStream
           //    异步推到 purchased / restored 再处理）。
           return PurchaseResult.initiated();
+
+        case SK2ProductPurchaseResult.unverified:
+          // ⚠️ StoreKit 2 校验失败（in_app_purchase_storekit 新版本新增）。
+          //    不把它当作成功，直接判为失败并解除 loading，具体失败原因
+          //    由后续 purchaseStream 事件/日志补充。
+          return PurchaseResult.failure('支付校验未通过');
       }
     } catch (e, s) {
       Log.error('[AppleIAP] SK2Product.purchase exception: $e\n$s');
