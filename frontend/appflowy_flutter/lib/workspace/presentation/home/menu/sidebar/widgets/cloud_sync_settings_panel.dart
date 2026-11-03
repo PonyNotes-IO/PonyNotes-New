@@ -26,6 +26,7 @@ class CloudSyncSettingsPanel extends StatefulWidget {
     this.currentSubscription,
     this.onUpgrade,
     this.showUpgradeSpaceButton = true,
+    this.showSubscriptionActions = true,
     this.width = 320,
     this.storageTotal = '200G',
     this.maxFileSize = '3GB',
@@ -38,6 +39,7 @@ class CloudSyncSettingsPanel extends StatefulWidget {
   final CurrentSubscription? currentSubscription;
   final VoidCallback? onUpgrade;
   final bool showUpgradeSpaceButton;
+  final bool showSubscriptionActions;
   final double width;
   final String storageTotal;
   final String maxFileSize;
@@ -162,14 +164,16 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           softWrap: true,
           maxLines: null,
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: AFFilledTextButton.primary(
-            text: LocaleKeys.newSettings_cloudSync_btnSubscribe.tr(),
-            onTap: widget.onUpgrade ?? () {},
+        if (widget.showSubscriptionActions) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: AFFilledTextButton.primary(
+              text: LocaleKeys.newSettings_cloudSync_btnSubscribe.tr(),
+              onTap: widget.onUpgrade ?? () {},
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -237,7 +241,9 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
-        if (isFreePlan && widget.showUpgradeSpaceButton) ...[
+        if (isFreePlan &&
+            widget.showUpgradeSpaceButton &&
+            widget.showSubscriptionActions) ...[
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -318,14 +324,16 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           softWrap: true,
           maxLines: null,
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: AFFilledTextButton.primary(
-            text: LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
-            onTap: widget.onUpgrade ?? () {},
+        if (widget.showSubscriptionActions) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: AFFilledTextButton.primary(
+              text: LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
+              onTap: widget.onUpgrade ?? () {},
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -408,16 +416,18 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           softWrap: true,
           maxLines: null,
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: AFFilledTextButton.primary(
-            text: isDowngraded
-                ? LocaleKeys.newSettings_cloudSync_btnUpgradePlan.tr()
-                : LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
-            onTap: widget.onUpgrade ?? () {},
+        if (widget.showSubscriptionActions) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: AFFilledTextButton.primary(
+              text: isDowngraded
+                  ? LocaleKeys.newSettings_cloudSync_btnUpgradePlan.tr()
+                  : LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
+              onTap: widget.onUpgrade ?? () {},
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -474,16 +484,18 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: AFFilledTextButton.primary(
-            text: isExpired
-                ? LocaleKeys.newSettings_cloudSync_btnRenew.tr()
-                : LocaleKeys.newSettings_cloudSync_btnExpandSpace.tr(),
-            onTap: widget.onUpgrade ?? () {},
+        if (widget.showSubscriptionActions) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: AFFilledTextButton.primary(
+              text: isExpired
+                  ? LocaleKeys.newSettings_cloudSync_btnRenew.tr()
+                  : LocaleKeys.newSettings_cloudSync_btnExpandSpace.tr(),
+              onTap: widget.onUpgrade ?? () {},
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
