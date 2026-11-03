@@ -27,6 +27,7 @@ members = [
   "build-tool/flowy-codegen",
   "build-tool/flowy-derive",
   "flowy-search-pub",
+  "flowy-link",
   "flowy-ai",
   "flowy-ai-pub",
   "flowy-storage-pub",
@@ -69,6 +70,7 @@ flowy-storage = { path = "flowy-storage" }
 flowy-storage-pub = { path = "flowy-storage-pub" }
 flowy-search = { path = "flowy-search" }
 flowy-search-pub = { path = "flowy-search-pub" }
+flowy-link = { path = "flowy-link" }
 collab-integrate = { path = "collab-integrate" }
 flowy-date = { path = "flowy-date" }
 flowy-ai = { path = "flowy-ai" }

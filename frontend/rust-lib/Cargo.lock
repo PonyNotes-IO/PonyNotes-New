@@ -3056,7 +3056,9 @@ dependencies = [
  "flowy-derive",
  "flowy-document-pub",
  "flowy-error",
+ "flowy-link",
  "flowy-notification",
+ "flowy-sqlite",
  "flowy-storage-pub",
  "futures",
  "getrandom 0.2.17",
@@ -3221,6 +3223,24 @@ dependencies = [
  "flowy-error",
  "lib-infra",
  "protobuf",
+ "uuid",
+]
+
+[[package]]
+name = "flowy-link"
+version = "0.1.0"
+dependencies = [
+ "collab-document",
+ "diesel",
+ "flowy-error",
+ "flowy-sqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+ "unicode-normalization",
+ "url",
  "uuid",
 ]
 

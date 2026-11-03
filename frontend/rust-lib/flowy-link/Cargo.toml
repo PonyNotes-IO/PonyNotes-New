@@ -1,0 +1,22 @@
+[package]
+name = "flowy-link"
+version = "0.1.0"
+edition = "2021"
+description = "Bidirectional link index for PonyNotes documents. Local-only derived index."
+
+[dependencies]
+flowy-sqlite = { workspace = true }
+flowy-error = { workspace = true, features = ["impl_from_sqlite"] }
+collab-document = { workspace = true }
+
+diesel = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+thiserror = "1.0"
+url = "2"
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tempfile = "3.8.1"
