@@ -18,6 +18,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 import 'editor_plugins/link_preview/custom_link_preview_block_component.dart';
+import 'editor_plugins/backlinks/referenced_block.dart';
 import 'editor_plugins/page_block/custom_page_block_component.dart';
 
 /// A global configuration for the editor.
@@ -99,7 +100,13 @@ Map<String, BlockComponentBuilder> buildBlockComponentBuilders({
     );
   }
 
-  return builders;
+  return {
+    for (final entry in builders.entries)
+      entry.key: entry.key == PageBlockKeys.type ||
+              entry.key == errorBlockComponentBuilderKey
+          ? entry.value
+          : ReferencedBlockBuilder(entry.value),
+  };
 }
 
 BlockComponentConfiguration _buildDefaultConfiguration(

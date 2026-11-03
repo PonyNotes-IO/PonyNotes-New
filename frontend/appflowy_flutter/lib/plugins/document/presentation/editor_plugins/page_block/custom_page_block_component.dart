@@ -45,6 +45,7 @@ class CustomPageBlockComponent extends BlockComponentStatelessWidget {
 
     if (scrollController == null || scrollController.shrinkWrap) {
       return SingleChildScrollView(
+        controller: scrollController?.scrollController,
         child: Builder(
           builder: (context) {
             final scroller = Scrollable.maybeOf(context);

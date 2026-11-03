@@ -96,6 +96,7 @@ Future<bool> inlinePageReferenceCommandHandler(
         InlineChildPageService(currentViewId: currentViewId),
       InlinePageReferenceService(
         currentViewId: currentViewId,
+        selectBlock: previousChar == _bracketChar,
         limitResults: 10,
       ),
     ],

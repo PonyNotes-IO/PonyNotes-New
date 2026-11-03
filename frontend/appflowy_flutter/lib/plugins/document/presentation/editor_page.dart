@@ -38,6 +38,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 
+import 'note_block_navigation.dart';
+import 'editor_plugins/backlinks/backlink_panel.dart';
+import 'editor_plugins/backlinks/note_relations_scope.dart';
+import 'package:appflowy/plugins/document/application/note_relations_controller.dart';
 import 'editor_plugins/desktop_toolbar/desktop_floating_toolbar.dart';
 import 'editor_plugins/toolbar_item/custom_format_toolbar_items.dart';
 import 'editor_plugins/toolbar_item/custom_hightlight_color_toolbar_item.dart';
@@ -152,6 +156,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   DocumentBloc get documentBloc => context.read<DocumentBloc>();
 
   late final EditorScrollController editorScrollController;
+  late final NoteBlockNavigation blockNavigation;
 
   late final ViewInfoBloc viewInfoBloc = context.read<ViewInfoBloc>();
 
@@ -169,6 +174,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   AppLifecycleState? lifecycleState = WidgetsBinding.instance.lifecycleState;
   List<Selection?> previousSelections = [];
 
+  bool _showRelations = false;
   Timer? _tabletKeyboardAvoidanceTimer;
   int _tabletKeyboardAvoidanceRequest = 0;
 
@@ -223,6 +229,12 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       shrinkWrap: widget.shrinkWrap,
       scrollController: effectiveScrollController,
     );
+    blockNavigation = NoteBlockNavigation(
+      pageId: documentBloc.documentId,
+      editor: widget.editorState,
+      scrollController: editorScrollController,
+      hasHeader: () => widget.header != null,
+    )..attach();
 
     toolbarItemWhiteList.addAll([
       ToggleListBlockKeys.type,
@@ -256,45 +268,8 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   }
 
   void _scrollToSelectionIfNeeded() {
-    final initialSelection = widget.initialSelection;
-    final path = initialSelection?.start.path;
-    if (path == null) {
-      return;
-    }
-
-    // on desktop, using jumpTo to scroll to the selection.
-    // on mobile, using scrollTo to scroll to the selection, because using jumpTo will break the scroll notification metrics.
-    if (PlatformInfo.isDesktopOrTablet) {
-      editorScrollController.itemScrollController.jumpTo(
-        index: path.first,
-        alignment: 0.5,
-      );
-      widget.editorState.updateSelectionWithReason(
-        initialSelection,
-      );
-    } else {
-      const delayDuration = Duration(milliseconds: 250);
-      const animationDuration = Duration(milliseconds: 400);
-      Future.delayed(delayDuration, () {
-        editorScrollController.itemScrollController.scrollTo(
-          index: path.first,
-          duration: animationDuration,
-          curve: Curves.easeInOut,
-        );
-        widget.editorState.updateSelectionWithReason(
-          initialSelection,
-          extraInfo: {
-            selectionExtraInfoDoNotAttachTextService: true,
-            selectionExtraInfoDisableMobileToolbarKey: true,
-          },
-        );
-      }).then((_) {
-        Future.delayed(animationDuration, () {
-          widget.editorState.selectionType = SelectionType.inline;
-          widget.editorState.selectionExtraInfo = null;
-        });
-      });
-    }
+    final path = widget.initialSelection?.start.path;
+    if (path != null) unawaited(blockNavigation.jumpToPath(path));
   }
 
   void onSelectionChanged() {
@@ -456,13 +431,21 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       effectiveScrollController.dispose();
     }
     inlineActionsService.dispose();
+    blockNavigation.dispose();
     editorScrollController.dispose();
 
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => NoteRelationsScope(
+        key: ValueKey(documentBloc.documentId),
+        pageId: documentBloc.documentId,
+        editorState: widget.editorState,
+        child: Builder(builder: _buildEditor),
+      );
+
+  Widget _buildEditor(BuildContext context) {
     final (bool autoFocus, Selection? selection) =
         _computeAutoFocusParameters();
 
@@ -480,6 +463,9 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
         context.watch<PageAccessLevelBloc?>()?.state.isEditable ?? false;
     final isEditable = widget.editable ?? pageAccessEditable;
 
+    final showSidebar = !widget.shrinkWrap &&
+        _showRelations &&
+        MediaQuery.sizeOf(context).width >= 900;
     final editor = Directionality(
       textDirection: textDirection,
       child: AppFlowyEditor(
@@ -501,6 +487,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
           ),
           context: context,
           editorState: widget.editorState,
+          editable: !isViewDeleted && isEditable,
           styleCustomizer: widget.styleCustomizer,
           showParagraphPlaceholder: widget.showParagraphPlaceholder,
           placeholderText: widget.placeholderText,
@@ -515,16 +502,24 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
         autoScrollEdgeOffset: PlatformInfo.isDesktopOrTabletOrWeb
             ? 250
             : appFlowyEditorAutoScrollEdgeOffset,
-        footer: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () async {
-            // if the last one isn't a empty node, insert a new empty node.
-            await _focusOnLastEmptyParagraph();
-          },
-          child: SizedBox(
-            width: double.infinity,
-            height: PlatformInfo.isDesktopOrTabletOrWeb ? 600 : 400,
-          ),
+        footer: Column(
+          children: [
+            if (!isViewDeleted && !showSidebar)
+              BacklinkPanel(
+                key: ValueKey(documentBloc.documentId),
+                pageId: documentBloc.documentId,
+                editorState: widget.editorState,
+                editable: isEditable,
+              ),
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _focusOnLastEmptyParagraph,
+              child: SizedBox(
+                width: double.infinity,
+                height: PlatformInfo.isDesktopOrTabletOrWeb ? 600 : 400,
+              ),
+            ),
+          ],
         ),
         dropTargetStyle: AppFlowyDropTargetStyle(
           color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
@@ -600,6 +595,61 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
         ),
       ),
     );
+
+    if (!widget.shrinkWrap && MediaQuery.sizeOf(context).width >= 900) {
+      final zh = Localizations.localeOf(context).languageCode == 'zh';
+      desktopEditor = Stack(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: desktopEditor),
+              if (showSidebar)
+                Container(
+                  width: 340,
+                  decoration: BoxDecoration(
+                    border: BorderDirectional(
+                      start: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        title: Text(zh ? '笔记关系' : 'Note relationships'),
+                        trailing: IconButton(
+                          tooltip: zh ? '关闭' : 'Close',
+                          icon: const Icon(Icons.close),
+                          onPressed: () =>
+                              setState(() => _showRelations = false),
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: BacklinkPanel(
+                            pageId: documentBloc.documentId,
+                            editorState: widget.editorState,
+                            editable: isEditable,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          if (!showSidebar)
+            PositionedDirectional(
+              top: 8,
+              end: 12,
+              child: IconButton(
+                tooltip: zh ? '笔记关系' : 'Note relationships',
+                icon: const Icon(Icons.format_quote_outlined),
+                onPressed: () => setState(() => _showRelations = true),
+              ),
+            ),
+        ],
+      );
+    }
 
     // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建
     // 原因：iPad/Android平板走桌面端布局，但有软键盘，导致MediaQuery.viewInsets变化
@@ -715,7 +765,10 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       final workspaceId = queryParams['workspaceId'];
 
       // 兼容处理：若 viewId 包含 & 或 ?，说明 query string 解析有问题
-      if (viewId != null && (viewId.contains('&') || viewId.contains('?') || viewId.contains('/'))) {
+      if (viewId != null &&
+          (viewId.contains('&') ||
+              viewId.contains('?') ||
+              viewId.contains('/'))) {
         final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
         if (match != null) {
           viewId = match.group(1);
@@ -726,7 +779,9 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       final isSharePath = path == '/share' || path == 'share';
       final isShareOrPublishType = linkType == 'share' || linkType == 'publish';
 
-      if (isSharePath && isShareOrPublishType && queryParams.containsKey('viewId')) {
+      if (isSharePath &&
+          isShareOrPublishType &&
+          queryParams.containsKey('viewId')) {
         if (viewId != null && viewId.isNotEmpty) {
           await _openViewInApp(viewId, workspaceId, url);
           return;
@@ -742,7 +797,11 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   }
 
   /// 在应用内打开笔记视图
-  Future<void> _openViewInApp(String viewId, String? workspaceId, String url) async {
+  Future<void> _openViewInApp(
+    String viewId,
+    String? workspaceId,
+    String url,
+  ) async {
     try {
       // 通过 ViewBackendService 获取视图信息
       final result = await ViewBackendService.getView(viewId);

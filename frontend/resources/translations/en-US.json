@@ -1981,6 +1981,7 @@
         "numberedList": "Numbered list",
         "todoList": "To-do list",
         "doc": "Doc",
+        "referenceParagraph": "Reference a paragraph",
         "linkedDoc": "Link to page",
         "grid": "Grid",
         "linkedGrid": "Linked Grid",

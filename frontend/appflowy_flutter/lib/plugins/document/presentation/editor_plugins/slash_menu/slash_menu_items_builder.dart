@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/document/presentation/editor_plugins/backlinks/note_reference_slash_item.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/ai/operations/ai_writer_node_extension.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
@@ -90,7 +91,8 @@ List<SelectionMenuItem> _defaultSlashMenuItems({
     // simple table
     tableSlashMenuItem,
 
-    // link to page
+    // Linked notes and individual passages.
+    noteReferenceSlashItem,
     linkToPageSlashMenuItem,
 
     // columns
@@ -155,6 +157,7 @@ List<SelectionMenuItem> _defaultSlashMenuItems({
 List<SelectionMenuItem> _simpleTableSlashMenuItems() {
   return [
     paragraphSlashMenuItem,
+    noteReferenceSlashItem,
 
     // heading 1-3
     heading1SlashMenuItem,
@@ -175,7 +178,8 @@ List<SelectionMenuItem> _simpleTableSlashMenuItems() {
     // quote
     quoteSlashMenuItem,
 
-    // link to page
+    // Linked notes and individual passages.
+    noteReferenceSlashItem,
     linkToPageSlashMenuItem,
 
     // callout

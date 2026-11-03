@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:appflowy/plugins/document/presentation/note_block_navigation.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_backend/log.dart';
@@ -885,11 +886,9 @@ class _DocumentPageState extends State<DocumentPage>
       return;
     }
 
-    final Path? path = _getPathFromAction(action, editorState);
+    final path = _getPathFromAction(action, editorState);
     if (path != null) {
-      editorState.updateSelectionWithReason(
-        Selection.collapsed(Position(path: path)),
-      );
+      NoteBlockNavigation.forEditor(editorState)?.jumpToPath(path);
     }
   }
 

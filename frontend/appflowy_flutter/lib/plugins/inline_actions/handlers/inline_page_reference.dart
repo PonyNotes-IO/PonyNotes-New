@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:appflowy/plugins/document/presentation/editor_plugins/backlinks/note_reference_picker.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/insert_page_command.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
@@ -31,6 +32,7 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     this.viewLayout,
     this.customTitle,
     this.insertPage = false,
+    this.selectBlock = false,
     this.limitResults = 5,
   }) : assert(limitResults > 0, 'limitResults must be greater than 0') {
     init();
@@ -47,6 +49,7 @@ class InlinePageReferenceService extends InlineActionsDelegate {
   /// When false, a link to the view will be inserted
   ///
   final bool insertPage;
+  final bool selectBlock;
 
   /// Defaults to 5
   /// Will limit the page reference results
@@ -209,6 +212,33 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     final node = editorState.getNodeAtPath(selection.start.path);
     final delta = node?.delta;
     if (node == null || delta == null) {
+      return;
+    }
+
+    if (selectBlock && view.layout == ViewLayoutPB.Document) {
+      final anchor = NoteReferenceAnchor.capture(
+        editorState,
+        start: replace.$1,
+        length: replace.$2,
+      );
+      final editorContext = editorState.document.root.context;
+      if (anchor == null || editorContext == null || !editorContext.mounted) {
+        return;
+      }
+      // The inline menu dismisses itself after this handler returns.
+      // Open the picker on the next microtask so it receives keyboard focus.
+      unawaited(
+        Future<void>.microtask(() async {
+          if (editorContext.mounted) {
+            await insertNoteReference(
+              editorContext,
+              editorState,
+              initialView: view,
+              anchor: anchor,
+            );
+          }
+        }),
+      );
       return;
     }
 

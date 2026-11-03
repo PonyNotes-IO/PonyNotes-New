@@ -2,6 +2,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy/plugins/document/presentation/note_block_navigation.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_bloc.dart';
@@ -24,11 +25,6 @@ import 'package:appflowy_editor/appflowy_editor.dart'
         Delta,
         EditorState,
         Node,
-        NodeIterator,
-        Path,
-        Position,
-        Selection,
-        SelectionType,
         TextInsert,
         TextTransaction,
         paragraphNode;
@@ -113,10 +109,16 @@ class _MentionPageBlockState extends State<MentionPageBlock> {
             );
           }
 
+          final blockContent =
+              widget.blockId != null && state.blockContent.isEmpty
+                  ? (Localizations.localeOf(context).languageCode == 'zh'
+                      ? '引用段落为空或不可用'
+                      : 'Referenced passage is empty or unavailable')
+                  : state.blockContent;
           if (PlatformInfo.isMobile) {
             return _MobileMentionPageBlock(
               view: view,
-              content: state.blockContent,
+              content: blockContent,
               textStyle: widget.textStyle,
               handleTap: () => handleMentionBlockTap(
                 context,
@@ -135,7 +137,7 @@ class _MentionPageBlockState extends State<MentionPageBlock> {
           } else {
             return _DesktopMentionPageBlock(
               view: view,
-              content: state.blockContent,
+              content: blockContent,
               textStyle: widget.textStyle,
               showTrashHint: state.isInTrash,
               handleTap: () => handleMentionBlockTap(
@@ -301,27 +303,6 @@ class _MentionSubPageBlockState extends State<MentionSubPageBlock> {
   }
 }
 
-Path? _findNodePathByBlockId(EditorState editorState, String blockId) {
-  final document = editorState.document;
-  final startNode = document.root.children.firstOrNull;
-  if (startNode == null) {
-    return null;
-  }
-
-  final nodeIterator = NodeIterator(
-    document: document,
-    startNode: startNode,
-  );
-  while (nodeIterator.moveNext()) {
-    final node = nodeIterator.current;
-    if (node.id == blockId) {
-      return node.path;
-    }
-  }
-
-  return null;
-}
-
 Future<void> handleMentionBlockTap(
   BuildContext context,
   EditorState editorState,
@@ -329,17 +310,9 @@ Future<void> handleMentionBlockTap(
   String? blockId,
 }) async {
   final currentViewId = context.read<DocumentBloc>().documentId;
-  if (currentViewId == view.id && blockId != null) {
-    // same page
-    final path = _findNodePathByBlockId(editorState, blockId);
-    if (path != null) {
-      editorState.scrollService?.jumpTo(path.first);
-      await editorState.updateSelectionWithReason(
-        Selection.collapsed(Position(path: path)),
-        customSelectionType: SelectionType.block,
-      );
-    }
-    return;
+  if (blockId != null && blockId.isNotEmpty) {
+    NoteBlockNavigation.request(view.id, blockId);
+    if (currentViewId == view.id) return;
   }
 
   if (PlatformInfo.isMobile) {

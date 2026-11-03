@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/document/presentation/editor_plugins/backlinks/note_reference_slash_item.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/selection_menu/mobile_selection_menu_item.dart';
@@ -9,6 +10,7 @@ import 'slash_menu_items.dart';
 
 final List<SelectionMenuItem> mobileItems = [
   textStyleMobileSlashMenuItem,
+  noteReferenceSlashItem,
   listMobileSlashMenuItem,
   toggleListMobileSlashMenuItem,
   fileAndMediaMobileSlashMenuItem,
@@ -21,6 +23,7 @@ final List<SelectionMenuItem> mobileItems = [
 
 final List<SelectionMenuItem> mobileItemsInTale = [
   textStyleMobileSlashMenuItem,
+  noteReferenceSlashItem,
   listMobileSlashMenuItem,
   toggleListMobileSlashMenuItem,
   fileAndMediaMobileSlashMenuItem,
