@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/database/domain/select_option_cell_service.dart
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/document/application/note_link_service.dart';
 import 'package:appflowy/plugins/document/application/editor_transaction_adapter.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart'
@@ -153,6 +154,14 @@ class McpTools {
       'page_id': JsonString(description: '页面 ID'),
     },
     required: ['workspace_id', 'page_id'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _linksGraphSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
+    },
+    required: ['workspace_id'],
     additionalProperties: false,
   );
 
@@ -526,7 +535,7 @@ class McpTools {
   /// 避免两套入口各自实现笔记操作。
   List<McpToolSpec> get toolSpecs => _toolSpecs;
 
-  /// 27 个工具的唯一来源。新增工具只需在此追加一条，MCP 与内部 AI 同时生效。
+  /// 30 个工具的唯一来源。新增工具只需在此追加一条，MCP 与内部 AI 同时生效。
   late final List<McpToolSpec> _toolSpecs = [
     McpToolSpec(
       name: 'get_context',
@@ -617,6 +626,32 @@ class McpTools {
       inputSchema: _searchSchema,
       readOnly: true,
       handler: _searchNotes,
+    ),
+    McpToolSpec(
+      name: 'get_backlinks',
+      description: '查询一个页面的双向链接：哪些页面链接到它（反向链接）、'
+          '它链接到哪些页面（正向链接）、以及尚未解析到真实页面的悬空链接。'
+          '反向链接是本地派生索引，只覆盖本机已同步过的页面。',
+      inputSchema: _pageIdSchema,
+      readOnly: true,
+      handler: _getBacklinks,
+    ),
+    McpToolSpec(
+      name: 'get_workspace_links_graph',
+      description: '返回当前工作区的全部页面链接边（双向链接的结构图数据），'
+          '用于整体分析页面之间的引用关系。边里只有页面 ID，'
+          '需要标题时再用 get_page 或 list_pages 查询。',
+      inputSchema: _linksGraphSchema,
+      readOnly: true,
+      handler: _getWorkspaceLinksGraph,
+    ),
+    McpToolSpec(
+      name: 'reindex_page_links',
+      description: '对一个页面重建双向链接索引（从正文重新提取链接边）。'
+          '用于反链结果与正文不一致时的修复；不会改动页面内容本身。',
+      inputSchema: _pageIdSchema,
+      readOnly: false,
+      handler: _reindexPageLinks,
     ),
     McpToolSpec(
       name: 'create_workspace',
@@ -1632,6 +1667,154 @@ class McpTools {
         .take(limit)
         .toList();
     return _ok({'query': query, 'complete': complete, 'results': results});
+  }
+
+  // ---------------------------------------------------------------------------
+  // 双向链接：反链查询 / 工作区链接图 / 索引修复
+  // 反链是本地派生索引，只覆盖本机已同步的页面；不一致时用 reindex_page_links 修复。
+  // ---------------------------------------------------------------------------
+
+  Future<CallToolResult> _getBacklinks(Map<String, dynamic> args) async {
+    final common = await _pageLinksCommon(args);
+    if (common is CallToolResult) return common;
+    final (workspaceId, pageId, view) = common as (String, String, ViewPB);
+
+    final DocumentLinksPB links;
+    try {
+      links = await NoteLinkService.read(pageId: pageId, workspaceId: workspaceId);
+    } catch (e) {
+      Log.error('[MCP] get_backlinks failed: $e');
+      return _error('internal', '读取双向链接失败：$e');
+    }
+    return _ok(await _linkSnapshot(pageId, view.name, links));
+  }
+
+  Future<CallToolResult> _getWorkspaceLinksGraph(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id');
+    if (workspaceId == null || workspaceId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id。');
+    }
+    final contextError = await _validateWorkspace(workspaceId);
+    if (contextError != null) return contextError;
+
+    // 空 page_id 让 Rust 侧返回工作区全图：outgoing 字段承载全部链接边。
+    final DocumentLinksPB links;
+    try {
+      links = await NoteLinkService.read(pageId: '', workspaceId: workspaceId);
+    } catch (e) {
+      Log.error('[MCP] get_workspace_links_graph failed: $e');
+      return _error('internal', '读取链接图失败：$e');
+    }
+    return _ok({
+      'workspace_id': workspaceId,
+      'indexed_pages': links.indexedPages,
+      'truncated': links.truncated,
+      'edges': links.outgoing.map(_edgeToJson).toList(),
+    });
+  }
+
+  Future<CallToolResult> _reindexPageLinks(Map<String, dynamic> args) async {
+    final common = await _pageLinksCommon(args);
+    if (common is CallToolResult) return common;
+    final (workspaceId, pageId, view) = common as (String, String, ViewPB);
+
+    final DocumentLinksPB links;
+    try {
+      // repair=true 走 Rust 侧 ReindexDocumentLinks：从正文重提取并写回索引，
+      // 完成后广播 DidUpdateLinks，已打开的反链面板会自动刷新。
+      links = await NoteLinkService.read(
+        pageId: pageId,
+        workspaceId: workspaceId,
+        repair: true,
+      );
+    } catch (e) {
+      Log.error('[MCP] reindex_page_links failed: $e');
+      return _error('internal', '重建链接索引失败：$e');
+    }
+    return _ok(await _linkSnapshot(pageId, view.name, links));
+  }
+
+  /// 双链三个工具共用的参数校验：workspace 归属 + 页面存在。
+  /// 成功返回 `(workspaceId, pageId, view)` record，失败直接返回错误结果。
+  Future<Object> _pageLinksCommon(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id');
+    final pageId = _stringArg(args, 'page_id');
+    if (workspaceId == null ||
+        workspaceId.isEmpty ||
+        pageId == null ||
+        pageId.isEmpty) {
+      return _error('invalid_params', '缺少 workspace_id 或 page_id。');
+    }
+    final contextError = await _validateWorkspace(workspaceId);
+    if (contextError != null) return contextError;
+
+    final view = await _view(pageId);
+    if (view == null) {
+      return _error('not_found', '页面不存在或无权访问。');
+    }
+    if (view.workspaceId.isNotEmpty && view.workspaceId != workspaceId) {
+      return _error('workspace_mismatch', '页面不属于指定工作区。');
+    }
+    return (workspaceId, pageId, view);
+  }
+
+  Future<Map<String, dynamic>> _linkSnapshot(
+    String pageId,
+    String title,
+    DocumentLinksPB links,
+  ) async {
+    // 标题解析有限额：反链本身有 999 上限，逐个查视图代价太高，
+    // 只解析前 100 个去重页面，其余留空由调用方按需 get_page。
+    final titles = await _resolveTitles([
+      ...links.incoming.map((l) => l.srcPageId),
+      ...links.outgoing.map((l) => l.dstPageId),
+    ]);
+    return {
+      'page_id': pageId,
+      'title': title,
+      'indexed_pages': links.indexedPages,
+      'truncated': links.truncated,
+      'backlinks': links.incoming.map((l) => _edgeToJson(l, titles)).toList(),
+      'outgoing': links.outgoing.map((l) => _edgeToJson(l, titles)).toList(),
+      'unresolved':
+          links.unresolved.map(_unresolvedToJson).toList(),
+    };
+  }
+
+  /// 去重并解析页面标题，最多 100 个；查不到的页面不放入结果。
+  Future<Map<String, String>> _resolveTitles(Iterable<String> pageIds) async {
+    final ids = pageIds.where((id) => id.isNotEmpty).toSet().take(100);
+    final titles = <String, String>{};
+    await Future.wait(ids.map((id) async {
+      final view = await _view(id);
+      if (view != null) titles[id] = view.name;
+    }));
+    return titles;
+  }
+
+  Map<String, dynamic> _edgeToJson(
+    NoteLinkPB link, [
+    Map<String, String> titles = const {},
+  ]) {
+    return {
+      'from_page_id': link.srcPageId,
+      if (titles.containsKey(link.srcPageId)) 'from_title': titles[link.srcPageId],
+      'from_block_id': link.srcBlockId,
+      'to_page_id': link.dstPageId,
+      if (titles.containsKey(link.dstPageId)) 'to_title': titles[link.dstPageId],
+      'to_block_id': link.dstBlockId,
+      'kind': link.kind,
+      'label': link.label,
+      'char_offset': link.charOffset,
+    };
+  }
+
+  Map<String, dynamic> _unresolvedToJson(UnresolvedNoteLinkPB link) {
+    return {
+      'src_block_id': link.srcBlockId,
+      'raw_title': link.rawTitle,
+      'char_offset': link.charOffset,
+    };
   }
 
   Map<String, dynamic> _serverSearchItem(SearchResponseItemPB item) {
