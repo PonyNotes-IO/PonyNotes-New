@@ -92,7 +92,11 @@ impl UserDB {
     Ok(conn)
   }
 
-  pub(crate) fn get_pool(&self, user_id: i64) -> Result<Arc<ConnectionPool>, FlowyError> {
+  /// 用户本地 SQLite 连接池。
+  ///
+  /// 公开给跨 crate 的派生索引能力（如双向链接索引）复用；
+  /// `open_sqlite_db` 内部有缓存，重复调用不会真的重开数据库文件。
+  pub fn get_pool(&self, user_id: i64) -> Result<Arc<ConnectionPool>, FlowyError> {
     let pool = self.open_sqlite_db(self.paths.sqlite_db_path(user_id), user_id)?;
     Ok(pool)
   }

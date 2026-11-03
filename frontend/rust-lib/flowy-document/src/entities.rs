@@ -1,6 +1,6 @@
 use collab::core::collab_state::SyncState;
 use collab_document::{
-  blocks::{Block, BlockAction, DocumentData, json_str_to_hashmap},
+  blocks::{json_str_to_hashmap, Block, BlockAction, DocumentData},
   document_awareness::{
     DocumentAwarenessPosition, DocumentAwarenessSelection, DocumentAwarenessState,
     DocumentAwarenessUser,
@@ -15,6 +15,66 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::parse::{NotEmptyStr, NotEmptyVec};
+
+/// A derived link occurrence. Titles and access are resolved against current views by the client.
+#[derive(Default, ProtoBuf)]
+pub struct NoteLinkPB {
+  #[pb(index = 1)]
+  pub src_page_id: String,
+  #[pb(index = 2)]
+  pub src_block_id: String,
+  #[pb(index = 3)]
+  pub dst_page_id: String,
+  #[pb(index = 4)]
+  pub dst_block_id: String,
+  #[pb(index = 5)]
+  pub kind: String,
+  #[pb(index = 6)]
+  pub label: String,
+  #[pb(index = 7)]
+  pub char_offset: i32,
+  #[pb(index = 8)]
+  pub occurrence: i32,
+}
+
+impl From<flowy_link::store::BacklinkRecord> for NoteLinkPB {
+  fn from(link: flowy_link::store::BacklinkRecord) -> Self {
+    Self {
+      src_page_id: link.src_page_id,
+      src_block_id: link.src_block_id,
+      dst_page_id: link.dst_page_id,
+      dst_block_id: link.dst_block_id.unwrap_or_default(),
+      kind: link.kind,
+      label: link.label,
+      char_offset: link.char_offset,
+      occurrence: link.occurrence,
+    }
+  }
+}
+
+#[derive(Default, ProtoBuf)]
+pub struct UnresolvedNoteLinkPB {
+  #[pb(index = 1)]
+  pub src_block_id: String,
+  #[pb(index = 2)]
+  pub raw_title: String,
+  #[pb(index = 3)]
+  pub char_offset: i32,
+}
+
+#[derive(Default, ProtoBuf)]
+pub struct DocumentLinksPB {
+  #[pb(index = 1)]
+  pub incoming: Vec<NoteLinkPB>,
+  #[pb(index = 2)]
+  pub outgoing: Vec<NoteLinkPB>,
+  #[pb(index = 3)]
+  pub unresolved: Vec<UnresolvedNoteLinkPB>,
+  #[pb(index = 4)]
+  pub indexed_pages: i32,
+  #[pb(index = 5)]
+  pub truncated: bool,
+}
 
 #[derive(Default, ProtoBuf)]
 pub struct EncodedCollabPB {

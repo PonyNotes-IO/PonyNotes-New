@@ -12,6 +12,7 @@ pub enum DocumentNotification {
   DidUpdateDocumentSnapshotState = 2,
   DidUpdateDocumentSyncState = 3,
   DidUpdateDocumentAwarenessState = 4,
+  DidUpdateLinks = 5,
 }
 
 impl std::convert::From<DocumentNotification> for i32 {
@@ -26,6 +27,7 @@ impl std::convert::From<i32> for DocumentNotification {
       2 => DocumentNotification::DidUpdateDocumentSnapshotState,
       3 => DocumentNotification::DidUpdateDocumentSyncState,
       4 => DocumentNotification::DidUpdateDocumentAwarenessState,
+      5 => DocumentNotification::DidUpdateLinks,
       _ => DocumentNotification::Unknown,
     }
   }

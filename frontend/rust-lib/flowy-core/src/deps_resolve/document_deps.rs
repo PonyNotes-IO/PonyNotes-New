@@ -6,6 +6,7 @@ use flowy_document::manager::{DocumentManager, DocumentSnapshotService, Document
 use flowy_document_pub::cloud::DocumentCloudService;
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_storage_pub::storage::StorageService;
+use flowy_sqlite::ConnectionPool;
 use flowy_user::services::authenticate_user::AuthenticateUser;
 use std::sync::{Arc, Weak};
 use uuid::Uuid;
@@ -125,5 +126,14 @@ impl DocumentUserService for DocumentUserImpl {
       .select(workspace_shared_view::workspace_id)
       .first::<String>(&mut conn)
       .ok()
+  }
+
+  fn sqlite_pool(&self) -> Result<Arc<ConnectionPool>, FlowyError> {
+    let user = self
+      .0
+      .upgrade()
+      .ok_or(FlowyError::internal().with_context("Unexpected error: UserSession is None"))?;
+    let uid = user.user_id()?;
+    user.get_sqlite_pool(uid)
   }
 }

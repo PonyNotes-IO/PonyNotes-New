@@ -20,7 +20,7 @@ use crate::parser::parser_entities::{
 };
 use crate::{manager::DocumentManager, parser::json::parser::JsonToDocumentParser};
 use flowy_error::{FlowyError, FlowyResult};
-use lib_dispatch::prelude::{AFPluginData, AFPluginState, DataResult, data_result_ok};
+use lib_dispatch::prelude::{data_result_ok, AFPluginData, AFPluginState, DataResult};
 use lib_infra::sync_trace;
 use tracing::instrument;
 use uuid::Uuid;
@@ -32,6 +32,40 @@ fn upgrade_document(
     .upgrade()
     .ok_or(FlowyError::internal().with_context("The document manager is already dropped"))?;
   Ok(manager)
+}
+
+pub(crate) async fn get_document_links_handler(
+  data: AFPluginData<OpenDocumentPayloadPB>,
+  manager: AFPluginState<Weak<DocumentManager>>,
+) -> DataResult<DocumentLinksPB, FlowyError> {
+  query_links(data, manager, false).await
+}
+
+pub(crate) async fn reindex_document_links_handler(
+  data: AFPluginData<OpenDocumentPayloadPB>,
+  manager: AFPluginState<Weak<DocumentManager>>,
+) -> DataResult<DocumentLinksPB, FlowyError> {
+  query_links(data, manager, true).await
+}
+
+async fn query_links(
+  data: AFPluginData<OpenDocumentPayloadPB>,
+  manager: AFPluginState<Weak<DocumentManager>>,
+  reindex: bool,
+) -> DataResult<DocumentLinksPB, FlowyError> {
+  let manager = upgrade_document(manager)?;
+  let payload = data.into_inner();
+  if !payload.workspace_id.is_empty()
+    && payload.workspace_id != manager.user_service.workspace_id()?.to_string()
+  {
+    return Err(FlowyError::invalid_data().into());
+  }
+  let page_id = if payload.document_id.is_empty() {
+    None
+  } else {
+    Some(Uuid::parse_str(&payload.document_id).map_err(|_| FlowyError::invalid_data())?)
+  };
+  data_result_ok(manager.document_links(page_id, reindex).await?)
 }
 
 // Handler for getting the document state

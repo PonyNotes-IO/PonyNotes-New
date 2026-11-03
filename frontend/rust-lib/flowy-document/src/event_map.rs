@@ -13,6 +13,11 @@ pub fn init(document_manager: Weak<DocumentManager>) -> AFPlugin {
   AFPlugin::new()
     .name(env!("CARGO_PKG_NAME"))
     .state(document_manager)
+    .event(DocumentEvent::GetDocumentLinks, get_document_links_handler)
+    .event(
+      DocumentEvent::ReindexDocumentLinks,
+      reindex_document_links_handler,
+    )
     .event(DocumentEvent::CreateDocument, create_document_handler)
     .event(DocumentEvent::OpenDocument, open_document_handler)
     .event(DocumentEvent::CloseDocument, close_document_handler)
@@ -141,6 +146,12 @@ pub enum DocumentEvent {
 
   #[event(input = "OpenDocumentPayloadPB", output = "DocumentTextPB")]
   GetDocumentText = 20,
+
+  #[event(input = "OpenDocumentPayloadPB", output = "DocumentLinksPB")]
+  GetDocumentLinks = 22,
+
+  #[event(input = "OpenDocumentPayloadPB", output = "DocumentLinksPB")]
+  ReindexDocumentLinks = 23,
 
   #[event(input = "OpenDocumentPayloadPB", output = "DocumentDataPB")]
   GetCloudDocumentData = 21,

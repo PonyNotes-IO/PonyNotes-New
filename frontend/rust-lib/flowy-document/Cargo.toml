@@ -8,6 +8,8 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+flowy-link = { workspace = true }
+flowy-sqlite = { workspace = true }
 collab = { workspace = true }
 collab-document = { workspace = true }
 collab-entity = { workspace = true }

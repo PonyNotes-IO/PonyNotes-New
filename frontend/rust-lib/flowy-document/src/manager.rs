@@ -7,8 +7,10 @@ use collab::core::origin::CollabOrigin;
 use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use collab::preclude::Collab;
+use collab::preclude::Transact;
 use collab_document::blocks::DocumentData;
 use collab_document::document::Document;
+use collab_document::document::DocumentBody;
 use collab_document::document_awareness::DocumentAwarenessState;
 use collab_document::document_awareness::DocumentAwarenessUser;
 use collab_document::document_data::default_document_data;
@@ -24,7 +26,9 @@ use collab_plugins::CollabKVDB;
 use dashmap::DashMap;
 use dashmap::DashSet;
 use flowy_document_pub::cloud::DocumentCloudService;
-use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
+use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
+use flowy_link::LinkIndexService;
+use flowy_sqlite::ConnectionPool;
 use flowy_storage_pub::storage::{CreatedUpload, StorageService};
 use lib_infra::util::timestamp;
 use tracing::{event, instrument};
@@ -53,6 +57,15 @@ pub trait DocumentUserService: Send + Sync {
   fn shared_view_source_workspace_id(&self, _view_id: &str) -> Option<String> {
     None
   }
+
+  /// 本地 SQLite 连接池，供双向链接索引写入。
+  ///
+  /// 用默认实现返回错误而不是声明成必需方法：链接索引是可选的派生能力，
+  /// 纯内存环境（单元测试、无本地库的宿主）不实现它，索引会自动跳过，
+  /// 文档读写行为完全不受影响。
+  fn sqlite_pool(&self) -> Result<Arc<ConnectionPool>, FlowyError> {
+    Err(FlowyError::internal().with_context("sqlite pool is not available, link index is disabled"))
+  }
 }
 
 pub trait DocumentSnapshotService: Send + Sync {
@@ -74,12 +87,38 @@ pub struct DocumentManager {
   cloud_service: Arc<dyn DocumentCloudService>,
   storage_service: Weak<dyn StorageService>,
   snapshot_service: Arc<dyn DocumentSnapshotService>,
+  /// 是否启用双向链接索引。
+  ///
+  /// 索引所需的连接池通过 `DocumentUserService::sqlite_pool` 按需获取，
+  /// 而不是在构造时注入 —— 因为连接池是**按用户、按会话**隔离的，
+  /// 而 DocumentManager 的构造早于登录。
+  link_index_enabled: bool,
 }
 
 impl Drop for DocumentManager {
   fn drop(&mut self) {
     trace!("[Drop] drop document manager");
   }
+}
+
+/// 把 `EncodedCollab`（CRDT 二进制快照）还原成结构化的 `DocumentData`。
+///
+/// 这里刻意**新建一个临时 Collab 实例**，而不是去借用已打开的文档：
+/// 索引发生在文档关闭的路径上，此刻原实例的状态与锁都不适合再取。
+/// 临时实例是一次纯反序列化，成本远低于冲突或死锁的风险。
+fn decode_document_data(doc_id: &Uuid, encoded_collab: &EncodedCollab) -> Option<DocumentData> {
+  let collab = Collab::new_with_source(
+    CollabOrigin::Empty,
+    &doc_id.to_string(),
+    DataSource::DocStateV1(encoded_collab.doc_state.to_vec()),
+    vec![],
+    false,
+  )
+  .ok()?;
+
+  let body = DocumentBody::from_collab(&collab)?;
+  let txn = collab.transact();
+  body.get_document_data(&txn).ok()
 }
 
 impl DocumentManager {
@@ -99,7 +138,17 @@ impl DocumentManager {
       cloud_service,
       storage_service,
       snapshot_service,
+      link_index_enabled: true,
     }
+  }
+
+  /// 开关双向链接索引。
+  ///
+  /// 默认开启；提供这个开关是为了让测试和特定宿主环境可以完全关掉它，
+  /// 而不必改造依赖注入链。
+  pub fn with_link_index(mut self, enabled: bool) -> Self {
+    self.link_index_enabled = enabled;
+    self
   }
 
   fn collab_builder(&self) -> FlowyResult<Arc<AppFlowyCollabBuilder>> {
@@ -139,6 +188,96 @@ impl DocumentManager {
       .await
     {
       warn!("[Indexing] failed to index document {}: {:?}", doc_id, err);
+    }
+
+    // 链接索引挂在这里而不是另开一条事件流：全文索引和链接索引必须
+    // 共用同一个「文档已变更」的汇聚点，否则会出现「搜索能搜到、反链没更新」
+    // 这种用户无法理解的错位。
+    self.index_links(*doc_id, workspace_id, encoded_collab);
+  }
+
+  /// 刷新一页的双向链接索引。
+  ///
+  /// 失败只记日志：索引是派生数据，它坏了不该连累文档保存。
+  /// 用户下次打开或编辑该页时会自动重算，最坏情况是反链短暂不全。
+  ///
+  /// 这里直接做同步 SQLite 写入。单页链接数量是 O(十) 量级，耗时为毫秒级，
+  /// 在当前的调用频率下不会阻塞执行器。若将来改成「每次编辑都触发」，
+  /// 需要移到 `spawn_blocking`，否则会占住 async 工作线程。
+  fn index_links(&self, doc_id: Uuid, workspace_id: Uuid, encoded_collab: &EncodedCollab) {
+    if !self.link_index_enabled
+      || self
+        .user_service
+        .shared_view_source_workspace_id(&doc_id.to_string())
+        .is_some_and(|owner| owner != workspace_id.to_string())
+    {
+      return;
+    }
+
+    // 连接池按用户隔离，且随会话变化，所以每次取而不是缓存。
+    // `open_sqlite_db` 内部有 DashMap 缓存，重复调用不会真的重开库。
+    let pool = match self.user_service.sqlite_pool() {
+      Ok(pool) => pool,
+      Err(_) => {
+        // 该环境没有本地库（测试、内存模式），安静跳过即可，不是错误。
+        trace!("[Link] sqlite pool unavailable, skip link indexing");
+        return;
+      },
+    };
+    let service = LinkIndexService::new(pool);
+
+    let Some(document_data) = decode_document_data(&doc_id, encoded_collab) else {
+      warn!(
+        "[Link] failed to decode document {} for link indexing",
+        doc_id
+      );
+      return;
+    };
+
+    match service.index_document_for(&workspace_id, &doc_id.to_string(), &document_data, false) {
+      Ok(outcome) => {
+        if outcome.is_written() {
+          crate::notification::document_notification_builder(
+            &workspace_id.to_string(),
+            crate::notification::DocumentNotification::DidUpdateLinks,
+          )
+          .send();
+        }
+        trace!("[Link] indexed document {}: {:?}", doc_id, outcome);
+      },
+      Err(err) => {
+        // 索引失败不影响主流程，但要留痕，便于排查「反链一直不出现」类问题
+        warn!(
+          "[Link] failed to index links for document {}: {}",
+          doc_id, err
+        );
+      },
+    }
+  }
+
+  /// 删除页面时清理它的出链索引。
+  ///
+  /// 指向它的入链会保留 —— 那表示「别处引用了已删除的页面」，
+  /// 这条信息对用户有用，不该静默消失。
+  pub fn remove_link_index(&self, workspace_id: &Uuid, page_id: &Uuid) {
+    if !self.link_index_enabled {
+      return;
+    }
+    let Ok(pool) = self.user_service.sqlite_pool() else {
+      return;
+    };
+    let service = LinkIndexService::new(pool);
+    if let Err(err) = service.on_page_deleted(workspace_id, &page_id.to_string()) {
+      warn!(
+        "[Link] failed to remove link index for {}: {}",
+        page_id, err
+      );
+    } else {
+      crate::notification::document_notification_builder(
+        &workspace_id.to_string(),
+        crate::notification::DocumentNotification::DidUpdateLinks,
+      )
+      .send();
     }
   }
 
@@ -398,6 +537,7 @@ impl DocumentManager {
             subscribe_document_snapshot_state(&lock);
             subscribe_document_sync_state(&lock);
           }
+          self.subscribe_link_index(*doc_id, &document).await;
           self.documents.insert(*doc_id, document.clone());
         }
         Ok(document)
@@ -409,6 +549,151 @@ impl DocumentManager {
         return Err(err);
       },
     }
+  }
+
+  /// A debounced observer covers local edits, undo and remote CRDT merges.
+  /// The pool/workspace belong to this session; a task never resolves a later user's pool.
+  async fn subscribe_link_index(&self, doc_id: Uuid, document: &Arc<RwLock<Document>>) {
+    if !self.link_index_enabled {
+      return;
+    }
+    let (Ok(pool), Ok(workspace_id)) = (
+      self.user_service.sqlite_pool(),
+      self.user_service.workspace_id(),
+    ) else {
+      return;
+    };
+    // Shared documents owned by another workspace must not leak into this graph.
+    if self
+      .user_service
+      .shared_view_source_workspace_id(&doc_id.to_string())
+      .is_some_and(|owner| owner != workspace_id.to_string())
+    {
+      return;
+    }
+    let (sender, mut receiver) = tokio::sync::watch::channel(0u64);
+    let weak_document = Arc::downgrade(document);
+    document
+      .write()
+      .await
+      .subscribe_block_changed("note_link", move |_, _| {
+        sender.send_modify(|version| *version = version.wrapping_add(1));
+      });
+    tokio::spawn(async move {
+      let service = LinkIndexService::new(pool);
+      loop {
+        // Also index once on open, including existing notes without links.
+        loop {
+          match tokio::time::timeout(std::time::Duration::from_millis(500), receiver.changed())
+            .await
+          {
+            Ok(Ok(())) => continue,
+            Ok(Err(_)) => return,
+            Err(_) => break,
+          }
+        }
+        let Some(document) = weak_document.upgrade() else {
+          return;
+        };
+        let data = document.read().await.get_document_data();
+        drop(document);
+        if let Ok(data) = data {
+          match service.index_document_for(&workspace_id, &doc_id.to_string(), &data, false) {
+            Ok(outcome) if outcome.is_written() => {
+              crate::notification::document_notification_builder(
+                &workspace_id.to_string(),
+                crate::notification::DocumentNotification::DidUpdateLinks,
+              )
+              .send();
+            },
+            Err(err) => warn!("[Link] live indexing {} failed: {}", doc_id, err),
+            _ => {},
+          }
+        }
+        if receiver.changed().await.is_err() {
+          return;
+        }
+      }
+    });
+  }
+
+  /// Query current-workspace derived data. Empty page id requests the graph snapshot.
+  pub async fn document_links(
+    &self,
+    page_id: Option<Uuid>,
+    reindex: bool,
+  ) -> FlowyResult<crate::entities::DocumentLinksPB> {
+    use crate::entities::{DocumentLinksPB, UnresolvedNoteLinkPB};
+    use flowy_link::store::LinkIndexStore;
+    let workspace_id = self.user_service.workspace_id()?;
+    let pool = self.user_service.sqlite_pool()?;
+    let service = LinkIndexService::new(pool.clone());
+    if reindex {
+      let id = page_id.ok_or_else(FlowyError::invalid_data)?;
+      if self
+        .user_service
+        .shared_view_source_workspace_id(&id.to_string())
+        .is_some_and(|owner| owner != workspace_id.to_string())
+      {
+        return Err(
+          FlowyError::invalid_data().with_context("shared document belongs to another workspace"),
+        );
+      }
+      // Repair is local-only and must not fetch every remote document.
+      if !self.is_doc_exist(&id).await? {
+        return Err(FlowyError::record_not_found());
+      }
+      let data = self.get_document_data(&id).await?;
+      service
+        .index_document_for(&workspace_id, &id.to_string(), &data, true)
+        .map_err(internal_error)?;
+      crate::notification::document_notification_builder(
+        &workspace_id.to_string(),
+        crate::notification::DocumentNotification::DidUpdateLinks,
+      )
+      .send();
+    }
+    let store = LinkIndexStore::new(pool);
+    let mut result = DocumentLinksPB {
+      indexed_pages: store
+        .indexed_page_count(&workspace_id)
+        .map_err(internal_error)?
+        .min(i32::MAX as i64) as i32,
+      ..Default::default()
+    };
+    if let Some(id) = page_id {
+      let id = id.to_string();
+      let mut incoming = service
+        .get_backlinks(&workspace_id, &id, 1000)
+        .map_err(internal_error)?;
+      result.truncated = incoming.len() > 999;
+      incoming.truncate(999);
+      result.incoming = incoming.into_iter().map(Into::into).collect();
+      result.outgoing = service
+        .get_outgoing(&workspace_id, &id)
+        .map_err(internal_error)?
+        .into_iter()
+        .map(Into::into)
+        .collect();
+      result.unresolved = service
+        .get_unresolved(&workspace_id, &id)
+        .map_err(internal_error)?
+        .into_iter()
+        .map(|link| UnresolvedNoteLinkPB {
+          src_block_id: link.src_block_id,
+          raw_title: link.raw_title,
+          char_offset: link.char_offset,
+        })
+        .collect();
+    } else {
+      let mut edges = store
+        .workspace_edges(&workspace_id, 20001)
+        .map_err(internal_error)?;
+      result.truncated = edges.len() > 20000;
+      edges.truncate(20000);
+      result.outgoing = edges.into_iter().map(Into::into).collect();
+    }
+    Ok(result)
   }
 
   pub async fn get_document_data(&self, doc_id: &Uuid) -> FlowyResult<DocumentData> {
@@ -516,6 +801,8 @@ impl DocumentManager {
       // When deleting a document, we need to remove it from the cache.
       self.documents.remove(doc_id);
     }
+    // 清理本页的出链索引；指向它的入链刻意保留（引用了已删除页面对用户有价值）。
+    self.remove_link_index(&workspace_id, doc_id);
     Ok(())
   }
 

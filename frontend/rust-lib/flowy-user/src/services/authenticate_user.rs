@@ -8,7 +8,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::kv::KVStorePreferences;
-use flowy_sqlite::DBConnection;
+use flowy_sqlite::{ConnectionPool, DBConnection};
 use flowy_user_pub::entities::{UserWorkspace, WorkspaceType};
 use flowy_user_pub::session::Session;
 use flowy_user_pub::sql::{select_user_workspace, select_user_workspace_type};
@@ -92,6 +92,14 @@ impl AuthenticateUser {
 
   pub fn get_sqlite_connection(&self, uid: i64) -> FlowyResult<DBConnection> {
     self.database.get_connection(uid)
+  }
+
+  /// 用户本地 SQLite 连接池，供双向链接索引等派生能力按需获取。
+  ///
+  /// 与 `get_sqlite_connection` 的区别：连接池可以跨线程长期持有，
+  /// 而单个连接应即取即还。
+  pub fn get_sqlite_pool(&self, uid: i64) -> FlowyResult<Arc<ConnectionPool>> {
+    self.database.get_pool(uid)
   }
 
   pub fn get_index_path(&self) -> FlowyResult<PathBuf> {
