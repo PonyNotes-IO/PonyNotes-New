@@ -79,7 +79,9 @@ impl SearchHandler for DocumentLocalSearchHandler {
   }
 }
 
-fn tanvity_item_to_local_search_item(item: TanvitySearchResponseItem) -> LocalSearchResponseItemPB {
+pub(crate) fn tanvity_item_to_local_search_item(
+  item: TanvitySearchResponseItem,
+) -> LocalSearchResponseItemPB {
   LocalSearchResponseItemPB {
     id: item.id,
     display_name: item.display_name,
