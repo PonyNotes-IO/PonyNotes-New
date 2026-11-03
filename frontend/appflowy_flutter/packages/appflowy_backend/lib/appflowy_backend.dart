@@ -50,15 +50,23 @@ class FlowySDK {
       ffi.set_log_stream_port(RustLogStreamReceiver.logShared.port);
     }
 
-    // final completer = Completer<Uint8List>();
-    // // Create a SendPort that accepts only one message.
-    // final sendPort = singleCompletePort(completer);
-
-    final code = ffi.init_sdk(0, configuration.toNativeUtf8());
+    // init_sdk blocks until Rust has restored the workspace, including cloud
+    // requests. Keep Linux's UI isolate free to paint the startup window.
+    final code = Platform.isLinux
+        ? await compute(_initializeSDK, configuration)
+        : _initializeSDK(configuration);
     if (code != 0) {
       throw Exception('Failed to initialize the SDK');
     }
-    // return completer.future;
+  }
+}
+
+int _initializeSDK(String configuration) {
+  final nativeConfiguration = configuration.toNativeUtf8();
+  try {
+    return ffi.init_sdk(0, nativeConfiguration);
+  } finally {
+    malloc.free(nativeConfiguration);
   }
 }
 

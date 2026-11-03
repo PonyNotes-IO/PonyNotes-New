@@ -67,10 +67,10 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  if (Platform.isAndroid || Platform.isIOS) {
+  if (Platform.isAndroid || Platform.isIOS || Platform.isLinux) {
     // Render a Flutter frame before the dependency-heavy application startup.
-    // This prevents mobile platforms from exposing an empty Flutter surface
-    // after the native splash has been removed.
+    // Linux also needs a visible surface while the Rust SDK restores the
+    // workspace, which may involve slow cloud requests.
     PerformanceTrace.mark('startup_shell_run_app');
     runApp(const StartupShell());
     await WidgetsBinding.instance.endOfFrame;
