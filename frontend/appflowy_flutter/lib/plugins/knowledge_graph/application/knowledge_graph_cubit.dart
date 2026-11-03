@@ -15,6 +15,7 @@ import 'package:appflowy_backend/protobuf/flowy-notification/protobuf.dart';
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+typedef GraphLinkLoader = Future<DocumentLinksPB> Function();
 typedef GraphViewLoader = Future<List<ViewPB>> Function();
 typedef GraphDocumentLoader = Future<DocumentDataPB?> Function(String id);
 
@@ -31,8 +32,12 @@ class KnowledgeGraphState {
     this.failedExtractions = 0,
     this.extractionError = '',
     this.cacheError = false,
+    this.indexedPages = 0,
+    this.truncated = false,
   });
 
+  final int indexedPages;
+  final bool truncated;
   final KnowledgeGraphData data;
   final bool loading;
   final bool indexing;
@@ -55,6 +60,8 @@ class KnowledgeGraphState {
     bool? cacheError,
   }) =>
       KnowledgeGraphState(
+        indexedPages: indexedPages,
+        truncated: truncated,
         data: data ?? this.data,
         loading: loading,
         indexing: indexing,
@@ -73,12 +80,14 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
   KnowledgeGraphCubit({
     required this.workspaceId,
     this.focusViewId,
+    GraphLinkLoader? loadLinks,
     GraphViewLoader? loadViews,
     GraphDocumentLoader? loadDocument,
     GraphChunkExtractor? extractChunk,
     GraphExtractionCache? cache,
     KnowledgeGraphExtractor? extractor,
-  })  : _loadViews = loadViews ?? _readViews,
+  })  : _loadLinks = loadLinks,
+        _loadViews = loadViews ?? _readViews,
         _loadDocument = loadDocument ?? _readDocument,
         _extractChunk = extractChunk,
         _cache = cache,
@@ -87,6 +96,8 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
 
   final String workspaceId;
   final String? focusViewId;
+  final GraphLinkLoader? _loadLinks;
+  bool _semantic = false;
   final GraphViewLoader _loadViews;
   final GraphDocumentLoader _loadDocument;
   final GraphChunkExtractor? _extractChunk;
@@ -123,7 +134,9 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
             FolderNotification.DidRemoveMySharedView,
           }.contains(FolderNotification.valueOf(event.ty));
       final documentChanged = event.source == 'Document' &&
-          event.ty == DocumentNotification.DidReceiveUpdate.value;
+          (event.ty == DocumentNotification.DidUpdateLinks.value ||
+              (_semantic &&
+                  event.ty == DocumentNotification.DidReceiveUpdate.value));
       if (folderChanged || documentChanged) {
         _debounce?.cancel();
         _debounce = Timer(const Duration(milliseconds: 800), refresh);
@@ -169,6 +182,22 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
           .map((node) => node.view)
           .where(KnowledgeGraphBuilder.isDocument)
           .toList();
+      final linkSnapshot = await _loadLinks?.call();
+      if (!active()) return;
+      if (linkSnapshot != null) builder.addLinks(linkSnapshot.outgoing);
+      if (_loadLinks != null && !_semantic) {
+        _builder = builder;
+        _documents = documents;
+        emit(
+          KnowledgeGraphState(
+            data: builder.build(),
+            loading: false,
+            indexedPages: linkSnapshot!.indexedPages,
+            truncated: linkSnapshot.truncated,
+          ),
+        );
+        return;
+      }
       _documents = documents;
       _chunks = {};
       _fingerprints.clear();
@@ -193,7 +222,7 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
               if (document == null) {
                 failed++;
               } else {
-                builder.addDocument(view, document);
+                if (_loadLinks == null) builder.addDocument(view, document);
                 final chunks = graphDocumentChunks(view.id, document);
                 _chunks[view.id] = chunks;
                 _fingerprints[view.id] = graphDocumentFingerprint(chunks);
@@ -245,6 +274,8 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
             data: builder.build(),
             loading: false,
             failedDocuments: failed,
+            indexedPages: linkSnapshot?.indexedPages ?? 0,
+            truncated: linkSnapshot?.truncated ?? false,
             cacheError: cacheError,
           ),
         );
@@ -267,9 +298,18 @@ class KnowledgeGraphCubit extends Cubit<KnowledgeGraphState> {
     }
   }
 
+  Future<void> setSemanticLayer(bool enabled) async {
+    if (_semantic == enabled) return;
+    _semantic = enabled;
+    await refresh();
+  }
+
+  Future<void> enableSemanticLayer() => setSemanticLayer(true);
+
   /// Explicit action: opening/refreshing the graph never sends notes to an LLM.
   /// Unchanged successful documents are reused, failed documents remain retryable.
   Future<void> extract() async {
+    if (_loadLinks != null && !_semantic) await enableSemanticLayer();
     if (isClosed ||
         state.extracting ||
         _refreshing ||

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:appflowy/plugins/document/application/note_link_service.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_cubit.dart';
@@ -37,6 +38,7 @@ class KnowledgeGraphPage extends StatelessWidget {
     return BlocProvider(
       key: ValueKey((identity, focusView?.id)),
       create: (_) => KnowledgeGraphCubit(
+        loadLinks: () => NoteLinkService.read(workspaceId: workspaceId),
         workspaceId: workspaceId,
         focusViewId: focusView?.id,
         cache: GraphExtractionCache(
@@ -46,6 +48,8 @@ class KnowledgeGraphPage extends StatelessWidget {
         ),
       )..start(),
       child: KnowledgeGraphView(
+        layoutCacheKey:
+            'note-graph-layout-v1/${identity.$1}/$workspaceId/${focusView?.id ?? 'global'}',
         focusView: focusView,
         onOpen: (node) {
           context.read<TabsBloc>().openPlugin(node.view);
@@ -76,9 +80,11 @@ class KnowledgeGraphView extends StatefulWidget {
     required this.onOpen,
     this.onOpenSource,
     this.onConfigureModel,
+    this.layoutCacheKey,
     this.focusView,
   });
 
+  final String? layoutCacheKey;
   final ValueChanged<GraphNode> onOpen;
   final void Function(ViewPB view, String blockId)? onOpenSource;
   final VoidCallback? onConfigureModel;
@@ -92,10 +98,11 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
   final _canvasKey = GlobalKey<KnowledgeGraphCanvasState>();
   final _search = TextEditingController();
   bool _settings = false;
+  int _depth = 1;
   bool _labels = true;
   bool _hierarchy = true;
   bool _orphans = true;
-  bool _entitiesOnly = true;
+  bool _entitiesOnly = false;
   String _entityType = '';
   String? _focus;
   GraphNode? _selected;
@@ -107,7 +114,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
   @override
   void initState() {
     super.initState();
-    _entitiesOnly = widget.focusView == null;
+    _entitiesOnly = false;
   }
 
   @override
@@ -118,7 +125,7 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
       _focus = null;
       _selected = null;
       _selectedEdge = null;
-      _entitiesOnly = widget.focusView == null;
+      _entitiesOnly = false;
       _search.clear();
     }
   }
@@ -161,6 +168,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
               ? state.data
               : state.data.filtered(
                   focus: widget.focusView!.id,
+                  depth: _depth,
+                  maxNodes: 500,
                   hierarchy: _hierarchy,
                 );
           _selected =
@@ -175,6 +184,8 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
             documentsOnly: !_entitiesOnly,
             entityType: _entityType,
             focus: _focus,
+            depth: _depth,
+            maxNodes: 500,
           );
         }
         return Material(
@@ -257,7 +268,13 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
                                 ? context
                                     .read<KnowledgeGraphCubit>()
                                     .cancelExtraction
-                                : context.read<KnowledgeGraphCubit>().extract,
+                                : () {
+                                    _entitiesOnly = true;
+                                    _filter();
+                                    context
+                                        .read<KnowledgeGraphCubit>()
+                                        .extract();
+                                  },
                             child: Text(
                               graphText(
                                 context,
@@ -287,6 +304,18 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    if (widget.focusView != null)
+                      ActionChip(
+                        label: Text(
+                          Localizations.localeOf(context).languageCode == 'zh'
+                              ? '邻接深度 $_depth'
+                              : 'Depth $_depth',
+                        ),
+                        onPressed: () {
+                          _depth = _depth == 1 ? 2 : 1;
+                          _filter();
+                        },
+                      ),
                     for (final entities in [if (canExtract) true, false]) ...[
                       ChoiceChip(
                         label: Text(
@@ -298,6 +327,9 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
                         selected: _entitiesOnly == entities,
                         onSelected: (_) {
                           _entitiesOnly = entities;
+                          context
+                              .read<KnowledgeGraphCubit>()
+                              .setSemanticLayer(entities);
                           _selected = null;
                           _selectedEdge = null;
                           _reset();
@@ -307,6 +339,26 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
                   ],
                 ),
               ),
+              if (_visible.hiddenNodes > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    Localizations.localeOf(context).languageCode == 'zh'
+                        ? '还有 ${_visible.hiddenNodes} 个节点未展示，请搜索或打开局部图'
+                        : '${_visible.hiddenNodes} more nodes; search or open a local graph',
+                  ),
+                ),
+              if (!_entitiesOnly)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  child: Text(
+                    Localizations.localeOf(context).languageCode == 'zh'
+                        ? '本机已索引 ${state.indexedPages} 篇笔记，仅含已同步内容${state.truncated ? '；链接超过上限，当前显示前 20000 条' : ''}'
+                        : '${state.indexedPages} notes indexed on this device; synced content only${state.truncated ? '; showing the first 20000 links' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               if (state.extracting ||
                   state.extractionError.isNotEmpty ||
                   state.cacheError)
@@ -509,6 +561,9 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
       waitDuration: const Duration(seconds: 3),
       child: KnowledgeGraphCanvas(
         key: _canvasKey,
+        layoutCacheKey: widget.layoutCacheKey == null
+            ? null
+            : '${widget.layoutCacheKey}/${_entitiesOnly ? 'semantic' : 'structural'}',
         data: _visible,
         showLabels: _labels,
         selectedId: _selected?.id ?? widget.focusView?.id,

@@ -30,17 +30,25 @@ class KnowledgeGraphPluginConfig implements PluginConfig {
 }
 
 class KnowledgeGraphPlugin extends Plugin {
+  KnowledgeGraphPlugin({this.focusView});
+  final ViewPB? focusView;
+
   @override
-  PluginId get id => 'knowledge_graph';
+  PluginId get id => focusView == null
+      ? 'knowledge_graph'
+      : 'knowledge_graph:${focusView!.id}';
 
   @override
   PluginType get pluginType => PluginType.knowledgeGraph;
 
   @override
-  PluginWidgetBuilder get widgetBuilder => KnowledgeGraphWidgetBuilder();
+  PluginWidgetBuilder get widgetBuilder =>
+      KnowledgeGraphWidgetBuilder(focusView: focusView);
 }
 
 class KnowledgeGraphWidgetBuilder extends PluginWidgetBuilder {
+  KnowledgeGraphWidgetBuilder({this.focusView});
+  final ViewPB? focusView;
   @override
   String get viewName => 'knowledgeGraph.title'.tr();
 
@@ -67,5 +75,5 @@ class KnowledgeGraphWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) =>
-      const KnowledgeGraphPage();
+      KnowledgeGraphPage(focusView: focusView);
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_data.dart';
 import 'package:appflowy/plugins/knowledge_graph/knowledge_graph_strings.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_layout.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -16,11 +19,13 @@ class KnowledgeGraphCanvas extends StatefulWidget {
     required this.showLabels,
     required this.onOpen,
     this.selectedId,
+    this.layoutCacheKey,
   });
 
   final KnowledgeGraphData data;
   final bool showLabels;
   final ValueChanged<GraphNode> onOpen;
+  final String? layoutCacheKey;
   final String? selectedId;
 
   @override
@@ -32,6 +37,7 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
   final _transform = TransformationController();
   late final Ticker _springTicker;
   Map<String, Offset> _positions = {};
+  final _knownPositions = <String, Offset>{};
   Map<String, Offset> _anchors = {};
   final _velocities = <String, Offset>{};
   Map<GraphEdge, double> _restLengths = {};
@@ -56,11 +62,45 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
   @override
   void didUpdateWidget(KnowledgeGraphCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.data, widget.data)) _layout();
+    if (oldWidget.layoutCacheKey != widget.layoutCacheKey) {
+      _positions = {};
+      _knownPositions.clear();
+    }
+    if (!identical(oldWidget.data, widget.data) ||
+        oldWidget.layoutCacheKey != widget.layoutCacheKey) {
+      _layout();
+    }
   }
 
   Future<void> _layout() async {
     final version = ++_layoutVersion;
+    final firstLayout = _positions.isEmpty;
+    final oldPositions = <String, Offset>{..._knownPositions, ..._positions};
+    if (oldPositions.isEmpty && widget.layoutCacheKey != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(widget.layoutCacheKey!);
+        final saved = raw == null ? null : jsonDecode(raw);
+        if (saved is Map) {
+          for (final entry in saved.entries) {
+            final xy = entry.value;
+            if (entry.key is String &&
+                xy is List &&
+                xy.length == 2 &&
+                xy[0] is num &&
+                xy[1] is num) {
+              final point =
+                  Offset((xy[0] as num).toDouble(), (xy[1] as num).toDouble());
+              if (point.dx.isFinite && point.dy.isFinite) {
+                oldPositions[entry.key as String] = point;
+              }
+            }
+          }
+        }
+      } catch (_) {/* Derived layout can always be rebuilt. */}
+    }
+    if (!mounted || version != _layoutVersion) return;
+    _knownPositions.addAll(oldPositions);
     _springTicker.stop();
     _dragPointer = null;
     _dragged = null;
@@ -72,6 +112,27 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
       ),
     );
     if (!mounted || version != _layoutVersion) return;
+    final retained = widget.data.nodes
+        .map((node) => node.id)
+        .where(oldPositions.containsKey)
+        .toSet();
+    for (final id in retained) {
+      positions[id] = oldPositions[id]!;
+    }
+    for (final id
+        in positions.keys.where((id) => !retained.contains(id)).toList()) {
+      final neighbors = widget.data.edges
+          .where((edge) => edge.source == id || edge.target == id)
+          .map((edge) => edge.source == id ? edge.target : edge.source)
+          .where(retained.contains)
+          .toList();
+      if (neighbors.isNotEmpty) {
+        positions[id] =
+            neighbors.map((id) => positions[id]!).reduce((a, b) => a + b) /
+                    neighbors.length.toDouble() +
+                const Offset(35, 35);
+      }
+    }
     setState(() {
       _positions = positions;
       _anchors = Map.of(positions);
@@ -90,9 +151,26 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      fit();
-      if (!MediaQuery.disableAnimationsOf(context)) _startSprings();
+      if (firstLayout) fit();
+      if (retained.isEmpty && !MediaQuery.disableAnimationsOf(context)) {
+        _startSprings();
+      }
+      unawaited(_saveLayout());
     });
+  }
+
+  Future<void> _saveLayout() async {
+    final key = widget.layoutCacheKey;
+    if (key == null || _positions.isEmpty) return;
+    _knownPositions.addAll(_positions);
+    final encoded = jsonEncode({
+      for (final entry in _knownPositions.entries)
+        entry.key: [entry.value.dx, entry.value.dy],
+    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, encoded);
+    } catch (_) {/* A layout write must not affect the graph. */}
   }
 
   void _startSprings() {
@@ -150,6 +228,7 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
     if (maxSpeed < 0.4 && maxForce < 0.6) {
       _springTicker.stop();
       _velocities.clear();
+      unawaited(_saveLayout());
     }
   }
 
@@ -190,7 +269,10 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
       _dragPointer = null;
       _dragged = null;
     });
-    if (_didDrag && !MediaQuery.disableAnimationsOf(context)) _startSprings();
+    if (_didDrag) {
+      unawaited(_saveLayout());
+      if (!MediaQuery.disableAnimationsOf(context)) _startSprings();
+    }
   }
 
   void fit() {
@@ -246,6 +328,7 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
 
   @override
   void dispose() {
+    unawaited(_saveLayout());
     _layoutVersion++;
     _springTicker.dispose();
     _transform.dispose();
@@ -433,6 +516,30 @@ class _GraphPainter extends CustomPainter {
         }
       } else {
         canvas.drawLine(a, b, line);
+        if (edge.kind == GraphEdgeKind.reference && (b - a).distance > 28) {
+          void arrow(Offset from, Offset to) {
+            final direction = (to - from) / (to - from).distance;
+            final end = to - direction * 12;
+            final normal = Offset(-direction.dy, direction.dx);
+            canvas.drawPath(
+              Path()
+                ..moveTo(end.dx, end.dy)
+                ..lineTo(
+                  (end - direction * 7 + normal * 3).dx,
+                  (end - direction * 7 + normal * 3).dy,
+                )
+                ..lineTo(
+                  (end - direction * 7 - normal * 3).dx,
+                  (end - direction * 7 - normal * 3).dy,
+                )
+                ..close(),
+              line,
+            );
+          }
+
+          arrow(a, b);
+          if (edge.bidirectional) arrow(b, a);
+        }
       }
     }
     for (final node in data.nodes) {

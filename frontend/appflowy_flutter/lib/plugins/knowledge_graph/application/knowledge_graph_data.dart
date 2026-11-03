@@ -54,6 +54,7 @@ class GraphEdge {
     this.kind, {
     this.label = '',
     this.sources = const [],
+    this.bidirectional = false,
   });
 
   final String source;
@@ -61,6 +62,7 @@ class GraphEdge {
   final GraphEdgeKind kind;
   final String label;
   final List<GraphSource> sources;
+  final bool bidirectional;
 
   @override
   bool operator ==(Object other) =>
@@ -68,14 +70,21 @@ class GraphEdge {
       source == other.source &&
       target == other.target &&
       kind == other.kind &&
-      label == other.label;
+      label == other.label &&
+      bidirectional == other.bidirectional;
 
   @override
-  int get hashCode => Object.hash(source, target, kind, label);
+  int get hashCode => Object.hash(source, target, kind, label, bidirectional);
 }
 
 class KnowledgeGraphData {
-  const KnowledgeGraphData({this.nodes = const [], this.edges = const []});
+  const KnowledgeGraphData({
+    this.nodes = const [],
+    this.edges = const [],
+    this.hiddenNodes = 0,
+  });
+
+  final int hiddenNodes;
 
   final List<GraphNode> nodes;
   final List<GraphEdge> edges;
@@ -88,6 +97,8 @@ class KnowledgeGraphData {
     bool documentsOnly = false,
     String entityType = '',
     String? focus,
+    int depth = 1,
+    int maxNodes = 0,
   }) {
     final search = query.trim().toLowerCase();
     var visible = nodes
@@ -117,13 +128,14 @@ class KnowledgeGraphData {
           )
           .map((node) => node.id)
           .toSet();
-      ids = {
-        ...matches,
-        for (final edge in links)
-          if (matches.contains(edge.source)) edge.target,
-        for (final edge in links)
-          if (matches.contains(edge.target)) edge.source,
-      };
+      ids = {...matches};
+      for (var level = 0; level < depth.clamp(1, 2); level++) {
+        final previous = Set<String>.of(ids);
+        for (final edge in links) {
+          if (previous.contains(edge.source)) ids.add(edge.target);
+          if (previous.contains(edge.target)) ids.add(edge.source);
+        }
+      }
       visible = visible.where((node) => ids.contains(node.id)).toList();
       links = links
           .where(
@@ -136,7 +148,35 @@ class KnowledgeGraphData {
           links.expand((edge) => [edge.source, edge.target]).toSet();
       visible = visible.where((node) => connected.contains(node.id)).toList();
     }
-    return KnowledgeGraphData(nodes: visible, edges: links);
+    var omitted = hiddenNodes;
+    if (maxNodes > 0 && visible.length > maxNodes) {
+      final degree = <String, int>{};
+      for (final edge in links) {
+        degree.update(edge.source, (value) => value + 1, ifAbsent: () => 1);
+        degree.update(edge.target, (value) => value + 1, ifAbsent: () => 1);
+      }
+      visible.sort((a, b) {
+        if (a.id == focus) return -1;
+        if (b.id == focus) return 1;
+        final byDegree = (degree[b.id] ?? 0).compareTo(degree[a.id] ?? 0);
+        return byDegree == 0 ? a.id.compareTo(b.id) : byDegree;
+      });
+      omitted += visible.length - maxNodes;
+      visible = visible.take(maxNodes).toList();
+      final retained = visible.map((node) => node.id).toSet();
+      links = links
+          .where(
+            (edge) =>
+                retained.contains(edge.source) &&
+                retained.contains(edge.target),
+          )
+          .toList();
+    }
+    return KnowledgeGraphData(
+      nodes: visible,
+      edges: links,
+      hiddenNodes: omitted,
+    );
   }
 }
 
@@ -280,7 +320,17 @@ class KnowledgeGraphBuilder {
           ? (edge.source, edge.target)
           : (edge.target, edge.source);
       final existing = connections[pair];
-      if (existing == null || edge.kind == GraphEdgeKind.reference) {
+      if (existing?.kind == GraphEdgeKind.reference &&
+          edge.kind == GraphEdgeKind.reference) {
+        connections[pair] = GraphEdge(
+          existing!.source,
+          existing.target,
+          GraphEdgeKind.reference,
+          bidirectional:
+              existing.bidirectional || existing.source != edge.source,
+          sources: [...existing.sources, ...edge.sources],
+        );
+      } else if (existing == null || edge.kind == GraphEdgeKind.reference) {
         connections[pair] = edge;
       }
     }
@@ -290,43 +340,68 @@ class KnowledgeGraphBuilder {
     );
   }
 
-  void addDocument(ViewPB view, DocumentDataPB document) {
-    if (!_nodes.containsKey(view.id)) return;
-    for (final block in document.blocks.values) {
-      final attributes = _json(block.data);
-      _references(view.id, attributes);
-    }
-    // Rich text is stored separately from block attributes in AppFlowy.
-    for (final text in document.meta.textMap.values) {
-      _references(view.id, _json(text));
+  /// Structural edges come from the local Rust index; only visible endpoints survive.
+  void addLinks(Iterable<NoteLinkPB> links) {
+    for (final link in links) {
+      if (_nodes.containsKey(link.srcPageId)) {
+        // An owned child-page block describes the folder tree, not a citation.
+        if (link.kind == 'embed' &&
+            _nodes[link.dstPageId]?.view.parentViewId == link.srcPageId) {
+          continue;
+        }
+        _addReference(link.srcPageId, link.dstPageId);
+      }
     }
   }
 
-  void _references(String source, dynamic value) {
-    if (value is Map) {
-      for (final entry in value.entries) {
-        final target = entry.value;
-        if ((entry.key == 'page_id' || entry.key == 'view_id') &&
-            target is String) {
-          _addReference(source, target);
-        } else if ((entry.key == 'href' || entry.key == 'url') &&
-            target is String) {
-          final uri = Uri.tryParse(target);
-          if (uri != null &&
-              (const {'ponynotes', 'appflowy-flutter', 'appflowy'}
-                      .contains(uri.scheme) ||
-                  uri.path == '/share')) {
-            final id =
-                uri.queryParameters['viewId'] ?? uri.queryParameters['page_id'];
-            if (id != null) _addReference(source, id);
-          }
+  /// Compatibility for imported document snapshots. Parse only editor link fields.
+  void addDocument(ViewPB view, DocumentDataPB document) {
+    if (!_nodes.containsKey(view.id)) return;
+    void internalUrl(String url) {
+      final uri = Uri.tryParse(url);
+      if (uri == null ||
+          !const {'ponynotes', 'appflowy-flutter', 'appflowy'}
+              .contains(uri.scheme)) {
+        return;
+      }
+      final id =
+          uri.queryParameters['viewId'] ?? uri.queryParameters['page_id'];
+      if (id != null) _addReference(view.id, id);
+    }
+
+    void delta(dynamic value) {
+      if (value is Map) value = value['ops'] ?? value['delta'];
+      if (value is! List) return;
+      for (final op in value) {
+        if (op is! Map) continue;
+        final attributes = op['attributes'];
+        if (attributes is! Map) continue;
+        final mention = attributes['mention'];
+        if (op['insert'] == r'$' &&
+            mention is Map &&
+            const {'page', 'childPage'}.contains(mention['type'] ?? 'page') &&
+            mention['page_id'] is String) {
+          _addReference(view.id, mention['page_id'] as String);
         }
-        _references(source, target);
+        final href = attributes['href'];
+        if (href is String) internalUrl(href);
       }
-    } else if (value is List) {
-      for (final item in value) {
-        _references(source, item);
+    }
+
+    for (final block in document.blocks.values) {
+      final data = _json(block.data);
+      if (data is! Map) continue;
+      if (const {'sub_page', 'mention', 'link_to_page'}.contains(block.ty) &&
+          data['view_id'] is String) {
+        _addReference(view.id, data['view_id'] as String);
       }
+      if (block.ty == 'link_preview' && data['url'] is String) {
+        internalUrl(data['url'] as String);
+      }
+      delta(data['delta']);
+    }
+    for (final text in document.meta.textMap.values) {
+      delta(_json(text));
     }
   }
 

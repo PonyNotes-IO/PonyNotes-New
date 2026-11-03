@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_dat
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_canvas.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_page.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -23,6 +24,7 @@ void main() {
   final previewKey = GlobalKey();
 
   setUpAll(() async {
+    Log.shared.disableLog = true;
     SharedPreferences.setMockInitialValues({});
     await EasyLocalization.ensureInitialized();
     if (previewPath != null) {
@@ -333,7 +335,7 @@ void main() {
   });
 
   testWidgets(
-      'defaults to entity setup, separates document links and translates missing model errors',
+      'defaults to document links, separates semantic setup and translates missing model errors',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final cubit = KnowledgeGraphCubit(
@@ -353,6 +355,9 @@ void main() {
     await cubit.refresh();
     var configured = false;
     await mount(tester, cubit, onConfigureModel: () => configured = true);
+    await waitForNodes(tester, count: 1);
+    await tester.tap(find.text(previewPath == null ? 'Entity graph' : '实体图谱'));
+    await tester.pumpAndSettle();
     expect(
       find.text(
         previewPath == null ? 'Build your knowledge graph' : '尚未生成知识图谱',
@@ -710,7 +715,7 @@ void main() {
       cubit,
       onOpenSource: (view, block) => opened = (view.id, block),
     );
-    expect(find.byType(KnowledgeGraphCanvas), findsNothing);
+    await waitForNodes(tester, count: 1);
     await openAction(
       tester,
       previewPath == null ? 'Extract entities and relationships' : '抽取实体与关系',

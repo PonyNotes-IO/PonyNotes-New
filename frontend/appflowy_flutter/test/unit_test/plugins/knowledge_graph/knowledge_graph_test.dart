@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_cub
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_data.dart';
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_extraction.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_layout.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +78,97 @@ DocumentDataPB note(String text) => document({
     });
 
 void main() {
+  setUp(() => Log.shared.disableLog = true);
+
+  test(
+      'local graph supports two hops and reports nodes omitted by the display limit',
+      () {
+    final graph = KnowledgeGraphData(
+      nodes: [
+        for (final id in ['a', 'b', 'c', 'd'])
+          GraphNode(id: id, label: id, view: page(id)),
+      ],
+      edges: const [
+        GraphEdge('a', 'b', GraphEdgeKind.reference),
+        GraphEdge('b', 'c', GraphEdgeKind.reference),
+        GraphEdge('c', 'd', GraphEdgeKind.reference),
+      ],
+    );
+    expect(
+      graph.filtered(focus: 'a').nodes.map((node) => node.id).toSet(),
+      {'a', 'b'},
+    );
+    expect(
+      graph.filtered(focus: 'a', depth: 2).nodes.map((node) => node.id).toSet(),
+      {'a', 'b', 'c'},
+    );
+    final limited = graph.filtered(focus: 'a', depth: 2, maxNodes: 2);
+    expect(limited.nodes.map((node) => node.id), contains('a'));
+    expect(limited.hiddenNodes, 1);
+    expect(limited.edges, [const GraphEdge('a', 'b', GraphEdgeKind.reference)]);
+  });
+
+  test(
+      'indexed structural graph never reads document bodies and filters inaccessible endpoints',
+      () async {
+    var reads = 0;
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async => [page('a'), page('b')],
+      loadLinks: () async => DocumentLinksPB(
+        indexedPages: 2,
+        outgoing: [
+          NoteLinkPB(srcPageId: 'a', dstPageId: 'b'),
+          NoteLinkPB(srcPageId: 'private', dstPageId: 'b'),
+          NoteLinkPB(srcPageId: 'a', dstPageId: 'deleted'),
+        ],
+      ),
+      loadDocument: (_) async {
+        reads++;
+        return note(evidence);
+      },
+    );
+    await cubit.refresh();
+    expect(reads, 0);
+    expect(cubit.state.indexedPages, 2);
+    expect(
+      cubit.state.data.edges,
+      [const GraphEdge('a', 'b', GraphEdgeKind.reference)],
+    );
+    await cubit.refresh();
+    expect(reads, 0);
+    await cubit.enableSemanticLayer();
+    expect(reads, 2);
+    await cubit.setSemanticLayer(false);
+    await cubit.refresh();
+    expect(reads, 2);
+    expect(
+      cubit.state.data.edges,
+      [const GraphEdge('a', 'b', GraphEdgeKind.reference)],
+    );
+    await cubit.close();
+  });
+
+  test('index failure remains retryable without presenting an empty success',
+      () async {
+    var fail = true;
+    final cubit = KnowledgeGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async => [page('a')],
+      loadLinks: () async {
+        if (fail) throw StateError('unavailable');
+        return DocumentLinksPB(indexedPages: 1);
+      },
+    );
+    await cubit.refresh();
+    expect(cubit.state.error, isTrue);
+    fail = false;
+    await cubit.refresh();
+    expect(cubit.state.error, isFalse);
+    expect(cubit.state.indexedPages, 1);
+    await cubit.close();
+  });
+
   test('validates graph evidence and never accepts model-supplied source IDs',
       () {
     final raw = extraction();
@@ -644,6 +736,27 @@ void main() {
     expect(builder.build().nodes, hasLength(4));
   });
 
+  test(
+      'owned child-page embeds stay hierarchy edges while citations retain direction',
+      () {
+    final builder = KnowledgeGraphBuilder(
+      [page('parent'), page('child', parent: 'parent')],
+      workspaceId: 'workspace',
+    );
+    builder.addLinks(
+      [NoteLinkPB(srcPageId: 'parent', dstPageId: 'child', kind: 'embed')],
+    );
+    expect(builder.build().edges.single.kind, GraphEdgeKind.hierarchy);
+    builder.addLinks([
+      NoteLinkPB(srcPageId: 'child', dstPageId: 'parent', kind: 'block_ref'),
+    ]);
+    final citation = builder.build().edges.single;
+    expect(citation.kind, GraphEdgeKind.reference);
+    expect(citation.source, 'child');
+    expect(citation.target, 'parent');
+    expect(citation.bidirectional, isFalse);
+  });
+
   test('reciprocal references and parent links produce one document connection',
       () {
     final a = page('a');
@@ -680,6 +793,7 @@ void main() {
     expect(graph.edges, hasLength(1));
     expect({graph.edges.single.source, graph.edges.single.target}, {'a', 'b'});
     expect(graph.edges.single.kind, GraphEdgeKind.reference);
+    expect(graph.edges.single.bidirectional, isTrue);
     expect(graph.filtered(hierarchy: false).edges, hasLength(1));
     expect(
       graph.filtered(orphans: false).nodes.map((node) => node.id).toSet(),
