@@ -2611,6 +2611,7 @@
     "openSourceIconsFrom": "Open source icons from"
   },
   "inlineActions": {
+    "morePages": "Choose from all {} notes…",
     "noResults": "No results",
     "recentPages": "Recent pages",
     "pageReference": "Page reference",

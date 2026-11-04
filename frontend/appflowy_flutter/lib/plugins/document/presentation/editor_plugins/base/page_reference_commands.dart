@@ -1,3 +1,5 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/mobile/presentation/inline_actions/mobile_inline_actions_menu.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/child_page.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/inline_page_reference.dart';
@@ -96,6 +98,11 @@ Future<bool> inlinePageReferenceCommandHandler(
         InlineChildPageService(currentViewId: currentViewId),
       InlinePageReferenceService(
         currentViewId: currentViewId,
+        workspaceId: context
+            .read<UserWorkspaceBloc?>()
+            ?.state
+            .currentWorkspace
+            ?.workspaceId,
         selectBlock: previousChar == _bracketChar,
         limitResults: 10,
       ),

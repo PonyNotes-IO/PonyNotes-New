@@ -57,6 +57,8 @@ class NoteRelationsController extends ChangeNotifier {
   bool _backfilling = false;
   int _generation = 0;
 
+  String? spaceName(String id) => views[noteSpaceId(id, views)]?.name;
+
   bool _isHierarchy(NoteLinkPB link) =>
       link.kind == 'embed' &&
       views[link.dstPageId]?.parentViewId == link.srcPageId;
@@ -139,7 +141,11 @@ class NoteRelationsController extends ChangeNotifier {
               workspaceId: workspaceId,
             );
       if (_disposed || generation != _generation) return;
-      views = {for (final view in accessible) view.id: view};
+      views = {
+        for (final view in accessible)
+          if (view.workspaceId.isEmpty || view.workspaceId == workspaceId)
+            view.id: view,
+      };
       links = snapshot;
       _invalidateRelations();
       _contexts.clear();
@@ -196,22 +202,31 @@ class NoteRelationsController extends ChangeNotifier {
   Future<String> excerpt(String pageId, String blockId, {int offset = 0}) {
     if (!views.containsKey(pageId) || blockId.isEmpty) return Future.value('');
     return _contexts.putIfAbsent('$pageId/$blockId/$offset', () async {
-      if (_loadExcerpt != null) return _loadExcerpt(pageId, blockId, offset);
-      final result = await DocumentService()
-          .getDocumentNode(documentId: pageId, blockId: blockId);
-      if (_disposed || !views.containsKey(pageId)) return '';
-      final node = result.fold((value) => value.$3, (_) => null);
-      return node == null
+      final generation = _generation;
+      final String text;
+      if (_loadExcerpt != null) {
+        text = await _loadExcerpt(pageId, blockId, offset);
+      } else {
+        final result = await DocumentService()
+            .getDocumentNode(documentId: pageId, blockId: blockId);
+        final node = result.fold((value) => value.$3, (_) => null);
+        text = node == null
+            ? ''
+            : noteLinkContext(
+                noteBlockText(
+                  node,
+                  titles: {
+                    for (final view in views.values) view.id: view.name,
+                  },
+                ),
+                offset,
+              );
+      }
+      return _disposed ||
+              generation != _generation ||
+              !views.containsKey(pageId)
           ? ''
-          : noteLinkContext(
-              noteBlockText(
-                node,
-                titles: {
-                  for (final view in views.values) view.id: view.name,
-                },
-              ),
-              offset,
-            );
+          : text;
     });
   }
 

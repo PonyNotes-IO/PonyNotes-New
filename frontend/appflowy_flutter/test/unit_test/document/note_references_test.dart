@@ -1,3 +1,9 @@
+import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'dart:async';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/backlinks/note_reference_list.dart';
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy_backend/protobuf/flowy-notification/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/notification.pbenum.dart';
@@ -12,6 +18,38 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+
+class _UnopenedReferenceDocument extends DocumentService {
+  _UnopenedReferenceDocument(this.document);
+  final DocumentDataPB document;
+  int opens = 0;
+  int closes = 0;
+  bool fail = false;
+  @override
+  Future<FlowyResult<DocumentDataPB, FlowyError>> getDocument({
+    required String documentId,
+    String? workspaceId,
+  }) async =>
+      FlowyResult.success(DocumentDataPB());
+  @override
+  Future<FlowyResult<DocumentDataPB, FlowyError>> openDocument({
+    required String documentId,
+    String? workspaceId,
+  }) async {
+    opens++;
+    return fail
+        ? FlowyResult.failure(FlowyError(msg: 'not synced'))
+        : FlowyResult.success(document);
+  }
+
+  @override
+  Future<FlowyResult<void, FlowyError>> closeDocument({
+    required String viewId,
+  }) async {
+    closes++;
+    return FlowyResult.success(null);
+  }
+}
 
 EditorState editorWith(Node node) => EditorState(
       document: Document(root: pageNode(children: [node])),
@@ -227,6 +265,178 @@ void main() {
     editor.dispose();
   });
 
+  test(
+      'workspace boundaries exclude foreign incoming sources and pending excerpts after revocation',
+      () async {
+    final editor = editorWith(paragraphNode());
+    final pending = Completer<String>();
+    var allowed = true;
+    final controller = NoteRelationsController(
+      pageId: 'b',
+      workspaceId: 'ws',
+      identity: 'user/ws',
+      editorState: editor,
+      loadViews: () async => [
+        ViewPB(id: 'b', workspaceId: 'ws'),
+        if (allowed) ViewPB(id: 'a', workspaceId: 'ws'),
+        ViewPB(id: 'foreign', workspaceId: 'other'),
+      ],
+      loadLinks: () async => DocumentLinksPB(
+        indexedPages: 3,
+        incoming: [
+          NoteLinkPB(srcPageId: 'a', dstPageId: 'b', srcBlockId: 'a-block'),
+          NoteLinkPB(srcPageId: 'foreign', dstPageId: 'b'),
+        ],
+      ),
+      loadExcerpt: (_, __, ___) => pending.future,
+    );
+    await controller.refresh();
+    expect(controller.incoming.map((link) => link.srcPageId), ['a']);
+    final excerpt = controller.excerpt('a', 'a-block');
+    allowed = false;
+    await controller.refresh();
+    pending.complete('private source');
+    expect(await excerpt, isEmpty);
+    expect(controller.incoming, isEmpty);
+    controller.dispose();
+    editor.dispose();
+  });
+
+  testWidgets(
+      'reference picker prioritizes current space and permits readable cross-space passages',
+      (tester) async {
+    final local = ViewPB(
+      id: 'local',
+      name: 'Z local',
+      parentViewId: 'one',
+      workspaceId: 'ws',
+    );
+    final external = ViewPB(
+      id: 'external',
+      name: 'A external',
+      parentViewId: 'two',
+      workspaceId: 'ws',
+    );
+    final target = paragraphNode(text: 'External source passage');
+    NoteReferenceTarget? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              child: const Text('Pick'),
+              onPressed: () async {
+                selected = await showDialog<NoteReferenceTarget>(
+                  context: context,
+                  builder: (_) => NoteReferencePicker(
+                    workspaceId: 'ws',
+                    currentPageId: 'current',
+                    loadViews: () async => [
+                      local,
+                      external,
+                      ViewPB(
+                        id: 'one',
+                        name: 'Local space',
+                        extra: '{"is_space":true}',
+                        workspaceId: 'ws',
+                      ),
+                      ViewPB(
+                        id: 'two',
+                        name: 'Other space',
+                        extra: '{"is_space":true}',
+                        workspaceId: 'ws',
+                      ),
+                      ViewPB(
+                        id: 'current',
+                        parentViewId: 'one',
+                        workspaceId: 'ws',
+                      ),
+                      ViewPB(
+                        id: 'foreign',
+                        name: 'Foreign secret',
+                        workspaceId: 'other',
+                      ),
+                    ],
+                    loadBlocks: (_) async => [target],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Pick'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(find.text('Z local')).dy,
+      lessThan(tester.getTopLeft(find.text('A external')).dy),
+    );
+    expect(find.text('Other space'), findsOneWidget);
+    expect(find.text('Foreign secret'), findsNothing);
+    await tester.tap(find.text('A external'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('External source passage'));
+    await tester.pumpAndSettle();
+    expect(selected!.pageId, 'external');
+    expect(selected!.blockId, target.id);
+  });
+
+  testWidgets(
+      'backlinks include readable sources from other spaces with space labels',
+      (tester) async {
+    final editor = editorWith(paragraphNode());
+    final controller = NoteRelationsController(
+      pageId: 'b',
+      workspaceId: 'ws',
+      identity: 'user/ws',
+      editorState: editor,
+      loadExcerpt: (_, __, ___) async => 'Cross-space passage',
+    )
+      ..views = {
+        'one': ViewPB(
+          id: 'one',
+          name: 'Research space',
+          extra: '{"is_space":true}',
+        ),
+        'two': ViewPB(
+          id: 'two',
+          name: 'Planning space',
+          extra: '{"is_space":true}',
+        ),
+        'a': ViewPB(id: 'a', name: 'External note', parentViewId: 'two'),
+        'b': ViewPB(id: 'b', parentViewId: 'one'),
+      }
+      ..links = DocumentLinksPB(
+        incoming: [
+          NoteLinkPB(srcPageId: 'a', srcBlockId: 'a-block', dstPageId: 'b'),
+        ],
+      )
+      ..loading = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChangeNotifierProvider<NoteRelationsController?>.value(
+            value: controller,
+            child: BacklinkPanel(
+              pageId: 'b',
+              editorState: editor,
+              editable: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Backlinks · 1 notes'), findsOneWidget);
+    expect(find.text('External note'), findsOneWidget);
+    expect(find.text('Planning space · 1 references'), findsOneWidget);
+    expect(find.text('Cross-space passage'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    editor.dispose();
+  });
+
   testWidgets(
       'a target paragraph exposes automatically derived sources and transient highlight',
       (tester) async {
@@ -327,6 +537,74 @@ void main() {
     controller.dispose();
     editor.dispose();
   });
+  testWidgets(
+      'unopened nested reference document loads its paragraphs before selection',
+      (tester) async {
+    final paragraph =
+        paragraphNode(text: 'Paragraph in a nested cross-space note');
+    final service = _UnopenedReferenceDocument(
+      DocumentDataPBFromTo.fromDocument(
+        Document(root: pageNode(children: [paragraph])),
+      )!,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteReferencePicker(
+          initialView: ViewPB(id: 'nested'),
+          documentService: service,
+          loadViews: () async => [
+            ViewPB(id: 'nested', parentViewId: 'parent'),
+            ViewPB(id: 'parent'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Paragraph in a nested cross-space note'), findsOneWidget);
+    expect(service.opens, 1);
+    expect(service.closes, 1);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+      'unavailable target content reports a retry instead of an empty passage list',
+      (tester) async {
+    final paragraph = paragraphNode(text: 'Loaded after retry');
+    final service = _UnopenedReferenceDocument(
+      DocumentDataPBFromTo.fromDocument(
+        Document(root: pageNode(children: [paragraph])),
+      )!,
+    )..fail = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NoteReferencePicker(
+          initialView: ViewPB(id: 'nested'),
+          documentService: service,
+          loadViews: () async => [ViewPB(id: 'nested')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load content. Retry'), findsOneWidget);
+    final button = tester.widget<TextButton>(
+      find
+          .ancestor(
+            of: find.text('Link to the whole note'),
+            matching: find.byWidgetPredicate((widget) => widget is TextButton),
+          )
+          .first,
+    );
+    expect(button.onPressed, isNull);
+    service.fail = false;
+    await tester.tap(find.text('Could not load content. Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Loaded after retry'), findsOneWidget);
+    expect(service.opens, 2);
+    expect(service.closes, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('picker searches passages and returns the chosen block identity',
       (tester) async {
     final first = paragraphNode(delta: Delta()..insert('Unrelated paragraph'));
@@ -375,6 +653,7 @@ void main() {
       MaterialApp(
         home: NoteReferencePicker(
           initialView: ViewPB(id: 'target', name: 'Target note'),
+          loadViews: () async => [ViewPB(id: 'target', name: 'Target note')],
           loadBlocks: (_) async {
             if (attempts++ == 0) throw StateError('offline');
             return [paragraphNode(delta: Delta()..insert('Recovered passage'))];

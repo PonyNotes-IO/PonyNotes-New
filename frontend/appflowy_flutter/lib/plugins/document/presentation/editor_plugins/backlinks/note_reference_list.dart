@@ -65,7 +65,11 @@ class _NoteReferenceGroup extends StatelessWidget {
             ? referenceText(context, '未命名', 'Untitled')
             : view.name;
     final count = noteLinkOccurrences(links);
-    final subtitle = referenceText(context, '$count 处引用', '$count references');
+    final space = controller.spaceName(id);
+    final subtitle = [
+      if (space != null && space.isNotEmpty) space,
+      referenceText(context, '$count 处引用', '$count references'),
+    ].join(' · ');
     if (links.length == 1) {
       return ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 12),

@@ -1,3 +1,8 @@
+import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/document/application/note_relations_controller.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:convert';
 
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
@@ -107,11 +112,37 @@ Future<void> insertNoteReference(
   }
   final source = anchor ?? NoteReferenceAnchor.capture(editor);
   if (source == null) return;
+  final relations = NoteRelationsController.forEditor(editor);
+  final workspaceId = relations?.workspaceId ??
+      context.read<UserWorkspaceBloc?>()?.state.currentWorkspace?.workspaceId;
   final target = await showDialog<NoteReferenceTarget>(
     context: context,
-    builder: (_) => NoteReferencePicker(initialView: initialView),
+    builder: (_) => NoteReferencePicker(
+      initialView: initialView,
+      currentPageId: relations?.pageId,
+      workspaceId: workspaceId,
+    ),
   );
   if (target == null || !context.mounted) return;
+  if (relations != null) {
+    await relations.refresh();
+    if (!context.mounted || editor.isDisposed) return;
+    if (NoteRelationsController.forEditor(editor) != relations ||
+        !relations.views.containsKey(target.pageId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            referenceText(
+              context,
+              '目标笔记已不可访问，请重新选择',
+              'The target note is no longer accessible. Choose again.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+  }
   if (!await source.insert(editor, target) && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -131,12 +162,18 @@ class NoteReferencePicker extends StatefulWidget {
   const NoteReferencePicker({
     super.key,
     this.initialView,
+    this.currentPageId,
+    this.workspaceId,
     this.loadViews,
     this.loadBlocks,
+    this.documentService,
   });
   final ViewPB? initialView;
+  final String? currentPageId;
+  final String? workspaceId;
   final Future<List<ViewPB>> Function()? loadViews;
   final Future<List<Node>> Function(ViewPB view)? loadBlocks;
+  final DocumentService? documentService;
   @override
   State<NoteReferencePicker> createState() => _NoteReferencePickerState();
 }
@@ -144,6 +181,7 @@ class NoteReferencePicker extends StatefulWidget {
 class _NoteReferencePickerState extends State<NoteReferencePicker> {
   final _search = TextEditingController();
   List<ViewPB> _views = [];
+  Map<String, ViewPB>? _accessible;
   List<Node> _blocks = [];
   ViewPB? _view;
   bool _loading = true;
@@ -171,28 +209,81 @@ class _NoteReferencePickerState extends State<NoteReferencePicker> {
       _error = false;
     });
     try {
-      if (_view == null && widget.loadViews != null) {
-        _views = await widget.loadViews!();
-      } else if (_view != null && widget.loadBlocks != null) {
+      if (_accessible == null) {
+        final List<ViewPB> views;
+        if (widget.loadViews != null) {
+          views = await widget.loadViews!();
+        } else {
+          final result = await ViewBackendService.getAllViews();
+          views = result.fold(
+            (value) => value.items,
+            (error) => throw StateError(error.msg),
+          );
+        }
+        if (!mounted || generation != _generation) return;
+        final accessible = {
+          for (final view in views)
+            if (widget.workspaceId == null ||
+                view.workspaceId.isEmpty ||
+                view.workspaceId == widget.workspaceId)
+              view.id: view,
+        };
+        _accessible = accessible;
+        final currentSpace =
+            noteSpaceId(widget.currentPageId ?? '', accessible);
+        _views = accessible.values
+            .where(
+              (view) =>
+                  view.layout == ViewLayoutPB.Document &&
+                  !view.isSpace &&
+                  view.id != widget.workspaceId &&
+                  (view.workspaceId.isEmpty || view.id != view.workspaceId),
+            )
+            .toList()
+          ..sort((a, b) {
+            final aLocal = currentSpace != null &&
+                noteSpaceId(a.id, accessible) == currentSpace;
+            final bLocal = currentSpace != null &&
+                noteSpaceId(b.id, accessible) == currentSpace;
+            if (aLocal != bLocal) return aLocal ? -1 : 1;
+            return a.name.compareTo(b.name);
+          });
+      }
+      if (_view != null && !_views.any((view) => view.id == _view!.id)) {
+        throw StateError('Note is no longer accessible');
+      }
+      if (_view != null && widget.loadBlocks != null) {
         final blocks = await widget.loadBlocks!(_view!);
         if (!mounted || generation != _generation) return;
         _blocks = blocks;
-      } else if (_view == null) {
-        final result = await ViewBackendService.getAllViews();
-        _views = result.fold(
-          (value) => value.items
-              .where((view) => view.layout == ViewLayoutPB.Document)
-              .toList(),
-          (error) => throw StateError(error.msg),
+      } else if (_view != null) {
+        final id = _view!.id;
+        final service = widget.documentService ?? DocumentService();
+        final local = await service.getDocument(
+          documentId: id,
+          workspaceId: widget.workspaceId,
         );
-      } else {
-        final result =
-            await DocumentService().getDocument(documentId: _view!.id);
+        var data = local.fold((value) => value, (_) => null);
+        if (data == null || data.blocks.isEmpty) {
+          try {
+            final opened = await service.openDocument(
+              documentId: id,
+              workspaceId: widget.workspaceId,
+            );
+            data = opened.fold(
+              (value) => value,
+              (error) => throw StateError(error.msg),
+            );
+          } finally {
+            if (DocumentBloc.findOpen(id) == null) {
+              await service.closeDocument(viewId: id);
+            }
+          }
+        }
         if (!mounted || generation != _generation) return;
-        final data = result.fold(
-          (value) => value,
-          (error) => throw StateError(error.msg),
-        );
+        if (data == null || data.blocks.isEmpty) {
+          throw StateError('Document content unavailable');
+        }
         final root = data.buildNode(data.pageId);
         final blocks = <Node>[];
         void walk(Node node) {
@@ -216,6 +307,15 @@ class _NoteReferencePickerState extends State<NoteReferencePicker> {
         });
       }
     }
+  }
+
+  String _spaceLabel(ViewPB view) {
+    final accessible = _accessible ?? {};
+    final space = accessible[noteSpaceId(view.id, accessible)];
+    final label = space?.name;
+    return label == null || label.isEmpty
+        ? referenceText(context, '未归属空间', 'No space')
+        : label;
   }
 
   @override
@@ -284,10 +384,12 @@ class _NoteReferencePickerState extends State<NoteReferencePicker> {
               Align(
                 alignment: AlignmentDirectional.centerStart,
                 child: TextButton.icon(
-                  onPressed: () => Navigator.pop(
-                    context,
-                    NoteReferenceTarget(_view!.id, null),
-                  ),
+                  onPressed: _loading || _error
+                      ? null
+                      : () => Navigator.pop(
+                            context,
+                            NoteReferenceTarget(_view!.id, null),
+                          ),
                   icon: const Icon(Icons.article_outlined, size: 18),
                   label: Text(text('引用整篇笔记', 'Link to the whole note')),
                 ),
@@ -326,6 +428,7 @@ class _NoteReferencePickerState extends State<NoteReferencePicker> {
                                             ? text('未命名', 'Untitled')
                                             : views[index].name,
                                       ),
+                                      subtitle: Text(_spaceLabel(views[index])),
                                       trailing: const Icon(Icons.chevron_right),
                                       onTap: () {
                                         setState(() {

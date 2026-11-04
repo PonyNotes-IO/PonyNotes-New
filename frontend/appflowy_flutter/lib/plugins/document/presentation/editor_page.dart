@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
@@ -104,7 +106,14 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     handlers: [
       if (FeatureFlag.inlineSubPageMention.isOn)
         InlineChildPageService(currentViewId: documentBloc.documentId),
-      InlinePageReferenceService(currentViewId: documentBloc.documentId),
+      InlinePageReferenceService(
+        currentViewId: documentBloc.documentId,
+        workspaceId: context
+            .read<UserWorkspaceBloc?>()
+            ?.state
+            .currentWorkspace
+            ?.workspaceId,
+      ),
       DateReferenceService(context),
       ReminderReferenceService(context),
       InlineUserReferenceService(currentViewId: documentBloc.documentId),

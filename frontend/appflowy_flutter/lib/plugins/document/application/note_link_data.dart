@@ -1,3 +1,5 @@
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 
@@ -133,4 +135,17 @@ String noteBlockText(Node node, {Map<String, String> titles = const {}}) {
     }
   }
   return text.toString().trim();
+}
+
+/// Resolve only through readable ancestors; missing or cyclic parents have no known space.
+String? noteSpaceId(String pageId, Map<String, ViewPB> views) {
+  var parent = views[pageId]?.parentViewId;
+  final visited = {pageId};
+  while (parent != null && visited.add(parent)) {
+    final view = views[parent];
+    if (view == null) return null;
+    if (view.isSpace) return view.id;
+    parent = view.parentViewId;
+  }
+  return null;
 }

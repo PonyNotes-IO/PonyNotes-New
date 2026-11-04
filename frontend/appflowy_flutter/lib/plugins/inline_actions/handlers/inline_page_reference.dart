@@ -1,3 +1,5 @@
+import 'package:appflowy/plugins/document/application/note_link_data.dart';
+import 'package:appflowy/plugins/note_graph/application/note_graph_data.dart';
 import 'dart:async';
 
 import 'package:appflowy/plugins/document/presentation/editor_plugins/backlinks/note_reference_picker.dart';
@@ -29,11 +31,13 @@ import 'package:flutter/material.dart';
 class InlinePageReferenceService extends InlineActionsDelegate {
   InlinePageReferenceService({
     required this.currentViewId,
+    this.workspaceId,
     this.viewLayout,
     this.customTitle,
     this.insertPage = false,
     this.selectBlock = false,
     this.limitResults = 5,
+    this.loadViews,
   }) : assert(limitResults > 0, 'limitResults must be greater than 0') {
     init();
   }
@@ -41,6 +45,8 @@ class InlinePageReferenceService extends InlineActionsDelegate {
   final Completer _initCompleter = Completer<void>();
 
   final String currentViewId;
+  final String? workspaceId;
+  final Future<List<ViewPB>> Function()? loadViews;
   final ViewLayoutPB? viewLayout;
   final String? customTitle;
 
@@ -60,14 +66,12 @@ class InlinePageReferenceService extends InlineActionsDelegate {
   late final CachedRecentService _recentService;
 
   bool _recentViewsInitialized = false;
-  late final List<InlineActionsMenuItem> _recentViews;
+  List<InlineActionsMenuItem> _recentViews = [];
 
   Future<List<InlineActionsMenuItem>> _getRecentViews() async {
     if (_recentViewsInitialized) {
       return _recentViews;
     }
-
-    _recentViewsInitialized = true;
 
     final sectionViews = await _recentService.recentViews();
     final views =
@@ -77,30 +81,79 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     views.retainWhere(
       (i) =>
           currentViewId != i.id &&
+          !NoteGraphData.isWorkspaceRoot(i, workspaceId) &&
           (viewLayout == null || i.layout == viewLayout),
     );
 
-    // Map to InlineActionsMenuItem, then take 5 items
-    return _recentViews = views.map(_fromView).take(5).toList();
+    _recentViews = views.map(_fromView).take(5).toList();
+    _recentViewsInitialized = true;
+    return _recentViews;
   }
 
   bool _viewsInitialized = false;
-  late final List<ViewPB> _allViews;
+  List<ViewPB> _allViews = [];
+  Map<String, ViewPB> _readableViews = {};
 
   Future<List<ViewPB>> _getViews() async {
     if (_viewsInitialized) {
       return _allViews;
     }
 
+    final List<ViewPB> views;
+    if (loadViews != null) {
+      views = await loadViews!();
+    } else {
+      final result = await ViewBackendService.getAllViews();
+      views = result.fold(
+        (value) => value.items,
+        (error) => throw StateError(error.msg),
+      );
+    }
+    _readableViews = {
+      for (final view in views)
+        if (workspaceId == null ||
+            view.workspaceId.isEmpty ||
+            view.workspaceId == workspaceId)
+          view.id: view,
+    };
+    final ordered = _readableViews.values.toList();
+    if (selectBlock) ordered.sort(_compareReferenceViews);
+    _allViews = ordered
+        .where((view) => !NoteGraphData.isWorkspaceRoot(view, workspaceId))
+        .where((view) => !selectBlock || !view.isSpace)
+        .where((v) => viewLayout == null || v.layout == viewLayout)
+        .toList();
     _viewsInitialized = true;
+    return _allViews;
+  }
 
-    final viewResult = await ViewBackendService.getAllViews();
-    return _allViews = viewResult
-            .toNullable()
-            ?.items
-            .where((v) => viewLayout == null || v.layout == viewLayout)
-            .toList() ??
-        const [];
+  int _compareReferenceViews(ViewPB a, ViewPB b) {
+    final current = noteSpaceId(currentViewId, _readableViews);
+    final aLocal =
+        current != null && noteSpaceId(a.id, _readableViews) == current;
+    final bLocal =
+        current != null && noteSpaceId(b.id, _readableViews) == current;
+    if (aLocal != bLocal) return aLocal ? -1 : 1;
+    return a.name.compareTo(b.name);
+  }
+
+  String _referenceLabel(ViewPB view) {
+    if (!selectBlock) return view.nameOrDefault;
+    final path = <String>[];
+    var parent = view.parentViewId;
+    final seen = {view.id};
+    while (seen.add(parent)) {
+      final ancestor = _readableViews[parent];
+      if (ancestor == null ||
+          NoteGraphData.isWorkspaceRoot(ancestor, workspaceId)) {
+        break;
+      }
+      if (ancestor.name.isNotEmpty) path.add(ancestor.name);
+      parent = ancestor.parentViewId;
+    }
+    return path.isEmpty
+        ? view.nameOrDefault
+        : '${view.nameOrDefault} · ${path.reversed.join(' / ')}';
   }
 
   Future<void> init() async {
@@ -124,24 +177,28 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     final isSearching = search != null && search.isNotEmpty;
 
     late List<InlineActionsMenuItem> items;
-    if (isSearching) {
+    if (selectBlock || isSearching) {
       final allViews = await _getViews();
-
-      items = allViews
+      final query = search?.trim().toLowerCase() ?? '';
+      final matches = allViews
           .where(
             (view) =>
                 view.id != currentViewId &&
-                    view.name.toLowerCase().contains(search.toLowerCase()) ||
-                (view.name.isEmpty && search.isEmpty) ||
-                (view.name.isEmpty &&
-                    LocaleKeys.menuAppHeader_defaultNewPageName
-                        .tr()
-                        .toLowerCase()
-                        .contains(search.toLowerCase())),
+                (query.isEmpty ||
+                    _referenceLabel(view).toLowerCase().contains(query)),
           )
-          .take(limitResults)
-          .map((view) => _fromView(view))
           .toList();
+      items = matches.take(limitResults).map(_fromView).toList();
+      if (selectBlock && matches.length > limitResults) {
+        items.add(
+          InlineActionsMenuItem(
+            label: 'inlineActions.morePages'.tr(args: ['${matches.length}']),
+            iconBuilder: (_) => const Icon(Icons.search, size: 16),
+            onSelected: (context, editor, menu, replace) =>
+                _selectPassage(editor, replace),
+          ),
+        );
+      }
     } else {
       items = await _getRecentViews();
     }
@@ -149,7 +206,7 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     return InlineActionsResult(
       title: customTitle?.isNotEmpty == true
           ? customTitle!
-          : isSearching
+          : isSearching || selectBlock
               ? LocaleKeys.inlineActions_pageReference.tr()
               : LocaleKeys.inlineActions_recentPages.tr(),
       results: items,
@@ -216,29 +273,7 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     }
 
     if (selectBlock && view.layout == ViewLayoutPB.Document) {
-      final anchor = NoteReferenceAnchor.capture(
-        editorState,
-        start: replace.$1,
-        length: replace.$2,
-      );
-      final editorContext = editorState.document.root.context;
-      if (anchor == null || editorContext == null || !editorContext.mounted) {
-        return;
-      }
-      // The inline menu dismisses itself after this handler returns.
-      // Open the picker on the next microtask so it receives keyboard focus.
-      unawaited(
-        Future<void>.microtask(() async {
-          if (editorContext.mounted) {
-            await insertNoteReference(
-              editorContext,
-              editorState,
-              initialView: view,
-              anchor: anchor,
-            );
-          }
-        }),
-      );
+      _selectPassage(editorState, replace, view: view);
       return;
     }
 
@@ -261,9 +296,32 @@ class InlinePageReferenceService extends InlineActionsDelegate {
     await editorState.apply(transaction);
   }
 
+  void _selectPassage(EditorState editor, (int, int) replace, {ViewPB? view}) {
+    final anchor = NoteReferenceAnchor.capture(
+      editor,
+      start: replace.$1,
+      length: replace.$2,
+    );
+    final context = editor.document.root.context;
+    if (anchor == null || context == null || !context.mounted) return;
+    // The inline menu must finish dismissing before the picker takes focus.
+    unawaited(
+      Future<void>.microtask(() async {
+        if (context.mounted) {
+          await insertNoteReference(
+            context,
+            editor,
+            initialView: view,
+            anchor: anchor,
+          );
+        }
+      }),
+    );
+  }
+
   InlineActionsMenuItem _fromView(ViewPB view) => InlineActionsMenuItem(
         keywords: [view.nameOrDefault.toLowerCase()],
-        label: view.nameOrDefault,
+        label: _referenceLabel(view),
         iconBuilder: (onSelected) {
           final child = view.icon.value.isNotEmpty
               ? RawEmojiIconWidget(

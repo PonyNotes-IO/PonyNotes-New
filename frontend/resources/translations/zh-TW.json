@@ -2482,6 +2482,7 @@
     "openSourceIconsFrom": "從來源取得圖示"
   },
   "inlineActions": {
+    "morePages": "選擇全部 {} 篇筆記…",
     "noResults": "無結果",
     "recentPages": "最近的頁面",
     "pageReference": "頁面參照",

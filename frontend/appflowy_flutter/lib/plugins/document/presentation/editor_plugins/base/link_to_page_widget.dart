@@ -1,3 +1,5 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/inline_page_reference.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_menu.dart';
@@ -31,6 +33,11 @@ Future<void> showLinkToPageMenu(
     handlers: [
       InlinePageReferenceService(
         currentViewId: '',
+        workspaceId: rootContext
+            .read<UserWorkspaceBloc?>()
+            ?.state
+            .currentWorkspace
+            ?.workspaceId,
         viewLayout: pageType,
         customTitle: titleFromPageType(pageType),
         insertPage: insertPage ?? pageType != ViewLayoutPB.Document,

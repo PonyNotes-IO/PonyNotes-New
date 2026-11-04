@@ -2669,6 +2669,7 @@
     "openSourceIconsFrom": "开源图标来自"
   },
   "inlineActions": {
+    "morePages": "选择全部 {} 篇笔记…",
     "noResults": "没有结果",
     "pageReference": "页面参考",
     "date": "日期",
