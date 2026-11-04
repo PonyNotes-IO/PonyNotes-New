@@ -36,9 +36,14 @@ class _NavigationObserver extends NavigatorObserver {
 }
 
 void main() {
-  for (final inPopover in [false, true]) {
+  for (final (inPopover, planCode, actionKey) in [
+    (false, 'standard', LocaleKeys.newSettings_cloudSync_btnRenew),
+    (true, 'standard', LocaleKeys.newSettings_cloudSync_btnRenew),
+    (false, 'mfb', LocaleKeys.newSettings_cloudSync_btnUpgradeSpace),
+    (true, 'mfb', LocaleKeys.newSettings_cloudSync_btnUpgradeSpace),
+  ]) {
     testWidgets(
-        'renew opens settings from ${inPopover ? 'closed popover' : 'inline button'}',
+        '$planCode opens settings from ${inPopover ? 'closed popover' : 'inline button'}',
         (tester) async {
       Localization.load(
         const Locale('zh', 'CN'),
@@ -54,7 +59,7 @@ void main() {
         workspaceSubscriptionInfo: WorkspaceSubscriptionInfoPB(),
         currentSubscription: CurrentSubscription(
           subscription: SubscriptionSummary.fromJson({
-            'plan_code': 'standard',
+            'plan_code': planCode,
             'end_date':
                 DateTime.now().add(const Duration(hours: 12)).toIso8601String(),
           }),
@@ -122,8 +127,7 @@ void main() {
       );
       expect(find.byType(CloudSyncSettingsPanel), findsOneWidget);
       final cloudSyncRoute = observer.pushed.last;
-      await tester
-          .tap(find.text(LocaleKeys.newSettings_cloudSync_btnRenew.tr()));
+      await tester.tap(find.text(actionKey.tr()));
 
       expect(tester.takeException(), isNull);
       expect(observer.popped, contains(cloudSyncRoute));
