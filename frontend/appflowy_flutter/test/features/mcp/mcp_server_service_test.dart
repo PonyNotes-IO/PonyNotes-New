@@ -333,6 +333,15 @@ void main() {
         'get_page',
         'list_blocks',
         'search_notes',
+        'get_backlinks',
+        'get_workspace_links_graph',
+        'get_note_graph',
+        'get_reference_context',
+        'insert_note_reference',
+        'remove_note_reference',
+        'open_note_graph',
+        'open_note_reference',
+        'reindex_page_links',
         'create_workspace',
         'open_workspace',
         'create_page',
@@ -349,14 +358,14 @@ void main() {
   });
 
   // 回归：注册表一度只填了 3 个工具，内部 AI 因此看不到检索与写操作。
-  test('工具注册表覆盖全部 27 个工具，只读/破坏性标记正确', () async {
+  test('工具注册表覆盖全部 36 个工具，只读/破坏性标记正确', () async {
     final tools = McpTools(endpoint: 'test', version: '1.0.0');
     final specs = tools.toolSpecs;
 
-    expect(specs.length, 27);
+    expect(specs.length, 36);
     expect(
       specs.map((spec) => spec.name).toSet().length,
-      27,
+      36,
       reason: '工具名不应重复',
     );
     expect(
@@ -370,6 +379,10 @@ void main() {
         'query_database',
         'list_trash',
         'search_notes',
+        'get_backlinks',
+        'get_workspace_links_graph',
+        'get_reference_context',
+        'get_note_graph',
       ]),
     );
     expect(
@@ -379,9 +392,10 @@ void main() {
         'delete_block',
         'delete_database_row',
         'delete_database_field',
+        'remove_note_reference',
       ]),
     );
-    expect(specs.where((spec) => !spec.readOnly).length, 19);
+    expect(specs.where((spec) => !spec.readOnly).length, 24);
 
     final unknown = await tools.executeTool('no_such_tool', const {});
     expect(unknown.isError, isTrue);
