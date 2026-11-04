@@ -13,6 +13,7 @@
 | --- | --- | --- | --- |
 | [bidirectional-links-client-design.md](./bidirectional-links-client-design.md) | 客户端双链笔记：数据模型、链接解析、反向索引、图谱、增量更新与一致性取舍 | 主流程已实现，性能预算待实测 | 2026-11-03 |
 | [mcp-implementation-plan.md](./mcp-implementation-plan.md) | 客户端本地 MCP 实现计划（二期第一章） | 设计中 | 2026-10-21 |
+| [mcp-note-links.md](./mcp-note-links.md) | MCP 双链笔记引用、反链与独立图谱工具（仅客户端） | 已实现，真实客户端验收待完成 | 2026-11-03 |
 | [mcp-agent-compatibility.md](./mcp-agent-compatibility.md) | 本地 MCP 接入与兼容性清单 | 设计中 | 2026-10-21 |
 | [mcp-phase6-internal-ai-plan.md](./mcp-phase6-internal-ai-plan.md) | MCP 阶段六：内部 AI 接入实施核查 | 设计中 | 2026-10-21 |
 | [handwriting-storage-refactor-plan.md](./handwriting-storage-refactor-plan.md) | 手写笔记存储与同步重构（仅客户端改动） | 已实现 | 2026-10-20 |
