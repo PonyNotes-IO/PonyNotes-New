@@ -4,6 +4,9 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#ifdef GDK_WINDOWING_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 
 #include "flutter/generated_plugin_registrant.h"
 #include "desktop_multi_window/desktop_multi_window_plugin.h"
@@ -20,6 +23,25 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 static void my_application_activate(GApplication *application)
 {
   MyApplication *self = MY_APPLICATION(application);
+
+  // 打印实际生效的 GDK 后端，便于排查「窗口黑屏」这类问题。
+  {
+    GdkDisplay *display = gdk_display_get_default();
+    const char *backend = "unknown";
+    if (display != nullptr) {
+#ifdef GDK_WINDOWING_WAYLAND
+      if (GDK_IS_WAYLAND_DISPLAY(display)) {
+        backend = "wayland (native)";
+      }
+#endif
+#ifdef GDK_WINDOWING_X11
+      if (GDK_IS_X11_DISPLAY(display)) {
+        backend = "x11 (XWayland)";
+      }
+#endif
+    }
+    g_message("AppFlowy: GDK backend = %s", backend);
+  }
 
   GList* windows = gtk_application_get_windows(GTK_APPLICATION(application));
   if (windows) {
