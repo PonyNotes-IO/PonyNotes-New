@@ -44,6 +44,8 @@ const _noteGraphSchema = JsonObject(
   properties: {
     'workspace_id': JsonString(description: '当前工作区 ID'),
     'focus_page_id': JsonString(description: '可选：以该笔记为中心的局部图谱'),
+    'space_id': JsonString(description: '可选：限定当前工作区中的空间 ID'),
+    'include_external': JsonBoolean(description: '显示与所选空间直接关联的其他空间笔记，默认 false'),
     'depth': JsonInteger(minimum: 1, maximum: 3, description: '局部图谱深度，默认 1'),
     'direction': JsonString(
       enumValues: ['both', 'incoming', 'outgoing'],
@@ -256,8 +258,9 @@ extension _McpNoteLinks on McpTools {
   }
 
   Future<(String, Map<String, ViewPB>)> _noteScope(
-    Map<String, dynamic> args,
-  ) async {
+    Map<String, dynamic> args, {
+    bool includeContainers = false,
+  }) async {
     final workspace = _noteId(args, 'workspace_id', required: true);
     final invalid = await (noteLinks?.validateWorkspace(workspace) ??
         _validateWorkspace(workspace));
@@ -277,8 +280,8 @@ extension _McpNoteLinks on McpTools {
       {
         for (final view in views)
           if ((view.workspaceId.isEmpty || view.workspaceId == workspace) &&
-              !view.isSpace &&
-              view.layout == ViewLayoutPB.Document &&
+              (includeContainers ||
+                  (!view.isSpace && view.layout == ViewLayoutPB.Document)) &&
               // 工作区根文档只是工作区外壳，不算可选笔记；排除后
               // accessible_notes 与图谱节点数保持同一口径。
               !NoteGraphData.isWorkspaceRoot(view, workspace))
@@ -604,11 +607,22 @@ extension _McpNoteLinks on McpTools {
     }
     final isolated = _noteBool(args, 'show_isolated', true);
     final blocksOnly = _noteBool(args, 'blocks_only', false);
-    final (workspace, views) = await _noteScope(args);
+    final (workspace, views) = await _noteScope(args, includeContainers: true);
     if (focus.isNotEmpty) _noteView(views, focus);
     final snapshot = await _noteReadLinks(workspace, '');
-    final all = NoteGraphData.fromIndex(views.values, snapshot, workspaceId: workspace);
-    final graph = all.filtered(
+    final all =
+        NoteGraphData.fromIndex(views.values, snapshot, workspaceId: workspace);
+    if (focus.isNotEmpty && !all.notes.containsKey(focus)) {
+      _noteFail('not_found', '中心笔记不存在或无权访问。');
+    }
+    final space = _noteId(args, 'space_id');
+    final external = _noteBool(args, 'include_external', false);
+    if (space.isNotEmpty && !all.spaces.containsKey(space)) {
+      _noteFail('not_found', '空间不存在或无权访问。');
+    }
+    final scoped =
+        all.inSpace(space.isEmpty ? null : space, includeExternal: external);
+    final graph = scoped.filtered(
       focus: focus.isEmpty ? null : focus,
       depth: depth,
       direction: NoteGraphDirection.values.byName(direction as String),
@@ -620,6 +634,8 @@ extension _McpNoteLinks on McpTools {
     return _ok({
       'workspace_id': workspace,
       'graph_type': 'note_links',
+      'space_id': space.isEmpty ? null : space,
+      'include_external': external,
       'focus_page_id': focus.isEmpty ? null : focus,
       'depth': depth,
       'direction': direction,
@@ -635,6 +651,10 @@ extension _McpNoteLinks on McpTools {
           {
             'page_id': view.id,
             'title': view.name,
+            'space_id': all.noteSpaceIds[view.id],
+            'space_name': all.spaces[all.noteSpaceIds[view.id]]?.name,
+            'is_external':
+                space.isNotEmpty && all.noteSpaceIds[view.id] != space,
             'incoming_note_count': all.incomingTo(view.id).length,
             'outgoing_note_count': all.outgoingFrom(view.id).length,
             'is_isolated': all.degree(view.id) == 0,

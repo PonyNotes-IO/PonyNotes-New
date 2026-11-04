@@ -675,6 +675,58 @@ void main() {
   });
 
   test(
+      'space-scoped MCP graph preserves cross-space references and can include external neighbors',
+      () async {
+    final fixture = _Fixture();
+    fixture.views['one'] = ViewPB(
+      id: 'one',
+      name: 'One',
+      workspaceId: 'ws',
+      extra: '{"is_space":true}',
+    );
+    fixture.views['two'] = ViewPB(
+      id: 'two',
+      name: 'Two',
+      workspaceId: 'ws',
+      extra: '{"is_space":true}',
+    );
+    fixture.views['a']!.parentViewId = 'one';
+    fixture.views['isolated']!.parentViewId = 'one';
+    fixture.views['b']!.parentViewId = 'two';
+    final inserted = await fixture.call(
+      'insert_note_reference',
+      {'page_id': 'a', 'target_page_id': 'b', 'target_block_id': 'b-block'},
+    );
+    expect(inserted.isError, isFalse, reason: body(inserted).toString());
+    expect(
+      body(await fixture.call('get_backlinks', {'page_id': 'b'}))[
+          'incoming_note_count'],
+      1,
+    );
+    final scoped =
+        body(await fixture.call('get_note_graph', {'space_id': 'one'}));
+    expect(scoped['nodes'], hasLength(2));
+    expect(scoped['edges'], isEmpty);
+    final expanded = body(
+      await fixture.call(
+        'get_note_graph',
+        {'space_id': 'one', 'include_external': true},
+      ),
+    );
+    expect(expanded['nodes'], hasLength(3));
+    expect(expanded['edges'], hasLength(1));
+    final external =
+        expanded['nodes'].singleWhere((dynamic node) => node['page_id'] == 'b');
+    expect(external['is_external'], isTrue);
+    expect(external['space_name'], 'Two');
+    expect(
+      (await fixture.call('get_note_graph', {'space_id': 'unreadable'}))
+          .isError,
+      isTrue,
+    );
+  });
+
+  test(
       'open graph routes to independent global or local plugin and denies inaccessible focus',
       () async {
     final fixture = _Fixture();

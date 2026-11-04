@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/document/application/note_link_data.dart';
 import 'dart:collection';
 
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -28,7 +29,11 @@ class NoteGraphData {
     required Map<String, ViewPB> notes,
     required Iterable<NoteGraphEdge> edges,
     this.omittedNotes = 0,
-  })  : notes = Map.unmodifiable(notes),
+    Map<String, ViewPB> spaces = const {},
+    Map<String, String> noteSpaceIds = const {},
+  })  : spaces = Map.unmodifiable(spaces),
+        noteSpaceIds = Map.unmodifiable(noteSpaceIds),
+        notes = Map.unmodifiable(notes),
         edges = List.unmodifiable(edges);
   factory NoteGraphData.empty() => NoteGraphData(notes: {}, edges: []);
 
@@ -37,13 +42,29 @@ class NoteGraphData {
     DocumentLinksPB snapshot, {
     String? workspaceId,
   }) {
-    final notes = {
+    final byId = {
       for (final view in views)
+        if (workspaceId == null ||
+            view.workspaceId.isEmpty ||
+            view.workspaceId == workspaceId)
+          view.id: view,
+    };
+    final spaces = {
+      for (final view in byId.values)
+        if (view.isSpace) view.id: view,
+    };
+    final noteSpaceIds = <String, String>{};
+    final notes = {
+      for (final view in byId.values)
         if (view.layout == ViewLayoutPB.Document &&
             !view.isSpace &&
             !isWorkspaceRoot(view, workspaceId))
           view.id: view,
     };
+    for (final note in notes.values) {
+      final space = noteSpaceId(note.id, byId);
+      if (space != null) noteSpaceIds[note.id] = space;
+    }
     final groups = <(String, String), List<NoteLinkPB>>{};
     final seen = <(String, String, String, String, String)>{};
     for (final raw in snapshot.outgoing) {
@@ -77,6 +98,8 @@ class NoteGraphData {
       });
     return NoteGraphData(
       notes: notes,
+      spaces: spaces,
+      noteSpaceIds: noteSpaceIds,
       edges: [
         for (final key in keys) NoteGraphEdge(key.$1, key.$2, groups[key]!),
       ],
@@ -84,8 +107,37 @@ class NoteGraphData {
   }
 
   final Map<String, ViewPB> notes;
+  final Map<String, ViewPB> spaces;
+  final Map<String, String> noteSpaceIds;
   final List<NoteGraphEdge> edges;
   final int omittedNotes;
+
+  NoteGraphData inSpace(String? spaceId, {bool includeExternal = false}) {
+    if (spaceId == null) return this;
+    final internal = {
+      for (final id in notes.keys)
+        if (noteSpaceIds[id] == spaceId) id,
+    };
+    final connections = edges
+        .where(
+          (edge) => includeExternal
+              ? internal.contains(edge.source) || internal.contains(edge.target)
+              : internal.contains(edge.source) &&
+                  internal.contains(edge.target),
+        )
+        .toList();
+    final visible = {
+      ...internal,
+      if (includeExternal)
+        for (final edge in connections) ...[edge.source, edge.target],
+    };
+    return NoteGraphData(
+      notes: {for (final id in visible) id: notes[id]!},
+      edges: connections,
+      spaces: spaces,
+      noteSpaceIds: noteSpaceIds,
+    );
+  }
 
   /// 工作区根文档（标题通常就是 "Workspace"）不是用户写的笔记，只是工作区外壳，
   /// 但它是个 `Document` 布局的 view，以前会混进图谱当一个真实节点。
@@ -201,6 +253,8 @@ class NoteGraphData {
         },
       ),
       omittedNotes: matching.length - visible.length,
+      spaces: spaces,
+      noteSpaceIds: noteSpaceIds,
     );
   }
 }

@@ -204,6 +204,110 @@ void main() {
   });
 
   test(
+      'space scope includes nested notes through folders and excludes outside edges',
+      () {
+    final graph = NoteGraphData.fromIndex(
+      [
+        ViewPB(id: 'space-a', name: 'Same title', extra: '{"is_space":true}'),
+        ViewPB(id: 'space-b', name: 'Same title', extra: '{"is_space":true}'),
+        ViewPB(id: 'empty-space', extra: '{"is_space":true}'),
+        note('a', parent: 'space-a'),
+        ViewPB(
+          id: 'folder',
+          parentViewId: 'space-a',
+          layout: ViewLayoutPB.Folder,
+        ),
+        note('nested', parent: 'folder'),
+        note('deep', parent: 'nested'),
+        note('isolated', parent: 'space-a'),
+        note('b', parent: 'space-b'),
+        note('loose'),
+      ],
+      DocumentLinksPB(
+        outgoing: [link('a', 'deep'), link('b', 'a'), link('deep', 'b')],
+      ),
+    );
+    expect(
+      graph.spaces.keys,
+      unorderedEquals(['space-a', 'space-b', 'empty-space']),
+    );
+    final scoped = graph.inSpace('space-a');
+    expect(
+      scoped.notes.keys,
+      unorderedEquals(['a', 'nested', 'deep', 'isolated']),
+    );
+    expect(scoped.edges.single.key, ('a', 'deep'));
+    expect(scoped.incomingTo('a'), isEmpty);
+    expect(scoped.filtered().notes.containsKey('isolated'), isTrue);
+    expect(
+      scoped.filtered(focus: 'a', depth: 3).notes.keys,
+      unorderedEquals(['a', 'deep']),
+    );
+    expect(scoped.filtered(query: 'isolated').notes.keys, ['isolated']);
+    expect(graph.inSpace('space-b').notes.keys, ['b']);
+    expect(graph.inSpace('empty-space').notes, isEmpty);
+    expect(graph.inSpace('missing').notes, isEmpty);
+    expect(identical(graph.inSpace(null), graph), isTrue);
+    expect(graph.notes.containsKey('loose'), isTrue);
+  });
+
+  test(
+      'external scope includes direct readable neighbors without expanding their unrelated links',
+      () {
+    final graph = NoteGraphData.fromIndex(
+      [
+        ViewPB(
+          id: 'one',
+          name: 'One',
+          workspaceId: 'ws',
+          extra: '{"is_space":true}',
+        ),
+        ViewPB(
+          id: 'two',
+          name: 'Two',
+          workspaceId: 'ws',
+          extra: '{"is_space":true}',
+        ),
+        note('a', parent: 'one'),
+        note('alone', parent: 'one'),
+        note('b', parent: 'two'),
+        note('c', parent: 'two'),
+        ViewPB(id: 'foreign', workspaceId: 'other', parentViewId: 'two'),
+      ],
+      DocumentLinksPB(
+        outgoing: [link('a', 'b'), link('b', 'c'), link('c', 'foreign')],
+      ),
+      workspaceId: 'ws',
+    );
+    expect(graph.inSpace('one').notes.keys, unorderedEquals(['a', 'alone']));
+    expect(graph.inSpace('one').edges, isEmpty);
+    final scoped = graph.inSpace('one', includeExternal: true);
+    expect(scoped.notes.keys, unorderedEquals(['a', 'alone', 'b']));
+    expect(scoped.edges.single.key, ('a', 'b'));
+    expect(scoped.filtered().noteSpaceIds['b'], 'two');
+    expect(scoped.spaces['two']!.name, 'Two');
+    expect(graph.notes.containsKey('foreign'), isFalse);
+  });
+
+  test(
+      'missing ancestors and corrupt cycles cannot leak notes into a selected space',
+      () {
+    final graph = NoteGraphData.fromIndex(
+      [
+        ViewPB(id: 'space', extra: '{"is_space":true}'),
+        note('good', parent: 'space'),
+        note('missing-parent', parent: 'unreadable'),
+        note('cycle-a', parent: 'cycle-b'),
+        note('cycle-b', parent: 'cycle-a'),
+      ],
+      DocumentLinksPB(),
+    );
+    expect(graph.inSpace('space').notes.keys, ['good']);
+    expect(graph.notes, hasLength(4));
+    expect(graph.noteSpaceIds.keys, ['good']);
+  });
+
+  test(
       'force layout is stable, finite, handles reverse edges, and is independent of semantic layout',
       () {
     const input = NoteGraphLayoutInput(

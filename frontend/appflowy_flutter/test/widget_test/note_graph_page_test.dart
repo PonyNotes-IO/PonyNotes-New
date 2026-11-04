@@ -58,6 +58,52 @@ NoteGraphCubit _cubit() => NoteGraphCubit(
       loadExcerpt: (page, block) async => 'Live passage from $page at $block',
     );
 
+NoteGraphCubit _spaceCubit({List<ViewPB> Function()? loadSpaces}) =>
+    NoteGraphCubit(
+      workspaceId: 'workspace',
+      loadViews: () async =>
+          loadSpaces?.call() ??
+          [
+            ViewPB(
+              id: 'space-a',
+              name: 'Research space',
+              extra: '{"is_space":true}',
+            ),
+            ViewPB(
+              id: 'space-b',
+              name: 'Planning space',
+              extra: '{"is_space":true}',
+            ),
+            ViewPB(
+              id: 'empty-space',
+              name: 'Empty space',
+              extra: '{"is_space":true}',
+            ),
+            ..._notes().map(
+              (note) => note
+                ..parentViewId =
+                    ['a', 'b', 'e'].contains(note.id) ? 'space-a' : 'space-b',
+            ),
+          ],
+      loadLinks: () async => DocumentLinksPB(
+        indexedPages: 5,
+        outgoing: [
+          _link('a', 'b', block: true),
+          _link('b', 'a'),
+          _link('c', 'b', block: true),
+          _link('d', 'c'),
+        ],
+      ),
+      loadExcerpt: (page, block) async => 'Live passage from $page at $block',
+    );
+
+Future<void> _chooseSpace(WidgetTester tester, String title) async {
+  await tester.tap(find.byKey(const ValueKey('note-graph-space-filter')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(title).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _waitLayout(WidgetTester tester) async {
   for (var attempt = 0; attempt < 80; attempt++) {
     await tester
@@ -191,7 +237,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2 incoming notes'), findsOneWidget);
     expect(find.text('1 outgoing notes'), findsOneWidget);
-    await tester.ensureVisible(find.text('Focus on this note'));
+    await tester.scrollUntilVisible(
+      find.text('Focus on this note'),
+      80,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Focus on this note'));
     await _waitLayout(tester);
     expect(find.text('Around: Reading notes'), findsOneWidget);
@@ -494,6 +549,188 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+      'space dropdown scopes notes, links, local focus and inspector counts',
+      (tester) async {
+    final cubit = _spaceCubit();
+    await _mount(tester, cubit);
+    expect(find.text('5 notes · 4 directed relationships'), findsOneWidget);
+    await _chooseSpace(tester, 'Research space');
+    await _waitLayout(tester);
+    expect(find.text('3 notes · 2 directed relationships'), findsOneWidget);
+    expect(
+      _semantic(tester, 'note-graph-node-e').properties.label,
+      'Unconnected note',
+    );
+    _semantic(tester, 'note-graph-node-b').properties.onTap!();
+    await tester.pumpAndSettle();
+    expect(find.text('1 incoming notes'), findsOneWidget);
+    expect(find.text('2 incoming notes'), findsNothing);
+    expect(find.text('Project planning'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Focus on this note'),
+      80,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.text('Focus on this note'));
+    await _waitLayout(tester);
+    expect(find.text('Around: Reading notes'), findsOneWidget);
+    expect(find.text('2 notes · 2 directed relationships'), findsOneWidget);
+    await _chooseSpace(tester, 'Planning space');
+    await _waitLayout(tester);
+    expect(find.text('Around: Reading notes'), findsNothing);
+    expect(find.text('Reference details'), findsNothing);
+    expect(find.text('2 notes · 1 directed relationships'), findsOneWidget);
+    await _chooseSpace(tester, 'All spaces');
+    await _waitLayout(tester);
+    expect(find.text('5 notes · 4 directed relationships'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
+  testWidgets('empty space, search and narrow layouts remain usable',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final cubit = _spaceCubit();
+    await _mount(tester, cubit);
+    await _chooseSpace(tester, 'Research space');
+    await _waitLayout(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('note-graph-search')),
+      'Unconnected',
+    );
+    await _waitLayout(tester);
+    expect(find.text('1 notes · 0 directed relationships'), findsOneWidget);
+    await tester.tap(find.byTooltip('Clear search'));
+    await _waitLayout(tester);
+    await _chooseSpace(tester, 'Empty space');
+    expect(find.text('0 notes · 0 directed relationships'), findsOneWidget);
+    expect(find.text('No matching notes'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
+  testWidgets(
+      'refresh retains a space choice and removes an unavailable space safely',
+      (tester) async {
+    var removed = false;
+    final cubit = _spaceCubit(
+      loadSpaces: () => [
+        if (!removed)
+          ViewPB(
+            id: 'space-a',
+            name: 'Research space',
+            extra: '{"is_space":true}',
+          ),
+        ..._notes().map((note) => note..parentViewId = 'space-a'),
+      ],
+    );
+    await _mount(tester, cubit);
+    await _chooseSpace(tester, 'Research space');
+    await _waitLayout(tester);
+    await cubit.refresh();
+    await _waitLayout(tester);
+    expect(
+      tester
+          .widget<DropdownButton<String>>(
+            find.byKey(const ValueKey('note-graph-space-filter')),
+          )
+          .value,
+      'space-a',
+    );
+    removed = true;
+    await cubit.refresh();
+    await _waitLayout(tester);
+    expect(find.byKey(const ValueKey('note-graph-space-filter')), findsNothing);
+    expect(find.text('5 notes · 4 directed relationships'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
+  testWidgets(
+      'scoped inspector can show all references without changing the graph filter',
+      (tester) async {
+    final cubit = _spaceCubit();
+    await _mount(tester, cubit);
+    await _chooseSpace(tester, 'Research space');
+    await _waitLayout(tester);
+    _semantic(tester, 'note-graph-node-b').properties.onTap!();
+    await tester.pumpAndSettle();
+    expect(find.text('References in this graph scope'), findsOneWidget);
+    expect(find.text('1 incoming notes'), findsOneWidget);
+    await tester.tap(find.text('View all references'));
+    await tester.pumpAndSettle();
+    expect(find.text('All accessible references'), findsOneWidget);
+    expect(find.text('2 incoming notes'), findsOneWidget);
+    expect(find.text('3 notes · 2 directed relationships'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Project planning'),
+      80,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.tap(find.text('Project planning'));
+    await tester.pumpAndSettle();
+    expect(find.text('Project planning → Reading notes'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Source passage'),
+      80,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('Source passage'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
+  });
+
+  testWidgets(
+      'cross-space toggle adds only direct neighbors marked as external',
+      (tester) async {
+    final cubit = _spaceCubit();
+    await _mount(tester, cubit);
+    await _chooseSpace(tester, 'Research space');
+    await _waitLayout(tester);
+    await tester.tap(find.text('Cross-space links'));
+    await _waitLayout(tester);
+    expect(find.text('4 notes · 3 directed relationships'), findsOneWidget);
+    expect(find.text('Hollow nodes: other spaces'), findsOneWidget);
+    final canvas = tester.widget<NoteGraphCanvas>(find.byType(NoteGraphCanvas));
+    expect(canvas.externalNotes, {'c'});
+    expect(canvas.data.notes.containsKey('d'), isFalse);
+    await tester.tap(find.text('Cross-space links'));
+    await _waitLayout(tester);
+    expect(find.text('3 notes · 2 directed relationships'), findsOneWidget);
+    expect(
+      tester
+          .widget<NoteGraphCanvas>(find.byType(NoteGraphCanvas))
+          .externalNotes,
+      isEmpty,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await cubit.close();
   });
 
   testWidgets('note graph preview', (tester) async {

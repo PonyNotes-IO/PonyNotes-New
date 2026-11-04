@@ -62,16 +62,20 @@ class _NoteGraphViewState extends State<NoteGraphView> {
   final _canvas = GlobalKey<NoteGraphCanvasState>();
   final _search = TextEditingController();
   String? _focus;
+  String? _space;
   String? _selected;
   (String, String)? _edge;
   int _depth = 1;
   bool _isolated = true;
+  bool _includeExternal = false;
+  bool _allReferences = false;
   bool _blocksOnly = false;
   bool _labels = true;
   bool _inspector = false;
   int _referenceLimit = 20;
   NoteGraphDirection _direction = NoteGraphDirection.both;
   NoteGraphData? _source;
+  NoteGraphData? _scoped;
   NoteGraphData? _visible;
 
   @override
@@ -104,6 +108,7 @@ class _NoteGraphViewState extends State<NoteGraphView> {
       });
   void _selectNote(String id) => setState(() {
         _selected = id;
+        _allReferences = false;
         _edge = null;
         _inspector = true;
       });
@@ -121,9 +126,23 @@ class _NoteGraphViewState extends State<NoteGraphView> {
         builder: (context, state) {
           if (!identical(_source, state.data)) {
             _source = state.data;
+            _scoped = null;
             _visible = null;
+            if (!state.loading &&
+                !state.error &&
+                _space != null &&
+                !state.data.spaces.containsKey(_space)) {
+              _space = null;
+              _focus = _selected = null;
+              _edge = null;
+              _inspector = false;
+            }
           }
-          final data = _visible ??= state.data.filtered(
+          final scoped = _scoped ??=
+              state.data.inSpace(_space, includeExternal: _includeExternal);
+          final spaces = state.data.spaces.values.toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+          final data = _visible ??= scoped.filtered(
             query: _search.text,
             focus: _focus,
             depth: _depth,
@@ -131,10 +150,12 @@ class _NoteGraphViewState extends State<NoteGraphView> {
             showIsolated: _isolated,
             blocksOnly: _blocksOnly,
           );
-          final focusView = state.data.notes[_focus];
-          final selectedView = state.data.notes[_selected];
-          final selectedEdge =
-              state.data.edges.where((edge) => edge.key == _edge).firstOrNull;
+          final focusView = scoped.notes[_focus];
+          final selectedView = scoped.notes[_selected];
+          final selectedEdge = (_allReferences ? state.data : scoped)
+              .edges
+              .where((edge) => edge.key == _edge)
+              .firstOrNull;
           final theme = Theme.of(context);
           return Material(
             color: theme.scaffoldBackgroundColor,
@@ -215,6 +236,69 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                     runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
+                      if (spaces.isNotEmpty || _space != null)
+                        SizedBox(
+                          width: 240,
+                          child: DropdownButton<String>(
+                            key: const ValueKey('note-graph-space-filter'),
+                            value: _space ?? '',
+                            isExpanded: true,
+                            hint: Text(text('工作空间', 'Space')),
+                            items: [
+                              DropdownMenuItem(
+                                value: '',
+                                child: Text(text('全部工作空间', 'All spaces')),
+                              ),
+                              for (final space in spaces)
+                                DropdownMenuItem(
+                                  value: space.id,
+                                  child: Text(
+                                    space.name.isEmpty
+                                        ? text('未命名空间', 'Untitled space')
+                                        : space.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              if (_space != null &&
+                                  !state.data.spaces.containsKey(_space))
+                                DropdownMenuItem(
+                                  value: _space,
+                                  child: Text(
+                                    text('正在加载空间…', 'Loading space…'),
+                                  ),
+                                ),
+                            ],
+                            onChanged: state.loading || state.error
+                                ? null
+                                : (value) => _filter(() {
+                                      _space = value == '' ? null : value;
+                                      _scoped = null;
+                                      _allReferences = false;
+                                      _focus = _selected = null;
+                                      _edge = null;
+                                      _inspector = false;
+                                    }),
+                          ),
+                        ),
+                      if (_space != null)
+                        FilterChip(
+                          label: Text(text('显示跨空间关联', 'Cross-space links')),
+                          selected: _includeExternal,
+                          onSelected: (value) => _filter(() {
+                            _includeExternal = value;
+                            _scoped = null;
+                            _allReferences = false;
+                            _selected = _focus = null;
+                            _edge = null;
+                            _inspector = false;
+                          }),
+                        ),
+                      if (_space != null && _includeExternal)
+                        Text(
+                          text('空心节点：其他空间笔记', 'Hollow nodes: other spaces'),
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ChoiceChip(
                         label: Text(text('全部笔记', 'All notes')),
                         selected: _focus == null,
@@ -321,8 +405,7 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                                   ? _empty(
                                       Icons.account_tree_outlined,
                                       _focus != null &&
-                                              !state.data.notes
-                                                  .containsKey(_focus)
+                                              !scoped.notes.containsKey(_focus)
                                           ? text(
                                               '这篇笔记暂不可用',
                                               'This note is unavailable',
@@ -346,6 +429,14 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                                         NoteGraphCanvas(
                                           key: _canvas,
                                           data: data,
+                                          externalNotes: {
+                                            if (_space != null)
+                                              for (final id in data.notes.keys)
+                                                if (state.data
+                                                        .noteSpaceIds[id] !=
+                                                    _space)
+                                                  id,
+                                          },
                                           focusNote: _focus,
                                           selectedNote: _selected,
                                           selectedEdge: _edge,
@@ -354,7 +445,7 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                                           onSelectNote: _selectNote,
                                           onSelectEdge: _selectEdge,
                                           onOpenNote: (id) {
-                                            final view = state.data.notes[id];
+                                            final view = scoped.notes[id];
                                             if (view != null) {
                                               widget.onOpen(view, null);
                                             }
@@ -400,8 +491,11 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                                         ),
                                       ],
                                     );
-                      final details =
-                          _details(state, selectedView, selectedEdge);
+                      final details = _details(
+                        _allReferences ? state.data : scoped,
+                        selectedView,
+                        selectedEdge,
+                      );
                       if (wide) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -524,8 +618,7 @@ class _NoteGraphViewState extends State<NoteGraphView> {
         ),
       );
 
-  Widget _details(NoteGraphState state, ViewPB? view, NoteGraphEdge? edge) {
-    final graph = state.data;
+  Widget _details(NoteGraphData graph, ViewPB? view, NoteGraphEdge? edge) {
     final cubit = context.read<NoteGraphCubit>();
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -540,8 +633,37 @@ class _NoteGraphViewState extends State<NoteGraphView> {
             ),
           ),
           const Divider(height: 1),
+          if (_space != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _allReferences
+                          ? text('全部可访问引用', 'All accessible references')
+                          : text('当前图谱范围内引用', 'References in this graph scope'),
+                      maxLines: 2,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _allReferences = !_allReferences;
+                      _edge = null;
+                    }),
+                    child: Text(
+                      _allReferences
+                          ? text('返回范围内引用', 'Scope references')
+                          : text('查看全部引用', 'View all references'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: ListView(
+              key: ValueKey((view?.id, edge?.key, _allReferences)),
               padding: const EdgeInsets.all(16),
               children: [
                 if (view == null && edge == null)
@@ -556,6 +678,11 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                     view.name.isEmpty ? text('未命名', 'Untitled') : view.name,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
+                  if (graph.spaces[graph.noteSpaceIds[view.id]] != null)
+                    Text(
+                      graph.spaces[graph.noteSpaceIds[view.id]]!.name,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -628,9 +755,15 @@ class _NoteGraphViewState extends State<NoteGraphView> {
                         ),
                         subtitle: Text(
                           text(
-                            '${relation.occurrences} 处引用',
-                            '${relation.occurrences} references',
-                          ),
+                                '${relation.occurrences} 处引用',
+                                '${relation.occurrences} references',
+                              ) +
+                              (graph.spaces[graph.noteSpaceIds[incoming
+                                          ? relation.source
+                                          : relation.target]] ==
+                                      null
+                                  ? ''
+                                  : ' · ${graph.spaces[graph.noteSpaceIds[incoming ? relation.source : relation.target]]!.name}'),
                         ),
                         onTap: () => _selectEdge(relation),
                       ),

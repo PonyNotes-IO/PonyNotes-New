@@ -22,8 +22,10 @@ class NoteGraphCanvas extends StatefulWidget {
     this.focusNote,
     this.labels = true,
     this.untitled = 'Untitled',
+    this.externalNotes = const {},
   });
   final NoteGraphData data;
+  final Set<String> externalNotes;
   final ValueChanged<String> onSelectNote;
   final ValueChanged<String> onOpenNote;
   final ValueChanged<NoteGraphEdge> onSelectEdge;
@@ -341,6 +343,7 @@ class NoteGraphCanvasState extends State<NoteGraphCanvas>
                         size: const Size(4800, 4800),
                         painter: _NoteGraphPainter(
                           data: widget.data,
+                          externalNotes: widget.externalNotes,
                           positions: _positions,
                           selected: widget.selectedNote,
                           selectedEdge: widget.selectedEdge,
@@ -408,6 +411,7 @@ class NoteGraphCanvasState extends State<NoteGraphCanvas>
 class _NoteGraphPainter extends CustomPainter {
   _NoteGraphPainter({
     required this.data,
+    required this.externalNotes,
     required this.positions,
     required this.color,
     required this.ink,
@@ -423,6 +427,7 @@ class _NoteGraphPainter extends CustomPainter {
     this.hovered,
   });
   final NoteGraphData data;
+  final Set<String> externalNotes;
   final ValueChanged<String> onSelectNote;
   final ValueChanged<NoteGraphEdge> onSelectEdge;
   final Map<String, Offset> positions;
@@ -506,20 +511,27 @@ class _NoteGraphPainter extends CustomPainter {
         Paint()
           ..color = (degrees[note.id] ?? 0) == 0
               ? ink.withValues(alpha: faded ? .16 : .45)
-              : color.withValues(alpha: faded ? .2 : 1),
-      );
-      canvas.drawCircle(
-        point,
-        radius,
-        Paint()
-          ..color = background
-          ..style = PaintingStyle.stroke
+              : color.withValues(alpha: faded ? .2 : 1)
+          ..style = externalNotes.contains(note.id)
+              ? PaintingStyle.stroke
+              : PaintingStyle.fill
           ..strokeWidth = 2,
       );
+      if (!externalNotes.contains(note.id)) {
+        canvas.drawCircle(
+          point,
+          radius,
+          Paint()
+            ..color = background
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+      }
       if (labels || selectedNode || note.id == hovered) {
         final text = TextPainter(
           text: TextSpan(
-            text: note.name.isEmpty ? untitled : note.name,
+            text:
+                '${externalNotes.contains(note.id) ? '↗ ' : ''}${note.name.isEmpty ? untitled : note.name}',
             style: textStyle.copyWith(
               color: ink.withValues(alpha: faded ? .25 : 1),
               fontSize: 12,
