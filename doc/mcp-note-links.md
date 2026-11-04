@@ -102,6 +102,8 @@
   "arguments": {
     "workspace_id": "workspace-id",
     "focus_page_id": "note-id",
+    "space_id": "space-id",
+    "include_external": false,
     "depth": 2,
     "direction": "incoming",
     "query": "",
@@ -113,6 +115,7 @@
 ```
 
 - 不传 `focus_page_id`：全局图谱，默认保留无连线的笔记。
+- 可选 `space_id` 限定当前工作区内的空间。`include_external=true` 显示与该空间直接关联的可访问外部笔记；节点返回 `space_id`、`space_name` 与 `is_external`，不会展开无关外部连线。空间筛选不改变真实引用关系，`get_backlinks` 仍展示跨空间的可访问来源。
 - 局部深度为 1～3；方向是 `both`、`incoming` 或 `outgoing`。
 - 使用与独立图谱界面相同的数据构建与筛选代码；只包含明确正文引用，不含目录和 AI 关系。
 - 返回笔记节点、方向聚合边及引用次数；单条关系的内容和精确位置继续用 `get_backlinks`、`get_reference_context` 获取。
