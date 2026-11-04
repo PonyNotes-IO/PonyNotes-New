@@ -50,7 +50,7 @@ class FileUploadService {
       final targetWorkspaceId = workspaceId ??
           (await UserBackendService.getCurrentWorkspace()).fold(
             (workspace) => workspace.id,
-            (error) => throw Exception('无法获取当前工作区: $error'),
+            (error) => throw Exception('无法获取当前空间: $error'),
           );
       
       // Get AppFlowy Cloud base URL from DI container (includes port for dev environments)

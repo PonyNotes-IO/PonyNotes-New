@@ -151,8 +151,8 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
     if (_currentWorkspace == null) return;
 
     final message = value
-        ? '限定此工作空间只有工作空间所有者可以创建团队协作区？'
-        : '允许此工作空间的所有成员创建团队协作区？';
+        ? '限定此空间只有空间所有者可以创建团队协作区？'
+        : '允许此空间的所有成员创建团队协作区？';
 
     final confirmed = await showFlowyCupertinoConfirmDialog(
       title: '',
@@ -274,12 +274,12 @@ class _MobileSpaceManagementPageState extends State<MobileSpaceManagementPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FlowyText.medium(
-                  '仅工作空间所有者可以创建团队协作区',
+                  '仅空间所有者可以创建团队协作区',
                   fontSize: 15,
                 ),
                 const SizedBox(height: 4),
                 FlowyText(
-                  '仅允许工作空间所有者创建团队协作区',
+                  '仅允许空间所有者创建团队协作区',
                   fontSize: 13,
                   color: const Color(0xFF8E8E93),
                 ),
@@ -883,7 +883,7 @@ class _PermissionSheet extends StatelessWidget {
             theme,
             SpacePermission.publicToAll,
             '开放式',
-            '所有工作空间成员可见并可访问',
+            '所有空间成员可见并可访问',
           ),
           const SizedBox(height: 8),
           _buildOption(
@@ -1567,7 +1567,7 @@ class _RoleDropdown extends StatelessWidget {
   String _label(AFRolePB role) {
     switch (role) {
       case AFRolePB.Owner:
-        return '工作空间所有者';
+        return '空间所有者';
       case AFRolePB.Member:
         return '成员';
       case AFRolePB.Guest:

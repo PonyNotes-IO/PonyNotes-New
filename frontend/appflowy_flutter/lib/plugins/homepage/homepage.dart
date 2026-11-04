@@ -173,8 +173,8 @@ class _HomePageState extends State<HomePage> {
       // 1. 获取当前workspace ID
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
       if (workspaceId == null) {
-        Log.error('❌ 主页: 无法获取工作空间信息');
-        _showError('无法获取工作空间信息');
+        Log.error('❌ 主页: 无法获取空间信息');
+        _showError('无法获取空间信息');
         return;
       }
 
@@ -523,7 +523,7 @@ class _HomePageState extends State<HomePage> {
       if (userProfile == null || workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
           showToastNotification(
-            message: '无法获取当前用户或工作空间信息',
+            message: '无法获取当前用户或空间信息',
             type: ToastificationType.error,
           );
         }

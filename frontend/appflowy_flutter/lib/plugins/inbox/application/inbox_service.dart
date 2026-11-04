@@ -150,9 +150,9 @@ class InboxService {
   static String defaultTitleFor(String notificationType) {
     switch (notificationType) {
       case 'reminder':
-        return '工作区邀请';
+        return '空间邀请';
       case 'workspace_member_removed':
-        return '工作区成员移除';
+        return '空间成员移除';
       case 'workspace_member_role_changed':
         return '角色变更';
       case 'mention':
@@ -201,11 +201,11 @@ class InboxService {
   List<String> _tagsFromType(String notificationType) {
     switch (notificationType) {
       case 'reminder':
-        return ['工作区', '邀请'];
+        return ['空间', '邀请'];
       case 'workspace_member_removed':
-        return ['工作区', '成员'];
+        return ['空间', '成员'];
       case 'workspace_member_role_changed':
-        return ['工作区', '角色'];
+        return ['空间', '角色'];
       case 'mention':
         return ['提及'];
       case 'collab_shared':

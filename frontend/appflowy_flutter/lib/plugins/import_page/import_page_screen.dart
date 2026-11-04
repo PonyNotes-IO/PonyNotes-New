@@ -284,11 +284,11 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
         (workspace) => workspace,
-        (error) => throw Exception('获取当前工作空间失败: $error'),
+        (error) => throw Exception('获取当前空间失败: $error'),
       );
 
       // 直接在工作空间根目录下检查或创建"外部导入"项目
-      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      Log.info('在空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
       
       // 使用现有的导入面板逻辑导入CSV文件
@@ -419,14 +419,14 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         (workspace) => workspace,
         (error) {
           closeDialog();
-          throw Exception('获取当前工作空间失败: $error');
+          throw Exception('获取当前空间失败: $error');
         },
       );
 
       progressNotifier.value = 0.1;
 
       // 在工作空间根目录下检查或创建"外部导入"项目
-      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      Log.info('在空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
       progressNotifier.value = 0.15;
@@ -637,11 +637,11 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
         (workspace) => workspace,
-        (error) => throw Exception('获取当前工作空间失败: $error'),
+        (error) => throw Exception('获取当前空间失败: $error'),
       );
 
       // 直接在工作空间根目录下检查或创建"外部导入"项目
-      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      Log.info('在空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
       // 显示增强的PDF导入对话框
@@ -698,11 +698,11 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
             (workspace) => workspace,
-            (error) => throw Exception('获取当前工作空间失败: $error'),
+            (error) => throw Exception('获取当前空间失败: $error'),
       );
 
       // 直接在工作空间根目录下检查或创建"外部导入"项目
-      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      Log.info('在空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
       // 显示增强的HTML导入对话框
@@ -780,11 +780,11 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
         (workspace) => workspace,
-        (error) => throw Exception('获取当前工作空间失败: $error'),
+        (error) => throw Exception('获取当前空间失败: $error'),
       );
 
       // 直接在工作空间根目录下检查或创建"外部导入"项目
-      Log.info('在工作空间根目录下检查或创建"外部导入"项目');
+      Log.info('在空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
       // 显示Word导入弹框

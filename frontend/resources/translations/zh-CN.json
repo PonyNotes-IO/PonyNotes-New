@@ -167,42 +167,42 @@
     "passwordRequirementHint": "请输入8位以上的密码，需包含大小写字母、数字和特殊字符。"
   },
   "workspace": {
-    "chooseWorkspace": "选择您的工作区",
-    "defaultName": "我的工作区",
+    "chooseWorkspace": "选择您的空间",
+    "defaultName": "我的空间",
     "create": "新建空间",
-    "new": "新的工作空间",
+    "new": "新的空间",
     "importFromNotion": "从 Notion 导入",
     "learnMore": "了解更多",
-    "reset": "重置工作区",
-    "renameWorkspace": "重命名工作区",
-    "workspaceNameCannotBeEmpty": "工作区名称不可为空",
-    "resetWorkspacePrompt": "重置工作区将删除其中的所有页面和数据。您确定要重置工作区吗？您也可以联系技术支持团队来恢复工作区",
-    "hint": "工作区",
-    "notFoundError": "找不到工作区",
-    "failedToLoad": "出了些问题！我们无法加载工作区。请尝试关闭所有打开的 @:appName 实例，然后重试。",
+    "reset": "重置空间",
+    "renameWorkspace": "重命名空间",
+    "workspaceNameCannotBeEmpty": "空间名称不可为空",
+    "resetWorkspacePrompt": "重置空间将删除其中的所有页面和数据。您确定要重置空间吗？您也可以联系技术支持团队来恢复空间",
+    "hint": "空间",
+    "notFoundError": "找不到空间",
+    "failedToLoad": "出了些问题！我们无法加载空间。请尝试关闭所有打开的 @:appName 实例，然后重试。",
     "errorActions": {
       "reportIssue": "上报问题",
       "reportIssueOnGithub": "在 Github 上报告问题",
       "exportLogFiles": "导出日志文件"
     },
-    "menuTitle": "工作区",
-    "deleteWorkspaceHintText": "您确定要删除这个工作区嘛？这个操作不可恢复。",
-    "createSuccess": "工作区创建成功",
-    "createFailed": "工作区创建失败",
-    "createLimitExceeded": "您已达到账户允许的最大工作空间限制。如果您需要额外的工作空间来继续工作，请在 Github 上申请",
-    "deleteSuccess": "工作区删除成功",
-    "deleteFailed": "工作区删除失败",
-    "openSuccess": "打开工作区成功",
-    "openFailed": "打开工作区失败",
-    "renameSuccess": "工作区已成功重命名",
-    "renameFailed": "工作区重命名失败",
-    "updateIconSuccess": "工作区图标已修改",
-    "updateIconFailed": "修改工作区图标失败",
-    "cannotDeleteTheOnlyWorkspace": "不能删除仅存的工作区",
-    "fetchWorkspacesFailed": "获取工作区失败",
-    "leaveCurrentWorkspace": "退出工作区",
-    "leaveCurrentWorkspacePrompt": "您确定要离开当前工作区吗？",
-    "removedFromWorkspace": "已被移除当前工作区"
+    "menuTitle": "空间",
+    "deleteWorkspaceHintText": "您确定要删除这个空间嘛？这个操作不可恢复。",
+    "createSuccess": "空间创建成功",
+    "createFailed": "空间创建失败",
+    "createLimitExceeded": "您已达到账户允许的最大空间限制。如果您需要额外的空间来继续工作，请在 Github 上申请",
+    "deleteSuccess": "空间删除成功",
+    "deleteFailed": "空间删除失败",
+    "openSuccess": "打开空间成功",
+    "openFailed": "打开空间失败",
+    "renameSuccess": "空间已成功重命名",
+    "renameFailed": "空间重命名失败",
+    "updateIconSuccess": "空间图标已修改",
+    "updateIconFailed": "修改空间图标失败",
+    "cannotDeleteTheOnlyWorkspace": "不能删除仅存的空间",
+    "fetchWorkspacesFailed": "获取空间失败",
+    "leaveCurrentWorkspace": "退出空间",
+    "leaveCurrentWorkspacePrompt": "您确定要离开当前空间吗？",
+    "removedFromWorkspace": "已被移除当前空间"
   },
   "shareAction": {
     "buttonText": "分享",
@@ -478,7 +478,7 @@
     "clickToHideFavorites": "单击隐藏收藏夹栏目",
     "addAPage": "添加页面",
     "addAPageToPrivate": "添加页面到私人空间",
-    "addAPageToWorkspace": "添加页面到工作空间",
+    "addAPageToWorkspace": "添加页面到空间",
     "recent": "最近的",
     "today": "今日",
     "thisWeek": "本周",
@@ -504,18 +504,18 @@
     "aiResponseLimitTitle": "你已用尽免费 AI 回应。升级到专业版或者购买 AI 插件来解锁无限制回应",
     "aiResponseLimitDialogTitle": "已达到 AI 回应限额",
     "aiResponseLimit": "你已用尽了免费 AI 回应。\n\n转到“设置 -> 计划 -> 点击 AI Max 或 Pro 计划”获取更多 AI 回应",
-    "askOwnerToUpgradeToPro": "你的工作区即将用尽免费存储。请联系工作区所有者升级到专业版计划",
-    "askOwnerToUpgradeToProIOS": "你的工作区即将用尽免费存储。",
-    "askOwnerToUpgradeToAIMax": "你的工作区即将用尽免费 AI 回应。请联系工作区所有者升级计划或购买 AI 插件",
-    "askOwnerToUpgradeToAIMaxIOS": "你的工作区即将用尽免费 AI 回应限额。",
+    "askOwnerToUpgradeToPro": "你的空间即将用尽免费存储。请联系空间所有者升级到专业版计划",
+    "askOwnerToUpgradeToProIOS": "你的空间即将用尽免费存储。",
+    "askOwnerToUpgradeToAIMax": "你的空间即将用尽免费 AI 回应。请联系空间所有者升级计划或购买 AI 插件",
+    "askOwnerToUpgradeToAIMaxIOS": "你的空间即将用尽免费 AI 回应限额。",
     "aiImageResponseLimit": "你已消耗完你的 AI 图像响应额度。\n转到 设置 -> 方案 -> 点击 AI Max 去获得更多的图像响应额度",
     "purchaseStorageSpace": "购买存储空间",
     "purchaseAIResponse": "购买",
-    "askOwnerToUpgradeToLocalAI": "联系工作区所有者启用设备上 AI",
+    "askOwnerToUpgradeToLocalAI": "联系空间所有者启用设备上 AI",
     "upgradeToAILocal": "在你的设备上运行本地模型，极致保护隐私",
     "upgradeToAILocalDesc": "使用本地 AI 用 PDF 聊天、改善写作、自动填充表格",
     "expandSidebar": "展开为全页",
-    "purchaseAIMax": "您的工作区已用完AI图像响应额度。请联系工作区所有者购买AI Max",
+    "purchaseAIMax": "您的空间已用完AI图像响应额度。请联系空间所有者购买AI Max",
     "singleFileProPlanLimitationDescription": "您已超过免费计划允许的最大文件上传大小。请升级到专业版以上传更大的文件",
     "singleFileSizeLimitExceeded": "单文件大小不能超过 3GB"
   },
@@ -647,8 +647,8 @@
         "updateExistingNamespace": "更新现有的名称空间",
         "upgradeToPro": "请升级至 Pro 订阅计划以设置主页",
         "redirectToPayment": "正在重定向至付款页面......",
-        "onlyWorkspaceOwnerCanSetHomePage": "仅工作空间的所有者能为其设置主页",
-        "pleaseAskOwnerToSetHomePage": "请联系工作空间所有者更新至 Pro 订阅计划",
+        "onlyWorkspaceOwnerCanSetHomePage": "仅空间的所有者能为其设置主页",
+        "pleaseAskOwnerToSetHomePage": "请联系空间所有者更新至 Pro 订阅计划",
         "description": "此更改将应用于此命名空间下所有已发布的页面",
         "tooltip": "我们保留删除任何不当命名空间的权利"
       },
@@ -656,7 +656,7 @@
         "title": "所有已发布页面",
         "description": "管理您已发布的页面",
         "date": "已发布的数据",
-        "emptyHinText": "在当前工作空间没有已发布的页面",
+        "emptyHinText": "在当前空间没有已发布的页面",
         "noPublishedPages": "没有已发布的页面",
         "settings": "发布设置",
         "clickToOpenPageInApp": "在 App 中打开页面",
@@ -670,8 +670,8 @@
         "namespaceAlreadyInUse": "该名称空间已被占用你，请尝试其他名称空间",
         "invalidNamespace": "无效的名称空间，请尝试其他的名称空间",
         "namespaceLengthAtLeast2Characters": "名称空间应不少于 2 个字符长度",
-        "onlyWorkspaceOwnerCanUpdateNamespace": "仅工作空间所有者可更新名称空间",
-        "onlyWorkspaceOwnerCanRemoveHomepage": "仅工作空间所有者可移除主页",
+        "onlyWorkspaceOwnerCanUpdateNamespace": "仅空间所有者可更新名称空间",
+        "onlyWorkspaceOwnerCanRemoveHomepage": "仅空间所有者可移除主页",
         "setHomepageFailed": "设置主页失败",
         "namespaceTooLong": "该名称空间过长，请尝试其他名称空间",
         "namespaceTooShort": "该名称空间过短，请尝试其他名称空间",
@@ -683,7 +683,7 @@
         "publishNameTooLong": "路径名称过长，请尝试其他路径名称",
         "publishNameAlreadyInUse": "该路径名称已被使用，请尝试其他路径名称",
         "namespaceContainsInvalidCharacters": "该名称空间包含无效的字符，请尝试其他名称空间",
-        "publishPermissionDenied": "仅工作空间所有者或页面发布者可管理发布设置",
+        "publishPermissionDenied": "仅空间所有者或页面发布者可管理发布设置",
         "publishNameCannotBeEmpty": "该路径名称不能为空，请尝试其他路径名称",
         "failedToGeneratePaymentLink": "生成专业版支付链接失败"
       },
@@ -722,21 +722,21 @@
       "officialVersion": "Version {version} (官方構建)"
     },
     "workspacePage": {
-      "menuLabel": "工作区",
-      "title": "工作区",
-      "description": "自定义你的工作区外观、主题、字体、文本布局、日期/时间格式和语言。",
+      "menuLabel": "空间",
+      "title": "空间",
+      "description": "自定义你的空间外观、主题、字体、文本布局、日期/时间格式和语言。",
       "workspaceName": {
-        "title": "工作区名称",
-        "savedMessage": "已保存的工作区名称",
-        "editTooltip": "编辑工作区名称"
+        "title": "空间名称",
+        "savedMessage": "已保存的空间名称",
+        "editTooltip": "编辑空间名称"
       },
       "workspaceIcon": {
-        "title": "工作区图标",
-        "description": "上传图片或使用表情符号到你的工作区。图标将显示在您的侧边栏和通知中。"
+        "title": "空间图标",
+        "description": "上传图片或使用表情符号到你的空间。图标将显示在您的侧边栏和通知中。"
       },
       "appearance": {
         "title": "外观",
-        "description": "自定义你的工作区外观、主题、字体、文本布局、日期、时间和语言。",
+        "description": "自定义你的空间外观、主题、字体、文本布局、日期、时间和语言。",
         "options": {
           "system": "自动",
           "light": "明亮",
@@ -761,7 +761,7 @@
         "failedToLoadThemes": "加载失败"
       },
       "workspaceFont": {
-        "title": "工作区字体",
+        "title": "空间字体",
         "noFontHint": "找不到字体，换个词试试。"
       },
       "textDirection": {
@@ -793,19 +793,19 @@
         "title": "语言"
       },
       "deleteWorkspacePrompt": {
-        "title": "删除工作区",
-        "content": "你确定要删除此工作区吗？此操作无法撤消。"
+        "title": "删除空间",
+        "content": "你确定要删除此空间吗？此操作无法撤消。"
       },
       "leaveWorkspacePrompt": {
-        "title": "离开工作区",
-        "content": "你确定要离开此工作区吗？你将无法访问其中的所有页面和数据。",
-        "success": "你已经成功离开工作区。",
-        "fail": "无法离开工作区。"
+        "title": "离开空间",
+        "content": "你确定要离开此空间吗？你将无法访问其中的所有页面和数据。",
+        "success": "你已经成功离开空间。",
+        "fail": "无法离开空间。"
       },
       "manageWorkspace": {
-        "title": "管理工作区",
-        "leaveWorkspace": "离开工作区",
-        "deleteWorkspace": "删除工作区"
+        "title": "管理空间",
+        "leaveWorkspace": "离开空间",
+        "deleteWorkspace": "删除空间"
       }
     },
     "manageDataPage": {
@@ -1055,9 +1055,9 @@
           "title": "附加功能"
         },
         "aiCredit": {
-          "info": "为每个工作区添加 1,000 个 AI 积分，并将可定制的 AI 无缝集成到您的工作流程中，获得更智能、更快速的结果：",
+          "info": "为每个空间添加 1,000 个 AI 积分，并将可定制的 AI 无缝集成到您的工作流程中，获得更智能、更快速的结果：",
           "infoItemOne": "每个数据库 10,000 次响应",
-          "infoItemTwo": "每个工作区 1,000 次响应",
+          "infoItemTwo": "每个空间 1,000 次响应",
           "price": "{}",
           "priceDescription": "1,000 积分",
           "purchase": "购买 AI",
@@ -1073,7 +1073,7 @@
         "collaboratorsUsage": "{} / {}",
         "deal": {
           "bannerLabel": "新年特惠！",
-          "info": "升级专业版和团队版可节省 10%！使用强大的新功能（包括 @:appName AI）提升您的工作区效率。",
+          "info": "升级专业版和团队版可节省 10%！使用强大的新功能（包括 @:appName AI）提升您的空间效率。",
           "title": "壮大您的团队！",
           "viewPlans": "查看计划"
         },
@@ -1097,7 +1097,7 @@
         "itemSix": "无限",
         "itemFileUpload": "无限",
         "intelligentSearch": "智能搜索",
-        "itemOne": "按工作空间收费",
+        "itemOne": "按空间收费",
         "itemSeven": "每个月50张图片"
       },
       "actions": {
@@ -1107,7 +1107,7 @@
       },
       "current": "现状",
       "downgradeDialog": {
-        "description": "降级你的套餐会让你回到免费套餐。会员可能会失去使用该工作区的权限和你可能需要腾出空间以满足免费套餐的存储限制。",
+        "description": "降级你的套餐会让你回到免费套餐。会员可能会失去使用该空间的权限和你可能需要腾出空间以满足免费套餐的存储限制。",
         "downgradeLabel": "降级计划",
         "title": "你确定要降级吗？"
       },
@@ -1116,7 +1116,7 @@
         "itemFileUpload": "最高可达7MB",
         "itemFive": "是",
         "itemFour": "是",
-        "itemOne": "按工作空间收费",
+        "itemOne": "按空间收费",
         "itemSeven": "2 lifetime",
         "itemSix": "10 lifetime",
         "itemThree": "5 GB",
@@ -1140,13 +1140,13 @@
         "itemFileUpload": "文件上传",
         "itemFive": "访客编辑",
         "itemFour": "实时协作",
-        "itemOne": "工作区",
+        "itemOne": "空间",
         "itemSeven": "AI 图片",
         "itemSix": "AI 响应",
         "itemThree": "存储",
         "itemTwo": "成员",
         "tooltipFive": "与非成员在特定页面上协作",
-        "tooltipSeven": "允许您自定义工作区 URL 的部分内容",
+        "tooltipSeven": "允许您自定义空间 URL 的部分内容",
         "tooltipSix": "终身意味着响应次数永不重置"
       },
       "proPlan": {
@@ -1411,9 +1411,9 @@
         "label": "成员",
         "user": "用户",
         "role": "角色",
-        "removeFromWorkspace": "从工作区中删除",
-        "removeFromWorkspaceSuccess": "成功从工作区移除。",
-        "removeFromWorkspaceFailed": "从工作区移除失败",
+        "removeFromWorkspace": "从空间中删除",
+        "removeFromWorkspaceSuccess": "成功从空间移除。",
+        "removeFromWorkspaceFailed": "从空间移除失败",
         "owner": "拥有者",
         "guest": "访客",
         "member": "成员",
@@ -1428,8 +1428,8 @@
           "other": "{} 个成员"
         },
         "inviteFailedDialogTitle": "升级至专业版方案",
-        "inviteFailedMemberLimit": "此工作区已达到免费限制。请升级到专业版以解锁更多成员。",
-        "inviteFailedMemberLimitMobile": "您的工作区已达到成员上限。",
+        "inviteFailedMemberLimit": "此空间已达到免费限制。请升级到专业版以解锁更多成员。",
+        "inviteFailedMemberLimitMobile": "您的空间已达到成员上限。",
         "memberLimitExceeded": "已达到成员上限，若要邀请更多成员，请...",
         "memberLimitExceededUpgrade": "升级",
         "memberLimitExceededPro": "已达到成员上限，若需要更多成员，请联系...",
@@ -2908,11 +2908,11 @@
       "deleteAccount": {
         "title": "删除帐户",
         "subtitle": "永久删除你的帐户和所有数据。",
-        "description": "永久删除你的账户，并移除所有工作区的访问权限。",
+        "description": "永久删除你的账户，并移除所有空间的访问权限。",
         "deleteMyAccount": "删除我的账户",
         "dialogTitle": "删除帐户",
         "dialogContent1": "你确定要永久删除您的帐户吗？",
-        "dialogContent2": "此操作无法撤消，并且将删除所有团队空间的访问权限，删除你的整个帐户（包括私人工作区），并将你从所有共享工作区中删除。",
+        "dialogContent2": "此操作无法撤消，并且将删除所有团队空间的访问权限，删除你的整个帐户（包括私人空间），并将你从所有共享空间中删除。",
         "confirmHint1": "请输入 \"@:newSettings.myAccount.deleteAccount.confirmHint3\" 以确认。",
         "confirmHint2": "我理解此操作是不可逆的，并且将永久删除我的帐户和所有关联数据。",
         "confirmHint3": "删除我的账户",
@@ -2969,14 +2969,14 @@
         },
         "language": "语言"
       },
-      "name": "工作区",
+      "name": "空间",
       "renameError": "操作失败",
-      "subtitle": "自定义您的工作区外观、主题、字体、文本布局、日期、时间和语言。",
-      "title": "工作区设置",
-      "workplaceIcon": "工作区图标",
-      "workplaceIconSubtitle": "上传图片或使用表情符号作为工作区图标。图标将显示在侧边栏和通知中。",
-      "workplaceName": "工作区名称",
-      "workplaceNamePlaceholder": "输入工作区名称"
+      "subtitle": "自定义您的空间外观、主题、字体、文本布局、日期、时间和语言。",
+      "title": "空间设置",
+      "workplaceIcon": "空间图标",
+      "workplaceIconSubtitle": "上传图片或使用表情符号作为空间图标。图标将显示在侧边栏和通知中。",
+      "workplaceName": "空间名称",
+      "workplaceNamePlaceholder": "输入空间名称"
     },
     "syncState": {
       "syncing": "同步中",
@@ -3063,21 +3063,21 @@
     "spaceNamePlaceholder": "例如营销、工程、人力资源",
     "permission": "空间权限",
     "publicPermission": "公开",
-    "publicPermissionDescription": "所有具有完全访问权限的工作区成员",
+    "publicPermissionDescription": "所有具有完全访问权限的空间成员",
     "privatePermission": "私人",
     "privatePermissionDescription": "只有您可以访问此空间",
     "spaceIconBackground": "背景色",
     "spaceIcon": "图标",
     "dangerZone": "危险区域",
     "unableToDeleteLastSpace": "无法删除最后一个空间",
-    "unableToDeleteSpaceNotCreatedByYou": "无法删除他人建立的工作区",
-    "enableSpacesForYourWorkspace": "启用工作区的 Spaces",
+    "unableToDeleteSpaceNotCreatedByYou": "无法删除他人建立的空间",
+    "enableSpacesForYourWorkspace": "启用空间的 Spaces",
     "title": "空间",
     "defaultSpaceName": "一般",
     "privateSpace": "私有",
     "mySpace": "我的空间",
     "upgradeSpaceTitle": "启用空间",
-    "upgradeSpaceDescription": "建立多个公开和私人空间，以更好地组织您的工作区。",
+    "upgradeSpaceDescription": "建立多个公开和私人空间，以更好地组织您的空间。",
     "upgrade": "升级",
     "upgradeYourSpace": "创建多个空间",
     "quicklySwitch": "快速切换到下一个空间",
@@ -3090,7 +3090,7 @@
     "whiteboardMigrationSuccess": "白板已移动",
     "moveSuccess": "页面已移动",
     "noPermissionToMoveIntoSharedSpace": "没有权限：受限成员无法向协作区添加文档",
-    "noPermissionToMoveOutOfSharedSpace": "没有权限：只有工作空间所有者可以把文档移出协作区",
+    "noPermissionToMoveOutOfSharedSpace": "没有权限：只有空间所有者可以把文档移出协作区",
     "onlyWhiteboardCreatorCanMove": "只有白板创建者可以在私有空间与协作区之间移动白板",
     "switchSpace": "切换空间",
     "spaceNameCannotBeEmpty": "空间名称不能为空",
@@ -3166,7 +3166,7 @@
     "selectPublishToView": "选择左侧发布项查看内容",
     "noFavorites": "暂无最爱",
     "hasNotBeenPublished": "此页面尚未发布。",
-    "spaceHasNotBeenPublished": "目前尚不支持发布工作区",
+    "spaceHasNotBeenPublished": "目前尚不支持发布空间",
     "reportPage": "举报页面",
     "databaseHasNotBeenPublished": "目前尚不支持发布数据库。",
     "createdWith": "创建于",
@@ -3197,9 +3197,9 @@
     "noDatabaseSelected": "未选取数据库，请至少选择一个数据库。",
     "unableToDeselectPrimaryDatabase": "无法取消选择主要数据库",
     "duplicateTitle": "您想将其新增到哪里？",
-    "selectWorkspace": "选择工作区",
+    "selectWorkspace": "选择空间",
     "addTo": "添加",
-    "duplicateSuccessfully": "已新增至您的工作区",
+    "duplicateSuccessfully": "已新增至您的空间",
     "duplicateSuccessfullyDescription": "尚未安装 AppFlowy？点击“下载”后，下载将自动开始。",
     "downloadIt": "下载",
     "openApp": "在应用程序中打开",
@@ -3405,9 +3405,9 @@
         "guest": "升级以邀请访客"
       },
       "description": {
-        "owner": "您的工作区目前使用的是免费方案。升级到专业版后，可以允许外部用户以访客身份访问此页面。",
-        "member": "部分受邀者不在您的工作区内。若要将他们邀请为访客，请联系工作区所有者升级到专业版。",
-        "guest": "部分受邀者不在您的工作区内。若要将他们邀请为访客，请联系工作区所有者升级到专业版。"
+        "owner": "您的空间目前使用的是免费方案。升级到专业版后，可以允许外部用户以访客身份访问此页面。",
+        "member": "部分受邀者不在您的空间内。若要将他们邀请为访客，请联系空间所有者升级到专业版。",
+        "guest": "部分受邀者不在您的空间内。若要将他们邀请为访客，请联系空间所有者升级到专业版。"
       }
     }
   },
@@ -3481,13 +3481,13 @@
   },
   "approveAccess": {
     "alreadyProMessage": "请联系 <emAIl/> 以解锁更多成员",
-    "alreadyProTitle": "您已达到工作区计划限制",
+    "alreadyProTitle": "您已达到空间计划限制",
     "approveButton": "批准",
     "approveError": "操作失败",
     "approveSuccess": "审批成功",
     "asMember": "作为成员",
     "downloadApp": "下载应用",
-    "ensurePlanLimit": "请确保未超过工作区计划限制。如果已超过限制，请考虑<upgrade/>工作区计划或<下载/>。",
+    "ensurePlanLimit": "请确保未超过空间计划限制。如果已超过限制，请考虑<upgrade/>空间计划或<下载/>。",
     "getRequestInfoError": "操作失败",
     "memberCount": {
       "many": "{count} 个成员",
@@ -3588,12 +3588,12 @@
       "changeAccount": "切换账户",
       "close": "返回首页",
       "contactOwner": "联系所有者",
-      "description": "您当前的账户 {emAIl} 可能无权访问此工作区。请使用正确的账户登录或联系工作区所有者获取帮助。",
+      "description": "您当前的账户 {emAIl} 可能无权访问此空间。请使用正确的账户登录或联系空间所有者获取帮助。",
       "title": "出现问题"
     },
     "invitedBy": "邀请者",
     "join": "加入",
-    "joinWorkspace": "加入工作区",
+    "joinWorkspace": "加入空间",
     "membersCount": {
       "many": "{count} 个成员",
       "one": "{count} 个成员",
@@ -3602,9 +3602,9 @@
     },
     "on": "于",
     "openWorkspace": "打开小马AI笔记",
-    "success": "您已成功加入工作区",
-    "successMessage": "您现在可以访问其中的所有页面和工作区。",
-    "tip": "您已被邀请使用以下联系信息加入此工作区。如有错误，请联系管理员重新发送邀请。"
+    "success": "您已成功加入空间",
+    "successMessage": "您现在可以访问其中的所有页面和空间。",
+    "tip": "您已被邀请使用以下联系信息加入此空间。如有错误，请联系管理员重新发送邀请。"
   },
   "inviteMember": {
     "addEmail": "email@example.com, email2@example.com...",
@@ -3613,7 +3613,7 @@
     "inviteAlready": "您已邀请过此邮箱：{emAIl}",
     "inviteFailedMemberLimit": "已达到成员限制，请",
     "inviteSuccess": "邀请发送成功",
-    "requestInviteMembers": "邀请加入您的工作区",
+    "requestInviteMembers": "邀请加入您的空间",
     "requestInvites": "发送邀请",
     "upgrade": "升级"
   },
@@ -3730,7 +3730,7 @@
       "first": "无限存储空间",
       "five": "自定义命名空间",
       "four": "无限文件上传",
-      "second": "最多10个工作区成员",
+      "second": "最多10个空间成员",
       "three": "无限AI响应"
     },
     "save": "节省 {discount}%",

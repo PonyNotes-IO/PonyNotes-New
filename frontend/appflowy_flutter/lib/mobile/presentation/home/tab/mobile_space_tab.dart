@@ -199,7 +199,7 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
       final workspaceId =
           context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
       if (workspaceId == null || workspaceId.isEmpty) {
-        Log.error('移动端快捷新建失败：当前工作区 ID 为空');
+        Log.error('移动端快捷新建失败：当前空间 ID 为空');
         _showCreateDocumentError();
         return;
       }

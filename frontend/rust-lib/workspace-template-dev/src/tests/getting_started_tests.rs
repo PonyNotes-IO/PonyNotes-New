@@ -118,7 +118,7 @@ mod tests {
 
     let general_space = &views[0];
 
-    assert_eq!(general_space.parent_view.name, "默认的工作空间");
+    assert_eq!(general_space.parent_view.name, "默认的空间");
     // 空间下只有一篇欢迎信
     assert_eq!(general_space.child_views.len(), 1);
     assert_eq!(

@@ -768,13 +768,13 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final ownerWorkspaceId = entry.ownerWorkspaceId;
 
     if (ownerWorkspaceId.isEmpty && workspace == null) {
-      showToastNotification(message: '未找到工作区');
+      showToastNotification(message: '未找到空间');
       return;
     }
 
     if (ownerWorkspaceId.isEmpty &&
         workspace?.workspaceType == WorkspaceTypePB.LocalW) {
-      showToastNotification(message: '当前工作区暂不支持共享权限管理');
+      showToastNotification(message: '当前空间暂不支持共享权限管理');
       return;
     }
 

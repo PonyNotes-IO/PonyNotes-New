@@ -72,7 +72,7 @@ class UpgradePlanCard extends StatelessWidget {
               const SizedBox(height: 8),
               _buildFeatureRow(theme, isYearly ? '每年存储空间' : '每月存储空间', storage),
               const SizedBox(height: 4),
-              _buildFeatureRow(theme, '工作区限制', workspaces),
+              _buildFeatureRow(theme, '空间限制', workspaces),
               const SizedBox(height: 4),
               _buildFeatureRow(theme, isYearly ? '每年AI对话额度' : '每月AI对话额度', aiQuota),
               const SizedBox(height: 12),

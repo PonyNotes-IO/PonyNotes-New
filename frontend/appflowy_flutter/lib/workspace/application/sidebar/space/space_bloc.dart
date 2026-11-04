@@ -156,7 +156,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                             m.role == AFRolePB.Owner &&
                             m.uid.toInt() == userProfile.id.toInt());
                         if (!isOwner) {
-                          showToastNotification(message: '仅工作空间所有者可以创建团队协作区');
+                          showToastNotification(message: '仅空间所有者可以创建团队协作区');
                           shouldProceed = false;
                         }
                       }, (e) {
@@ -173,14 +173,14 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                   // failed to get settings - allow create attempt, backend will enforce if necessary
                   Log.error('Failed to get workspace settings: ${err.msg}');
                   showToastNotification(
-                      message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',
+                      message: '空间创建失败：仅空间所有者可以创建团队协作区',
                       type: ToastificationType.error);
                 });
               } catch (e, st) {
                 Log.error(
                     'Exception when checking workspace settings: $e\n$st');
                 showToastNotification(
-                    message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',
+                    message: '空间创建失败：仅空间所有者可以创建团队协作区',
                     type: ToastificationType.error);
               }
             }
@@ -1016,7 +1016,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     }, (error) {
       Log.error('Failed to create space: $error');
       showToastNotification(
-          message: '工作空间创建失败：${error.msg}', type: ToastificationType.error);
+          message: '空间创建失败：${error.msg}', type: ToastificationType.error);
       return null;
     });
   }

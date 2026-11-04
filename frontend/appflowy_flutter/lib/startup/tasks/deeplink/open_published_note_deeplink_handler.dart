@@ -124,11 +124,11 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 获取当前工作区 ID
       final workspaceId = destWorkspaceId ?? await _getCurrentWorkspaceId();
       if (workspaceId == null || workspaceId.isEmpty) {
-        Log.error('[OpenPublishedNoteDeepLinkHandler] 无法获取当前工作区');
+        Log.error('[OpenPublishedNoteDeepLinkHandler] 无法获取当前空间');
         onStateChange(this, DeepLinkState.error);
         return FlowyResult.failure(
           FlowyError()
-            ..msg = '无法获取当前工作区'
+            ..msg = '无法获取当前空间'
             ..code = ErrorCode.Internal,
         );
       }
@@ -260,16 +260,16 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final result = await FolderEventGetCurrentWorkspaceSetting().send();
       return result.fold(
         (ws) {
-          Log.info('[OpenPublishedNoteDeepLinkHandler] 获取到当前工作区: ${ws.workspaceId}');
+          Log.info('[OpenPublishedNoteDeepLinkHandler] 获取到当前空间: ${ws.workspaceId}');
           return ws.workspaceId.isEmpty ? null : ws.workspaceId;
         },
         (e) {
-          Log.error('[OpenPublishedNoteDeepLinkHandler] 获取当前工作区失败: $e');
+          Log.error('[OpenPublishedNoteDeepLinkHandler] 获取当前空间失败: $e');
           return null;
         },
       );
     } catch (e, stackTrace) {
-      Log.error('[OpenPublishedNoteDeepLinkHandler] 获取工作区信息时出错: $e', stackTrace);
+      Log.error('[OpenPublishedNoteDeepLinkHandler] 获取空间信息时出错: $e', stackTrace);
     }
     return null;
   }

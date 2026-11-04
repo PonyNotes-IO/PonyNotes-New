@@ -194,7 +194,7 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
   Future<Set<String>> _getWorkspaceViewIds(String workspaceId) async {
     try {
       if (_userProfile == null) {
-        Log.warn('用户信息为空，无法获取工作区视图');
+        Log.warn('用户信息为空，无法获取空间视图');
         return <String>{};
       }
       
@@ -223,10 +223,10 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
         rootViewIds.add(rootView.id);
       }
       
-      Log.debug('工作区 $workspaceId 共有 ${rootViewIds.length} 个根视图');
+      Log.debug('空间 $workspaceId 共有 ${rootViewIds.length} 个根视图');
       return rootViewIds;
     } catch (e) {
-      Log.error('获取工作区视图ID失败: $e');
+      Log.error('获取空间视图ID失败: $e');
       return <String>{};
     }
   }
@@ -285,7 +285,7 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
       Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId not in workspace, returning false');
       return false;
     } catch (e) {
-      Log.error('检查视图工作区归属失败: $e');
+      Log.error('检查视图空间归属失败: $e');
       // 如果获取失败，保守处理：返回false（不显示）
       return false;
     }
