@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_note_graph_button.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_graph_button.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
@@ -48,7 +49,8 @@ class SidebarSpace extends StatelessWidget {
         context.watch<UserWorkspaceBloc>().state.currentWorkspace;
 
     // only show spaces if the user role is member or owner
-    final currentUserRole = context.watch<UserWorkspaceBloc>().state.currentUserRole;
+    final currentUserRole =
+        context.watch<UserWorkspaceBloc>().state.currentUserRole;
     final shouldShowSpaces = [
       AFRolePB.Member,
       AFRolePB.Owner,
@@ -72,6 +74,8 @@ class SidebarSpace extends StatelessWidget {
             const SidebarCalendarButton(),
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarKnowledgeGraphButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarNoteGraphButton(),
             // favorite button
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
@@ -94,7 +98,7 @@ class SidebarSpace extends StatelessWidget {
                           PrivateSectionFolder(
                             views: privateSpaces,
                           ),
-                    const VSpace(sidebarPrimaryEntryGap),
+                          const VSpace(sidebarPrimaryEntryGap),
                           // 协作区 / 公共空间（仅 Space）
                           PublicSectionFolder(
                             views: publicSpaces,

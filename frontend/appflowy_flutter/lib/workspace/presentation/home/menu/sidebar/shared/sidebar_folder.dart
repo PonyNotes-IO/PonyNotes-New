@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_note_graph_button.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_graph_button.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -52,6 +53,8 @@ class SidebarFolder extends StatelessWidget {
             const SidebarCalendarButton(),
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarKnowledgeGraphButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarNoteGraphButton(),
             // favorite
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
@@ -89,7 +92,7 @@ class SidebarFolder extends StatelessWidget {
                             views: privateSpaces,
                           ),
                           // 协作区 / 公共空间（仅 Space）
-                    const VSpace(sidebarPrimaryEntryGap),
+                          const VSpace(sidebarPrimaryEntryGap),
                           PublicSectionFolder(
                             views: publicSpaces,
                           ),
@@ -111,7 +114,6 @@ class SidebarFolder extends StatelessWidget {
             // const SidebarTemplateNewButton(),
             // NOTE: Trash and Settings moved to sidebar bottom area to keep them fixed.
           ],
-
         );
       },
     );

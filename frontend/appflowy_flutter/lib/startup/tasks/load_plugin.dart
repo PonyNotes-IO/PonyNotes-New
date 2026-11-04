@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/note_graph/note_graph_plugin.dart';
 import 'package:appflowy/plugins/ai_chat/chat.dart';
 import 'package:appflowy/plugins/knowledge_graph/knowledge_graph_plugin.dart';
 import 'package:appflowy/plugins/database/calendar/calendar.dart';
@@ -19,6 +20,7 @@ import 'package:appflowy/plugins/template/template_plugin.dart';
 import 'package:appflowy/plugins/folder/folder.dart';
 import 'package:appflowy/plugins/notebook/notebook.dart';
 import 'package:appflowy/plugins/ai_welcome/ai_welcome_plugin.dart';
+
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
 
@@ -90,6 +92,10 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: HandwritingSaberPluginBuilder(),
+    );
+    registerPlugin(
+      builder: NoteGraphPluginBuilder(),
+      config: NoteGraphPluginConfig(),
     );
   }
 }

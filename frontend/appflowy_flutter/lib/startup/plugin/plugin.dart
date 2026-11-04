@@ -30,6 +30,7 @@ enum PluginType {
   aiWelcome,
   handwritingSaber,
   knowledgeGraph,
+  noteGraph,
 }
 
 typedef PluginId = String;

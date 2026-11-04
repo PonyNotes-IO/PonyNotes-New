@@ -8,7 +8,7 @@ import 'package:appflowy/plugins/document/application/note_link_service.dart';
 import 'package:appflowy/plugins/document/application/note_relations_controller.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_block.dart';
-import 'package:appflowy/plugins/knowledge_graph/knowledge_graph_plugin.dart';
+import 'package:appflowy/plugins/note_graph/note_graph_plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
@@ -348,14 +348,13 @@ class _BacklinkPanelState extends State<BacklinkPanel> {
               if (context.read<TabsBloc?>() != null &&
                   controller.views.containsKey(widget.pageId))
                 IconButton(
-                  tooltip: text('查看局部图谱', 'Open local graph'),
+                  tooltip: text('查看双链图谱', 'Open note link graph'),
                   icon: const Icon(Icons.hub_outlined, size: 18),
                   onPressed: () => context.read<TabsBloc>().add(
                         TabsEvent.openPlugin(
-                          plugin: KnowledgeGraphPlugin(
+                          plugin: NoteGraphPlugin(
                             focusView: controller.views[widget.pageId],
                           ),
-                          view: controller.views[widget.pageId],
                         ),
                       ),
                 ),
