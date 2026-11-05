@@ -5,6 +5,7 @@ import 'package:appflowy/env/env.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Sets the cloud type for the application.
 ///
@@ -38,10 +39,9 @@ Future<void> _setAuthenticatorType(AuthenticatorType ty) async {
   }
 }
 
-// 生产后端 API 网关。注意必须带 api. 子域：裸域名 xiaomabiji.com 的 nginx
-// 未代理登录/OTP 等 API 路径（返回 405），只有 api.xiaomabiji.com 是完整 API 网关。
-// 该常量是 .env 缺失 APPFLOWY_CLOUD_URL 时的兜底值（CI 未注入时会用到）。
-const String kAppflowyCloudUrl = "https://api.xiaomabiji.com";
+// .env 地址为空时，仍按构建模式选择对应网关。
+const String kAppflowyCloudUrl =
+    kDebugMode ? 'http://47.94.42.183' : 'https://api.xiaomabiji.com';
 
 /// Retrieves the currently set cloud type.
 ///

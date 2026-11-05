@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:convert';
+import 'package:appflowy/env/env.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -24,7 +25,7 @@ class CancellationToken {
 /// 阿里云文档解析处理器
 /// 使用阿里云文档解析API进行文件解析
 class AliyunDocParseProcessor {
-  static const String apiBaseUrl = 'https://www.xiaomabiji.com';
+  static const String apiBaseUrl = Env.baseWebDomain;
   static const String parseEndpoint = '/prod-api/tool/docParse/parse';
   static const String parseStatusEndpoint = '/prod-api/tool/docParse/content';
   static const Duration taskPollInterval = Duration(seconds: 2);

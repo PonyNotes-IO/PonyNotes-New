@@ -1,6 +1,6 @@
 // lib/env/env.dart
-import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:envied/envied.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 part 'env.g.dart';
 
@@ -23,9 +23,10 @@ abstract class Env {
   @EnviedField(
     obfuscate: false,
     varName: 'APPFLOWY_CLOUD_URL',
-    defaultValue: '',
+    defaultValue: 'https://api.xiaomabiji.com',
   )
-  static const String afCloudUrl = _Env.afCloudUrl;
+  static const String afCloudUrl =
+      kDebugMode ? 'http://47.94.42.183' : _Env.afCloudUrl;
 
   @EnviedField(
     obfuscate: false,
@@ -44,7 +45,8 @@ abstract class Env {
   @EnviedField(
     obfuscate: false,
     varName: 'BASE_WEB_DOMAIN',
-    defaultValue: ShareConstants.defaultBaseWebDomain,
+    defaultValue: 'https://www.xiaomabiji.com',
   )
-  static const String baseWebDomain = _Env.baseWebDomain;
+  static const String baseWebDomain =
+      kDebugMode ? 'http://47.94.42.183' : _Env.baseWebDomain;
 }
