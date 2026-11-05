@@ -40,6 +40,31 @@ class DocumentDiff {
       newNode.children.map((child) => MapEntry(child.id, child)),
     );
 
+    final oldOrder = oldNode.children
+        .where((child) => newChildrenById.containsKey(child.id))
+        .map((child) => child.id)
+        .toList();
+    final newOrder = newNode.children
+        .where((child) => oldChildrenById.containsKey(child.id))
+        .map((child) => child.id)
+        .toList();
+    final typeChanged = newNode.children.any(
+      (child) =>
+          oldChildrenById[child.id] != null &&
+          oldChildrenById[child.id]!.type != child.type,
+    );
+    // Version restores can reorder existing IDs or change their block types.
+    if (!_equality.equals(oldOrder, newOrder) || typeChanged) {
+      final path = [...oldNode.path, 0];
+      if (newNode.children.isNotEmpty) {
+        operations.add(InsertOperation(path, newNode.children.toList()));
+      }
+      if (oldNode.children.isNotEmpty) {
+        operations.add(DeleteOperation(path, oldNode.children.toList()));
+      }
+      return operations;
+    }
+
     // Insertion or Update
     for (final newChild in newNode.children) {
       final oldChild = oldChildrenById[newChild.id];

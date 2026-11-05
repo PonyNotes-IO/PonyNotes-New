@@ -54,6 +54,57 @@ void main() {
       await applyOperationAndVerifyDocument(previous, next, operations);
     });
 
+    test('restoring reordered blocks with the same IDs updates the editor',
+        () async {
+      final before = Document(
+        root: pageNode(
+          children: [
+            createNodeWithId(id: 'a', text: 'A'),
+            createNodeWithId(id: 'b', text: 'B'),
+          ],
+        ),
+      );
+      final after = Document(
+        root: pageNode(
+          children: [
+            createNodeWithId(id: 'b', text: 'B'),
+            createNodeWithId(id: 'a', text: 'A'),
+          ],
+        ),
+      );
+      await applyOperationAndVerifyDocument(
+        before,
+        after,
+        diff.diffDocument(before, after),
+      );
+    });
+
+    test('restoring a different block type with the same ID updates the editor',
+        () async {
+      final before = Document(
+        root: pageNode(children: [createNodeWithId(id: 'a', text: 'A')]),
+      );
+      final after = Document(
+        root: pageNode(
+          children: [
+            Node(
+              id: 'a',
+              type: 'heading',
+              attributes: {
+                'level': 2,
+                'delta': (Delta()..insert('A')).toJson(),
+              },
+            ),
+          ],
+        ),
+      );
+      await applyOperationAndVerifyDocument(
+        before,
+        after,
+        diff.diffDocument(before, after),
+      );
+    });
+
     test('update text diff with the same id', () async {
       final node1 = createNodeWithId(id: '1', text: 'Hello AppFlowy');
       final node2 = createNodeWithId(id: '1', text: 'Hello AppFlowy 2');

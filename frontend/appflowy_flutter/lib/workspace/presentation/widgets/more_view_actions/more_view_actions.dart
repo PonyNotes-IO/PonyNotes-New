@@ -1,4 +1,5 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/features/version_history/version_history_page.dart';
 import 'package:appflowy/features/share_tab/data/models/share_access_level.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -291,6 +292,33 @@ class _MoreViewActionsPopupContent extends StatelessWidget {
 
     return [
       ...customActions,
+      if (state.workspaceType == WorkspaceTypePB.ServerW &&
+          view.isDocument &&
+          !view.isSpace &&
+          !isHandwriting &&
+          !isWhiteboard &&
+          !pageAccessLevelState.isReadOnly)
+        SizedBox(
+          height: 38,
+          child: FlowyButton(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            leftIcon: const Icon(Icons.history, size: 18),
+            text: FlowyText('versionHistory.title'.tr()),
+            onTap: () {
+              final navigator = Navigator.of(context, rootNavigator: true);
+              final page = VersionHistoryPage(
+                view: viewFromState,
+              );
+              popoverMutex.close();
+              navigator.push(
+                MaterialPageRoute<void>(
+                  builder: (_) => page,
+                  fullscreenDialog: true,
+                ),
+              );
+            },
+          ),
+        ),
       if (view.isDocument && !isHandwriting) ...[
         const FontSizeAction(),
         ViewAction(
