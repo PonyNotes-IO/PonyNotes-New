@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
+import 'package:appflowy/features/agent/presentation/ai_conversation.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
@@ -34,6 +37,29 @@ class AIChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isAgentDocument(view.extra)) {
+      final extra = Map<String, dynamic>.from(jsonDecode(view.extra) as Map);
+      return AiConversation(
+        key: ValueKey(view.id),
+        documentId: view.id,
+        initialMessage: extra['initial_message'] as String? ?? '',
+        initialImagePaths:
+            (extra['initial_images'] as List? ?? []).cast<String>(),
+        onInitialAccepted: () async {
+          final current = (await ViewBackendService.getView(view.id))
+              .fold((value) => value, (error) => throw StateError(error.msg));
+          final metadata =
+              Map<String, dynamic>.from(jsonDecode(current.extra) as Map)
+                ..remove('initial_message')
+                ..remove('initial_images');
+          (await ViewBackendService.updateView(
+            viewId: view.id,
+            extra: jsonEncode(metadata),
+          ))
+              .fold((_) {}, (error) => throw StateError(error.msg));
+        },
+      );
+    }
     // 从view.extra中读取初始消息、首选模型、深度思考和全网搜索开关、初始图片
     final viewExtra = view.extra;
     String? initialMessage;
@@ -41,7 +67,7 @@ class AIChatPage extends StatelessWidget {
     bool enableDeepThinking = false;
     bool enableWebSearch = false;
     List<String>? initialImagePaths;
-    
+
     if (viewExtra.isNotEmpty) {
       try {
         // view.extra可能是JSON字符串，尝试解析
@@ -50,7 +76,8 @@ class AIChatPage extends StatelessWidget {
         preferredModelId = extraData['preferred_model'] as String?;
 
         // 读取深度思考开关
-        final enableDeepThinkingStr = extraData['enable_deep_thinking'] as String?;
+        final enableDeepThinkingStr =
+            extraData['enable_deep_thinking'] as String?;
         if (enableDeepThinkingStr == 'true') {
           enableDeepThinking = true;
         }
@@ -72,7 +99,7 @@ class AIChatPage extends StatelessWidget {
         // 解析失败，静默忽略
       }
     }
-    
+
     return MultiBlocProvider(
       providers: [
         /// [ChatBloc] is used to handle chat messages including send/receive message
@@ -85,7 +112,7 @@ class AIChatPage extends StatelessWidget {
               preferredModelId: preferredModelId,
               enableDeepThinking: enableDeepThinking,
               enableWebSearch: enableWebSearch,
-              initialImagePaths: initialImagePaths,  // 传递图片路径
+              initialImagePaths: initialImagePaths, // 传递图片路径
             );
             // 异步获取 workspace ID 并刷新使用情况
             AIChatViewService.getCurrentWorkspaceId().then((workspaceId) {
@@ -124,7 +151,8 @@ class AIChatPage extends StatelessWidget {
             child: Shortcuts(
               shortcuts: {
                 // 定义快捷键，不影响普通输入
-                const SingleActivator(LogicalKeyboardKey.escape): _StopStreamIntent(),
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    _StopStreamIntent(),
                 const SingleActivator(
                   LogicalKeyboardKey.keyC,
                   control: true,

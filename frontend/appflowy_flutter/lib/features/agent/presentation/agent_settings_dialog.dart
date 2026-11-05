@@ -35,21 +35,17 @@ class AgentSettingsDialog extends StatefulWidget {
 class AgentSettingsDialogState extends State<AgentSettingsDialog> {
   late final url = TextEditingController(text: widget.settings.remoteUrl);
   late final token = TextEditingController(text: widget.settings.remoteToken);
-  late final directory = TextEditingController(text: widget.settings.directory);
   late final servers = TextEditingController(
     text:
         const JsonEncoder.withIndent('  ').convert(widget.settings.mcpServers),
   );
-  late bool commands = widget.settings.allowCommands;
-  late bool remoteFiles = widget.settings.remoteUrl.isNotEmpty &&
-      widget.settings.directory.isNotEmpty;
   late final skills = widget.settings.skillDirectories.toList();
   late final disabledTools = widget.settings.disabledNoteTools.toSet();
   String? error;
   bool saving = false;
   @override
   void dispose() {
-    for (final controller in [url, token, directory, servers]) {
+    for (final controller in [url, token, servers]) {
       controller.dispose();
     }
     super.dispose();
@@ -91,12 +87,6 @@ class AgentSettingsDialogState extends State<AgentSettingsDialog> {
         scope: widget.settings.scope,
         remoteUrl: remote,
         remoteToken: token.text.trim(),
-        directory: remote.isEmpty
-            ? directory.text.trim()
-            : remoteFiles
-                ? 'remote-workspace'
-                : '',
-        allowCommands: commands,
         skillDirectories: skills,
         disabledNoteTools: disabledTools.toList(),
         mcpServers: decoded,
@@ -135,50 +125,9 @@ class AgentSettingsDialogState extends State<AgentSettingsDialog> {
                   decoration: const InputDecoration(labelText: '执行器连接密钥'),
                 ),
                 const SizedBox(height: 12),
-                if (url.text.trim().isNotEmpty)
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('允许访问远端任务目录'),
-                    subtitle: const Text('文件在远端执行器中；手机文件需要通过附件明确提供'),
-                    value: remoteFiles,
-                    onChanged: (value) => setState(() => remoteFiles = value),
-                  )
-                else
-                  TextField(
-                    controller: directory,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      labelText: '授权文件目录',
-                      hintText: '未选择时只开放笔记工具',
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: '选择目录',
-                            icon: const Icon(Icons.folder_open_outlined),
-                            onPressed: () async {
-                              final selected =
-                                  await FilePicker.platform.getDirectoryPath();
-                              if (selected != null && mounted) {
-                                setState(() => directory.text = selected);
-                              }
-                            },
-                          ),
-                          IconButton(
-                            tooltip: '取消文件授权',
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () => setState(directory.clear),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('允许请求执行命令'),
-                  subtitle: const Text('每次执行前确认；命令拥有执行器系统用户的权限'),
-                  value: commands,
-                  onChanged: (value) => setState(() => commands = value),
+                const Text(
+                  '工作目录和权限模式在每个 Agent 文档的输入框下方选择；未选择工作目录时只开放小马笔记的笔记工具，MCP、Skills 与命令也不会加载。',
+                  style: TextStyle(fontSize: 12),
                 ),
                 const SizedBox(height: 12),
                 const Text(

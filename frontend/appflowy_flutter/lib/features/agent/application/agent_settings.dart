@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -11,8 +12,6 @@ class AgentSettings {
     this.remoteUrl = '',
     this.scope = '',
     this.remoteToken = '',
-    this.directory = '',
-    this.allowCommands = false,
     this.mcpServers = const {},
     this.skillDirectories = const [],
     this.disabledNoteTools = const [],
@@ -20,8 +19,6 @@ class AgentSettings {
   final String scope;
   final String remoteUrl;
   final String remoteToken;
-  final String directory;
-  final bool allowCommands;
   final Map<String, dynamic> mcpServers;
   final List<String> skillDirectories;
   final List<String> disabledNoteTools;
@@ -54,8 +51,6 @@ class AgentSettings {
       scope: scope,
       remoteUrl: json['remoteUrl'] as String? ?? '',
       remoteToken: json['remoteToken'] as String? ?? '',
-      directory: json['directory'] as String? ?? '',
-      allowCommands: json['allowCommands'] == true,
       disabledNoteTools:
           (json['disabledNoteTools'] as List? ?? []).cast<String>(),
       skillDirectories:
@@ -69,11 +64,49 @@ class AgentSettings {
         value: jsonEncode({
           'remoteUrl': remoteUrl,
           'remoteToken': remoteToken,
-          'directory': directory,
-          'allowCommands': allowCommands,
           'mcpServers': mcpServers,
           'skillDirectories': skillDirectories,
           'disabledNoteTools': disabledNoteTools,
         }),
       );
+}
+
+/// Working directory and permission mode of one Agent document, chosen in its composer.
+class AgentWorkspaceConfig {
+  const AgentWorkspaceConfig({
+    this.directory = '',
+    this.permissionMode = 'ask',
+  });
+
+  /// Empty: only 小马笔记 note tools. [remoteDirectory]: the remote executor's task directory.
+  final String directory;
+
+  /// ask: confirm every change; auto: approve edits, ask for commands/deletes/external tools; full: never ask.
+  final String permissionMode;
+  static const modes = ['ask', 'auto', 'full'];
+  static const remoteDirectory = 'remote-workspace';
+  static String _key(String documentId) =>
+      'ponynotes.agent.workspace.$documentId';
+
+  static Future<AgentWorkspaceConfig> load(String documentId) async {
+    final raw =
+        (await SharedPreferences.getInstance()).getString(_key(documentId));
+    if (raw == null) return const AgentWorkspaceConfig();
+    final json = jsonDecode(raw) as Map<String, dynamic>;
+    final mode = json['permissionMode'];
+    return AgentWorkspaceConfig(
+      directory: json['directory'] as String? ?? '',
+      permissionMode: modes.contains(mode) ? mode as String : 'ask',
+    );
+  }
+
+  Future<void> save(String documentId) async {
+    if (!modes.contains(permissionMode)) {
+      throw ArgumentError.value(permissionMode);
+    }
+    await (await SharedPreferences.getInstance()).setString(
+      _key(documentId),
+      jsonEncode({'directory': directory, 'permissionMode': permissionMode}),
+    );
+  }
 }

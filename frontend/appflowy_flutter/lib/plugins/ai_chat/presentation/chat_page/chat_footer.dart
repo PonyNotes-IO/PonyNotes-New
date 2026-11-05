@@ -11,7 +11,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class ChatFooter extends StatefulWidget {
@@ -73,9 +73,12 @@ class _ChatFooterState extends State<ChatFooter> {
                           return Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Align(
+                              Align(
                                 alignment: Alignment.centerLeft,
-                                child: AiModeButton(),
+                                child: AiModeButton(
+                                  agentMode: false,
+                                  enabled: canSendMessage,
+                                ),
                               ),
                               PlatformInfo.isDesktopOrTablet
                                   ? _buildDesktopInput(

@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
+import 'package:appflowy/features/agent/presentation/agent_model_settings.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
@@ -67,6 +69,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   UserProfilePB? _userProfile;
   bool _isLoading = true;
   bool _isSending = false;
+  bool _agentMode = false;
 
   @override
   void initState() {
@@ -256,6 +259,11 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
             children: [
               _buildHeader(context),
               const SizedBox(height: 8),
+              AiModeButton(
+                agentMode: _agentMode,
+                enabled: !_isSending,
+                onSelected: (value) => setState(() => _agentMode = value),
+              ),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) => SingleChildScrollView(
@@ -268,42 +276,46 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                        // Logo — PNG 图片
-                        Image.asset(
-                          'assets/images/ai_avatar.png',
-                          width: 62,
-                          height: 62,
-                          fit: BoxFit.cover,
-                        ),
-                        const SizedBox(height: 16),
-                        // Greeting
-                        Text(
-                          '我是小马笔记AI，很高兴见到你！',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontSize: 17,
-                                  ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        // Subtitle
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            // 安卓移动端使用免责声明文案，其他端保持原有引导文案
-                            UniversalPlatform.isAndroid
-                                ? '内容由AI生成，请仔细甄别'
-                                : '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context)
-                                          .hintColor
-                                          .withValues(alpha: 0.7),
-                                      fontSize: 12,
-                                    ),
+                          // Logo — PNG 图片
+                          Image.asset(
+                            'assets/images/ai_avatar.png',
+                            width: 62,
+                            height: 62,
+                            fit: BoxFit.cover,
+                          ),
+                          const SizedBox(height: 16),
+                          // Greeting
+                          Text(
+                            '我是小马笔记AI，很高兴见到你！',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  fontSize: 17,
+                                ),
                             textAlign: TextAlign.center,
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          // Subtitle
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              // 安卓移动端使用免责声明文案，其他端保持原有引导文案
+                              UniversalPlatform.isAndroid
+                                  ? '内容由AI生成，请仔细甄别'
+                                  : '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .hintColor
+                                        .withValues(alpha: 0.7),
+                                    fontSize: 12,
+                                  ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -312,6 +324,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
               ),
               // Bottom input bar
               _MobileWelcomeInputBar(
+                agentMode: _agentMode,
                 isSending: _isSending,
                 onSend: _handleWelcomeInputSubmit,
                 preferredModelId: _preferredModelId,
@@ -319,13 +332,14 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
                 enableWebSearch: _enableWebSearch,
               ),
               // AI 剩余次数提示（输入框卡片下方，水平居中，底部额外安全距离）
-              Padding(
-                padding: EdgeInsets.only(
-                  top: 4,
-                  bottom: MediaQuery.of(context).padding.bottom + 10,
+              if (!_agentMode)
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: 4,
+                    bottom: MediaQuery.of(context).padding.bottom + 10,
+                  ),
+                  child: _buildRemainingUsageHint(context),
                 ),
-                child: _buildRemainingUsageHint(context),
-              ),
             ],
           ),
         ),
@@ -333,8 +347,8 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
     );
   }
 
-  void _handleWelcomeInputSubmit(
-      String text, String? modelId, bool deepThinking, bool webSearch, List<ChatImage> images) {
+  void _handleWelcomeInputSubmit(String text, String? modelId,
+      bool deepThinking, bool webSearch, List<ChatImage> images) {
     if (_isSending) return;
     if (text.trim().isEmpty && images.isEmpty) return;
     _sendMessage(text,
@@ -379,10 +393,11 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       final view = await AIChatViewService.createAndOpenAIChat(
         parentViewId: workspaceId,
         initialMessage: message,
-        selectedModelId: effectiveModelId,
-        enableDeepThinking: effectiveDeepThinking,
-        enableWebSearch: effectiveWebSearch,
+        selectedModelId: _agentMode ? null : effectiveModelId,
+        enableDeepThinking: !_agentMode && effectiveDeepThinking,
+        enableWebSearch: !_agentMode && effectiveWebSearch,
         initialImages: images,
+        agentMode: _agentMode,
       );
 
       if (!mounted) return;
@@ -487,12 +502,14 @@ class _MobileWelcomeInputBar extends StatefulWidget {
   const _MobileWelcomeInputBar({
     required this.isSending,
     required this.onSend,
+    this.agentMode = false,
     this.preferredModelId,
     this.enableDeepThinking = false,
     this.enableWebSearch = false,
   });
 
   final bool isSending;
+  final bool agentMode;
   final void Function(String, String?, bool, bool, List<ChatImage>) onSend;
   final String? preferredModelId;
   final bool enableDeepThinking;
@@ -533,7 +550,15 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     _controller.addListener(_onTextChanged);
     _isDeepThinkingEnabled = widget.enableDeepThinking;
     _isWebSearchEnabled = widget.enableWebSearch;
-    _loadModels();
+    if (!widget.agentMode) _loadModels();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileWelcomeInputBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agentMode && !widget.agentMode && _selectedModel == null) {
+      _loadModels();
+    }
   }
 
   void _onTextChanged() {
@@ -604,7 +629,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     // 提取附件中的图片
     final List<ChatImage> images = [];
     for (final attachment in _attachments) {
-      if (attachment.type == _MobileAttachmentType.image && attachment.image != null) {
+      if (attachment.type == _MobileAttachmentType.image &&
+          attachment.image != null) {
         images.add(attachment.image!);
       }
     }
@@ -620,9 +646,9 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
     widget.onSend(
       text,
-      modelId,
-      _isDeepThinkingEnabled,
-      _isWebSearchEnabled,
+      widget.agentMode ? null : modelId,
+      !widget.agentMode && _isDeepThinkingEnabled,
+      !widget.agentMode && _isWebSearchEnabled,
       images,
     );
   }
@@ -733,8 +759,10 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   Widget _modelButton(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? const Color(0xFFFF8A66) : const Color(0xFFE94618);
-    final borderColor = isDark ? const Color(0xFFFF8A66) : const Color(0xFFF2A18A);
+    final textColor =
+        isDark ? const Color(0xFFFF8A66) : const Color(0xFFE94618);
+    final borderColor =
+        isDark ? const Color(0xFFFF8A66) : const Color(0xFFF2A18A);
     final bgColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
 
     return GestureDetector(
@@ -821,7 +849,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     final hasAttachments = _attachments.isNotEmpty;
 
     return GestureDetector(
-      onTap: isDisabled || _isAttachmentLoading ? null : _showAttachmentSourceMenu,
+      onTap:
+          isDisabled || _isAttachmentLoading ? null : _showAttachmentSourceMenu,
       child: SizedBox(
         width: 28,
         height: 28,
@@ -833,7 +862,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   ? SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator.adaptive(strokeWidth: 1.5),
+                      child:
+                          CircularProgressIndicator.adaptive(strokeWidth: 1.5),
                     )
                   : FlowySvg(
                       FlowySvgs.m_ai_attachment_m,
@@ -888,7 +918,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
 
   /// 确保当前选择的模型支持图片/附件
   void _ensureModelSupportsImages() {
-    if (!_hasAttachments) return;
+    if (widget.agentMode || !_hasAttachments) return;
 
     if (_selectedModel == null || !_selectedModel!.supportsImages) {
       final filteredModels = _getFilteredModels();
@@ -934,23 +964,24 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                   _pickImages();
                 },
               ),
-              ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+              if (!widget.agentMode)
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.folder_open, color: Colors.green),
                   ),
-                  child: const Icon(Icons.folder_open, color: Colors.green),
+                  title: const Text('从文件选择'),
+                  subtitle: const Text('PDF、Word、文本等'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _pickFiles();
+                  },
                 ),
-                title: const Text('从文件选择'),
-                subtitle: const Text('PDF、Word、文本等'),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  _pickFiles();
-                },
-              ),
             ],
           ),
         ),
@@ -1003,7 +1034,17 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'xls', 'xlsx', 'ppt', 'pptx'],
+        allowedExtensions: [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'md',
+          'xls',
+          'xlsx',
+          'ppt',
+          'pptx',
+        ],
         withData: false,
       );
       if (result == null || result.files.isEmpty) return;
@@ -1057,9 +1098,8 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor =
         isDark ? const Color(0xFF2C2C2C) : const Color(0xFFF9F9F9);
-    final cardBorderColor = isDark
-        ? const Color(0xFF444444)
-        : const Color(0xFFF0F0F0);
+    final cardBorderColor =
+        isDark ? const Color(0xFF444444) : const Color(0xFFF0F0F0);
 
     return GestureDetector(
       onTap: () {
@@ -1131,28 +1171,33 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
                     Expanded(
                       child: Row(
                         children: [
-                          _modelButton(context),
-                          const SizedBox(width: 3),
-                          _featureButton(
-                            context: context,
-                            label: '深度思考',
-                            icon: Icons.psychology,
-                            isEnabled: _isDeepThinkingEnabled,
-                            onTap: () => setState(
-                              () => _isDeepThinkingEnabled =
-                                  !_isDeepThinkingEnabled,
+                          if (widget.agentMode)
+                            const Expanded(child: AgentModelSettingsButton())
+                          else ...[
+                            _modelButton(context),
+                            const SizedBox(width: 3),
+                            _featureButton(
+                              context: context,
+                              label: '深度思考',
+                              icon: Icons.psychology,
+                              isEnabled: _isDeepThinkingEnabled,
+                              onTap: () => setState(
+                                () => _isDeepThinkingEnabled =
+                                    !_isDeepThinkingEnabled,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 3),
-                          _featureButton(
-                            context: context,
-                            label: '联网搜索',
-                            icon: Icons.language,
-                            isEnabled: _isWebSearchEnabled,
-                            onTap: () => setState(
-                              () => _isWebSearchEnabled = !_isWebSearchEnabled,
+                            const SizedBox(width: 3),
+                            _featureButton(
+                              context: context,
+                              label: '联网搜索',
+                              icon: Icons.language,
+                              isEnabled: _isWebSearchEnabled,
+                              onTap: () => setState(
+                                () =>
+                                    _isWebSearchEnabled = !_isWebSearchEnabled,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -1266,9 +1311,7 @@ class _MobileWelcomeInputBarState extends State<_MobileWelcomeInputBar> {
         children: [
           // 文件类型图标
           Icon(
-            isImage
-                ? Icons.image
-                : _getFileIcon(extension),
+            isImage ? Icons.image : _getFileIcon(extension),
             size: 18,
             color: isImage ? Colors.red : Colors.blue,
           ),

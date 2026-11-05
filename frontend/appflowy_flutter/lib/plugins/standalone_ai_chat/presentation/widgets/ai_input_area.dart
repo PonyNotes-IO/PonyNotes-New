@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:appflowy/features/agent/presentation/agent_model_settings.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -35,6 +36,7 @@ class AIInputArea extends StatefulWidget {
     this.customMargin,
     this.customToolbarPadding,
     this.customToolbarWidth,
+    this.agentMode = false,
   });
 
   /// 发送消息的回调（使用AIModel系统）
@@ -48,6 +50,7 @@ class AIInputArea extends StatefulWidget {
   final EdgeInsets? customMargin; // 可选的自定义边距
   final EdgeInsets? customToolbarPadding; // 可选的自定义工具栏边距
   final double? customToolbarWidth; // 可选的自定义工具栏宽度
+  final bool agentMode;
 
   @override
   State<AIInputArea> createState() => _AIInputAreaState();
@@ -84,9 +87,18 @@ class _AIInputAreaState extends State<AIInputArea> {
   @override
   void initState() {
     super.initState();
-    _loadModelsFromAPI();
+    if (!widget.agentMode) _loadModelsFromAPI();
     // 监听文本变化以更新字符计数并限制长度
     _textController.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant AIInputArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.agentMode != widget.agentMode) {
+      if (_isDropdownOpen) _closeDropdown();
+      if (!widget.agentMode && _selectedModel == null) _loadModelsFromAPI();
+    }
   }
 
   @override
@@ -171,7 +183,7 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 确保当前选择的模型支持图片/附件
   /// 如果当前模型不支持图片/附件，自动切换到第一个支持的模型
   void _ensureModelSupportsImages() {
-    if (!_hasAttachments) return;
+    if (widget.agentMode || !_hasAttachments) return;
 
     // 如果没有选择模型，或者当前模型不支持图片
     if (_selectedModel == null || !_selectedModel!.supportsImages) {
@@ -194,7 +206,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     }
 
     // 确保已选择模型
-    if (_selectedModel == null) {
+    if (!widget.agentMode && _selectedModel == null) {
       final models = _getFilteredModels();
       if (models.isNotEmpty) {
         // 选择第一个可用模型（过滤后的）
@@ -208,7 +220,8 @@ class _AIInputAreaState extends State<AIInputArea> {
     }
 
     // 【关键修复】如果有附件，确保当前模型支持
-    if (_hasAttachments &&
+    if (!widget.agentMode &&
+        _hasAttachments &&
         _selectedModel != null &&
         !_selectedModel!.supportsImages) {
       final filteredModels = _getFilteredModels();
@@ -225,9 +238,9 @@ class _AIInputAreaState extends State<AIInputArea> {
     }
 
     // 检查AI对话限制
-    final canUseAI = await context.checkAndHandleAIChatLimit();
-    if (!canUseAI) {
-      return;
+    if (!widget.agentMode) {
+      final canUseAI = await context.checkAndHandleAIChatLimit();
+      if (!canUseAI || !mounted) return;
     }
 
     debugPrint('📤 AIInputArea: 准备发送消息');
@@ -245,10 +258,10 @@ class _AIInputAreaState extends State<AIInputArea> {
     // 调用回调，使用AIModel系统，传递深度思考和全网搜索状态
     widget.onMessageSent?.call(
         text,
-        _selectedModel,
+        widget.agentMode ? null : _selectedModel,
         images.isNotEmpty ? images : null,
-        _isDeepThinkingEnabled,
-        _isWebSearchEnabled);
+        !widget.agentMode && _isDeepThinkingEnabled,
+        !widget.agentMode && _isWebSearchEnabled);
 
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
@@ -348,13 +361,17 @@ class _AIInputAreaState extends State<AIInputArea> {
                 child: Row(
                   children: [
                     // 模型选择下拉框（对应 block_4）
-                    _buildModelSelector(),
-                    // 深度思考按钮（移到模型选择器右侧，相邻）
-                    const SizedBox(width: 10),
-                    _buildDeepThinkingButton(),
-                    // 联网搜索按钮（移到深度思考按钮右侧）
-                    const SizedBox(width: 10),
-                    _buildWebSearchButton(),
+                    if (widget.agentMode)
+                      const AgentModelSettingsButton()
+                    else ...[
+                      _buildModelSelector(),
+                      // 深度思考按钮（移到模型选择器右侧，相邻）
+                      const SizedBox(width: 10),
+                      _buildDeepThinkingButton(),
+                      // 联网搜索按钮（移到深度思考按钮右侧）
+                      const SizedBox(width: 10),
+                      _buildWebSearchButton(),
+                    ],
                     const Spacer(),
                     // 功能图标按钮组
 
@@ -364,7 +381,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                       _buildHistoryButton(),
                     ],
                     // 字数与剩余可用次数合并显示（紧凑样式，靠近附件按钮）
-                    _buildCountAndRemainingIndicator(),
+                    if (!widget.agentMode) _buildCountAndRemainingIndicator(),
                     const SizedBox(width: 12),
                     // 合并后的附件上传按钮（包含图片和附件上传功能）
                     const SizedBox(width: 12),
@@ -834,7 +851,7 @@ class _AIInputAreaState extends State<AIInputArea> {
   Widget _buildAttachmentButton() {
     final hasAttachments = _attachments.isNotEmpty;
     // 有功能开关开启时禁用附件上传
-    final isDisabled = _hasFeatureEnabled;
+    final isDisabled = !widget.agentMode && _hasFeatureEnabled;
     final isDisabledReason = isDisabled ? '开启深度思考或联网搜索后不支持上传附件' : null;
     final theme = AppFlowyTheme.of(context);
     return FlowyTooltip(

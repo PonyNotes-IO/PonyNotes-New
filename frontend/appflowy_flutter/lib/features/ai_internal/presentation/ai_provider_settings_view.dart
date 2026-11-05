@@ -12,7 +12,8 @@ import 'package:flutter/material.dart';
 /// 与「AI 接入 (MCP)」是两个方向：
 /// MCP 是外部 Agent 访问小马，这里是 小马访问用户自己的模型服务。
 class AiProviderSettingsView extends StatefulWidget {
-  const AiProviderSettingsView({super.key});
+  const AiProviderSettingsView({super.key, this.onSaved});
+  final ValueChanged<AiProviderConfig>? onSaved;
 
   @override
   State<AiProviderSettingsView> createState() => _AiProviderSettingsViewState();
@@ -27,6 +28,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   bool _saving = false;
   bool _testing = false;
   bool _obscureKey = true;
+  bool _supportsReasoning = false;
 
   /// 连通性测试的结果，null 表示还没测过。
   String? _testMessage;
@@ -53,6 +55,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
       _serverUrlController.text = config.baseUrl;
       _modelController.text = config.modelName;
       _apiKeyController.text = config.apiKey;
+      _supportsReasoning = config.supportsReasoning;
     } catch (_) {
       if (mounted) setState(() => _testMessage = '无法读取系统安全存储，请解锁系统钥匙串后重试。');
     } finally {
@@ -64,17 +67,27 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         baseUrl: _serverUrlController.text.trim(),
         modelName: _modelController.text.trim(),
         apiKey: _apiKeyController.text.trim(),
+        supportsReasoning: _supportsReasoning,
       );
 
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await const AiProviderConfigStorage().save(_currentConfig());
+      final config = _currentConfig();
+      if (widget.onSaved != null && !config.isComplete) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '请填写模型地址、模型名称和 API Key。';
+        });
+        return;
+      }
+      await const AiProviderConfigStorage().save(config);
       if (mounted) {
         setState(() {
           _testOk = true;
           _testMessage = '已保存';
         });
+        widget.onSaved?.call(config);
       }
     } catch (_) {
       if (mounted) {
@@ -172,6 +185,13 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ),
         const VSpace(12),
         _buildApiKeyField(context),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('支持推理 / 思考程度'),
+          subtitle: const Text('仅为支持思考参数的模型开启'),
+          value: _supportsReasoning,
+          onChanged: (value) => setState(() => _supportsReasoning = value),
+        ),
         if (_testMessage != null) ...[
           const VSpace(12),
           FlowyText(
@@ -254,7 +274,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ),
         const VSpace(4),
         FlowyText(
-          '密钥保存在本机，不会上传，也不会写入日志。',
+          '密钥保存在系统安全存储中，仅用于访问模型服务和你配置的 Agent 执行器。',
           fontSize: 12,
           color: AppFlowyTheme.of(context).textColorScheme.secondary,
         ),
