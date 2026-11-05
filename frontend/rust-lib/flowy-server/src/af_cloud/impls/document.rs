@@ -27,6 +27,71 @@ impl<T> DocumentCloudService for AFCloudDocumentCloudServiceImpl<T>
 where
   T: AFServer,
 {
+  async fn list_document_versions(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    offset: u32,
+  ) -> Result<DocumentVersionList, FlowyError> {
+    let result = self
+      .inner
+      .try_get_client()?
+      .list_document_versions(workspace, document, offset)
+      .await?;
+    Ok(DocumentVersionList {
+      items: result
+        .items
+        .into_iter()
+        .map(|v| DocumentVersionMeta {
+          snapshot_id: v.snapshot_id,
+          object_id: v.object_id,
+          created_at: v.created_at,
+            reused: v.reused,
+        })
+        .collect(),
+      has_more: result.has_more,
+      retention_days: result.retention_days,
+    })
+  }
+
+  async fn get_document_version(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    snapshot: &Uuid,
+  ) -> Result<DocumentData, FlowyError> {
+    let result = self
+      .inner
+      .try_get_client()?
+      .get_document_version(workspace, document, snapshot)
+      .await?;
+    serde_json::from_value(result.document).map_err(FlowyError::from)
+  }
+
+  async fn save_document_version(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    let result = self
+      .inner
+      .try_get_client()?
+      .save_document_version(
+        workspace,
+        document,
+        client_api::entity::history_dto::DocumentVersionData {
+          document: serde_json::to_value(data)?,
+        },
+      )
+      .await?;
+    Ok(DocumentVersionMeta {
+      snapshot_id: result.snapshot_id,
+      object_id: result.object_id,
+      created_at: result.created_at,
+      reused: result.reused,
+    })
+  }
   #[instrument(level = "debug", skip_all, fields(document_id = %document_id))]
   async fn get_document_doc_state(
     &self,

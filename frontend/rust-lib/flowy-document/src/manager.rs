@@ -84,7 +84,7 @@ pub struct DocumentManager {
   /// 本轮打开后发生过写入的文档。关闭时据此立即刷新搜索索引，
   /// 避免只改一次的文档落在 30 秒轮询窗口之外。
   dirty_documents: Arc<DashSet<Uuid>>,
-  cloud_service: Arc<dyn DocumentCloudService>,
+  pub(crate) cloud_service: Arc<dyn DocumentCloudService>,
   storage_service: Weak<dyn StorageService>,
   snapshot_service: Arc<dyn DocumentSnapshotService>,
   /// 是否启用双向链接索引。
@@ -845,6 +845,7 @@ impl DocumentManager {
         snapshot_id: meta.snapshot_id,
         object_id: meta.object_id,
         created_at: meta.created_at,
+        reused: false,
       })
       .collect::<Vec<_>>();
 

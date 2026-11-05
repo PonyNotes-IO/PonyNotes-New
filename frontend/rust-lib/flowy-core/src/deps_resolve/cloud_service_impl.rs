@@ -24,7 +24,9 @@ use flowy_database_pub::cloud::{
   TranslateRowContent, TranslateRowResponse,
 };
 use flowy_document::deps::DocumentData;
-use flowy_document_pub::cloud::{DocumentCloudService, DocumentSnapshot};
+use flowy_document_pub::cloud::{
+  DocumentCloudService, DocumentSnapshot, DocumentVersionList, DocumentVersionMeta,
+};
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder_pub::cloud::{
   FolderCloudService, FolderCollabParams, FolderSnapshot, FullSyncCollabParams,
@@ -601,6 +603,44 @@ impl DatabaseAIService for ServerProvider {
 
 #[async_trait]
 impl DocumentCloudService for ServerProvider {
+  async fn list_document_versions(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    offset: u32,
+  ) -> Result<DocumentVersionList, FlowyError> {
+    self
+      .get_server()?
+      .document_service()
+      .list_document_versions(document, workspace, offset)
+      .await
+  }
+
+  async fn get_document_version(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    snapshot: &Uuid,
+  ) -> Result<DocumentData, FlowyError> {
+    self
+      .get_server()?
+      .document_service()
+      .get_document_version(document, workspace, snapshot)
+      .await
+  }
+
+  async fn save_document_version(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    self
+      .get_server()?
+      .document_service()
+      .save_document_version(document, workspace, data)
+      .await
+  }
   async fn get_document_doc_state(
     &self,
     document_id: &Uuid,

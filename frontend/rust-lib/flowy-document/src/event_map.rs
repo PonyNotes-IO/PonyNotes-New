@@ -7,12 +7,29 @@ use lib_dispatch::prelude::AFPlugin;
 use tracing::event;
 
 use crate::event_handler::get_snapshot_meta_handler;
+use crate::history::*;
 use crate::{event_handler::*, manager::DocumentManager};
 
 pub fn init(document_manager: Weak<DocumentManager>) -> AFPlugin {
   AFPlugin::new()
     .name(env!("CARGO_PKG_NAME"))
     .state(document_manager)
+    .event(
+      DocumentEvent::ListDocumentVersions,
+      list_document_versions_handler,
+    )
+    .event(
+      DocumentEvent::GetDocumentVersion,
+      get_document_version_handler,
+    )
+    .event(
+      DocumentEvent::SaveDocumentVersion,
+      save_document_version_handler,
+    )
+    .event(
+      DocumentEvent::RestoreDocumentVersion,
+      restore_document_version_handler,
+    )
     .event(DocumentEvent::GetDocumentLinks, get_document_links_handler)
     .event(
       DocumentEvent::ReindexDocumentLinks,
@@ -155,4 +172,13 @@ pub enum DocumentEvent {
 
   #[event(input = "OpenDocumentPayloadPB", output = "DocumentDataPB")]
   GetCloudDocumentData = 21,
+
+  #[event(input = "DocumentHistoryQueryPB", output = "DocumentHistoryListPB")]
+  ListDocumentVersions = 24,
+  #[event(input = "DocumentHistoryQueryPB", output = "DocumentDataPB")]
+  GetDocumentVersion = 25,
+  #[event(input = "DocumentHistoryQueryPB", output = "DocumentSnapshotMetaPB")]
+  SaveDocumentVersion = 26,
+  #[event(input = "DocumentHistoryQueryPB", output = "DocumentSnapshotMetaPB")]
+  RestoreDocumentVersion = 27,
 }

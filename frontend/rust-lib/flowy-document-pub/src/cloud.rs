@@ -9,6 +9,32 @@ use uuid::Uuid;
 /// [flowy-server] crate for more information.
 #[async_trait]
 pub trait DocumentCloudService: Send + Sync + 'static {
+  async fn list_document_versions(
+    &self,
+    _document: &Uuid,
+    _workspace: &Uuid,
+    _offset: u32,
+  ) -> Result<DocumentVersionList, FlowyError> {
+    Err(FlowyError::not_support())
+  }
+
+  async fn get_document_version(
+    &self,
+    _document: &Uuid,
+    _workspace: &Uuid,
+    _snapshot: &Uuid,
+  ) -> Result<DocumentData, FlowyError> {
+    Err(FlowyError::not_support())
+  }
+
+  async fn save_document_version(
+    &self,
+    _document: &Uuid,
+    _workspace: &Uuid,
+    _data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    Err(FlowyError::not_support())
+  }
   async fn get_document_doc_state(
     &self,
     document_id: &Uuid,
@@ -41,4 +67,17 @@ pub struct DocumentSnapshot {
   pub document_id: String,
   pub data: Vec<u8>,
   pub created_at: i64,
+}
+
+pub struct DocumentVersionMeta {
+  pub snapshot_id: String,
+  pub object_id: String,
+  pub created_at: i64,
+  pub reused: bool,
+}
+
+pub struct DocumentVersionList {
+  pub items: Vec<DocumentVersionMeta>,
+  pub has_more: bool,
+  pub retention_days: i32,
 }
