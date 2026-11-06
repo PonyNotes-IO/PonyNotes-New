@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
+import 'package:appflowy/features/agent/presentation/ai_conversation.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
@@ -34,6 +37,29 @@ class AIChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (isAgentDocument(view.extra)) {
+      final extra = Map<String, dynamic>.from(jsonDecode(view.extra) as Map);
+      return AiConversation(
+        key: ValueKey(view.id),
+        documentId: view.id,
+        initialMessage: extra['initial_message'] as String? ?? '',
+        initialImagePaths:
+            (extra['initial_images'] as List? ?? []).cast<String>(),
+        onInitialAccepted: () async {
+          final current = (await ViewBackendService.getView(view.id))
+              .fold((value) => value, (error) => throw StateError(error.msg));
+          final metadata =
+              Map<String, dynamic>.from(jsonDecode(current.extra) as Map)
+                ..remove('initial_message')
+                ..remove('initial_images');
+          (await ViewBackendService.updateView(
+            viewId: view.id,
+            extra: jsonEncode(metadata),
+          ))
+              .fold((_) {}, (error) => throw StateError(error.msg));
+        },
+      );
+    }
     // 从view.extra中读取初始消息、首选模型、深度思考和全网搜索开关、初始图片
     final viewExtra = view.extra;
     String? initialMessage;

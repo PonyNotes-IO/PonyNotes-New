@@ -31,6 +31,16 @@ void main() {
                 ],
               })}\n\n');
         }
+        request.response.write('data: ${jsonEncode({
+              'id': 'one',
+              'object': 'chat.completion.chunk',
+              'choices': [],
+              'usage': {
+                'prompt_tokens': 40,
+                'completion_tokens': 8,
+                'total_tokens': 48,
+              },
+            })}\n\n');
         request.response.write('data: [DONE]\n\n');
         await request.response.close();
       });
@@ -66,6 +76,16 @@ void main() {
         );
         await waitFor((r) => r['type'] == 'settled');
         expect(records.any((r) => jsonEncode(r).contains('你好')), true);
+        final state = records.lastWhere((r) => r['type'] == 'state')['data'];
+        final answer = (state['messages'] as List)
+            .lastWhere((m) => m['role'] == 'assistant');
+        expect(
+          answer['stopReason'],
+          'stop',
+          reason: '${answer['errorMessage']}',
+        );
+        expect(answer['usage']['input'], 40);
+        expect(answer['usage']['output'], 8);
         await transport.close();
         await transport.connect(dataDirectory: directory.path);
         transport

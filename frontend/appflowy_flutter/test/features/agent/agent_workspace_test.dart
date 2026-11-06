@@ -3,15 +3,22 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
-import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
+import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../widget_test/widget_test_wrapper.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+  });
   setUpAll(() async {
     final materialIcons = FontLoader('MaterialIcons')
       ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
@@ -25,45 +32,87 @@ void main() {
       await loader.load();
     }
   });
-  testWidgets(
-      'switching modes preserves the Chat draft and disables switching while Chat runs',
+  testWidgets('Agent document has one input and no nested session list',
       (tester) async {
+    final controller = AgentController(chatId: 'document-one')
+      ..connected = true;
     await tester.pumpWidget(
-      const WidgetTestWrapper(
-        child: AiModeShell(
-          chatId: 'test',
-          chat: Column(children: [AiModeButton(), TextField()]),
+      WidgetTestWrapper(child: AgentWorkspace(controller: controller)),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), '解释一下这段文字');
+    controller.messages.add({'role': 'assistant', 'content': '这是一段解释。'});
+    controller.changed();
+    await tester.pump();
+    expect(find.text('解释一下这段文字'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byTooltip('切换对话模式'), findsNothing);
+    expect(find.text('新任务'), findsNothing);
+    expect(find.byType(AiModeButton), findsOneWidget);
+    expect(find.byTooltip('会话历史'), findsNothing);
+    expect(find.text('Agent'), findsWidgets);
+    expect(controller.chatId, 'document-one');
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets(
+      'startup connects silently and connection failures remain visible',
+      (tester) async {
+    final controller = AgentController(chatId: 'silent-start')
+      ..connecting = true;
+    await tester.pumpWidget(
+      WidgetTestWrapper(child: AgentWorkspace(controller: controller)),
+    );
+    await tester.pump();
+    expect(find.text('正在连接…'), findsNothing);
+    expect(find.text('连接执行器'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    controller.connecting = false;
+    controller.error = '执行器不可用';
+    controller.changed();
+    await tester.pump();
+    expect(find.text('执行器不可用'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets(
+      'new conversations offer both modes while document menus explicitly create new documents',
+      (tester) async {
+    bool selected = false;
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: AiModeButton(
+          agentMode: false,
+          onSelected: (value) => selected = value,
         ),
       ),
     );
-    await tester.enterText(find.byType(TextField), '保留我的草稿');
     await tester.tap(find.byType(AiModeButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Agent · 执行任务'));
     await tester.pumpAndSettle();
-    expect(find.text('把任务交给 Agent'), findsOneWidget);
+    expect(selected, true);
+    await tester.pumpWidget(
+      const WidgetTestWrapper(child: AiModeButton(agentMode: true)),
+    );
     await tester.tap(find.byType(AiModeButton));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Chat · 问答'));
-    await tester.pumpAndSettle();
-    expect(find.text('保留我的草稿'), findsOneWidget);
-    await tester.pumpWidget(
-      const WidgetTestWrapper(
-        child: AiModeShell(
-          chatId: 'test',
-          chatBusy: true,
-          chat: Column(children: [AiModeButton(), TextField()]),
-        ),
-      ),
-    );
-    expect(
-      tester
-          .widget<PopupMenuButton<bool>>(
-            find.byType(PopupMenuButton<bool>).first,
-          )
-          .enabled,
-      isFalse,
-    );
+    expect(find.text('新建 Chat 对话'), findsOneWidget);
+    expect(find.text('新建 Agent 对话'), findsOneWidget);
+  });
+
+  test('old Ask AI documents remain Chat and Agent documents carry their mode',
+      () {
+    expect(isAgentDocument(''), false);
+    expect(isAgentDocument('legacy text'), false);
+    expect(isAgentDocument('{"initial_message":"hi"}'), false);
+    expect(isAgentDocument('{"ai_mode":"chat"}'), false);
+    expect(isAgentDocument('{"ai_mode":"agent"}'), true);
   });
 
   for (final variant in [
@@ -72,6 +121,14 @@ void main() {
   ]) {
     testWidgets('approval, context and task controls render on ${variant.name}',
         (tester) async {
+      await const AiProviderConfigStorage().save(
+        const AiProviderConfig(
+          baseUrl: 'https://example.test/v1',
+          modelName: 'DeepSeek Reasoner',
+          apiKey: 'test-key',
+          supportsReasoning: true,
+        ),
+      );
       tester.view.physicalSize = variant.size;
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -135,6 +192,9 @@ void main() {
       expect(find.text('允许这次'), findsOneWidget);
       expect(find.text('拒绝'), findsOneWidget);
       expect(find.byTooltip('停止任务'), findsOneWidget);
+      expect(find.text('仅笔记'), findsOneWidget);
+      expect(find.text('逐次确认'), findsOneWidget);
+      expect(find.byKey(const Key('agent-context-gauge')), findsOneWidget);
       final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
       if (output != null) {
         await tester.runAsync(() async {

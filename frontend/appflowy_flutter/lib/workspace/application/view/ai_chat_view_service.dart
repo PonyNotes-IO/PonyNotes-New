@@ -36,6 +36,7 @@ class AIChatViewService {
     bool enableWebSearch = false,
     bool enableKnowledgeSearch = false,
     List<ChatImage>? initialImages,
+    bool agentMode = false,
   }) async {
     try {
       // 1. 生成Chat名称
@@ -65,6 +66,7 @@ class AIChatViewService {
 
       // 4. 构建额外参数（存储为JSON）
       final extraData = <String, dynamic>{};
+      extraData['ai_mode'] = agentMode ? 'agent' : 'chat';
       if (selectedModelId != null && selectedModelId.isNotEmpty) {
         extraData['preferred_model'] = selectedModelId;
       }
@@ -91,13 +93,14 @@ class AIChatViewService {
       }
 
       // 5. 在"我的AI会话"子空间下创建Chat类型的View
-      // 注意：设置 openAfterCreate: false，因为我们需要先更新extra字段再打开
+      // 模式与初始消息随文档一起创建，避免打开时读到另一种模式。
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Chat,
         parentViewId: aiChatSpaceId,  // 使用AI会话子空间作为父视图
         name: chatName,
         openAfterCreate: false,  // 先不打开，等更新extra后再打开
         section: ViewSectionPB.Private,  // 指定为私有空间
+        extra: extraJson,
       );
 
       // 【修复】使用 isSuccess/isFailure 替代 fold，避免 async 回调不等待的问题
@@ -113,20 +116,6 @@ class AIChatViewService {
       Log.info('   - 视图ID: ${view.id}');
       Log.info('   - 视图名称: ${view.name}');
       Log.info('   - 父视图ID: $aiChatSpaceId');
-      
-      // 6. 如果有额外数据，更新view的extra字段
-      if (extraJson != null) {
-        Log.info('🔄 更新视图的extra字段...');
-        final updateResult = await ViewBackendService.updateView(
-          viewId: view.id,
-          extra: extraJson,
-        );
-        if (updateResult.isSuccess) {
-          Log.info('✅ extra字段更新成功');
-        } else {
-          Log.error('❌ extra字段更新失败: ${updateResult.getFailure().msg}');
-        }
-      }
       
       // 7. 重新获取视图数据（包含更新后的extra字段）
       ViewPB updatedView = view;

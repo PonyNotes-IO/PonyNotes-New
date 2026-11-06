@@ -1,6 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -11,19 +12,22 @@ import 'package:flutter/services.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import '../application/agent_controller.dart';
 import 'agent_settings_dialog.dart';
+import 'agent_model_settings.dart';
+import 'agent_workspace_controls.dart';
+import 'ai_mode_button.dart';
 
 class AgentWorkspace extends StatefulWidget {
   const AgentWorkspace({
     super.key,
     required this.controller,
-    this.onChat,
-    this.modeControl,
-    this.chatContext,
+    this.initialMessage = '',
+    this.initialImagePaths = const [],
+    this.onInitialAccepted,
   });
   final AgentController controller;
-  final VoidCallback? onChat;
-  final Widget? modeControl;
-  final String Function()? chatContext;
+  final String initialMessage;
+  final List<String> initialImagePaths;
+  final Future<void> Function()? onInitialAccepted;
   @override
   State<AgentWorkspace> createState() => _AgentWorkspaceState();
 }
@@ -33,7 +37,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
   final scroll = ScrollController();
   String behavior = 'steer';
   bool details = false;
-  String? handover;
+  bool initialPending = false;
   final attachments = <PlatformFile>[];
   AgentController get agent => widget.controller;
   int clearanceVersion = 0;
@@ -42,6 +46,11 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     super.initState();
     clearanceVersion = agent.clearanceVersion;
     agent.addListener(_clearRevokedContext);
+    initialPending = widget.initialMessage.isNotEmpty;
+    input.text = widget.initialMessage;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_openDocument());
+    });
   }
 
   void _clearRevokedContext() {
@@ -49,7 +58,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     clearanceVersion = agent.clearanceVersion;
     input.clear();
     attachments.clear();
-    handover = null;
+    initialPending = false;
   }
 
   @override
@@ -67,7 +76,6 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     input.clear();
     final images = <Map<String, dynamic>>[];
     final textFiles = StringBuffer();
-    if (handover != null) textFiles.write('\n\n用户确认引入的 Chat 上下文：\n$handover');
     for (final file in attachments) {
       final bytes = file.bytes!;
       final ext = (file.extension ?? '').toLowerCase();
@@ -84,11 +92,16 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
       }
     }
     try {
-      await agent.send(
+      final accepted = await agent.send(
         '$text$textFiles',
         behavior: agent.running ? behavior : 'prompt',
         images: images,
+        initialRequest: initialPending ? agent.chatId : null,
       );
+      if (accepted && initialPending) {
+        initialPending = false;
+        await widget.onInitialAccepted?.call();
+      }
     } catch (e) {
       agent.error = '$e';
       agent.changed();
@@ -96,6 +109,40 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     if (agent.connected && mounted) setState(attachments.clear);
     if (!agent.connected && mounted && sentVersion == agent.clearanceVersion) {
       input.text = text;
+    }
+  }
+
+  Future<void> _openDocument() async {
+    try {
+      for (final imagePath in widget.initialImagePaths) {
+        final file = File(imagePath);
+        final length = await file.length();
+        if (length > 5 * 1024 * 1024) throw StateError('图片不超过 5 MB');
+        final bytes = await file.readAsBytes();
+        if (!mounted) return;
+        setState(
+          () => attachments.add(
+            PlatformFile(
+              name: file.uri.pathSegments.last,
+              size: bytes.length,
+              bytes: bytes,
+            ),
+          ),
+        );
+      }
+      await agent.connect();
+      if (!mounted || !agent.connected || !initialPending) return;
+      if (agent.messages.isEmpty) {
+        await _send();
+      } else {
+        initialPending = false;
+        input.clear();
+        attachments.clear();
+        await widget.onInitialAccepted?.call();
+      }
+    } catch (e) {
+      agent.error = '$e';
+      agent.changed();
     }
   }
 
@@ -139,62 +186,6 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     }
   }
 
-  Future<void> _handover() async {
-    final text = widget.chatContext?.call() ?? '';
-    if (text.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('当前 Chat 还没有可引入的内容')));
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('引入 Chat 上下文'),
-        content: SizedBox(
-          width: 560,
-          child: SingleChildScrollView(child: SelectableText(text)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('加入下一条任务'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true && mounted) setState(() => handover = text);
-  }
-
-  Future<void> _model() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-        child: SizedBox(
-          width: 640,
-          height: MediaQuery.sizeOf(context).height * .8,
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  tooltip: '关闭模型设置',
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-              const Expanded(child: AiProviderSettingsView()),
-            ],
-          ),
-        ),
-      ),
-    );
-    await agent.disconnect();
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -203,152 +194,141 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
       builder: (context, _) => LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 1080;
+          _wide = wide;
           return ColoredBox(
             color: theme.surfaceColorScheme.primary,
             child: Row(
               children: [
-                if (wide && agent.connected)
-                  SizedBox(width: 205, child: _history()),
                 Expanded(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.auto_awesome_outlined, size: 18),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Agent',
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 832),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                agent.connecting
-                                    ? '正在连接…'
-                                    : '${agent.location}${agent.model.isEmpty ? '' : ' · ${agent.model}'}',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: theme.textColorScheme.secondary,
-                                  fontSize: 12,
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.auto_awesome_outlined,
+                                  size: 18,
                                 ),
-                              ),
-                            ),
-                            if (!wide && agent.connected)
-                              IconButton(
-                                tooltip: '会话历史',
-                                icon: const Icon(Icons.history, size: 20),
-                                onPressed: () => showModalBottomSheet<void>(
-                                  context: context,
-                                  builder: (_) => _history(),
-                                ),
-                              ),
-                            IconButton(
-                              tooltip: '上下文与操作详情',
-                              icon: const Icon(
-                                Icons.view_sidebar_outlined,
-                                size: 20,
-                              ),
-                              onPressed: () {
-                                if (wide) {
-                                  setState(() => details = !details);
-                                } else {
-                                  showModalBottomSheet<void>(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (_) => SizedBox(
-                                      height:
-                                          MediaQuery.sizeOf(context).height *
-                                              .7,
-                                      child: _details(),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                            IconButton(
-                              tooltip: '模型设置',
-                              icon: const Icon(Icons.memory_outlined, size: 20),
-                              onPressed: agent.running ? null : _model,
-                            ),
-                            IconButton(
-                              tooltip: 'Agent 设置',
-                              icon: const Icon(Icons.tune, size: 20),
-                              onPressed: agent.running ? null : _settings,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (agent.steps.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: ExpansionTile(
-                            tilePadding: EdgeInsets.zero,
-                            title: Text(
-                              '任务步骤 · ${agent.steps.where((s) => s['status'] == 'completed').length}/${agent.steps.length}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            children: agent.steps
-                                .map(
-                                  (step) => ListTile(
-                                    dense: true,
-                                    leading: Icon(
-                                      step['status'] == 'completed'
-                                          ? Icons.check_circle_outline
-                                          : step['status'] == 'failed'
-                                              ? Icons.error_outline
-                                              : Icons.radio_button_unchecked,
-                                      size: 16,
-                                    ),
-                                    title: Text('${step['title']}'),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                      Expanded(
-                        child: agent.messages.isEmpty && !agent.running
-                            ? _empty()
-                            : _timeline(),
-                      ),
-                      if (agent.interactions.isNotEmpty)
-                        _approval(agent.interactions.first),
-                      if (agent.authorizationUrl != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: TextButton.icon(
-                            onPressed: () => afLaunchUri(
-                              Uri.parse(agent.authorizationUrl!),
-                            ),
-                            icon: const Icon(Icons.open_in_new, size: 16),
-                            label: const Text('打开 MCP 登录授权页面'),
-                          ),
-                        ),
-                      if (agent.error != null)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline, size: 18),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: SelectableText(
-                                  agent.error!,
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Agent',
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    agent.model.isEmpty
+                                        ? ''
+                                        : '${agent.location} · ${agent.model}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: theme.textColorScheme.secondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: '上下文与操作详情',
+                                  icon: const Icon(
+                                    Icons.view_sidebar_outlined,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => _toggleDetails(wide),
+                                ),
+                                IconButton(
+                                  tooltip: 'Agent 设置',
+                                  icon: const Icon(Icons.tune, size: 20),
+                                  onPressed: agent.running ? null : _settings,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      _composer(),
-                    ],
+                          if (agent.steps.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                title: Text(
+                                  '任务步骤 · ${agent.steps.where((s) => s['status'] == 'completed').length}/${agent.steps.length}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                children: agent.steps
+                                    .map(
+                                      (step) => ListTile(
+                                        dense: true,
+                                        leading: Icon(
+                                          step['status'] == 'completed'
+                                              ? Icons.check_circle_outline
+                                              : step['status'] == 'failed'
+                                                  ? Icons.error_outline
+                                                  : Icons
+                                                      .radio_button_unchecked,
+                                          size: 16,
+                                        ),
+                                        title: Text('${step['title']}'),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ),
+                          Expanded(
+                            child: agent.messages.isEmpty &&
+                                    !agent.running &&
+                                    !agent.connecting
+                                ? _empty()
+                                : _timeline(),
+                          ),
+                          if (agent.interactions.isNotEmpty)
+                            _approval(agent.interactions.first),
+                          if (agent.authorizationUrl != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: TextButton.icon(
+                                onPressed: () => afLaunchUri(
+                                  Uri.parse(agent.authorizationUrl!),
+                                ),
+                                icon: const Icon(Icons.open_in_new, size: 16),
+                                label: const Text('打开 MCP 登录授权页面'),
+                              ),
+                            ),
+                          if (agent.error != null)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: SelectableText(
+                                      agent.error!,
+                                      style: TextStyle(
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          _composer(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 if (wide && details) SizedBox(width: 300, child: _details()),
@@ -356,6 +336,22 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  bool _wide = false;
+  void _toggleDetails(bool wide) {
+    if (wide) {
+      setState(() => details = !details);
+      return;
+    }
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * .7,
+        child: _details(),
       ),
     );
   }
@@ -376,17 +372,18 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  '查找资料、整理笔记，或完成多步骤任务。写入前会请求确认。',
+                  '在当前“问 AI”文档中查找资料、整理笔记。选择工作目录后还可以处理本地文件和执行命令；是否需要确认由输入框下方的权限模式决定。',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
-                OutlinedButton(
-                  onPressed: agent.connecting ? null : agent.connect,
-                  child: Text(agent.connecting ? '正在连接…' : '连接执行器'),
-                ),
+                if (!agent.connected && agent.error != null)
+                  OutlinedButton(
+                    onPressed: agent.connect,
+                    child: const Text('重试'),
+                  ),
                 TextButton(
                   onPressed: _settings,
-                  child: const Text('配置执行环境与 MCP'),
+                  child: const Text('配置执行器、MCP 与 Skills'),
                 ),
               ],
             ),
@@ -406,7 +403,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      message['role'] == 'user' ? '你' : 'Agent',
+                      message['role'] == 'user' ? '你' : 'AI',
                       style: TextStyle(
                         fontSize: 12,
                         color:
@@ -647,7 +644,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                       minLines: 1,
                       maxLines: 6,
                       decoration: const InputDecoration(
-                        hintText: '描述任务，或补充一条指令',
+                        hintText: '输入问题，或告诉我需要做什么',
                         border: InputBorder.none,
                         isDense: true,
                       ),
@@ -690,37 +687,58 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                   ),
                 Row(
                   children: [
-                    if (widget.chatContext != null && !agent.running)
-                      IconButton(
-                        tooltip: '引入 Chat 上下文',
-                        onPressed: _handover,
-                        icon: const Icon(Icons.add_comment_outlined, size: 18),
-                      ),
-                    if (!agent.running)
-                      IconButton(
-                        tooltip: '添加图片或文本附件',
-                        onPressed: agent.running ? null : _attach,
-                        icon: const Icon(Icons.attach_file, size: 18),
-                      ),
-                    widget.modeControl ??
-                        TextButton(
-                          onPressed: agent.running ? null : widget.onChat,
-                          child: const Text('Agent ▾'),
-                        ),
-                    if (agent.running)
-                      DropdownButton<String>(
-                        value: behavior,
-                        underline: const SizedBox.shrink(),
-                        items: const [
-                          DropdownMenuItem(value: 'steer', child: Text('补充指令')),
-                          DropdownMenuItem(
-                            value: 'follow_up',
-                            child: Text('排队发送'),
+                    Expanded(
+                      child: Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          AiModeButton(
+                            agentMode: true,
+                            enabled: !agent.running &&
+                                !agent.connecting &&
+                                !agent.compacting,
+                          ),
+                          if (!agent.running)
+                            IconButton(
+                              tooltip: '添加图片或文本附件',
+                              onPressed: agent.running ? null : _attach,
+                              icon: const Icon(Icons.attach_file, size: 18),
+                            ),
+                          if (agent.running)
+                            DropdownButton<String>(
+                              value: behavior,
+                              underline: const SizedBox.shrink(),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'steer',
+                                  child: Text('补充指令'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'follow_up',
+                                  child: Text('排队发送'),
+                                ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => behavior = value!),
+                            ),
+                          AgentWorkspaceControls(
+                            agent: agent,
+                            onShowContext: () => _toggleDetails(_wide),
+                          ),
+                          AgentModelSettingsButton(
+                            currentConfig: agent.providerConfig,
+                            currentThinking:
+                                agent.connected ? agent.thinkingLevel : null,
+                            enabled: !agent.running &&
+                                !agent.connecting &&
+                                !agent.compacting,
+                            onChanged: (config, thinking) async {
+                              await agent.configureModel(config, thinking);
+                              if (!agent.connected) await _openDocument();
+                            },
                           ),
                         ],
-                        onChanged: (value) => setState(() => behavior = value!),
                       ),
-                    const Spacer(),
+                    ),
                     if (agent.running)
                       IconButton(
                         tooltip: '停止任务',
@@ -728,7 +746,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                         icon: const Icon(Icons.stop_circle_outlined),
                       ),
                     IconButton(
-                      tooltip: agent.running ? '发送指令' : '发送任务',
+                      tooltip: agent.running ? '发送指令' : '发送',
                       onPressed: agent.connecting ? null : _send,
                       icon: const Icon(Icons.arrow_upward),
                     ),
@@ -737,36 +755,6 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
               ],
             ),
           ),
-        ),
-      );
-  Widget _history() => ListenableBuilder(
-        listenable: agent,
-        builder: (context, _) => ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            TextButton.icon(
-              onPressed: agent.running
-                  ? null
-                  : () => _guard(() => agent.selectSession(null)),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('新任务'),
-            ),
-            for (final session in agent.sessions)
-              ListTile(
-                dense: true,
-                leading: const Icon(Icons.chat_bubble_outline, size: 16),
-                title: Text(
-                  '${session['name'] ?? session['firstMessage'] ?? 'Agent 会话'}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: agent.running
-                    ? null
-                    : () => _guard(
-                          () => agent.selectSession('${session['id']}'),
-                        ),
-              ),
-          ],
         ),
       );
   Future<void> _guard(Future<void> Function() action) async {
@@ -787,11 +775,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
             const SizedBox(height: 12),
             Text('${agent.model}\n${agent.location}'),
             const SizedBox(height: 8),
-            Text(
-              agent.contextUsage == null
-                  ? '开始对话后显示上下文用量'
-                  : '上下文用量：${agent.contextUsage!['tokens'] ?? '—'} tokens',
-            ),
+            ...contextDetails(agent),
             TextButton.icon(
               onPressed: !agent.connected || agent.running || agent.compacting
                   ? null
@@ -800,11 +784,6 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
               label: Text(agent.compacting ? '正在压缩…' : '压缩上下文'),
             ),
             const Divider(),
-            if (handover != null)
-              InputChip(
-                label: const Text('已引入 Chat 上下文'),
-                onDeleted: () => setState(() => handover = null),
-              ),
             const Text('操作与产物', style: TextStyle(fontWeight: FontWeight.w600)),
             ..._artifacts(),
             for (final activity in agent.activities.values) _activity(activity),

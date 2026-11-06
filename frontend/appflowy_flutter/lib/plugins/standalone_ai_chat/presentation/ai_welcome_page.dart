@@ -14,7 +14,8 @@ import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
+import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 import '../../../generated/flowy_svgs.g.dart';
@@ -27,7 +28,7 @@ import 'widgets/ai_welcome_header.dart';
 
 /// AI 欢迎页，对应空聊天态的完整布局。
 /// AI welcome page for the empty-chat state.
-class AIWelcomePage extends StatelessWidget {
+class AIWelcomePage extends StatefulWidget {
   const AIWelcomePage({
     super.key,
     required this.onMessageSent,
@@ -48,75 +49,126 @@ class AIWelcomePage extends StatelessWidget {
   final VoidCallback? onChatHistoryTap;
 
   @override
+  State<AIWelcomePage> createState() => _AIWelcomePageState();
+}
+
+class _AIWelcomePageState extends State<AIWelcomePage> {
+  bool agentMode = false;
+  bool creating = false;
+  Future<void> _send(
+    String message,
+    AIModel? model,
+    List<ChatImage>? images,
+    bool thinking,
+    bool search,
+    bool knowledgeSearch,
+  ) async {
+    if (!agentMode) {
+      widget.onMessageSent(
+        message,
+        model,
+        images,
+        thinking,
+        search,
+        knowledgeSearch,
+      );
+      return;
+    }
+    if (creating) return;
+    setState(() => creating = true);
+    try {
+      final workspace = await AIChatViewService.getCurrentWorkspaceId();
+      if (workspace == null) throw StateError('请先打开工作区');
+      final view = await AIChatViewService.createAndOpenAIChat(
+        parentViewId: workspace,
+        initialMessage: message,
+        initialImages: images,
+        agentMode: true,
+      );
+      if (view == null) throw StateError('创建 Agent 对话失败，请重试');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => creating = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return AiModeShell(
-      chatId: 'welcome',
-      chat: Scaffold(
-        backgroundColor: AIWelcomeTheme.backgroundColor(context),
-        resizeToAvoidBottomInset:
-            UniversalPlatform.isMobile && !PlatformInfo.isTablet,
-        body: ColoredBox(
-          color: AIWelcomeTheme.backgroundColor(context),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-              return Stack(
-                children: [
-                  CustomScrollView(
-                    slivers: [
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Column(
-                          children: [
-                            // 顶部头像和欢迎文字区域 / Header section.
-                            AIWelcomeHeader(
-                              onChatHistoryTap: onChatHistoryTap,
+    return Scaffold(
+      backgroundColor: AIWelcomeTheme.backgroundColor(context),
+      resizeToAvoidBottomInset:
+          UniversalPlatform.isMobile && !PlatformInfo.isTablet,
+      body: ColoredBox(
+        color: AIWelcomeTheme.backgroundColor(context),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
+            return Stack(
+              children: [
+                CustomScrollView(
+                  slivers: [
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Column(
+                        children: [
+                          // 顶部头像和欢迎文字区域 / Header section.
+                          AIWelcomeHeader(
+                            onChatHistoryTap: widget.onChatHistoryTap,
+                          ),
+                          // 输入交互区域和使用提示 / Input area and usage hint.
+                          AiModeButton(
+                            agentMode: agentMode,
+                            enabled: !creating,
+                            onSelected: (value) =>
+                                setState(() => agentMode = value),
+                          ),
+                          AIInputArea(
+                            agentMode: agentMode,
+                            onMessageSent: _send,
+                            onChatHistoryTap: widget.onChatHistoryTap,
+                          ),
+                          const Spacer(),
+                          // 底部提示文字 / Footer disclaimer.
+                          Container(
+                            margin: EdgeInsets.only(
+                              bottom: 32 + viewInsetsBottom,
                             ),
-                            // 输入交互区域和使用提示 / Input area and usage hint.
-                            const AiModeButton(),
-                            AIInputArea(
-                              onMessageSent: onMessageSent,
-                              onChatHistoryTap: onChatHistoryTap,
+                            child: Text(
+                              '内容由 AI 生成，请仔细甄别',
+                              style: AIWelcomeTheme.tooltipStyle(context),
                             ),
-                            const Spacer(),
-                            // 底部提示文字 / Footer disclaimer.
-                            Container(
-                              margin: EdgeInsets.only(
-                                bottom: 32 + viewInsetsBottom,
-                              ),
-                              child: Text(
-                                '内容由 AI 生成，请仔细甄别',
-                                style: AIWelcomeTheme.tooltipStyle(context),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: UniversalPlatform.isMacOS ? 88 : 16,
-                    child:
-                        // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
-                        BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-                      builder: (context, state) {
-                        if (state.menuStatus != MenuStatus.hidden) {
-                          return const SizedBox.shrink();
-                        }
-                        final theme = AppFlowyTheme.of(context);
-                        return _AISidebarToggleButton(
-                          context: context,
-                          color: theme.iconColorScheme.primary,
-                        );
-                      },
                     ),
+                  ],
+                ),
+                Positioned(
+                  top: 10,
+                  left: UniversalPlatform.isMacOS ? 88 : 16,
+                  child:
+                      // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
+                      BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                    buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                    builder: (context, state) {
+                      if (state.menuStatus != MenuStatus.hidden) {
+                        return const SizedBox.shrink();
+                      }
+                      final theme = AppFlowyTheme.of(context);
+                      return _AISidebarToggleButton(
+                        context: context,
+                        color: theme.iconColorScheme.primary,
+                      );
+                    },
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

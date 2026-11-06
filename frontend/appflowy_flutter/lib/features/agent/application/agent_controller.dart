@@ -14,6 +14,8 @@ import 'package:uuid/uuid.dart';
 import 'agent_settings.dart';
 import 'agent_note_bridge.dart';
 import 'agent_transport.dart';
+import 'agent_model_preferences.dart';
+import 'agent_credits.dart';
 
 class AgentActivity {
   AgentActivity({
@@ -63,11 +65,30 @@ class AgentController extends ChangeNotifier {
   String? error;
   String streamingText = '';
   String model = '';
+  AiProviderConfig? providerConfig;
+
+  /// Gateway balance for the active model key; null for endpoints without credits.
+  AgentCredits? credits;
+  Future<void> refreshCredits() async {
+    final config = providerConfig;
+    if (config == null) return;
+    final value = await fetchAgentCredits(config);
+    if (identical(config, providerConfig)) {
+      credits = value;
+      changed();
+    }
+  }
+  String thinkingLevel = 'off';
   String location = '本机';
   String? authorizationUrl;
   HttpServer? _oauthRelay;
   Map<String, dynamic>? contextUsage;
-  List<Map<String, dynamic>> sessions = [];
+  Map<String, dynamic>? sessionTokens;
+  final activeTools = <String>[];
+
+  /// Per-document working directory and permission mode, editable at any time from the composer.
+  AgentWorkspaceConfig workspace = const AgentWorkspaceConfig();
+  bool get remote => _settings?.remoteUrl.isNotEmpty ?? false;
 
   void changed() {
     if (!_disposed) notifyListeners();
@@ -90,6 +111,7 @@ class AgentController extends ChangeNotifier {
         scope: const Uuid().v5(Namespace.url.value, currentIdentity),
       );
       _settings = settings;
+      workspace = await AgentWorkspaceConfig.load(chatId);
       _workspaceId = await AIChatViewService.getCurrentWorkspaceId();
       final provider = await const AiProviderConfigStorage().load();
       if (!provider.isComplete) {
@@ -130,14 +152,17 @@ class AgentController extends ChangeNotifier {
       final data = await command('initialize', {
         'config': {
           'scope': scope,
+          'documentId': chatId,
           'workspaceId': _workspaceId,
           'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
               ? '$base/v1'
               : base,
           'model': provider.modelName,
+          'supportsReasoning': provider.supportsReasoning,
+          'thinkingLevel': await AgentModelPreferences.loadThinking(),
           'apiKey': provider.apiKey,
-          'directory': settings.directory,
-          'allowCommands': settings.allowCommands,
+          'directory': workspace.directory,
+          'permissionMode': workspace.permissionMode,
           'mcpServers': settings.mcpServers,
           'mcpCredentials':
               await AgentSettings.loadMcpCredentials(settings.scope),
@@ -156,8 +181,9 @@ class AgentController extends ChangeNotifier {
       });
       if (epoch != _epoch) return;
       _readState(Map<String, dynamic>.from(data as Map));
+      providerConfig = provider;
+      unawaited(refreshCredits());
       connected = true;
-      await listSessions();
     } catch (e) {
       if (epoch == _epoch) {
         error = '$e';
@@ -187,13 +213,14 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  Future<void> send(
+  Future<bool> send(
     String text, {
     String behavior = 'prompt',
     List<Map<String, dynamic>> images = const [],
+    String? initialRequest,
   }) async {
     if (!connected) await connect();
-    if (!connected) return;
+    if (!connected) return false;
     if (await identity() != _identity) {
       await disconnect();
       throw StateError('账号或工作区已切换，请重新连接');
@@ -211,16 +238,22 @@ class AgentController extends ChangeNotifier {
     try {
       final disposition = await command(
         behavior,
-        {'message': text, if (images.isNotEmpty) 'images': images},
+        {
+          'message': text,
+          if (images.isNotEmpty) 'images': images,
+          if (initialRequest != null) 'initialRequest': initialRequest,
+        },
       );
       if (behavior != 'prompt' && disposition == 'queued') {
         queuedInputs.add(text);
         changed();
       }
+      return true;
     } catch (e) {
       error = '$e';
       if (behavior == 'prompt') running = false;
       changed();
+      return false;
     }
   }
 
@@ -238,6 +271,63 @@ class AgentController extends ChangeNotifier {
     }
   }
 
+  Future<void> configureModel(
+    AiProviderConfig provider,
+    String thinking,
+  ) async {
+    if (!connected) return;
+    if (await identity() != _identity) {
+      await disconnect();
+      throw StateError('账号或工作区已切换，请重新打开文档');
+    }
+    if (running || compacting) throw StateError('请等待当前任务结束后切换模型');
+    final base = provider.baseUrl
+        .replaceAll(RegExp(r'/+$'), '')
+        .replaceFirst(RegExp(r'/chat/completions$'), '');
+    final data = await command('configure_model', {
+      'config': {
+        'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
+            ? '$base/v1'
+            : base,
+        'model': provider.modelName,
+        'apiKey': provider.apiKey,
+        'supportsReasoning': provider.supportsReasoning,
+        'thinkingLevel': thinking,
+      },
+    });
+    _readState(Map<String, dynamic>.from(data as Map));
+    providerConfig = provider;
+    credits = null;
+    unawaited(refreshCredits());
+    changed();
+  }
+
+  /// Changing the directory reopens the same transcript; the mode applies to the next tool call.
+  Future<void> configureWorkspace({
+    String? directory,
+    String? permissionMode,
+  }) async {
+    final next = AgentWorkspaceConfig(
+      directory: directory ?? workspace.directory,
+      permissionMode: permissionMode ?? workspace.permissionMode,
+    );
+    if (next.directory != workspace.directory && (running || compacting)) {
+      throw StateError('请等待当前任务结束后切换工作目录');
+    }
+    if (connected) {
+      final data = await command('configure_workspace', {
+        'config': {
+          'directory': next.directory,
+          'permissionMode': next.permissionMode,
+        },
+      });
+      _readState(Map<String, dynamic>.from(data as Map));
+    }
+    await next.save(chatId);
+    workspace = next;
+    changed();
+  }
+
   Future<void> compact() async {
     compacting = true;
     changed();
@@ -249,24 +339,6 @@ class AgentController extends ChangeNotifier {
       compacting = false;
       changed();
     }
-  }
-
-  Future<void> listSessions() async {
-    final result = await command('list_sessions') as List;
-    sessions = result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-    changed();
-  }
-
-  Future<void> selectSession(String? id) async {
-    if (running) return;
-    final data = await command(
-      id == null ? 'new_session' : 'switch_session',
-      id == null ? {} : {'sessionId': id},
-    );
-    _readState(Map<String, dynamic>.from(data as Map));
-    activities.clear();
-    await listSessions();
-    changed();
   }
 
   void _receive(Map<String, dynamic> record) {
@@ -282,15 +354,11 @@ class AgentController extends ChangeNotifier {
       case 'state':
         _readState(Map<String, dynamic>.from(record['data'] as Map));
       case 'settled':
+        unawaited(refreshCredits());
         running = false;
         streamingText = '';
         interactions.clear();
         queuedInputs.clear();
-        unawaited(
-          listSessions().catchError((Object e) {
-            error = '$e';
-          }),
-        );
       case 'event':
         _event(Map<String, dynamic>.from(record['event'] as Map));
       case 'approval':
@@ -318,7 +386,9 @@ class AgentController extends ChangeNotifier {
           }
         }
       case 'notice':
-        if (record['kind'] == 'error') error = '${record['message']}';
+        if (record['kind'] == 'error') {
+          error = friendlyModelError('${record['message']}');
+        }
       case 'credentials_changed':
         if (_settings != null && record['value'] is String) {
           unawaited(
@@ -345,7 +415,15 @@ class AgentController extends ChangeNotifier {
     contextUsage = state['context'] == null
         ? null
         : Map<String, dynamic>.from(state['context'] as Map);
+    activeTools
+      ..clear()
+      ..addAll((state['tools'] as List? ?? []).cast<String>());
+    final stats = state['stats'] as Map?;
+    sessionTokens = stats?['tokens'] is Map
+        ? Map<String, dynamic>.from(stats!['tokens'])
+        : null;
     model = state['model'] as String? ?? model;
+    thinkingLevel = state['thinkingLevel'] as String? ?? thinkingLevel;
     location = state['location'] as String? ?? location;
     steps
       ..clear()
@@ -375,7 +453,9 @@ class AgentController extends ChangeNotifier {
           if (message['role'] == 'assistant') streamingText = '';
         }
         if (message['stopReason'] == 'error') {
-          error = '${message['errorMessage'] ?? '模型请求失败'}';
+          error = friendlyModelError(
+            '${message['errorMessage'] ?? '模型请求失败'}',
+          );
         }
       case 'tool_execution_start':
         activities['${event['toolCallId']}'] = AgentActivity(
@@ -440,6 +520,9 @@ class AgentController extends ChangeNotifier {
             connected &&
             await identity() == _identity,
         approve: (spec, args) async {
+          final mode = workspace.permissionMode;
+          final automatic =
+              mode == 'full' || (mode == 'auto' && !spec.destructive);
           if (args['page_id'] is String &&
               !(_settings?.disabledNoteTools.contains('get_page') ?? true)) {
             final snapshot = await tools.executeTool(
@@ -448,6 +531,8 @@ class AgentController extends ChangeNotifier {
             );
             if (!snapshot.isError) before = _resultText(snapshot.toJson());
           }
+          // Auto-approved writes still record the before/after snapshot for the details pane.
+          if (automatic) return true;
           final confirmation = Completer<bool>();
           final approval = {
             ...request,
@@ -592,9 +677,12 @@ class AgentController extends ChangeNotifier {
     streamingText = '';
     _identity = null;
     _settings = null;
-    sessions = [];
     contextUsage = null;
+    sessionTokens = null;
+    activeTools.clear();
     model = '';
+    providerConfig = null;
+    credits = null;
     if (!keepError) error = null;
     changed();
   }
