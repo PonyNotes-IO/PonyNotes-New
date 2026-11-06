@@ -11,6 +11,7 @@
 
 | 文档 | 主题 | 状态 | 日期 |
 | --- | --- | --- | --- |
+| [weknora-feishu-mvp-plan.md](./weknora-feishu-mvp-plan.md) | 小马接入 WeKnora 知识库并连接飞书：范围、实施任务、验收与权限边界 | 笔记检索服务已部署，聊天开关及 Windows Debug 构建通过；模型回答待用户验收，飞书待接入 | 2026-11-06 |
 | [bidirectional-links-client-design.md](./bidirectional-links-client-design.md) | 客户端双链笔记：数据模型、链接解析、反向索引、图谱、增量更新与一致性取舍 | 主流程已实现，性能预算待实测 | 2026-11-03 |
 | [mcp-implementation-plan.md](./mcp-implementation-plan.md) | 客户端本地 MCP 实现计划（二期第一章） | 设计中 | 2026-10-21 |
 | [mcp-note-links.md](./mcp-note-links.md) | MCP 双链笔记引用、反链与独立图谱工具（仅客户端） | 已实现，真实客户端验收待完成 | 2026-11-03 |
