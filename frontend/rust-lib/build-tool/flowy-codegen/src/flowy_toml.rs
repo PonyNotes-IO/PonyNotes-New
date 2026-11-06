@@ -33,6 +33,7 @@ fn default_protobuf_crate() -> String {
 
 impl FlowyConfig {
   pub fn from_toml_file(path: &Path) -> Self {
+    println!("cargo:rerun-if-changed={}", path.display());
     let content = fs::read_to_string(path).unwrap();
     let config: FlowyConfig = toml::from_str(content.as_ref()).unwrap();
     config

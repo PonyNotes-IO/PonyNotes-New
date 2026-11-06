@@ -20,6 +20,8 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 pub fn dart_gen(crate_name: &str) {
+  println!("cargo:rerun-if-env-changed=CARGO_MAKE_WORKING_DIRECTORY");
+  println!("cargo:rerun-if-env-changed=FLUTTER_FLOWY_SDK_PATH");
   // 1. generate the proto files to proto_file_dir
   #[cfg(feature = "proto_gen")]
   let proto_crates = gen_proto_files(crate_name);
@@ -257,7 +259,7 @@ fn generate_ts_protobuf_files(
 /// 若未设置 CARGO_MAKE_WORKING_DIRECTORY / FLUTTER_FLOWY_SDK_PATH，则从 CARGO_MANIFEST_DIR
 /// 向上查找包含 appflowy_flutter 的目录作为 frontend 根，使直接 cargo build 也能生成 Dart。
 #[cfg(feature = "dart")]
-fn resolve_dart_output_base() -> Option<(PathBuf, String)> {
+pub(crate) fn resolve_dart_output_base() -> Option<(PathBuf, String)> {
   let from_work = std::env::var("CARGO_MAKE_WORKING_DIRECTORY").ok();
   let from_sdk = std::env::var("FLUTTER_FLOWY_SDK_PATH").ok();
   if let (Some(work), Some(sdk)) = (from_work, from_sdk) {

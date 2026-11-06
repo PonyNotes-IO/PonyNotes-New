@@ -14,15 +14,10 @@ use crate::util::{is_crate_dir, is_hidden, path_string_with_component, read_file
 use super::event_template::*;
 
 pub fn r#gen(crate_name: &str) {
-  if std::env::var("CARGO_MAKE_WORKING_DIRECTORY").is_err() {
-    println!("CARGO_MAKE_WORKING_DIRECTORY was not set, skip generate dart pb");
+  let Some((working_dir, sdk_path)) = crate::protobuf_file::resolve_dart_output_base() else {
+    println!("Dart event output unknown, skip generation");
     return;
-  }
-
-  if std::env::var("FLUTTER_FLOWY_SDK_PATH").is_err() {
-    println!("FLUTTER_FLOWY_SDK_PATH was not set, skip generate dart pb");
-    return;
-  }
+  };
 
   let crate_path = std::fs::canonicalize(".")
     .unwrap()
@@ -45,16 +40,10 @@ pub fn r#gen(crate_name: &str) {
     }
   }
 
-  let dart_event_folder: PathBuf = [
-    &std::env::var("CARGO_MAKE_WORKING_DIRECTORY").unwrap(),
-    &std::env::var("FLUTTER_FLOWY_SDK_PATH").unwrap(),
-    "lib",
-    "dispatch",
-    "dart_event",
-    crate_name,
-  ]
-  .iter()
-  .collect();
+  let dart_event_folder: PathBuf = working_dir
+    .join(sdk_path)
+    .join("lib/dispatch/dart_event")
+    .join(crate_name);
 
   if !dart_event_folder.as_path().exists() {
     std::fs::create_dir_all(dart_event_folder.as_path()).unwrap();
