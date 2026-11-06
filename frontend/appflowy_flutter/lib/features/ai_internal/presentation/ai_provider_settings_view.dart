@@ -47,11 +47,17 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   }
 
   Future<void> _load() async {
-    final config = await const AiProviderConfigStorage().load();
-    _serverUrlController.text = config.baseUrl;
-    _modelController.text = config.modelName;
-    _apiKeyController.text = config.apiKey;
-    if (mounted) setState(() => _loading = false);
+    try {
+      final config = await const AiProviderConfigStorage().load();
+      if (!mounted) return;
+      _serverUrlController.text = config.baseUrl;
+      _modelController.text = config.modelName;
+      _apiKeyController.text = config.apiKey;
+    } catch (_) {
+      if (mounted) setState(() => _testMessage = '无法读取系统安全存储，请解锁系统钥匙串后重试。');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   AiProviderConfig _currentConfig() => AiProviderConfig(
@@ -62,13 +68,24 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    await const AiProviderConfigStorage().save(_currentConfig());
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _testOk = true;
-      _testMessage = '已保存';
-    });
+    try {
+      await const AiProviderConfigStorage().save(_currentConfig());
+      if (mounted) {
+        setState(() {
+          _testOk = true;
+          _testMessage = '已保存';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '保存失败，请检查系统安全存储后重试。';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   /// 用当前填写的配置发一次最小请求，只验证通路与鉴权，不实际生成笔记操作。
@@ -91,7 +108,11 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         return;
       }
       // 直接问一句最轻量的话，不触发任何工具。用未保存的表单值，便于先测后存。
-      await service.ask(question: '你好', configOverride: config);
+      await service.ask(
+        question: '你好',
+        configOverride: config,
+        withTools: false,
+      );
       if (mounted) {
         setState(() {
           _testOk = true;

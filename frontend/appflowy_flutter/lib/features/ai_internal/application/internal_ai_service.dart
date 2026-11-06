@@ -195,6 +195,7 @@ class InternalAiService {
     bool confirmedWrite = false,
     Future<bool> Function(AiToolCallRecord pending)? confirmWrite,
     AiProviderConfig? configOverride,
+    bool withTools = true,
   }) async {
     _canceled = false;
     final config = configOverride ?? await loadConfig();
@@ -206,7 +207,12 @@ class InternalAiService {
     }
 
     final messages = <Map<String, dynamic>>[
-      {'role': 'system', 'content': buildSystemPrompt()},
+      {
+        'role': 'system',
+        'content': withTools
+            ? buildSystemPrompt()
+            : '你是小马笔记的 Chat 助手。根据用户提供的内容回答，不执行工具或修改笔记。需要操作笔记时，说明可切换到 Agent 模式。',
+      },
       ...history,
       {'role': 'user', 'content': question},
     ];
@@ -216,11 +222,18 @@ class InternalAiService {
       final response = await _postChatCompletion(
         config,
         messages,
+        withTools: withTools,
       );
 
       final choice = _firstChoice(response);
       final message = choice['message'] as Map<String, dynamic>? ?? const {};
       final toolCalls = (message['tool_calls'] as List<dynamic>?) ?? const [];
+      if (!withTools && toolCalls.isNotEmpty) {
+        throw InternalAiException(
+          InternalAiErrorKind.serverError,
+          'Chat 模式不能执行工具，请切换到 Agent 模式后重试。',
+        );
+      }
 
       if (toolCalls.isEmpty) {
         return InternalAiResult(

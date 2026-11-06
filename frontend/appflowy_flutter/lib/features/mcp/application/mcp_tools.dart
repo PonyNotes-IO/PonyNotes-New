@@ -100,6 +100,7 @@ class McpTools {
     required this.version,
     this.isAgentChannel = false,
     this.agentName,
+    this.isToolAllowed,
     DocumentService? documentService,
     this.noteLinks,
   }) : _documentService = documentService ?? DocumentService();
@@ -113,6 +114,9 @@ class McpTools {
   /// 是否为外部 Agent 通道（MCP Server）。为 true 时按权限表过滤工具，
   /// 并把每次调用写入审计日志；内部 AI 走 `executeTool`，不受权限开关限制。
   final bool isAgentChannel;
+  final bool Function(String tool)? isToolAllowed;
+  bool _allowed(String tool) =>
+      isToolAllowed?.call(tool) ?? McpPermissions.instance.isAllowed(tool);
 
   /// 当前连接的 Agent 名称，来自 MCP initialize 上报的 clientInfo。
   final String Function()? agentName;
@@ -769,7 +773,7 @@ class McpTools {
   /// Agent 通道会跳过被用户关掉的工具：不对外声明，Agent 也就看不到。
   void registerAll(McpServer server) {
     for (final spec in toolSpecs) {
-      if (isAgentChannel && !McpPermissions.instance.isAllowed(spec.name)) {
+      if (isAgentChannel && !_allowed(spec.name)) {
         continue;
       }
       server.registerTool(
@@ -791,7 +795,7 @@ class McpTools {
     final stopwatch = Stopwatch()..start();
     final target = _targetIds(args);
     try {
-      final result = isAgentChannel && !McpPermissions.instance.isAllowed(name)
+      final result = isAgentChannel && !_allowed(name)
           ? _error('permission_denied', '该工具的权限已关闭：$name。')
           : await handler(args).timeout(_toolTimeout);
       Log.info(

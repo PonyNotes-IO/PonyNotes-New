@@ -2,11 +2,15 @@ import 'package:appflowy/features/ai_internal/application/internal_ai_chat_store
 import 'package:appflowy/features/ai_internal/presentation/ai_chat_view.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../widget_test/widget_test_wrapper.dart';
 
 void main() {
-  setUp(() => InternalAiChatStore.instance.reset());
+  setUp(() {
+    InternalAiChatStore.instance.reset();
+    FlutterSecureStorage.setMockInitialValues({});
+  });
 
   testWidgets('未配置模型时显示提示，输入框与发送按钮可用', (tester) async {
     SharedPreferences.setMockInitialValues({});

@@ -14,6 +14,7 @@ import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 import '../../../generated/flowy_svgs.g.dart';
@@ -47,67 +48,74 @@ class AIWelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AIWelcomeTheme.backgroundColor(context),
-      resizeToAvoidBottomInset:
-          UniversalPlatform.isMobile && !PlatformInfo.isTablet,
-      body: ColoredBox(
-        color: AIWelcomeTheme.backgroundColor(context),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
-            return Stack(children: [
-              CustomScrollView(
-                slivers: [
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Column(
-                      children: [
-                        // 顶部头像和欢迎文字区域 / Header section.
-                        AIWelcomeHeader(
-                          onChatHistoryTap: onChatHistoryTap,
+    return AiModeShell(
+      chatId: 'welcome',
+      chat: Scaffold(
+        backgroundColor: AIWelcomeTheme.backgroundColor(context),
+        resizeToAvoidBottomInset:
+            UniversalPlatform.isMobile && !PlatformInfo.isTablet,
+        body: ColoredBox(
+          color: AIWelcomeTheme.backgroundColor(context),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
+              return Stack(
+                children: [
+                  CustomScrollView(
+                    slivers: [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Column(
+                          children: [
+                            // 顶部头像和欢迎文字区域 / Header section.
+                            AIWelcomeHeader(
+                              onChatHistoryTap: onChatHistoryTap,
+                            ),
+                            // 输入交互区域和使用提示 / Input area and usage hint.
+                            const AiModeButton(),
+                            AIInputArea(
+                              onMessageSent: onMessageSent,
+                              onChatHistoryTap: onChatHistoryTap,
+                            ),
+                            const Spacer(),
+                            // 底部提示文字 / Footer disclaimer.
+                            Container(
+                              margin: EdgeInsets.only(
+                                bottom: 32 + viewInsetsBottom,
+                              ),
+                              child: Text(
+                                '内容由 AI 生成，请仔细甄别',
+                                style: AIWelcomeTheme.tooltipStyle(context),
+                              ),
+                            ),
+                          ],
                         ),
-                        // 输入交互区域和使用提示 / Input area and usage hint.
-                        AIInputArea(
-                          onMessageSent: onMessageSent,
-                          onChatHistoryTap: onChatHistoryTap,
-                        ),
-                        const Spacer(),
-                        // 底部提示文字 / Footer disclaimer.
-                        Container(
-                          margin:
-                              EdgeInsets.only(bottom: 32 + viewInsetsBottom),
-                          child: Text(
-                            '内容由 AI 生成，请仔细甄别',
-                            style: AIWelcomeTheme.tooltipStyle(context),
-                          ),
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    top: 10,
+                    left: UniversalPlatform.isMacOS ? 88 : 16,
+                    child:
+                        // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
+                        BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                      buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                      builder: (context, state) {
+                        if (state.menuStatus != MenuStatus.hidden) {
+                          return const SizedBox.shrink();
+                        }
+                        final theme = AppFlowyTheme.of(context);
+                        return _AISidebarToggleButton(
+                          context: context,
+                          color: theme.iconColorScheme.primary,
+                        );
+                      },
                     ),
                   ),
                 ],
-              ),
-              Positioned(
-                top: 10,
-                left: UniversalPlatform.isMacOS ? 88 : 16,
-                child:
-                    // 打开侧边栏按钮（仅在侧边栏隐藏时显示）
-                    BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                  buildWhen: (p, c) => p.menuStatus != c.menuStatus,
-                  builder: (context, state) {
-                    if (state.menuStatus != MenuStatus.hidden) {
-                      return const SizedBox.shrink();
-                    }
-                    final theme = AppFlowyTheme.of(context);
-                    return _AISidebarToggleButton(
-                      context: context,
-                      color: theme.iconColorScheme.primary,
-                    );
-                  },
-                ),
-              ),
-            ]);
-          },
+              );
+            },
+          ),
         ),
       ),
     );

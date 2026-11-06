@@ -86,6 +86,30 @@ http.Response _completion(Map<String, dynamic> message) {
 }
 
 void main() {
+  test(
+      'Chat cannot execute a tool even if the model returns an unsolicited tool call',
+      () async {
+    final tools = _FakeMcpTools();
+    final service = _TestableInternalAi(
+      setting: _validSetting(),
+      tools: tools,
+      client: MockClient((request) async {
+        expect((jsonDecode(request.body) as Map).containsKey('tools'), false);
+        return _completion({
+          'tool_calls': [
+            {
+              'id': 'unexpected',
+              'function': {'name': 'delete_page', 'arguments': '{}'}
+            }
+          ]
+        });
+      }),
+    );
+    await expectLater(service.ask(question: 'hello', withTools: false),
+        throwsA(isA<InternalAiException>()));
+    expect(tools.executed, isEmpty);
+    service.dispose();
+  });
   test('structured extraction sends no tools and decodes UTF-8 evidence',
       () async {
     final tools = _FakeMcpTools();

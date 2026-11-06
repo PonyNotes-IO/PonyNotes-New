@@ -4,8 +4,9 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
 
-/// 内部 AI 的对话界面：一问一答，工具调用逐条展示，写操作先确认。
+/// 内部模型的 Chat 入口；工具执行与审批由 Agent 模式承接。
 ///
 /// 模型地址 / 模型名 / API Key 由「内部 AI 模型」页配置；未配置时这里只提示，不发请求。
 class AiChatView extends StatefulWidget {
@@ -45,9 +46,13 @@ class _AiChatViewState extends State<AiChatView> {
   }
 
   Future<void> _refreshConfigured() async {
-    final config = await _service.loadConfig();
-    if (!mounted) return;
-    setState(() => _configured = _service.isConfigured(config));
+    try {
+      final config = await _service.loadConfig();
+      if (!mounted) return;
+      setState(() => _configured = _service.isConfigured(config));
+    } catch (_) {
+      if (mounted) _store.setError('无法读取模型凭据，请解锁系统安全存储后重试。');
+    }
   }
 
   Future<void> _send() async {
@@ -64,7 +69,7 @@ class _AiChatViewState extends State<AiChatView> {
       final result = await _service.ask(
         question: question,
         history: List<Map<String, dynamic>>.of(_store.history),
-        confirmWrite: _confirmWrite,
+        withTools: false,
       );
       _store.addHistory(question, result.text);
       if (!mounted) return;
@@ -87,43 +92,6 @@ class _AiChatViewState extends State<AiChatView> {
     }
   }
 
-  /// 写操作确认：执行前弹一次框，拒绝则整轮中止，工具不会执行。
-  Future<bool> _confirmWrite(AiToolCallRecord pending) async {
-    if (!mounted) return false;
-    final allowed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认写操作'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('AI 想执行：${pending.name}'),
-              const VSpace(8),
-              Text(
-                _argumentSummary(pending.arguments),
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('执行'),
-          ),
-        ],
-      ),
-    );
-    return allowed ?? false;
-  }
-
-
   /// markdown_widget 的默认主题不跟随应用主题，深色模式下代码块和引用几乎是白的。
   MarkdownConfig _markdownConfig(AppFlowyThemeData theme) {
     final primary = theme.textColorScheme.primary;
@@ -133,9 +101,15 @@ class _AiChatViewState extends State<AiChatView> {
     return MarkdownConfig(
       configs: [
         PConfig(textStyle: body.copyWith(fontSize: 13)),
-        H1Config(style: body.copyWith(fontSize: 20, fontWeight: FontWeight.bold)),
-        H2Config(style: body.copyWith(fontSize: 17, fontWeight: FontWeight.bold)),
-        H3Config(style: body.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        H1Config(
+          style: body.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        H2Config(
+          style: body.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
+        ),
+        H3Config(
+          style: body.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
         CodeConfig(style: TextStyle(backgroundColor: codeBackground)),
         PreConfig(
           decoration: BoxDecoration(
@@ -176,56 +150,63 @@ class _AiChatViewState extends State<AiChatView> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: FlowyText(
-                  '内部 AI 对话',
-                  fontSize: 20,
-                  color: theme.textColorScheme.primary,
-                ),
-              ),
-              if (_store.turns.isNotEmpty)
-                TextButton(
-                  onPressed: _sending ? null : _store.reset,
-                  child: const Text('新对话'),
-                ),
-            ],
-          ),
-          const VSpace(4),
-          FlowyText(
-            '用你配置的模型理解意图，并能读写本机笔记。写操作会先问你。',
-            fontSize: 12,
-            color: theme.textColorScheme.secondary,
-          ),
-          const VSpace(12),
-          if (!_configured) _buildNotConfigured(context),
-          Expanded(
-            child: _store.turns.isEmpty && _store.error == null
-                ? _buildEmpty(context)
-                : ListView.builder(
-                    controller: _scrollController,
-                    itemCount: _store.turns.length,
-                    itemBuilder: (context, index) =>
-                        _buildTurn(context, _store.turns[index]),
+    return AiModeShell(
+      chatId: 'internal',
+      chatBusy: _sending,
+      chatContext: () => _store.turns
+          .map((turn) => '${turn.isUser ? '用户' : 'AI'}：${turn.text}')
+          .join('\n\n'),
+      chat: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: FlowyText(
+                    '内部 AI 对话',
+                    fontSize: 20,
+                    color: theme.textColorScheme.primary,
                   ),
-          ),
-          if (_store.error != null) ...[
-            const VSpace(8),
-            FlowyText(
-              _store.error!,
-              fontSize: 13,
-              color: Theme.of(context).colorScheme.error,
+                ),
+                if (_store.turns.isNotEmpty)
+                  TextButton(
+                    onPressed: _sending ? null : _store.reset,
+                    child: const Text('新对话'),
+                  ),
+              ],
             ),
+            const VSpace(4),
+            FlowyText(
+              'Chat 用于问答；切换 Agent 可检索和整理笔记，写入前会确认。',
+              fontSize: 12,
+              color: theme.textColorScheme.secondary,
+            ),
+            const VSpace(12),
+            if (!_configured) _buildNotConfigured(context),
+            Expanded(
+              child: _store.turns.isEmpty && _store.error == null
+                  ? _buildEmpty(context)
+                  : ListView.builder(
+                      controller: _scrollController,
+                      itemCount: _store.turns.length,
+                      itemBuilder: (context, index) =>
+                          _buildTurn(context, _store.turns[index]),
+                    ),
+            ),
+            if (_store.error != null) ...[
+              const VSpace(8),
+              FlowyText(
+                _store.error!,
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ],
+            const VSpace(8),
+            _buildComposer(context),
           ],
-          const VSpace(8),
-          _buildComposer(context),
-        ],
+        ),
       ),
     );
   }
@@ -250,7 +231,7 @@ class _AiChatViewState extends State<AiChatView> {
     final theme = AppFlowyTheme.of(context);
     return Center(
       child: FlowyText(
-        '可以试试：\n· 帮我总结最近改过的页面\n· 在我的空间里找「会议」相关的笔记',
+        '可以试试：\n· 帮我解释一个概念\n· 总结我粘贴的这段文字',
         fontSize: 13,
         color: theme.textColorScheme.secondary,
         textAlign: TextAlign.center,
@@ -308,6 +289,7 @@ class _AiChatViewState extends State<AiChatView> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        const AiModeButton(),
         Expanded(
           child: TextField(
             controller: _controller,
@@ -316,7 +298,7 @@ class _AiChatViewState extends State<AiChatView> {
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => _send(),
             decoration: const InputDecoration(
-              hintText: '问点什么，或者让它帮你整理笔记',
+              hintText: '输入问题，或粘贴需要总结的内容',
               border: OutlineInputBorder(),
               isDense: true,
             ),
@@ -325,9 +307,7 @@ class _AiChatViewState extends State<AiChatView> {
         const HSpace(8),
         FilledButton(
           onPressed: _sending ? _stop : _send,
-          child: _sending
-              ? const Icon(Icons.stop, size: 18)
-              : const Text('发送'),
+          child: _sending ? const Icon(Icons.stop, size: 18) : const Text('发送'),
         ),
       ],
     );

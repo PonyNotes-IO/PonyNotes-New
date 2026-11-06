@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// 内部 AI 使用的模型服务配置：地址、模型名、API Key。
 ///
@@ -39,33 +40,43 @@ class AiProviderConfig {
   }
 }
 
-/// 本地持久化：`SharedPreferences`，三个键独立于 Ollama 设置。
+/// 地址/模型保留原配置；凭据迁入系统安全存储，成功后移除旧明文键。
 class AiProviderConfigStorage {
   const AiProviderConfigStorage();
 
   static const _baseUrlKey = 'ai_internal.base_url';
   static const _modelKey = 'ai_internal.model';
   static const _apiKeyKey = 'ai_internal.api_key';
+  static const _secure = FlutterSecureStorage();
 
   Future<AiProviderConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
+    var apiKey = await _secure.read(key: _apiKeyKey);
+    final legacy = prefs.getString(_apiKeyKey);
+    if (apiKey == null && legacy != null) {
+      await _secure.write(key: _apiKeyKey, value: legacy);
+      apiKey = legacy;
+    }
+    if (legacy != null) await prefs.remove(_apiKeyKey);
     return AiProviderConfig(
       baseUrl: prefs.getString(_baseUrlKey) ?? '',
       modelName: prefs.getString(_modelKey) ?? '',
-      apiKey: prefs.getString(_apiKeyKey) ?? '',
+      apiKey: apiKey ?? '',
     );
   }
 
   Future<void> save(AiProviderConfig config) async {
     final prefs = await SharedPreferences.getInstance();
+    await _secure.write(key: _apiKeyKey, value: config.apiKey.trim());
+    await prefs.remove(_apiKeyKey);
     await prefs.setString(_baseUrlKey, config.baseUrl.trim());
     await prefs.setString(_modelKey, config.modelName.trim());
-    await prefs.setString(_apiKeyKey, config.apiKey.trim());
   }
 
   /// 只用于测试与「清空配置」。
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
+    await _secure.delete(key: _apiKeyKey);
     await prefs.remove(_baseUrlKey);
     await prefs.remove(_modelKey);
     await prefs.remove(_apiKeyKey);

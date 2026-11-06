@@ -1,4 +1,5 @@
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
@@ -56,6 +57,7 @@ class BackendAuthService implements AuthService {
   Future<void> signOut({
     Map<String, String> params = const {},
   }) async {
+    await AgentController.revokeAll();
     await UserEventSignOut().send();
     return;
   }

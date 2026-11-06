@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:appflowy/features/agent/application/agent_controller.dart';
 
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -761,7 +762,8 @@ class UserBackendService implements IUserBackendService {
     return UserEventSignInWithEmailPassword(payload).send();
   }
 
-  static Future<FlowyResult<void, FlowyError>> signOut() {
+  static Future<FlowyResult<void, FlowyError>> signOut() async {
+    await AgentController.revokeAll();
     return UserEventSignOut().send();
   }
 
@@ -804,7 +806,8 @@ class UserBackendService implements IUserBackendService {
   Future<FlowyResult<void, FlowyError>> openWorkspace(
     String workspaceId,
     WorkspaceTypePB workspaceType,
-  ) {
+  ) async {
+    await AgentController.revokeAll();
     final payload = OpenUserWorkspacePB()
       ..workspaceId = workspaceId
       ..workspaceType = workspaceType;

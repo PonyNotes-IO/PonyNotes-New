@@ -1,9 +1,7 @@
 import 'package:appflowy/ai/ai.dart';
 import 'package:flowy_infra/platform_extension.dart';
 // PonyNotes: 添加AIPromptInputBloc导入以获取深度思考和联网搜索状态
-import 'package:appflowy/ai/service/ai_prompt_input_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/application/ai_chat_prelude.dart';
-import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_input/mobile_chat_input.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
@@ -13,6 +11,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_shell.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class ChatFooter extends StatefulWidget {
@@ -71,17 +70,26 @@ class _ChatFooterState extends State<ChatFooter> {
                         builder: (context, canSendMessage) {
                           final chatBloc = context.read<ChatBloc>();
 
-                          return PlatformInfo.isDesktopOrTablet
-                              ? _buildDesktopInput(
-                                  context,
-                                  chatBloc,
-                                  canSendMessage,
-                                )
-                              : _buildMobileInput(
-                                  context,
-                                  chatBloc,
-                                  canSendMessage,
-                                );
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: AiModeButton(),
+                              ),
+                              PlatformInfo.isDesktopOrTablet
+                                  ? _buildDesktopInput(
+                                      context,
+                                      chatBloc,
+                                      canSendMessage,
+                                    )
+                                  : _buildMobileInput(
+                                      context,
+                                      chatBloc,
+                                      canSendMessage,
+                                    ),
+                            ],
+                          );
                         },
                       ),
                     );
