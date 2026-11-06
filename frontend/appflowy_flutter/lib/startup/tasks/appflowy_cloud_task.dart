@@ -32,6 +32,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
 import 'package:window_manager/window_manager.dart';
@@ -71,8 +72,8 @@ class AppFlowyCloudDeepLink {
         _deepLinkSubscription.cancel();
       },
     );
-    if (Platform.isWindows) {
-      // register deep link for Windows
+    if (Platform.isWindows && !kDebugMode) {
+      // Browser callbacks keep using the installed release.
       registerProtocolHandler(appflowyDeepLinkSchema);
     }
   }
@@ -84,7 +85,9 @@ class AppFlowyCloudDeepLink {
     final appData = Platform.environment['APPDATA'] ??
         Platform.environment['LOCALAPPDATA'] ??
         '.';
-    return '$appData\\PonyNotes\\deep_link.txt';
+    // Must match kDeepLinkFileName in windows/runner/app_instance.h.
+    const fileName = kDebugMode ? 'deep_link_debug.txt' : 'deep_link.txt';
+    return '$appData\\PonyNotes\\$fileName';
   }
 
   void _startDeepLinkPolling() {

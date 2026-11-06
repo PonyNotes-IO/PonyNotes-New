@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "app_instance.h"
 #include "flutter_window.h"
 #include "utils.h"
 
@@ -87,8 +88,7 @@ std::string CheckPendingDeepLink() {
   }
 
   std::string dir_path = std::string(app_data_env) + "\\PonyNotes";
-  std::string file_path =
-      dir_path + "\\deep_link.txt";
+  std::string file_path = dir_path + "\\" + kDeepLinkFileName;
 
   std::ifstream in_file(file_path);
   if (!in_file.is_open()) {
@@ -123,7 +123,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     }
   }
 
-  HANDLE h_mutex_instance = CreateMutex(NULL, TRUE, L"PonyNotesMutex");
+  HANDLE h_mutex_instance = CreateMutex(NULL, TRUE, kInstanceMutexName);
   bool is_first_instance = (GetLastError() != ERROR_ALREADY_EXISTS);
 
   if (!is_first_instance) {
@@ -132,7 +132,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       if (app_data_env != nullptr) {
         std::string dir_path = std::string(app_data_env) + "\\PonyNotes";
         CreateDirectoryA(dir_path.c_str(), NULL);
-        std::string file_path = dir_path + "\\deep_link.txt";
+        std::string file_path = dir_path + "\\" + kDeepLinkFileName;
         std::ofstream out_file(file_path);
         if (out_file.is_open()) {
           out_file << extracted_url;
@@ -142,7 +142,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       }
     }
 
-    HWND hwnd = FindWindowA(NULL, "PonyNotes");
+    HWND hwnd = FindWindowW(kWindowClassName, nullptr);
     if (hwnd != NULL) {
       ShowWindow(hwnd, SW_RESTORE);
       SetForegroundWindow(hwnd);
@@ -173,7 +173,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   const Win32Window::Size size =
       Win32Window::GetStartupSize(Win32Window::Size(1280, 720));
 
-  if (!window.Create(L"PonyNotes", origin, size)) {
+  if (!window.Create(kWindowTitle, origin, size)) {
     ReleaseMutex(h_mutex_instance);
     return EXIT_FAILURE;
   }

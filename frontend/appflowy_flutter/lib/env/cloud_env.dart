@@ -185,8 +185,7 @@ class AppFlowyCloudSharedEnv {
   AuthenticatorType get authenticatorType => _authenticatorType;
 
   static Future<AppFlowyCloudSharedEnv> fromEnv() async {
-    // Always use the cloud settings from the .env file.
-    // Environment is determined at compile time, not runtime.
+    // Env selects the test server in debug and generated .env values otherwise.
     final authenticatorType =
         AuthenticatorType.fromValue(Env.authenticatorType);
 

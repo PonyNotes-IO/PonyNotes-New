@@ -6,6 +6,10 @@ part 'env.g.dart';
 
 @Envied(path: '.env')
 abstract class Env {
+  // Select here so direct Env readers and the Rust SDK share one environment.
+  // Profile/release continue using the generated .env values.
+  static const String debugCloudUrl = 'http://47.94.42.183';
+
   // Disable custom cloud configuration - environment is determined at compile time
   // 禁用自定义云配置 - 环境在编译时确定，用户不能手动切换
   static bool get enableCustomCloud {
@@ -17,7 +21,7 @@ abstract class Env {
     varName: 'AUTHENTICATOR_TYPE',
     defaultValue: 2,
   )
-  static const int authenticatorType = _Env.authenticatorType;
+  static const int authenticatorType = kDebugMode ? 3 : _Env.authenticatorType;
 
   /// AppFlowy Cloud Configuration
   @EnviedField(
@@ -25,8 +29,7 @@ abstract class Env {
     varName: 'APPFLOWY_CLOUD_URL',
     defaultValue: 'https://api.xiaomabiji.com',
   )
-  static const String afCloudUrl =
-      kDebugMode ? 'http://47.94.42.183' : _Env.afCloudUrl;
+  static const String afCloudUrl = kDebugMode ? debugCloudUrl : _Env.afCloudUrl;
 
   @EnviedField(
     obfuscate: false,
@@ -48,5 +51,5 @@ abstract class Env {
     defaultValue: 'https://www.xiaomabiji.com',
   )
   static const String baseWebDomain =
-      kDebugMode ? 'http://47.94.42.183' : _Env.baseWebDomain;
+      kDebugMode ? debugCloudUrl : _Env.baseWebDomain;
 }

@@ -3,6 +3,7 @@
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
+#include "app_instance.h"
 #include "resource.h"
 
 #include "app_links/app_links_plugin_c_api.h"
@@ -17,8 +18,6 @@ namespace {
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
-
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
 ///
