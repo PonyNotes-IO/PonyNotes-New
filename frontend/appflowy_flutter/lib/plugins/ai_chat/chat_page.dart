@@ -40,17 +40,20 @@ class AIChatPage extends StatelessWidget {
     String? preferredModelId;
     bool enableDeepThinking = false;
     bool enableWebSearch = false;
+    bool enableKnowledgeSearch = false;
     List<String>? initialImagePaths;
-    
+
     if (viewExtra.isNotEmpty) {
       try {
         // view.extra可能是JSON字符串，尝试解析
         final extraData = json.decode(viewExtra) as Map<String, dynamic>;
+        enableKnowledgeSearch = extraData['enable_knowledge_search'] == true;
         initialMessage = extraData['initial_message'] as String?;
         preferredModelId = extraData['preferred_model'] as String?;
 
         // 读取深度思考开关
-        final enableDeepThinkingStr = extraData['enable_deep_thinking'] as String?;
+        final enableDeepThinkingStr =
+            extraData['enable_deep_thinking'] as String?;
         if (enableDeepThinkingStr == 'true') {
           enableDeepThinking = true;
         }
@@ -72,7 +75,7 @@ class AIChatPage extends StatelessWidget {
         // 解析失败，静默忽略
       }
     }
-    
+
     return MultiBlocProvider(
       providers: [
         /// [ChatBloc] is used to handle chat messages including send/receive message
@@ -85,7 +88,8 @@ class AIChatPage extends StatelessWidget {
               preferredModelId: preferredModelId,
               enableDeepThinking: enableDeepThinking,
               enableWebSearch: enableWebSearch,
-              initialImagePaths: initialImagePaths,  // 传递图片路径
+              enableKnowledgeSearch: enableKnowledgeSearch,
+              initialImagePaths: initialImagePaths, // 传递图片路径
             );
             // 异步获取 workspace ID 并刷新使用情况
             AIChatViewService.getCurrentWorkspaceId().then((workspaceId) {
@@ -100,6 +104,7 @@ class AIChatPage extends StatelessWidget {
         /// [AIPromptInputBloc] is used to handle the user prompt
         BlocProvider(
           create: (_) => AIPromptInputBloc(
+            enableKnowledgeSearch: enableKnowledgeSearch,
             objectId: view.id,
             predefinedFormat: PredefinedFormat(
               imageFormat: ImageFormat.text,
@@ -124,7 +129,8 @@ class AIChatPage extends StatelessWidget {
             child: Shortcuts(
               shortcuts: {
                 // 定义快捷键，不影响普通输入
-                const SingleActivator(LogicalKeyboardKey.escape): _StopStreamIntent(),
+                const SingleActivator(LogicalKeyboardKey.escape):
+                    _StopStreamIntent(),
                 const SingleActivator(
                   LogicalKeyboardKey.keyC,
                   control: true,

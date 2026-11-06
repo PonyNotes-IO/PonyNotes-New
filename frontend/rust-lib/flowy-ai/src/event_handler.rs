@@ -39,6 +39,7 @@ pub(crate) async fn stream_chat_message_handler(
     enable_web_search,
     images,
     has_images,
+    enable_knowledge_search,
   } = data;
 
   if has_images {
@@ -67,6 +68,7 @@ pub(crate) async fn stream_chat_message_handler(
     enable_web_search,
     images,
     has_images,
+    enable_knowledge_search,
   };
 
   let ai_manager = upgrade_ai_manager(ai_manager)?;

@@ -90,6 +90,9 @@ pub struct StreamChatPayloadPB {
   /// 是否包含图片
   #[pb(index = 12)]
   pub has_images: bool,
+
+  #[pb(index = 13)]
+  pub enable_knowledge_search: bool,
 }
 
 #[derive(Default, Debug)]
@@ -108,6 +111,7 @@ pub struct StreamMessageParams {
   pub images: Vec<String>,
   /// 是否包含图片
   pub has_images: bool,
+  pub enable_knowledge_search: bool,
 }
 
 #[derive(Default, ProtoBuf, Validate, Clone, Debug)]

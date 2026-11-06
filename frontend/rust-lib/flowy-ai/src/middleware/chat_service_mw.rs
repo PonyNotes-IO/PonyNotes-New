@@ -88,6 +88,21 @@ impl ChatServiceMiddleware {
     Ok(content)
   }
 
+  fn knowledge_search_enabled(&self, message_id: i64) -> FlowyResult<bool> {
+    let uid = self.user_service.user_id()?;
+    let conn = self.user_service.sqlite_connection(uid)?;
+    let message = select_message(conn, message_id)?;
+    let metadata: Value = message
+      .and_then(|m| m.metadata)
+      .and_then(|s| serde_json::from_str(&s).ok())
+      .unwrap_or(Value::Null);
+    Ok(
+      metadata["enable_knowledge_search"]
+        .as_bool()
+        .unwrap_or(false),
+    )
+  }
+
   /// 从消息metadata中提取图片和文件附件
   fn get_message_attachments(
     &self,
@@ -228,6 +243,13 @@ impl ChatCloudService for ChatServiceMiddleware {
       "[Middleware] stream_answer_with_thinking use model: {:?}, enable_thinking: {}, enable_web_search: {}, workspace_id: {}",
       ai_model, enable_thinking, enable_web_search, workspace_id
     );
+    let knowledge_search = self.knowledge_search_enabled(question_id)?;
+    if ai_model.is_local && knowledge_search {
+      return Err(FlowyError::new(
+        flowy_error::ErrorCode::InvalidParams,
+        "知识库检索请使用云端模型。",
+      ));
+    }
     if ai_model.is_local {
       if self.local_ai.is_ready().await {
         let content = self.get_message_content(question_id)?;
@@ -247,7 +269,7 @@ impl ChatCloudService for ChatServiceMiddleware {
       info!("[Middleware] 使用新的 AI 会话接口");
 
       // 从本地数据库获取问题内容和metadata
-      let content = self.get_message_content(question_id)?;
+      let mut content = self.get_message_content(question_id)?;
       trace!("[Middleware] 问题内容: {}", content);
 
       // 读取消息metadata，提取图片数据
@@ -265,8 +287,10 @@ impl ChatCloudService for ChatServiceMiddleware {
         );
       }
 
-      // 获取服务器地址（这里硬编码，后续可以从配置获取）
-      let base_url = "https://api.xiaomabiji.com";
+      // Use the same cloud as login/sync, including self-hosted test environments.
+      let base_url = std::env::var("APPFLOWY_CLOUD_ENV_APPFLOWY_CLOUD_BASE_URL")
+        .unwrap_or_else(|_| "https://api.xiaomabiji.com".to_string());
+      let base_url = base_url.as_str();
 
       // 将模型显示名称映射到API所需的模型ID
       let model_id = Self::map_model_name_to_id(&ai_model.name);
@@ -389,6 +413,18 @@ impl ChatCloudService for ChatServiceMiddleware {
 
       if token.is_none() {
         error!("[Middleware] 无法获取有效的 token，请求将失败");
+      }
+
+      if knowledge_search {
+        let access_token = token.as_deref().ok_or_else(|| {
+          FlowyError::new(
+            flowy_error::ErrorCode::InvalidParams,
+            "请登录后使用知识库检索。",
+          )
+        })?;
+        content =
+          super::knowledge_search::augment_question(base_url, access_token, workspace_id, &content)
+            .await?;
       }
 
       // 调用新的 AI 会话接口，传递深度思考和全网搜索参数

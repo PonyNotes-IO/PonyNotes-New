@@ -159,7 +159,8 @@ class _HomePageState extends State<HomePage> {
       AIModel? selectedModel,
       List<ChatImage>? images,
       bool enableDeepThinking,
-      bool enableWebSearch) async {
+      bool enableWebSearch,
+      bool enableKnowledgeSearch) async {
     if (message.isEmpty) return;
 
     Log.info('🔄 主页: 处理消息发送');
@@ -187,6 +188,7 @@ class _HomePageState extends State<HomePage> {
         selectedModelId: selectedModel?.id,
         enableDeepThinking: enableDeepThinking,
         enableWebSearch: enableWebSearch,
+        enableKnowledgeSearch: enableKnowledgeSearch,
         initialImages: images, // 传递图片数据
       );
 

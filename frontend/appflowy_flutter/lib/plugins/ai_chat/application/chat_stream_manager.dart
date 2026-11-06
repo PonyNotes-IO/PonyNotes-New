@@ -11,7 +11,8 @@ import 'chat_message_stream.dart';
 
 /// Manages chat streaming operations
 class ChatStreamManager {
-  ChatStreamManager(this.chatId, {this.enableDeepThinking = false, this.enableWebSearch = false});
+  ChatStreamManager(this.chatId,
+      {this.enableDeepThinking = false, this.enableWebSearch = false});
   final String chatId;
   final bool enableDeepThinking;
   final bool enableWebSearch;
@@ -43,6 +44,7 @@ class ChatStreamManager {
     bool hasImages = false,
     bool? enableDeepThinkingOverride,
     bool? enableWebSearchOverride,
+    bool enableKnowledgeSearch = false,
   }) {
     final payload = StreamChatPayloadPB(
       chatId: chatId,
@@ -53,6 +55,7 @@ class ChatStreamManager {
       enableThinking: enableDeepThinkingOverride ?? enableDeepThinking,
       enableWebSearch: enableWebSearchOverride ?? enableWebSearch,
       hasImages: hasImages,
+      enableKnowledgeSearch: enableKnowledgeSearch,
     );
 
     if (format != null) {
@@ -78,6 +81,7 @@ class ChatStreamManager {
     bool hasImages = false,
     bool? enableDeepThinkingOverride,
     bool? enableWebSearchOverride,
+    bool enableKnowledgeSearch = false,
   }) async {
     final payload = buildStreamPayload(
       message,
@@ -87,6 +91,7 @@ class ChatStreamManager {
       hasImages: hasImages,
       enableDeepThinkingOverride: enableDeepThinkingOverride,
       enableWebSearchOverride: enableWebSearchOverride,
+      enableKnowledgeSearch: enableKnowledgeSearch,
     );
     return AIEventStreamMessage(payload).send();
   }

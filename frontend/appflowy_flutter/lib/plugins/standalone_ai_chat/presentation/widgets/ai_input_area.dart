@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:appflowy/ai/widgets/knowledge_search_button.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -39,8 +40,13 @@ class AIInputArea extends StatefulWidget {
 
   /// 发送消息的回调（使用AIModel系统）
   /// 参数：message - 消息内容, model - 选择的模型, images - 图片列表, enableDeepThinking - 是否启用深度思考, enableWebSearch - 是否启用全网搜索
-  final Function(String message, AIModel? model, List<ChatImage>? images,
-      bool enableDeepThinking, bool enableWebSearch)? onMessageSent;
+  final Function(
+      String message,
+      AIModel? model,
+      List<ChatImage>? images,
+      bool enableDeepThinking,
+      bool enableWebSearch,
+      bool enableKnowledgeSearch)? onMessageSent;
 
   /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
   final VoidCallback? onChatHistoryTap;
@@ -77,6 +83,7 @@ class _AIInputAreaState extends State<AIInputArea> {
   // 功能开关状态
   bool _isDeepThinkingEnabled = false; // 深度思考开关
   bool _isWebSearchEnabled = false; // 全网搜索开关
+  bool _isKnowledgeSearchEnabled = false;
   // 文本长度限制与计数
   static const int _kMaxMessageLength = 120;
   int _currentCharCount = 0;
@@ -248,7 +255,8 @@ class _AIInputAreaState extends State<AIInputArea> {
         _selectedModel,
         images.isNotEmpty ? images : null,
         _isDeepThinkingEnabled,
-        _isWebSearchEnabled);
+        _isWebSearchEnabled,
+        _isKnowledgeSearchEnabled);
 
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
@@ -355,6 +363,13 @@ class _AIInputAreaState extends State<AIInputArea> {
                     // 联网搜索按钮（移到深度思考按钮右侧）
                     const SizedBox(width: 10),
                     _buildWebSearchButton(),
+                    const SizedBox(width: 10),
+                    KnowledgeSearchButton(
+                      enabled: _isKnowledgeSearchEnabled,
+                      onChanged: (enabled) => setState(() {
+                        _isKnowledgeSearchEnabled = enabled;
+                      }),
+                    ),
                     const Spacer(),
                     // 功能图标按钮组
 

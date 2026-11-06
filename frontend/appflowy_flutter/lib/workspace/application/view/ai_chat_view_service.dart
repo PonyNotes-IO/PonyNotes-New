@@ -34,6 +34,7 @@ class AIChatViewService {
     String? selectedModelId,
     bool enableDeepThinking = false,
     bool enableWebSearch = false,
+    bool enableKnowledgeSearch = false,
     List<ChatImage>? initialImages,
   }) async {
     try {
@@ -76,6 +77,7 @@ class AIChatViewService {
       if (enableWebSearch) {
         extraData['enable_web_search'] = 'true';
       }
+      extraData['enable_knowledge_search'] = enableKnowledgeSearch;
       if (imagePaths != null && imagePaths.isNotEmpty) {
         extraData['initial_images'] = imagePaths;
         Log.info('✅ 将 ${imagePaths.length} 张图片路径添加到extra');

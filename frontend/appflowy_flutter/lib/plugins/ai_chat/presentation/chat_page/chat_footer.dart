@@ -106,6 +106,7 @@ class _ChatFooterState extends State<ChatFooter> {
     bool canSendMessage,
   ) {
     return DesktopPromptInput(
+      showKnowledgeSearch: true,
       isStreaming: !canSendMessage,
       textController: textController,
       onStopStreaming: () {
@@ -121,7 +122,11 @@ class _ChatFooterState extends State<ChatFooter> {
           ChatEvent.sendMessage(
             message: text,
             format: format,
-            metadata: metadata,
+            metadata: {
+              ...metadata,
+              'enable_knowledge_search':
+                  promptInputBloc?.knowledgeSearchEnabled.value ?? false,
+            },
             promptId: promptId,
             // PonyNotes: 传递深度思考和联网搜索状态
             enableDeepThinking: enableDeepThinking,
@@ -159,7 +164,11 @@ class _ChatFooterState extends State<ChatFooter> {
           ChatEvent.sendMessage(
             message: text,
             format: format,
-            metadata: metadata,
+            metadata: {
+              ...metadata,
+              'enable_knowledge_search':
+                  promptInputBloc?.knowledgeSearchEnabled.value ?? false,
+            },
             enableDeepThinking: enableDeepThinking,
             enableWebSearch: enableWebSearch,
           ),

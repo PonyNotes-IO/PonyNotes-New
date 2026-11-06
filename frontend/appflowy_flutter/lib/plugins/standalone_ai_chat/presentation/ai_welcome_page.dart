@@ -40,6 +40,7 @@ class AIWelcomePage extends StatelessWidget {
     List<ChatImage>? images,
     bool enableDeepThinking,
     bool enableWebSearch,
+    bool enableKnowledgeSearch,
   ) onMessageSent;
 
   /// 点击聊天记录按钮的回调。

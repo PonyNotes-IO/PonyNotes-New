@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:appflowy/ai/widgets/knowledge_search_button.dart';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/ai/ai.dart';
@@ -52,6 +53,7 @@ class DesktopPromptInput extends StatefulWidget {
     required this.onUpdateSelectedSources,
     this.hideDecoration = false,
     this.hideFormats = false,
+    this.showKnowledgeSearch = false,
     this.extraBottomActionButton,
   });
 
@@ -63,6 +65,7 @@ class DesktopPromptInput extends StatefulWidget {
   final void Function(List<String>) onUpdateSelectedSources;
   final bool hideDecoration;
   final bool hideFormats;
+  final bool showKnowledgeSearch;
   final Widget? extraBottomActionButton;
 
   @override
@@ -185,6 +188,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
                           top: null,
                           child: TextFieldTapRegion(
                             child: _PromptBottomActions(
+                              showKnowledgeSearch: widget.showKnowledgeSearch,
                               showPredefinedFormatButton: !widget.hideFormats,
                               showImageFormats:
                                   state.modelState.type == AiType.cloud,
@@ -673,6 +677,7 @@ class _PromptBottomActions extends StatelessWidget {
     required this.selectedSourcesNotifier,
     required this.onUpdateSelectedSources,
     required this.onSelectPrompt,
+    required this.showKnowledgeSearch,
     this.extraBottomActionButton,
   });
 
@@ -687,6 +692,7 @@ class _PromptBottomActions extends StatelessWidget {
   final void Function(List<String>) onUpdateSelectedSources;
   final void Function(AiPrompt) onSelectPrompt;
   final Widget? extraBottomActionButton;
+  final bool showKnowledgeSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -707,6 +713,20 @@ class _PromptBottomActions extends StatelessWidget {
               // PonyNotes: 添加联网搜索按钮
               const SizedBox(width: 10),
               _buildWebSearchButton(context, state),
+              if (showKnowledgeSearch) ...[
+                const SizedBox(width: 10),
+                ValueListenableBuilder<bool>(
+                  valueListenable:
+                      context.read<AIPromptInputBloc>().knowledgeSearchEnabled,
+                  builder: (context, enabled, _) => KnowledgeSearchButton(
+                    enabled: enabled,
+                    onChanged: (value) => context
+                        .read<AIPromptInputBloc>()
+                        .knowledgeSearchEnabled
+                        .value = value,
+                  ),
+                ),
+              ],
 
               const Spacer(),
 

@@ -54,7 +54,8 @@ class AIWelcomePluginWidgetBuilder extends PluginWidgetBuilder
   Widget get leftBarItem => const SizedBox.shrink(); // 不显示左侧栏
 
   @override
-  Widget tabBarItem(String pluginId, [bool shortForm = false]) => const SizedBox.shrink(); // 不显示标签栏
+  Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
+      const SizedBox.shrink(); // 不显示标签栏
 
   @override
   EdgeInsets get contentPadding => EdgeInsets.zero; // 无内边距
@@ -80,16 +81,22 @@ class AIWelcomePluginPage extends StatefulWidget {
 
 class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
   /// 处理来自AIWelcomePage的消息发送
-  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images, bool enableDeepThinking, bool enableWebSearch) async {
+  void _handleMessageSent(
+      String message,
+      AIModel? selectedModel,
+      List<ChatImage>? images,
+      bool enableDeepThinking,
+      bool enableWebSearch,
+      bool enableKnowledgeSearch) async {
     if (message.isEmpty) return;
-    
+
     Log.info('🔄 AI欢迎页: 处理消息发送');
     Log.info('   - 消息: $message');
     Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
     Log.info('   - 图片数: ${images?.length ?? 0}');
     Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
     Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
-    
+
     try {
       // 1. 获取当前workspace ID
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
@@ -100,7 +107,7 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
       }
 
       Log.info('✅ AI欢迎页: 获取到workspace ID: $workspaceId');
-      
+
       // 2. 创建并打开原生AI Chat视图
       final view = await AIChatViewService.createAndOpenAIChat(
         parentViewId: workspaceId,
@@ -108,7 +115,8 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
         selectedModelId: selectedModel?.id,
         enableDeepThinking: enableDeepThinking,
         enableWebSearch: enableWebSearch,
-        initialImages: images,  // 传递图片数据
+        enableKnowledgeSearch: enableKnowledgeSearch,
+        initialImages: images, // 传递图片数据
       );
 
       if (view == null) {
@@ -138,4 +146,3 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
     );
   }
 }
-

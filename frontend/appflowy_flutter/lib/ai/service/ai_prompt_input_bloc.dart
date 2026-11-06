@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
 import 'package:appflowy/ai/service/ai_model_state_notifier.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
@@ -16,7 +17,9 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
   AIPromptInputBloc({
     required String objectId,
     required PredefinedFormat? predefinedFormat,
-  })  : aiModelStateNotifier = AIModelStateNotifier(objectId: objectId),
+    bool enableKnowledgeSearch = false,
+  })  : knowledgeSearchEnabled = ValueNotifier(enableKnowledgeSearch),
+        aiModelStateNotifier = AIModelStateNotifier(objectId: objectId),
         super(AIPromptInputState.initial(predefinedFormat)) {
     _dispatch();
     _startListening();
@@ -24,12 +27,14 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
   }
 
   final AIModelStateNotifier aiModelStateNotifier;
+  final ValueNotifier<bool> knowledgeSearchEnabled;
 
   String? promptId;
 
   @override
   Future<void> close() async {
     await aiModelStateNotifier.dispose();
+    knowledgeSearchEnabled.dispose();
     return super.close();
   }
 

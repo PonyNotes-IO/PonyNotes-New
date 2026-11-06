@@ -95,17 +95,16 @@ impl Chat {
 
     // 构建消息 metadata：将图片数据（base64）一并保存到服务端，
     // 以便协作区其他用户加载历史消息时能看到图片。
-    let question_metadata = if params.has_images && !params.images.is_empty() {
-      Some(serde_json::json!({
-        "images": params.images,
-        "has_images": true,
-      }))
-    } else {
-      None
-    };
+    let mut question_metadata = serde_json::json!({
+      "enable_knowledge_search": params.enable_knowledge_search,
+    });
+    if params.has_images && !params.images.is_empty() {
+      question_metadata["images"] = serde_json::json!(params.images);
+      question_metadata["has_images"] = serde_json::json!(true);
+    }
 
     // 尝试创建问题，如果失败且是数据同步禁用错误，则在本地创建
-    let question = match self
+    let mut question = match self
       .chat_service
       .create_question(
         &workspace_id,
@@ -113,7 +112,7 @@ impl Chat {
         &params.message,
         params.message_type.clone(),
         params.prompt_id.clone(),
-        question_metadata,
+        Some(question_metadata.clone()),
       )
       .await
     {
@@ -132,9 +131,7 @@ impl Chat {
           // 创建本地问题记录
           let question = match params.message_type {
             ChatMessageType::System => ChatMessage::new_system(message_id, params.message.clone()),
-            ChatMessageType::User => {
-              ChatMessage::new_human(message_id, params.message.clone(), None)
-            },
+            ChatMessageType::User => ChatMessage::new_human(message_id, params.message.clone(), None),
           };
 
           // 保存到本地数据库
@@ -155,44 +152,18 @@ impl Chat {
       .send(StreamMessage::MessageId(question.message_id).to_string())
       .await;
 
-    let mut question_with_images = question.clone();
-    if params.has_images && !params.images.is_empty() {
-      tracing::info!(
-        "[Chat] 将 {} 张图片添加到消息 metadata，message_id={}",
-        params.images.len(),
-        question_with_images.message_id
-      );
-
-      let mut metadata = question_with_images.metadata.clone();
-      if let Some(obj) = metadata.as_object_mut() {
-        obj.insert("images".to_string(), serde_json::json!(params.images));
-        obj.insert("has_images".to_string(), serde_json::json!(true));
-      } else {
-        metadata = serde_json::json!({
-          "images": params.images,
-          "has_images": true,
-        });
-      }
-      question_with_images.metadata = metadata;
-
-      // 【重要】将带图片的消息保存到本地数据库
-      // 中间件会从数据库读取消息的 metadata 来获取图片数据
-      let conn = self.user_service.sqlite_connection(uid)?;
-      let record = ChatMessageTable::from_message(
-        self.chat_id.to_string(),
-        question_with_images.clone(),
-        false,
-      );
-      tracing::info!(
-        "[Chat] 保存带图片的消息到本地数据库，message_id={}, metadata_len={}",
-        record.message_id,
-        record.metadata.as_ref().map(|m| m.len()).unwrap_or(0)
-      );
-      upsert_chat_messages(conn, &[record])?;
+    if let Some(metadata) = question.metadata.as_object_mut() {
+      metadata.extend(question_metadata.as_object().unwrap().clone());
+    } else {
+      question.metadata = question_metadata;
     }
+    // Middleware reads this flag for both first answers and regenerated answers.
+    let conn = self.user_service.sqlite_connection(uid)?;
+    let record = ChatMessageTable::from_message(self.chat_id.to_string(), question.clone(), false);
+    upsert_chat_messages(conn, &[record])?;
 
     // Save message to disk（包含图片 metadata）
-    notify_message(&self.chat_id, question_with_images)?;
+    notify_message(&self.chat_id, question.clone())?;
     let format = params.format.clone().map(Into::into).unwrap_or_default();
     self.stream_response(
       params.answer_stream_port,

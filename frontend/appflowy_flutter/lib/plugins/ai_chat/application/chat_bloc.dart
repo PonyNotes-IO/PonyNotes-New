@@ -47,6 +47,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.preferredModelId,
     this.enableDeepThinking = false,
     this.enableWebSearch = false,
+    this.enableKnowledgeSearch = false,
     this.initialImagePaths,
   })  : chatController = InMemoryChatController(),
         listener = ChatMessageListener(chatId: chatId),
@@ -109,6 +110,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String? preferredModelId;
   final bool enableDeepThinking;
   final bool enableWebSearch;
+  final bool enableKnowledgeSearch;
   final List<String>? initialImagePaths;
   String? _workspaceId;
   final ChatMessageListener listener;
@@ -997,7 +999,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     if (oldestMessage != null) {
       var oldestMessageId = Int64.tryParseInt(oldestMessage.id);
-      
+
       if (oldestMessageId == null) {
         final parsed = int.tryParse(oldestMessage.id);
         if (parsed != null) {
@@ -1008,7 +1010,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           return;
         }
       }
-      
+
       isLoadingPreviousMessages = true;
       _loadPreviousMessages(oldestMessageId);
     }
@@ -1108,6 +1110,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       hasImages: hasImages,
       enableDeepThinkingOverride: actualEnableDeepThinking,
       enableWebSearchOverride: actualEnableWebSearch,
+      enableKnowledgeSearch: metadata?['enable_knowledge_search'] as bool? ??
+          enableKnowledgeSearch,
     )
         .fold(
       (question) {
@@ -1145,8 +1149,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           //
           // 改为：始终带上错误文案；仅在 msg 为空时回退到通用提示，
           // 保证任何失败都有可读信息，不再出现空白气泡。
-          final errorText =
-              err.msg.trim().isNotEmpty ? err.msg : LocaleKeys.chat_requestFailedFallback.tr();
+          final errorText = err.msg.trim().isNotEmpty
+              ? err.msg
+              : LocaleKeys.chat_requestFailedFallback.tr();
           _showSendingError(errorText);
           add(const ChatEvent.failedSending());
         }
