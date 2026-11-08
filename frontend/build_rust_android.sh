@@ -15,8 +15,8 @@ if [ -z "$ANDROID_NDK_HOME" ]; then
     exit 1
 fi
 
-# 直接设置NDK路径，避免环境变量问题
-NDK_PATH="/Users/dongli/Library/Android/sdk/ndk/26.1.10909125"
+# 不要再写死旧机器的 /Users/dongli/...；统一取环境变量（脚本开头已校验）
+NDK_PATH="$ANDROID_NDK_HOME"
 NDK_TOOLCHAIN="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/bin"
 
 # 添加NDK工具链到PATH

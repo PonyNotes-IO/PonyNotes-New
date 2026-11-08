@@ -1,4 +1,9 @@
-MINIMUM_MACOSX_DEPLOYMENT_TARGET_SUPPORTED = '10.15'
+# Xcode 27.2 起 macOS SDK 支持的最低部署目标为 12.0，设置 10.15 会让
+# Pods.xcodeproj 的所有 target 直接报 "range of supported deployment target
+# versions is 12.0 to 27.2.x" 并导致 BUILD FAILED。
+# 同时 Runner.xcodeproj 中的 MACOSX_DEPLOYMENT_TARGET 已是 13.0，此处必须
+# 保持一致（platform :osx 与 post_install 都引用这个常量）。
+MINIMUM_MACOSX_DEPLOYMENT_TARGET_SUPPORTED = '13.0'
 
 platform :osx, MINIMUM_MACOSX_DEPLOYMENT_TARGET_SUPPORTED
 
