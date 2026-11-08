@@ -16,6 +16,7 @@ import 'agent_note_bridge.dart';
 import 'agent_transport.dart';
 import 'agent_model_preferences.dart';
 import 'agent_credits.dart';
+import 'agent_internal_service.dart';
 
 class AgentActivity {
   AgentActivity({
@@ -33,8 +34,12 @@ class AgentActivity {
 }
 
 class AgentController extends ChangeNotifier {
-  AgentController({required this.chatId, AgentTransport? transport})
-      : transport = transport ?? AgentTransport();
+  AgentController({
+    required this.chatId,
+    AgentTransport? transport,
+    AgentInternalService? internalService,
+  })  : transport = transport ?? AgentTransport(),
+        internalService = internalService ?? AgentInternalService();
   static final _instances = <AgentController>{};
   static Future<void> revokeAll() async {
     await Future.wait(
@@ -44,6 +49,8 @@ class AgentController extends ChangeNotifier {
 
   final String chatId;
   final AgentTransport transport;
+  final AgentInternalService internalService;
+  AiProviderConfig? _runtimeConfig;
   final _pending = <String, Completer<dynamic>>{};
   final messages = <Map<String, dynamic>>[];
   final activities = <String, AgentActivity>{};
@@ -69,15 +76,28 @@ class AgentController extends ChangeNotifier {
 
   /// Gateway balance for the active model key; null for endpoints without credits.
   AgentCredits? credits;
+  String? creditsError;
   Future<void> refreshCredits() async {
     final config = providerConfig;
     if (config == null) return;
-    final value = await fetchAgentCredits(config);
-    if (identical(config, providerConfig)) {
-      credits = value;
-      changed();
+    try {
+      final value = config.isInternal
+          ? await internalService.credits()
+          : await fetchAgentCredits(config);
+      if (identical(config, providerConfig)) {
+        credits = value;
+        creditsError = null;
+        changed();
+      }
+    } catch (_) {
+      if (identical(config, providerConfig)) {
+        credits = null;
+        creditsError = '积分查询失败，请稍后重试';
+        changed();
+      }
     }
   }
+
   String thinkingLevel = 'off';
   String location = '本机';
   String? authorizationUrl;
@@ -105,6 +125,7 @@ class AgentController extends ChangeNotifier {
     changed();
     final epoch = ++_epoch;
     _instances.add(this);
+    AiProviderConfig? pendingRuntime;
     try {
       final currentIdentity = await identity();
       final settings = await AgentSettings.load(
@@ -113,10 +134,7 @@ class AgentController extends ChangeNotifier {
       _settings = settings;
       workspace = await AgentWorkspaceConfig.load(chatId);
       _workspaceId = await AIChatViewService.getCurrentWorkspaceId();
-      final provider = await const AiProviderConfigStorage().load();
-      if (!provider.isComplete) {
-        throw StateError('请先在「内部 AI 模型」配置模型地址、名称和 API Key');
-      }
+      final provider = await internalService.preferred();
       final support = await getApplicationSupportDirectory();
       _identity = currentIdentity;
       await _subscription?.cancel();
@@ -128,6 +146,12 @@ class AgentController extends ChangeNotifier {
         },
       );
       if (epoch != _epoch) return;
+      final runtime = await internalService.runtimeConfig(provider);
+      pendingRuntime = runtime;
+      if (epoch != _epoch) return;
+      if (await identity() != currentIdentity) {
+        throw StateError('账号或工作区已切换，请重新连接');
+      }
       await transport.connect(
         dataDirectory: p.join(support.path, 'agent'),
         remoteUrl: settings.remoteUrl,
@@ -146,7 +170,7 @@ class AgentController extends ChangeNotifier {
         isAgentChannel: true,
         agentName: () => '小马笔记 Agent',
       );
-      final base = provider.baseUrl
+      final base = runtime.baseUrl
           .replaceAll(RegExp(r'/+$'), '')
           .replaceFirst(RegExp(r'/chat/completions$'), '');
       final data = await command('initialize', {
@@ -157,10 +181,10 @@ class AgentController extends ChangeNotifier {
           'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
               ? '$base/v1'
               : base,
-          'model': provider.modelName,
-          'supportsReasoning': provider.supportsReasoning,
+          'model': runtime.modelName,
+          'supportsReasoning': runtime.supportsReasoning,
           'thinkingLevel': await AgentModelPreferences.loadThinking(),
-          'apiKey': provider.apiKey,
+          'apiKey': runtime.apiKey,
           'directory': workspace.directory,
           'permissionMode': workspace.permissionMode,
           'mcpServers': settings.mcpServers,
@@ -181,7 +205,11 @@ class AgentController extends ChangeNotifier {
       });
       if (epoch != _epoch) return;
       _readState(Map<String, dynamic>.from(data as Map));
-      providerConfig = provider;
+      _runtimeConfig = runtime;
+      pendingRuntime = null;
+      providerConfig = runtime.isInternal
+          ? runtime.copyWith(baseUrl: '', apiKey: '')
+          : runtime;
       unawaited(refreshCredits());
       connected = true;
     } catch (e) {
@@ -190,6 +218,13 @@ class AgentController extends ChangeNotifier {
         await transport.close();
       }
     } finally {
+      if (pendingRuntime != null) {
+        try {
+          await internalService.revoke(pendingRuntime);
+        } catch (_) {
+          error = '内部模型会话撤销失败，请稍后重试连接';
+        }
+      }
       if (epoch == _epoch) {
         connecting = false;
         changed();
@@ -224,6 +259,17 @@ class AgentController extends ChangeNotifier {
     if (await identity() != _identity) {
       await disconnect();
       throw StateError('账号或工作区已切换，请重新连接');
+    }
+    if (!running &&
+        providerConfig?.isInternal == true &&
+        internalService.sessionNeedsRefresh) {
+      try {
+        await configureModel(providerConfig!, thinkingLevel);
+      } catch (e) {
+        error = '$e';
+        changed();
+        return false;
+      }
     }
     if (behavior == 'prompt') {
       ++_runEpoch;
@@ -281,25 +327,47 @@ class AgentController extends ChangeNotifier {
       throw StateError('账号或工作区已切换，请重新打开文档');
     }
     if (running || compacting) throw StateError('请等待当前任务结束后切换模型');
-    final base = provider.baseUrl
-        .replaceAll(RegExp(r'/+$'), '')
-        .replaceFirst(RegExp(r'/chat/completions$'), '');
-    final data = await command('configure_model', {
-      'config': {
-        'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
-            ? '$base/v1'
-            : base,
-        'model': provider.modelName,
-        'apiKey': provider.apiKey,
-        'supportsReasoning': provider.supportsReasoning,
-        'thinkingLevel': thinking,
-      },
-    });
-    _readState(Map<String, dynamic>.from(data as Map));
-    providerConfig = provider;
-    credits = null;
-    unawaited(refreshCredits());
-    changed();
+    final epoch = _epoch;
+    final runtime = await internalService.runtimeConfig(provider);
+    var applied = false;
+    try {
+      if (epoch != _epoch) throw StateError('Agent 连接已关闭');
+      if (await identity() != _identity) throw StateError('账号或工作区已切换，请重新连接');
+      final base = runtime.baseUrl
+          .replaceAll(RegExp(r'/+$'), '')
+          .replaceFirst(RegExp(r'/chat/completions$'), '');
+      final data = await command('configure_model', {
+        'config': {
+          'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
+              ? '$base/v1'
+              : base,
+          'model': runtime.modelName,
+          'apiKey': runtime.apiKey,
+          'supportsReasoning': runtime.supportsReasoning,
+          'thinkingLevel': thinking,
+        },
+      });
+      if (epoch != _epoch) throw StateError('Agent 连接已关闭');
+      _readState(Map<String, dynamic>.from(data as Map));
+      final previousRuntime = _runtimeConfig;
+      _runtimeConfig = runtime;
+      applied = true;
+      providerConfig = runtime.isInternal
+          ? runtime.copyWith(baseUrl: '', apiKey: '')
+          : runtime;
+      credits = null;
+      creditsError = null;
+      unawaited(refreshCredits());
+      changed();
+      try {
+        await internalService.revoke(previousRuntime);
+      } catch (_) {
+        error = '旧内部模型会话撤销失败，将在有效期结束后失效';
+        changed();
+      }
+    } finally {
+      if (!applied) await internalService.revoke(runtime);
+    }
   }
 
   /// Changing the directory reopens the same transcript; the mode applies to the next tool call.
@@ -329,9 +397,14 @@ class AgentController extends ChangeNotifier {
   }
 
   Future<void> compact() async {
-    compacting = true;
-    changed();
     try {
+      if (!running &&
+          providerConfig?.isInternal == true &&
+          internalService.sessionNeedsRefresh) {
+        await configureModel(providerConfig!, thinkingLevel);
+      }
+      compacting = true;
+      changed();
       await command('compact');
     } catch (e) {
       error = '$e';
@@ -665,6 +738,14 @@ class AgentController extends ChangeNotifier {
     await _oauthRelay?.close(force: true);
     _oauthRelay = null;
     authorizationUrl = null;
+    final runtime = _runtimeConfig;
+    _runtimeConfig = null;
+    try {
+      await internalService.revoke(runtime);
+    } catch (_) {
+      error = '内部模型会话撤销失败，将在有效期结束后失效';
+      keepError = true;
+    }
     try {
       await transport.close();
     } catch (e) {
@@ -683,6 +764,7 @@ class AgentController extends ChangeNotifier {
     model = '';
     providerConfig = null;
     credits = null;
+    creditsError = null;
     if (!keepError) error = null;
     changed();
   }

@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_model_preferences.dart';
+import 'package:appflowy/features/agent/application/agent_internal_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:appflowy/features/agent/presentation/agent_model_settings.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
@@ -41,6 +44,44 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
+  });
+
+  testWidgets('a new user can select sub2api models without a custom key',
+      (tester) async {
+    AiProviderConfig? selected;
+    final service = AgentInternalService(
+      account: () async => const AgentCloudAccount(
+        baseUrl: 'https://cloud.test',
+        accessToken: 'login',
+        userId: '1',
+      ),
+      client: MockClient(
+        (_) async => http.Response(
+          '{"data":[{"id":"managed-first"},{"id":"managed-second"}]}',
+          200,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: AgentModelSettingsButton(
+          internalService: service,
+          onChanged: (config, _) async => selected = config,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('managed-first'), findsOneWidget);
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    expect(find.text('内部模型'), findsOneWidget);
+    expect(find.text('配置自定义模型'), findsOneWidget);
+    await tester.tap(find.text('managed-second'));
+    await tester.pumpAndSettle();
+    expect(selected?.isInternal, true);
+    expect(selected?.apiKey, isEmpty);
+    expect((await service.preferred()).modelName, 'managed-second');
+    expect(await storage.loadProfiles(), isEmpty);
   });
 
   testWidgets(
@@ -211,18 +252,32 @@ void main() {
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Column(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextField(
+                          const TextField(
                             decoration: InputDecoration(
                               hintText: '输入问题，或告诉我需要做什么',
                               border: InputBorder.none,
                             ),
                           ),
-                          SizedBox(height: 8),
-                          AgentModelSettingsButton(),
+                          const SizedBox(height: 8),
+                          AgentModelSettingsButton(
+                            internalService: AgentInternalService(
+                              account: () async => const AgentCloudAccount(
+                                baseUrl: 'https://cloud.test',
+                                accessToken: 'login',
+                                userId: '1',
+                              ),
+                              client: MockClient(
+                                (_) async => http.Response(
+                                  '{"data":[{"id":"sub2api-chat"},{"id":"sub2api-reasoner-long-model-name"}]}',
+                                  200,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

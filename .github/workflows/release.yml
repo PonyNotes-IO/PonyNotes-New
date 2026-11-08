@@ -54,6 +54,11 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -139,6 +144,11 @@ jobs:
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
 
       - name: Install flutter
         uses: subosito/flutter-action@v2
@@ -247,6 +257,11 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -353,6 +368,11 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -373,7 +393,7 @@ jobs:
         run: |
           sudo wget -qO /etc/apt/trusted.gpg.d/dart_linux_signing_key.asc https://dl-ssl.google.com/linux/linux_signing_key.pub
           sudo apt-get update
-          sudo apt-get install -y build-essential libsqlite3-dev libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev libcurl4-openssl-dev
+          sudo apt-get install -y build-essential libsqlite3-dev libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev libcurl4-openssl-dev
           sudo apt-get install keybinder-3.0
           sudo apt-get install -y alien libnotify-dev
           sudo apt install libfuse2

@@ -1,6 +1,6 @@
 plugins {
     id 'com.android.application'
-    id 'kotlin-android'
+    id 'org.jetbrains.kotlin.android'
     id 'dev.flutter.flutter-gradle-plugin'
 }
 
@@ -28,9 +28,13 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def targetAbis = (findProperty('androidAbis') ?: 'arm64-v8a,armeabi-v7a').split(',').toList()
+def cargoTargetPlatforms = targetAbis.collect { it == 'arm64-v8a' ? 'android-arm64' : 'android-arm' }.join(',')
+
 android {
     namespace 'com.xiaomabiji.app.note'
     compileSdk = flutter.compileSdkVersion
+    // 与云构建一致：云 workflow 不改这个值，直接用 Flutter 自带的 ndkVersion（3.35.x = 27.0.12077973）
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -50,6 +54,17 @@ android {
                     'libs',
                     'jniLibs'
             ]
+        }
+        debug.jniLibs.srcDir "${rootProject.buildDir}/super_native_extensions/jniLibs/debug"
+        profile.jniLibs.srcDir "${rootProject.buildDir}/super_native_extensions/jniLibs/profile"
+        release.jniLibs.srcDir "${rootProject.buildDir}/super_native_extensions/jniLibs/release"
+    }
+
+    // Exclude emulator ABIs while retaining both 64-bit and 32-bit ARM libraries.
+    packaging {
+        jniLibs {
+            excludes += (['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'] - targetAbis)
+                    .collect { abi -> "lib/${abi}/**" }
         }
     }
 
@@ -90,22 +105,98 @@ android {
         }
     }
 
-    // 体积优化：Android 端只发 arm64-v8a（覆盖 2020 年后所有国内真机）。
-    //   - armeabi-v7a：仅 2017 年前的老机器，份额 < 1%
-    //   - x86_64   ：模拟器/Chromebook，C 端用户基本无需求
-    // 桌面端不受影响：本配置只作用于 Android 构建。
-    splits {
-        abi {
-            enable true
-            reset()
-            include 'arm64-v8a'
-            universalApk true
-        }
-    }
 }
 
 flutter {
     source '../..'
+}
+
+// These CargoKit versions do not reliably export their native libraries with
+// modern Flutter Gradle on Windows. If either library is missing, automatic
+// plugin registration aborts before permission_handler is registered.
+def cargoNativePlugins = [
+        [
+                projectName: 'irondash_engine_context',
+                taskName: 'IrondashEngineContext',
+                libraryName: 'irondash_engine_context_native',
+                manifestPath: 'android/rust',
+        ],
+        [
+                projectName: 'super_native_extensions',
+                taskName: 'SuperNativeExtensions',
+                libraryName: 'super_native_extensions',
+                manifestPath: 'rust',
+        ],
+]
+
+['Debug': 'debug', 'Profile': 'profile', 'Release': 'release'].each { variantName, buildMode ->
+    cargoNativePlugins.each { config ->
+        def nativeProject = project(":${config.projectName}")
+        def nativeRoot = nativeProject.projectDir.parentFile
+        def nativeBuildDir = new File(rootProject.buildDir, config.projectName)
+        def nativeLibraries = targetAbis.collect { abi ->
+            new File(nativeBuildDir, "jniLibs/${buildMode}/${abi}/lib${config.libraryName}.so")
+        }
+        def buildNativeLibrary = tasks.register(
+                "build${config.taskName}${variantName}NativeLibrary",
+                Exec
+        ) {
+            def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+            def runner = new File(
+                    nativeRoot,
+                    "cargokit/${isWindows ? 'run_build_tool.cmd' : 'run_build_tool.sh'}"
+            )
+            workingDir(nativeProject.projectDir)
+            executable(runner)
+            args('build-gradle')
+            environment('FLUTTER_ROOT', localProperties.getProperty('flutter.sdk'))
+            environment('CARGOKIT_ROOT_PROJECT_DIR', rootProject.projectDir)
+            environment('CARGOKIT_TOOL_TEMP_DIR', "${nativeBuildDir}/build/build_tool")
+            environment('CARGOKIT_MANIFEST_DIR', new File(nativeRoot, config.manifestPath))
+            environment('CARGOKIT_CONFIGURATION', buildMode)
+            environment('CARGOKIT_TARGET_TEMP_DIR', "${nativeBuildDir}/build")
+            environment('CARGOKIT_OUTPUT_DIR', "${nativeBuildDir}/jniLibs/${buildMode}")
+            environment('CARGOKIT_NDK_VERSION', android.ndkVersion)
+            environment('CARGOKIT_SDK_DIR', android.sdkDirectory)
+            environment('CARGOKIT_COMPILE_SDK_VERSION', flutter.compileSdkVersion)
+            environment('CARGOKIT_MIN_SDK_VERSION', flutter.minSdkVersion)
+            environment('CARGOKIT_TARGET_PLATFORMS', cargoTargetPlatforms)
+            environment('CARGOKIT_JAVA_HOME', System.properties['java.home'])
+            // CargoKit uses encoded flags; RUSTFLAGS would be overridden by its NDK setup.
+            environment('CARGO_ENCODED_RUSTFLAGS',
+                    [System.getenv('CARGO_ENCODED_RUSTFLAGS'), '-C', 'link-arg=-Wl,-z,max-page-size=16384']
+                            .findAll { it }.join('\u001f'))
+            doFirst {
+                if (!runner.exists()) {
+                    throw new GradleException("Missing CargoKit runner: ${runner}")
+                }
+                if (!isWindows) {
+                    runner.setExecutable(true)
+                }
+            }
+            doLast {
+                def missingLibraries = nativeLibraries.findAll { !it.exists() }
+                if (!missingLibraries.isEmpty()) {
+                    throw new GradleException(
+                            "Missing Android native plugin libraries: ${missingLibraries.join(', ')}"
+                    )
+                }
+            }
+        }
+        tasks.matching { it.name == "merge${variantName}JniLibFolders" }.configureEach {
+            dependsOn(buildNativeLibrary)
+        }
+    }
+}
+
+// The irondash plugin's own CargoKit task is redundant with the deterministic
+// app task above and otherwise tries unused emulator targets in debug.
+gradle.projectsEvaluated {
+    ['Debug', 'Profile', 'Release'].each { variantName ->
+        project(':irondash_engine_context').tasks
+                .findByName("cargokitCargoBuildIrondash_engine_context_native${variantName}")
+                ?.enabled = false
+    }
 }
 
 // Release builds must keep Flutter's generated plugin registration. This guard

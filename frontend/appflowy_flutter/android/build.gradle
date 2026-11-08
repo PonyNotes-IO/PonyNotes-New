@@ -9,10 +9,10 @@ allprojects {
 }
 
 rootProject.buildDir = '../build'
+def targetAbis = (findProperty('androidAbis') ?: 'arm64-v8a,armeabi-v7a').split(',').toList()
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(':app')
-
     // tobias 5.3.4 只含 Kotlin 源文件，没有 .java 文件，导致 AGP 的
     // compileDebugJavaWithJavac 被标记为 NO-SOURCE 并跳过。这会打断
     // 库类打包链路：bundleLibCompileToJarDebug / bundleLibRuntimeToDirDebug
@@ -41,6 +41,18 @@ subprojects {
         project.plugins.withId('com.android.library') {
             project.android.sourceSets.main.java.srcDir new File("${project.buildDir}/generated/tobias-placeholder")
         }
+    }
+
+    // 统一使用 Flutter 的默认 NDK（3.35.x = 27.0.12077973，与云构建的 app ndkVersion 同值）
+    // 用 plugins.withId 而非 afterEvaluate：本文件里 evaluationDependsOn 已使项目求值，afterEvaluate 会报错
+    // Ship one APK that supports both 64-bit and 32-bit ARM devices.
+    plugins.withId('com.android.library') {
+        android.ndkVersion = "27.0.12077973"
+        android.defaultConfig.ndk.abiFilters = targetAbis
+    }
+    plugins.withId('com.android.application') {
+        android.ndkVersion = "27.0.12077973"
+        android.defaultConfig.ndk.abiFilters = targetAbis
     }
 }
 

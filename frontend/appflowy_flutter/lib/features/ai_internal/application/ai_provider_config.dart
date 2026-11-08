@@ -13,6 +13,7 @@ class AiProviderConfig {
     this.modelName = '',
     this.apiKey = '',
     this.supportsReasoning = false,
+    this.isInternal = false,
   });
 
   /// OpenAI 兼容端点，例如 `https://api.deepseek.com`。
@@ -25,10 +26,12 @@ class AiProviderConfig {
   final String apiKey;
   final bool supportsReasoning;
 
+  /// Agent's managed model. Its runtime credential is never saved in custom profiles.
+  final bool isInternal;
+
   bool get isComplete =>
-      baseUrl.trim().isNotEmpty &&
       modelName.trim().isNotEmpty &&
-      apiKey.trim().isNotEmpty;
+      (isInternal || (baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty));
 
   AiProviderConfig copyWith({
     String? baseUrl,
@@ -41,6 +44,7 @@ class AiProviderConfig {
       modelName: modelName ?? this.modelName,
       apiKey: apiKey ?? this.apiKey,
       supportsReasoning: supportsReasoning ?? this.supportsReasoning,
+      isInternal: isInternal,
     );
   }
 }
@@ -74,6 +78,9 @@ class AiProviderConfigStorage {
   }
 
   Future<void> save(AiProviderConfig config) async {
+    if (config.isInternal) {
+      throw ArgumentError('内部模型凭据不能保存为自定义配置');
+    }
     final profiles = await loadProfiles();
     profiles.removeWhere(
       (p) =>

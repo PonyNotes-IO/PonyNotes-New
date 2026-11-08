@@ -297,6 +297,7 @@ class StreamChatPayloadPB extends $pb.GeneratedMessage {
     $core.bool? enableWebSearch,
     $core.Iterable<$core.String>? images,
     $core.bool? hasImages,
+    $core.bool? enableKnowledgeSearch,
   }) {
     final $result = create();
     if (chatId != null) {
@@ -335,6 +336,9 @@ class StreamChatPayloadPB extends $pb.GeneratedMessage {
     if (hasImages != null) {
       $result.hasImages = hasImages;
     }
+    if (enableKnowledgeSearch != null) {
+      $result.enableKnowledgeSearch = enableKnowledgeSearch;
+    }
     return $result;
   }
   StreamChatPayloadPB._() : super();
@@ -369,6 +373,7 @@ class StreamChatPayloadPB extends $pb.GeneratedMessage {
     ..aOB(10, _omitFieldNames ? '' : 'enableWebSearch')
     ..pPS(11, _omitFieldNames ? '' : 'images')
     ..aOB(12, _omitFieldNames ? '' : 'hasImages')
+    ..aOB(13, _omitFieldNames ? '' : 'enableKnowledgeSearch')
     ..hasRequiredFields = false
   ;
 
@@ -507,6 +512,15 @@ class StreamChatPayloadPB extends $pb.GeneratedMessage {
   $core.bool hasHasImages() => $_has(11);
   @$pb.TagNumber(12)
   void clearHasImages() => clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.bool get enableKnowledgeSearch => $_getBF(12);
+  @$pb.TagNumber(13)
+  set enableKnowledgeSearch($core.bool v) { $_setBool(12, v); }
+  @$pb.TagNumber(13)
+  $core.bool hasEnableKnowledgeSearch() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearEnableKnowledgeSearch() => clearField(13);
 }
 
 enum RegenerateResponsePB_OneOfFormat {

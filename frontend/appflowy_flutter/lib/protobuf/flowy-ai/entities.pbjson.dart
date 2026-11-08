@@ -225,6 +225,7 @@ const StreamChatPayloadPB$json = {
     {'1': 'enable_web_search', '3': 10, '4': 1, '5': 8, '10': 'enableWebSearch'},
     {'1': 'images', '3': 11, '4': 3, '5': 9, '10': 'images'},
     {'1': 'has_images', '3': 12, '4': 1, '5': 8, '10': 'hasImages'},
+    {'1': 'enable_knowledge_search', '3': 13, '4': 1, '5': 8, '10': 'enableKnowledgeSearch'},
   ],
   '8': [
     {'1': 'one_of_format'},
@@ -243,8 +244,9 @@ final $typed_data.Uint8List streamChatPayloadPBDescriptor = $convert.base64Decod
     '1wdF9pZBgHIAEoCUgBUghwcm9tcHRJZBIiCgVtb2RlbBgIIAEoCzIKLkFJTW9kZWxQQkgCUgVt'
     'b2RlbBInCg9lbmFibGVfdGhpbmtpbmcYCSABKAhSDmVuYWJsZVRoaW5raW5nEioKEWVuYWJsZV'
     '93ZWJfc2VhcmNoGAogASgIUg9lbmFibGVXZWJTZWFyY2gSFgoGaW1hZ2VzGAsgAygJUgZpbWFn'
-    'ZXMSHQoKaGFzX2ltYWdlcxgMIAEoCFIJaGFzSW1hZ2VzQg8KDW9uZV9vZl9mb3JtYXRCEgoQb2'
-    '5lX29mX3Byb21wdF9pZEIOCgxvbmVfb2ZfbW9kZWw=');
+    'ZXMSHQoKaGFzX2ltYWdlcxgMIAEoCFIJaGFzSW1hZ2VzEjYKF2VuYWJsZV9rbm93bGVkZ2Vfc2'
+    'VhcmNoGA0gASgIUhVlbmFibGVLbm93bGVkZ2VTZWFyY2hCDwoNb25lX29mX2Zvcm1hdEISChBv'
+    'bmVfb2ZfcHJvbXB0X2lkQg4KDG9uZV9vZl9tb2RlbA==');
 
 @$core.Deprecated('Use regenerateResponsePBDescriptor instead')
 const RegenerateResponsePB$json = {

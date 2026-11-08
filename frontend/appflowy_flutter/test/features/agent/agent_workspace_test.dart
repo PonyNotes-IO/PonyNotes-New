@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/features/agent/application/agent_credits.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
 import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
@@ -195,6 +196,12 @@ void main() {
       expect(find.text('仅笔记'), findsOneWidget);
       expect(find.text('逐次确认'), findsOneWidget);
       expect(find.byKey(const Key('agent-context-gauge')), findsOneWidget);
+      expect(find.byKey(const Key('agent-credits')), findsNothing);
+      controller.credits = const AgentCredits(usd: 0.99735828);
+      controller.changed();
+      await tester.pump();
+      expect(find.byKey(const Key('agent-credits')), findsOneWidget);
+      expect(find.text('99.74 积分'), findsOneWidget);
       final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
       if (output != null) {
         await tester.runAsync(() async {

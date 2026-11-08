@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import '../application/agent_credits.dart';
 import '../application/agent_model_preferences.dart';
+import '../application/agent_internal_service.dart';
 
 Future<AiProviderConfig?> showAgentModelSettings(BuildContext context) =>
     showDialog<AiProviderConfig>(
@@ -40,10 +44,12 @@ class AgentModelSettingsButton extends StatefulWidget {
     this.onChanged,
     this.currentConfig,
     this.currentThinking,
+    this.internalService,
   });
   final bool enabled;
   final AiProviderConfig? currentConfig;
   final String? currentThinking;
+  final AgentInternalService? internalService;
   final Future<void> Function(AiProviderConfig config, String thinking)?
       onChanged;
 
@@ -56,8 +62,13 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   final storage = const AiProviderConfigStorage();
   AiProviderConfig active = const AiProviderConfig();
   List<AiProviderConfig> profiles = [];
+  List<AiProviderConfig> internalModels = [];
+  String? internalError;
+  bool loadingInternal = true;
+  late final internal = widget.internalService ?? AgentInternalService();
   String thinking = 'off';
   bool updating = false;
+  int loadGeneration = 0;
 
   @override
   void initState() {
@@ -72,19 +83,58 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     if (widget.currentThinking != null) thinking = widget.currentThinking!;
   }
 
-  Future<void> _load() async {
+  Future<void> _load({AiProviderConfig? selected}) async {
+    final generation = ++loadGeneration;
     try {
-      final config = widget.currentConfig ?? await storage.load();
+      var config = selected ?? widget.currentConfig ?? await storage.load();
       final saved = await storage.loadProfiles();
       final level =
           widget.currentThinking ?? await AgentModelPreferences.loadThinking();
-      if (!mounted) return;
+      if (!mounted || generation != loadGeneration) return;
       setState(() {
         active = config;
         profiles = saved;
         thinking = level;
       });
+      List<AiProviderConfig> managed = [];
+      String? failure;
+      try {
+        managed = await internal.models();
+        config = selected ??
+            widget.currentConfig ??
+            await internal.preferred(available: managed);
+      } catch (e) {
+        failure = '$e'.replaceFirst('Bad state: ', '');
+      }
+      if (!mounted || generation != loadGeneration) return;
+      setState(() {
+        active = config;
+        internalModels = managed;
+        internalError = failure;
+        loadingInternal = false;
+      });
+      // A gateway key can serve several models; offer each one under the same endpoint and key.
+      final seen = {for (final p in saved) '${p.baseUrl}|${p.modelName}'};
+      for (final endpoint in {
+        for (final p in saved) '${p.baseUrl}|${p.apiKey}': p,
+      }.values.toList()) {
+        for (final model in await fetchGatewayModels(endpoint)) {
+          if (seen.add('${endpoint.baseUrl}|$model')) {
+            saved.add(endpoint.copyWith(modelName: model));
+          }
+        }
+      }
+      if (!mounted || generation != loadGeneration) return;
+      setState(() {
+        active = config;
+        profiles = saved;
+        internalModels = managed;
+        internalError = failure;
+        loadingInternal = false;
+        thinking = level;
+      });
     } catch (e) {
+      if (mounted) setState(() => loadingInternal = false);
       _error(e);
     }
   }
@@ -97,25 +147,26 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
 
   Future<void> _select(AiProviderConfig config, String level) async {
     if (updating) return;
+    ++loadGeneration;
     final previous = active;
     final previousThinking = thinking;
     setState(() => updating = true);
     try {
-      await storage.save(config);
+      await internal.select(config);
       await AgentModelPreferences.saveThinking(level);
       await widget.onChanged?.call(config, level);
-      await _load();
       if (mounted) {
         setState(() {
           active = config;
           thinking = level;
         });
+        unawaited(_load(selected: config));
       }
     } catch (e) {
       try {
-        await storage.save(previous);
+        await internal.select(previous);
         await AgentModelPreferences.saveThinking(previousThinking);
-        await _load();
+        await _load(selected: previous);
         _error(e);
       } catch (restoreError) {
         _error('模型切换失败：$e；配置恢复失败，请重新选择模型：$restoreError');
@@ -137,7 +188,9 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           PopupMenuButton<AiProviderConfig>(
-            enabled: widget.enabled && !updating,
+            enabled: widget.enabled &&
+                !updating &&
+                (!loadingInternal || profiles.isNotEmpty),
             tooltip: '选择模型',
             color: AppFlowyTheme.of(context).surfaceColorScheme.layer01,
             elevation: 6,
@@ -150,6 +203,60 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
             onSelected: (config) =>
                 config.isComplete ? _select(config, thinking) : _custom(),
             itemBuilder: (_) => [
+              PopupMenuItem<AiProviderConfig>(
+                enabled: false,
+                height: 36,
+                child: Text(
+                  '内部模型',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              if (loadingInternal ||
+                  internalError != null ||
+                  internalModels.isEmpty)
+                PopupMenuItem<AiProviderConfig>(
+                  enabled: false,
+                  child: Text(
+                    loadingInternal ? '正在加载内部模型…' : internalError ?? '暂无可用内部模型',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              for (final config in internalModels)
+                PopupMenuItem(
+                  value: config,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_awesome_outlined, size: 18),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          config.modelName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (active.isInternal &&
+                          config.modelName == active.modelName)
+                        const Icon(Icons.check, size: 18),
+                    ],
+                  ),
+                ),
+              const PopupMenuDivider(),
+              if (profiles.isNotEmpty)
+                PopupMenuItem<AiProviderConfig>(
+                  enabled: false,
+                  height: 36,
+                  child: Text(
+                    '自定义模型',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ),
               for (var i = 0; i < profiles.length; i++)
                 PopupMenuItem(
                   value: profiles[i],
@@ -176,7 +283,8 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
                           ],
                         ),
                       ),
-                      if (profiles[i].modelName == active.modelName &&
+                      if (!active.isInternal &&
+                          profiles[i].modelName == active.modelName &&
                           profiles[i].baseUrl == active.baseUrl)
                         const Icon(Icons.check, size: 18),
                     ],
@@ -202,7 +310,11 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 140),
                     child: Text(
-                      active.isComplete ? active.modelName : '选择模型',
+                      active.isComplete
+                          ? active.modelName
+                          : loadingInternal
+                              ? '加载模型…'
+                              : '选择模型',
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 13),
                     ),

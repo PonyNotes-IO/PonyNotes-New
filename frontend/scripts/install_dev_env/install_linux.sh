@@ -81,6 +81,15 @@ else
     echo 'Your system is not supported, please install libnotify-dev manually.'
 fi
 
+printMessage "Installing system keyring dependencies"
+if command apt-get &>/dev/null; then
+    sudo apt-get install libsecret-1-dev libjsoncpp-dev
+elif command dnf &>/dev/null; then
+    sudo dnf install libsecret-devel jsoncpp-devel
+else
+    echo 'Install libsecret and jsoncpp development packages for model credential storage.'
+fi
+
 # For Video Block support
 printMessage "Installing libmpv-dev mpv"
 if command apt-get &>/dev/null; then

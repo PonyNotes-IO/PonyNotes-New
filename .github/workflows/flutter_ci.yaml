@@ -149,6 +149,11 @@ jobs:
           override: true
           profile: minimal
 
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+
       - name: Install flutter
         id: flutter
         uses: subosito/flutter-action@v2
@@ -175,7 +180,7 @@ jobs:
             sudo wget -qO /etc/apt/trusted.gpg.d/dart_linux_signing_key.asc https://dl-ssl.google.com/linux/linux_signing_key.pub
             sudo wget -qO /etc/apt/sources.list.d/dart_stable.list https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list
             sudo apt-get update
-            sudo apt-get install -y dart curl build-essential libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev keybinder-3.0 libnotify-dev libcurl4-openssl-dev
+            sudo apt-get install -y dart curl build-essential libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev keybinder-3.0 libnotify-dev libcurl4-openssl-dev
           fi
         shell: bash
 
@@ -292,6 +297,11 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Install Agent build runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+
       - name: Install flutter
         id: flutter
         uses: subosito/flutter-action@v2
@@ -310,7 +320,7 @@ jobs:
           sudo wget -qO /etc/apt/trusted.gpg.d/dart_linux_signing_key.asc https://dl-ssl.google.com/linux/linux_signing_key.pub
           sudo wget -qO /etc/apt/sources.list.d/dart_stable.list https://storage.googleapis.com/download.dartlang.org/linux/debian/dart_stable.list
           sudo apt-get update
-          sudo apt-get install -y dart curl build-essential libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev keybinder-3.0 libnotify-dev libcurl4-openssl-dev
+          sudo apt-get install -y dart curl build-essential libssl-dev clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev libjsoncpp-dev keybinder-3.0 libnotify-dev libcurl4-openssl-dev
         shell: bash
 
       - name: Enable Flutter Desktop

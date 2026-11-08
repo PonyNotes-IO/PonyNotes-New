@@ -150,8 +150,8 @@ script = [
   fi
   mkdir -p ${output_path}
 
-  product=${PRODUCT_NAME}-arm64-v8a-release.${PRODUCT_EXT}
-  artifact=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+  product=${PRODUCT_NAME}-universal-release.${PRODUCT_EXT}
+  artifact=${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-release.apk
   if [ ! -s "${artifact}" ]; then
     echo "Android release artifact is missing or empty: ${artifact}"
     exit 1
@@ -171,8 +171,8 @@ script = [
   """
   product_path = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/product/${APP_VERSION}
   output_path = set ${product_path}/${TARGET_OS}/${FLUTTER_OUTPUT_DIR}
-  artifact = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-  product = set ${output_path}/${PRODUCT_NAME}-arm64-v8a-release.${PRODUCT_EXT}
+  artifact = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/appflowy_flutter/build/app/outputs/flutter-apk/app-release.apk
+  product = set ${output_path}/${PRODUCT_NAME}-universal-release.${PRODUCT_EXT}
 
   if is_path_exists ${output_path}
     rm -r ${output_path}
@@ -299,10 +299,10 @@ script = ["""
   if ! flutter pub get --enforce-lockfile; then
     exit 1
   fi
-  if ! flutter build apk --release --target-platform android-arm64 --split-per-abi --split-debug-info=./ --obfuscate --verbose; then
+  if ! flutter build apk --release --target-platform android-arm64,android-arm --split-debug-info=./debug_info --obfuscate --verbose; then
     exit 1
   fi
-  if [ ! -s build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ]; then
+  if [ ! -s build/app/outputs/flutter-apk/app-release.apk ]; then
     echo "Android release artifact is missing or empty."
     exit 1
   fi
@@ -315,7 +315,7 @@ script = ["""
   if ! flutter pub get --enforce-lockfile; then
     exit 1
   fi
-  if ! flutter build apk --debug --target-platform android-arm64; then
+  if ! flutter build apk --debug --target-platform android-arm64,android-arm; then
     exit 1
   fi
 """]
@@ -329,9 +329,9 @@ script = [
   assert_eq ${result.code} 0 "flutter pub get failed"
   result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot .
   assert_eq ${result.code} 0 "Android plugin registration preflight failed"
-  result = exec cmd.exe /c flutter build apk --release --target-platform android-arm64 --split-per-abi --split-debug-info=./ --obfuscate --verbose
+  result = exec cmd.exe /c flutter build apk --release --target-platform android-arm64,android-arm --split-debug-info=./debug_info --obfuscate --verbose
   assert_eq ${result.code} 0 "Android release build failed"
-  result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot . -ArtifactPath build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+  result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot . -ArtifactPath build/app/outputs/flutter-apk/app-release.apk
   assert_eq ${result.code} 0 "Android release artifact validation failed"
   """,
 ]
@@ -345,7 +345,7 @@ script = [
   assert_eq ${result.code} 0 "flutter pub get failed"
   result = exec powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_android_plugin_registration.ps1 -ProjectRoot .
   assert_eq ${result.code} 0 "Android plugin registration preflight failed"
-  result = exec cmd.exe /c flutter build apk --debug --target-platform android-arm64
+  result = exec cmd.exe /c flutter build apk --debug --target-platform android-arm64,android-arm
   assert_eq ${result.code} 0 "Android debug build failed"
   """,
 ]

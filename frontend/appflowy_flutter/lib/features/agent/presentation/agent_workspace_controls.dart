@@ -184,6 +184,25 @@ class AgentWorkspaceControls extends StatelessWidget {
               ),
             ),
           ),
+        if (agent.credits != null)
+          Tooltip(
+            key: const Key('agent-credits'),
+            message: '${agent.credits!.label}，由模型服务按实际用量结算',
+            child: _chip(
+              context,
+              Icons.toll_outlined,
+              agent.credits!.label,
+              warning: !agent.credits!.unlimited && agent.credits!.credits <= 0,
+            ),
+          ),
+        if (agent.creditsError != null)
+          Tooltip(
+            message: agent.creditsError!,
+            child: TextButton(
+              onPressed: agent.refreshCredits,
+              child: const Text('重试积分查询'),
+            ),
+          ),
       ],
     );
   }
@@ -236,6 +255,7 @@ List<Widget> contextDetails(AgentController agent) {
   final directory = agent.workspace.directory;
   final tools = agent.activeTools;
   return [
+    if (agent.credits != null) Text('剩余额度：${agent.credits!.label}'),
     Text(contextSummary(agent)),
     if (tokens != null)
       Text(
