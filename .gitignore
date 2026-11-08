@@ -183,3 +183,19 @@ dsa_priv.pem
 frontend/artifacts/
 frontend/scripts/windows_installer/Output/
 frontend/scripts/windows_installer/PonyNotes
+
+# 本地构建 / 模拟器缓存：由 scripts/run_android.sh 与 Android emulator 生成，勿入库
+# 注意：.pub-cache 被 run_android.sh 的 PUB_CACHE 指向（3.4G，删后需重新拉取依赖）；
+#       .avd 含模拟器数据与 adbkey；.workbuddy 为项目工作记录。
+#       这些目录只忽略、不删除，否则每次构建都会重新生成并重新出现在 status 中。
+/.avd/
+/.pub-cache/
+/.cargo-target-android*/
+/.workbuddy/
+/targettest/
+
+# 临时探针文件
+/.del_probe_2
+/.delete_probe
+/probe_del.txt
+/probe_f

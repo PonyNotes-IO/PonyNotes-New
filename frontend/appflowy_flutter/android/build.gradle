@@ -1,5 +1,9 @@
 allprojects {
     repositories {
+        // Flutter Gradle 插件会拉 io.flutter:arm64_v8a_debug 等引擎产物，
+        // 默认 storage.googleapis.com 在国内不可达（clean 构建时报 404/超时），
+        // 用官方镜像兜底；找不到该依赖时会继续走下面的仓库。
+        maven { url 'https://storage.flutter-io.cn/download.flutter.io' }
         google()
         mavenCentral()
         // 添加其他仓库，例如 JitPack
