@@ -15,6 +15,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/util/log_utils.dart';
 import 'package:appflowy/util/theme_extension.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -430,7 +431,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           style: context.tooltipTextStyle(),
         ),
         TextSpan(
-          text: Platform.isMacOS ? 'Cmd+.' : 'Ctrl+\\',
+          text: shortcutLabel(context, 'app.sidebar'),
           style: context
               .tooltipTextStyle()
               ?.copyWith(color: Theme.of(context).hintColor),
@@ -1336,7 +1337,7 @@ class _HomeTopBarState extends State<HomeTopBar>
           return const SizedBox.shrink();
         }
         final theme = AppFlowyTheme.of(context);
-        final shortcut = Platform.isMacOS ? '⌘+.' : 'Ctrl+\\';
+        final shortcut = shortcutLabel(context, 'app.sidebar');
         final textSpan = TextSpan(
           children: [
             TextSpan(

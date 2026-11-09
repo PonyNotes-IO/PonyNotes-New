@@ -3,6 +3,7 @@ import 'package:appflowy/workspace/presentation/widgets/date_picker/desktop_date
 import 'package:appflowy/workspace/presentation/widgets/date_picker/utils/date_time_format_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/utils/user_time_format_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/date_time.pbenum.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_popover/appflowy_popover.dart';
@@ -154,7 +155,7 @@ class DatePickerMenu extends DatePickerService {
                 FocusScope(
                   child: Focus(
                     onKeyEvent: (node, event) {
-                      if (event.logicalKey == LogicalKeyboardKey.escape) {
+                      if (matchesShortcut('dialog.close', event)) {
                         dismiss();
                         return KeyEventResult.handled;
                       }

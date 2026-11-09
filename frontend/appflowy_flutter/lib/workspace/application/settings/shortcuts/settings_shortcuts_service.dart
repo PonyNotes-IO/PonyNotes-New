@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -10,6 +9,7 @@ import 'package:collection/collection.dart';
 import 'package:path/path.dart' as p;
 
 import 'shortcuts_model.dart';
+import 'shortcut_registry.dart';
 
 class SettingsShortcutService {
   /// If file is non null then the SettingsShortcutService uses that
@@ -29,14 +29,14 @@ class SettingsShortcutService {
   Future<void> saveAllShortcuts(
     List<CommandShortcutEvent> commandShortcuts,
   ) async {
+    await _initCompleter.future;
     final shortcuts = EditorShortcuts(
       commandShortcuts: commandShortcuts.toCommandShortcutModelList(),
     );
 
-    await _file.writeAsString(
-      jsonEncode(shortcuts.toJson()),
-      flush: true,
-    );
+    final pending = await _file.copy('${_file.path}.tmp');
+    await pending.writeAsString(jsonEncode(shortcuts.toJson()), flush: true);
+    await pending.rename(_file.path);
   }
 
   /// Checks the file for saved shortcuts. If shortcuts do NOT exist then returns
@@ -49,7 +49,13 @@ class SettingsShortcutService {
     if (shortcutsInJson.isEmpty) {
       return [];
     } else {
-      return getShortcutsFromJson(shortcutsInJson);
+      try {
+        return getShortcutsFromJson(shortcutsInJson);
+      } on FormatException {
+        return [];
+      } on TypeError {
+        return [];
+      }
     }
   }
 
@@ -57,7 +63,9 @@ class SettingsShortcutService {
   // This list needs to be converted to List<CommandShortcutEvent\>. This function is intended to facilitate the same.
   List<CommandShortcutModel> getShortcutsFromJson(String savedJson) {
     final shortcuts = EditorShortcuts.fromJson(jsonDecode(savedJson));
-    return shortcuts.commandShortcuts;
+    return shortcuts.commandShortcuts
+        .where((s) => isValidShortcutCommand(s.command))
+        .toList();
   }
 
   Future<void> updateCommandShortcuts(
@@ -68,19 +76,33 @@ class SettingsShortcutService {
       final shortcutEvent = commandShortcuts.firstWhereOrNull(
         (s) => s.key == shortcut.key && s.command != shortcut.command,
       );
-      shortcutEvent?.updateCommand(command: shortcut.command);
+      if (shortcutEvent != null &&
+          isSupportedShortcutCommand(shortcutEvent, shortcut.command)) {
+        setShortcutCommand(shortcutEvent, shortcut.command);
+      }
     }
   }
 
   Future<void> resetToDefaultShortcuts() async {
     await _initCompleter.future;
-    await saveAllShortcuts(defaultCommandShortcutEvents);
+    await saveAllShortcuts(allDefaultShortcutEvents);
+    await updateCommandShortcuts(
+      allShortcutEvents,
+      allDefaultShortcutEvents
+          .map(CommandShortcutModel.fromCommandEvent)
+          .toList(),
+    );
+    notifyShortcutChanges();
   }
 
   // Accesses the shortcuts.json file within the default AppFlowy Document Directory or creates a new file if it already doesn't exist.
   Future<void> _initializeService(File? file) async {
-    _file = file ?? await _defaultShortcutFile();
-    _initCompleter.complete();
+    try {
+      _file = file ?? await _defaultShortcutFile();
+      _initCompleter.complete();
+    } catch (error, stackTrace) {
+      _initCompleter.completeError(error, stackTrace);
+    }
   }
 
   //returns the default file for storing shortcuts

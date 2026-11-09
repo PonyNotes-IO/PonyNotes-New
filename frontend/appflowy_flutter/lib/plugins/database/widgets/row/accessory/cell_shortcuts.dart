@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -35,14 +36,9 @@ class GridCellShortcuts extends StatelessWidget {
 
   Map<ShortcutActivator, Intent> get shortcuts => {
         if (shouldAddKeyboardKey(CellKeyboardKey.onEnter))
-          LogicalKeySet(LogicalKeyboardKey.enter): const GridCellEnterIdent(),
+          const ConfiguredActivator('cell.submit'): const GridCellEnterIdent(),
         if (shouldAddKeyboardKey(CellKeyboardKey.onCopy))
-          LogicalKeySet(
-            Platform.isMacOS
-                ? LogicalKeyboardKey.meta
-                : LogicalKeyboardKey.control,
-            LogicalKeyboardKey.keyC,
-          ): const GridCellCopyIntent(),
+          const ConfiguredActivator('cell.copy'): const GridCellCopyIntent(),
       };
 
   Map<Type, Action<Intent>> get actions => {

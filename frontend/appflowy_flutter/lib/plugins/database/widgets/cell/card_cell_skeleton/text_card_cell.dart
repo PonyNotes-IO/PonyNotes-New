@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -215,7 +216,7 @@ class _TextCellState extends State<TextCardCell> {
           ignoring: !isEditing,
           child: CallbackShortcuts(
             bindings: {
-              const SingleActivator(LogicalKeyboardKey.escape): () =>
+              const ConfiguredActivator('cell.cancel'): () =>
                   focusNode.unfocus(),
               const SimpleActivator(LogicalKeyboardKey.enter): () =>
                   focusNode.unfocus(),

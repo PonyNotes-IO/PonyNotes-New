@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/database/board/application/board_actions_bloc.d
 import 'package:appflowy/plugins/database/board/application/board_bloc.dart';
 import 'package:appflowy/plugins/shared/callback_shortcuts.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -50,37 +51,24 @@ class BoardShortcutContainer extends StatelessWidget {
     BuildContext context,
   ) {
     return {
-      const SingleActivator(LogicalKeyboardKey.arrowUp):
-          focusScope.focusPrevious,
-      const SingleActivator(LogicalKeyboardKey.arrowDown): focusScope.focusNext,
-      const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
+      const ConfiguredActivator('board.previous'): focusScope.focusPrevious,
+      const ConfiguredActivator('board.next'): focusScope.focusNext,
+      const ConfiguredActivator('board.selectPrevious'):
           focusScope.adjustRangeUp,
-      const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true):
-          focusScope.adjustRangeDown,
-      const SingleActivator(LogicalKeyboardKey.escape): focusScope.clear,
-      const SingleActivator(LogicalKeyboardKey.delete): () =>
-          _removeHandler(context),
-      const SingleActivator(LogicalKeyboardKey.backspace): () =>
-          _removeHandler(context),
-      SingleActivator(
-        LogicalKeyboardKey.arrowUp,
-        shift: true,
-        meta: Platform.isMacOS,
-        control: !Platform.isMacOS,
-      ): () => _shiftCmdUpHandler(context),
-      const SingleActivator(LogicalKeyboardKey.enter): () =>
-          _enterHandler(context),
-      const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-          _enterHandler(context),
-      const SingleActivator(LogicalKeyboardKey.enter, shift: true): () =>
+      const ConfiguredActivator('board.selectNext'): focusScope.adjustRangeDown,
+      const ConfiguredActivator('board.clear'): focusScope.clear,
+      const ConfiguredActivator('board.delete'): () => _removeHandler(context),
+      const ConfiguredActivator('board.createBefore'): () =>
+          _shiftCmdUpHandler(context),
+      const ConfiguredActivator('board.open'): () => _enterHandler(context),
+      const ConfiguredActivator('board.createAfter'): () =>
           _shiftEnterHandler(context),
-      const SingleActivator(LogicalKeyboardKey.comma): () =>
+      const ConfiguredActivator('board.previousGroup'): () =>
           _moveGroupToAdjacentGroup(context, true),
-      const SingleActivator(LogicalKeyboardKey.period): () =>
+      const ConfiguredActivator('board.nextGroup'): () =>
           _moveGroupToAdjacentGroup(context, false),
-      const SingleActivator(LogicalKeyboardKey.keyE): () =>
-          _keyEHandler(context),
-      const SingleActivator(LogicalKeyboardKey.keyN): () =>
+      const ConfiguredActivator('board.edit'): () => _keyEHandler(context),
+      const ConfiguredActivator('board.createBottom'): () =>
           _keyNHandler(context),
     };
   }

@@ -1,4 +1,3 @@
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/align_toolbar_item/custom_text_align_command.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/string_extension.dart';
@@ -11,7 +10,6 @@ import 'package:appflowy/shared/error_page/error_page.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_cubit.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
-import 'package:appflowy/workspace/presentation/settings/shared/settings_alert_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/emoji_picker/emoji_shortcut_event.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -19,53 +17,55 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flowy_infra/size.dart';
-import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 
-class SettingsShortcutsView extends StatefulWidget {
-  const SettingsShortcutsView({super.key});
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 
+class SettingsShortcutsView extends StatefulWidget {
+  const SettingsShortcutsView({super.key, this.service});
+  final SettingsShortcutService? service;
   @override
   State<SettingsShortcutsView> createState() => _SettingsShortcutsViewState();
 }
 
 class _SettingsShortcutsViewState extends State<SettingsShortcutsView> {
   String _query = '';
-  bool _isEditing = false;
-
   @override
-  Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) =>
-          ShortcutsCubit(SettingsShortcutService())..fetchShortcuts(),
-      child: Builder(
-        builder: (context) => SettingsBody(
-          title: LocaleKeys.settings_shortcutsPage_title.tr(),
-          autoSeparate: false,
-          children: [
-            Row(
-              children: [
-                Flexible(
-                  child: _SearchBar(
-                    onSearchChanged: (v) => setState(() => _query = v),
+  Widget build(BuildContext context) => BlocProvider(
+        create: (_) =>
+            ShortcutsCubit(widget.service ?? SettingsShortcutService())
+              ..fetchShortcuts(),
+        child: Builder(
+          builder: (context) => SettingsBody(
+            title: LocaleKeys.settings_shortcutsPage_title.tr(),
+            autoSeparate: false,
+            children: [
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 300,
+                    child: AFTextField(
+                      onChanged: (value) => setState(
+                        () => _query = value.toLowerCase(),
+                      ),
+                      hintText: '搜索功能或组合键',
+                    ),
                   ),
-                ),
-                const HSpace(10),
-                _ResetButton(
-                  onReset: () {
-                    showConfirmDialog(
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.restore, size: 18),
+                    label: const Text('一键恢复默认'),
+                    onPressed: () => showConfirmDialog(
                       context: context,
                       title: LocaleKeys.settings_shortcutsPage_resetDialog_title
                           .tr(),
-                      description: LocaleKeys
-                          .settings_shortcutsPage_resetDialog_description
-                          .tr(),
+                      description: '将应用、编辑器和组件的全部快捷键恢复为默认组合键。',
                       confirmLabel: LocaleKeys
                           .settings_shortcutsPage_resetDialog_buttonLabel
                           .tr(),
@@ -74,457 +74,333 @@ class _SettingsShortcutsViewState extends State<SettingsShortcutsView> {
                         Navigator.of(context).pop();
                       },
                       style: ConfirmPopupStyle.cancelAndOk,
-                    );
-                  },
-                ),
-              ],
-            ),
-            BlocBuilder<ShortcutsCubit, ShortcutsState>(
-              builder: (context, state) {
-                final filtered = state.commandShortcutEvents
-                    .where(
-                      (e) => e.afLabel
-                          .toLowerCase()
-                          .contains(_query.toLowerCase()),
-                    )
-                    .toList();
-
-                return Column(
-                  children: [
-                    const VSpace(16),
-                    if (state.status.isLoading) ...[
-                      const CircularProgressIndicator(),
-                    ] else if (state.status.isFailure) ...[
-                      FlowyErrorPage.message(
-                        LocaleKeys.settings_shortcutsPage_errorPage_message
-                            .tr(args: [state.error]),
-                        howToFix: LocaleKeys
-                            .settings_shortcutsPage_errorPage_howToFix
-                            .tr(),
-                      ),
-                    ] else ...[
-                      ListView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) => ShortcutSettingTile(
-                          command: filtered[index],
-                          canStartEditing: () => !_isEditing,
-                          onStartEditing: () =>
-                              setState(() => _isEditing = true),
-                          onFinishEditing: () =>
-                              setState(() => _isEditing = false),
-                        ),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchBar extends StatelessWidget {
-  const _SearchBar({this.onSearchChanged});
-
-  final void Function(String)? onSearchChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return AFTextField(
-      onChanged: onSearchChanged,
-      hintText: LocaleKeys.settings_shortcutsPage_searchHint.tr(),
-    );
-  }
-}
-
-class _ResetButton extends StatelessWidget {
-  const _ResetButton({this.onReset});
-
-  final void Function()? onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: onReset,
-      child: FlowyHover(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            vertical: 4.0,
-            horizontal: 6,
-          ),
-          child: Row(
-            children: [
-              const FlowySvg(
-                FlowySvgs.restore_s,
-                size: Size.square(20),
+                    ),
+                  ),
+                ],
               ),
-              const HSpace(6),
-              SizedBox(
-                height: 16,
-                child: FlowyText.regular(
-                  LocaleKeys.settings_shortcutsPage_actions_resetDefault.tr(),
-                  color: AFThemeExtension.of(context).strongText,
-                ),
+              const VSpace(12),
+              const Text('点击右侧编辑按钮，直接按下组合键后保存。修改立即生效，并在下次启动时保留。'),
+              const VSpace(24),
+              BlocBuilder<ShortcutsCubit, ShortcutsState>(
+                builder: (context, state) {
+                  if (state.status.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (state.status.isFailure) {
+                    return FlowyErrorPage.message(
+                      state.error,
+                      howToFix: '请重试，或恢复默认快捷键。',
+                    );
+                  }
+                  final filtered = state.commandShortcutEvents
+                      .where(
+                        (event) =>
+                            event.afLabel.toLowerCase().contains(_query) ||
+                            event.command.toLowerCase().contains(_query),
+                      )
+                      .toList();
+                  if (filtered.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('没有匹配的快捷键'),
+                    );
+                  }
+                  final groups = <String, List<CommandShortcutEvent>>{};
+                  for (final event in filtered) {
+                    groups
+                        .putIfAbsent(shortcutScope(event), () => [])
+                        .add(event);
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final scope in [
+                        'app',
+                        'editor',
+                        'table',
+                        'code',
+                        'board',
+                        'cell',
+                        'checklist',
+                        'row',
+                        'dropdown',
+                        'dialog',
+                      ])
+                        if (groups.containsKey(scope)) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 16,
+                              bottom: 12,
+                            ),
+                            child: Text(
+                              const {
+                                'app': '应用',
+                                'editor': '文档编辑',
+                                'table': '表格单元格',
+                                'code': '代码块',
+                                'board': '看板',
+                                'cell': '数据库单元格',
+                                'checklist': '清单',
+                                'row': '行标题',
+                                'dropdown': '下拉菜单',
+                                'dialog': '弹窗',
+                              }[scope]!,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          for (final event in groups[scope]!)
+                            ShortcutSettingTile(command: event),
+                        ],
+                    ],
+                  );
+                },
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }
 
-class ShortcutSettingTile extends StatefulWidget {
-  const ShortcutSettingTile({
+class ShortcutSettingTile extends StatelessWidget {
+  const ShortcutSettingTile({super.key, required this.command});
+  final CommandShortcutEvent command;
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Theme.of(context).dividerColor),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                command.afLabel.split(' · ').last,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            const HSpace(12),
+            Expanded(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  if (command.command.isEmpty) const Text('未设置'),
+                  for (final binding
+                      in command.command.split(',').where((s) => s.isNotEmpty))
+                    KeyBadge(keyLabel: displayShortcut(binding)),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: LocaleKeys.settings_shortcutsPage_editTooltip.tr(),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              onPressed: () async {
+                isRecordingShortcut = true;
+                try {
+                  await showDialog<void>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => ShortcutRecorderDialog(
+                      command: command,
+                      cubit: context.read<ShortcutsCubit>(),
+                    ),
+                  );
+                } finally {
+                  isRecordingShortcut = false;
+                }
+              },
+            ),
+          ],
+        ),
+      );
+}
+
+class ShortcutRecorderDialog extends StatefulWidget {
+  const ShortcutRecorderDialog({
     super.key,
     required this.command,
-    required this.onStartEditing,
-    required this.onFinishEditing,
-    required this.canStartEditing,
+    required this.cubit,
   });
-
   final CommandShortcutEvent command;
-  final VoidCallback onStartEditing;
-  final VoidCallback onFinishEditing;
-  final bool Function() canStartEditing;
-
+  final ShortcutsCubit cubit;
   @override
-  State<ShortcutSettingTile> createState() => _ShortcutSettingTileState();
+  State<ShortcutRecorderDialog> createState() => _ShortcutRecorderDialogState();
 }
 
-class _ShortcutSettingTileState extends State<ShortcutSettingTile> {
-  final keybindController = TextEditingController();
-
-  late final FocusNode focusNode;
-
-  bool isHovering = false;
-  bool isEditing = false;
-  bool canClickOutside = false;
-
+class _ShortcutRecorderDialogState extends State<ShortcutRecorderDialog> {
+  late String _command = widget.command.command;
+  String? _error;
+  bool _saving = false;
+  late final FocusNode _focusNode = FocusNode(
+    onKeyEvent: (_, event) {
+      if (_saving || event is! KeyDownEvent) return KeyEventResult.handled;
+      final command = event.toCommand;
+      if (command.isNotEmpty && isValidShortcutCommand(command)) {
+        if (!isSupportedShortcutCommand(widget.command, command)) {
+          setState(() => _error = '当前平台不支持这个组合键，请换一个键。');
+          return KeyEventResult.handled;
+        }
+        setState(() {
+          _command = command;
+          _error = null;
+        });
+        _focusNode.nextFocus();
+      }
+      return KeyEventResult.handled;
+    },
+  );
   @override
   void initState() {
     super.initState();
-    focusNode = FocusNode(
-      onKeyEvent: (focusNode, key) {
-        if (key is! KeyDownEvent && key is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-
-        if (key.logicalKey == LogicalKeyboardKey.enter &&
-            !HardwareKeyboard.instance.isShiftPressed) {
-          if (keybindController.text == widget.command.command) {
-            _finishEditing();
-            return KeyEventResult.handled;
-          }
-
-          final conflict = context.read<ShortcutsCubit>().getConflict(
-                widget.command,
-                keybindController.text,
-              );
-
-          if (conflict != null) {
-            canClickOutside = true;
-            SettingsAlertDialog(
-              title: LocaleKeys.settings_shortcutsPage_conflictDialog_title
-                  .tr(args: [keybindController.text]),
-              confirm: () {
-                conflict.clearCommand();
-                _updateCommand();
-                Navigator.of(context).pop();
-              },
-              confirmLabel: LocaleKeys
-                  .settings_shortcutsPage_conflictDialog_confirmLabel
-                  .tr(),
-              children: [
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: TextSpan(
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.normal,
-                        ),
-                    children: [
-                      TextSpan(
-                        text: LocaleKeys
-                            .settings_shortcutsPage_conflictDialog_descriptionPrefix
-                            .tr(),
-                      ),
-                      TextSpan(
-                        text: conflict.afLabel,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      TextSpan(
-                        text: LocaleKeys
-                            .settings_shortcutsPage_conflictDialog_descriptionSuffix
-                            .tr(args: [keybindController.text]),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ).show(context).then((_) => canClickOutside = false);
-          } else {
-            _updateCommand();
-          }
-        } else if (key.logicalKey == LogicalKeyboardKey.escape) {
-          _finishEditing();
-        } else {
-          // Extract complete keybinding
-          setState(() => keybindController.text = key.toCommand);
-        }
-
-        return KeyEventResult.handled;
-      },
-    );
-  }
-
-  void _finishEditing() => setState(() {
-        isEditing = false;
-        keybindController.clear();
-        widget.onFinishEditing();
-      });
-
-  void _updateCommand() {
-    widget.command.updateCommand(command: keybindController.text);
-    context.read<ShortcutsCubit>().updateAllShortcuts();
-    _finishEditing();
+    isRecordingShortcut = true;
   }
 
   @override
   void dispose() {
-    focusNode.dispose();
-    keybindController.dispose();
+    _focusNode.dispose();
+    isRecordingShortcut = false;
     super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final success = await widget.cubit.rebind(widget.command, _command);
+    if (!mounted) return;
+    if (success) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() {
+        _saving = false;
+        _error = '保存失败，请重试。原有快捷键未更改。';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-      ),
-      child: FlowyHover(
-        cursor: MouseCursor.defer,
-        style: HoverStyle(
-          hoverColor: Theme.of(context).colorScheme.secondaryContainer,
-          borderRadius: BorderRadius.zero,
-        ),
-        resetHoverOnRebuild: false,
-        builder: (context, isHovering) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-              const HSpace(8),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: FlowyText.regular(
-                    widget.command.afLabel,
-                    fontSize: 14,
-                    lineHeight: 1,
-                    maxLines: 2,
-                    color: AFThemeExtension.of(context).strongText,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: isEditing
-                    ? _renderKeybindEditor()
-                    : _renderKeybindings(isHovering),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _renderKeybindings(bool isHovering) => Row(
-        children: [
-          if (widget.command.keybindings.isNotEmpty) ...[
-            ..._toParts(widget.command.keybindings.first).map(
-              (key) => KeyBadge(keyLabel: key),
-            ),
-          ] else ...[
-            const SizedBox(height: 24),
-          ],
-          const Spacer(),
-          if (isHovering)
-            GestureDetector(
-              onTap: () {
-                if (widget.canStartEditing()) {
-                  setState(() {
-                    widget.onStartEditing();
-                    isEditing = true;
-                  });
-                }
-              },
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: FlowyTooltip(
-                  message: LocaleKeys.settings_shortcutsPage_editTooltip.tr(),
-                  child: const FlowySvg(
-                    FlowySvgs.edit_s,
-                    size: Size.square(16),
-                  ),
-                ),
-              ),
-            ),
-          const HSpace(8),
-        ],
-      );
-
-  Widget _renderKeybindEditor() => TapRegion(
-        onTapOutside: canClickOutside ? null : (_) => _finishEditing(),
-        child: FlowyTextField(
-          focusNode: focusNode,
-          controller: keybindController,
-          hintText: LocaleKeys.settings_shortcutsPage_editBindingHint.tr(),
-          onChanged: (_) => setState(() {}),
-          suffixIcon: keybindController.text.isNotEmpty
-              ? MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
-                    onTap: () => setState(() => keybindController.clear()),
-                    child: const FlowySvg(
-                      FlowySvgs.close_s,
-                      size: Size.square(10),
+    final conflicts = widget.cubit.conflictsFor(widget.command, _command);
+    return AlertDialog(
+      title: Text(widget.command.afLabel),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('点击录制区后按下组合键。Enter、Esc 和 Tab 也可设为快捷键；使用下方按钮保存或取消。'),
+            const VSpace(16),
+            Focus(
+              focusNode: _focusNode,
+              autofocus: true,
+              child: GestureDetector(
+                onTap: _focusNode.requestFocus,
+                child: Semantics(
+                  label: '快捷键录制区',
+                  button: true,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _command.isEmpty
+                          ? '未设置'
+                          : _command
+                              .split(',')
+                              .map(displayShortcut)
+                              .join(' / '),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                )
-              : null,
+                ),
+              ),
+            ),
+            if (conflicts.isNotEmpty) ...[
+              const VSpace(16),
+              Text(
+                '该组合键已用于：${conflicts.map((e) => e.afLabel).join('、')}。保存将解除这些功能的相同组合键，保留其其他组合键。',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const VSpace(12),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
         ),
-      );
-
-  List<String> _toParts(Keybinding binding) {
-    final List<String> keys = [];
-
-    if (binding.isControlPressed) {
-      keys.add('ctrl');
-    }
-    if (binding.isMetaPressed) {
-      keys.add('meta');
-    }
-    if (binding.isShiftPressed) {
-      keys.add('shift');
-    }
-    if (binding.isAltPressed) {
-      keys.add('alt');
-    }
-
-    return keys..add(binding.keyLabel);
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => setState(() => _command = ''),
+          child: const Text('清除绑定'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(
+            _saving
+                ? '保存中…'
+                : conflicts.isEmpty
+                    ? '保存'
+                    : '替换并保存',
+          ),
+        ),
+      ],
+    );
   }
 }
 
 @visibleForTesting
 class KeyBadge extends StatelessWidget {
   const KeyBadge({super.key, required this.keyLabel});
-
   final String keyLabel;
-
   @override
-  Widget build(BuildContext context) {
-    if (iconData == null && keyLabel.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      height: 24,
-      margin: const EdgeInsets.only(right: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: AFThemeExtension.of(context).greySelect,
-        borderRadius: Corners.s4Border,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 1,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Center(
-        child: iconData != null
-            ? FlowySvg(iconData!, color: Colors.black)
-            : FlowyText.medium(
-                keyLabel.toLowerCase(),
-                fontSize: 12,
-                color: Colors.black,
-              ),
-      ),
-    );
-  }
-
-  FlowySvgData? get iconData => switch (keyLabel) {
-        'meta' => FlowySvgs.keyboard_meta_s,
-        'arrow left' => FlowySvgs.keyboard_arrow_left_s,
-        'arrow right' => FlowySvgs.keyboard_arrow_right_s,
-        'arrow up' => FlowySvgs.keyboard_arrow_up_s,
-        'arrow down' => FlowySvgs.keyboard_arrow_down_s,
-        'shift' => FlowySvgs.keyboard_shift_s,
-        'tab' => FlowySvgs.keyboard_tab_s,
-        'enter' || 'return' => FlowySvgs.keyboard_return_s,
-        'opt' || 'option' => FlowySvgs.keyboard_option_s,
-        _ => null,
-      };
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(keyLabel, style: Theme.of(context).textTheme.bodySmall),
+      );
 }
 
 extension ToCommand on KeyEvent {
   String get toCommand {
-    String command = '';
-    if (HardwareKeyboard.instance.isControlPressed) {
-      command += 'ctrl+';
-    }
-    if (HardwareKeyboard.instance.isMetaPressed) {
-      command += 'meta+';
-    }
-    if (HardwareKeyboard.instance.isShiftPressed) {
-      command += 'shift+';
-    }
-    if (HardwareKeyboard.instance.isAltPressed) {
-      command += 'alt+';
-    }
-
-    if ([
-      LogicalKeyboardKey.control,
-      LogicalKeyboardKey.controlLeft,
-      LogicalKeyboardKey.controlRight,
-      LogicalKeyboardKey.meta,
-      LogicalKeyboardKey.metaLeft,
-      LogicalKeyboardKey.metaRight,
-      LogicalKeyboardKey.alt,
-      LogicalKeyboardKey.altLeft,
-      LogicalKeyboardKey.altRight,
-      LogicalKeyboardKey.shift,
-      LogicalKeyboardKey.shiftLeft,
-      LogicalKeyboardKey.shiftRight,
-    ].contains(logicalKey)) {
-      return command;
-    }
-
-    final keyPressed = keyToCodeMapping.keys.firstWhere(
-      (k) => keyToCodeMapping[k] == logicalKey.keyId,
-      orElse: () => '',
-    );
-
-    return command += keyPressed;
+    final key = keyToCodeMapping.keys
+        .where((name) => keyToCodeMapping[name] == logicalKey.keyId)
+        .firstOrNull;
+    if (key == null) return '';
+    final command = [
+      if (HardwareKeyboard.instance.isControlPressed) 'ctrl',
+      if (HardwareKeyboard.instance.isMetaPressed) 'meta',
+      if (HardwareKeyboard.instance.isShiftPressed) 'shift',
+      if (HardwareKeyboard.instance.isAltPressed) 'alt',
+      key.toLowerCase(),
+    ].join('+');
+    return isValidShortcutCommand(command) ? command : '';
   }
 }
 
 extension CommandLabel on CommandShortcutEvent {
   String get afLabel {
+    if (componentShortcutDefaults.containsKey(key)) {
+      return componentShortcutDefaults[key]!.$1;
+    }
     String? label;
 
     if (key == toggleToggleListCommand.key) {

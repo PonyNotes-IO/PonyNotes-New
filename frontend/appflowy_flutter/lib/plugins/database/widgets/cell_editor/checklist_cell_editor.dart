@@ -6,6 +6,7 @@ import 'package:appflowy/plugins/database/application/cell/cell_controller_build
 import 'package:appflowy/plugins/database/grid/presentation/layout/sizes.dart';
 import 'package:appflowy/plugins/database/grid/presentation/widgets/common/type_option_separator.dart';
 import 'package:appflowy/util/debounce.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
@@ -38,7 +39,7 @@ class _ChecklistCellEditorState extends State<ChecklistCellEditor> {
     super.initState();
     newTaskFocusNode = FocusNode(
       onKeyEvent: (node, event) {
-        if (event.logicalKey == LogicalKeyboardKey.escape) {
+        if (matchesShortcut('cell.cancel', event)) {
           node.unfocus();
           return KeyEventResult.handled;
         }
@@ -311,17 +312,12 @@ class _ChecklistItemState extends State<ChecklistItem> {
 
   Map<ShortcutActivator, Intent> _buildShortcuts() {
     return {
-      SingleActivator(
-        LogicalKeyboardKey.enter,
-        meta: Platform.isMacOS,
-        control: !Platform.isMacOS,
-      ): const _SelectTaskIntent(),
+      const ConfiguredActivator('checklist.select'): const _SelectTaskIntent(),
       if (!isComposing)
-        const SingleActivator(LogicalKeyboardKey.enter):
+        const ConfiguredActivator('cell.submit'):
             const _UpdateTaskDescriptionIntent(),
       if (!isComposing)
-        const SingleActivator(LogicalKeyboardKey.escape):
-            const _EndEditingTaskIntent(),
+        const ConfiguredActivator('cell.cancel'): const _EndEditingTaskIntent(),
     };
   }
 
@@ -407,7 +403,7 @@ class _NewTaskItemState extends State<NewTaskItem> {
               bindings: isComposing
                   ? const {}
                   : {
-                      const SingleActivator(LogicalKeyboardKey.enter): () =>
+                      const ConfiguredActivator('cell.submit'): () =>
                           _createNewTask(context),
                     },
               child: TextField(

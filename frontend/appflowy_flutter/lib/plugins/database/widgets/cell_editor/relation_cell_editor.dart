@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/database/widgets/row/relation_row_detail.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
@@ -73,20 +74,20 @@ class _RelationCellEditorContentState
     super.initState();
     focusNode = FocusNode(
       onKeyEvent: (node, event) {
-        switch (event.logicalKey) {
-          case LogicalKeyboardKey.arrowUp when event is! KeyUpEvent:
+        switch (event) {
+          case final event when matchesShortcut('dropdown.previous', event):
             if (textEditingController.value.composing.isCollapsed) {
               bloc.add(const RelationRowSearchEvent.focusPreviousOption());
               return KeyEventResult.handled;
             }
             break;
-          case LogicalKeyboardKey.arrowDown when event is! KeyUpEvent:
+          case final event when matchesShortcut('dropdown.next', event):
             if (textEditingController.value.composing.isCollapsed) {
               bloc.add(const RelationRowSearchEvent.focusNextOption());
               return KeyEventResult.handled;
             }
             break;
-          case LogicalKeyboardKey.escape when event is! KeyUpEvent:
+          case final event when matchesShortcut('dialog.close', event):
             if (!textEditingController.value.composing.isCollapsed) {
               final end = textEditingController.value.composing.end;
               final text = textEditingController.text;

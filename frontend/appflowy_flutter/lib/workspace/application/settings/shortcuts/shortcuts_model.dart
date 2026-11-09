@@ -1,12 +1,16 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 
 class EditorShortcuts {
-  factory EditorShortcuts.fromJson(Map<String, dynamic> json) =>
-      EditorShortcuts(
-        commandShortcuts: List<CommandShortcutModel>.from(
-          json["commandShortcuts"].map((x) => CommandShortcutModel.fromJson(x)),
-        ),
-      );
+  factory EditorShortcuts.fromJson(Map<String, dynamic> json) {
+    if (json['commandShortcuts'] is! List) {
+      throw const FormatException('commandShortcuts must be a list');
+    }
+    return EditorShortcuts(
+      commandShortcuts: List<CommandShortcutModel>.from(
+        json["commandShortcuts"].map((x) => CommandShortcutModel.fromJson(x)),
+      ),
+    );
+  }
 
   EditorShortcuts({required this.commandShortcuts});
 

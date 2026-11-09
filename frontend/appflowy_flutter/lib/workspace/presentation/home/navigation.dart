@@ -4,6 +4,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
@@ -140,7 +141,7 @@ TextSpan sidebarTooltipTextSpan(BuildContext context, String hintText) =>
           text: "$hintText\n",
         ),
         TextSpan(
-          text: Platform.isMacOS ? "⌘+." : "Ctrl+\\",
+          text: shortcutLabel(context, 'app.sidebar'),
         ),
       ],
     );

@@ -3,9 +3,8 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
 import 'package:appflowy/util/theme_extension.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
-// ignore: implementation_imports
-import 'package:appflowy_editor/src/editor/toolbar/desktop/items/utils/tooltip_util.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/icon_button.dart';
@@ -94,7 +93,7 @@ class _FormatToolbarItem extends ToolbarItem {
               return tooltipBuilder(
                 context,
                 id.id,
-                _getTooltipText(id),
+                _getTooltipText(context, id),
                 child,
               );
             }
@@ -103,33 +102,21 @@ class _FormatToolbarItem extends ToolbarItem {
         );
 }
 
-String _getTooltipText(ToolbarId id) {
-  switch (id) {
-    case ToolbarId.underline:
-      return '${LocaleKeys.toolbar_underline.tr()}${shortcutTooltips(
-        '⌘ + U',
-        'CTRL + U',
-        'CTRL + U',
-      )}';
-    case ToolbarId.bold:
-      return '${LocaleKeys.toolbar_bold.tr()}${shortcutTooltips(
-        '⌘ + B',
-        'CTRL + B',
-        'CTRL + B',
-      )}';
-    case ToolbarId.italic:
-      return '${LocaleKeys.toolbar_italic.tr()}${shortcutTooltips(
-        '⌘ + I',
-        'CTRL + I',
-        'CTRL + I',
-      )}';
-    case ToolbarId.code:
-      return '${LocaleKeys.document_toolbar_inlineCode.tr()}${shortcutTooltips(
-        '⌘ + E',
-        'CTRL + E',
-        'CTRL + E',
-      )}';
-    default:
-      return '';
-  }
+String _getTooltipText(BuildContext context, ToolbarId id) {
+  final (label, key) = switch (id) {
+    ToolbarId.underline => (
+        LocaleKeys.toolbar_underline.tr(),
+        toggleUnderlineCommand.key
+      ),
+    ToolbarId.bold => (LocaleKeys.toolbar_bold.tr(), toggleBoldCommand.key),
+    ToolbarId.italic => (LocaleKeys.toolbar_italic.tr(), toggleItalicCommand.key),
+    ToolbarId.code => (
+        LocaleKeys.document_toolbar_inlineCode.tr(),
+        toggleCodeCommand.key
+      ),
+    _ => ('', ''),
+  };
+  if (key.isEmpty) return label;
+  final binding = shortcutLabel(context, key);
+  return binding.isEmpty ? label : '$label ($binding)';
 }

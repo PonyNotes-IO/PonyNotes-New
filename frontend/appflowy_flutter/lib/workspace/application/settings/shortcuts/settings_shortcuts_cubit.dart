@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -56,19 +56,21 @@ class ShortcutsCubit extends Cubit<ShortcutsState> {
     try {
       final customizeShortcuts = await service.getCustomizeShortcuts();
       await service.updateCommandShortcuts(
-        commandShortcutEvents,
+        allShortcutEvents,
         customizeShortcuts,
       );
+      notifyShortcutChanges();
 
       //sort the shortcuts
-      commandShortcutEvents.sort(
-        (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()),
-      );
+      final sorted = allShortcutEvents.map((event) => event.copyWith()).toList()
+        ..sort(
+          (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()),
+        );
 
       emit(
         state.copyWith(
           status: ShortcutsStatus.success,
-          commandShortcutEvents: commandShortcutEvents,
+          commandShortcutEvents: sorted,
           error: '',
         ),
       );
@@ -87,6 +89,7 @@ class ShortcutsCubit extends Cubit<ShortcutsState> {
 
     try {
       await service.saveAllShortcuts(state.commandShortcutEvents);
+      notifyShortcutChanges();
       emit(state.copyWith(status: ShortcutsStatus.success, error: ''));
     } catch (e) {
       emit(
@@ -102,7 +105,7 @@ class ShortcutsCubit extends Cubit<ShortcutsState> {
     emit(state.copyWith(status: ShortcutsStatus.updating, error: ''));
 
     try {
-      await service.saveAllShortcuts(defaultCommandShortcutEvents);
+      await service.saveAllShortcuts(allDefaultShortcutEvents);
       await fetchShortcuts();
     } catch (e) {
       emit(
@@ -114,28 +117,87 @@ class ShortcutsCubit extends Cubit<ShortcutsState> {
     }
   }
 
-  /// Checks if the new command is conflicting with other shortcut
-  /// We also check using the key, whether this command is a codeblock
-  /// shortcut, if so we only check a conflict with other codeblock shortcut.
+  List<CommandShortcutEvent> conflictsFor(
+    CommandShortcutEvent current,
+    String command,
+  ) {
+    if (command.isEmpty) return [];
+    final bindings = command.split(',').map(Keybinding.parse).toSet();
+    final existing = allShortcutEvents
+        .firstWhere((event) => event.key == current.key)
+        .keybindings
+        .toSet();
+    if (bindings.length == existing.length && bindings.containsAll(existing)) {
+      return [];
+    }
+    return allShortcutEvents
+        .where(
+          (other) =>
+              other.key != current.key &&
+              shortcutScopesOverlap(current, other) &&
+              other.keybindings.any(bindings.contains),
+        )
+        .toList();
+  }
+
+  Future<bool> rebind(CommandShortcutEvent current, String command) async {
+    if (!isSupportedShortcutCommand(current, command)) return false;
+    if (shortcutFor(current.key).command == command) return true;
+    final conflicts = conflictsFor(current, command).map((e) => e.key).toSet();
+    final bindings = command.isEmpty
+        ? <Keybinding>{}
+        : command.split(',').map(Keybinding.parse).toSet();
+    final updated = allShortcutEvents.map((event) {
+      final copy = event.copyWith();
+      if (event.key == current.key) {
+        setShortcutCommand(copy, command);
+      } else if (conflicts.contains(event.key)) {
+        setShortcutCommand(
+          copy,
+          event.command
+              .split(',')
+              .where((part) => !bindings.contains(Keybinding.parse(part)))
+              .join(','),
+        );
+      }
+      return copy;
+    }).toList();
+    try {
+      await service.saveAllShortcuts(updated);
+      for (var i = 0; i < updated.length; i++) {
+        setShortcutCommand(allShortcutEvents[i], updated[i].command);
+      }
+      notifyShortcutChanges();
+      emit(
+        state.copyWith(
+          commandShortcutEvents: updated
+            ..sort(
+              (a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()),
+            ),
+          status: ShortcutsStatus.success,
+          error: '',
+        ),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Checks the current command against shortcuts with overlapping scopes.
   CommandShortcutEvent? getConflict(
     CommandShortcutEvent currentShortcut,
     String command,
   ) {
-    // check if currentShortcut is a codeblock shortcut.
-    final isCodeBlockCommand = currentShortcut.isCodeBlockCommand;
-
     for (final shortcut in state.commandShortcutEvents) {
-      final keybindings = shortcut.command.split(',');
-      if (keybindings.contains(command) &&
-          shortcut.isCodeBlockCommand == isCodeBlockCommand) {
+      if (shortcut.key == currentShortcut.key || command.isEmpty) continue;
+      final keybindings = shortcut.keybindings;
+      if (keybindings.contains(Keybinding.parse(command)) &&
+          shortcutScopesOverlap(currentShortcut, shortcut)) {
         return shortcut;
       }
     }
 
     return null;
   }
-}
-
-extension on CommandShortcutEvent {
-  bool get isCodeBlockCommand => localizedCodeBlockCommands.contains(this);
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
@@ -203,6 +204,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     }
 
     _initEditorL10n();
+    shortcutChanges.addListener(_applyConfiguredShortcuts);
     _initializeShortcuts();
 
     AppFlowyRichTextKeys.partialSliced.addAll([
@@ -418,6 +420,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
   @override
   void dispose() {
+    shortcutChanges.removeListener(_applyConfiguredShortcuts);
     if (PlatformInfo.isTablet) {
       forceShowBlockAction = false;
     }
@@ -700,15 +703,25 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
     return const (false, null);
   }
 
+  void _applyConfiguredShortcuts() {
+    for (final event in commandShortcuts) {
+      if (event.key == 'show the find dialog')
+        setShortcutCommand(event, shortcutFor('editor.find').command);
+      if (event.key == 'show the find and replace dialog')
+        setShortcutCommand(event, shortcutFor('editor.replace').command);
+    }
+  }
+
   Future<void> _initializeShortcuts() async {
     defaultCommandShortcutEvents;
     final settingsShortcutService = SettingsShortcutService();
     final customizeShortcuts =
         await settingsShortcutService.getCustomizeShortcuts();
     await settingsShortcutService.updateCommandShortcuts(
-      commandShortcuts,
+      allShortcutEvents,
       customizeShortcuts,
     );
+    _applyConfiguredShortcuts();
   }
 
   void _setRTLToolbarItems(bool enableRtlToolbarItems) {

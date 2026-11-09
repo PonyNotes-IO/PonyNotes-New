@@ -1,6 +1,6 @@
 import 'dart:ffi';
 
-import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_cubit.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -73,7 +73,8 @@ void main() {
               .having(
                 (w) => w.commandShortcutEvents,
                 'shortcuts',
-                commandShortcutEvents,
+                orderedEquals([...allShortcutEvents]..sort((a, b) =>
+                    a.key.toLowerCase().compareTo(b.key.toLowerCase()))),
               ),
         ],
       );
@@ -155,7 +156,8 @@ void main() {
               .having(
                 (w) => w.commandShortcutEvents,
                 'shortcuts',
-                commandShortcutEvents,
+                orderedEquals([...allShortcutEvents]..sort((a, b) =>
+                    a.key.toLowerCase().compareTo(b.key.toLowerCase()))),
               ),
         ],
       );

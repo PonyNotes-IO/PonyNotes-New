@@ -8,6 +8,7 @@
 
 import 'dart:math' as math;
 
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -22,8 +23,8 @@ typedef CompareFunction<T> = bool Function(T? left, T? right);
 // Navigation shortcuts to move the selected menu items up or down.
 final Map<ShortcutActivator, Intent> _kMenuTraversalShortcuts =
     <ShortcutActivator, Intent>{
-  LogicalKeySet(LogicalKeyboardKey.arrowUp): const _ArrowUpIntent(),
-  LogicalKeySet(LogicalKeyboardKey.arrowDown): const _ArrowDownIntent(),
+  const ConfiguredActivator('dropdown.previous'): const _ArrowUpIntent(),
+  const ConfiguredActivator('dropdown.next'): const _ArrowDownIntent(),
 };
 
 /// A dropdown menu that can be opened from a [TextField]. The selected

@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/database/widgets/cell_editor/checklist_cell_edi
 import 'package:appflowy/plugins/database/widgets/cell_editor/checklist_cell_textfield.dart';
 import 'package:appflowy/plugins/database/widgets/cell_editor/checklist_progress_bar.dart';
 import 'package:appflowy/plugins/database/widgets/row/cells/cell_container.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
@@ -378,12 +379,11 @@ class _PhantomChecklistItemState extends State<PhantomChecklistItem> {
     return isComposing
         ? const {}
         : {
-            const SingleActivator(LogicalKeyboardKey.enter):
-                _SubmitPhantomTaskIntent(
+            const ConfiguredActivator('cell.submit'): _SubmitPhantomTaskIntent(
               taskDescription: widget.textController.text,
               index: widget.index,
             ),
-            const SingleActivator(LogicalKeyboardKey.escape):
+            const ConfiguredActivator('cell.cancel'):
                 const _CancelCreatingFromPhantomIntent(),
           };
   }

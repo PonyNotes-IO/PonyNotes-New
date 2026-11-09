@@ -226,6 +226,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
               changeSelectedPage: widget.changeSelectedPage,
             ),
             SettingsMenuElement(
+              page: SettingsPage.shortcuts,
+              selectedPage: widget.currentPage,
+              label: LocaleKeys.settings_shortcutsPage_title.tr(),
+              changeSelectedPage: widget.changeSelectedPage,
+            ),
+            SettingsMenuElement(
               page: SettingsPage.mcp,
               selectedPage: widget.currentPage,
               label: "AI 接入 (MCP)",

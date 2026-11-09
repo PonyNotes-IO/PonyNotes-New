@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -35,6 +36,7 @@ import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/theme.dart';
 import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/widget/dialog/styled_dialogs.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -76,6 +78,8 @@ class InitAppWidgetTask extends LaunchTask {
     await super.initialize(context);
 
     WidgetsFlutterBinding.ensureInitialized();
+    IntoDialog.dismissOnKeyEvent =
+        (event) => matchesShortcut('dialog.close', event);
 
     _setPreferredOrientations();
 
@@ -350,14 +354,16 @@ class _ApplicationWidgetState extends State<ApplicationWidget>
                                 ? EdgeInsets.zero
                                 : MediaQuery.of(context).viewInsets,
                           ),
-                          child: overlayManagerBuilder(
-                            context,
-                            !PlatformInfo.isMobile && FeatureFlag.search.isOn
-                                ? CommandPalette(
-                                    notifier: _commandPaletteNotifier,
-                                    child: child,
-                                  )
-                                : child,
+                          child: ConfiguredDialogShortcuts(
+                            child: overlayManagerBuilder(
+                              context,
+                              !PlatformInfo.isMobile && FeatureFlag.search.isOn
+                                  ? CommandPalette(
+                                      notifier: _commandPaletteNotifier,
+                                      child: child,
+                                    )
+                                  : child,
+                            ),
                           ),
                         ),
                       );

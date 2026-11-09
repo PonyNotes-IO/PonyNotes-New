@@ -6,6 +6,7 @@ import 'package:appflowy/shared/error_code/error_code_map.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/sites/settings_sites_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -59,7 +60,7 @@ class _DomainSettingsDialogState extends State<DomainSettingsDialog> {
         autofocus: true,
         onKeyEvent: (event) {
           if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.escape) {
+              matchesShortcut('dialog.close', event)) {
             Navigator.of(context).pop();
           }
         },

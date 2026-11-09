@@ -21,6 +21,7 @@ import 'package:appflowy/plugins/shared/cover_type_ext.dart';
 import 'package:appflowy/shared/af_image.dart';
 import 'package:appflowy/shared/flowy_gradient_colors.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
@@ -667,10 +668,8 @@ class _TitleSkin extends IEditableTextCellSkin {
 
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            focusNode.unfocus(),
-        const SimpleActivator(LogicalKeyboardKey.enter): () =>
-            focusNode.unfocus(),
+        const ConfiguredActivator('row.cancel'): () => focusNode.unfocus(),
+        const ConfiguredActivator('row.submit'): () => focusNode.unfocus(),
       },
       child: TextField(
         controller: textEditingController,

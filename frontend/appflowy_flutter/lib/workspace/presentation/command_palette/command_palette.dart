@@ -4,6 +4,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -167,12 +168,8 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
           ),
         },
         shortcuts: {
-          LogicalKeySet(
-            UniversalPlatform.isMacOS
-                ? LogicalKeyboardKey.meta
-                : LogicalKeyboardKey.control,
-            LogicalKeyboardKey.keyP,
-          ): const _ToggleCommandPaletteIntent(),
+          const ConfiguredActivator('app.palette'):
+              const _ToggleCommandPaletteIntent(),
         },
         child: child,
       );

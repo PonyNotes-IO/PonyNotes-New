@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
@@ -508,24 +509,17 @@ class _BoardColumnFooterState extends State<BoardColumnFooter> {
     const nada = DoNothingAndStopPropagationIntent();
     return Shortcuts(
       shortcuts: {
-        const SingleActivator(LogicalKeyboardKey.arrowUp): nada,
-        const SingleActivator(LogicalKeyboardKey.arrowDown): nada,
-        const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): nada,
-        const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): nada,
-        const SingleActivator(LogicalKeyboardKey.keyE): nada,
-        const SingleActivator(LogicalKeyboardKey.keyN): nada,
-        const SingleActivator(LogicalKeyboardKey.delete): nada,
-        // const SingleActivator(LogicalKeyboardKey.backspace): nada,
-        const SingleActivator(LogicalKeyboardKey.enter): nada,
-        const SingleActivator(LogicalKeyboardKey.numpadEnter): nada,
-        const SingleActivator(LogicalKeyboardKey.comma): nada,
-        const SingleActivator(LogicalKeyboardKey.period): nada,
-        SingleActivator(
-          LogicalKeyboardKey.arrowUp,
-          shift: true,
-          meta: Platform.isMacOS,
-          control: !Platform.isMacOS,
-        ): nada,
+        const ConfiguredActivator('board.previous'): nada,
+        const ConfiguredActivator('board.next'): nada,
+        const ConfiguredActivator('board.selectPrevious'): nada,
+        const ConfiguredActivator('board.selectNext'): nada,
+        const ConfiguredActivator('board.edit'): nada,
+        const ConfiguredActivator('board.createBottom'): nada,
+        const ConfiguredActivator('board.delete'): nada,
+        const ConfiguredActivator('board.open'): nada,
+        const ConfiguredActivator('board.previousGroup'): nada,
+        const ConfiguredActivator('board.nextGroup'): nada,
+        const ConfiguredActivator('board.createBefore'): nada,
       },
       child: FlowyTextField(
         hintTextConstraints: const BoxConstraints(maxHeight: 36),
@@ -657,25 +651,17 @@ class _BoardCardState extends State<_BoardCard> {
       },
       child: Shortcuts(
         shortcuts: {
-          const SingleActivator(LogicalKeyboardKey.arrowUp): nada,
-          const SingleActivator(LogicalKeyboardKey.arrowDown): nada,
-          const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): nada,
-          const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true):
-              nada,
-          const SingleActivator(LogicalKeyboardKey.keyE): nada,
-          const SingleActivator(LogicalKeyboardKey.keyN): nada,
-          const SingleActivator(LogicalKeyboardKey.delete): nada,
-          // const SingleActivator(LogicalKeyboardKey.backspace): nada,
-          const SingleActivator(LogicalKeyboardKey.enter): nada,
-          const SingleActivator(LogicalKeyboardKey.numpadEnter): nada,
-          const SingleActivator(LogicalKeyboardKey.comma): nada,
-          const SingleActivator(LogicalKeyboardKey.period): nada,
-          SingleActivator(
-            LogicalKeyboardKey.arrowUp,
-            shift: true,
-            meta: Platform.isMacOS,
-            control: !Platform.isMacOS,
-          ): nada,
+          const ConfiguredActivator('board.previous'): nada,
+          const ConfiguredActivator('board.next'): nada,
+          const ConfiguredActivator('board.selectPrevious'): nada,
+          const ConfiguredActivator('board.selectNext'): nada,
+          const ConfiguredActivator('board.edit'): nada,
+          const ConfiguredActivator('board.createBottom'): nada,
+          const ConfiguredActivator('board.delete'): nada,
+          const ConfiguredActivator('board.open'): nada,
+          const ConfiguredActivator('board.previousGroup'): nada,
+          const ConfiguredActivator('board.nextGroup'): nada,
+          const ConfiguredActivator('board.createBefore'): nada,
         },
         child: ConditionalListenableBuilder<List<GroupedRowId>>(
           valueListenable: widget.notifier,

@@ -8,13 +8,16 @@ import 'package:flowy_infra_ui/style_widget/scrolling/styled_list.dart';
 import 'package:flowy_infra_ui/widget/dialog/dialog_size.dart';
 
 extension IntoDialog on Widget {
+  static bool Function(KeyEvent) dismissOnKeyEvent = (event) =>
+      event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape;
+
   Future<dynamic> show(BuildContext context) async {
     FocusNode dialogFocusNode = FocusNode();
     await Dialogs.show(
       child: KeyboardListener(
         focusNode: dialogFocusNode,
         onKeyEvent: (event) {
-          if (event.logicalKey == LogicalKeyboardKey.escape) {
+          if (dismissOnKeyEvent(event)) {
             Navigator.of(context).pop();
           }
         },

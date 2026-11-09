@@ -11,6 +11,7 @@ import 'package:appflowy/plugins/document/presentation/editor_notification.dart'
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/loading.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -775,9 +776,10 @@ class _SidebarSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final searchLabel = PlatformInfo.isTablet
+    final paletteShortcut = shortcutLabel(context, 'app.palette');
+    final searchLabel = PlatformInfo.isTablet || paletteShortcut.isEmpty
         ? LocaleKeys.search_label.tr()
-        : '${LocaleKeys.search_label.tr()} (${Platform.isMacOS ? String.fromCharCode(0x2318) : 'Ctrl'}+P)';
+        : '${LocaleKeys.search_label.tr()} ($paletteShortcut)';
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final searchBackgroundColor =
         isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;

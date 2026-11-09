@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
@@ -7,11 +6,14 @@ import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/sidebar/rename_view/rename_view_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_setting.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:scaled_app/scaled_app.dart';
@@ -77,155 +79,32 @@ class HomeHotKeys extends StatefulWidget {
 class _HomeHotKeysState extends State<HomeHotKeys> {
   final windowSizeManager = WindowSizeManager();
   var _isRegistered = false;
+  final List<HotKeyItem> _registeredItems = [];
+  Future<void> _registration = Future.value();
 
-  late final items = [
-    // Collapse sidebar menu (using slash)
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.backslash,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => colappsedMenus(context),
-    ),
-
-    // Collapse sidebar menu (using .)
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.period,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => colappsedMenus(context),
-    ),
-
-    // Toggle theme mode light/dark. Ctrl/Cmd+Shift+L belongs to the document
-    // editor's left-align command, so use Alt to avoid both handlers firing.
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.keyL,
-        modifiers: [
-          Platform.isMacOS ? KeyModifier.meta : KeyModifier.control,
-          KeyModifier.shift,
-          KeyModifier.alt,
-        ],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) =>
-          context.read<AppearanceSettingsCubit>().toggleThemeMode(),
-    ),
-
-    // Close current tab
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.keyW,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) =>
-          context.read<TabsBloc>().add(const TabsEvent.closeCurrentTab()),
-    ),
-
-    // Go to previous tab
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.pageUp,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => _selectTab(context, -1),
-    ),
-
-    // Go to next tab
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.pageDown,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => _selectTab(context, 1),
-    ),
-
-    // Rename current view
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.f2,
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) =>
-          getIt<RenameViewBloc>().add(const RenameViewEvent.open()),
-    ),
-
-    // Scale up/down the app
-    // In some keyboards, the system returns equal as + keycode, while others may return add as + keycode, so add them both as zoom in key.
-    ...zoomInKeyCodes.map(
-      (keycode) => HotKeyItem(
-        hotKey: HotKey(
-          keycode,
-          modifiers: [
-            Platform.isMacOS ? KeyModifier.meta : KeyModifier.control,
-          ],
-          scope: HotKeyScope.inapp,
-        ),
-        keyDownHandler: (_) => _scaleWithStep(0.1),
-      ),
-    ),
-
-    ...zoomOutKeyCodes.map(
-      (keycode) => HotKeyItem(
-        hotKey: HotKey(
-          keycode,
-          modifiers: [
-            Platform.isMacOS ? KeyModifier.meta : KeyModifier.control,
-          ],
-          scope: HotKeyScope.inapp,
-        ),
-        keyDownHandler: (_) => _scaleWithStep(-0.1),
-      ),
-    ),
-
-    // Reset app scaling
-    ...resetZoomKeyCodes.map(
-      (keycode) => HotKeyItem(
-        hotKey: HotKey(
-          keycode,
-          modifiers: [
-            Platform.isMacOS ? KeyModifier.meta : KeyModifier.control,
-          ],
-          scope: HotKeyScope.inapp,
-        ),
-        keyDownHandler: (_) => _scale(1),
-      ),
-    ),
-
-    // Switch to the next space
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.keyO,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => switchToTheNextSpace.value++,
-    ),
-
-    // Create a new page
-    HotKeyItem(
-      hotKey: HotKey(
-        KeyCode.keyN,
-        modifiers: [Platform.isMacOS ? KeyModifier.meta : KeyModifier.control],
-        scope: HotKeyScope.inapp,
-      ),
-      keyDownHandler: (_) => createNewPageNotifier.value++,
-    ),
-
-    // Open settings dialog
-    openSettingsHotKey(context),
-  ];
+  late final Map<String, KeyDownHandler> handlers = {
+    'app.sidebar': (_) => colappsedMenus(context),
+    'app.theme': (_) =>
+        context.read<AppearanceSettingsCubit>().toggleThemeMode(),
+    'app.closeTab': (_) =>
+        context.read<TabsBloc>().add(const TabsEvent.closeCurrentTab()),
+    'app.previousTab': (_) => _selectTab(context, -1),
+    'app.nextTab': (_) => _selectTab(context, 1),
+    'app.rename': (_) =>
+        getIt<RenameViewBloc>().add(const RenameViewEvent.open()),
+    'app.zoomIn': (_) => _scaleWithStep(0.1),
+    'app.zoomOut': (_) => _scaleWithStep(-0.1),
+    'app.resetZoom': (_) => _scale(1),
+    'app.nextSpace': (_) => switchToTheNextSpace.value++,
+    'app.newPage': (_) => createNewPageNotifier.value++,
+    'app.settings': openSettingsHotKey(context).keyDownHandler!,
+  };
 
   @override
   void initState() {
     super.initState();
-    unawaited(_registerHotKeys());
+    shortcutChanges.addListener(_refreshHotKeys);
+    _registration = _loadHotKeys();
   }
 
   @override
@@ -233,16 +112,41 @@ class _HomeHotKeysState extends State<HomeHotKeys> {
 
   @override
   void dispose() {
-    unawaited(_unregisterHotKeys());
+    shortcutChanges.removeListener(_refreshHotKeys);
+    unawaited(_registration.then((_) => _unregisterHotKeys()));
     super.dispose();
   }
 
   Future<void> _registerHotKeys() async {
-    if (_isRegistered) {
+    if (_isRegistered || !mounted) {
       return;
     }
     _isRegistered = true;
-    await Future.wait(items.map((item) => item.register()));
+    for (final entry in handlers.entries) {
+      final id = entry.key;
+      for (final binding in shortcutFor(id).keybindings) {
+        final code =
+            KeyCodeParser.fromLogicalKey(LogicalKeyboardKey(binding.keyCode));
+        if (code == null) continue;
+        final configured = HotKeyItem(
+          hotKey: HotKey(
+            code,
+            scope: HotKeyScope.inapp,
+            modifiers: [
+              if (binding.isControlPressed) KeyModifier.control,
+              if (binding.isMetaPressed) KeyModifier.meta,
+              if (binding.isAltPressed) KeyModifier.alt,
+              if (binding.isShiftPressed) KeyModifier.shift,
+            ],
+          ),
+          keyDownHandler: (key) {
+            if (!isRecordingShortcut) entry.value(key);
+          },
+        );
+        await configured.register();
+        _registeredItems.add(configured);
+      }
+    }
   }
 
   Future<void> _unregisterHotKeys() async {
@@ -250,7 +154,28 @@ class _HomeHotKeysState extends State<HomeHotKeys> {
       return;
     }
     _isRegistered = false;
-    await Future.wait(items.map((item) => item.unregister()));
+    await Future.wait(_registeredItems.map((item) => item.unregister()));
+    _registeredItems.clear();
+  }
+
+  Future<void> _loadHotKeys() async {
+    try {
+      final service = SettingsShortcutService();
+      await service.updateCommandShortcuts(
+        allShortcutEvents,
+        await service.getCustomizeShortcuts(),
+      );
+    } catch (error) {
+      Log.error('Could not load shortcuts: $error');
+    }
+    await _registerHotKeys();
+  }
+
+  void _refreshHotKeys() {
+    _registration = _registration.then((_) async {
+      await _unregisterHotKeys();
+      await _registerHotKeys();
+    });
   }
 
   void _selectTab(BuildContext context, int change) {
