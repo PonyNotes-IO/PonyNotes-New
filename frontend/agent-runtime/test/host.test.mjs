@@ -217,21 +217,48 @@ test('pi connects a stdio MCP server and executes its approved tool', async t =>
   const f = await fixture(t, 'external');
   f.approvals.allowed = true;
   f.config.mcpServers = { local: { command: process.execPath, args: [path.resolve('test/stdio-mcp-fixture.mjs')] } };
-  f.config.directory = f.directory;
   await f.host.receive({ type: 'initialize', id: 'init', config: f.config });
   await f.host.receive({ type: 'prompt', id: 'q', message: 'Use the echo tool' });
   assert.ok(f.host.session.messages.some(message => message.role === 'toolResult' && JSON.stringify(message).includes('echo:hello')));
   assert.ok(f.host.session.getActiveToolNames().includes('read_mcp_resource'));
 });
 
-test('without a working directory only note tools are active, even with MCP configured', async t => {
-  const f = await fixture(t, 'text');
+test('default session directory enables tools and restores its artifacts', async t => {
+  const f = await fixture(t, 'file');
+  f.config.documentId = 'default-directory-document';
   f.config.mcpServers = { local: { command: process.execPath, args: [path.resolve('test/stdio-mcp-fixture.mjs')] } };
   await f.host.receive({ type: 'initialize', id: 'init', config: f.config });
   const tools = f.host.session.getActiveToolNames();
   assert.ok(tools.includes('notes_search_notes'));
-  for (const name of ['read', 'write', 'edit', 'ls', 'run_command', 'read_mcp_resource']) assert.ok(!tools.includes(name), name);
-  assert.equal(f.host.state().directory, '');
+  for (const name of ['read', 'write', 'edit', 'ls', 'run_command']) assert.ok(tools.includes(name), name);
+  const cwd = f.host.cwd;
+  assert.match(path.relative(path.join(f.directory, 'artifacts'), cwd), /^\d{4}-\d{2}-\d{2}[\\/]user-workspace-chat$/);
+  await f.host.receive({ type: 'prompt', id: 'denied', message: 'Write a file' });
+  assert.equal(f.records.filter(r => r.type === 'approval').length, 1);
+  f.approvals.allowed = true;
+  await f.host.receive({ type: 'prompt', id: 'approved', message: 'Write a file' });
+  assert.equal(await readFile(path.join(cwd, 'result.txt'), 'utf8'), 'approved result');
+  await f.host.close();
+  const restored = new AgentHost({ dataRoot: f.directory, send: () => {} });
+  await restored.initialize(f.config);
+  assert.equal(restored.cwd, cwd);
+  assert.equal(await readFile(path.join(restored.cwd, 'result.txt'), 'utf8'), 'approved result');
+  await restored.close();
+});
+
+test('remote default directory keeps command policy and existing selected remote directory', async t => {
+  const f = await fixture(t, 'text');
+  const remote = new AgentHost({ dataRoot: f.directory, remote: true, send: () => {} });
+  await remote.initialize(f.config);
+  assert.ok(remote.session.getActiveToolNames().includes('write'));
+  assert.ok(!remote.session.getActiveToolNames().includes('run_command'));
+  assert.ok(remote.cwd.startsWith(path.join(f.directory, 'artifacts')));
+  await remote.close();
+  const selected = new AgentHost({ dataRoot: f.directory, remote: true, allowCommands: true, send: () => {} });
+  await selected.initialize({ ...f.config, directory: 'remote-workspace' });
+  assert.equal(selected.cwd, path.join(f.directory, f.config.scope, 'files'));
+  assert.ok(selected.session.getActiveToolNames().includes('run_command'));
+  await selected.close();
 });
 
 test('permission modes: auto edits inside the directory without asking, full asks nothing', async t => {
@@ -262,6 +289,10 @@ test('changing the working directory keeps the document transcript', async t => 
   assert.equal(f.host.session.sessionId, sessionId);
   assert.ok(f.host.session.getActiveToolNames().includes('write'));
   assert.ok(f.host.session.messages.some(m => m.role === 'user' && JSON.stringify(m.content).includes('alpha')));
+  await f.host.receive({ type: 'configure_workspace', id: 'default', config: { directory: '' } });
+  assert.ok(f.host.cwd.startsWith(path.join(f.directory, 'artifacts')));
+  assert.equal(f.host.session.sessionId, sessionId);
+  await f.host.receive({ type: 'configure_workspace', id: 'dir-again', config: { directory: work } });
   await f.host.receive({ type: 'configure_workspace', id: 'missing', config: { directory: path.join(f.directory, 'nope') } });
   assert.equal(f.records.find(r => r.id === 'missing').success, false);
   assert.equal(f.host.state().directory, work);
@@ -274,5 +305,5 @@ test('the model is told it is 小马 Agent and never sees engine names', async t
   const system = f.requests[0].messages.find(m => m.role === 'system' || m.role === 'developer').content;
   assert.match(system, /小马 Agent/);
   assert.doesNotMatch(system, /running inside pi|coding agent harness|Pi documentation|pi-coding-agent/i);
-  assert.doesNotMatch(system, new RegExp(f.directory.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')));
+  assert.match(system, /默认工作目录/);
 });

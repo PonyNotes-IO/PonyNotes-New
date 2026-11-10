@@ -5,6 +5,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +21,7 @@ class AgentCloudAccount {
   final String accessToken;
   final String userId;
   String get selectionKey => 'ponynotes.agent.model.$baseUrl|$userId';
+  String get customSelectionKey => '$selectionKey.custom';
 
   static Future<AgentCloudAccount> current() async {
     if (!getIt.isRegistered<AppFlowyCloudSharedEnv>() ||
@@ -57,6 +59,7 @@ class AgentInternalService {
         _account = account ?? AgentCloudAccount.current;
   final http.Client? _client;
   final Future<AgentCloudAccount> Function() _account;
+  static const _secure = FlutterSecureStorage();
   DateTime? _expiresAt;
   bool get sessionNeedsRefresh =>
       _expiresAt == null ||
@@ -119,18 +122,34 @@ class AgentInternalService {
     try {
       account = await _account();
     } catch (_) {
-      if (custom.isComplete) return custom;
+      if ((!getIt.isRegistered<AppFlowyCloudSharedEnv>() ||
+              !getIt<AppFlowyCloudSharedEnv>()
+                  .authenticatorType
+                  .isAppFlowyCloudEnabled) &&
+          custom.isComplete) {
+        return custom;
+      }
       rethrow;
     }
-    final model =
-        (await SharedPreferences.getInstance()).getString(account.selectionKey);
+    final prefs = await SharedPreferences.getInstance();
+    final model = prefs.getString(account.selectionKey);
     if (model != null) {
       return available
               ?.where((value) => value.modelName == model)
               .firstOrNull ??
           AiProviderConfig(modelName: model, isInternal: true);
     }
-    if (custom.isComplete) return custom;
+    final selectedCustom = await _secure.read(key: account.customSelectionKey);
+    if (selectedCustom != null) {
+      final data = jsonDecode(selectedCustom) as Map<String, dynamic>;
+      final config = AiProviderConfig(
+        baseUrl: data['baseUrl'] as String,
+        modelName: data['modelName'] as String,
+        apiKey: data['apiKey'] as String,
+        supportsReasoning: data['supportsReasoning'] == true,
+      );
+      if (config.isComplete) return config;
+    }
     available ??= await models(account: account);
     if (available.isEmpty) throw StateError('暂无可用内部模型，请联系管理员');
     return available.first;
@@ -142,18 +161,33 @@ class AgentInternalService {
       try {
         account = await _account();
       } catch (_) {
-        // Local custom profiles do not require a cloud login.
+        if (getIt.isRegistered<AppFlowyCloudSharedEnv>() &&
+            getIt<AppFlowyCloudSharedEnv>()
+                .authenticatorType
+                .isAppFlowyCloudEnabled) {
+          rethrow;
+        }
       }
       await const AiProviderConfigStorage().save(config);
       if (account != null) {
-        await (await SharedPreferences.getInstance())
-            .remove(account.selectionKey);
+        final prefs = await SharedPreferences.getInstance();
+        await _secure.write(
+          key: account.customSelectionKey,
+          value: jsonEncode({
+            'baseUrl': config.baseUrl,
+            'modelName': config.modelName,
+            'apiKey': config.apiKey,
+            'supportsReasoning': config.supportsReasoning,
+          }),
+        );
+        await prefs.remove(account.selectionKey);
       }
       return;
     }
     final account = await _account();
-    await (await SharedPreferences.getInstance())
-        .setString(account.selectionKey, config.modelName);
+    final prefs = await SharedPreferences.getInstance();
+    await _secure.delete(key: account.customSelectionKey);
+    await prefs.setString(account.selectionKey, config.modelName);
   }
 
   Future<AiProviderConfig> runtimeConfig(AiProviderConfig model) async {

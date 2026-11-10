@@ -86,7 +86,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   Future<void> _load({AiProviderConfig? selected}) async {
     final generation = ++loadGeneration;
     try {
-      var config = selected ?? widget.currentConfig ?? await storage.load();
+      var config = selected ?? widget.currentConfig ?? const AiProviderConfig();
       final saved = await storage.loadProfiles();
       final level =
           widget.currentThinking ?? await AgentModelPreferences.loadThinking();
@@ -105,6 +105,13 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
             await internal.preferred(available: managed);
       } catch (e) {
         failure = '$e'.replaceFirst('Bad state: ', '');
+        if (selected == null && widget.currentConfig == null) {
+          try {
+            config = await internal.preferred(available: managed);
+          } catch (_) {
+            // Keep the model unselected if account identification failed.
+          }
+        }
       }
       if (!mounted || generation != loadGeneration) return;
       setState(() {

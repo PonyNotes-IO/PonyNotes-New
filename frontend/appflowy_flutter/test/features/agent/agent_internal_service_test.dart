@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:appflowy/env/backend_env.dart';
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -68,7 +73,15 @@ void main() {
       'internal selection is isolated by cloud account and cannot leak into custom storage',
       () async {
     var current = account;
-    final service = AgentInternalService(account: () async => current);
+    final service = AgentInternalService(
+      account: () async => current,
+      client: MockClient(
+        (_) async => http.Response(
+          '{"data":[{"id":"other-managed"}]}',
+          200,
+        ),
+      ),
+    );
     const selected = AiProviderConfig(modelName: 'managed', isInternal: true);
     await service.select(selected);
     expect((await service.preferred()).isInternal, true);
@@ -83,6 +96,8 @@ void main() {
       apiKey: 'own-key',
     );
     await const AiProviderConfigStorage().save(custom);
+    expect((await service.preferred()).modelName, 'other-managed');
+    await service.select(custom);
     expect((await service.preferred()).isInternal, false);
     await expectLater(
       const AiProviderConfigStorage().save(selected),
@@ -92,6 +107,19 @@ void main() {
     expect((await service.preferred()).modelName, 'managed');
     await service.select(custom);
     expect((await service.preferred()).modelName, 'custom');
+    const changedCustom = AiProviderConfig(
+      baseUrl: 'https://another.test',
+      modelName: 'another',
+      apiKey: 'another-key',
+    );
+    current = const AgentCloudAccount(
+      baseUrl: 'https://cloud.test',
+      accessToken: 'other',
+      userId: '2',
+    );
+    await service.select(changedCustom);
+    current = account;
+    expect((await service.preferred()).apiKey, 'own-key');
   });
 
   test('custom models stay usable without a cloud account or cloud requests',
@@ -112,6 +140,34 @@ void main() {
     expect((await service.preferred()).modelName, 'custom');
     expect(await service.runtimeConfig(custom), same(custom));
     await service.revoke(custom);
+  });
+
+  test('cloud identity failure never falls back to a device custom key',
+      () async {
+    getIt.registerSingleton<AppFlowyCloudSharedEnv>(
+      AppFlowyCloudSharedEnv(
+        authenticatorType: AuthenticatorType.appflowyCloud,
+        appflowyCloudConfig: AppFlowyCloudConfiguration(
+          base_url: 'https://cloud.test',
+          ws_base_url: 'wss://cloud.test',
+          gotrue_url: 'https://cloud.test',
+          enable_sync_trace: false,
+          base_web_domain: 'https://cloud.test',
+        ),
+      ),
+    );
+    addTearDown(() => getIt.unregister<AppFlowyCloudSharedEnv>());
+    const custom = AiProviderConfig(
+      baseUrl: 'https://custom.test/v1',
+      modelName: 'custom',
+      apiKey: 'old-account-key',
+    );
+    await const AiProviderConfigStorage().save(custom);
+    final service = AgentInternalService(
+      account: () async => throw StateError('identity unavailable'),
+    );
+    await expectLater(service.preferred(), throwsStateError);
+    await expectLater(service.select(custom), throwsStateError);
   });
 
   test(
@@ -136,6 +192,73 @@ void main() {
     expect((await service.credits()).label, '积分不限额');
     body = '{"unit":"USD","remaining":2.5}';
     await expectLater(service.credits(), throwsFormatException);
+  });
+
+  test('credit refresh queues a fresh request while one is in flight',
+      () async {
+    final first = Completer<http.Response>();
+    var requests = 0;
+    final service = AgentInternalService(
+      account: () async => account,
+      client: MockClient((request) async {
+        requests++;
+        if (requests == 1) return first.future;
+        return http.Response(
+          '{"unit":"USD","remaining":0.01,"credits_per_usd":100}',
+          200,
+        );
+      }),
+    );
+    final controller =
+        AgentController(chatId: 'credit-test', internalService: service)
+          ..providerConfig =
+              const AiProviderConfig(modelName: 'managed', isInternal: true)
+          ..connected = true;
+    final pending = controller.refreshCredits();
+    await Future<void>.delayed(Duration.zero);
+    await controller.refreshCredits();
+    expect(requests, 1);
+    first.complete(
+      http.Response(
+        '{"unit":"USD","remaining":0.96,"credits_per_usd":100}',
+        200,
+      ),
+    );
+    await pending;
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(requests, 2);
+    expect(controller.credits?.label, '1.00 积分');
+
+    await controller.disconnect();
+    expect(controller.credits, isNull);
+    controller.dispose();
+  });
+
+  test('late credit response cannot restore a disconnected balance', () async {
+    final response = Completer<http.Response>();
+    final controller = AgentController(
+      chatId: 'credit-disconnect',
+      internalService: AgentInternalService(
+        account: () async => account,
+        client: MockClient((_) => response.future),
+      ),
+    )
+      ..providerConfig =
+          const AiProviderConfig(modelName: 'managed', isInternal: true)
+      ..connected = true;
+    final pending = controller.refreshCredits();
+    await Future<void>.delayed(Duration.zero);
+    await controller.disconnect();
+    response.complete(
+      http.Response(
+        '{"unit":"USD","remaining":0.96,"credits_per_usd":100}',
+        200,
+      ),
+    );
+    await pending;
+    expect(controller.credits, isNull);
+    controller.dispose();
   });
 
   test('expired login and unprovisioned service remain visible errors',

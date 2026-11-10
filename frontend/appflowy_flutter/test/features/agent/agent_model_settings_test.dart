@@ -224,6 +224,13 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       await storage.save(first);
       await storage.save(second);
+      await AgentInternalService(
+        account: () async => const AgentCloudAccount(
+          baseUrl: 'https://cloud.test',
+          accessToken: 'login',
+          userId: '1',
+        ),
+      ).select(second);
       await AgentModelPreferences.saveThinking('high');
       final theme = AppFlowyDefaultTheme();
       final boundary = GlobalKey();

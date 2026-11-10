@@ -57,7 +57,7 @@ class AgentWorkspaceControls extends StatelessWidget {
           title: const Text('开启完全开放？'),
           content: Text(
             '${permissionHints['full']}。'
-            '${agent.workspace.directory.isEmpty ? '' : '命令拥有当前系统用户的权限，可访问工作目录以外的文件。'}'
+            '命令拥有执行器系统用户的权限，可访问工作目录以外的文件。'
             '仅在信任当前任务时使用。',
           ),
           actions: [
@@ -84,7 +84,7 @@ class AgentWorkspaceControls extends StatelessWidget {
     final canPickLocal = !agent.remote &&
         (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
     final label = directory.isEmpty
-        ? '仅笔记'
+        ? '默认会话目录'
         : directory == AgentWorkspaceConfig.remoteDirectory
             ? '远端任务目录'
             : p.basename(directory);
@@ -94,10 +94,8 @@ class AgentWorkspaceControls extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         PopupMenuButton<String>(
-          tooltip: directory.isEmpty ||
-                  directory == AgentWorkspaceConfig.remoteDirectory
-              ? '工作目录：未选择时只能使用小马笔记的笔记工具'
-              : '工作目录：$directory',
+          tooltip:
+              '工作目录：${directory.isEmpty ? agent.effectiveDirectory ?? '默认会话目录' : directory == AgentWorkspaceConfig.remoteDirectory ? '远端任务目录' : directory}',
           enabled: !busy,
           onSelected: (value) => switch (value) {
             'pick' => _pickDirectory(context),
@@ -123,12 +121,12 @@ class AgentWorkspaceControls extends StatelessWidget {
             PopupMenuItem(
               value: 'none',
               enabled: directory.isNotEmpty,
-              child: const Text('不使用工作目录（仅笔记工具）'),
+              child: const Text('使用默认会话目录'),
             ),
           ],
           child: _chip(
             context,
-            directory.isEmpty ? Icons.note_outlined : Icons.folder_outlined,
+            Icons.folder_outlined,
             label,
           ),
         ),
@@ -264,7 +262,7 @@ List<Widget> contextDetails(AgentController agent) {
       ),
     const SizedBox(height: 8),
     Text(
-      '工作目录：${directory.isEmpty ? '未选择（仅笔记工具）' : directory == AgentWorkspaceConfig.remoteDirectory ? '远端任务目录' : directory}',
+      '工作目录：${directory.isEmpty ? agent.effectiveDirectory ?? '默认会话目录' : directory == AgentWorkspaceConfig.remoteDirectory ? '远端任务目录' : directory}',
     ),
     Text('权限：${permissionLabels[agent.workspace.permissionMode]}'),
     if (tools.isNotEmpty)

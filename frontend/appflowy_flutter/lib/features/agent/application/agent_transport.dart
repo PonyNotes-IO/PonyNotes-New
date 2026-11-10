@@ -15,6 +15,7 @@ class AgentTransport {
 
   Future<void> connect({
     required String dataDirectory,
+    String? artifactDirectory,
     String remoteUrl = '',
     String token = '',
   }) async {
@@ -76,7 +77,11 @@ class AgentTransport {
     final node = await File(bundledNode).exists() ? bundledNode : 'node';
     _process = await Process.start(
       node,
-      [p.join(runtime, 'src', 'stdio.mjs'), dataDirectory],
+      [
+        p.join(runtime, 'src', 'stdio.mjs'),
+        dataDirectory,
+        if (artifactDirectory != null) artifactDirectory,
+      ],
       workingDirectory: runtime,
     );
     _process!.stdout
