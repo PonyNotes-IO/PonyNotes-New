@@ -37,7 +37,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
-    DeepLinkLoadingOverlay.show(message: '正在加入协作工作区...');
+    DeepLinkLoadingOverlay.show(message: '正在加入协作空间...');
     try {
       // Try to extract code and ws from query or path with simple parsing
       String? code = uri.queryParameters['code'];
@@ -125,8 +125,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
             context: context,
             builder: (dialogCtx) {
               return AlertDialog(
-                title: const Text('已加入工作区'),
-                content: Text('已成功加入工作区 $joinedWorkspaceId，是否前往查看？'),
+                title: const Text('已加入空间'),
+                content: Text('已成功加入空间 $joinedWorkspaceId，是否前往查看？'),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.of(dialogCtx).pop(),
@@ -161,7 +161,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
               return AlertDialog(
                 title: const Text('加入失败'),
                 content: Text(
-                    '自动加入工作区失败：${resp.statusCode} ${resp.body.isNotEmpty ? resp.body : ''}'),
+                    '自动加入空间失败：${resp.statusCode} ${resp.body.isNotEmpty ? resp.body : ''}'),
                 actions: [
                   TextButton(
                     onPressed: () async {

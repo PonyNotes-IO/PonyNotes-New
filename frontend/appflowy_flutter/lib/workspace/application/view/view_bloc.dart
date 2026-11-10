@@ -472,7 +472,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               emit(
                 state.copyWith(
                   successOrFailure: FlowyResult.failure(
-                    FlowyError(msg: '无法获取当前工作区'),
+                    FlowyError(msg: '无法获取当前空间'),
                   ),
                 ),
               );

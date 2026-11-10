@@ -18,7 +18,7 @@ extension AFRolePBExtension on AFRolePB {
   String get description {
     switch (this) {
       case AFRolePB.Owner:
-        return '工作空间所有者';
+        return '空间所有者';
       case AFRolePB.Member:
         return '成员';
       case AFRolePB.Guest:

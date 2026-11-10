@@ -121,7 +121,7 @@ class _TemplatePageState extends State<TemplatePage>
       if (workspaceId.isEmpty) {
         if (context.mounted) {
           showToastNotification(
-            message: '无法获取工作空间信息',
+            message: '无法获取空间信息',
             type: ToastificationType.error,
           );
         }

@@ -234,7 +234,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       final errorResult = FlowyResult.failure(
         FlowyError(
           code: ErrorCode.Internal,
-          msg: '云同步已关闭，无法创建工作区。请先开启云同步功能。',
+          msg: '云同步已关闭，无法创建空间。请先开启云同步功能。',
         ),
       );
       emit(

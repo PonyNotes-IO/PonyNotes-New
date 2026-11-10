@@ -42,7 +42,7 @@ class HttpCollabWorkspaceResolver implements CollabWorkspaceResolver {
         _accessTokenProvider = accessTokenProvider,
         _currentWorkspaceIdProvider = currentWorkspaceIdProvider;
 
-  static const unavailableMessage = '无法确认文档所属工作区，请刷新后重试';
+  static const unavailableMessage = '无法确认文档所属空间，请刷新后重试';
 
   final http.Client _client;
   final String Function() _baseUrlProvider;

@@ -141,7 +141,7 @@ class _SettingsWorkspaceManagementViewState
   Widget build(BuildContext context) {
     return SettingsBody(
       title: '空间管理',
-      description: '管理您的工作空间设置和配置',
+      description: '管理您的空间设置和配置',
       autoSeparate:
           false, // control separators manually to avoid duplicate dividers
       headerTrailingBuilder: (context) => _buildRightButton(),
@@ -165,8 +165,8 @@ class _SettingsWorkspaceManagementViewState
     }
 
     return SettingsCategory(
-      title: '仅工作空间所有者可以创建团队协作区',
-      description: '仅允许工作空间所有者创建团队协作区',
+      title: '仅空间所有者可以创建团队协作区',
+      description: '仅允许空间所有者创建团队协作区',
       actions: [
             Toggle(
               value: _onlyOwnerCanCreateTeamWorkspace,
@@ -174,7 +174,7 @@ class _SettingsWorkspaceManagementViewState
             // value == true means turning on (limit to owners)
             // value == false means turning off (allow all members)
             final message =
-                value ? '限定此工作空间只有工作空间所有者可以创建团队协作区？' : '允许此工作空间的所有成员创建团队协作区？';
+                value ? '限定此空间只有空间所有者可以创建团队协作区？' : '允许此空间的所有成员创建团队协作区？';
 
             showSimpleConfirmDialog(
               context: context,
@@ -911,7 +911,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                   itemBuilder: (ctx2) => [
                                                     const PopupMenuItem(
                                                         value: AFRolePB.Owner,
-                                                        child: Text('工作空间所有者')),
+                                                        child: Text('空间所有者')),
                                                     const PopupMenuItem(
                                                         value: AFRolePB.Member,
                                                         child: Text('成员')),
@@ -926,7 +926,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                       Text(
                                                           dialogSelectedRole ==
                                                                   AFRolePB.Owner
-                                                              ? '工作空间所有者'
+                                                              ? '空间所有者'
                                                               : dialogSelectedRole ==
                                                                       AFRolePB
                                                                           .Guest

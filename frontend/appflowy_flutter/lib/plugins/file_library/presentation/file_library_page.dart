@@ -1197,7 +1197,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       if (workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
           showToastNotification(
-            message: '无法获取当前工作空间',
+            message: '无法获取当前空间',
             type: ToastificationType.error,
           );
         }

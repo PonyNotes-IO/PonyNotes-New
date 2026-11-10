@@ -381,7 +381,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
       if (!mounted) return;
       if (workspaceId == null) {
-        _showError('无法获取工作空间信息');
+        _showError('无法获取空间信息');
         setState(() => _isSending = false);
         return;
       }

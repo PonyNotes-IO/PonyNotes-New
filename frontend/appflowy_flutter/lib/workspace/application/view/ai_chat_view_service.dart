@@ -43,7 +43,7 @@ class AIChatViewService {
       final chatName = _generateChatName(initialMessage);
       
       Log.info('🔄 开始创建AI Chat视图...');
-      Log.info('   - 工作空间ID: $parentViewId');
+      Log.info('   - 空间ID: $parentViewId');
       Log.info('   - 名称: $chatName');
       Log.info('   - 模型: $selectedModelId');
       Log.info('   - 初始消息: ${initialMessage?.substring(0, initialMessage.length > 50 ? 50 : initialMessage.length)}...');
