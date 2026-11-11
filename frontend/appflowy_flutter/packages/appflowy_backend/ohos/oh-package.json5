@@ -1,0 +1,10 @@
+{
+  "name": "appflowy_backend",
+  "version": "1.0.0",
+  "description": "AppFlowy backend plugin for HarmonyOS",
+  "main": "index.ets",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "@ohos/flutter_ohos": "file:./har/flutter.har",
+  },
+}

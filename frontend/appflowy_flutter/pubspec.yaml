@@ -256,7 +256,15 @@ dependency_overrides:
   #  在 frontend_server 新版本下会被拒，导致 Android / 桌面所有真机编译失败）
   win32: 5.13.0
   flutter_math_fork: ^0.7.3
-  
+
+  # image 4.11.0 的 png_decoder.dart 会调用 ZLibDecoder.decodeLazy，而本项目锁定的
+  # archive 4.0.9 没有该 API，kernel_snapshot 直接报
+  # "The method 'decodeLazy' isn't defined for the type 'ZLibDecoder'"，
+  # macOS / iOS / 鸿蒙 构建都会在 PhaseScriptExecution 阶段失败。
+  # image 是传递依赖且没有上界，任何一次全量 pub get 都可能把它升上去，
+  # 因此在这里精确锁定，避免只改 pubspec.lock 后再次被覆盖。
+  image: 4.5.4
+
   # 使用官方兼容版本
   quill_native_bridge: ^11.1.0
   volume_controller: ^3.4.0

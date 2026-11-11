@@ -391,6 +391,7 @@ class _AFDropdownMenuState<T> extends State<AFDropdownMenu<T>> {
       case TargetPlatform.iOS:
       case TargetPlatform.android:
       case TargetPlatform.fuchsia:
+      case TargetPlatform.ohos:
         return false;
       case TargetPlatform.macOS:
       case TargetPlatform.linux:
