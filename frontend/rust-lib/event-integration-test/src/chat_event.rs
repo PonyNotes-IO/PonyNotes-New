@@ -64,6 +64,7 @@ impl EventIntegrationTest {
       enable_web_search: false,
       images: vec![],
       has_images: false,
+      enable_knowledge_search: false,
     };
 
     EventBuilder::new(self.clone())

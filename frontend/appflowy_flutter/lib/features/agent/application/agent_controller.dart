@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mcp_dart/mcp_dart.dart';
@@ -77,29 +79,53 @@ class AgentController extends ChangeNotifier {
   /// Gateway balance for the active model key; null for endpoints without credits.
   AgentCredits? credits;
   String? creditsError;
+  Timer? _creditsTimer;
+  bool _creditsInFlight = false;
+  bool _creditsRefreshAgain = false;
   Future<void> refreshCredits() async {
     final config = providerConfig;
     if (config == null) return;
+    if (_creditsInFlight) {
+      _creditsRefreshAgain = true;
+      return;
+    }
+    _creditsInFlight = true;
+    final epoch = _epoch;
     try {
+      if (_identity != null && await identity() != _identity) {
+        throw StateError('账号或工作区已切换');
+      }
       final value = config.isInternal
           ? await internalService.credits()
           : await fetchAgentCredits(config);
-      if (identical(config, providerConfig)) {
+      if (_identity != null && await identity() != _identity) {
+        throw StateError('账号或工作区已切换');
+      }
+      if (epoch == _epoch && identical(config, providerConfig)) {
         credits = value;
         creditsError = null;
         changed();
       }
     } catch (_) {
-      if (identical(config, providerConfig)) {
+      if (epoch == _epoch && identical(config, providerConfig)) {
         credits = null;
         creditsError = '积分查询失败，请稍后重试';
         changed();
+      }
+    } finally {
+      _creditsInFlight = false;
+      if (_creditsRefreshAgain && connected && !_disposed) {
+        _creditsRefreshAgain = false;
+        unawaited(refreshCredits());
+      } else {
+        _creditsRefreshAgain = false;
       }
     }
   }
 
   String thinkingLevel = 'off';
   String location = '本机';
+  String? effectiveDirectory;
   String? authorizationUrl;
   HttpServer? _oauthRelay;
   Map<String, dynamic>? contextUsage;
@@ -154,6 +180,9 @@ class AgentController extends ChangeNotifier {
       }
       await transport.connect(
         dataDirectory: p.join(support.path, 'agent'),
+        artifactDirectory: settings.remoteUrl.isEmpty
+            ? p.join(await getIt<ApplicationDataStorage>().getPath(), 'agent')
+            : null,
         remoteUrl: settings.remoteUrl,
         token: settings.remoteToken,
       );
@@ -210,8 +239,14 @@ class AgentController extends ChangeNotifier {
       providerConfig = runtime.isInternal
           ? runtime.copyWith(baseUrl: '', apiKey: '')
           : runtime;
-      unawaited(refreshCredits());
       connected = true;
+      _creditsTimer?.cancel();
+      _creditsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!_creditsInFlight) {
+          unawaited(refreshCredits());
+        }
+      });
+      unawaited(refreshCredits());
     } catch (e) {
       if (epoch == _epoch) {
         error = '$e';
@@ -498,6 +533,7 @@ class AgentController extends ChangeNotifier {
     model = state['model'] as String? ?? model;
     thinkingLevel = state['thinkingLevel'] as String? ?? thinkingLevel;
     location = state['location'] as String? ?? location;
+    effectiveDirectory = state['directory'] as String?;
     steps
       ..clear()
       ..addAll(
@@ -715,6 +751,9 @@ class AgentController extends ChangeNotifier {
   }
 
   Future<void> disconnect({bool keepError = false}) async {
+    _creditsTimer?.cancel();
+    _creditsTimer = null;
+    _creditsRefreshAgain = false;
     ++clearanceVersion;
     ++_epoch;
     ++_runEpoch;

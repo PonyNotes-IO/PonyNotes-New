@@ -51,9 +51,10 @@ export async function insideDirectory(root, candidate) {
 
 // One host belongs to one authenticated connection; disconnect always revokes its pending actions.
 export class AgentHost {
-  constructor({ send, dataRoot, remote = false, allowCommands = false, skillDirectories = [] }) {
+  constructor({ send, dataRoot, artifactRoot = path.join(dataRoot, 'artifacts'), remote = false, allowCommands = false, skillDirectories = [] }) {
     this.send = send;
     this.dataRoot = path.resolve(dataRoot);
+    this.artifactRoot = path.resolve(artifactRoot);
     this.remote = remote;
     this.allowCommands = allowCommands;
     this.skillDirectories = skillDirectories;
@@ -203,6 +204,17 @@ export class AgentHost {
     this.config = { ...config, permissionMode: config.permissionMode ?? 'ask' };
     this.sessionDir = path.join(this.dataRoot, safeKey(config.scope));
     this.agentDir = path.join(this.sessionDir, 'config');
+    await mkdir(this.sessionDir, { recursive: true, mode: 0o700 });
+    const dateFile = path.join(this.sessionDir, 'artifact-date');
+    try {
+      this.artifactDate = (await readFile(dateFile, 'utf8')).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(this.artifactDate)) throw Error('无效的会话产物日期');
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+      const now = new Date();
+      this.artifactDate = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+      await writeFile(dateFile, this.artifactDate, { mode: 0o600 });
+    }
     await this.prepareCwd();
     await mkdir(this.agentDir, { recursive: true, mode: 0o700 });
     this.oauthState = config.mcpCredentials;
@@ -234,7 +246,9 @@ export class AgentHost {
   }
   async prepareCwd() {
     const local = this.config.directory && !this.remote;
-    this.cwd = local ? path.resolve(this.config.directory) : path.join(this.sessionDir, 'files');
+    this.cwd = local ? path.resolve(this.config.directory) : this.remote && this.config.directory
+      ? path.join(this.sessionDir, 'files')
+      : path.join(this.artifactRoot, this.artifactDate, safeKey(this.config.scope));
     if (local) { if (!existsSync(this.cwd)) throw Error('工作目录不存在'); }
     else await mkdir(this.cwd, { recursive: true, mode: 0o700 });
   }
@@ -250,13 +264,11 @@ export class AgentHost {
   }
   async openSession(manager) {
     await this.teardownSession('switch');
-    // Without a working directory only 小马笔记 note tools are available.
-    const workspace = Boolean(this.config.directory);
     const settings = SettingsManager.inMemory({
       compaction: { enabled: true }, retry: { enabled: true, maxRetries: 2 },
-      defaultTools: workspace ? ['read', 'ls', 'edit', 'write'] : [],
+      defaultTools: ['read', 'ls', 'edit', 'write'],
     });
-    const servers = Object.entries(workspace ? this.config.mcpServers || {} : {}).map(([name, config]) => {
+    const servers = Object.entries(this.config.mcpServers || {}).map(([name, config]) => {
       if (!/^[a-zA-Z0-9_-]+$/.test(name)) throw Error('MCP 服务名称只能包含字母、数字、横线和下划线');
       if (!config.url && !config.command) throw Error(`MCP ${name} 缺少地址或启动命令`);
       if (config.auth) throw Error('MCP 认证请使用独立的 headers 或 OAuth，不得转发模型凭据');
@@ -275,7 +287,7 @@ export class AgentHost {
         let level = 'exec';
         if (['read', 'edit', 'write', 'find', 'grep', 'ls'].includes(event.toolName)) {
           const target = event.toolName === 'read' ? await resolveReadPathAsync(event.input.path || '.', this.cwd) : resolveToCwd(event.input.path || '.', this.cwd);
-          if (!this.config.directory || !(await insideDirectory(this.cwd, target))) return { block: true, reason: '目标不在工作目录中' };
+          if (!(await insideDirectory(this.cwd, target))) return { block: true, reason: '目标不在工作目录中' };
           event.input.path = target;
           if (['read', 'find', 'grep', 'ls'].includes(event.toolName)) return;
           level = 'edit';
@@ -291,17 +303,15 @@ export class AgentHost {
         return { content: event.content.map(part => part.type === 'text' ? { ...part, text: scrubEngineNames(part.text) } : part) };
       });
       agent.on('before_agent_start', event => {
-        // The cwd section would otherwise name an internal data path.
-        if (!workspace) event.systemPromptOptions.cwd = '（未选择工作目录）';
-        else if (this.remote) event.systemPromptOptions.cwd = '远端任务目录';
+        if (this.remote) event.systemPromptOptions.cwd = '远端任务目录';
       });
     };
     const loader = new DefaultResourceLoader({
       cwd: this.cwd, agentDir: this.agentDir, settingsManager: settings,
       noExtensions: true, noContextFiles: true, noThemes: true,
       noSkills: true, noPromptTemplates: true,
-      additionalSkillPaths: !workspace ? [] : this.remote ? this.skillDirectories : (this.config.skillDirectories || []),
-      extensionFactories: [policy, createToolSearchExtension(), ...(workspace ? [createMcpExtension({
+      additionalSkillPaths: this.remote ? this.skillDirectories : (this.config.skillDirectories || []),
+      extensionFactories: [policy, createToolSearchExtension(), createMcpExtension({
         credentials: this.mcpCredentials,
         logPath: path.join(this.agentDir, 'mcp.log'),
         loadConfig: () => ({ servers, errors: [], autoEnableCodemode: false }),
@@ -316,9 +326,9 @@ export class AgentHost {
           this.send({ type: 'open_url', url, callback: this.remote ? redirect : undefined });
         },
         updateConfig: () => { throw Error('请在小马笔记的 Agent 设置中修改 MCP 配置'); },
-      })] : [])],
+      })],
       // A custom prompt replaces the engine preamble and its documentation section.
-      systemPrompt: conversationPrompt(this.config.workspaceId, this.config.documentId, workspace),
+      systemPrompt: conversationPrompt(this.config.workspaceId, this.config.documentId, Boolean(this.config.directory)),
       appendSystemPrompt: [],
     });
     await loader.reload();
@@ -338,7 +348,7 @@ export class AgentHost {
         this.send({ type: 'plan', steps: args.steps }); return textResult(JSON.stringify(args));
       },
     };
-    const commandTools = workspace && (!this.remote || this.allowCommands) ? [{
+    const commandTools = !this.remote || this.allowCommands ? [{
       name: 'run_command', label: '执行命令', description: process.platform === 'win32' ? '在工作目录中通过 PowerShell 7 执行命令。' : '在工作目录中执行 shell 命令。',
       parameters: { type: 'object', properties: { command: { type: 'string', minLength: 1 } }, required: ['command'] },
       execute: async (_id, args, signal, update) => new Promise((resolve, reject) => {
@@ -370,9 +380,8 @@ export class AgentHost {
     if (this.closed) { result.session.dispose(); throw Error('连接已关闭'); }
     this.session = result.session;
     this.session.agent.toolExecution = 'sequential';
-    // File access is opt-in; a shell is never enabled by an MCP configuration.
     const names = this.session.getActiveToolNames();
-    if (workspace) names.push('read', 'ls', 'edit', 'write');
+    names.push('read', 'ls', 'edit', 'write');
     this.session.setActiveToolsByName([...new Set(names)]);
     this.session.subscribe(event => { if (!this.closed) this.send({ type: 'event', event }); });
     const ui = {
@@ -395,7 +404,7 @@ export class AgentHost {
       messages: this.session.messages, stats: this.session.getSessionStats(), context: this.session.getContextUsage(),
       steps: this.session.sessionManager.getEntries().filter(e => e.type === 'custom' && e.customType === 'ponynotes-plan').at(-1)?.data?.steps || [],
       tools: this.session.getActiveToolNames(), model: this.config.model, thinkingLevel: this.session.thinkingLevel, location: this.remote ? '远端执行器' : '本机',
-      directory: !this.config.directory ? '' : this.remote ? '远端任务目录' : this.cwd, permissionMode: this.config.permissionMode,
+      directory: this.remote ? '远端任务目录' : this.cwd, permissionMode: this.config.permissionMode,
     };
   }
   sendState() { if (this.session && !this.closed) this.send({ type: 'state', data: this.state() }); }

@@ -193,7 +193,7 @@ void main() {
       expect(find.text('允许这次'), findsOneWidget);
       expect(find.text('拒绝'), findsOneWidget);
       expect(find.byTooltip('停止任务'), findsOneWidget);
-      expect(find.text('仅笔记'), findsOneWidget);
+      expect(find.text('默认会话目录'), findsOneWidget);
       expect(find.text('逐次确认'), findsOneWidget);
       expect(find.byKey(const Key('agent-context-gauge')), findsOneWidget);
       expect(find.byKey(const Key('agent-credits')), findsNothing);

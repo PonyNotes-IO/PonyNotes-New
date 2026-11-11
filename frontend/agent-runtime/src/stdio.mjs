@@ -1,7 +1,7 @@
 import { AgentHost } from './host.mjs';
 const dataRoot = process.argv[2];
 if (!dataRoot) throw Error('Missing application data directory');
-const host = new AgentHost({ dataRoot, send: record => process.stdout.write(`${JSON.stringify(record)}\n`) });
+const host = new AgentHost({ dataRoot, artifactRoot: process.argv[3], send: record => process.stdout.write(`${JSON.stringify(record)}\n`) });
 let buffer = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {

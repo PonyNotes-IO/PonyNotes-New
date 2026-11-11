@@ -78,7 +78,7 @@ class AgentWorkspaceConfig {
     this.permissionMode = 'ask',
   });
 
-  /// Empty: only 小马笔记 note tools. [remoteDirectory]: the remote executor's task directory.
+  /// Empty: the session's default directory. [remoteDirectory]: the remote executor's task directory.
   final String directory;
 
   /// ask: confirm every change; auto: approve edits, ask for commands/deletes/external tools; full: never ask.
