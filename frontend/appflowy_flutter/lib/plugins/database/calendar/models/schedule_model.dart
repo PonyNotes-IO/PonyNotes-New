@@ -18,6 +18,10 @@ import 'package:appflowy/plugins/database/application/cell/cell_data_loader.dart
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
+import 'package:appflowy/user/application/reminder/reminder_service.dart';
+import 'package:appflowy/user/application/reminder/notification_service.dart';
+import 'package:appflowy/user/application/reminder/recurring_reminder.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/reminder.pb.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -26,9 +30,12 @@ import 'package:nanoid/nanoid.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:collection/collection.dart';
+import 'package:appflowy_backend/log.dart';
 
 import '../../application/field/field_info.dart';
-import 'package:appflowy_backend/log.dart';
+import 'recurrence_rule.dart';
+
+export 'recurrence_rule.dart';
 
 // 日程数据模型 - 基于 AppFlowy 数据库行
 class ScheduleItem {
@@ -167,216 +174,6 @@ class ScheduleItem {
   }
 }
 
-// 重复规则处理类
-class RecurrenceRule {
-  final int repeatType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
-  final String? repeatRuleJson; // 自定义规则JSON
-  final DateTime startDate; // 原始开始日期
-  /// 勿将日程单次结束时间当作重复截止；仅 JSON 中 until/endDate 表示「重复截止到某日」
-  final DateTime? endDate;
-
-  RecurrenceRule({
-    required this.repeatType,
-    this.repeatRuleJson,
-    required this.startDate,
-    this.endDate,
-  });
-
-  // 判断某个日期是否匹配重复规则
-  bool matchesDate(DateTime date) {
-    if (repeatType == 0) {
-      return false;
-    }
-
-    final dateOnly = _getDateOnly(date);
-    final startDateOnly = _getDateOnly(startDate);
-    // 仅使用重复规则 JSON 里的截止日期；不用日程 endTime（跨天日程的结束日会错误截断整段重复）
-    final repeatUntil = _getRuleEndDate();
-
-    // 如果日期在原始日期之前，不匹配（所有重复类型都允许匹配过去日期）
-
-    if (repeatUntil != null &&
-        dateOnly.isAfter(_getDateOnly(repeatUntil))) {
-      return false;
-    }
-
-    switch (repeatType) {
-      case 1: // 每天
-        return true;
-
-      case 2: // 每周：仅「周期锚点日」（与开始日同一星期几），且与开始日相差整周
-        if (repeatRuleJson != null && repeatRuleJson!.isNotEmpty) {
-          try {
-            final rule = jsonDecode(repeatRuleJson!) as Map<String, dynamic>;
-            final weekdays = rule['weekdays'] as List<dynamic>?;
-            if (weekdays != null && weekdays.isNotEmpty) {
-              final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
-              if (!weekdayList.contains(date.weekday)) return false;
-              final diff = dateOnly.difference(startDateOnly).inDays;
-              return diff % 7 == 0;
-            }
-          } catch (_) {}
-        }
-        if (date.weekday != startDate.weekday) return false;
-        final d = dateOnly.difference(startDateOnly).inDays;
-        return d % 7 == 0;
-
-      case 3: // 每年
-        return date.month == startDate.month && date.day == startDate.day;
-
-      case 4: // 法定工作日（需要节假日库）
-        if (date.weekday == 6 || date.weekday == 7) {
-          return false;
-        }
-        return true;
-
-      case 99: // 自定义
-        return _matchesCustomRule(date);
-
-      default:
-        return false;
-    }
-  }
-
-  // 解析自定义规则（如"每1周的周一"）
-  bool _matchesCustomRule(DateTime date) {
-    if (repeatRuleJson == null || repeatRuleJson!.isEmpty) {
-      return false;
-    }
-
-    try {
-      // 解析规则：如"每1周的周一、周三" -> {"unit": 1, "interval": 1, "weekdays": [1, 3]}
-      final rule = jsonDecode(repeatRuleJson!);
-      final unit = rule['unit'] ?? 1; // 0=天 1=周 2=月 3=年
-      final interval = rule['interval'] ?? 1;
-      final weekdays = rule['weekdays'] as List<dynamic>?;
-
-      final dateOnly = _getDateOnly(date);
-      final startDateOnly = _getDateOnly(startDate);
-      final daysDiff = dateOnly.difference(startDateOnly).inDays;
-
-      switch (unit) {
-        case 0: // 每 N 天
-          // 每 interval 天重复一次
-          return daysDiff >= 0 && daysDiff % interval == 0;
-
-        case 1: // 每 N 周的特定星期几
-          if (weekdays == null || weekdays.isEmpty) {
-            return false;
-          }
-          // 自定义对话框保存的 weekday 索引为 0..6（周一..周日），
-          // 而 DateTime.weekday 为 1..7（周一..周日）。需要做 +1 映射。
-          final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
-          if (!weekdayList.contains(date.weekday)) {
-            return false;
-          }
-
-          // 计算从开始日期所在周（周一为起点）到目标日期所在周的天数
-          // 先把两个日期都对齐到各自的周一
-          final startWeekday = startDateOnly.weekday; // 1=周一
-          final dateWeekday = dateOnly.weekday;         // 1=周一
-          final daysToStartMonday = startDateOnly.day - startWeekday;
-          final daysToDateMonday = dateOnly.day - dateWeekday;
-          final startMonday = startDateOnly.subtract(Duration(days: daysToStartMonday));
-          final dateMonday = dateOnly.subtract(Duration(days: daysToDateMonday));
-          // 两个周一之间的天数差，再除以7得到周数差
-          final weeksDiff = dateMonday.difference(startMonday).inDays ~/ 7;
-
-          return weeksDiff >= 0 && weeksDiff % interval == 0;
-
-        case 2: // 每 N 月
-          // 计算月份差
-          final monthsDiff = (date.year - startDate.year) * 12 + (date.month - startDate.month);
-          if (monthsDiff < 0 || monthsDiff % interval != 0) {
-            return false;
-          }
-          // 在同一个月内，日期应该相同或接近（处理月末情况）
-          // 如果开始日期是月末（如31日），目标月份可能没有31日，则使用该月最后一天
-          final targetDay = _getDayInMonth(date.year, date.month, startDate.day);
-          return date.day == targetDay;
-
-        case 3: // 每 N 年
-          // 计算年份差
-          final yearsDiff = date.year - startDate.year;
-          if (yearsDiff < 0 || yearsDiff % interval != 0) {
-            return false;
-          }
-          // 在同一年内，月份和日期应该相同
-          // 处理闰年2月29日的情况：如果开始日期是2月29日，目标年份不是闰年，则使用2月28日
-          if (startDate.month == 2 && startDate.day == 29) {
-            // 闰年2月29日的情况
-            final isLeapYear = _isLeapYear(date.year);
-            if (isLeapYear) {
-              return date.month == 2 && date.day == 29;
-            } else {
-              return date.month == 2 && date.day == 28;
-            }
-          }
-          return date.month == startDate.month && date.day == startDate.day;
-
-        default:
-          return false;
-      }
-    } catch (e) {
-      print('⚠️ [RecurrenceRule] 解析自定义规则失败: $e');
-      return false;
-    }
-  }
-
-  DateTime? _getRuleEndDate() {
-    if (repeatRuleJson == null || repeatRuleJson!.isEmpty) {
-      return null;
-    }
-    try {
-      final rule = jsonDecode(repeatRuleJson!);
-      if (rule is! Map<String, dynamic>) {
-        return null;
-      }
-      final raw = rule['endDate'] ??
-          rule['until'] ??
-          rule['untilDate'] ??
-          rule['end_at'] ??
-          rule['endTimestamp'];
-      if (raw == null) {
-        return null;
-      }
-      if (raw is int) {
-        final millis = raw > 1000000000000 ? raw : raw * 1000;
-        return DateTime.fromMillisecondsSinceEpoch(millis);
-      }
-      if (raw is String && raw.isNotEmpty) {
-        final asInt = int.tryParse(raw);
-        if (asInt != null) {
-          final millis = asInt > 1000000000000 ? asInt : asInt * 1000;
-          return DateTime.fromMillisecondsSinceEpoch(millis);
-        }
-        return DateTime.tryParse(raw);
-      }
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // 获取日期部分（去除时分秒）
-  DateTime _getDateOnly(DateTime date) {
-    return DateTime(date.year, date.month, date.day);
-  }
-
-  // 获取月份中的有效日期（处理月末情况）
-  int _getDayInMonth(int year, int month, int day) {
-    // 获取该月的最大天数
-    final daysInMonth = DateTime(year, month + 1, 0).day;
-    // 如果指定的日期超过该月的最大天数，返回该月的最后一天
-    return day > daysInMonth ? daysInMonth : day;
-  }
-
-  // 判断是否为闰年
-  bool _isLeapYear(int year) {
-    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-  }
-}
-
 // 日程管理模型 - 基于 AppFlowy 数据库
 class ScheduleModel extends ChangeNotifier {
   final List<ScheduleItem> _schedules = [];
@@ -387,9 +184,6 @@ class ScheduleModel extends ChangeNotifier {
   DatabaseController? _databaseController; // 数据库控制器
   DatabaseCallbacks? _databaseCallbacks; // 数据库回调
   bool _isDatabaseReady = false; // 数据库是否已准备就绪
-  static const Duration _reminderUpdateWaitTimeout = Duration(seconds: 1);
-  static const Duration _reminderUpdatePollInterval =
-      Duration(milliseconds: 50);
   
   // 展开/收起状态管理
   bool _isIncompleteExpanded = true; // 未完成区域是否展开
@@ -494,29 +288,6 @@ class ScheduleModel extends ChangeNotifier {
       Log.error('❌ [ScheduleModel] setViewIdAsync 数据库监听器初始化失败: $e');
       if (!_isDisposed) await refresh();
     }
-  }
-
-  // 等待 ReminderBloc 将指定提醒更新为目标时间（避免刷新读到旧值）
-  Future<void> _waitReminderUpdated(
-      String reminderId, DateTime expected) async {
-    try {
-      final deadline = DateTime.now().add(_reminderUpdateWaitTimeout);
-      while (DateTime.now().isBefore(deadline)) {
-        final reminderBloc = getIt<ReminderBloc>();
-        final r = reminderBloc.state.reminders
-                .firstWhereOrNull((e) => e.id == reminderId) ??
-            reminderBloc.state.allReminders
-                .firstWhereOrNull((e) => e.id == reminderId);
-        if (r != null) {
-          final scheduled = r.scheduledAt.toDateTime();
-          if ((scheduled.millisecondsSinceEpoch ~/ 1000) ==
-              (expected.millisecondsSinceEpoch ~/ 1000)) {
-            return; // 已更新
-          }
-        }
-        await Future.delayed(_reminderUpdatePollInterval);
-      }
-    } catch (_) {}
   }
 
   // 刷新日程数据（带防抖机制，避免重复调用）
@@ -949,7 +720,7 @@ class ScheduleModel extends ChangeNotifier {
           // 处理提醒
           if (reminderOption != ReminderOption.none && dateService != null) {
             try {
-              await _handleReminder(
+              final reminderId = await _handleReminder(
                 viewId: viewId,
                 rowId: rowMeta.id,
                 schedule: newSchedule,
@@ -958,20 +729,10 @@ class ScheduleModel extends ChangeNotifier {
                 existingReminderId: null,
               );
               
-              // 更新本地 ScheduleItem 的 reminderId（从 ReminderBloc 获取）
-              final reminderBloc = getIt<ReminderBloc>();
-              final reminder = reminderBloc.state.allReminders.firstWhereOrNull(
-                (r) => r.meta[ReminderMetaKeys.rowId] == rowMeta.id,
-              );
-              if (reminder != null) {
-                final updatedSchedule = newSchedule.copyWith(reminderId: reminder.id);
               final index = _schedules.indexWhere((s) => s.id == rowMeta.id);
               if (index != -1) {
-                _schedules[index] = updatedSchedule;
-              if (!_isDisposed) {
-                    notifyListeners();
-              }
-            }
+                _schedules[index] = newSchedule.copyWith(reminderId: reminderId ?? '');
+                if (!_isDisposed) notifyListeners();
               }
             } catch (e) {
             print('⚠️ [ScheduleModel] createSchedule 设置提醒失败: $e');
@@ -1169,136 +930,80 @@ class ScheduleModel extends ChangeNotifier {
     }
   }
 
-  // 处理提醒的公共方法
-  Future<void> _handleReminder({
+  // 修改重复规则或关闭提醒时，清理整组旧提醒，避免重复或残留通知。
+  Future<void> _removeScheduleReminders(
+    String viewId,
+    String rowId,
+    String? existingReminderId,
+  ) async {
+    const service = ReminderService();
+    final result = await service.fetchReminders();
+    final reminders = result.fold(
+      (items) => items,
+      (error) => throw Exception(error.msg),
+    );
+    for (final reminder in reminders) {
+      if (reminder.id != existingReminderId &&
+          !(reminder.objectId == viewId && reminder.rowId == rowId)) {
+        continue;
+      }
+      final removed = await service.removeReminder(reminderId: reminder.id);
+      removed.fold((_) {}, (error) => throw Exception(error.msg));
+      await NotificationService().cancelReminderNotification(reminder.id);
+    }
+  }
+
+  Future<String?> _handleReminder({
     required String viewId,
     required String rowId,
     required ScheduleItem schedule,
     required ReminderOption reminderOption,
     required DateCellBackendService? dateService,
     String? existingReminderId,
-  }) async {
-    if (reminderOption == ReminderOption.none) {
-      // 移除提醒
-      if (existingReminderId != null && existingReminderId.isNotEmpty) {
-        final reminderBloc = getIt<ReminderBloc>();
-        reminderBloc.add(ReminderEvent.removeReminder(reminderId: existingReminderId));
-        if (dateService != null) {
-          await dateService.update(reminderId: '');
-        }
-      }
-      return;
-    }
-
-    final reminderBloc = getIt<ReminderBloc>();
-    
-    // 处理单次日程
-    if (schedule.repeatType == 0) {
-      final baseTime = schedule.isAllDay ? schedule.startTime.withoutTime : schedule.startTime;
-      final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
-
-      if (existingReminderId == null || existingReminderId.isEmpty) {
-        // 创建新提醒
-        final reminderId = nanoid();
-        if (dateService != null) {
-          await dateService.update(reminderId: reminderId);
-        }
-
-        reminderBloc.add(
-          ReminderEvent.addById(
-            reminderId: reminderId,
-            objectId: viewId,
-            meta: {
-              ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
-              ReminderMetaKeys.rowId: rowId,
-              ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
-              ReminderMetaKeys.notificationType: 'reminder',
-            },
-            scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch),
-          ),
-        );
-
-        await _waitReminderUpdated(reminderId, scheduledAt);
-      } else {
-        // 更新现有提醒
-        reminderBloc.add(
-          ReminderEvent.update(
-            ReminderUpdate(
-              id: existingReminderId,
-              scheduledAt: scheduledAt,
-              includeTime: !schedule.isAllDay,
-              date: schedule.startTime,
-            ),
-          ),
-        );
-
-        await _waitReminderUpdated(existingReminderId, scheduledAt);
-      }
-    } else {
-      // 处理重复日程，为未来N个实例创建提醒
-      await _handleRecurringScheduleReminders(
-        viewId: viewId,
-        rowId: rowId,
-        schedule: schedule,
-        reminderOption: reminderOption,
-      );
-    }
-  }
-
-  // 处理重复日程的提醒
-  Future<void> _handleRecurringScheduleReminders({
-    required String viewId,
-    required String rowId,
-    required ScheduleItem schedule,
-    required ReminderOption reminderOption,
-  }) async {
-    final reminderBloc = getIt<ReminderBloc>();
-    final recurrenceRule = RecurrenceRule(
-      repeatType: schedule.repeatType,
-      repeatRuleJson: schedule.repeatRuleJson,
-      startDate: schedule.startTime,
-    );
-
-    // 生成未来30天的提醒
-    final now = DateTime.now();
-    final endDate = now.add(Duration(days: 30));
-    DateTime currentDate = schedule.startTime;
-    int instanceCount = 0;
-
-    while (currentDate.isBefore(endDate) && instanceCount < 10) { // 限制最多10个实例
-      if (recurrenceRule.matchesDate(currentDate)) {
-        final baseTime = schedule.isAllDay ? currentDate.withoutTime : currentDate;
+  }) =>
+      runScheduleReminderTask(() async {
+        await _removeScheduleReminders(viewId, rowId, existingReminderId);
+        final baseTime = schedule.isAllDay
+            ? schedule.startTime.withoutTime
+            : schedule.startTime;
         final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
-        
-        if (scheduledAt.isAfter(now)) {
-          // 为每个重复实例创建单独的提醒
-          final reminderId = '${nanoid()}_${currentDate.millisecondsSinceEpoch}';
-          
-          reminderBloc.add(
-            ReminderEvent.addById(
-              reminderId: reminderId,
-              objectId: viewId,
-              meta: {
-                ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
-                ReminderMetaKeys.rowId: rowId,
-                ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
-                ReminderMetaKeys.notificationType: 'reminder',
-                ReminderMetaKeys.isRecurring: 'true',
-                ReminderMetaKeys.recurrenceInstanceId: currentDate.millisecondsSinceEpoch.toString(),
-              },
-              scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch),
-            ),
-          );
-          
-          await _waitReminderUpdated(reminderId, scheduledAt);
-          instanceCount++;
+        final template = ReminderPB(
+          id: nanoid(),
+          objectId: viewId,
+          title: schedule.title,
+          message: schedule.description,
+          scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch),
+          isAck: scheduledAt.isBefore(DateTime.now()),
+          meta: {
+            ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
+            ReminderMetaKeys.rowId: rowId,
+            ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
+            ReminderMetaKeys.notificationType: 'reminder',
+            if (schedule.repeatType != 0) ...{
+              'recurrence_start': baseTime.millisecondsSinceEpoch.toString(),
+              'recurrence_type': schedule.repeatType.toString(),
+              'recurrence_rule': schedule.repeatRuleJson ?? '',
+              'recurrence_offset':
+                  scheduledAt.difference(baseTime).inMilliseconds.toString(),
+            },
+          },
+        );
+        final reminders = reminderOption == ReminderOption.none
+            ? <ReminderPB>[]
+            : schedule.repeatType == 0
+                ? [template]
+                : upcomingRecurringReminders(template, DateTime.now());
+        for (final reminder in reminders) {
+          final result =
+              await const ReminderService().addReminder(reminder: reminder);
+          result.fold((_) {}, (error) => throw Exception(error.msg));
+          await NotificationService().scheduleReminderNotification(reminder);
         }
-      }
-      
-      // 下一天
-      currentDate = currentDate.add(Duration(days: 1));
-    }
-  }
+        final reminderId = reminders.firstOrNull?.id;
+        await dateService?.update(reminderId: reminderId ?? '');
+        getIt<ReminderBloc>().add(const ReminderEvent.refresh());
+        return reminderId;
+      });
 
   // 更新日程
   Future<bool> updateSchedule(ScheduleItem schedule) async {
@@ -1431,7 +1136,7 @@ class ScheduleModel extends ChangeNotifier {
 
           // 处理提醒
           try {
-            await _handleReminder(
+            final reminderId = await _handleReminder(
               viewId: viewId,
               rowId: schedule.id,
               schedule: schedule,
@@ -1440,30 +1145,9 @@ class ScheduleModel extends ChangeNotifier {
               existingReminderId: existingReminderId,
             );
             
-            // 更新本地 ScheduleItem 的 reminderId
-            final reminderBloc = getIt<ReminderBloc>();
-            final reminder = reminderBloc.state.allReminders.firstWhereOrNull(
-              (r) => r.id == existingReminderId || 
-                     r.meta[ReminderMetaKeys.rowId] == schedule.id,
-            );
-            if (reminder != null) {
-              final updatedSchedule = schedule.copyWith(
-                reminderId: reminder.id,
-                reminderOption: schedule.reminderOption,
-              );
-              final index = _schedules.indexWhere((s) => s.id == schedule.id);
-              if (index != -1) {
-                _schedules[index] = updatedSchedule;
-              }
-            } else if (schedule.reminderOption == ReminderOption.none) {
-              final updatedSchedule = schedule.copyWith(
-                  reminderId: '',
-                reminderOption: ReminderOption.none,
-              );
-              final index = _schedules.indexWhere((s) => s.id == schedule.id);
-              if (index != -1) {
-                _schedules[index] = updatedSchedule;
-              }
+            final index = _schedules.indexWhere((s) => s.id == schedule.id);
+            if (index != -1) {
+              _schedules[index] = schedule.copyWith(reminderId: reminderId ?? '');
             }
           } catch (e) {
             print('⚠️ [ScheduleModel] updateSchedule 更新提醒失败: $e');
@@ -1507,10 +1191,14 @@ class ScheduleModel extends ChangeNotifier {
       // 从数据库删除
       await RowBackendService.deleteRows(viewId, [scheduleId]);
 
-      // 如果找到了日程并且有提醒，则移除提醒
-      if (scheduleToDelete?.reminderId != null) {
-        _removeReminder(scheduleToDelete!.reminderId!);
-      }
+      await runScheduleReminderTask(
+        () => _removeScheduleReminders(
+          viewId,
+          scheduleId,
+          scheduleToDelete?.reminderId,
+        ),
+      );
+      getIt<ReminderBloc>().add(const ReminderEvent.refresh());
 
       // 从本地列表删除
       _schedules.removeWhere((s) => s.id == scheduleId);
@@ -1727,7 +1415,7 @@ class ScheduleModel extends ChangeNotifier {
             if (reminder != null && s != null) {
               final scheduledAt = reminder.scheduledAt.toDateTime();
             final optionFromBloc =
-                ReminderOption.fromDateDifference(s, scheduledAt);
+                ReminderOption.fromDateDifference(reminder.date ?? s, scheduledAt);
             print(
                 '    🔔 [enrichFromCells] 从 ReminderBloc 找到提醒，映射为: ${optionFromBloc.name}');
             // 统一使用 ReminderBloc 推导结果作为权威来源
@@ -1816,14 +1504,6 @@ class ScheduleModel extends ChangeNotifier {
     print('    ✅ [enrichFromCells] 数据丰富完成');
 
     return enriched;
-  }
-
-  // 移除提醒
-  void _removeReminder(String reminderId) async {
-    try {
-      final reminderBloc = getIt<ReminderBloc>();
-      reminderBloc.add(ReminderEvent.removeReminder(reminderId: reminderId));
-    } catch (e) {}
   }
 
   /// 每周重复 + 跨日历多日：求 target 落在哪一周期的「锚点日」（与原始开始日同星期几）
