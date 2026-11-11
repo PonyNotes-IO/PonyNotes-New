@@ -30,11 +30,25 @@ class InitRustSDKTask extends LaunchTask {
 
     Directory root;
     try {
-      root = await getApplicationSupportDirectory();
+      if (Platform.isOhos) {
+        // 鸿蒙上 path_provider 无 ohos 实现，通过 appflowy_backend 插件获取
+        final dir = await FlowySDK.getFilesDir();
+        if (dir != null && dir.isNotEmpty) {
+          root = Directory(dir);
+        } else {
+          throw Exception('FlowySDK.getFilesDir returned null');
+        }
+      } else {
+        root = await getApplicationSupportDirectory();
+      }
     } catch (e) {
       Log.error('Failed to get application support directory: $e');
       if (Platform.isAndroid) {
         root = Directory('/data/data/com.xiaomabiji.app.note/cache');
+      } else if (Platform.isOhos) {
+        // 鸿蒙 fallback：尝试通过插件获取缓存目录
+        final cacheDir = await FlowySDK.getCacheDir();
+        root = Directory(cacheDir ?? './cache');
       } else {
         root = Directory('./data');
       }
@@ -93,6 +107,17 @@ AppFlowyConfiguration _makeAppFlowyConfiguration(
 /// The default directory to store the user data. The directory can be
 /// customized by the user via the [ApplicationDataStorage]
 Future<Directory> appFlowyApplicationDataDirectory() async {
+  // 鸿蒙：path_provider 无 ohos 实现，通过 appflowy_backend 插件获取路径
+  if (Platform.isOhos) {
+    final dir = await FlowySDK.getFilesDir();
+    if (dir != null && dir.isNotEmpty) {
+      final mode = integrationMode();
+      final subDir = mode == IntegrationMode.develop ? 'data_dev' : 'data';
+      return Directory(path.join(dir, subDir));
+    }
+    // fallback
+    return Directory('./data');
+  }
   try {
     switch (integrationMode()) {
       case IntegrationMode.develop:

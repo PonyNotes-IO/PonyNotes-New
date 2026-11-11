@@ -224,6 +224,10 @@ class FlowyRunner {
         // 在Android上使用缓存目录作为默认路径
         applicationDataDirectory =
             Directory('/data/data/com.xiaomabiji.app.note/cache');
+      } else if (Platform.isOhos) {
+        // 鸿蒙 fallback：尝试通过插件获取缓存目录
+        final cacheDir = await FlowySDK.getCacheDir();
+        applicationDataDirectory = Directory(cacheDir ?? './cache');
       } else {
         applicationDataDirectory = Directory('./data');
       }

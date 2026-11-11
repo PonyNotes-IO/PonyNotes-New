@@ -30,6 +30,28 @@ class FlowySDK {
     return version;
   }
 
+  /// 鸿蒙专用：获取应用文件目录（替代 path_provider 的 getApplicationSupportDirectory）
+  static Future<String?> getFilesDir() async {
+    if (!Platform.isOhos) return null;
+    try {
+      return await _channel.invokeMethod<String>('getFilesDir');
+    } catch (e) {
+      Log.error('Failed to get files dir: $e');
+      return null;
+    }
+  }
+
+  /// 鸿蒙专用：获取应用缓存目录（替代 path_provider 的 getTemporaryDirectory）
+  static Future<String?> getCacheDir() async {
+    if (!Platform.isOhos) return null;
+    try {
+      return await _channel.invokeMethod<String>('getCacheDir');
+    } catch (e) {
+      Log.error('Failed to get cache dir: $e');
+      return null;
+    }
+  }
+
   FlowySDK();
 
   Future<void> dispose() async {
