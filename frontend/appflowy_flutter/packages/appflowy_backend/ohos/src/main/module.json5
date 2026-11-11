@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "appflowy_backend",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}
