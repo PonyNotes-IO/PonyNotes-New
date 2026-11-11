@@ -58,7 +58,7 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
       context.read<KnowledgeBaseCubit>().service;
 
   Future<Map<String, dynamic>> _request(String action) =>
-      _service.post(action, {'workspace_id': widget.base.workspaceId});
+      _service.post(action, widget.base.target);
 
   @override
   void initState() {
@@ -81,7 +81,7 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
       _preview = source
           ? null
           : _service.post(_tab == 0 ? 'document' : 'wiki_page', {
-              'workspace_id': widget.base.workspaceId,
+              ...widget.base.target,
               _tab == 0 ? 'document_id' : 'slug': entry['id'],
             });
     });

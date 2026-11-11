@@ -35,34 +35,51 @@ enum KnowledgeBaseCategory {
 
 class KnowledgeBase {
   KnowledgeBase.fromJson(Map<String, dynamic> json)
-      : workspaceId = json['workspace_id'] as String,
+      : id = (json['id'] ?? json['workspace_id']) as String,
+        workspaceId = json['workspace_id'] as String,
         name = json['name'] as String,
         visibility = json['visibility'] as String,
         isFavorite = json['is_favorite'] == true,
         canManage = json['can_manage'] == true,
         ready = json['ready'] == true;
 
+  final String id;
   final String workspaceId;
   final String name;
   final String visibility;
   final bool isFavorite;
   final bool canManage;
   final bool ready;
+
+  Map<String, String> get target =>
+      {'workspace_id': workspaceId, 'base_id': id};
 }
 
 class KnowledgeBaseException implements Exception {
-  const KnowledgeBaseException(this.status);
+  const KnowledgeBaseException(this.status, {this.action});
   final int status;
+  final String? action;
 }
 
 String kbError(BuildContext context, Object? error) {
   final status = error is KnowledgeBaseException ? error.status : 503;
   return switch (status) {
+    400 => kbText(
+        context,
+        '知识库参数无效，请检查后重试。',
+        'Check the knowledge base details and try again.',
+      ),
     401 => kbText(context, '请登录云端账号后使用知识库。', 'Sign in to use knowledge bases.'),
     403 => kbText(
         context,
         '你没有此知识库的访问或管理权限，请刷新列表。',
         'Access denied. Refresh your knowledge bases.',
+      ),
+    404 when error is KnowledgeBaseException && error.action == 'create' =>
+      kbText(
+        context,
+        '当前知识库服务尚不支持创建，请联系管理员更新。',
+        'Creating knowledge bases requires a server update. Contact your administrator.',
       ),
     _ => kbText(
         context,
@@ -122,7 +139,7 @@ class KnowledgeBaseService {
         .timeout(const Duration(seconds: 120));
     if (_closed) throw const KnowledgeBaseException(401);
     if (response.statusCode != 200) {
-      throw KnowledgeBaseException(response.statusCode);
+      throw KnowledgeBaseException(response.statusCode, action: action);
     }
     final result =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;

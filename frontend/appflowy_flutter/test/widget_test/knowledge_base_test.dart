@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_page.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_plugin.dart';
@@ -12,6 +13,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_base_button.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -31,6 +33,9 @@ class _CapturingTabs extends MockBloc<TabsEvent, TabsState>
   @override
   void add(TabsEvent event) => events.add(event);
 }
+
+class _Workspace extends MockBloc<UserWorkspaceEvent, UserWorkspaceState>
+    implements UserWorkspaceBloc {}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -79,7 +84,7 @@ void main() {
         );
       await icons.load();
     }
-    final bases = [
+    final bases = <Map<String, dynamic>>[
       {
         'workspace_id': 'team',
         'name': '产品资料',
@@ -158,8 +163,11 @@ void main() {
     addTearDown(tabs.close);
     final boundary = GlobalKey();
     await tester.pumpWidget(
-      BlocProvider<TabsBloc>.value(
-        value: tabs,
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<TabsBloc>.value(value: tabs),
+          BlocProvider<KnowledgeBaseCubit>.value(value: cubit),
+        ],
         child: AppFlowyTheme(
           data: AppFlowyDefaultTheme().light(),
           child: MaterialApp(
@@ -185,11 +193,8 @@ void main() {
                     ),
                     const VerticalDivider(width: 1),
                     Expanded(
-                      child: BlocProvider.value(
-                        value: cubit,
-                        child: const KnowledgeBaseView(
-                          category: KnowledgeBaseCategory.shared,
-                        ),
+                      child: const KnowledgeBaseView(
+                        category: KnowledgeBaseCategory.shared,
                       ),
                     ),
                   ],
@@ -282,6 +287,372 @@ void main() {
     await selectCategory(tester, '最爱知识库  0');
     expect(find.textContaining('暂无最爱知识库'), findsOneWidget);
     expect(updates, 3);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'sidebar categories expand libraries and open the selected library',
+      (tester) async {
+    tester.view.physicalSize = const Size(1180, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final bases = <Map<String, dynamic>>[
+      {
+        'workspace_id': 'personal',
+        'name': '我的研究',
+        'visibility': 'private',
+        'ready': true,
+      },
+      {
+        'workspace_id': 'team',
+        'name': '团队手册',
+        'visibility': 'shared',
+        'ready': true,
+      },
+    ];
+    var denied = false;
+    final creationFailures = [404, 503];
+    final creations = <Map<String, dynamic>>[];
+    final requests = <(String, String?)>[];
+    final cubit = KnowledgeBaseCubit(
+      KnowledgeBaseService(
+        () async => ('https://notes.example', 'token'),
+        client: MockClient((request) async {
+          final action = request.url.path.split('/').last;
+          final payload = jsonDecode(request.body) as Map<String, dynamic>;
+          final id = (payload['base_id'] ?? payload['workspace_id']) as String?;
+          requests.add((action, id));
+          if (denied) return http.Response('', 403);
+          Map<String, dynamic>? created;
+          if (action == 'create') {
+            creations.add(payload);
+            if (creationFailures.isNotEmpty) {
+              return http.Response('', creationFailures.removeAt(0));
+            }
+            created = {
+              'id': 'created-${payload['visibility']}',
+              'workspace_id': payload['workspace_id'],
+              'name': payload['name'],
+              'visibility': payload['visibility'],
+              'can_manage': true,
+              'ready': true,
+            };
+            bases.add(created);
+          }
+          return http.Response(
+            jsonEncode({
+              'success': true,
+              'data': switch (action) {
+                'bases' => {'bases': bases},
+                'create' => {'base': created},
+                'documents' => {
+                    'status': 'ready',
+                    'documents': [
+                      {'id': id, 'title': '$id 的文件'},
+                    ],
+                  },
+                'sources' => {'status': 'ready', 'sources': []},
+                _ => throw StateError(action),
+              },
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      ),
+    );
+    addTearDown(cubit.close);
+    final tabs = _CapturingTabs();
+    addTearDown(tabs.close);
+    final workspace = _Workspace();
+    whenListen(
+      workspace,
+      const Stream<UserWorkspaceState>.empty(),
+      initialState: UserWorkspaceState(
+        userProfile: UserProfilePB(),
+        currentWorkspace: UserWorkspacePB(workspaceId: 'team'),
+      ),
+    );
+    addTearDown(workspace.close);
+    final selected = ValueNotifier<Plugin?>(null);
+    addTearDown(selected.dispose);
+    final boundary = GlobalKey();
+    const screenshot = String.fromEnvironment('KB_TREE_SCREENSHOT');
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<TabsBloc>.value(value: tabs),
+          BlocProvider<UserWorkspaceBloc>.value(value: workspace),
+          BlocProvider<KnowledgeBaseCubit>.value(value: cubit),
+        ],
+        child: AppFlowyTheme(
+          data: AppFlowyDefaultTheme().light(),
+          child: MaterialApp(
+            locale: const Locale('zh', 'CN'),
+            supportedLocales: const [Locale('zh', 'CN')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: ThemeData(
+              fontFamily: screenshot.isEmpty ? null : 'Microsoft YaHei',
+              scaffoldBackgroundColor: Colors.white,
+            ),
+            home: RepaintBoundary(
+              key: boundary,
+              child: Scaffold(
+                body: Row(
+                  children: [
+                    Container(
+                      width: 220,
+                      color: const Color(0xFFF8F8F8),
+                      padding: const EdgeInsets.all(10),
+                      alignment: Alignment.topLeft,
+                      child: const SidebarKnowledgeBaseButton(),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(
+                      child: ValueListenableBuilder<Plugin?>(
+                        valueListenable: selected,
+                        builder: (_, plugin, __) =>
+                            plugin?.widgetBuilder.buildWidget(
+                              context: PluginContext(),
+                              shrinkWrap: false,
+                            ) ??
+                            const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final sidebar = find.byType(SidebarKnowledgeBaseButton);
+    Finder entry(String label) =>
+        find.descendant(of: sidebar, matching: find.text(label));
+    final mouse = await tester.createGesture(kind: ui.PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1000, 700));
+    addTearDown(mouse.removePointer);
+    Future<void> hover(String label) async {
+      await mouse.moveTo(tester.getCenter(entry(label)));
+      await tester.pumpAndSettle();
+    }
+
+    expect(requests, isEmpty);
+    await tester.tap(entry('知识库'));
+    await tester.pumpAndSettle();
+    expect(cubit.state.hasError, isFalse, reason: '${cubit.state.error}');
+    expect(entry('我的研究'), findsNothing);
+    expect(entry('团队手册'), findsNothing);
+    expect(find.byTooltip('创建私有知识库'), findsNothing);
+    expect(find.byTooltip('创建共享知识库'), findsNothing);
+    await hover('私有知识库');
+    expect(find.byTooltip('创建私有知识库'), findsOneWidget);
+    expect(tabs.events, hasLength(1));
+    expect(entry('我的研究'), findsNothing);
+    await mouse.moveTo(tester.getCenter(find.byTooltip('创建私有知识库')));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('创建私有知识库'), findsOneWidget);
+    await tester.tap(entry('私有知识库'));
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsOneWidget);
+    expect(entry('团队手册'), findsNothing);
+    expect(find.byTooltip('创建私有知识库'), findsOneWidget);
+    expect(find.byTooltip('创建共享知识库'), findsNothing);
+    await hover('我的研究');
+    expect(find.byTooltip('创建私有知识库'), findsNothing);
+    final privateAdd =
+        find.byKey(const ValueKey('knowledge-base-add-private-personal'));
+    final sharedAdd =
+        find.byKey(const ValueKey('knowledge-base-add-shared-team'));
+    expect(privateAdd, findsOneWidget);
+    await mouse.moveTo(tester.getCenter(privateAdd));
+    await tester.pumpAndSettle();
+    expect(privateAdd, findsOneWidget);
+    expect(tester.getSize(privateAdd), const Size(28, 28));
+    await tester.tap(privateAdd);
+    await tester.pumpAndSettle();
+    await mouse.moveTo(tester.getCenter(find.text('上传文件')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<String>), findsNWidgets(6));
+    for (final label in [
+      '选择笔记',
+      '上传文件',
+      '上传文件夹',
+      '导入网页',
+      '在线编辑',
+      '链接数据源',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(tabs.events, hasLength(2));
+    expect(creations, isEmpty);
+    await tester.tapAt(const Offset(1000, 700));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<String>), findsNothing);
+    await hover('共享知识库');
+    expect(privateAdd, findsNothing);
+    expect(find.byTooltip('创建共享知识库'), findsOneWidget);
+    expect(find.byTooltip('创建私有知识库'), findsNothing);
+    expect(tabs.events, hasLength(2));
+    expect(entry('团队手册'), findsNothing);
+    await tester.tap(entry('共享知识库'));
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsOneWidget);
+    expect(entry('团队手册'), findsOneWidget);
+    expect(find.byTooltip('创建共享知识库'), findsOneWidget);
+    expect(find.byTooltip('创建私有知识库'), findsNothing);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('knowledge-base-create-shared')))
+          .height,
+      lessThanOrEqualTo(32),
+    );
+    expect(sharedAdd, findsNothing);
+    await hover('团队手册');
+    expect(sharedAdd, findsOneWidget);
+    expect(privateAdd, findsNothing);
+    expect(find.byTooltip('创建共享知识库'), findsNothing);
+    await mouse.moveTo(const Offset(1000, 700));
+    await tester.pumpAndSettle();
+    expect(sharedAdd, findsNothing);
+    expect(find.byTooltip('创建共享知识库'), findsNothing);
+
+    Future<void> open(String name, String id) async {
+      await tester.tap(entry(name));
+      await tester.pumpAndSettle();
+      final plugin = tabs.events.last.maybeWhen<Plugin>(
+        openPlugin: (plugin, _, __) => plugin,
+        orElse: () => throw StateError('Expected a knowledge base plugin'),
+      );
+      expect(plugin.id, 'knowledge_base:$id');
+      expect(plugin.widgetBuilder.viewName, name);
+      selected.value = plugin;
+      await tester.pumpAndSettle();
+      expect(find.text('$id 的文件'), findsOneWidget);
+    }
+
+    await open('我的研究', 'personal');
+    await open('团队手册', 'team');
+    expect(find.text('personal 的文件'), findsNothing);
+    expect(requests.where((request) => request.$1 == 'bases'), hasLength(1));
+    if (screenshot.isNotEmpty) {
+      await tester.runAsync(() async {
+        final render = boundary.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary;
+        final image = await render.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(screenshot).writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+    await tester.tap(entry('私有知识库'));
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsNothing);
+    expect(entry('团队手册'), findsOneWidget);
+    await tester.tap(entry('私有知识库'));
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsOneWidget);
+    bases.first['visibility'] = 'shared';
+    await cubit.load();
+    await tester.pumpAndSettle();
+    expect(entry('暂无知识库'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('knowledge-base-private-personal')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('knowledge-base-shared-personal')),
+      findsOneWidget,
+    );
+    denied = true;
+    await cubit.load();
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsNothing);
+    expect(entry('团队手册'), findsNothing);
+    expect(find.text('team 的文件'), findsNothing);
+    denied = false;
+    bases.removeLast();
+    await tester.tap(entry('重试').first);
+    await tester.pumpAndSettle();
+    expect(entry('我的研究'), findsOneWidget);
+    expect(entry('团队手册'), findsNothing);
+    expect(find.text('personal 的文件'), findsNothing);
+    expect(requests.where((request) => request.$1 == 'bases'), hasLength(4));
+    await tester.tap(entry('私有知识库'));
+    await tester.pumpAndSettle();
+    await hover('私有知识库');
+    await tester.tap(find.byTooltip('创建私有知识库'));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(AlertDialog);
+    final name = find.descendant(of: dialog, matching: find.byType(TextField));
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    await tester.enterText(name, '   ');
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(creations, isEmpty);
+    await hover('私有知识库');
+    await tester.tap(find.byTooltip('创建私有知识库'));
+    await tester.pumpAndSettle();
+    await tester.enterText(name, '  私有项目  ');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+    expect(dialog, findsOneWidget);
+    expect(find.text('当前知识库服务尚不支持创建，请联系管理员更新。'), findsOneWidget);
+    expect(find.text('知识库暂时无法连接，请稍后重试。'), findsNothing);
+    expect(tester.widget<TextField>(name).controller!.text, '  私有项目  ');
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+    expect(dialog, findsOneWidget);
+    expect(find.text('知识库暂时无法连接，请稍后重试。'), findsOneWidget);
+    expect(tester.widget<TextField>(name).controller!.text, '  私有项目  ');
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+    expect(creations, hasLength(3));
+    expect(creations[0]['request_id'], creations[1]['request_id']);
+    expect(creations[1]['request_id'], creations[2]['request_id']);
+    expect(creations.last['name'], '私有项目');
+    expect(creations.last['visibility'], 'private');
+    expect(creations.last['workspace_id'], 'team');
+    expect(entry('私有项目'), findsOneWidget);
+    tabs.events.last.maybeWhen(
+      openPlugin: (plugin, _, __) =>
+          expect(plugin.id, 'knowledge_base:created-private'),
+      orElse: () => fail('Creating a library must open it'),
+    );
+    await open('私有项目', 'created-private');
+    await tester.tap(entry('共享知识库'));
+    await tester.pumpAndSettle();
+    await hover('共享知识库');
+    await tester.tap(find.byTooltip('创建共享知识库'));
+    await tester.pumpAndSettle();
+    await tester.enterText(name, '团队项目');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+    expect(creations.last['visibility'], 'shared');
+    expect(entry('团队项目'), findsOneWidget);
+    await open('团队项目', 'created-shared');
+    expect(find.text('created-private 的文件'), findsNothing);
+    await tester.tap(entry('最爱知识库'));
+    await tester.pumpAndSettle();
+    await hover('最爱知识库');
+    expect(
+      find.descendant(of: sidebar, matching: find.byIcon(Icons.add)),
+      findsNothing,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -431,7 +802,7 @@ void main() {
                     value: cubit,
                     child: const KnowledgeBaseView(
                       category: KnowledgeBaseCategory.shared,
-                      currentWorkspaceId: 'current',
+                      currentBaseId: 'current',
                     ),
                   ),
                 ),

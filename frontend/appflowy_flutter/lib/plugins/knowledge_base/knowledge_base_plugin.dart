@@ -9,7 +9,14 @@ import 'package:flutter/material.dart';
 class KnowledgeBasePluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) => KnowledgeBasePlugin(
-        data is KnowledgeBaseCategory ? data : null,
+        switch (data) {
+          KnowledgeBaseCategory category => category,
+          KnowledgeBase base => base.visibility == 'private'
+              ? KnowledgeBaseCategory.private
+              : KnowledgeBaseCategory.shared,
+          _ => null,
+        },
+        base: data is KnowledgeBase ? data : null,
       );
 
   @override
@@ -31,31 +38,36 @@ class KnowledgeBasePluginConfig implements PluginConfig {
 }
 
 class KnowledgeBasePlugin extends Plugin {
-  KnowledgeBasePlugin(this.category);
+  KnowledgeBasePlugin(this.category, {this.base});
   final KnowledgeBaseCategory? category;
+  final KnowledgeBase? base;
 
   @override
-  PluginId get id => 'knowledge_base:${category?.name ?? 'current'}';
+  PluginId get id =>
+      'knowledge_base:${base?.id ?? category?.name ?? 'current'}';
 
   @override
   PluginType get pluginType => PluginType.knowledgeBase;
 
   @override
   PluginWidgetBuilder get widgetBuilder =>
-      _KnowledgeBaseWidgetBuilder(category);
+      _KnowledgeBaseWidgetBuilder(category, base);
 }
 
 class _KnowledgeBaseWidgetBuilder extends PluginWidgetBuilder {
-  _KnowledgeBaseWidgetBuilder(this.category);
+  _KnowledgeBaseWidgetBuilder(this.category, this.base);
   final KnowledgeBaseCategory? category;
+  final KnowledgeBase? base;
 
   @override
-  String get viewName => '知识库';
+  String get viewName => base?.name ?? '知识库';
 
   @override
   Widget get leftBarItem => Builder(
         builder: (context) => Text(
-          category?.label(context) ?? kbText(context, '知识库', 'Knowledge bases'),
+          base?.name ??
+              category?.label(context) ??
+              kbText(context, '知识库', 'Knowledge bases'),
         ),
       );
 
@@ -74,5 +86,5 @@ class _KnowledgeBaseWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) =>
-      KnowledgeBasePage(category: category);
+      KnowledgeBasePage(category: category, baseId: base?.id);
 }

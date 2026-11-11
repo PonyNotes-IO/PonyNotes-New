@@ -5,6 +5,8 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -226,6 +228,11 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             providers: [
               BlocProvider.value(value: getIt<ReminderBloc>()),
               BlocProvider<TabsBloc>.value(value: getIt<TabsBloc>()),
+              BlocProvider<KnowledgeBaseCubit>(
+                create: (_) => KnowledgeBaseCubit(
+                  KnowledgeBaseService.forUser(userProfile.id.toString()),
+                ),
+              ),
               BlocProvider<HomeBloc>(
                 create: (_) {
                   getIt<TabsBloc>().add(const TabsEvent.initial());
@@ -327,6 +334,12 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                               );
 
                               _checkAndHandleWorkspaceRemoved(context, state);
+                              final knowledgeBases =
+                                  context.read<KnowledgeBaseCubit>();
+                              if (knowledgeBases.state.connectionState !=
+                                  ConnectionState.none) {
+                                unawaited(knowledgeBases.load());
+                              }
                             },
                             child: _WorkspaceLifecycleRefresher(
                               child: HomeHotKeys(

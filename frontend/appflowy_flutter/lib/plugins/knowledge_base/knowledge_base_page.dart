@@ -7,8 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class KnowledgeBasePage extends StatelessWidget {
-  const KnowledgeBasePage({super.key, required this.category});
+  const KnowledgeBasePage({
+    super.key,
+    required this.category,
+    this.baseId,
+  });
   final KnowledgeBaseCategory? category;
+  final String? baseId;
 
   @override
   Widget build(BuildContext context) {
@@ -18,15 +23,10 @@ class KnowledgeBasePage extends StatelessWidget {
         bloc.state.currentWorkspace?.workspaceId,
       ),
     );
-    return BlocProvider(
-      key: ValueKey(identity),
-      create: (_) => KnowledgeBaseCubit(
-        KnowledgeBaseService.forUser(identity.$1),
-      )..load(),
-      child: KnowledgeBaseView(
-        category: category ?? KnowledgeBaseCategory.shared,
-        currentWorkspaceId: category == null ? identity.$2 : null,
-      ),
+    return KnowledgeBaseView(
+      key: ValueKey((identity, category, baseId)),
+      category: category ?? KnowledgeBaseCategory.shared,
+      currentBaseId: baseId ?? (category == null ? identity.$2 : null),
     );
   }
 }
@@ -35,10 +35,10 @@ class KnowledgeBaseView extends StatefulWidget {
   const KnowledgeBaseView({
     super.key,
     required this.category,
-    this.currentWorkspaceId,
+    this.currentBaseId,
   });
   final KnowledgeBaseCategory category;
-  final String? currentWorkspaceId;
+  final String? currentBaseId;
 
   @override
   State<KnowledgeBaseView> createState() => _KnowledgeBaseViewState();
@@ -57,7 +57,12 @@ class _KnowledgeBaseViewState extends State<KnowledgeBaseView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _onBases(_cubit.state);
+      if (!mounted) return;
+      if (_cubit.state.connectionState == ConnectionState.none) {
+        _cubit.load();
+      } else {
+        _onBases(_cubit.state);
+      }
     });
   }
 
@@ -68,17 +73,13 @@ class _KnowledgeBaseViewState extends State<KnowledgeBaseView> {
     }
     if (!state.hasData) return;
     final bases = state.data!;
-    final selected = bases
-        .where((base) => base.workspaceId == _selected?.workspaceId)
-        .firstOrNull;
-    final initial = bases
-        .where((base) => base.workspaceId == widget.currentWorkspaceId)
-        .firstOrNull;
+    final selected =
+        bases.where((base) => base.id == _selected?.id).firstOrNull;
+    final initial =
+        bases.where((base) => base.id == widget.currentBaseId).firstOrNull;
     setState(() {
       _selected = selected ??
-          (_browsing || widget.currentWorkspaceId == null
-              ? null
-              : initial ?? bases.where(_category.includes).firstOrNull);
+          (_browsing || widget.currentBaseId == null ? null : initial);
     });
   }
 
@@ -95,7 +96,7 @@ class _KnowledgeBaseViewState extends State<KnowledgeBaseView> {
         listener: (_, state) => _onBases(state),
         child: _selected != null
             ? KnowledgeBaseContents(
-                key: ValueKey(_selected!.workspaceId),
+                key: ValueKey(_selected!.id),
                 base: _selected!,
                 onBack: _back,
                 onRefreshBases: () => _cubit.load(),
@@ -301,7 +302,7 @@ class _KnowledgeBaseViewState extends State<KnowledgeBaseView> {
             onPressed: () => _cubit.load(
               action: 'favorite',
               payload: {
-                'workspace_id': base.workspaceId,
+                ...base.target,
                 'is_favorite': !base.isFavorite,
               },
             ),
@@ -316,7 +317,7 @@ class _KnowledgeBaseViewState extends State<KnowledgeBaseView> {
               onSelected: (value) => _cubit.load(
                 action: 'visibility',
                 payload: {
-                  'workspace_id': base.workspaceId,
+                  ...base.target,
                   'visibility': value,
                 },
               ),
