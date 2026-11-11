@@ -15,6 +15,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_base_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -109,6 +110,8 @@ class SidebarFolder extends StatelessWidget {
             const VSpace(sidebarPrimaryEntryGap),
             // 共享
             const SidebarShareButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarKnowledgeBaseButton(),
             // 模板
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),
