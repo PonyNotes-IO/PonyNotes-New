@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -18,7 +20,8 @@ class _StartupShellState extends State<StartupShell>
 
   static bool get _isMobileTarget =>
       defaultTargetPlatform == TargetPlatform.android ||
-      defaultTargetPlatform == TargetPlatform.iOS;
+      defaultTargetPlatform == TargetPlatform.iOS ||
+      Platform.isOhos;
 
   static String _launchAsset(BuildContext context, {required bool isDark}) {
     final size = MediaQuery.sizeOf(context);
