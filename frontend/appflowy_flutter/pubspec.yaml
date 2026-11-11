@@ -232,6 +232,8 @@ dev_dependencies:
   run_with_network_images: ^0.0.1
   url_launcher_platform_interface: any
 
+  flutter_localizations:
+    sdk: flutter
 dependency_overrides:
   # pdfrx 2.1.5 的原生桥接与 pdfrx_engine 0.1.13 配套。0.1.14 起新增的
   # 原生动态字体初始化不在该桥接版本中，macOS 会在首次解析 PDF 时卡住。

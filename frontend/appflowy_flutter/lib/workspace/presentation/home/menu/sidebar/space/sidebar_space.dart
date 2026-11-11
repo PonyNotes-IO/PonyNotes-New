@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_base_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
@@ -116,6 +117,8 @@ class SidebarSpace extends StatelessWidget {
             const VSpace(sidebarPrimaryEntryGap),
             // 共享
             const SidebarShareButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarKnowledgeBaseButton(),
             // 发布
             // 文件库
             // const VSpace(4.0),

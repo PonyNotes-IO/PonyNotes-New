@@ -73,6 +73,8 @@ class _CalendarContextMenuOverlayState
   bool _isAllDay = false;
   bool _isImportant = false;
   ReminderOption _reminderOption = ReminderOption.none;
+  int _repeatType = 0;
+  bool _showRepeatPicker = false;
   bool _isSaving = false;
   bool _showStartTimePicker = false;
   bool _showEndTimePicker = false;
@@ -80,6 +82,14 @@ class _CalendarContextMenuOverlayState
 
   static const double _menuWidth = 320;
   static const double _menuMaxHeight = 560;
+  static const _repeatOptions = {
+    0: '永不',
+    1: '每天',
+    4: '周一至周五',
+    2: '每周',
+    99: '每月',
+    3: '每年',
+  };
 
   @override
   void initState() {
@@ -88,7 +98,11 @@ class _CalendarContextMenuOverlayState
     _endDate = widget.date;
     final now = TimeOfDay.now();
     _startTime = TimeOfDay(hour: now.hour, minute: 0);
-    _endTime = TimeOfDay(hour: now.hour + 1, minute: 0);
+    _endTime = TimeOfDay(hour: (now.hour + 1) % 24, minute: 0);
+    if (now.hour == 23) {
+      _endDate =
+          DateTime(widget.date.year, widget.date.month, widget.date.day + 1);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
@@ -152,6 +166,9 @@ class _CalendarContextMenuOverlayState
         isAllDay: _isAllDay,
         isImportant: _isImportant,
         reminderOption: _reminderOption,
+        repeatType: _repeatType,
+        repeatRuleJson:
+            _repeatType == 99 ? '{"unit":2,"interval":1,"summary":"每月"}' : null,
       );
 
       if (mounted) {
@@ -224,6 +241,8 @@ class _CalendarContextMenuOverlayState
                           _buildTitleField(af, theme),
                           const SizedBox(height: 12),
                           _buildTimeSection(af, theme),
+                          const SizedBox(height: 6),
+                          _buildRepeatSelector(af),
                           const SizedBox(height: 12),
                           _buildDescriptionField(af, theme),
                           const SizedBox(height: 12),
@@ -329,6 +348,11 @@ class _CalendarContextMenuOverlayState
                 value: _isAllDay,
                 onChanged: (v) => setState(() {
                   _isAllDay = v;
+                  if (_reminderOption != ReminderOption.none) {
+                    _reminderOption = v
+                        ? ReminderOption.onDayOfEvent
+                        : ReminderOption.atTimeOfEvent;
+                  }
                   if (v) {
                     _showStartTimePicker = false;
                     _showEndTimePicker = false;
@@ -374,6 +398,32 @@ class _CalendarContextMenuOverlayState
     TimeOfDay time,
     bool isStart,
   ) {
+    return _buildPickerRow(
+      af,
+      label,
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+      isStart ? _showStartTimePicker : _showEndTimePicker,
+      () {
+        setState(() {
+          if (isStart) {
+            _showStartTimePicker = !_showStartTimePicker;
+            _showEndTimePicker = false;
+          } else {
+            _showEndTimePicker = !_showEndTimePicker;
+            _showStartTimePicker = false;
+          }
+        });
+      },
+    );
+  }
+
+  Widget _buildPickerRow(
+    AFThemeExtension af,
+    String label,
+    String value,
+    bool expanded,
+    VoidCallback onTap,
+  ) {
     return Row(
       children: [
         SizedBox(
@@ -385,17 +435,7 @@ class _CalendarContextMenuOverlayState
         ),
         Expanded(
           child: InkWell(
-            onTap: () {
-              setState(() {
-                if (isStart) {
-                  _showStartTimePicker = !_showStartTimePicker;
-                  _showEndTimePicker = false;
-                } else {
-                  _showEndTimePicker = !_showEndTimePicker;
-                  _showStartTimePicker = false;
-                }
-              });
-            },
+            onTap: onTap,
             borderRadius: BorderRadius.circular(6),
             hoverColor: af.lightGreyHover,
             child: Container(
@@ -408,12 +448,12 @@ class _CalendarContextMenuOverlayState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+                    value,
                     style: TextStyle(fontSize: 13, color: af.onBackground),
                   ),
                   const SizedBox(width: 4),
                   Icon(
-                    (isStart ? _showStartTimePicker : _showEndTimePicker)
+                    expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
                     size: 16,
@@ -501,6 +541,41 @@ class _CalendarContextMenuOverlayState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRepeatSelector(AFThemeExtension af) {
+    return Column(
+      children: [
+        _buildPickerRow(
+          af,
+          '重复',
+          _repeatOptions[_repeatType]!,
+          _showRepeatPicker,
+          () => setState(() => _showRepeatPicker = !_showRepeatPicker),
+        ),
+        if (_showRepeatPicker)
+          for (final option in _repeatOptions.entries)
+            RadioListTile<int>(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              value: option.key,
+              groupValue: _repeatType,
+              title: Text(option.value, style: const TextStyle(fontSize: 13)),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _repeatType = value;
+                  _showRepeatPicker = false;
+                  if (value != 0 && _reminderOption == ReminderOption.none) {
+                    _reminderOption = _isAllDay
+                        ? ReminderOption.onDayOfEvent
+                        : ReminderOption.atTimeOfEvent;
+                  }
+                });
+              },
+            ),
+      ],
     );
   }
 
@@ -633,8 +708,11 @@ class _CalendarContextMenuOverlayState
                       label,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isSelected ? af.onBackground : af.secondaryTextColor,
-                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                        color: isSelected
+                            ? af.onBackground
+                            : af.secondaryTextColor,
+                        fontWeight:
+                            isSelected ? FontWeight.w500 : FontWeight.normal,
                       ),
                     ),
                   ),

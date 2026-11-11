@@ -11,6 +11,7 @@ import 'package:appflowy/user/application/reminder/notification_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/user/application/reminder/reminder_listener.dart';
 import 'package:appflowy/user/application/reminder/reminder_service.dart';
+import 'package:appflowy/user/application/reminder/recurring_reminder.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -173,8 +174,6 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             add(const ReminderEvent.refresh());
           },
           refresh: () async {
-            final result = await _reminderService.fetchReminders();
-
             // 【全局通知】从服务端拉取账号级通知（跨所有工作区）。
             // 通知的唯一权威源是服务端 af_notification；本地按工作区隔离的
             // reminder 存储只保留"用户自设的日程提醒"职责。
@@ -192,56 +191,71 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
               _allViews.addAll(views.items);
             });
 
-            await result.fold(
-              (localReminders) async {
-                // 本地存储只保留日程提醒；历史版本写入的云通知副本
-                // （按工作区隔离、时有时无的根源）一律丢弃，以服务端全局列表为准
-                final scheduleReminders = localReminders
-                    .where((r) => !_isCloudNotification(r))
-                    .toList();
-                final reminders = [..._cloudReminders, ...scheduleReminders];
+            await runScheduleReminderTask(() async {
+              final result = await _reminderService.fetchReminders();
+              await result.fold(
+                (localReminders) async {
+                  // 本地存储只保留日程提醒；历史版本写入的云通知副本
+                  // （按工作区隔离、时有时无的根源）一律丢弃，以服务端全局列表为准
+                  final scheduleReminders = localReminders
+                      .where((r) => !_isCloudNotification(r))
+                      .toList();
+                  for (final reminder in missingRecurringReminders(
+                    scheduleReminders,
+                    DateTime.now(),
+                  )) {
+                    final added = await _reminderService.addReminder(
+                      reminder: reminder,
+                    );
+                    added.fold(
+                      (_) => scheduleReminders.add(reminder),
+                      (error) => Log.error('Failed to renew reminder: $error'),
+                    );
+                  }
+                  final reminders = [..._cloudReminders, ...scheduleReminders];
 
-                // 提醒通过协作数据同步到其他设备后，必须在该设备本机注册
-                // 系统定时通知；否则只有创建日程的设备会响。
-                await NotificationService()
-                    .synchronizeReminderNotifications(scheduleReminders);
+                  // 提醒通过协作数据同步到其他设备后，必须在该设备本机注册
+                  // 系统定时通知；否则只有创建日程的设备会响。
+                  await NotificationService()
+                      .synchronizeReminderNotifications(scheduleReminders);
 
-                final availableReminders =
-                    await filterAvailableReminders(reminders);
-                // Separate archived reminders
-                // 云通知同样可归档，此处不得按来源过滤
-                final archived =
-                    reminders.where((reminder) => reminder.isArchived).toList();
+                  final availableReminders =
+                      await filterAvailableReminders(reminders);
+                  // Separate archived reminders
+                  // 云通知同样可归档，此处不得按来源过滤
+                  final archived =
+                      reminders.where((reminder) => reminder.isArchived).toList();
 
-                // only print the reminder ids are not the same as the previous ones
-                final previousReminderIds =
-                    state.reminders.map((e) => e.id).toSet();
-                final newReminderIds =
-                    availableReminders.map((e) => e.id).toSet();
-                final diff = _deepEquality.equals(
-                  previousReminderIds,
-                  newReminderIds,
-                );
-                if (!diff) {
-                  Log.info(
-                    'Fetched reminders on refresh: ${availableReminders.length}',
+                  // only print the reminder ids are not the same as the previous ones
+                  final previousReminderIds =
+                      state.reminders.map((e) => e.id).toSet();
+                  final newReminderIds =
+                      availableReminders.map((e) => e.id).toSet();
+                  final diff = _deepEquality.equals(
+                    previousReminderIds,
+                    newReminderIds,
                   );
-                }
-                if (!isClosed && !emit.isDone) {
-                  emit(
-                    state.copyWith(
-                      reminders: availableReminders,
-                      serverReminders: reminders,
-                      archivedReminders: archived,
-                    ),
-                  );
-                }
-              },
-              (error) {
-                Log.error('Failed to fetch reminders: $error');
-                // 拉取失败时保留当前列表，_cloudReminders 缓存已在上方沿用
-              },
-            );
+                  if (!diff) {
+                    Log.info(
+                      'Fetched reminders on refresh: ${availableReminders.length}',
+                    );
+                  }
+                  if (!isClosed && !emit.isDone) {
+                    emit(
+                      state.copyWith(
+                        reminders: availableReminders,
+                        serverReminders: reminders,
+                        archivedReminders: archived,
+                      ),
+                    );
+                  }
+                },
+                (error) {
+                  Log.error('Failed to fetch reminders: $error');
+                  // 拉取失败时保留当前列表，_cloudReminders 缓存已在上方沿用
+                },
+              );
+            });
           },
           removeReminder: (reminderId) async {
             final result = await _reminderService.removeReminder(

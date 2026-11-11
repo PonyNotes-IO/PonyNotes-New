@@ -14,11 +14,19 @@ await cp(path.join(root, 'node_modules'), path.join(destination, 'node_modules')
 await copyFile(path.join(root, 'package.json'), path.join(destination, 'package.json'));
 await copyFile(path.join(root, 'package-lock.json'), path.join(destination, 'package-lock.json'));
 await copyFile(process.execPath, path.join(destination, process.platform === 'win32' ? 'node.exe' : 'node'));
+// 官方 tarball 把 node 放 bin/、LICENSE 放包根目录；nvm 等同理，所以不能只看 execPath 同级。
 let nodeLicense;
-try { nodeLicense = await readFile(path.join(path.dirname(process.execPath), 'LICENSE'), 'utf8'); }
-catch {
-  const response = await fetch(`https://nodejs.org/dist/v${process.versions.node}/LICENSE`, { signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw Error('Unable to retrieve the Node.js distribution license');
+const execDir = path.dirname(process.execPath);
+for (const candidate of [path.join(execDir, 'LICENSE'), path.join(execDir, '..', 'LICENSE')]) {
+  try { nodeLicense = await readFile(candidate, 'utf8'); break; } catch {}
+}
+if (!nodeLicense) {
+  // nodejs.org/dist 没有 LICENSE 文件，该地址会 404，仅作最后的兜底尝试。
+  const response = await fetch(`https://nodejs.org/dist/v${process.versions.node}/LICENSE`, { signal: AbortSignal.timeout(15000) })
+    .catch(() => undefined);
+  if (!response?.ok) {
+    throw Error(`Unable to locate the Node.js distribution license next to ${process.execPath}; checked LICENSE and ../LICENSE`);
+  }
   nodeLicense = await response.text();
 }
 await writeFile(path.join(destination, 'NODE-LICENSE.txt'), nodeLicense);

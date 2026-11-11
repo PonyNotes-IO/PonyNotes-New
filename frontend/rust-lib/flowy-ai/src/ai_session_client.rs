@@ -318,6 +318,7 @@ pub async fn stream_ai_session_with_attachments(
     buffer: String,
     pending_jsons: Vec<Value>,
     enable_thinking: bool,
+    response_model_logged: bool,
     /// SSE 流内错误事件（HTTP 200 + 错误体）。检测到后先把本轮已解析的正常分片
     /// 发完，再把它作为 Err 抛出，交由 chat.rs 的错误分支统一处理。
     pending_error: Option<String>,
@@ -328,6 +329,7 @@ pub async fn stream_ai_session_with_attachments(
     buffer: String::new(),
     pending_jsons: Vec::new(),
     enable_thinking,
+    response_model_logged: false,
     pending_error: None,
   };
 
@@ -445,6 +447,18 @@ pub async fn stream_ai_session_with_attachments(
                 // 豆包格式: {"choices":[{"delta":{"content":"","reasoning_content":"text"}}]}
                 // 内部格式: {"1": "text"} 或 {"0": metadata, "1": "text"}
                 if let Value::Object(ref mut obj) = json {
+                  // 上游通常在每个 SSE 分片中重复返回 model，每次请求只记录一次。
+                  if !state.response_model_logged {
+                    if let Some(model) = obj
+                      .get("model")
+                      .and_then(Value::as_str)
+                      .filter(|model| !model.trim().is_empty())
+                    {
+                      info!("[AISession] 上游响应 model={}", model);
+                      state.response_model_logged = true;
+                    }
+                  }
+
                   if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
                     if let Some(first_choice) = choices.first() {
                       // 检查是否是流结束标记（finish_reason为stop）
