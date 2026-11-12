@@ -493,7 +493,7 @@ void main() {
     await tester.tap(find.text('导入网页'));
     await tester.pumpAndSettle();
     expect(find.byType(KnowledgeBaseWebImportDialog), findsOneWidget);
-    expect(find.text('URL地址'), findsOneWidget);
+    expect(find.text('URL 地址'), findsOneWidget);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(find.byType(PopupMenuItem<String>), findsNothing);
@@ -966,6 +966,36 @@ void main() {
         await font.load();
       }
     }
+    final defaults = <String, dynamic>{
+      'summary_enabled': true,
+      'parser_engine_rules': [
+        {
+          'file_types': ['html'],
+          'engine': '',
+        }
+      ],
+      'chunking_config': {
+        'chunk_size': 640,
+        'chunk_overlap': 80,
+        'strategy': 'auto',
+        'enable_parent_child': false,
+        'parent_chunk_size': 4096,
+        'child_chunk_size': 384,
+      },
+      'enable_multimodel': false,
+      'vlm_config': {
+        'enabled': false,
+        'model_id': '',
+        'description_language': '',
+        'custom_instructions': '',
+      },
+      'asr_config': {'enabled': false, 'model_id': '', 'language': ''},
+      'question_generation_config': {
+        'enabled': false,
+        'question_count': 3,
+        'custom_instructions': '',
+      },
+    };
     final calls = <(String, Map<String, dynamic>)>[];
     var optionsFail = true;
     var pending = Completer<http.Response>();
@@ -981,12 +1011,22 @@ void main() {
           jsonEncode({
             'success': true,
             'data': {
-              'chunk_size': 640,
-              'chunk_overlap': 80,
-              'strategy': 'auto',
+              'version': 2,
+              'process_config': defaults,
+              'tags': [
+                {'id': 'tag', 'name': '学习'},
+              ],
+              'models': [
+                {'id': 'vision', 'name': '视觉模型', 'type': 'VLLM'},
+              ],
+              'engines': [
+                {'id': 'builtin', 'name': '内置解析'},
+              ],
+              'summary_available': true,
             },
           }),
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         );
       }),
     );
@@ -1080,6 +1120,26 @@ void main() {
       calls.map((call) => call.$1),
       ['web_import_options', 'web_import_options'],
     );
+    await tester.tap(find.text('学习'));
+    var previousSection = 0;
+    Future<void> section(String label) async {
+      final index = ['文档标签', '解析引擎', '分块设置', '图像处理', '音频处理', '文档摘要', 'AI 问题生成']
+          .indexOf(label);
+      final tile = find.widgetWithText(ListTile, label);
+      await tester.scrollUntilVisible(
+        tile,
+        index >= previousSection ? 80 : -80,
+        scrollable: find.descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      previousSection = index;
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+    }
+
+    await section('分块设置');
     expect(
       tester
           .widget<TextFormField>(find.byType(TextFormField).first)
@@ -1088,13 +1148,48 @@ void main() {
       '640',
     );
     await capture('parse');
-    await tester.enterText(find.byType(TextFormField).first, '100');
-    await tester.enterText(find.byType(TextFormField).last, '100');
+    await tester.enterText(find.byKey(const ValueKey('chunk_size')), '100');
+    await tester.enterText(find.byKey(const ValueKey('chunk_overlap')), '100');
     await tester.tap(confirm);
     await tester.pumpAndSettle();
     expect(calls, hasLength(2));
-    await tester.enterText(find.byType(TextFormField).first, '800');
-    await tester.enterText(find.byType(TextFormField).last, '100');
+    await tester.enterText(find.byKey(const ValueKey('chunk_size')), '800');
+    await tester.enterText(find.byKey(const ValueKey('chunk_overlap')), '0');
+    await section('解析引擎');
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('内置解析').last);
+    await tester.pumpAndSettle();
+    await section('图像处理');
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('vlm_config-model')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('视觉模型').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('vlm_config-custom_instructions')),
+      '保留图片里的文字',
+    );
+    await section('音频处理');
+    expect(
+      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).onChanged,
+      isNull,
+    );
+    await section('文档摘要');
+    await tester.tap(find.byType(SwitchListTile));
+    await section('AI 问题生成');
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('question_count')), '5');
+    await section('分块设置');
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const ValueKey('chunk_size')))
+          .controller!
+          .text,
+      '800',
+    );
     for (final status in [503, 409, 200]) {
       await tester.tap(confirm);
       await tester.pump();
@@ -1135,13 +1230,56 @@ void main() {
       'workspace_id': 'workspace',
       'base_id': 'base',
       'url': 'https://example.com/article',
-      'chunk_size': 800,
-      'chunk_overlap': 100,
-      'strategy': 'auto',
+      'tag_ids': ['tag'],
+      'process_config': {
+        ...defaults,
+        'summary_enabled': false,
+        'parser_engine_rules': [
+          {
+            'file_types': ['html'],
+            'engine': 'builtin',
+          }
+        ],
+        'chunking_config': {
+          ...defaults['chunking_config'] as Map,
+          'chunk_size': 800,
+          'chunk_overlap': 0,
+        },
+        'enable_multimodel': true,
+        'vlm_config': {
+          'enabled': true,
+          'model_id': 'vision',
+          'description_language': '',
+          'custom_instructions': '保留图片里的文字',
+        },
+        'question_generation_config': {
+          'enabled': true,
+          'question_count': 5,
+          'custom_instructions': '',
+        },
+      },
     });
     await tester.tap(find.text('打开'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'https://example.com');
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    await section('分块设置');
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const ValueKey('chunk_size')))
+          .controller!
+          .text,
+      '640',
+    );
+    // Settings remain usable on a narrow window, including validation navigation.
+    tester.view.physicalSize = const Size(390, 740);
+    await tester.pumpAndSettle();
+    expect(find.text('拆分策略'), findsOneWidget);
+    await capture('narrow');
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('上一步'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('清空'));
     expect(
       tester.widget<TextFormField>(find.byType(TextFormField)).controller!.text,
@@ -1150,7 +1288,7 @@ void main() {
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
     expect(find.byType(KnowledgeBaseWebImportDialog), findsNothing);
-    expect(calls, hasLength(5));
+    expect(calls, hasLength(6));
     expect(tester.takeException(), isNull);
   });
 
