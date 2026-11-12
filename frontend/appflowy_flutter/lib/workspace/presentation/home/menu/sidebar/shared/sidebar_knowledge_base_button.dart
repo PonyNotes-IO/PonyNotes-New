@@ -4,6 +4,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_web_import_dialog.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
@@ -26,6 +27,7 @@ class _SidebarKnowledgeBaseButtonState
   bool _expanded = false;
   final _expandedCategories = <KnowledgeBaseCategory>{};
   KnowledgeBaseCategory? _selectedCategory;
+  String? _addingToBaseId;
 
   KnowledgeBaseCubit get _cubit => context.read<KnowledgeBaseCubit>();
 
@@ -259,7 +261,7 @@ class _SidebarKnowledgeBaseButtonState
                     ),
                   ),
                 ),
-                if (isHovered)
+                if (isHovered || _addingToBaseId == base.id)
                   SizedBox.square(
                     dimension: 28,
                     child: PopupMenuButton<String>(
@@ -270,6 +272,26 @@ class _SidebarKnowledgeBaseButtonState
                       padding: EdgeInsets.zero,
                       position: PopupMenuPosition.under,
                       icon: Icon(Icons.add, size: 16, color: style.color),
+                      onOpened: () => setState(() => _addingToBaseId = base.id),
+                      onCanceled: () => setState(() => _addingToBaseId = null),
+                      onSelected: (action) async {
+                        setState(() => _addingToBaseId = null);
+                        if (action != 'Import web page') return;
+                        final cubit = _cubit;
+                        final imported = await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => KnowledgeBaseWebImportDialog(
+                            base: base,
+                            service: cubit.service,
+                          ),
+                        );
+                        if (imported != true || !mounted || cubit.isClosed) {
+                          return;
+                        }
+                        await cubit.load();
+                        if (mounted) _open(base);
+                      },
                       itemBuilder: (context) => [
                         for (final (zh, en) in const [
                           ('选择笔记', 'Select notes'),

@@ -66,6 +66,12 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant KnowledgeBaseContents oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.base != widget.base) _load();
+  }
+
   void _load() {
     _files = _tab == 0 ? _request('documents') : null;
     _sources = _tab == 0 ? _request('sources') : null;

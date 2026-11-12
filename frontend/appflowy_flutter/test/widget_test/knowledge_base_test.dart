@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_page.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_plugin.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_web_import_dialog.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_canvas.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -489,7 +490,11 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(tabs.events, hasLength(2));
     expect(creations, isEmpty);
-    await tester.tapAt(const Offset(1000, 700));
+    await tester.tap(find.text('导入网页'));
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeBaseWebImportDialog), findsOneWidget);
+    expect(find.text('URL地址'), findsOneWidget);
+    await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
     expect(find.byType(PopupMenuItem<String>), findsNothing);
     await hover('共享知识库');
@@ -936,6 +941,216 @@ void main() {
     await tester.tap(find.text('文件'));
     await tester.pumpAndSettle();
     expect(find.text('产品路线图.pdf'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('web import validates URLs, confirms parsing and handles retries',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const screenshot = String.fromEnvironment('KB_WEB_IMPORT_SCREENSHOT');
+    if (screenshot.isNotEmpty) {
+      for (final (name, path) in [
+        ('Microsoft YaHei', 'C:/Windows/Fonts/msyh.ttc'),
+        (
+          'MaterialIcons',
+          'E:/fly/FlyEnv-Data/env/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf'
+        ),
+      ]) {
+        final font = FontLoader(name)
+          ..addFont(
+            Future.value(ByteData.sublistView(File(path).readAsBytesSync())),
+          );
+        await font.load();
+      }
+    }
+    final calls = <(String, Map<String, dynamic>)>[];
+    var optionsFail = true;
+    var pending = Completer<http.Response>();
+    final service = KnowledgeBaseService(
+      () async => ('https://notes.example', 'token'),
+      client: MockClient((request) async {
+        final action = request.url.path.split('/').last;
+        calls.add((action, jsonDecode(request.body) as Map<String, dynamic>));
+        if (action == 'import_url') return pending.future;
+        expect(action, 'web_import_options');
+        if (optionsFail) return http.Response('', 404);
+        return http.Response(
+          jsonEncode({
+            'success': true,
+            'data': {
+              'chunk_size': 640,
+              'chunk_overlap': 80,
+              'strategy': 'auto',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+    addTearDown(service.close);
+    final boundary = GlobalKey();
+    bool? imported;
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: boundary,
+        child: AppFlowyTheme(
+          data: AppFlowyDefaultTheme().light(),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            locale: const Locale('zh', 'CN'),
+            supportedLocales: const [Locale('zh', 'CN')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            theme: ThemeData(
+              fontFamily: screenshot.isEmpty ? null : 'Microsoft YaHei',
+            ),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    imported = await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => KnowledgeBaseWebImportDialog(
+                        service: service,
+                        base: KnowledgeBase.fromJson({
+                          'id': 'base',
+                          'workspace_id': 'workspace',
+                          'name': '我的知识库',
+                          'visibility': 'shared',
+                        }),
+                      ),
+                    );
+                  },
+                  child: const Text('打开'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Future<void> capture(String suffix) async {
+      if (screenshot.isEmpty) return;
+      await tester.runAsync(() async {
+        final render = boundary.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary;
+        final image = await render.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File('$screenshot-$suffix.png')
+            .writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await capture('url');
+    final confirm = find.byType(FilledButton);
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(find.text('请输入有效的 HTTP 或 HTTPS 网页地址'), findsOneWidget);
+    for (final url in [
+      'ftp://example.com',
+      'https://',
+      'https://example.com/a b',
+    ]) {
+      await tester.enterText(find.byType(TextFormField), url);
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      expect(find.text('请输入有效的 HTTP 或 HTTPS 网页地址'), findsOneWidget);
+    }
+    expect(calls, isEmpty);
+    await tester.enterText(
+      find.byType(TextFormField),
+      '  https://example.com/article  ',
+    );
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(find.text('当前知识库服务尚不支持网页导入，请联系管理员更新。'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    optionsFail = false;
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(find.text('上传文档确认'), findsOneWidget);
+    expect(find.text('https://example.com/article'), findsOneWidget);
+    expect(
+      calls.map((call) => call.$1),
+      ['web_import_options', 'web_import_options'],
+    );
+    expect(
+      tester
+          .widget<TextFormField>(find.byType(TextFormField).first)
+          .controller!
+          .text,
+      '640',
+    );
+    await capture('parse');
+    await tester.enterText(find.byType(TextFormField).first, '100');
+    await tester.enterText(find.byType(TextFormField).last, '100');
+    await tester.tap(confirm);
+    await tester.pumpAndSettle();
+    expect(calls, hasLength(2));
+    await tester.enterText(find.byType(TextFormField).first, '800');
+    await tester.enterText(find.byType(TextFormField).last, '100');
+    for (final status in [503, 409, 200]) {
+      await tester.tap(confirm);
+      await tester.pump();
+      expect(tester.widget<FilledButton>(confirm).onPressed, isNull);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, '取消'))
+            .onPressed,
+        isNull,
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      pending.complete(
+        http.Response(
+          status == 200
+              ? jsonEncode({
+                  'success': true,
+                  'data': {'document_id': 'document'},
+                })
+              : '',
+          status,
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (status != 200) {
+        expect(find.text('https://example.com/article'), findsOneWidget);
+        expect(
+          find.text(status == 409 ? '该网页已存在于知识库中。' : '知识库暂时无法连接，请稍后重试。'),
+          findsOneWidget,
+        );
+      }
+      pending = Completer<http.Response>();
+    }
+    expect(imported, isTrue);
+    expect(find.byType(KnowledgeBaseWebImportDialog), findsNothing);
+    expect(calls, hasLength(5));
+    expect(calls.last.$2, {
+      'workspace_id': 'workspace',
+      'base_id': 'base',
+      'url': 'https://example.com/article',
+      'chunk_size': 800,
+      'chunk_overlap': 100,
+      'strategy': 'auto',
+    });
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'https://example.com');
+    await tester.tap(find.byTooltip('清空'));
+    expect(
+      tester.widget<TextFormField>(find.byType(TextFormField)).controller!.text,
+      isEmpty,
+    );
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeBaseWebImportDialog), findsNothing);
+    expect(calls, hasLength(5));
     expect(tester.takeException(), isNull);
   });
 

@@ -81,6 +81,20 @@ String kbError(BuildContext context, Object? error) {
         '当前知识库服务尚不支持创建，请联系管理员更新。',
         'Creating knowledge bases requires a server update. Contact your administrator.',
       ),
+    404
+        when error is KnowledgeBaseException &&
+            (error.action == 'web_import_options' ||
+                error.action == 'import_url') =>
+      kbText(
+        context,
+        '当前知识库服务尚不支持网页导入，请联系管理员更新。',
+        'Importing web pages requires a server update. Contact your administrator.',
+      ),
+    409 => kbText(
+        context,
+        '该网页已存在于知识库中。',
+        'This web page already exists in the knowledge base.',
+      ),
     _ => kbText(
         context,
         '知识库暂时无法连接，请稍后重试。',
