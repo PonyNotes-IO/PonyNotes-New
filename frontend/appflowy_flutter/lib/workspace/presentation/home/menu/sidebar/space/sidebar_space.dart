@@ -1,4 +1,5 @@
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_note_graph_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_artifacts_button.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_graph_button.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
@@ -119,6 +120,8 @@ class SidebarSpace extends StatelessWidget {
             const SidebarShareButton(),
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarKnowledgeBaseButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarArtifactsButton(),
             // 发布
             // 文件库
             // const VSpace(4.0),

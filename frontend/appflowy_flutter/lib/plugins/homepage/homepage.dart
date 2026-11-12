@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:appflowy/features/agent/application/agent_conversations.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -163,41 +166,22 @@ class _HomePageState extends State<HomePage> {
       bool enableKnowledgeSearch) async {
     if (message.isEmpty) return;
 
-    Log.info('🔄 主页: 处理消息发送');
-    Log.info('   - 消息: $message');
-    Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
-    Log.info('   - 图片数: ${images?.length ?? 0}');
-    Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
-    Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
-
     try {
-      // 1. 获取当前workspace ID
-      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
-      if (workspaceId == null) {
-        Log.error('❌ 主页: 无法获取工作空间信息');
-        _showError('无法获取工作空间信息');
-        return;
+      final attachments = <PlatformFile>[];
+      for (final image in images ?? <ChatImage>[]) {
+        final bytes = image.bytes ??
+            (image.filePath == null
+                ? null
+                : await File(image.filePath!).readAsBytes());
+        if (bytes != null)
+          attachments.add(PlatformFile(
+              name: image.name ?? 'image.png',
+              size: bytes.length,
+              bytes: bytes));
       }
-
-      Log.info('✅ 主页: 获取到workspace ID: $workspaceId');
-
-      // 2. 创建并打开原生AI Chat视图
-      final view = await AIChatViewService.createAndOpenAIChat(
-        parentViewId: workspaceId,
-        initialMessage: message,
-        selectedModelId: selectedModel?.id,
-        enableDeepThinking: enableDeepThinking,
-        enableWebSearch: enableWebSearch,
-        enableKnowledgeSearch: enableKnowledgeSearch,
-        initialImages: images, // 传递图片数据
-      );
-
-      if (view == null) {
-        Log.error('❌ 主页: 创建AI对话失败');
-        _showError('创建AI对话失败');
-      } else {
-        Log.info('✅ 主页: AI Chat视图创建成功，view.id=${view.id}');
-      }
+      if (!mounted) return;
+      AgentConversations.requestedPrompt.value = (message, attachments);
+      openIndependentAiConversation(context);
     } catch (e, stackTrace) {
       Log.error('❌ 主页: 处理消息发送失败: $e', e, stackTrace);
       _showError('打开AI对话时发生错误: $e');
@@ -294,6 +278,7 @@ class _HomePageState extends State<HomePage> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AIInputArea(
+                            agentMode: true,
                             onMessageSent: _handleMessageSent,
                             customWidth: constraints.maxWidth,
                             // 使用几乎全部可用宽度，只留8px左右边距

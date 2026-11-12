@@ -7,8 +7,6 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
@@ -67,6 +65,10 @@ class AIChatViewService {
       // 4. 构建额外参数（存储为JSON）
       final extraData = <String, dynamic>{};
       extraData['ai_mode'] = agentMode ? 'agent' : 'chat';
+      if (agentMode) {
+        extraData['ai_engine'] = 'weknora';
+        extraData['agent_mode'] = 'smart-reasoning';
+      }
       if (selectedModelId != null && selectedModelId.isNotEmpty) {
         extraData['preferred_model'] = selectedModelId;
       }
@@ -213,35 +215,8 @@ class AIChatViewService {
         return existingSpace.id;
       }
 
-      // 6. 不存在则在私有空间中创建"我的AI会话"子空间（Space类型）
-      Log.info('🔄 创建"$kAIChatSpaceName"子空间...');
-      
-      // 构建Space的extra属性
-      final spaceExtra = {
-        ViewExtKeys.isSpaceKey: true,  // 关键：标记为Space
-        ViewExtKeys.spaceIconKey: builtInSpaceIcons.first,  // 使用默认图标
-        ViewExtKeys.spaceIconColorKey: builtInSpaceColors[2],  // 使用蓝色（0x00C8FF）
-        ViewExtKeys.spacePermissionKey: SpacePermission.private.index,  // 私有空间
-        ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
-      };
-      
-      final createResult = await workspaceService.createView(
-        name: kAIChatSpaceName,
-        viewSection: ViewSectionPB.Private,  // 放在私有空间区域
-        setAsCurrent: false,  // 不要设置为当前空间
-        extra: jsonEncode(spaceExtra),  // 包含Space属性
-      );
-
-      return createResult.fold(
-        (space) {
-          Log.info('✅ 成功创建"$kAIChatSpaceName"子空间: ${space.id}');
-          return space.id;
-        },
-        (error) {
-          Log.error('❌ 创建"$kAIChatSpaceName"子空间失败: ${error.msg}');
-          return null;
-        },
-      );
+      // Old Chat remains available without creating another AI-only note space.
+      return workspaceId;
     } catch (e, stackTrace) {
       Log.error('❌ 获取或创建AI会话子空间异常: $e', e, stackTrace);
       return null;

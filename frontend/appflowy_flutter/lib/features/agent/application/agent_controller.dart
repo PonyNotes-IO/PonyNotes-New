@@ -1,24 +1,24 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
-import 'package:appflowy/features/mcp/application/mcp_tools.dart';
-import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:appflowy/features/mcp/application/mcp_tools.dart';
 import 'package:mcp_dart/mcp_dart.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
-
-import 'agent_settings.dart';
-import 'agent_note_bridge.dart';
-import 'agent_transport.dart';
-import 'agent_model_preferences.dart';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'agent_artifacts.dart';
 import 'agent_credits.dart';
 import 'agent_internal_service.dart';
+import 'agent_model_preferences.dart';
+import 'agent_service.dart';
+import 'agent_reference.dart';
+import 'agent_note_bridge.dart';
+import 'agent_permissions.dart';
+import 'agent_prompt.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 
 class AgentActivity {
   AgentActivity({
@@ -38,50 +38,906 @@ class AgentActivity {
 class AgentController extends ChangeNotifier {
   AgentController({
     required this.chatId,
-    AgentTransport? transport,
+    AgentService? service,
     AgentInternalService? internalService,
-  })  : transport = transport ?? AgentTransport(),
-        internalService = internalService ?? AgentInternalService();
+    Future<String?> Function()? workspaceId,
+    this.mode = 'smart-reasoning',
+    this.documentName = '',
+    this.independent = false,
+    this.initialThinking,
+    AgentArtifacts? artifacts,
+    Map<String, dynamic> cloudArtifacts = const {},
+  })  : service = service ?? AgentService(),
+        internalService = internalService ?? AgentInternalService(),
+        artifacts = artifacts ?? AgentArtifacts(),
+        cloudArtifacts = Map<String, dynamic>.from(cloudArtifacts),
+        _workspace = workspaceId ?? AIChatViewService.getCurrentWorkspaceId;
   static final _instances = <AgentController>{};
+  static final accountClearance = ValueNotifier(0);
   static Future<void> revokeAll() async {
+    accountClearance.value++;
     await Future.wait(
       _instances.toList().map((controller) => controller.disconnect()),
     );
   }
 
   final String chatId;
-  final AgentTransport transport;
+  final String documentName;
+  final bool independent;
+  final String? initialThinking;
+  final AgentService service;
   final AgentInternalService internalService;
-  AiProviderConfig? _runtimeConfig;
-  final _pending = <String, Completer<dynamic>>{};
+  final Future<String?> Function() _workspace;
+  final AgentArtifacts artifacts;
+  final Map<String, dynamic> cloudArtifacts;
+  String mode;
+  bool _modeSelected = false;
+  bool cloudSync = false;
+  bool savingArtifacts = false;
+  bool _saveArtifactsAgain = false;
+  String? artifactError;
+  final artifactFiles = <String, File>{};
+  String get _storageKey => 'ponynotes.agent.artifacts.$_identity|$chatId';
   final messages = <Map<String, dynamic>>[];
   final activities = <String, AgentActivity>{};
-  final interactions = <Map<String, dynamic>>[];
-  final steps = <Map<String, dynamic>>[];
+  final sources = <String, Map<String, dynamic>>{};
+  final references = <Map<String, dynamic>>[];
   final queuedInputs = <String>[];
+  final _answerSegments = <String, String>{};
+  final permissions = AgentPermissions();
+  final interactions = <Map<String, dynamic>>[];
+  final prompts = <String, AgentPrompt>{};
+  String progressText = '';
+  bool preparingNotes = false;
+  final _handledCalls = <String>{};
+  String _clientId = const Uuid().v4();
+  Timer? _toolTimer;
+  bool _pollingTools = false;
+  int _toolEpoch = 0;
+  bool _acceptNoteCalls = false;
+  McpTools get noteTools => McpTools(
+        endpoint: 'internal-agent',
+        version: '1.0.0',
+        isAgentChannel: true,
+        agentName: () => '小马 Agent',
+        isToolAllowed: (name) => !permissions.disabledTools.contains(name),
+      );
   StreamSubscription<Map<String, dynamic>>? _subscription;
-  String? _identity;
   String? _workspaceId;
+  String? _identity;
+  String? activeMessageId;
   int _epoch = 0;
-  int _runEpoch = 0;
-  AgentSettings? _settings;
+  int _run = 0;
+  bool _disposed = false;
+  bool _streamOpen = false;
   bool connected = false;
-  int clearanceVersion = 0;
   bool connecting = false;
   bool running = false;
-  bool compacting = false;
-  bool _disposed = false;
+  int clearanceVersion = 0;
   String? error;
+  String? notice;
   String streamingText = '';
   String model = '';
+  String thinkingLevel = 'off';
+  bool webSearch = false;
   AiProviderConfig? providerConfig;
-
-  /// Gateway balance for the active model key; null for endpoints without credits.
   AgentCredits? credits;
   String? creditsError;
-  Timer? _creditsTimer;
   bool _creditsInFlight = false;
   bool _creditsRefreshAgain = false;
+  Map<String, dynamic>? sessionTokens;
+
+  void changed() {
+    if (!_disposed) notifyListeners();
+  }
+
+  Future<bool> _isCurrent() async =>
+      _workspaceId != null &&
+      await _workspace() == _workspaceId &&
+      await service.identity(_workspaceId!) == _identity;
+
+  Future<void> connect() async {
+    if (connecting || connected) return;
+    connecting = true;
+    error = null;
+    changed();
+    final epoch = ++_epoch;
+    _instances.add(this);
+    try {
+      final workspace = await _workspace();
+      if (workspace == null) throw StateError('请先打开工作区');
+      _workspaceId = workspace;
+      _identity = await service.identity(workspace);
+      cloudSync =
+          (await SharedPreferences.getInstance()).getBool(_storageKey) ?? false;
+      await permissions.load(_identity!, chatId);
+      _clientId = const Uuid().v4();
+      if (mode == 'smart-reasoning') await _registerNoteTools();
+      _startHeartbeat();
+      thinkingLevel =
+          initialThinking ?? await AgentModelPreferences.loadThinking();
+      final data = await service.request('GET', workspace, chatId, '');
+      if (epoch != _epoch) return;
+      if (!await _isCurrent()) throw StateError('账号或工作区已切换');
+      _history(data);
+      _answerSegments.clear();
+      streamingText = '';
+      connected = true;
+      unawaited(saveArtifacts());
+      if (activeMessageId != null) {
+        _listen(
+          service.stream(
+            'GET',
+            workspace,
+            chatId,
+            '/stream?message_id=$activeMessageId',
+          ),
+          epoch,
+        );
+      }
+      final selected = providerConfig ?? await internalService.preferred();
+      if (epoch != _epoch || !await _isCurrent()) return;
+      providerConfig = selected;
+      model = selected.modelName;
+      unawaited(refreshCredits());
+    } catch (e) {
+      if (epoch == _epoch) error = '$e';
+    } finally {
+      if (epoch == _epoch) {
+        connecting = false;
+        changed();
+      }
+    }
+  }
+
+  void _history(Map<String, dynamic> data) {
+    if (data['cloud_artifacts'] is Map) {
+      cloudArtifacts
+          .addAll(Map<String, dynamic>.from(data['cloud_artifacts'] as Map));
+    }
+    // History reports the last submitted mode, not the user's next-turn choice.
+    if (!_modeSelected &&
+        ['quick-answer', 'smart-reasoning'].contains(data['mode'])) {
+      mode = data['mode'] as String;
+    }
+    messages
+      ..clear()
+      ..addAll(
+        (data['messages'] as List? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map)),
+      );
+    activities.clear();
+    prompts.clear();
+    for (final message in messages) {
+      for (final value in [
+        ...message['prompt_history'] as List? ?? [],
+        if (message['pending_prompt'] is Map) message['pending_prompt'],
+      ].whereType<Map>()) {
+        final prompt = AgentPrompt.fromJson(
+          value,
+          '${message['id']}',
+        );
+        if (prompt.open && !prompt.expired) prompts[prompt.id] = prompt;
+      }
+    }
+    for (final entry in cloudArtifacts.entries) {
+      final file = Map<String, dynamic>.from(entry.value as Map);
+      final id = file['message_id'] as String;
+      final message = messages.where((m) => m['id'] == id).firstOrNull;
+      final target = message ?? {'id': id, 'role': 'assistant', 'content': ''};
+      final files = (target['artifacts'] as List? ?? []).toList();
+      files.removeWhere((f) => f is Map && f['index'] == file['index']);
+      files.add(file);
+      target['artifacts'] = files;
+      if (message == null) messages.add(target);
+    }
+    _sources(data['sources']);
+    activeMessageId = data['active_message_id'] as String?;
+    // ContinueStream replays this message from its beginning.
+    if (activeMessageId != null) {
+      messages.removeWhere((message) => message['id'] == activeMessageId);
+    }
+    running = activeMessageId != null;
+    queuedInputs.removeWhere(
+      (text) => messages.any(
+        (message) => message['role'] == 'user' && message['content'] == text,
+      ),
+    );
+    if (data['scope_changed'] == true) {
+      notice = '可访问的笔记范围已变化，下一次提问将使用新会话；原会话仍保留在服务端。';
+    }
+    references.clear();
+    for (final message in messages) {
+      if (message['role'] == 'assistant') {
+        references.addAll(
+          (message['knowledge_references'] as List? ?? [])
+              .whereType<Map>()
+              .map((r) => Map<String, dynamic>.from(r)),
+        );
+      }
+    }
+  }
+
+  void _sources(dynamic value) {
+    if (value is! Map) return;
+    sources
+      ..clear()
+      ..addAll(
+        value.map(
+          (key, value) =>
+              MapEntry('$key', Map<String, dynamic>.from(value as Map)),
+        ),
+      );
+  }
+
+  Future<List<AgentReference>> loadReferences() async {
+    final version = clearanceVersion;
+    final workspace = await _workspace();
+    if (workspace == null) throw StateError('请先打开工作区');
+    if (_identity != null && !await _isCurrent()) throw StateError('账号或工作区已切换');
+    final items = await service.references(workspace);
+    if (_disposed ||
+        version != clearanceVersion ||
+        await _workspace() != workspace ||
+        (_identity != null && !await _isCurrent())) {
+      throw StateError('账号或工作区已切换，请重新选择引用');
+    }
+    return items;
+  }
+
+  Future<Map<String, dynamic>> loadReferenceFile(String id, int page) async {
+    if (!await _isCurrent()) throw StateError('账号或工作区已切换');
+    final version = clearanceVersion;
+    final data = await service.request(
+      'GET',
+      _workspaceId!,
+      '',
+      '/references/${Uri.encodeComponent(id)}?page=$page',
+    );
+    if (_disposed || version != clearanceVersion || !await _isCurrent()) {
+      throw StateError('账号或工作区已切换');
+    }
+    return data;
+  }
+
+  Future<bool> send(
+    String text, {
+    String behavior = 'prompt',
+    List<Map<String, dynamic>> images = const [],
+    List<Map<String, dynamic>> attachments = const [],
+    List<AgentReference> contextReferences = const [],
+    String? initialRequest,
+  }) async {
+    if (!connected) await connect();
+    if (!connected) return false;
+    if (!await _isCurrent()) {
+      await disconnect();
+      throw StateError('账号或工作区已切换，请重新打开文档');
+    }
+    if (running) {
+      if (behavior == 'prompt' || activeMessageId == null) {
+        throw StateError('当前回答尚未结束');
+      }
+      if (images.isNotEmpty ||
+          attachments.isNotEmpty ||
+          contextReferences.isNotEmpty) {
+        throw StateError('请等待当前回答结束后发送附件或引用');
+      }
+      await service.request('POST', _workspaceId!, chatId, '/steer', {
+        'query': text,
+        'client_id': _clientId,
+        'delivery': behavior == 'follow_up' ? 'after' : 'inject',
+        'expected_assistant_message_id': activeMessageId,
+      });
+      queuedInputs.add(text);
+      changed();
+      return true;
+    }
+    final config = providerConfig;
+    if (config == null) {
+      error = '请先选择可用模型；已有文件仍可打开';
+      changed();
+      return false;
+    }
+    if (mode == 'smart-reasoning') await _registerNoteTools();
+    final run = ++_run;
+    final epoch = _epoch;
+    await _subscription?.cancel();
+    final accepted = Completer<bool>();
+    running = true;
+    error = null;
+    activities.clear();
+    references.clear();
+    progressText = mode == 'quick-answer' ? '正在检索小马笔记' : '正在准备资料';
+    notice = null;
+    _answerSegments.clear();
+    streamingText = '';
+    final question = <String, dynamic>{
+      'role': 'user',
+      'content': text,
+      if (attachments.isNotEmpty)
+        'attachments': attachments
+            .map(
+              (file) => {
+                'file_name': file['file_name'],
+                'file_size': file['file_size'],
+                'status': 'uploading',
+              },
+            )
+            .toList(),
+      if (images.isNotEmpty)
+        'images': images
+            .map((image) => {'file_name': image['file_name'] ?? '图片'})
+            .toList(),
+      if (contextReferences.isNotEmpty)
+        'mentioned_items': contextReferences
+            .map((r) => {...r.toJson(), 'name': r.name})
+            .toList(),
+    };
+    messages.add(question);
+    changed();
+    var noteContext = <Map<String, dynamic>>[];
+    var noteSearchStatus = '';
+    if (mode == 'quick-answer') {
+      preparingNotes = true;
+      final retrieved = await _quickNotes(text, epoch, run);
+      if (epoch != _epoch || run != _run || _disposed) {
+        if (epoch == _epoch && !_disposed) {
+          messages.remove(question);
+          changed();
+        }
+        return false;
+      }
+      if (!await _isCurrent()) {
+        await disconnect();
+        return false;
+      }
+      preparingNotes = false;
+      noteContext = retrieved.$1;
+      noteSearchStatus = retrieved.$2;
+      progressText = '正在检索知识库';
+      changed();
+    }
+    _listen(
+      service.stream('POST', _workspaceId!, chatId, '/messages', {
+        'query': text,
+        'client_id': _clientId,
+        'mode': mode,
+        'model': {
+          'model_name': config.modelName,
+          'is_internal': config.isInternal,
+          if (!config.isInternal) 'base_url': config.baseUrl,
+          if (!config.isInternal) 'api_key': config.apiKey,
+          'supports_reasoning': config.supportsReasoning,
+        },
+        'reasoning_effort': thinkingLevel,
+        'web_search': webSearch,
+        if (mode == 'quick-answer') ...{
+          'note_context': noteContext,
+          'note_search_status': noteSearchStatus,
+        },
+        'initial_request': initialRequest != null,
+        'images': images
+            .map(
+              (image) =>
+                  {'data': 'data:${image['mimeType']};base64,${image['data']}'},
+            )
+            .toList(),
+        'attachments': attachments,
+        if (contextReferences.isNotEmpty)
+          'references': contextReferences.map((r) => r.toJson()).toList(),
+      }),
+      epoch,
+      accepted: accepted,
+    );
+    final sent = await accepted.future;
+    if (!sent && epoch == _epoch) {
+      for (final file
+          in (question['attachments'] as List? ?? []).whereType<Map>()) {
+        file['status'] = 'unconfirmed';
+      }
+      changed();
+    }
+    return sent;
+  }
+
+  Future<(List<Map<String, dynamic>>, String)> _quickNotes(
+    String query,
+    int epoch,
+    int run,
+  ) async {
+    final notes = <Map<String, dynamic>>[];
+    if (permissions.disabledTools.contains('search_notes') ||
+        permissions.disabledTools.contains('get_page')) {
+      notice = '笔记检索已关闭，本轮将检索知识库';
+      return (notes, 'disabled');
+    }
+    final bridge = AgentNoteBridge(
+      tools: noteTools,
+      workspaceId: _workspaceId!,
+      isCurrent: () async =>
+          epoch == _epoch && run == _run && await _isCurrent(),
+      approve: (_, __) async => false,
+    );
+    try {
+      final found = await bridge.execute(
+        'search_notes',
+        {'workspace_id': _workspaceId, 'query': query, 'limit': 5},
+      );
+      if (found.isError) throw StateError('笔记检索未完成');
+      final data = jsonDecode(_resultText(found)) as Map;
+      var partial = data['complete'] == false;
+      for (final item
+          in (data['results'] as List? ?? []).whereType<Map>().take(5)) {
+        if (epoch != _epoch || run != _run || !await _isCurrent()) {
+          return (<Map<String, dynamic>>[], 'canceled');
+        }
+        final id = '${item['page_id'] ?? ''}';
+        if (!Uuid.isValidUUID(fromString: id)) continue;
+        final page = await bridge
+            .execute('get_page', {'workspace_id': _workspaceId, 'page_id': id});
+        if (epoch != _epoch || run != _run || !await _isCurrent()) {
+          return (<Map<String, dynamic>>[], 'canceled');
+        }
+        if (page.isError) {
+          partial = true;
+          continue;
+        }
+        final body = jsonDecode(_resultText(page)) as Map;
+        if (body['content_supported'] != true ||
+            '${body['text'] ?? ''}'.trim().isEmpty) {
+          continue;
+        }
+        final title =
+            String.fromCharCodes('${item['title'] ?? '笔记'}'.runes.take(300));
+        notes.add({
+          'page_id': id,
+          'title': title,
+          'content': String.fromCharCodes('${body['text']}'.runes.take(4000)),
+        });
+        sources['note:$id'] = {
+          'title': title,
+          'url': 'ponynotes://open?viewId=$id&workspaceId=$_workspaceId',
+        };
+      }
+      if (partial) notice = '部分笔记暂未读取完成，已使用可读取的笔记继续检索';
+      return (
+        notes,
+        partial
+            ? 'partial'
+            : notes.isEmpty
+                ? 'empty'
+                : 'complete'
+      );
+    } catch (_) {
+      if (epoch == _epoch && run == _run) notice = '笔记检索暂不可用，本轮将检索知识库；可重新连接后再试';
+      return (notes, 'unavailable');
+    }
+  }
+
+  void _listen(
+    Stream<Map<String, dynamic>> stream,
+    int epoch, {
+    Completer<bool>? accepted,
+  }) {
+    var completed = false;
+    _streamOpen = true;
+    _subscription = stream.listen(
+      (event) {
+        if (epoch != _epoch || _disposed) return;
+        if (event['response_type'] == 'scope' &&
+            accepted?.isCompleted == false) {
+          accepted!.complete(true);
+        }
+        if (event['response_type'] == 'complete') completed = true;
+        receive(event);
+      },
+      onError: (Object e) {
+        if (accepted?.isCompleted == false) accepted!.complete(false);
+        if (epoch != _epoch || _disposed) return;
+        _streamOpen = false;
+        _cancelApprovals();
+        error = agentDisplayText('$e');
+        connected = false;
+        running = false;
+        changed();
+      },
+      onDone: () {
+        if (accepted?.isCompleted == false) accepted!.complete(false);
+        if (epoch != _epoch || _disposed) return;
+        _streamOpen = false;
+        if (!completed) {
+          error ??= '回答连接已断开，重新连接可恢复；请勿重复提交问题';
+          connected = false;
+        }
+        running = false;
+        changed();
+        if (completed) unawaited(_reloadHistory());
+      },
+      cancelOnError: true,
+    );
+  }
+
+  @visibleForTesting
+  void receive(Map<String, dynamic> event) {
+    final data = event['data'] is Map
+        ? Map<String, dynamic>.from(event['data'] as Map)
+        : <String, dynamic>{};
+    activeMessageId =
+        event['assistant_message_id'] as String? ?? activeMessageId;
+    switch (event['response_type']) {
+      case 'scope':
+        _sources(data['sources']);
+        final question = messages.where((m) => m['role'] == 'user').lastOrNull;
+        if (question != null &&
+            data['attachments'] is List &&
+            (data['attachments'] as List).isNotEmpty) {
+          question['attachments'] = data['attachments'];
+        }
+      case 'progress':
+        _answerSegments.remove('${data['event_id'] ?? event['id']}');
+        streamingText = _answerSegments.values.join();
+        progressText = '${event['content'] ?? ''}';
+      case 'agent_prompt_required':
+      case 'tool_approval_required':
+        if (activeMessageId != null) {
+          final prompt = AgentPrompt.fromJson(data, activeMessageId!);
+          prompts.putIfAbsent(prompt.id, () => prompt);
+          progressText = prompt.kind == 'ask_user' ? '等待你的回答' : '等待你的确认';
+        }
+      case 'agent_prompt_resolved':
+      case 'tool_approval_resolved':
+        prompts.remove('${data['pending_id']}');
+        progressText = '继续处理';
+      case 'answer':
+        final id = '${data['event_id'] ?? event['id'] ?? 'answer'}';
+        final text = '${event['content'] ?? ''}';
+        _answerSegments[id] = data['replace'] == true
+            ? text
+            : '${_answerSegments[id] ?? ''}$text';
+        streamingText = _answerSegments.values.join();
+      case 'tool_call':
+        _answerSegments.clear();
+        streamingText = '';
+        final id = '${data['tool_call_id']}';
+        activities[id] = AgentActivity(
+          id: id,
+          name: '${data['tool_name']}',
+          arguments: data['arguments'] is Map
+              ? Map<String, dynamic>.from(data['arguments'] as Map)
+              : {},
+        );
+      case 'tool_result':
+        final id = '${data['tool_call_id']}';
+        final activity = activities.putIfAbsent(
+          id,
+          () => AgentActivity(
+            id: id,
+            name: '${data['tool_name']}',
+            arguments: {},
+          ),
+        );
+        activity.status = data['success'] == true ? 'completed' : 'failed';
+        activity.result = '${event['content'] ?? data['error'] ?? ''}';
+      case 'references':
+        references
+          ..clear()
+          ..addAll(
+            (data['references'] as List? ??
+                    event['knowledge_references'] as List? ??
+                    [])
+                .whereType<Map>()
+                .map((r) => Map<String, dynamic>.from(r)),
+          );
+      case 'user_message_injected':
+        final text = '${data['query'] ?? event['content'] ?? ''}';
+        queuedInputs.remove(text);
+        if (text.isNotEmpty) messages.add({'role': 'user', 'content': text});
+      case 'context_compacted':
+        notice = '较早的对话已自动压缩';
+      case 'error':
+        error = agentDisplayText('${event['content'] ?? '小马 Agent 执行失败'}');
+      case 'complete':
+        if (data['final_content'] is String) {
+          streamingText = data['final_content'] as String;
+        }
+        sessionTokens = event['usage'] is Map
+            ? Map<String, dynamic>.from(event['usage'] as Map)
+            : data['usage'] is Map
+                ? Map<String, dynamic>.from(data['usage'] as Map)
+                : null;
+        if (streamingText.isNotEmpty) {
+          messages.add({
+            'role': 'assistant',
+            'content': streamingText,
+            'knowledge_references': references.toList(),
+            'local_activities': activities.values.toList(),
+          });
+          activities.clear();
+        }
+        streamingText = '';
+        _answerSegments.clear();
+        activeMessageId = null;
+        running = false;
+        progressText = '';
+        unawaited(refreshCredits());
+    }
+    changed();
+  }
+
+  Future<void> _reloadHistory() async {
+    final epoch = _epoch;
+    final run = _run;
+    try {
+      final data = await service.request('GET', _workspaceId!, chatId, '');
+      if (epoch == _epoch && run == _run && await _isCurrent()) {
+        _history(data);
+        unawaited(saveArtifacts());
+        if (activeMessageId != null && !_streamOpen && connected) {
+          _answerSegments.clear();
+          streamingText = '';
+          _listen(
+            service.stream(
+              'GET',
+              _workspaceId!,
+              chatId,
+              '/stream?message_id=$activeMessageId',
+            ),
+            epoch,
+          );
+        }
+        changed();
+      }
+    } catch (e) {
+      if (epoch == _epoch && run == _run) {
+        error = '回答已结束，但历史刷新失败：$e';
+        changed();
+      }
+    }
+  }
+
+  Future<void> answerPrompt(
+    AgentPrompt prompt,
+    Map<String, dynamic> response,
+  ) async {
+    if (prompt.submitting ||
+        !prompt.open ||
+        !connected ||
+        !await _isCurrent()) {
+      return;
+    }
+    final epoch = _epoch;
+    prompt.submitting = true;
+    prompt.error = null;
+    changed();
+    try {
+      final result = await service
+          .request('POST', _workspaceId!, chatId, '/prompt-response', {
+        'pending_id': prompt.id,
+        'message_id': prompt.messageId,
+        'kind': prompt.kind,
+        'response': response,
+      });
+      if (epoch != _epoch || !await _isCurrent()) return;
+      prompt.status = 'answered';
+      prompt.response = response;
+      prompts.remove(prompt.id);
+      progressText = '继续处理';
+      if (result['resumed'] == true || !_streamOpen) {
+        ++_run;
+        service.closeStream();
+        await _subscription?.cancel();
+        _answerSegments.clear();
+        streamingText = '';
+        messages.removeWhere((m) => m['id'] == prompt.messageId);
+        activeMessageId = prompt.messageId;
+        running = true;
+        _listen(
+          service.stream(
+            'GET',
+            _workspaceId!,
+            chatId,
+            '/stream?message_id=${Uri.encodeComponent(prompt.messageId)}${result['resumed'] == true ? '&resume_pending_id=${Uri.encodeComponent(prompt.id)}' : ''}',
+          ),
+          epoch,
+        );
+      }
+    } catch (e) {
+      if (epoch == _epoch) {
+        prompt.error = '回答未提交成功，请重试：${agentDisplayText('$e')}';
+      }
+    } finally {
+      prompt.submitting = false;
+      if (epoch == _epoch) changed();
+    }
+  }
+
+  Future<void> stop() async {
+    if (!connected || (!running && prompts.isEmpty)) return;
+    if (preparingNotes) {
+      ++_run;
+      preparingNotes = false;
+      running = false;
+      progressText = '';
+      notice = '检索已停止，问题尚未发送';
+      changed();
+      return;
+    }
+    try {
+      _acceptNoteCalls = false;
+      _cancelApprovals();
+      if (!await _isCurrent()) throw StateError('账号或工作区已切换');
+      await service.request('POST', _workspaceId!, chatId, '/stop', {});
+      service.closeStream();
+      await _subscription?.cancel();
+      running = false;
+      await _reloadHistory();
+    } catch (e) {
+      error = '$e';
+      changed();
+    }
+  }
+
+  Future<void> configureModel(AiProviderConfig config, String thinking) async {
+    if (running || connecting) throw StateError('请等待当前回答结束后切换模型');
+    providerConfig = config;
+    model = config.modelName;
+    thinkingLevel = thinking;
+    error = null;
+    credits = null;
+    changed();
+    if (connected) unawaited(refreshCredits());
+  }
+
+  void configureMode(bool smart) {
+    _modeSelected = true;
+    mode = smart ? 'smart-reasoning' : 'quick-answer';
+    changed();
+  }
+
+  Future<void> configureCloudSync(bool enabled) async {
+    if (_identity == null) return;
+    cloudSync = enabled;
+    await (await SharedPreferences.getInstance()).setBool(_storageKey, enabled);
+    changed();
+    await saveArtifacts();
+  }
+
+  String artifactKey(String message, int index) => '$message/$index';
+
+  List<AgentArtifact> get savedArtifacts => [
+        for (final message in messages)
+          for (final artifact
+              in (message['artifacts'] as List? ?? []).whereType<Map>())
+            if (artifactFiles[
+                    artifactKey('${message['id']}', artifact['index'] as int)]
+                case final file?)
+              AgentArtifact(
+                document: chatId,
+                message: '${message['id']}',
+                index: artifact['index'] as int,
+                name: '${artifact['file_name']}',
+                size: artifact['file_size'] as int,
+                file: file,
+                createdAt: DateTime.tryParse('${artifact['created_at']}') ??
+                    DateTime.fromMillisecondsSinceEpoch(0),
+                documentName: documentName,
+                independent: independent,
+                cloudUrl: artifact['cloud_url'] as String?,
+              ),
+      ];
+
+  Future<void> saveArtifacts() async {
+    if (savingArtifacts) {
+      _saveArtifactsAgain = true;
+      return;
+    }
+    if (!connected || _identity == null) return;
+    final epoch = _epoch;
+    final identity = _identity!;
+    final workspace = _workspaceId!;
+    savingArtifacts = true;
+    artifactError = null;
+    changed();
+    try {
+      final history =
+          messages.map((m) => Map<String, dynamic>.from(m)).toList();
+      if (history.isEmpty) return;
+      for (final message in history) {
+        for (final artifact
+            in (message['artifacts'] as List? ?? []).whereType<Map>()) {
+          if (epoch != _epoch || !await _isCurrent()) return;
+          final value = Map<String, dynamic>.from(artifact);
+          final id = message['id'] as String;
+          final index = value['index'] as int;
+          final key = artifactKey(id, index);
+          final file = await artifacts.save(
+            identity: identity,
+            document: chatId,
+            message: id,
+            artifact: value,
+            independent: independent,
+            documentName: documentName,
+            download: (destination) => value['cloud_url'] is String
+                ? service.downloadCloudArtifact(
+                    identity,
+                    workspace,
+                    value['cloud_url'] as String,
+                    destination,
+                  )
+                : service.downloadArtifact(
+                    identity,
+                    workspace,
+                    chatId,
+                    id,
+                    index,
+                    destination,
+                  ),
+          );
+          if (epoch != _epoch || !await _isCurrent()) return;
+          artifactFiles[key] = file;
+          if (cloudSync && value['cloud_url'] == null) {
+            final url = await service.uploadArtifact(
+              identity,
+              workspace,
+              file,
+              'pn-agent-v1-$chatId-$id-$index${p.extension(file.path)}',
+            );
+            if (epoch != _epoch || !await _isCurrent()) return;
+            if (independent) {
+              await service.request('POST', workspace, chatId, '/artifacts', {
+                'message_id': id,
+                'index': index,
+                'file_name': value['file_name'],
+                'file_size': value['file_size'],
+                'cloud_url': url,
+              });
+              if (epoch != _epoch || !await _isCurrent()) return;
+              cloudArtifacts[key] = {
+                ...value,
+                'message_id': id,
+                'cloud_url': url,
+              };
+              artifact['cloud_url'] = url;
+              continue;
+            }
+            final view = (await ViewBackendService.getView(chatId))
+                .fold((v) => v, (e) => throw StateError(e.msg));
+            final extra = view.extra.isEmpty
+                ? <String, dynamic>{}
+                : Map<String, dynamic>.from(jsonDecode(view.extra) as Map);
+            final files = Map<String, dynamic>.from(
+              extra['agent_artifacts'] as Map? ?? {},
+            );
+            files[key] = {...value, 'message_id': id, 'cloud_url': url};
+            extra['agent_artifacts'] = files;
+            if (epoch != _epoch || !await _isCurrent()) return;
+            (await ViewBackendService.updateView(
+              viewId: chatId,
+              extra: jsonEncode(extra),
+            ))
+                .fold((_) {}, (e) => throw StateError(e.msg));
+            cloudArtifacts[key] = files[key];
+            artifact['cloud_url'] = url;
+          }
+        }
+      }
+    } catch (e) {
+      if (epoch == _epoch) {
+        artifactError = '文件保存失败，可重试：${agentDisplayText('$e')}';
+      }
+    } finally {
+      if (epoch == _epoch) {
+        savingArtifacts = false;
+        changed();
+        if (_saveArtifactsAgain) {
+          _saveArtifactsAgain = false;
+          unawaited(saveArtifacts());
+        }
+      }
+    }
+  }
+
   Future<void> refreshCredits() async {
     final config = providerConfig;
     if (config == null) return;
@@ -92,13 +948,13 @@ class AgentController extends ChangeNotifier {
     _creditsInFlight = true;
     final epoch = _epoch;
     try {
-      if (_identity != null && await identity() != _identity) {
+      if (_identity != null && !await _isCurrent()) {
         throw StateError('账号或工作区已切换');
       }
       final value = config.isInternal
           ? await internalService.credits()
           : await fetchAgentCredits(config);
-      if (_identity != null && await identity() != _identity) {
+      if (_identity != null && !await _isCurrent()) {
         throw StateError('账号或工作区已切换');
       }
       if (epoch == _epoch && identical(config, providerConfig)) {
@@ -123,689 +979,288 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  String thinkingLevel = 'off';
-  String location = '本机';
-  String? effectiveDirectory;
-  String? authorizationUrl;
-  HttpServer? _oauthRelay;
-  Map<String, dynamic>? contextUsage;
-  Map<String, dynamic>? sessionTokens;
-  final activeTools = <String>[];
-
-  /// Per-document working directory and permission mode, editable at any time from the composer.
-  AgentWorkspaceConfig workspace = const AgentWorkspaceConfig();
-  bool get remote => _settings?.remoteUrl.isNotEmpty ?? false;
-
-  void changed() {
-    if (!_disposed) notifyListeners();
-  }
-
-  Future<String> identity() async {
-    return AgentSettings.currentIdentity();
-  }
-
-  Future<void> connect() async {
-    if (connecting || connected) return;
-    connecting = true;
-    error = null;
-    changed();
-    final epoch = ++_epoch;
-    _instances.add(this);
-    AiProviderConfig? pendingRuntime;
-    try {
-      final currentIdentity = await identity();
-      final settings = await AgentSettings.load(
-        scope: const Uuid().v5(Namespace.url.value, currentIdentity),
+  Future<void> disconnect() async {
+    _acceptNoteCalls = false;
+    _cancelApprovals();
+    _toolTimer?.cancel();
+    _toolTimer = null;
+    if (_workspaceId != null) {
+      unawaited(
+        service
+            .request(
+              'DELETE',
+              _workspaceId!,
+              chatId,
+              '/tools?client_id=$_clientId',
+            )
+            .catchError((Object _) => <String, dynamic>{}),
       );
-      _settings = settings;
-      workspace = await AgentWorkspaceConfig.load(chatId);
-      _workspaceId = await AIChatViewService.getCurrentWorkspaceId();
-      final provider = await internalService.preferred();
-      final support = await getApplicationSupportDirectory();
-      _identity = currentIdentity;
-      await _subscription?.cancel();
-      _subscription = transport.records.listen(
-        _receive,
-        onError: (Object e) {
-          error = '$e';
-          unawaited(disconnect(keepError: true));
-        },
-      );
-      if (epoch != _epoch) return;
-      final runtime = await internalService.runtimeConfig(provider);
-      pendingRuntime = runtime;
-      if (epoch != _epoch) return;
-      if (await identity() != currentIdentity) {
-        throw StateError('账号或工作区已切换，请重新连接');
-      }
-      await transport.connect(
-        dataDirectory: p.join(support.path, 'agent'),
-        artifactDirectory: settings.remoteUrl.isEmpty
-            ? p.join(await getIt<ApplicationDataStorage>().getPath(), 'agent')
-            : null,
-        remoteUrl: settings.remoteUrl,
-        token: settings.remoteToken,
-      );
-      if (epoch != _epoch) {
-        await transport.close();
-        return;
-      }
-      // UUID v5 is a stable namespace identifier, not a credential or integrity check.
-      final scope =
-          const Uuid().v5(Namespace.url.value, '$currentIdentity|$chatId');
-      final registry = McpTools(
-        endpoint: 'internal-agent',
-        version: '1.0.0',
-        isAgentChannel: true,
-        agentName: () => '小马笔记 Agent',
-      );
-      final base = runtime.baseUrl
-          .replaceAll(RegExp(r'/+$'), '')
-          .replaceFirst(RegExp(r'/chat/completions$'), '');
-      final data = await command('initialize', {
-        'config': {
-          'scope': scope,
-          'documentId': chatId,
-          'workspaceId': _workspaceId,
-          'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
-              ? '$base/v1'
-              : base,
-          'model': runtime.modelName,
-          'supportsReasoning': runtime.supportsReasoning,
-          'thinkingLevel': await AgentModelPreferences.loadThinking(),
-          'apiKey': runtime.apiKey,
-          'directory': workspace.directory,
-          'permissionMode': workspace.permissionMode,
-          'mcpServers': settings.mcpServers,
-          'mcpCredentials':
-              await AgentSettings.loadMcpCredentials(settings.scope),
-          'skillDirectories': settings.skillDirectories,
-          'noteTools': registry.toolSpecs
-              .where((spec) => !settings.disabledNoteTools.contains(spec.name))
-              .map(
-                (spec) => {
-                  'name': spec.name,
-                  'description': spec.description,
-                  'inputSchema': spec.inputSchema.toJson(),
-                },
-              )
-              .toList(),
-        },
-      });
-      if (epoch != _epoch) return;
-      _readState(Map<String, dynamic>.from(data as Map));
-      _runtimeConfig = runtime;
-      pendingRuntime = null;
-      providerConfig = runtime.isInternal
-          ? runtime.copyWith(baseUrl: '', apiKey: '')
-          : runtime;
-      connected = true;
-      _creditsTimer?.cancel();
-      _creditsTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        if (!_creditsInFlight) {
-          unawaited(refreshCredits());
-        }
-      });
-      unawaited(refreshCredits());
-    } catch (e) {
-      if (epoch == _epoch) {
-        error = '$e';
-        await transport.close();
-      }
-    } finally {
-      if (pendingRuntime != null) {
-        try {
-          await internalService.revoke(pendingRuntime);
-        } catch (_) {
-          error = '内部模型会话撤销失败，请稍后重试连接';
-        }
-      }
-      if (epoch == _epoch) {
-        connecting = false;
-        changed();
-      }
     }
-  }
-
-  Future<dynamic> command(
-    String type, [
-    Map<String, dynamic> data = const {},
-  ]) async {
-    final id = const Uuid().v4();
-    final completer = Completer<dynamic>();
-    _pending[id] = completer;
-    try {
-      transport.send({'type': type, 'id': id, ...data});
-      return await completer.future
-          .timeout(Duration(seconds: type == 'compact' ? 180 : 45));
-    } finally {
-      _pending.remove(id);
-    }
-  }
-
-  Future<bool> send(
-    String text, {
-    String behavior = 'prompt',
-    List<Map<String, dynamic>> images = const [],
-    String? initialRequest,
-  }) async {
-    if (!connected) await connect();
-    if (!connected) return false;
-    if (await identity() != _identity) {
-      await disconnect();
-      throw StateError('账号或工作区已切换，请重新连接');
-    }
-    if (!running &&
-        providerConfig?.isInternal == true &&
-        internalService.sessionNeedsRefresh) {
-      try {
-        await configureModel(providerConfig!, thinkingLevel);
-      } catch (e) {
-        error = '$e';
-        changed();
-        return false;
-      }
-    }
-    if (behavior == 'prompt') {
-      ++_runEpoch;
-      running = true;
-      error = null;
-      activities.clear();
-      steps.clear();
-      streamingText = '';
-      messages.add({'role': 'user', 'content': text});
-      changed();
-    }
-    try {
-      final disposition = await command(
-        behavior,
-        {
-          'message': text,
-          if (images.isNotEmpty) 'images': images,
-          if (initialRequest != null) 'initialRequest': initialRequest,
-        },
-      );
-      if (behavior != 'prompt' && disposition == 'queued') {
-        queuedInputs.add(text);
-        changed();
-      }
-      return true;
-    } catch (e) {
-      error = '$e';
-      if (behavior == 'prompt') running = false;
-      changed();
-      return false;
-    }
-  }
-
-  Future<void> stop() async {
-    if (!connected) return;
-    ++_runEpoch;
-    for (final interaction in interactions.toList()) {
-      respond(interaction, false);
-    }
-    try {
-      await command('abort');
-    } catch (e) {
-      error = '$e';
-      await disconnect(keepError: true);
-    }
-  }
-
-  Future<void> configureModel(
-    AiProviderConfig provider,
-    String thinking,
-  ) async {
-    if (!connected) return;
-    if (await identity() != _identity) {
-      await disconnect();
-      throw StateError('账号或工作区已切换，请重新打开文档');
-    }
-    if (running || compacting) throw StateError('请等待当前任务结束后切换模型');
-    final epoch = _epoch;
-    final runtime = await internalService.runtimeConfig(provider);
-    var applied = false;
-    try {
-      if (epoch != _epoch) throw StateError('Agent 连接已关闭');
-      if (await identity() != _identity) throw StateError('账号或工作区已切换，请重新连接');
-      final base = runtime.baseUrl
-          .replaceAll(RegExp(r'/+$'), '')
-          .replaceFirst(RegExp(r'/chat/completions$'), '');
-      final data = await command('configure_model', {
-        'config': {
-          'baseUrl': Uri.parse(base).path.isEmpty || Uri.parse(base).path == '/'
-              ? '$base/v1'
-              : base,
-          'model': runtime.modelName,
-          'apiKey': runtime.apiKey,
-          'supportsReasoning': runtime.supportsReasoning,
-          'thinkingLevel': thinking,
-        },
-      });
-      if (epoch != _epoch) throw StateError('Agent 连接已关闭');
-      _readState(Map<String, dynamic>.from(data as Map));
-      final previousRuntime = _runtimeConfig;
-      _runtimeConfig = runtime;
-      applied = true;
-      providerConfig = runtime.isInternal
-          ? runtime.copyWith(baseUrl: '', apiKey: '')
-          : runtime;
-      credits = null;
-      creditsError = null;
-      unawaited(refreshCredits());
-      changed();
-      try {
-        await internalService.revoke(previousRuntime);
-      } catch (_) {
-        error = '旧内部模型会话撤销失败，将在有效期结束后失效';
-        changed();
-      }
-    } finally {
-      if (!applied) await internalService.revoke(runtime);
-    }
-  }
-
-  /// Changing the directory reopens the same transcript; the mode applies to the next tool call.
-  Future<void> configureWorkspace({
-    String? directory,
-    String? permissionMode,
-  }) async {
-    final next = AgentWorkspaceConfig(
-      directory: directory ?? workspace.directory,
-      permissionMode: permissionMode ?? workspace.permissionMode,
-    );
-    if (next.directory != workspace.directory && (running || compacting)) {
-      throw StateError('请等待当前任务结束后切换工作目录');
-    }
-    if (connected) {
-      final data = await command('configure_workspace', {
-        'config': {
-          'directory': next.directory,
-          'permissionMode': next.permissionMode,
-        },
-      });
-      _readState(Map<String, dynamic>.from(data as Map));
-    }
-    await next.save(chatId);
-    workspace = next;
-    changed();
-  }
-
-  Future<void> compact() async {
-    try {
-      if (!running &&
-          providerConfig?.isInternal == true &&
-          internalService.sessionNeedsRefresh) {
-        await configureModel(providerConfig!, thinkingLevel);
-      }
-      compacting = true;
-      changed();
-      await command('compact');
-    } catch (e) {
-      error = '$e';
-    } finally {
-      compacting = false;
-      changed();
-    }
-  }
-
-  void _receive(Map<String, dynamic> record) {
-    if (_disposed) return;
-    switch (record['type']) {
-      case 'response':
-        final pending = _pending[record['id']];
-        if (pending != null && !pending.isCompleted) {
-          record['success'] == true
-              ? pending.complete(record['data'])
-              : pending.completeError(StateError('${record['error']}'));
-        }
-      case 'state':
-        _readState(Map<String, dynamic>.from(record['data'] as Map));
-      case 'settled':
-        unawaited(refreshCredits());
-        running = false;
-        streamingText = '';
-        interactions.clear();
-        queuedInputs.clear();
-      case 'event':
-        _event(Map<String, dynamic>.from(record['event'] as Map));
-      case 'approval':
-      case 'select':
-      case 'input':
-        interactions.add(record);
-      case 'note_call':
-        unawaited(_noteCall(record));
-      case 'plan':
-        steps
-          ..clear()
-          ..addAll(
-            (record['steps'] as List)
-                .map((e) => Map<String, dynamic>.from(e as Map)),
-          );
-      case 'open_url':
-        final uri = Uri.tryParse('${record['url']}');
-        if (uri != null &&
-            (uri.scheme == 'https' ||
-                (uri.scheme == 'http' &&
-                    ['localhost', '127.0.0.1'].contains(uri.host)))) {
-          authorizationUrl = uri.toString();
-          if (record['callback'] is String) {
-            unawaited(_relayOAuth(record['callback'] as String));
-          }
-        }
-      case 'notice':
-        if (record['kind'] == 'error') {
-          error = friendlyModelError('${record['message']}');
-        }
-      case 'credentials_changed':
-        if (_settings != null && record['value'] is String) {
-          unawaited(
-            AgentSettings.saveMcpCredentials(
-              _settings!.scope,
-              record['value'] as String,
-            ).catchError((Object e) {
-              error = 'MCP 凭据保存失败，请检查系统安全存储后重新登录';
-              changed();
-            }),
-          );
-        }
-    }
-    changed();
-  }
-
-  void _readState(Map<String, dynamic> state) {
-    messages
-      ..clear()
-      ..addAll(
-        (state['messages'] as List? ?? [])
-            .map((e) => Map<String, dynamic>.from(e as Map)),
-      );
-    contextUsage = state['context'] == null
-        ? null
-        : Map<String, dynamic>.from(state['context'] as Map);
-    activeTools
-      ..clear()
-      ..addAll((state['tools'] as List? ?? []).cast<String>());
-    final stats = state['stats'] as Map?;
-    sessionTokens = stats?['tokens'] is Map
-        ? Map<String, dynamic>.from(stats!['tokens'])
-        : null;
-    model = state['model'] as String? ?? model;
-    thinkingLevel = state['thinkingLevel'] as String? ?? thinkingLevel;
-    location = state['location'] as String? ?? location;
-    effectiveDirectory = state['directory'] as String?;
-    steps
-      ..clear()
-      ..addAll(
-        (state['steps'] as List? ?? [])
-            .map((value) => Map<String, dynamic>.from(value as Map)),
-      );
-  }
-
-  void _event(Map<String, dynamic> event) {
-    switch (event['type']) {
-      case 'message_update':
-        final update = event['assistantMessageEvent'] as Map?;
-        if (update?['type'] == 'text_delta') {
-          streamingText += '${update?['delta'] ?? ''}';
-        }
-      case 'message_end':
-        final message = Map<String, dynamic>.from(event['message'] as Map);
-        if (message['role'] == 'user') {
-          final text = message['content'] is String
-              ? message['content'] as String
-              : _resultText(message);
-          if (queuedInputs.remove(text)) messages.add(message);
-        }
-        if (message['role'] == 'assistant' || message['role'] == 'toolResult') {
-          messages.add(message);
-          if (message['role'] == 'assistant') streamingText = '';
-        }
-        if (message['stopReason'] == 'error') {
-          error = friendlyModelError(
-            '${message['errorMessage'] ?? '模型请求失败'}',
-          );
-        }
-      case 'tool_execution_start':
-        activities['${event['toolCallId']}'] = AgentActivity(
-          id: '${event['toolCallId']}',
-          name: '${event['toolName']}',
-          arguments: Map<String, dynamic>.from(event['args'] as Map? ?? {}),
-        );
-      case 'tool_execution_update':
-        activities['${event['toolCallId']}']?.result =
-            _resultText(event['partialResult']);
-      case 'tool_execution_end':
-        final activity = activities['${event['toolCallId']}'];
-        if (activity != null) {
-          activity.status = event['isError'] == true ? 'failed' : 'completed';
-          activity.result = _resultText(event['result']);
-          final details = (event['result'] as Map?)?['details'] as Map?;
-          activity.before = details?['before'] as String?;
-          activity.after = details?['after'] as String?;
-        }
-      case 'auto_compaction_start':
-        compacting = true;
-      case 'auto_compaction_end':
-        compacting = false;
-    }
-  }
-
-  static String _resultText(dynamic result) =>
-      (result is Map ? result['content'] as List? : null)
-          ?.whereType<Map>()
-          .map((c) => c['text'] ?? '')
-          .join('\n') ??
-      '';
-  Future<void> _noteCall(Map<String, dynamic> request) async {
-    final epoch = _epoch;
-    final runEpoch = _runEpoch;
-    CallToolResult result;
-    String? before;
-    String? after;
-    try {
-      if (!connected || await identity() != _identity) {
-        throw StateError('账号或工作区已切换');
-      }
-      final args = Map<String, dynamic>.from(request['arguments'] as Map);
-      if (args['workspace_id'] != null &&
-          args['workspace_id'] != _workspaceId) {
-        throw StateError('工具不属于当前工作区');
-      }
-      final tools = McpTools(
-        endpoint: 'internal-agent',
-        version: '1.0.0',
-        isAgentChannel: true,
-        agentName: () => '小马笔记 Agent',
-        isToolAllowed: (name) =>
-            !(_settings?.disabledNoteTools.contains(name) ?? true),
-      );
-      final bridge = AgentNoteBridge(
-        tools: tools,
-        workspaceId: _workspaceId!,
-        isCurrent: () async =>
-            epoch == _epoch &&
-            runEpoch == _runEpoch &&
-            connected &&
-            await identity() == _identity,
-        approve: (spec, args) async {
-          final mode = workspace.permissionMode;
-          final automatic =
-              mode == 'full' || (mode == 'auto' && !spec.destructive);
-          if (args['page_id'] is String &&
-              !(_settings?.disabledNoteTools.contains('get_page') ?? true)) {
-            final snapshot = await tools.executeTool(
-              'get_page',
-              {'workspace_id': _workspaceId, 'page_id': args['page_id']},
-            );
-            if (!snapshot.isError) before = _resultText(snapshot.toJson());
-          }
-          // Auto-approved writes still record the before/after snapshot for the details pane.
-          if (automatic) return true;
-          final confirmation = Completer<bool>();
-          final approval = {
-            ...request,
-            'type': 'note_approval',
-            'title': spec.name,
-            'confirmation': confirmation,
-            'before': before,
-          };
-          interactions.add(approval);
-          changed();
-          final allowed = await confirmation.future
-              .timeout(const Duration(seconds: 110), onTimeout: () => false);
-          interactions.remove(approval);
-          changed();
-          if (allowed && before != null) {
-            final current = await tools.executeTool(
-              'get_page',
-              {'workspace_id': _workspaceId, 'page_id': args['page_id']},
-            );
-            if (current.isError || _resultText(current.toJson()) != before) {
-              throw StateError('确认期间页面已改变，请重新读取后再修改');
-            }
-          }
-          return allowed;
-        },
-      );
-      result = await bridge.execute('${request['name']}', args);
-      if (before != null &&
-          !result.isError &&
-          epoch == _epoch &&
-          runEpoch == _runEpoch &&
-          await identity() == _identity) {
-        final snapshot = await tools.executeTool(
-          'get_page',
-          {'workspace_id': _workspaceId, 'page_id': args['page_id']},
-        );
-        if (!snapshot.isError) after = _resultText(snapshot.toJson());
-      }
-    } catch (e) {
-      result =
-          CallToolResult(content: [TextContent(text: '$e')], isError: true);
-    }
-    if (epoch == _epoch && connected) {
-      transport.send({
-        'type': 'note_result',
-        'id': request['id'],
-        'result': {
-          ...result.toJson(),
-          'details': {'before': before, 'after': after},
-        },
-      });
-    }
-  }
-
-  void respond(Map<String, dynamic> request, dynamic value) {
-    interactions.remove(request);
-    final confirmation = request['confirmation'];
-    if (confirmation is Completer<bool>) {
-      if (!confirmation.isCompleted) confirmation.complete(value == true);
-    } else {
-      transport.send({
-        'type': 'interaction_response',
-        'id': request['id'],
-        'result': value,
-      });
-    }
-    changed();
-  }
-
-  Future<void> _relayOAuth(String callback) async {
-    try {
-      final uri = Uri.parse(callback);
-      if (uri.scheme != 'http' ||
-          !['127.0.0.1', 'localhost', '::1'].contains(uri.host)) {
-        throw StateError('MCP 登录回调地址无效');
-      }
-      await _oauthRelay?.close(force: true);
-      final relay =
-          await HttpServer.bind(InternetAddress.loopbackIPv4, uri.port);
-      _oauthRelay = relay;
-      relay.listen((request) async {
-        if (request.method != 'GET' || request.uri.path != uri.path) {
-          request.response.statusCode = HttpStatus.notFound;
-          await request.response.close();
-          return;
-        }
-        try {
-          await command(
-            'oauth_callback',
-            {'url': uri.replace(query: request.uri.query).toString()},
-          );
-          request.response.headers.contentType = ContentType.text;
-          request.response.write('MCP 登录已完成，请返回小马笔记。');
-          authorizationUrl = null;
-        } catch (_) {
-          request.response.statusCode = HttpStatus.badRequest;
-          request.response.write('登录未完成，请返回小马笔记查看状态。');
-        }
-        await request.response.close();
-        changed();
-      });
-    } catch (e) {
-      error = '无法接收 MCP 登录回调：$e';
-      authorizationUrl = null;
-      changed();
-    }
-  }
-
-  Future<void> disconnect({bool keepError = false}) async {
-    _creditsTimer?.cancel();
-    _creditsTimer = null;
-    _creditsRefreshAgain = false;
-    ++clearanceVersion;
     ++_epoch;
-    ++_runEpoch;
+    service.closeStream();
+    await _subscription?.cancel();
+    _subscription = null;
     connected = false;
+    _streamOpen = false;
     connecting = false;
     running = false;
-    compacting = false;
-    for (final request in interactions.toList()) {
-      final confirmation = request['confirmation'];
-      if (confirmation is Completer<bool> && !confirmation.isCompleted) {
-        confirmation.complete(false);
-      }
-    }
-    interactions.clear();
-    for (final pending in _pending.values) {
-      if (!pending.isCompleted) {
-        pending.completeError(StateError('Agent 连接已关闭'));
-      }
-    }
-    _pending.clear();
-    await _oauthRelay?.close(force: true);
-    _oauthRelay = null;
-    authorizationUrl = null;
-    final runtime = _runtimeConfig;
-    _runtimeConfig = null;
-    try {
-      await internalService.revoke(runtime);
-    } catch (_) {
-      error = '内部模型会话撤销失败，将在有效期结束后失效';
-      keepError = true;
-    }
-    try {
-      await transport.close();
-    } catch (e) {
-      error = 'Agent 已撤权，执行器关闭失败：$e';
-    }
+    ++clearanceVersion;
     messages.clear();
-    queuedInputs.clear();
+    artifactFiles.clear();
+    cloudArtifacts.clear();
+    savingArtifacts = false;
+    _saveArtifactsAgain = false;
+    artifactError = null;
     activities.clear();
-    steps.clear();
+    prompts.clear();
+    preparingNotes = false;
+    progressText = '';
+    references.clear();
+    sources.clear();
+    queuedInputs.clear();
+    _answerSegments.clear();
     streamingText = '';
+    activeMessageId = null;
     _identity = null;
-    _settings = null;
-    contextUsage = null;
-    sessionTokens = null;
-    activeTools.clear();
-    model = '';
-    providerConfig = null;
+    _workspaceId = null;
     credits = null;
     creditsError = null;
-    if (!keepError) error = null;
+    error = null;
+    notice = null;
     changed();
+  }
+
+  Future<void> _registerNoteTools() async {
+    _cancelApprovals();
+    await service.request('POST', _workspaceId!, chatId, '/tools', {
+      'client_id': _clientId,
+      'tools': noteTools.toolSpecs
+          .where((spec) => !permissions.disabledTools.contains(spec.name))
+          .map(
+            (spec) => {
+              'name': spec.name, 'description': spec.description,
+              'inputSchema': spec.inputSchema.toJson(),
+              // This relay submits a request; Flutter approves the actual mutation.
+              'annotations': {
+                'readOnlyHint': spec.readOnly,
+                'destructiveHint': spec.destructive,
+              },
+            },
+          )
+          .toList(),
+    });
+    _acceptNoteCalls = true;
+  }
+
+  void _startHeartbeat() {
+    _toolTimer?.cancel();
+    _toolTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_acceptNoteCalls) unawaited(_pollNoteTools());
+      if (connected && timer.tick % 5 == 0) unawaited(refreshCredits());
+    });
+  }
+
+  Future<void> configurePermissions({
+    String? mode,
+    Set<String>? disabled,
+  }) async {
+    if (mode != null && !AgentPermissions.modes.contains(mode)) {
+      throw ArgumentError.value(mode, 'mode');
+    }
+    if (running || connecting || interactions.isNotEmpty || prompts.isNotEmpty) {
+      throw StateError('请等待当前任务结束后修改审批模式或笔记工具');
+    }
+    final previousMode = permissions.mode;
+    final previousDisabled = permissions.disabledTools.toSet();
+    if (mode != null) permissions.mode = mode;
+    if (disabled != null) {
+      permissions.disabledTools
+        ..clear()
+        ..addAll(disabled);
+    }
+    try {
+      await permissions.save();
+    } catch (_) {
+      permissions.mode = previousMode;
+      permissions.disabledTools
+        ..clear()
+        ..addAll(previousDisabled);
+      rethrow;
+    }
+    if (connected && disabled != null) await _registerNoteTools();
+    changed();
+  }
+
+  Future<void> _pollNoteTools() async {
+    if (_pollingTools ||
+        !_acceptNoteCalls ||
+        (!connected && !connecting) ||
+        _disposed) {
+      return;
+    }
+    _pollingTools = true;
+    final epoch = _epoch;
+    try {
+      if (!await _isCurrent()) {
+        await disconnect();
+        return;
+      }
+      final data = await service
+          .request('GET', _workspaceId!, chatId, '/tools?client_id=$_clientId')
+          .timeout(const Duration(seconds: 10));
+      if (epoch != _epoch) return;
+      if (!running && queuedInputs.isNotEmpty) await _reloadHistory();
+      for (final value in data['calls'] as List? ?? []) {
+        final call = Map<String, dynamic>.from(value as Map);
+        if (_acceptNoteCalls && _handledCalls.add('${call['id']}')) {
+          unawaited(_noteCall(call));
+        }
+      }
+    } catch (e) {
+      if (epoch == _epoch) {
+        _cancelApprovals();
+        _toolTimer?.cancel();
+        error = '笔记工具连接已断开，请重新连接：${agentDisplayText('$e')}';
+        connected = false;
+        changed();
+      }
+    } finally {
+      _pollingTools = false;
+    }
+  }
+
+  static String _resultText(CallToolResult result) => result.content
+      .whereType<TextContent>()
+      .map((part) => part.text)
+      .join('\n');
+  Future<void> _noteCall(Map<String, dynamic> call) async {
+    final epoch = _epoch;
+    final toolEpoch = _toolEpoch;
+    final workspace = _workspaceId!;
+    final clientId = _clientId;
+    final tools = noteTools;
+    String? before;
+    String? after;
+    final activity = AgentActivity(
+      id: 'note-${call['id']}',
+      name: '${call['name']}',
+      arguments: Map<String, dynamic>.from(call['arguments'] as Map),
+    );
+    activities[activity.id] = activity;
+    changed();
+    final bridge = AgentNoteBridge(
+      tools: tools,
+      workspaceId: workspace,
+      isCurrent: () async {
+        if (epoch != _epoch ||
+            toolEpoch != _toolEpoch ||
+            !connected ||
+            !await _isCurrent()) {
+          return false;
+        }
+        final pending = await service.request(
+          'GET',
+          workspace,
+          chatId,
+          '/tools?client_id=$clientId',
+        );
+        return epoch == _epoch &&
+            toolEpoch == _toolEpoch &&
+            connected &&
+            (pending['calls'] as List? ?? [])
+                .any((value) => value['id'] == call['id']);
+      },
+      approve: (spec, args) async {
+        if (args['page_id'] is String &&
+            !permissions.disabledTools.contains('get_page')) {
+          final snapshot = await tools.executeTool(
+            'get_page',
+            {'workspace_id': workspace, 'page_id': args['page_id']},
+          );
+          if (!snapshot.isError) before = _resultText(snapshot);
+        }
+        if (permissions.mode == 'full' ||
+            (permissions.mode == 'auto' && !spec.destructive)) {
+          return true;
+        }
+        final confirmation = Completer<bool>();
+        final approval = <String, dynamic>{
+          ...call,
+          'title': spec.name,
+          'confirmation': confirmation,
+          'before': before,
+        };
+        interactions.add(approval);
+        activity.status = 'waiting';
+        changed();
+        final allowed = await confirmation.future
+            .timeout(const Duration(seconds: 110), onTimeout: () => false);
+        interactions.remove(approval);
+        activity.status = 'running';
+        changed();
+        if (allowed && before != null) {
+          final snapshot = await tools.executeTool(
+            'get_page',
+            {'workspace_id': workspace, 'page_id': args['page_id']},
+          );
+          if (snapshot.isError || _resultText(snapshot) != before) {
+            throw StateError('确认期间页面已改变，请重新读取后再修改');
+          }
+        }
+        return allowed;
+      },
+    );
+    final result = await bridge.execute(
+      '${call['name']}',
+      Map<String, dynamic>.from(call['arguments'] as Map),
+    );
+    if (before != null &&
+        !result.isError &&
+        epoch == _epoch &&
+        toolEpoch == _toolEpoch &&
+        await _isCurrent()) {
+      final snapshot = await tools.executeTool(
+        'get_page',
+        {'workspace_id': workspace, 'page_id': call['arguments']['page_id']},
+      );
+      if (!snapshot.isError) after = _resultText(snapshot);
+    }
+    activity
+      ..status = result.isError ? 'failed' : 'completed'
+      ..result = _resultText(result)
+      ..before = before
+      ..after = after;
+    if (epoch != _epoch) return;
+    activities[activity.id] = activity;
+    changed();
+    try {
+      await service.request(
+        'POST',
+        workspace,
+        chatId,
+        '/tool-result',
+        {'client_id': clientId, 'id': call['id'], 'result': result.toJson()},
+      );
+    } catch (e) {
+      if (epoch == _epoch) {
+        error = '笔记操作结果回传失败，请查询实际结果，不要重复写入：${agentDisplayText('$e')}';
+        changed();
+      }
+    }
+  }
+
+  void respond(Map<String, dynamic> request, bool allowed) {
+    interactions.remove(request);
+    final confirmation = request['confirmation'] as Completer<bool>;
+    if (!confirmation.isCompleted) confirmation.complete(allowed);
+    changed();
+  }
+
+  void _cancelApprovals() {
+    ++_toolEpoch;
+    for (final request in interactions.toList()) {
+      respond(request, false);
+    }
   }
 
   @override
@@ -813,8 +1268,6 @@ class AgentController extends ChangeNotifier {
     _disposed = true;
     _instances.remove(this);
     unawaited(disconnect());
-    unawaited(_subscription?.cancel());
-    unawaited(transport.dispose());
     super.dispose();
   }
 }

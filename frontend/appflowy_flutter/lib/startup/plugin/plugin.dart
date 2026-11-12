@@ -32,6 +32,7 @@ enum PluginType {
   knowledgeGraph,
   noteGraph,
   knowledgeBase,
+  agentArtifacts,
 }
 
 typedef PluginId = String;

@@ -1,5 +1,6 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/features/agent/application/agent_legacy_space.dart';
 import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -217,7 +218,8 @@ class _SectionFolderState extends State<SectionFolder> {
 
     final itemLevel = 0;
 
-    return widget.views.asMap().entries.map((entry) {
+    final views = widget.views.where((view) => !isLegacyAiSpace(view)).toList();
+    return views.asMap().entries.map((entry) {
       final index = entry.key;
       final view = entry.value;
       final isSpace = view.isSpace;
@@ -229,7 +231,7 @@ class _SectionFolderState extends State<SectionFolder> {
         engagedInExpanding: !isSpace,
         isFirstChild: index == 0,
         // 有前一项 id 才能把条目拖到列表任意位置，而不只是首尾两端。
-        previousViewId: index > 0 ? widget.views[index - 1].id : null,
+        previousViewId: index > 0 ? views[index - 1].id : null,
         view: view,
         level: itemLevel,
         leftPadding: HomeSpaceViewSizes.leftPadding,

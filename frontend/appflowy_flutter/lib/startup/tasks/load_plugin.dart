@@ -21,6 +21,7 @@ import 'package:appflowy/plugins/template/template_plugin.dart';
 import 'package:appflowy/plugins/folder/folder.dart';
 import 'package:appflowy/plugins/notebook/notebook.dart';
 import 'package:appflowy/plugins/ai_welcome/ai_welcome_plugin.dart';
+import 'package:appflowy/features/agent/presentation/agent_artifact_plugin.dart';
 
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
@@ -33,6 +34,10 @@ class PluginLoadTask extends LaunchTask {
     await super.initialize(context);
 
     registerPlugin(builder: BlankPluginBuilder(), config: BlankPluginConfig());
+    registerPlugin(
+      builder: AgentArtifactPluginBuilder(),
+      config: AgentArtifactPluginConfig(),
+    );
     registerPlugin(
       builder: KnowledgeBasePluginBuilder(),
       config: KnowledgeBasePluginConfig(),

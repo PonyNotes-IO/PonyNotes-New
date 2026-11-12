@@ -5,6 +5,28 @@ import 'package:appflowy/mobile/presentation/chat/mobile_chat_screen.dart';
 import 'package:flowy_infra/platform_extension.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
+import '../application/agent_conversations.dart';
+import 'agent_conversations_page.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+
+void openIndependentAiConversation(BuildContext context, [String? id]) {
+  AgentConversations.requestOpen(id);
+  if (PlatformInfo.isDesktopOrTablet) {
+    getIt<TabsBloc>().add(
+      TabsEvent.openPlugin(
+        plugin: makePlugin(pluginType: PluginType.aiWelcome),
+      ),
+    );
+  } else {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AgentConversationsPage(),
+      ),
+    );
+  }
+}
 
 void openCreatedAiDocument(BuildContext context, String id, String title) {
   if (context.mounted && UniversalPlatform.isMobile && !PlatformInfo.isTablet) {
@@ -18,7 +40,8 @@ bool isAgentDocument(String extra) {
   if (extra.isEmpty) return false;
   try {
     final value = jsonDecode(extra);
-    return value is Map && value['ai_mode'] == 'agent';
+    return value is Map &&
+        (value['ai_mode'] == 'agent' || value['ai_engine'] == 'weknora');
   } on FormatException {
     return false;
   }
@@ -46,6 +69,10 @@ class AiModeButton extends StatelessWidget {
             return;
           }
           try {
+            if (value) {
+              openIndependentAiConversation(context);
+              return;
+            }
             final workspace = await AIChatViewService.getCurrentWorkspaceId();
             if (workspace == null) throw StateError('请先打开工作区');
             final document = await AIChatViewService.createAndOpenAIChat(
@@ -66,11 +93,11 @@ class AiModeButton extends StatelessWidget {
         itemBuilder: (_) => [
           PopupMenuItem(
             value: false,
-            child: Text(onSelected == null ? '新建 Chat 对话' : 'Chat · 问答'),
+            child: Text(onSelected == null ? '旧对话（保留）' : '快问快答'),
           ),
           PopupMenuItem(
             value: true,
-            child: Text(onSelected == null ? '新建 Agent 对话' : 'Agent · 执行任务'),
+            child: Text(onSelected == null ? 'Agent 原型' : '智能推理'),
           ),
         ],
         child: Padding(
@@ -79,7 +106,7 @@ class AiModeButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                agentMode ? 'Agent' : 'Chat',
+                agentMode ? '智能推理' : '快问快答',
                 style: const TextStyle(fontSize: 13),
               ),
               const Icon(Icons.expand_more, size: 16),

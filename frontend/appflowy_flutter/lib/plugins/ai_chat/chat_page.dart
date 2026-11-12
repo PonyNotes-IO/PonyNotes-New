@@ -42,6 +42,10 @@ class AIChatPage extends StatelessWidget {
       return AiConversation(
         key: ValueKey(view.id),
         documentId: view.id,
+        documentName: view.name,
+        mode: extra['agent_mode'] as String? ?? 'smart-reasoning',
+        cloudArtifacts:
+            Map<String, dynamic>.from(extra['agent_artifacts'] as Map? ?? {}),
         initialMessage: extra['initial_message'] as String? ?? '',
         initialImagePaths:
             (extra['initial_images'] as List? ?? []).cast<String>(),

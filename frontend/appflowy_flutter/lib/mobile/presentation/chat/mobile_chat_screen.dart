@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:appflowy/features/agent/presentation/agent_artifact_library.dart';
+import 'package:appflowy/features/agent/presentation/agent_conversations_page.dart';
 import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 
 import 'package:appflowy/ai/ai.dart';
@@ -69,7 +71,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
   UserProfilePB? _userProfile;
   bool _isLoading = true;
   bool _isSending = false;
-  bool _agentMode = false;
+  bool _agentMode = true;
 
   @override
   void initState() {
@@ -207,6 +209,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
       );
     }
 
+    if (_agentMode) return AgentConversationsPage(onLegacy: () => setState(() => _agentMode = false));
     return _buildWelcomeLayout(context);
   }
 
@@ -258,12 +261,9 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
           child: Column(
             children: [
               _buildHeader(context),
+              const AllAgentArtifactsButton(),
               const SizedBox(height: 8),
-              AiModeButton(
-                agentMode: _agentMode,
-                enabled: !_isSending,
-                onSelected: (value) => setState(() => _agentMode = value),
-              ),
+              TextButton(onPressed: () => setState(() => _agentMode = true), child: const Text('切换到 Agent 原型')),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) => SingleChildScrollView(
@@ -324,7 +324,7 @@ class _MobileChatScreenState extends State<MobileChatScreen> {
               ),
               // Bottom input bar
               _MobileWelcomeInputBar(
-                agentMode: _agentMode,
+                agentMode: false,
                 isSending: _isSending,
                 onSend: _handleWelcomeInputSubmit,
                 preferredModelId: _preferredModelId,

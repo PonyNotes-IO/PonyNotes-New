@@ -14,7 +14,9 @@ import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
+import 'package:appflowy/features/agent/presentation/agent_artifact_library.dart';
+import 'package:appflowy/features/agent/presentation/agent_conversations_page.dart';
+import 'package:appflowy/features/agent/application/agent_conversations.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:universal_platform/universal_platform.dart';
 
@@ -53,8 +55,25 @@ class AIWelcomePage extends StatefulWidget {
 }
 
 class _AIWelcomePageState extends State<AIWelcomePage> {
-  bool agentMode = false;
+  bool agentMode = true;
   bool creating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AgentConversations.openRequests.addListener(_openAgent);
+  }
+
+  void _openAgent() {
+    if (!agentMode) setState(() => agentMode = true);
+  }
+
+  @override
+  void dispose() {
+    AgentConversations.openRequests.removeListener(_openAgent);
+    super.dispose();
+  }
+
   Future<void> _send(
     String message,
     AIModel? model,
@@ -63,17 +82,6 @@ class _AIWelcomePageState extends State<AIWelcomePage> {
     bool search,
     bool knowledgeSearch,
   ) async {
-    if (!agentMode) {
-      widget.onMessageSent(
-        message,
-        model,
-        images,
-        thinking,
-        search,
-        knowledgeSearch,
-      );
-      return;
-    }
     if (creating) return;
     setState(() => creating = true);
     try {
@@ -83,7 +91,11 @@ class _AIWelcomePageState extends State<AIWelcomePage> {
         parentViewId: workspace,
         initialMessage: message,
         initialImages: images,
-        agentMode: true,
+        selectedModelId: model?.id,
+        enableDeepThinking: thinking,
+        enableWebSearch: search,
+        enableKnowledgeSearch: knowledgeSearch,
+        agentMode: agentMode,
       );
       if (view == null) throw StateError('创建 Agent 对话失败，请重试');
     } catch (e) {
@@ -98,6 +110,11 @@ class _AIWelcomePageState extends State<AIWelcomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (agentMode) {
+      return AgentConversationsPage(
+        onLegacy: () => setState(() => agentMode = false),
+      );
+    }
     return Scaffold(
       backgroundColor: AIWelcomeTheme.backgroundColor(context),
       resizeToAvoidBottomInset:
@@ -119,15 +136,13 @@ class _AIWelcomePageState extends State<AIWelcomePage> {
                           AIWelcomeHeader(
                             onChatHistoryTap: widget.onChatHistoryTap,
                           ),
+                          const AllAgentArtifactsButton(),
                           // 输入交互区域和使用提示 / Input area and usage hint.
-                          AiModeButton(
-                            agentMode: agentMode,
-                            enabled: !creating,
-                            onSelected: (value) =>
-                                setState(() => agentMode = value),
+                          TextButton(
+                            onPressed: () => setState(() => agentMode = true),
+                            child: const Text('切换到 Agent 原型'),
                           ),
                           AIInputArea(
-                            agentMode: agentMode,
                             onMessageSent: _send,
                             onChatHistoryTap: widget.onChatHistoryTap,
                           ),
