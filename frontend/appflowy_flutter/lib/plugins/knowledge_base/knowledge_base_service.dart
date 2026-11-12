@@ -64,6 +64,24 @@ class KnowledgeBaseException implements Exception {
 String kbError(BuildContext context, Object? error) {
   final status = error is KnowledgeBaseException ? error.status : 503;
   return switch (status) {
+    400 when error is KnowledgeBaseException && error.action == 'data_source' =>
+      kbText(
+        context,
+        '数据源操作失败，请检查凭据、资源范围及同步配置。',
+        'Check the credentials, resource scope and sync settings.',
+      ),
+    404 when error is KnowledgeBaseException && error.action == 'data_source' =>
+      kbText(
+        context,
+        '当前服务尚不支持此数据源操作，请联系管理员更新。',
+        'This data source operation requires a server update.',
+      ),
+    409 when error is KnowledgeBaseException && error.action == 'data_source' =>
+      kbText(
+        context,
+        '数据源正在同步或配置已更改，请刷新后重试。',
+        'The source is syncing or its settings changed. Refresh and try again.',
+      ),
     400 => kbText(
         context,
         '知识库参数无效，请检查后重试。',
