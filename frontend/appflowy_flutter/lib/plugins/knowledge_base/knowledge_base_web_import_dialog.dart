@@ -58,6 +58,14 @@ class _KnowledgeBaseWebImportDialogState
   List<Map<String, dynamic>> items(String name) =>
       (_options[name] as List).cast<Map<String, dynamic>>();
   String text(String zh, String en) => kbText(context, zh, en);
+  bool numberEnabled(String name) => switch (name) {
+        'parent_chunk_size' ||
+        'child_chunk_size' =>
+          _chunk['enable_parent_child'] == true,
+        'question_count' =>
+          group('question_generation_config')['enabled'] == true,
+        _ => true,
+      };
 
   @override
   void dispose() {
@@ -96,6 +104,7 @@ class _KnowledgeBaseWebImportDialogState
         });
       } else {
         for (final entry in _numbers.entries) {
+          if (!numberEnabled(entry.key)) continue;
           final target = entry.key == 'question_count'
               ? group('question_generation_config')
               : _chunk;
@@ -124,6 +133,7 @@ class _KnowledgeBaseWebImportDialogState
       ('child_chunk_size', 100, 4000),
       ('question_count', 1, 10),
     ]) {
+      if (!numberEnabled(name)) continue;
       final value = int.tryParse(_numbers[name]!.text);
       if (value == null || value < min || value > max) {
         setState(() {
@@ -139,8 +149,9 @@ class _KnowledgeBaseWebImportDialogState
     }
     if (int.parse(_numbers['chunk_overlap']!.text) >=
             int.parse(_numbers['chunk_size']!.text) ||
-        int.parse(_numbers['child_chunk_size']!.text) >
-            int.parse(_numbers['parent_chunk_size']!.text)) {
+        (_chunk['enable_parent_child'] == true &&
+            int.parse(_numbers['child_chunk_size']!.text) >
+                int.parse(_numbers['parent_chunk_size']!.text))) {
       setState(() {
         _section = _Section.chunks;
         _error = text(

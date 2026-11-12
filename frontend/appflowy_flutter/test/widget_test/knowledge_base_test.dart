@@ -1148,6 +1148,12 @@ void main() {
       '640',
     );
     await capture('parse');
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('parent_chunk_size')), 'invalid');
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('chunk_size')), '100');
     await tester.enterText(find.byKey(const ValueKey('chunk_overlap')), '100');
     await tester.tap(confirm);
