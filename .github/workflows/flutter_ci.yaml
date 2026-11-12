@@ -149,11 +149,6 @@ jobs:
           override: true
           profile: minimal
 
-      - name: Install Agent build runtime
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.9.0
-
       - name: Install flutter
         id: flutter
         uses: subosito/flutter-action@v2
@@ -296,11 +291,6 @@ jobs:
 
       - name: Checkout source code
         uses: actions/checkout@v4
-
-      - name: Install Agent build runtime
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.9.0
 
       - name: Install flutter
         id: flutter
