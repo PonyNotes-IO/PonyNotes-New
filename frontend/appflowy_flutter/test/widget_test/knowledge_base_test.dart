@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_data_source_editor.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_data_sources.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_page.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_plugin.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
@@ -303,12 +305,14 @@ void main() {
         'workspace_id': 'personal',
         'name': '我的研究',
         'visibility': 'private',
+        'can_manage': true,
         'ready': true,
       },
       {
         'workspace_id': 'team',
         'name': '团队手册',
         'visibility': 'shared',
+        'can_manage': true,
         'ready': true,
       },
     ];
@@ -354,6 +358,40 @@ void main() {
                     ],
                   },
                 'sources' => {'status': 'ready', 'sources': []},
+                'wiki' => {'status': 'ready', 'pages': []},
+                'data_source' => payload['operation'] == 'types'
+                    ? {
+                        'types': [
+                          for (final (type, name) in const [
+                            ('feishu', 'Feishu'),
+                            ('lark', 'Lark'),
+                            ('feishu_drive', 'Feishu Drive'),
+                            ('lark_drive', 'Lark Drive'),
+                            ('notion', 'Notion'),
+                            ('confluence', 'Confluence'),
+                            ('yuque', 'Yuque'),
+                            ('dingtalk', 'DingTalk'),
+                            ('ima', 'Tencent IMA'),
+                            ('rss', 'RSS / Atom'),
+                            ('gitlab', 'GitLab'),
+                            ('seafile', 'Seafile'),
+                          ])
+                            {
+                              'type': type,
+                              'name': name,
+                              'description': name,
+                              'fields': [
+                                {
+                                  'key': 'api_key',
+                                  'label': 'API Token',
+                                  'required': true,
+                                  'secret': true,
+                                },
+                              ],
+                            },
+                        ],
+                      }
+                    : {'sources': []},
                 _ => throw StateError(action),
               },
             }),
@@ -380,6 +418,27 @@ void main() {
     addTearDown(selected.dispose);
     final boundary = GlobalKey();
     const screenshot = String.fromEnvironment('KB_TREE_SCREENSHOT');
+    const dataSourceScreenshot =
+        String.fromEnvironment('KB_DATA_SOURCES_SCREENSHOT');
+    if (dataSourceScreenshot.isNotEmpty) {
+      for (final (name, path) in [
+        ('Microsoft YaHei', 'C:/Windows/Fonts/msyh.ttc'),
+        (
+          'MaterialIcons',
+          'E:/fly/FlyEnv-Data/env/flutter/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf'
+        ),
+        (
+          'packages/font_awesome_flutter/FontAwesomeBrands',
+          'C:/Users/hudii/AppData/Local/Pub/Cache/hosted/pub.dev/font_awesome_flutter-10.9.1/lib/fonts/fa-brands-400.ttf'
+        ),
+      ]) {
+        final font = FontLoader(name)
+          ..addFont(
+            Future.value(ByteData.sublistView(File(path).readAsBytesSync())),
+          );
+        await font.load();
+      }
+    }
     await tester.pumpWidget(
       MultiBlocProvider(
         providers: [
@@ -394,7 +453,9 @@ void main() {
             supportedLocales: const [Locale('zh', 'CN')],
             localizationsDelegates: GlobalMaterialLocalizations.delegates,
             theme: ThemeData(
-              fontFamily: screenshot.isEmpty ? null : 'Microsoft YaHei',
+              fontFamily: screenshot.isEmpty && dataSourceScreenshot.isEmpty
+                  ? null
+                  : 'Microsoft YaHei',
               scaffoldBackgroundColor: Colors.white,
             ),
             home: RepaintBoundary(
@@ -553,6 +614,91 @@ void main() {
         image.dispose();
       });
     }
+    // The active library must switch only its right pane, even when its plugin
+    // is already open (TabsState selects existing plugins by ID).
+    await tester.tap(find.text('图谱'));
+    await tester.pumpAndSettle();
+    final middle = find.byKey(const ValueKey('knowledge-base-middle-pane'));
+    final middleBounds = tester.getRect(middle);
+    final libraryContents = tester.element(middle);
+    final previousContent = find.text('暂无 Wiki 关系图谱。');
+    expect(previousContent, findsOneWidget);
+    await hover('团队手册');
+    await tester.tap(sharedAdd);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('链接数据源'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PopupMenuItem<String>), findsNothing);
+    expect(find.byType(Dialog), findsNothing);
+    final sources = find.byType(KnowledgeBaseDataSources);
+    expect(sources, findsOneWidget);
+    expect(cubit.dataSourceBaseId.value, 'team');
+    expect(tester.element(middle), same(libraryContents));
+    expect(tester.getRect(middle), middleBounds);
+    expect(tester.getRect(sources).left, greaterThan(middleBounds.right));
+    expect(previousContent, findsNothing);
+    expect(find.text('知识库设置'), findsOneWidget);
+    expect(find.text('数据源管理'), findsOneWidget);
+    expect(
+      find.descendant(of: sources, matching: find.byType(OutlinedButton)),
+      findsNWidgets(13),
+    );
+    expect(
+      DefaultTabController.of(tester.element(find.byType(TabBar))).index,
+      2,
+    );
+    final notion = find.byKey(const ValueKey('data-source-type-Notion'));
+    await tester.tap(notion);
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeBaseDataSourceEditor), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('source-api_key')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .obscureText,
+      isTrue,
+    );
+    await tester.tap(find.text('返回数据源'));
+    await tester.pumpAndSettle();
+    if (dataSourceScreenshot.isNotEmpty) {
+      await tester.runAsync(() async {
+        final render = boundary.currentContext!.findRenderObject()!
+            as RenderRepaintBoundary;
+        final image = await render.toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await File(dataSourceScreenshot)
+            .writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+    // A narrower right pane keeps all types reachable without overflowing.
+    tester.view.physicalSize = const Size(900, 740);
+    await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('data-source-type-Seafile')));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.widgetWithText(OutlinedButton, '关闭'));
+    await tester.pumpAndSettle();
+    expect(sources, findsNothing);
+    expect(previousContent, findsOneWidget);
+    tester.view.physicalSize = const Size(1180, 740);
+    await tester.pumpAndSettle();
+    await hover('团队手册');
+    await tester.tap(sharedAdd);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('链接数据源'));
+    await tester.pumpAndSettle();
+    expect(sources, findsOneWidget);
+    await tester.tap(find.byTooltip('关闭数据源设置'));
+    await tester.pumpAndSettle();
+    expect(previousContent, findsOneWidget);
+    await tester.tap(find.text('文件'));
+    await mouse.moveTo(const Offset(1100, 700));
+    await tester.pumpAndSettle();
     await tester.tap(entry('私有知识库'));
     await tester.pumpAndSettle();
     expect(entry('我的研究'), findsNothing);
@@ -1151,7 +1297,9 @@ void main() {
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.byKey(const ValueKey('parent_chunk_size')), 'invalid');
+      find.byKey(const ValueKey('parent_chunk_size')),
+      'invalid',
+    );
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('chunk_size')), '100');

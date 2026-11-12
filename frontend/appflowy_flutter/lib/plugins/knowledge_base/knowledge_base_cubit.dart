@@ -6,6 +6,7 @@ class KnowledgeBaseCubit extends Cubit<AsyncSnapshot<List<KnowledgeBase>>> {
   KnowledgeBaseCubit(this.service) : super(const AsyncSnapshot.nothing());
 
   final KnowledgeBaseService service;
+  final dataSourceBaseId = ValueNotifier<String?>(null);
   int _request = 0;
 
   Future<void> load({String? action, Map<String, dynamic>? payload}) async {
@@ -26,6 +27,7 @@ class KnowledgeBaseCubit extends Cubit<AsyncSnapshot<List<KnowledgeBase>>> {
 
   @override
   Future<void> close() {
+    dataSourceBaseId.dispose();
     service.close();
     return super.close();
   }

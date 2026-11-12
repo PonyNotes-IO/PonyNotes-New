@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_cubit.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_data_sources.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
 import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_data.dart';
 import 'package:appflowy/plugins/knowledge_graph/presentation/knowledge_graph_canvas.dart';
@@ -57,6 +58,9 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
   KnowledgeBaseService get _service =>
       context.read<KnowledgeBaseCubit>().service;
 
+  ValueNotifier<String?> get _dataSourceBaseId =>
+      context.read<KnowledgeBaseCubit>().dataSourceBaseId;
+
   Future<Map<String, dynamic>> _request(String action) =>
       _service.post(action, widget.base.target);
 
@@ -81,6 +85,7 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
   }
 
   void _open(Map<String, dynamic> entry, {bool source = false}) {
+    _dataSourceBaseId.value = null;
     setState(() {
       _selected = entry;
       _isSource = source;
@@ -144,18 +149,21 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
                     ),
                     knowledgeBaseTabs(
                       context,
-                      onTap: (index) => setState(() {
-                        _tab = index;
-                        _query = '';
-                        _selected = null;
-                        _preview = null;
-                        if (index == 0) {
-                          _files ??= _request('documents');
-                          _sources ??= _request('sources');
-                        } else {
-                          _wiki ??= _request('wiki');
-                        }
-                      }),
+                      onTap: (index) {
+                        _dataSourceBaseId.value = null;
+                        setState(() {
+                          _tab = index;
+                          _query = '';
+                          _selected = null;
+                          _preview = null;
+                          if (index == 0) {
+                            _files ??= _request('documents');
+                            _sources ??= _request('sources');
+                          } else {
+                            _wiki ??= _request('wiki');
+                          }
+                        });
+                      },
                     ),
                     Padding(
                       padding: const EdgeInsets.all(12),
@@ -188,17 +196,30 @@ class _KnowledgeBaseContentsState extends State<KnowledgeBaseContents> {
             ),
             const VerticalDivider(width: 1),
             Expanded(
-              child: _selected != null
-                  ? _detail()
-                  : _tab == 2
-                      ? _graphView()
-                      : _notice(
-                          kbText(
-                            context,
-                            '选择左侧条目以查看内容。',
-                            'Select an item to view its content.',
-                          ),
-                        ),
+              child: ValueListenableBuilder<String?>(
+                valueListenable: _dataSourceBaseId,
+                builder: (_, baseId, __) => baseId == widget.base.id
+                    ? KnowledgeBaseDataSources(
+                        base: widget.base,
+                        service: _service,
+                        onChanged: () => setState(() {
+                          _sources = _request('sources');
+                          if (_tab == 0) _files = _request('documents');
+                        }),
+                        onClose: () => _dataSourceBaseId.value = null,
+                      )
+                    : _selected != null
+                        ? _detail()
+                        : _tab == 2
+                            ? _graphView()
+                            : _notice(
+                                kbText(
+                                  context,
+                                  '选择左侧条目以查看内容。',
+                                  'Select an item to view its content.',
+                                ),
+                              ),
+              ),
             ),
           ],
         ),

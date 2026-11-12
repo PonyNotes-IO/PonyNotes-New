@@ -31,9 +31,11 @@ class _SidebarKnowledgeBaseButtonState
 
   KnowledgeBaseCubit get _cubit => context.read<KnowledgeBaseCubit>();
 
-  void _open(Object? target) =>
+  void _open(Object? target, {bool dataSources = false}) =>
       CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
         if (!mounted) return;
+        _cubit.dataSourceBaseId.value =
+            dataSources && target is KnowledgeBase ? target.id : null;
         context.read<TabsBloc>().add(
               TabsEvent.openPlugin(
                 plugin: makePlugin(
@@ -276,6 +278,10 @@ class _SidebarKnowledgeBaseButtonState
                       onCanceled: () => setState(() => _addingToBaseId = null),
                       onSelected: (action) async {
                         setState(() => _addingToBaseId = null);
+                        if (action == 'Link data source') {
+                          _open(base, dataSources: true);
+                          return;
+                        }
                         if (action != 'Import web page') return;
                         final cubit = _cubit;
                         final imported = await showDialog<bool>(
@@ -303,6 +309,7 @@ class _SidebarKnowledgeBaseButtonState
                         ])
                           PopupMenuItem(
                             value: en,
+                            enabled: en != 'Link data source' || base.canManage,
                             height: 32,
                             child: Text(
                               kbText(context, zh, en),
