@@ -48,17 +48,20 @@ void main() {
             color: Colors.white,
             child: Theme(
               data: ThemeData(fontFamily: 'AgentTestFont'),
-              child: Center(
-                child: AIInputArea(
-                  agentMode: true,
-                  onMessageSent:
-                      (text, model, images, thinking, search, knowledgeSearch) {
-                    submitted = text;
-                    expect(model, isNull);
-                    expect(thinking, false);
-                    expect(search, false);
-                    expect(knowledgeSearch, false);
-                  },
+              child: DefaultTextStyle.merge(
+                style: const TextStyle(fontFamily: 'AgentTestFont'),
+                child: Center(
+                  child: AIInputArea(
+                    agentMode: true,
+                    onMessageSent: (text, model, images, thinking, search,
+                        knowledgeSearch) {
+                      submitted = text;
+                      expect(model, isNull);
+                      expect(thinking, false);
+                      expect(search, false);
+                      expect(knowledgeSearch, false);
+                    },
+                  ),
                 ),
               ),
             ),

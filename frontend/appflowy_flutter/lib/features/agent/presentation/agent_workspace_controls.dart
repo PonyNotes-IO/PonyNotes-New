@@ -3,14 +3,21 @@ import '../application/agent_controller.dart';
 import '../application/agent_permissions.dart';
 
 class AgentWorkspaceControls extends StatelessWidget {
-  const AgentWorkspaceControls({super.key, required this.agent});
+  const AgentWorkspaceControls({
+    super.key,
+    required this.agent,
+    this.leading = const [],
+  });
   final AgentController agent;
+  final List<Widget> leading;
   @override
   Widget build(BuildContext context) => Align(
         alignment: Alignment.centerLeft,
         child: Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
           children: [
+            ...leading,
             FilterChip(
               label: const Text('产物云同步'),
               selected: agent.cloudSync,

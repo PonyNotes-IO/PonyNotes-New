@@ -171,6 +171,7 @@ void main() {
         find.byKey(const Key('agent-approval-mode')),
         find.text('产物云同步'),
         find.byType(AiModeButton),
+        find.byTooltip('笔记工具设置'),
       ]) {
         expect(
           tester.getRect(find.byType(AgentComposer)).contains(

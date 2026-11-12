@@ -261,13 +261,6 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                                     ),
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: '笔记工具设置',
-                                  icon: const Icon(Icons.tune, size: 20),
-                                  onPressed: agent.running || !agent.connected
-                                      ? null
-                                      : _toolSettings,
-                                ),
                                 if (constraints.maxWidth >= 600)
                                   TextButton.icon(
                                     onPressed: () =>
@@ -463,7 +456,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
   }
 
   Widget _empty() => Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1172,46 +1165,44 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                 icon: const Icon(Icons.arrow_upward),
               ),
             ],
-            footer: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (widget.showModeSelector)
-                      AiModeButton(
-                        agentMode: agent.mode == 'smart-reasoning',
-                        enabled: !submitting,
-                        onSelected: agent.configureMode,
+            footer: AgentWorkspaceControls(
+              agent: agent,
+              leading: [
+                if (widget.showModeSelector)
+                  AiModeButton(
+                    agentMode: agent.mode == 'smart-reasoning',
+                    enabled: !submitting,
+                    onSelected: agent.configureMode,
+                  ),
+                if (agent.running)
+                  DropdownButton<String>(
+                    value: behavior,
+                    underline: const SizedBox.shrink(),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'steer',
+                        child: Text('补充指令'),
                       ),
-                    if (agent.running)
-                      DropdownButton<String>(
-                        value: behavior,
-                        underline: const SizedBox.shrink(),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'steer',
-                            child: Text('补充指令'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'follow_up',
-                            child: Text('排队发送'),
-                          ),
-                        ],
-                        onChanged: (value) => setState(() => behavior = value!),
+                      DropdownMenuItem(
+                        value: 'follow_up',
+                        child: Text('排队发送'),
                       ),
-                    FilterChip(
-                      label: const Text('联网'),
-                      selected: agent.webSearch,
-                      onSelected: agent.running
-                          ? null
-                          : (value) => setState(() => agent.webSearch = value),
-                    ),
-                  ],
+                    ],
+                    onChanged: (value) => setState(() => behavior = value!),
+                  ),
+                FilterChip(
+                  label: const Text('联网'),
+                  selected: agent.webSearch,
+                  onSelected: agent.running
+                      ? null
+                      : (value) => setState(() => agent.webSearch = value),
                 ),
-                AgentWorkspaceControls(agent: agent),
+                IconButton(
+                  tooltip: '笔记工具设置',
+                  icon: const Icon(Icons.tune, size: 20),
+                  onPressed:
+                      agent.running || !agent.connected ? null : _toolSettings,
+                ),
               ],
             ),
           ),

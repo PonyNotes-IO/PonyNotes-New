@@ -61,6 +61,7 @@ void main() {
   for (final variant in [
     (name: 'desktop', size: const Size(1360, 900)),
     (name: 'phone', size: const Size(390, 844)),
+    (name: 'compact', size: const Size(320, 640)),
   ]) {
     testWidgets(
         'standalone conversations create and restore without note calls on ${variant.name}',
@@ -223,7 +224,7 @@ void main() {
         '保留输入草稿',
       );
       expect(find.text('draft.txt'), findsOneWidget);
-      if (variant.name == 'phone') {
+      if (variant.name != 'desktop') {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
@@ -231,6 +232,13 @@ void main() {
       expect(find.text('我的AI会话'), findsNothing);
       await tester.tap(find.text('最新的笔记是什么'));
       await tester.pumpAndSettle();
+      if (variant.name == 'compact') {
+        await tester.drag(
+          find.byKey(const Key('agent-timeline')),
+          const Offset(0, 300),
+        );
+        await tester.pumpAndSettle();
+      }
       expect(find.text('最新的笔记是什么？'), findsOneWidget);
       expect(find.byType(AgentWorkspace), findsOneWidget);
       final active =
@@ -264,7 +272,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await screenshot('independent-conversations');
-      if (variant.name == 'phone') {
+      if (variant.name != 'desktop') {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
@@ -288,7 +296,7 @@ void main() {
             .chatId,
         store.entries.first.id,
       );
-      if (variant.name == 'phone') {
+      if (variant.name != 'desktop') {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }

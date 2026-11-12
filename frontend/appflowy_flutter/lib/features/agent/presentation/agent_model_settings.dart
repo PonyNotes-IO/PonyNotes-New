@@ -314,16 +314,18 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 140),
-                    child: Text(
-                      active.isComplete
-                          ? active.modelName
-                          : loadingInternal
-                              ? '加载模型…'
-                              : '选择模型',
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13),
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: Text(
+                        active.isComplete
+                            ? active.modelName
+                            : loadingInternal
+                                ? '加载模型…'
+                                : '选择模型',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
+                      ),
                     ),
                   ),
                   const Icon(Icons.expand_more, size: 16),
