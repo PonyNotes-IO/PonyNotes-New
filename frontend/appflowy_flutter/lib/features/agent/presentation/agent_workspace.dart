@@ -16,6 +16,7 @@ import '../application/agent_attachments.dart';
 import '../application/agent_permissions.dart';
 import 'agent_model_settings.dart';
 import 'agent_workspace_controls.dart';
+import 'agent_composer.dart';
 import 'ai_mode_button.dart';
 import 'agent_artifact_panel.dart';
 import '../application/agent_reference.dart';
@@ -1068,14 +1069,10 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: Theme.of(context).dividerColor),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
+          child: AgentComposer(
+            input: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Focus(
                   onKeyEvent: (_, event) {
@@ -1105,7 +1102,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                     ),
                     child: TextField(
                       controller: input,
-                      minLines: 1,
+                      minLines: 3,
                       maxLines: 6,
                       decoration: const InputDecoration(
                         hintText: '提问，或描述你想了解的内容',
@@ -1142,76 +1139,75 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                       style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                const SizedBox(height: 8),
-                Row(
+              ],
+            ),
+            leading: [
+              if (!agent.running)
+                IconButton(
+                  tooltip: '添加图片或文件',
+                  onPressed: submitting ? null : _attach,
+                  icon: const Icon(Icons.attach_file, size: 18),
+                ),
+            ],
+            modelSelector: AgentModelSettingsButton(
+              currentConfig: agent.providerConfig,
+              currentThinking: agent.connected ? agent.thinkingLevel : null,
+              internalService: agent.internalService,
+              enabled: !agent.running && !agent.connecting && !submitting,
+              onChanged: (config, thinking) async {
+                await agent.configureModel(config, thinking);
+                if (!agent.connected) await agent.connect();
+              },
+            ),
+            actions: [
+              if (agent.running)
+                IconButton(
+                  tooltip: '停止任务',
+                  onPressed: agent.stop,
+                  icon: const Icon(Icons.stop_circle_outlined),
+                ),
+              IconButton(
+                tooltip: agent.running ? '发送指令' : '发送',
+                onPressed: agent.connecting || submitting ? null : _send,
+                icon: const Icon(Icons.arrow_upward),
+              ),
+            ],
+            footer: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
-                      child: Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          if (widget.showModeSelector)
-                            AiModeButton(
-                              agentMode: agent.mode == 'smart-reasoning',
-                              enabled: !submitting,
-                              onSelected: agent.configureMode,
-                            ),
-                          if (!agent.running)
-                            IconButton(
-                              tooltip: '添加图片或文件',
-                              onPressed: submitting ? null : _attach,
-                              icon: const Icon(Icons.attach_file, size: 18),
-                            ),
-                          if (agent.running)
-                            DropdownButton<String>(
-                              value: behavior,
-                              underline: const SizedBox.shrink(),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'steer',
-                                  child: Text('补充指令'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'follow_up',
-                                  child: Text('排队发送'),
-                                ),
-                              ],
-                              onChanged: (value) =>
-                                  setState(() => behavior = value!),
-                            ),
-                          AgentModelSettingsButton(
-                            currentConfig: agent.providerConfig,
-                            currentThinking:
-                                agent.connected ? agent.thinkingLevel : null,
-                            internalService: agent.internalService,
-                            enabled: !agent.running &&
-                                !agent.connecting &&
-                                !submitting,
-                            onChanged: (config, thinking) async {
-                              await agent.configureModel(config, thinking);
-                              if (!agent.connected) await agent.connect();
-                            },
+                    if (widget.showModeSelector)
+                      AiModeButton(
+                        agentMode: agent.mode == 'smart-reasoning',
+                        enabled: !submitting,
+                        onSelected: agent.configureMode,
+                      ),
+                    if (agent.running)
+                      DropdownButton<String>(
+                        value: behavior,
+                        underline: const SizedBox.shrink(),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'steer',
+                            child: Text('补充指令'),
                           ),
-                          FilterChip(
-                            label: const Text('联网'),
-                            selected: agent.webSearch,
-                            onSelected: agent.running
-                                ? null
-                                : (value) =>
-                                    setState(() => agent.webSearch = value),
+                          DropdownMenuItem(
+                            value: 'follow_up',
+                            child: Text('排队发送'),
                           ),
                         ],
+                        onChanged: (value) => setState(() => behavior = value!),
                       ),
-                    ),
-                    if (agent.running)
-                      IconButton(
-                        tooltip: '停止任务',
-                        onPressed: agent.stop,
-                        icon: const Icon(Icons.stop_circle_outlined),
-                      ),
-                    IconButton(
-                      tooltip: agent.running ? '发送指令' : '发送',
-                      onPressed: agent.connecting || submitting ? null : _send,
-                      icon: const Icon(Icons.arrow_upward),
+                    FilterChip(
+                      label: const Text('联网'),
+                      selected: agent.webSearch,
+                      onSelected: agent.running
+                          ? null
+                          : (value) => setState(() => agent.webSearch = value),
                     ),
                   ],
                 ),

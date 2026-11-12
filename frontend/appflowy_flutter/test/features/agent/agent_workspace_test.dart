@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/features/agent/application/agent_credits.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
+import 'package:appflowy/features/agent/presentation/agent_composer.dart';
 import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:appflowy/features/agent/presentation/agent_artifact_panel.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
@@ -164,6 +165,20 @@ void main() {
       expect(find.byType(AiModeButton), findsOneWidget);
       expect(find.textContaining('项目行动清单.md'), findsOneWidget);
       expect(find.text('产物云同步'), findsOneWidget);
+      for (final control in [
+        find.byTooltip('添加图片或文件'),
+        find.byTooltip('发送'),
+        find.byKey(const Key('agent-approval-mode')),
+        find.text('产物云同步'),
+        find.byType(AiModeButton),
+      ]) {
+        expect(
+          tester.getRect(find.byType(AgentComposer)).contains(
+                tester.getCenter(control),
+              ),
+          isTrue,
+        );
+      }
       final markdown =
           tester.widgetList<MarkdownWidget>(find.byType(MarkdownWidget)).last;
       final ink = theme.dark().textColorScheme.primary;

@@ -8,6 +8,7 @@ import 'package:appflowy/features/agent/application/agent_internal_service.dart'
 import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/presentation/agent_conversations_page.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
+import 'package:appflowy/features/agent/presentation/agent_composer.dart';
 import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/presentation/ai_welcome_page.dart';
@@ -157,6 +158,21 @@ void main() {
           )..providerConfig =
               const AiProviderConfig(modelName: 'DeepSeek', isInternal: true);
       final capture = GlobalKey();
+      Future<void> screenshot(String name) async {
+        final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
+        if (output == null) return;
+        await tester.runAsync(() async {
+          final image = await (capture.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await Directory(output).create(recursive: true);
+          await File('$output/$name-${variant.name}.png')
+              .writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+
       await tester.pumpWidget(
         RepaintBoundary(
           key: capture,
@@ -183,6 +199,20 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(store.error, isNull);
+      final composer = find.byType(AgentComposer);
+      expect(composer, findsOneWidget);
+      for (final control in [
+        find.byTooltip('上传文件'),
+        find.byTooltip('发送消息'),
+        find.byType(AiModeButton),
+        find.text('draft.txt'),
+      ]) {
+        expect(
+          tester.getRect(composer).contains(tester.getCenter(control)),
+          isTrue,
+        );
+      }
+      await screenshot('agent-welcome');
       await tester.enterText(find.byType(TextField), '保留输入草稿');
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
@@ -233,19 +263,7 @@ void main() {
       active.changed();
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
-      if (output != null) {
-        await tester.runAsync(() async {
-          final image = await (capture.currentContext!.findRenderObject()!
-                  as RenderRepaintBoundary)
-              .toImage();
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await Directory(output).create(recursive: true);
-          await File('$output/independent-conversations-${variant.name}.png')
-              .writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
-      }
+      await screenshot('independent-conversations');
       if (variant.name == 'phone') {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
@@ -253,6 +271,8 @@ void main() {
       await tester.tap(find.text('新建对话'));
       await tester.pumpAndSettle();
       expect(created, 1);
+      expect(find.byType(AgentComposer), findsOneWidget);
+      await screenshot('agent-new-conversation');
       expect(store.entries.first.title, '新对话');
       expect(
         tester

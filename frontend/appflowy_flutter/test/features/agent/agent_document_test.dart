@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/presentation/ai_conversation.dart';
 import 'package:appflowy/features/agent/presentation/agent_model_settings.dart';
+import 'package:appflowy/features/agent/presentation/agent_composer.dart';
 import 'package:appflowy/plugins/ai_chat/chat_page.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_input_area.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -67,6 +68,14 @@ void main() {
     );
     await tester.pump();
     expect(find.byType(AgentModelSettingsButton), findsOneWidget);
+    expect(find.byType(AgentComposer), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AgentComposer),
+        matching: find.byTooltip('发送'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('深度思考'), findsNothing);
     expect(find.text('联网搜索'), findsNothing);
     expect(find.text('知识库检索'), findsNothing);

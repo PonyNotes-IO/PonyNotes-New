@@ -12,6 +12,7 @@ import 'agent_artifact_library.dart';
 import 'ai_mode_button.dart';
 import '../application/agent_reference.dart';
 import 'agent_reference_field.dart';
+import 'agent_composer.dart';
 
 class AgentConversationsPage extends StatefulWidget {
   const AgentConversationsPage({
@@ -302,75 +303,75 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                 const SizedBox(height: 12),
                 const Text('查找资料、整理笔记，或把任务交给我', textAlign: TextAlign.center),
                 const SizedBox(height: 32),
-                AgentReferenceField(
-                  controller: input,
-                  selected: selectedReferences,
-                  enabled: !sessions.creating && !sessions.loading && !revoked,
-                  load: _loadReferences,
-                  onChanged: (items) => setState(
-                    () => selectedReferences
-                      ..clear()
-                      ..addAll(items),
-                  ),
-                  child: TextField(
-                    controller: input,
-                    minLines: 3,
-                    maxLines: 8,
-                    enabled: !sessions.creating,
-                    decoration: const InputDecoration(
-                      hintText: '有什么想问的，或需要我完成的任务？',
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => _create(send: true),
-                  ),
-                ),
-                if (files.isNotEmpty)
-                  Wrap(
-                    spacing: 8,
-                    children: files
-                        .map(
-                          (f) => InputChip(
-                            label: Text(f.name),
-                            onDeleted: () => setState(() => files.remove(f)),
+                AgentComposer(
+                  input: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AgentReferenceField(
+                        controller: input,
+                        selected: selectedReferences,
+                        enabled:
+                            !sessions.creating && !sessions.loading && !revoked,
+                        load: _loadReferences,
+                        onChanged: (items) => setState(
+                          () => selectedReferences
+                            ..clear()
+                            ..addAll(items),
+                        ),
+                        child: TextField(
+                          controller: input,
+                          minLines: 3,
+                          maxLines: 6,
+                          enabled: !sessions.creating,
+                          decoration: const InputDecoration(
+                            hintText: '有什么想问的，或需要我完成的任务？',
+                            border: InputBorder.none,
+                            isDense: true,
                           ),
-                        )
-                        .toList(),
+                          onSubmitted: (_) => _create(send: true),
+                        ),
+                      ),
+                      if (files.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: files
+                              .map(
+                                (f) => InputChip(
+                                  label: Text(f.name),
+                                  onDeleted: () =>
+                                      setState(() => files.remove(f)),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      if (uploadError != null)
+                        Text(
+                          uploadError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                    ],
                   ),
-                if (uploadError != null)
-                  Text(
-                    uploadError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    AiModeButton(
-                      agentMode: smart,
-                      enabled: !sessions.creating && !revoked,
-                      onSelected: (value) => setState(() => smart = value),
-                    ),
+                  leading: [
                     IconButton(
                       tooltip: '上传文件',
                       onPressed: sessions.creating ? null : _attach,
                       icon: const Icon(Icons.attach_file),
                     ),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: AgentModelSettingsButton(
-                          currentConfig: model,
-                          currentThinking: thinking,
-                          onChanged: (config, level) async {
-                            setState(() {
-                              model = config;
-                              thinking = level;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
+                  ],
+                  modelSelector: AgentModelSettingsButton(
+                    currentConfig: model,
+                    currentThinking: thinking,
+                    onChanged: (config, level) async {
+                      setState(() {
+                        model = config;
+                        thinking = level;
+                      });
+                    },
+                  ),
+                  actions: [
                     IconButton(
                       tooltip: '发送消息',
                       onPressed:
@@ -380,8 +381,19 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                       icon: const Icon(Icons.arrow_upward),
                     ),
                   ],
+                  footer: Wrap(
+                    spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      AiModeButton(
+                        agentMode: smart,
+                        enabled: !sessions.creating && !revoked,
+                        onSelected: (value) => setState(() => smart = value),
+                      ),
+                      const AllAgentArtifactsButton(),
+                    ],
+                  ),
                 ),
-                const AllAgentArtifactsButton(),
               ],
             ),
           ),
