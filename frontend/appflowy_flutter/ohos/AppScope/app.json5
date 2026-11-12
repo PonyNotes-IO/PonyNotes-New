@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "com.xiaomabiji.app.appflowy",
+    "bundleName": "com.xiaomabiji.app.note",
     "vendor": "example",
     "versionCode": 1000000,
     "versionName": "1.0.0",
