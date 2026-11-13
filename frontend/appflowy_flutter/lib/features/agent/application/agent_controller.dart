@@ -126,6 +126,17 @@ class AgentController extends ChangeNotifier {
   bool _creditsInFlight = false;
   bool _creditsRefreshAgain = false;
   Map<String, dynamic>? sessionTokens;
+  Timer? _attachmentPoll;
+  int _attachmentPollTicks = 0;
+  Map<String, dynamic>? _pendingRetry;
+
+  /// Tests shorten this to observe polling without waiting for real parses.
+  @visibleForTesting
+  Duration attachmentPollInterval = const Duration(seconds: 3);
+
+  /// True when the last submission was rejected before WeKnora accepted it, so
+  /// the original bytes are still in memory and the message can be re-sent.
+  bool get canRetryUpload => _pendingRetry != null && !running;
 
   void changed() {
     if (!_disposed) notifyListeners();
@@ -436,9 +447,98 @@ class AgentController extends ChangeNotifier {
           in (question['attachments'] as List? ?? []).whereType<Map>()) {
         file['status'] = 'unconfirmed';
       }
+      // Keep the original bytes so the user can re-send without re-picking.
+      _pendingRetry = {
+        'text': text,
+        'question': question,
+        'attachments': attachments,
+        'references': contextReferences,
+        'images': images,
+      };
       changed();
+    } else if (sent && epoch == _epoch) {
+      _pendingRetry = null;
+      if (attachments.isNotEmpty) _startAttachmentPoll(epoch);
     }
     return sent;
+  }
+
+  /// Re-sends a submission WeKnora never accepted, dropping the failed bubble
+  /// first so the conversation does not keep a duplicate question.
+  Future<bool> retryUpload() async {
+    final pending = _pendingRetry;
+    if (pending == null || running) return false;
+    _pendingRetry = null;
+    final question = pending['question'] as Map<String, dynamic>;
+    final index = messages.indexWhere((message) => identical(message, question));
+    if (index >= 0) messages.removeAt(index);
+    changed();
+    return send(
+      pending['text'] as String,
+      attachments: (pending['attachments'] as List)
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      contextReferences: (pending['references'] as List<AgentReference>),
+      images: (pending['images'] as List<Map<String, dynamic>>),
+    );
+  }
+
+  static bool _settled(String? status) =>
+      const {'ready', 'failed', 'expired'}.contains(status);
+
+  /// Upload only proves WeKnora stored the file; parsing finishes later, so poll
+  /// until every attachment reaches a terminal state instead of showing
+  /// "processing" forever.
+  void _startAttachmentPoll(int epoch) {
+    _attachmentPoll?.cancel();
+    _attachmentPollTicks = 0;
+    _attachmentPoll = Timer.periodic(attachmentPollInterval, (timer) async {
+      _attachmentPollTicks++;
+      if (_disposed || epoch != _epoch) {
+        timer.cancel();
+        _attachmentPoll = null;
+        return;
+      }
+      if (_attachmentPollTicks > 20) {
+        timer.cancel();
+        _attachmentPoll = null;
+        return;
+      }
+      if (await _refreshAttachmentStatus(epoch) && timer.isActive) {
+        timer.cancel();
+        _attachmentPoll = null;
+      }
+    });
+  }
+
+  /// Returns true once no attachment is still pending.
+  Future<bool> _refreshAttachmentStatus(int epoch) async {
+    try {
+      final statuses = await service.attachmentStatus(_workspaceId!, chatId);
+      if (_disposed || epoch != _epoch) return true;
+      final byId = {
+        for (final status in statuses)
+          if (status['id'] is String) status['id'] as String: status,
+      };
+      var pending = false;
+      for (final message in messages) {
+        for (final file
+            in (message['attachments'] as List? ?? []).whereType<Map>()) {
+          final status = byId[file['id']];
+          if (status == null) continue;
+          file['status'] = status['status'];
+          if (status['error_message'] is String) {
+            file['error_message'] = status['error_message'];
+          }
+          if (!_settled(status['status'] as String?)) pending = true;
+        }
+      }
+      changed();
+      return !pending;
+    } catch (_) {
+      // A transient failure is retried on the next tick.
+      return false;
+    }
   }
 
   Future<(List<Map<String, dynamic>>, String)> _quickNotes(
@@ -982,6 +1082,8 @@ class AgentController extends ChangeNotifier {
   Future<void> disconnect() async {
     _acceptNoteCalls = false;
     _cancelApprovals();
+    _attachmentPoll?.cancel();
+    _attachmentPoll = null;
     _toolTimer?.cancel();
     _toolTimer = null;
     if (_workspaceId != null) {
@@ -1266,6 +1368,8 @@ class AgentController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _attachmentPoll?.cancel();
+    _attachmentPoll = null;
     _instances.remove(this);
     unawaited(disconnect());
     super.dispose();

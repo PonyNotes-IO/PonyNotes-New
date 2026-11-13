@@ -188,6 +188,21 @@ class AgentService {
     }
   }
 
+  /// WeKnora parses uploaded files asynchronously, so the client polls this
+  /// while an attachment has not reached a terminal state.
+  Future<List<Map<String, dynamic>>> attachmentStatus(
+    String workspace,
+    String document,
+  ) async {
+    final data = await request('GET', workspace, document, '/attachments');
+    final items = data['attachments'];
+    if (items is! List) return const [];
+    return items
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
   Stream<Map<String, dynamic>> stream(
     String method,
     String workspace,
