@@ -109,15 +109,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected?.modelName, first.modelName);
     expect(selected?.apiKey, first.apiKey);
-    await tester.tap(find.text('思考 · 关闭'));
+    await tester.tap(find.text('思考 · 中'));
     await tester.pumpAndSettle();
     final slider = tester.widget<Slider>(find.byType(Slider));
-    slider.onChanged!(4);
-    slider.onChangeEnd!(4);
+    slider.onChanged!(6);
+    slider.onChangeEnd!(6);
     await tester.pumpAndSettle();
-    expect(effort, 'high');
-    expect(await AgentModelPreferences.loadThinking(), 'high');
-    expect(find.text('思考 · 高'), findsOneWidget);
+    expect(effort, 'max');
+    expect(await AgentModelPreferences.loadThinking(), 'max');
+    expect(find.text('思考 · 最大'), findsOneWidget);
   });
 
   testWidgets('failed model changes keep the previous active model',

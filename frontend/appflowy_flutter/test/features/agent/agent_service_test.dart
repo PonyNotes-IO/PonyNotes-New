@@ -121,6 +121,7 @@ void main() {
         'supports_reasoning': false,
       });
       expect(data['query'], '分析笔记');
+      expect(data['reasoning_effort'], 'medium');
       expect(data['attachments'], [
         {'file_name': '扫描.pdf', 'file_size': 4, 'data': 'JVBERg=='},
       ]);

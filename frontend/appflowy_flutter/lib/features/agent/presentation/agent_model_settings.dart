@@ -66,7 +66,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   String? internalError;
   bool loadingInternal = true;
   late final internal = widget.internalService ?? AgentInternalService();
-  String thinking = 'off';
+  String thinking = AgentModelPreferences.defaultLevel;
   bool updating = false;
   int loadGeneration = 0;
 
@@ -388,13 +388,21 @@ class _ThinkingControl extends StatefulWidget {
 }
 
 class _ThinkingControlState extends State<_ThinkingControl> {
-  late double value =
-      AgentModelPreferences.levels.indexOf(widget.value).toDouble();
+  late double value = _indexOf(widget.value);
+  static double _indexOf(String level) {
+    var index = AgentModelPreferences.levels.indexOf(level);
+    if (index < 0) {
+      index = AgentModelPreferences.levels
+          .indexOf(AgentModelPreferences.defaultLevel);
+    }
+    return index.toDouble();
+  }
+
   @override
   void didUpdateWidget(covariant _ThinkingControl oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      value = AgentModelPreferences.levels.indexOf(widget.value).toDouble();
+      value = _indexOf(widget.value);
     }
   }
 
@@ -428,24 +436,30 @@ class _ThinkingControlState extends State<_ThinkingControl> {
                   tooltip: '重置思考程度',
                   icon: const Icon(Icons.restart_alt, size: 20),
                   onPressed: () {
-                    setState(() => value = 0);
-                    widget.onSelected('off');
+                    final index = AgentModelPreferences.levels
+                        .indexOf(AgentModelPreferences.defaultLevel)
+                        .toDouble();
+                    setState(() => value = index);
+                    widget.onSelected(AgentModelPreferences.defaultLevel);
                   },
                 ),
               ],
             ),
             Slider(
               value: value,
-              max: 4,
-              divisions: 4,
+              max: (AgentModelPreferences.levels.length - 1).toDouble(),
+              divisions: AgentModelPreferences.levels.length - 1,
               label: AgentModelPreferences.labels[value.round()],
               onChanged: (v) => setState(() => value = v),
               onChangeEnd: (v) =>
                   widget.onSelected(AgentModelPreferences.levels[v.round()]),
             ),
-            const Row(
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [Text('关闭'), Text('高')],
+              children: [
+                Text(AgentModelPreferences.labels.first),
+                Text(AgentModelPreferences.labels.last),
+              ],
             ),
           ],
         ),

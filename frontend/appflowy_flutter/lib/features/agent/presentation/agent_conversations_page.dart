@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../application/agent_conversations.dart';
 import '../application/agent_attachments.dart';
 import '../application/agent_controller.dart';
+import '../application/agent_model_preferences.dart';
 import 'agent_workspace.dart';
 import 'agent_model_settings.dart';
 import 'agent_artifact_library.dart';
@@ -43,7 +44,7 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
   final selectedReferences = <AgentReference>[];
   List<AgentReference> initialReferences = [];
   AiProviderConfig? model;
-  String thinking = 'medium';
+  String thinking = AgentModelPreferences.defaultLevel;
   bool smart = true;
   String? uploadError;
   bool wasRunning = false;
@@ -61,6 +62,9 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
   Future<void> _load() async {
     await sessions.load();
     if (!mounted) return;
+    final thinking = await AgentModelPreferences.loadThinking();
+    if (!mounted) return;
+    setState(() => this.thinking = thinking);
     final id = AgentConversations.requestedConversation.value;
     if (id != null) _selectRequested(id);
     _prompt();

@@ -118,7 +118,7 @@ class AgentController extends ChangeNotifier {
   String? notice;
   String streamingText = '';
   String model = '';
-  String thinkingLevel = 'off';
+  String thinkingLevel = AgentModelPreferences.defaultLevel;
   bool webSearch = false;
   AiProviderConfig? providerConfig;
   AgentCredits? credits;
