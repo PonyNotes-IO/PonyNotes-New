@@ -10,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 const _account = AgentCloudAccount(
   baseUrl: 'https://cloud.test',
   accessToken: 'login',
@@ -171,6 +170,87 @@ void main() {
       hasLength(1),
     );
     expect(_attachment(controller)['id'], 'uploaded');
+    await stream.close();
+    await controller.disconnect();
+    controller.dispose();
+    client.close();
+  });
+
+  test('maps body bytes onto each attachment so progress is per file', () {
+    // Chinese text before the payload means UTF-16 indices differ from bytes.
+    final body = <String, dynamic>{
+      'query': '总结这份文件',
+      'attachments': [
+        {'file_name': '扫描.pdf', 'data': 'JVBERi0xLjQK'},
+        {'file_name': '表格.xlsx', 'data': 'UEsDBBQ='},
+      ],
+    };
+    final spans = AgentController.attachmentSpans(body);
+    expect(spans, hasLength(2));
+
+    final encoded = utf8.encode(jsonEncode(body));
+    final first = utf8.encode('JVBERi0xLjQK');
+    final second = utf8.encode('UEsDBBQ=');
+    // Each span must land exactly on its own payload bytes.
+    expect(
+      encoded.sublist(spans[0].$1, spans[0].$2),
+      first,
+    );
+    expect(
+      encoded.sublist(spans[1].$1, spans[1].$2),
+      second,
+    );
+    // The spans are ordered and never overlap.
+    expect(spans[0].$2 <= spans[1].$1, true);
+  });
+
+  test('reports upload progress per attachment while the body streams', () async {
+    final stream = StreamController<List<int>>();
+    final client = MockClient.streaming((request, body) async {
+      if (request.url.path.endsWith('/tools')) {
+        return http.StreamedResponse(
+          Stream.value(
+            utf8.encode(request.method == 'GET' ? '{"calls":[]}' : ''),
+          ),
+          request.method == 'GET' ? 200 : 204,
+        );
+      }
+      if (request.url.path.endsWith('/attachments')) {
+        return http.StreamedResponse(
+          Stream.value(utf8.encode('{"attachments":[]}')),
+          200,
+        );
+      }
+      if (request.method == 'GET') {
+        return http.StreamedResponse(
+          Stream.value(utf8.encode('{"messages":[],"sources":{}}')),
+          200,
+        );
+      }
+      // Consume the streamed body so progress callbacks fire.
+      final consumed = await body.bytesToString();
+      expect(consumed.contains('JVBERi0xLjQK'), true);
+      return http.StreamedResponse(
+        stream.stream,
+        200,
+        headers: {'content-type': 'text/event-stream'},
+      );
+    });
+    final controller = _controller(client);
+    await controller.connect();
+    final accepted = controller.send(
+      '看看这个文件',
+      attachments: [
+        {'file_name': '扫描.pdf', 'file_size': 4, 'data': 'JVBERi0xLjQK'},
+      ],
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    stream.add(
+      utf8.encode(
+        'data: {"response_type":"scope","data":{"sources":{},"attachments":[{"id":"uploaded","file_name":"扫描.pdf","file_size":4,"status":"processing"}]}}\n\n',
+      ),
+    );
+    expect(await accepted, true);
     await stream.close();
     await controller.disconnect();
     controller.dispose();
