@@ -373,6 +373,7 @@ class AgentController extends ChangeNotifier {
                 'file_name': file['file_name'],
                 'file_size': file['file_size'],
                 'status': 'uploading',
+                'uploaded': 0,
               },
             )
             .toList(),
@@ -409,35 +410,46 @@ class AgentController extends ChangeNotifier {
       progressText = '正在检索知识库';
       changed();
     }
+    final body = <String, dynamic>{
+      'query': text,
+      'client_id': _clientId,
+      'mode': mode,
+      'model': {
+        'model_name': config.modelName,
+        'is_internal': config.isInternal,
+        if (!config.isInternal) 'base_url': config.baseUrl,
+        if (!config.isInternal) 'api_key': config.apiKey,
+        'supports_reasoning': config.supportsReasoning,
+      },
+      'reasoning_effort': thinkingLevel,
+      'web_search': webSearch,
+      if (mode == 'quick-answer') ...{
+        'note_context': noteContext,
+        'note_search_status': noteSearchStatus,
+      },
+      'initial_request': initialRequest != null,
+      'images': images
+          .map(
+            (image) =>
+                {'data': 'data:${image['mimeType']};base64,${image['data']}'},
+          )
+          .toList(),
+      'attachments': attachments,
+      if (contextReferences.isNotEmpty)
+        'references': contextReferences.map((r) => r.toJson()).toList(),
+    };
     _listen(
-      service.stream('POST', _workspaceId!, chatId, '/messages', {
-        'query': text,
-        'client_id': _clientId,
-        'mode': mode,
-        'model': {
-          'model_name': config.modelName,
-          'is_internal': config.isInternal,
-          if (!config.isInternal) 'base_url': config.baseUrl,
-          if (!config.isInternal) 'api_key': config.apiKey,
-          'supports_reasoning': config.supportsReasoning,
-        },
-        'reasoning_effort': thinkingLevel,
-        'web_search': webSearch,
-        if (mode == 'quick-answer') ...{
-          'note_context': noteContext,
-          'note_search_status': noteSearchStatus,
-        },
-        'initial_request': initialRequest != null,
-        'images': images
-            .map(
-              (image) =>
-                  {'data': 'data:${image['mimeType']};base64,${image['data']}'},
-            )
-            .toList(),
-        'attachments': attachments,
-        if (contextReferences.isNotEmpty)
-          'references': contextReferences.map((r) => r.toJson()).toList(),
-      }),
+      attachments.isEmpty
+          ? service.stream('POST', _workspaceId!, chatId, '/messages', body)
+          : service.streamWithProgress(
+              'POST',
+              _workspaceId!,
+              chatId,
+              '/messages',
+              body,
+              onProgress: (sent, total) =>
+                  _trackUploadProgress(epoch, body, question, sent, total),
+            ),
       epoch,
       accepted: accepted,
     );
@@ -485,6 +497,81 @@ class AgentController extends ChangeNotifier {
 
   static bool _settled(String? status) =>
       const {'ready', 'failed', 'expired'}.contains(status);
+
+  /// Maps transported body bytes back onto the individual attachments so each
+  /// file shows its own progress instead of one shared percentage.
+  void _trackUploadProgress(
+    int epoch,
+    Map<String, dynamic> body,
+    Map<String, dynamic> question,
+    int sent,
+    int total,
+  ) {
+    if (_disposed || epoch != _epoch) return;
+    final spans = attachmentSpans(body);
+    final files =
+        (question['attachments'] as List? ?? []).whereType<Map>().toList();
+    for (var index = 0; index < files.length && index < spans.length; index++) {
+      final (start, end) = spans[index];
+      if (end <= start) continue;
+      final fraction = ((sent - start) / (end - start)).clamp(0.0, 1.0);
+      files[index]['uploaded'] = (fraction * 100).round();
+    }
+    changed();
+  }
+
+  /// UTF-8 byte ranges of each attachment payload inside the serialized body.
+  /// Base64 is ASCII, but the surrounding body is not, so UTF-16 indices from
+  /// [String.indexOf] must be converted before they line up with byte counts.
+  static List<(int, int)> attachmentSpans(Map<String, dynamic> body) {
+    final payloads = (body['attachments'] as List? ?? [])
+        .whereType<Map>()
+        .map((file) => file['data'] as String? ?? '')
+        .toList();
+    if (payloads.isEmpty) return const [];
+    final encoded = jsonEncode(body);
+    final spans = <(int, int)>[];
+    var cursor = 0;
+    var bytesBefore = 0;
+    var unitsBefore = 0;
+    for (final payload in payloads) {
+      if (payload.isEmpty) {
+        spans.add((0, 0));
+        continue;
+      }
+      final index = encoded.indexOf(payload, cursor);
+      if (index < 0) {
+        spans.add((0, 0));
+        continue;
+      }
+      // Scan the gap once; attachments are ordered, so this stays linear.
+      bytesBefore += _utf8Bytes(encoded, unitsBefore, index);
+      unitsBefore = index;
+      spans.add((bytesBefore, bytesBefore + payload.length));
+      bytesBefore += payload.length;
+      unitsBefore += payload.length;
+      cursor = index + payload.length;
+    }
+    return spans;
+  }
+
+  static int _utf8Bytes(String text, int start, int end) {
+    var bytes = 0;
+    for (var index = start; index < end; index++) {
+      final unit = text.codeUnitAt(index);
+      if (unit < 0x80) {
+        bytes += 1;
+      } else if (unit < 0x800) {
+        bytes += 2;
+      } else if (unit >= 0xD800 && unit <= 0xDBFF && index + 1 < end) {
+        bytes += 4;
+        index++;
+      } else {
+        bytes += 3;
+      }
+    }
+    return bytes;
+  }
 
   /// Upload only proves WeKnora stored the file; parsing finishes later, so poll
   /// until every attachment reaches a terminal state instead of showing
