@@ -1,5 +1,6 @@
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_note_graph_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_artifacts_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_automation_button.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_graph_button.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -115,6 +116,8 @@ class SidebarFolder extends StatelessWidget {
             const SidebarKnowledgeBaseButton(),
             const VSpace(sidebarPrimaryEntryGap),
             const SidebarArtifactsButton(),
+            const VSpace(sidebarPrimaryEntryGap),
+            const SidebarAutomationButton(),
             // 模板
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),
