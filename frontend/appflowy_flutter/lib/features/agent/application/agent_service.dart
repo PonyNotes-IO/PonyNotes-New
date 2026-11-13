@@ -150,12 +150,7 @@ class AgentService {
         expectedIdentity != '${account.baseUrl}|${account.userId}|$workspace') {
       throw StateError('账号或工作区已切换');
     }
-    final request = http.Request(
-      method,
-      Uri.parse(
-        '${account.baseUrl}/api/ai/agent/conversations/${Uri.encodeComponent(workspace)}${document.isEmpty ? '' : '/${Uri.encodeComponent(document)}'}$suffix',
-      ),
-    );
+    final request = http.Request(method, _uri(account, workspace, document, suffix));
     request.followRedirects = false;
     request.headers['Authorization'] = 'Bearer ${account.accessToken}';
     if (body != null) {
@@ -163,6 +158,61 @@ class AgentService {
       request.body = jsonEncode(body);
     }
     return request;
+  }
+
+  static Uri _uri(
+    AgentCloudAccount account,
+    String workspace,
+    String document,
+    String suffix,
+  ) =>
+      Uri.parse(
+        '${account.baseUrl}/api/ai/agent/conversations/${Uri.encodeComponent(workspace)}${document.isEmpty ? '' : '/${Uri.encodeComponent(document)}'}$suffix',
+      );
+
+  /// Streams the body in chunks so large attachments report real progress
+  /// instead of a single indeterminate spinner. [onProgress] receives the
+  /// number of body bytes the transport has actually pulled.
+  Future<http.StreamedRequest> _streamedRequest(
+    String method,
+    String workspace,
+    String document,
+    String suffix,
+    Map<String, dynamic> body,
+    void Function(int sent, int total) onProgress,
+  ) async {
+    final account = await _account();
+    final encoded = utf8.encode(jsonEncode(body));
+    final request = http.StreamedRequest(
+      method,
+      _uri(account, workspace, document, suffix),
+    )
+      ..followRedirects = false
+      ..contentLength = encoded.length
+      ..headers['Authorization'] = 'Bearer ${account.accessToken}'
+      ..headers['Content-Type'] = 'application/json';
+    var sent = 0;
+    // The map only runs when the transport pulls, so this tracks real progress.
+    request.sink.addStream(
+      Stream<List<int>>.fromIterable(_chunks(encoded)).map((chunk) {
+        sent += chunk.length;
+        onProgress(sent, encoded.length);
+        return chunk;
+      }),
+    ).whenComplete(request.sink.close).catchError((Object _) {});
+    return request;
+  }
+
+  static Iterable<List<int>> _chunks(
+    List<int> bytes, [
+    int size = 64 * 1024,
+  ]) sync* {
+    for (var start = 0; start < bytes.length; start += size) {
+      yield bytes.sublist(
+        start,
+        start + size > bytes.length ? bytes.length : start + size,
+      );
+    }
   }
 
   Future<Map<String, dynamic>> request(
@@ -211,6 +261,33 @@ class AgentService {
     Map<String, dynamic>? body,
   ]) async* {
     final request = await _request(method, workspace, document, suffix, body);
+    yield* _events(request);
+  }
+
+  /// Same as [stream] but reports how much of the request body the transport
+  /// has consumed, which is what makes attachment uploads observable.
+  Stream<Map<String, dynamic>> streamWithProgress(
+    String method,
+    String workspace,
+    String document,
+    String suffix,
+    Map<String, dynamic> body, {
+    void Function(int sent, int total)? onProgress,
+  }) async* {
+    final request = onProgress == null
+        ? await _request(method, workspace, document, suffix, body)
+        : await _streamedRequest(
+            method,
+            workspace,
+            document,
+            suffix,
+            body,
+            onProgress,
+          );
+    yield* _events(request);
+  }
+
+  Stream<Map<String, dynamic>> _events(http.BaseRequest request) async* {
     request.headers['Accept'] = 'text/event-stream';
     final client = _client ?? http.Client();
     _streamClient = client;
