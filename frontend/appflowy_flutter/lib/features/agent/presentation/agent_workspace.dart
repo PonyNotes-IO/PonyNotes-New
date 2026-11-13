@@ -663,12 +663,13 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
         runSpacing: 8,
         children: files.map((file) {
           final status = switch (file['status']) {
+            'pending' => '待上传',
             'uploading' => '正在上传',
             'uploaded' || 'processing' => '解析中',
             'ready' => '解析完成',
             'failed' => '解析失败',
-            'expired' => '附件已过期，请重新上传',
-            'unconfirmed' => '上传未确认，请重连查看历史',
+            'expired' => '附件已过期',
+            'unconfirmed' => '上传未确认',
             'image' => '图片',
             _ => '已上传',
           };
@@ -731,6 +732,16 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
           );
         }).toList(),
       ),
+      if (agent.canRetryUpload &&
+          files.any((file) => file['status'] == 'unconfirmed'))
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => agent.retryUpload(),
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('重新上传'),
+          ),
+        ),
     ];
   }
 
@@ -1114,6 +1125,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                           .map(
                             (file) => InputChip(
                               label: Text(file.name),
+                              tooltip: '待上传',
                               onDeleted: submitting
                                   ? null
                                   : () => setState(
