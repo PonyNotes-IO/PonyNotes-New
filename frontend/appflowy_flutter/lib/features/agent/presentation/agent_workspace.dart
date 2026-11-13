@@ -673,6 +673,11 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
             'image' => '图片',
             _ => '已上传',
           };
+          final uploaded =
+              file['uploaded'] is num ? (file['uploaded'] as num).toInt() : null;
+          final progressLabel = file['status'] == 'uploading' && uploaded != null
+              ? ' · $uploaded%'
+              : '';
           final failed =
               ['failed', 'expired', 'unconfirmed'].contains(file['status']);
           final size =
@@ -715,7 +720,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                           style: const TextStyle(fontSize: 13),
                         ),
                         Text(
-                          '$status$sizeLabel',
+                          '$status$progressLabel$sizeLabel',
                           style: TextStyle(
                             fontSize: 12,
                             color: failed
@@ -723,6 +728,14 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                                 : theme.textColorScheme.secondary,
                           ),
                         ),
+                        if (file['status'] == 'uploading' && uploaded != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: LinearProgressIndicator(
+                              value: uploaded / 100,
+                              minHeight: 3,
+                            ),
+                          ),
                       ],
                     ),
                   ),
