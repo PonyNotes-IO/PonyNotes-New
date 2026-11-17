@@ -161,27 +161,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
       )..add(const SettingsDialogEvent.initial()),
       child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
         builder: (context, state) {
-          final modelPage = state.page == SettingsPage.aiProvider;
-          final dialogWidth =
-              modelPage ? math.max(360.0, screenSize.width - 32) : width;
-          final dialogHeight =
-              modelPage ? math.max(420.0, screenSize.height - 24) : height;
           return FlowyDialog(
-            width: dialogWidth,
-            insetPadding: modelPage
-                ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
-                : null,
-            shape: modelPage
-                ? RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  )
-                : null,
+            width: width,
             backgroundColor: theme.backgroundColorScheme.primary,
             constraints: BoxConstraints(
-              minWidth: dialogWidth,
-              maxWidth: dialogWidth,
+              minWidth: width,
+              maxWidth: width,
               minHeight: minHeight,
-              maxHeight: dialogHeight,
+              maxHeight: height,
             ),
             expandHeight: false,
             child: ScaffoldMessenger(
@@ -199,7 +186,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SizedBox(
-                            width: modelPage ? 280 : settingsMenuWidth,
+                            width: settingsMenuWidth,
                             child: SettingsMenu(
                               userProfile: state.userProfile,
                               changeSelectedPage: (index) => context

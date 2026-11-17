@@ -30,28 +30,29 @@ String modelError(Object error, {bool deleting = false}) => switch (error) {
 Widget modelHeading(BuildContext context, String text) => Text(
       text,
       style: TextStyle(
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: FontWeight.w600,
         color: AppFlowyTheme.of(context).textColorScheme.primary,
       ),
     );
 
 class KnowledgeProviderIcon extends StatelessWidget {
-  const KnowledgeProviderIcon({super.key, this.provider});
+  const KnowledgeProviderIcon({super.key, this.provider, this.size = 20});
   final KnowledgeModelProvider? provider;
+  final double size;
   @override
   Widget build(BuildContext context) {
     final value = provider?.icon ?? '';
     if (value.startsWith('data:image/svg+xml;base64,')) {
       return FlowySvg.string(
         utf8.decode(base64Decode(value.split(',').last)),
-        size: const Size.square(20),
+        size: Size.square(size),
         blendMode: null,
       );
     }
     return Icon(
       Icons.code,
-      size: 20,
+      size: size,
       color: AppFlowyTheme.of(context).iconColorScheme.secondary,
     );
   }
@@ -85,8 +86,8 @@ class KnowledgeModelTypes extends StatelessWidget {
           alignment: spread && constraints.maxWidth >= 850
               ? WrapAlignment.spaceBetween
               : WrapAlignment.start,
-          spacing: spread && constraints.maxWidth >= 700 ? 24 : 6,
-          runSpacing: 8,
+          spacing: 4,
+          runSpacing: 4,
           children: [
             for (final type in <KnowledgeModelType?>[
               if (allowAll) null,
@@ -98,8 +99,8 @@ class KnowledgeModelTypes extends StatelessWidget {
                   onPressed: enabled ? () => onSelected(type) : null,
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 10,
+                      horizontal: 4,
+                      vertical: 4,
                     ),
                     backgroundColor: type == selected
                         ? theme.textColorScheme.primary.withValues(alpha: .035)
@@ -108,14 +109,17 @@ class KnowledgeModelTypes extends StatelessWidget {
                         ? theme.textColorScheme.primary.withValues(alpha: .68)
                         : theme.textColorScheme.secondary,
                     textStyle: DefaultTextStyle.of(context).style,
-                    minimumSize: const Size(0, 40),
+                    minimumSize: const Size(0, 28),
+                    tapTargetSize: MediaQuery.sizeOf(context).width >= 480
+                        ? MaterialTapTargetSize.shrinkWrap
+                        : MaterialTapTargetSize.padded,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                   icon: Icon(
                     knowledgeModelIcon(type),
-                    size: spread && constraints.maxWidth >= 700 ? 24 : 18,
+                    size: 16,
                     weight: 350,
                     color: type == selected
                         ? modelAccent
@@ -126,10 +130,7 @@ class KnowledgeModelTypes extends StatelessWidget {
                   ),
                   label: Text(
                     '${type?.label ?? '全部'}${models == null ? '' : ' (${models!.where((m) => type == null || m.type == type).length})'}',
-                    style: TextStyle(
-                      fontSize:
-                          spread ? (constraints.maxWidth >= 700 ? 18 : 14) : 13,
-                    ),
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
               ),
@@ -165,10 +166,10 @@ BoxDecoration modelSurface(BuildContext context, {double radius = 14}) {
 }
 
 EdgeInsets modelPagePadding(BuildContext context) => EdgeInsets.fromLTRB(
-      MediaQuery.sizeOf(context).width < 480 ? 16 : 36,
-      28,
-      MediaQuery.sizeOf(context).width < 480 ? 16 : 36,
-      32,
+      MediaQuery.sizeOf(context).width < 480 ? 16 : 24,
+      24,
+      MediaQuery.sizeOf(context).width < 480 ? 16 : 24,
+      24,
     );
 
 InputDecoration modelInputDecoration(
@@ -181,7 +182,7 @@ InputDecoration modelInputDecoration(
       suffixIcon: suffix,
       filled: true,
       fillColor: AppFlowyTheme.of(context).backgroundColorScheme.primary,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
@@ -213,7 +214,7 @@ Widget modelField(
   String? hint,
 }) =>
     Padding(
-      padding: const EdgeInsets.only(bottom: 26),
+      padding: const EdgeInsets.only(bottom: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -244,7 +245,7 @@ Widget modelField(
                 ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           DecoratedBox(
             decoration: modelSurface(context, radius: 10),
             child: input,
