@@ -1,5 +1,6 @@
 import 'package:appflowy/features/ai_internal/application/knowledge_model_service.dart';
 import 'package:appflowy/features/ai_internal/presentation/knowledge_model_widgets.dart';
+import 'package:appflowy/features/ai_internal/presentation/knowledge_model_form_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
@@ -11,10 +12,12 @@ class KnowledgeModelForm extends StatefulWidget {
     required this.onCancel,
     this.initial,
     this.initialType = KnowledgeModelType.chat,
+    this.models = const [],
   });
   final KnowledgeModelService service;
   final KnowledgeModel? initial;
   final KnowledgeModelType initialType;
+  final List<KnowledgeModel> models;
   final VoidCallback onSaved;
   final VoidCallback onCancel;
   @override
@@ -40,7 +43,10 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
   bool _saving = false;
   bool _obscureKey = true;
   bool _dimensionOverride = false;
-  bool _reasoning = false;
+  bool _reasoning = true;
+  // Temperature is not part of the WeKnora model parameter allowlist yet, so the
+  // slider stays local and is intentionally left out of the save payload.
+  double _temperature = 1.3;
   String? _error;
   int _generation = 0;
   KnowledgeModelProvider? get _provider =>
@@ -66,16 +72,20 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                 (params['spec'] as Map?)?['api'] == 'openai-completions'
             ? 'openai'
             : 'provider';
-    _context.text = '${params['context_window'] ?? 128000}';
-    _maxTokens.text = '${params['max_output_tokens'] ?? 8192}';
-    _dimension.text =
-        '${(params['embedding_parameters'] as Map?)?['dimension'] ?? ''}';
-    _truncate.text =
-        '${(params['embedding_parameters'] as Map?)?['truncate_prompt_tokens'] ?? 8192}';
+    _context.text = modelThousands(params['context_window'] ?? 128000);
+    _maxTokens.text = modelThousands(params['max_output_tokens'] ?? 8192);
+    _dimension.text = modelThousands(
+      (params['embedding_parameters'] as Map?)?['dimension'],
+    );
+    _truncate.text = modelThousands(
+      (params['embedding_parameters'] as Map?)?['truncate_prompt_tokens'] ??
+          8192,
+    );
     _dimensionOverride = (params['embedding_parameters']
             as Map?)?['supports_dimension_override'] ==
         true;
-    _reasoning = (params['spec'] as Map?)?['reasoning'] == true;
+    // Thinking support is the default; only an explicit false is preserved.
+    _reasoning = (params['spec'] as Map?)?['reasoning'] as bool? ?? true;
     _loadProviders();
   }
 
@@ -155,8 +165,8 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
   }
 
   String? _positive(String? value, {int max = 2000000}) {
-    final n = int.tryParse(value ?? '');
-    return n == null || n < 1 || n > max ? '请输入 1–$max 的整数' : null;
+    final n = modelNumber(value);
+    return n == null || n < 1 || n > max ? '请输入 1-$max 的整数' : null;
   }
 
   Future<void> _save() async {
@@ -172,8 +182,8 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
         if (_key.text.trim().isNotEmpty) 'api_key': _key.text.trim(),
         if (_chat) ...{
           'interface_type': _protocol == 'ollama' ? 'ollama' : 'openai',
-          'context_window': int.parse(_context.text),
-          'max_output_tokens': int.parse(_maxTokens.text),
+          'context_window': modelNumber(_context.text)!,
+          'max_output_tokens': modelNumber(_maxTokens.text)!,
           'supports_vision': _type == KnowledgeModelType.vision,
           'spec': {
             'api': _protocol == 'ollama'
@@ -182,14 +192,14 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                     ? _provider?.data['api'] ?? 'openai-completions'
                     : 'openai-completions',
             'reasoning': _reasoning,
-            'context_window': int.parse(_context.text),
-            'max_output_tokens': int.parse(_maxTokens.text),
+            'context_window': modelNumber(_context.text)!,
+            'max_output_tokens': modelNumber(_maxTokens.text)!,
           },
         },
         if (_type == KnowledgeModelType.embedding)
           'embedding_parameters': {
-            'dimension': int.parse(_dimension.text),
-            'truncate_prompt_tokens': int.parse(_truncate.text),
+            'dimension': modelNumber(_dimension.text)!,
+            'truncate_prompt_tokens': modelNumber(_truncate.text)!,
             'supports_dimension_override': _dimensionOverride,
           },
         if (_fields.isNotEmpty)
@@ -219,339 +229,394 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
     return Theme(
-      data: Theme.of(context).copyWith(
-        canvasColor: theme.backgroundColorScheme.primary,
-        focusColor: theme.textColorScheme.primary.withValues(alpha: .035),
-        highlightColor: theme.textColorScheme.primary.withValues(alpha: .035),
-        colorScheme:
-            Theme.of(context).colorScheme.copyWith(primary: modelAccent),
-      ),
+      data: modelControlsTheme(context),
       child: Form(
         key: _form,
-        child: SingleChildScrollView(
-          padding: modelPagePadding(context),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: '返回模型列表',
-                    onPressed: _saving ? null : widget.onCancel,
-                    icon: const Icon(Icons.arrow_back, size: 20),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: modelHeading(
-                      context,
-                      widget.initial == null ? '添加模型' : '编辑模型',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text('模型类型'),
-              const SizedBox(height: 8),
-              KnowledgeModelTypes(
-                selected: _type,
-                allowAll: false,
-                enabled: widget.initial == null && !_saving,
-                onSelected: (type) {
-                  setState(() {
-                    _type = type!;
-                    _providerId = 'generic';
-                    _protocol = 'openai';
-                    _key.clear();
-                    _url.clear();
-                    _name.clear();
-                  });
-                  _loadProviders();
-                },
-              ),
-              const SizedBox(height: 22),
-              if (_loading) const LinearProgressIndicator(),
-              if (!_loading) ...[
-                modelField(
-                  context,
-                  '服务商',
-                  DropdownButtonFormField<String>(
-                    initialValue: _providerId,
-                    isExpanded: true,
-                    elevation: 2,
-                    borderRadius: BorderRadius.circular(12),
-                    menuMaxHeight: 400,
-                    decoration: modelInputDecoration(context),
-                    itemHeight: 68,
-                    selectedItemBuilder: (context) => [
-                      for (final provider in _providerChoices)
-                        _providerRow(provider),
-                    ],
-                    items: [
-                      for (final provider in _providerChoices)
-                        DropdownMenuItem(
-                          value: provider.id,
-                          child: _providerRow(provider, menu: true),
-                        ),
-                    ],
-                    onChanged: _fixedEmbedding || _saving
-                        ? null
-                        : (value) => _changeProvider(value!),
-                  ),
-                  hint: '选择厂商预设，或使用自定义服务地址',
-                ),
-                if (_type != KnowledgeModelType.rerank &&
-                    _type != KnowledgeModelType.speech)
-                  modelField(
-                    context,
-                    '接口协议',
-                    DropdownButtonFormField<String>(
-                      initialValue: _protocol,
-                      isExpanded: true,
-                      decoration: modelInputDecoration(context),
-                      items: [
-                        if (_providerId != 'generic')
-                          const DropdownMenuItem(
-                            value: 'provider',
-                            child: Text('厂商原生协议'),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: modelPagePadding(context),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: '返回模型列表',
+                          onPressed: _saving ? null : widget.onCancel,
+                          icon: const Icon(Icons.arrow_back, size: 20),
+                          constraints: const BoxConstraints.tightFor(
+                            width: 28,
+                            height: 28,
                           ),
-                        const DropdownMenuItem(
-                          value: 'openai',
-                          child: Text('OpenAI 兼容协议'),
+                          padding: EdgeInsets.zero,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
-                        const DropdownMenuItem(
-                          value: 'ollama',
-                          child: Text('Ollama 本地服务'),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: modelHeading(
+                            context,
+                            widget.initial == null ? '添加模型' : '编辑模型',
+                          ),
                         ),
                       ],
-                      onChanged: _fixedEmbedding || _saving
-                          ? null
-                          : (v) => setState(() {
-                                _protocol = v!;
-                                if (v == 'ollama' && _url.text.isEmpty) {
-                                  _url.text = 'http://localhost:11434';
-                                }
-                              }),
                     ),
-                  ),
-                modelField(
-                  context,
-                  '接口地址',
-                  TextFormField(
-                    key: const ValueKey('model-url'),
-                    controller: _url,
-                    readOnly: _fixedEmbedding,
-                    decoration: modelInputDecoration(
-                      context,
-                      hint: 'https://api.example.com/v1',
-                    ),
-                    validator: (value) {
-                      final uri = Uri.tryParse(value?.trim() ?? '');
-                      return uri == null ||
-                              !['http', 'https'].contains(uri.scheme) ||
-                              uri.host.isEmpty
-                          ? '请输入有效的 HTTP 或 HTTPS 地址'
-                          : null;
-                    },
-                  ),
-                  hint: '地址须能被 WeKnora 服务端访问；localhost 指服务端本机。',
-                ),
-                modelField(
-                  context,
-                  _credentialLabel,
-                  TextFormField(
-                    key: const ValueKey('model-key'),
-                    controller: _key,
-                    obscureText: _obscureKey,
-                    enableSuggestions: false,
-                    autocorrect: false,
-                    decoration: modelInputDecoration(
-                      context,
-                      hint:
-                          widget.initial == null ? '输入 API Key' : '留空保留已保存的密钥',
-                      suffix: IconButton(
-                        tooltip: _obscureKey ? '显示密钥' : '隐藏密钥',
-                        onPressed: () =>
-                            setState(() => _obscureKey = !_obscureKey),
-                        icon: Icon(
-                          _obscureKey
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          size: 18,
-                        ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      '模型类型',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    validator: (value) => widget.initial == null &&
-                            _protocol != 'ollama' &&
-                            _providerId != 'generic' &&
-                            (value?.trim().isEmpty ?? true)
-                        ? '请输入访问凭据'
-                        : null,
-                  ),
-                ),
-                if ((_provider?.models(_type) ?? []).isNotEmpty)
-                  modelField(
-                    context,
-                    '厂商模型',
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      hint: const Text('选择预设，或在下方填写模型名称'),
-                      decoration: modelInputDecoration(context),
-                      items: [
-                        for (final model in _provider!.models(_type))
-                          DropdownMenuItem(
-                            value: model['id'] as String,
-                            child: Text(
-                              model['name'] as String? ?? model['id'] as String,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: _fixedEmbedding || _saving
-                          ? null
-                          : (id) => setState(() {
-                                _name.text = id!;
-                                final model = _provider!
-                                    .models(_type)
-                                    .firstWhere((m) => m['id'] == id);
-                                if ((model['dimension'] as num? ?? 0) > 0) {
-                                  _dimension.text = '${model['dimension']}';
-                                }
-                                if ((model['context_window'] as num? ?? 0) >
-                                    0) {
-                                  _context.text = '${model['context_window']}';
-                                }
-                                if ((model['max_output_tokens'] as num? ?? 0) >
-                                    0) {
-                                  _maxTokens.text =
-                                      '${model['max_output_tokens']}';
-                                }
-                                _reasoning = model['reasoning'] == true;
-                              }),
-                    ),
-                  ),
-                modelField(
-                  context,
-                  '模型名称',
-                  TextFormField(
-                    key: const ValueKey('model-name'),
-                    controller: _name,
-                    readOnly: _fixedEmbedding,
-                    decoration:
-                        modelInputDecoration(context, hint: '输入真实模型 ID'),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? '请输入模型名称'
-                        : null,
-                  ),
-                ),
-                modelField(
-                  context,
-                  '显示名称（可选）',
-                  TextFormField(
-                    controller: _displayName,
-                    decoration: modelInputDecoration(context, hint: '便于区分的名称'),
-                  ),
-                ),
-                for (final field in _fields) _extraField(field),
-                if (_chat) ...[
-                  _numbers([
-                    _number('上下文长度', _context),
-                    _number(
-                      'MAX tokens',
-                      _maxTokens,
-                      validator: (v) {
-                        final error = _positive(v);
-                        if (error != null) return error;
-                        return int.parse(v!) >
-                                (int.tryParse(_context.text) ?? 0)
-                            ? '不能超过上下文长度'
-                            : null;
+                    const SizedBox(height: 8),
+                    KnowledgeModelTypes(
+                      spread: true,
+                      models: widget.models,
+                      selected: _type,
+                      allowAll: false,
+                      enabled: widget.initial == null && !_saving,
+                      onSelected: (type) {
+                        setState(() {
+                          _type = type!;
+                          _providerId = 'generic';
+                          _protocol = 'openai';
+                          _key.clear();
+                          _url.clear();
+                          _name.clear();
+                        });
+                        _loadProviders();
                       },
                     ),
-                  ]),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('支持推理 / 思考程度'),
-                    value: _reasoning,
-                    onChanged: (v) => setState(() => _reasoning = v),
-                  ),
-                ],
-                if (_type == KnowledgeModelType.embedding) ...[
-                  _numbers([
-                    _number('向量维度', _dimension, max: 65536),
-                    _number('最大输入 tokens', _truncate),
-                  ]),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('支持指定输出维度'),
-                    value: _dimensionOverride,
-                    onChanged: _fixedEmbedding
-                        ? null
-                        : (v) => setState(() => _dimensionOverride = v),
-                  ),
-                ],
-                if (_type == KnowledgeModelType.rerank)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: Text('保存后，在“知识库使用设置”中选用此 ReRank 模型并设置返回数量。'),
-                  ),
-                if (_type == KnowledgeModelType.speech)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: Text('用于知识库音频内容的语音转写（ASR）。'),
-                  ),
-                if (_fixedEmbedding)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: Text('向量模型定义保持固定。需更换模型或维度时，请添加新模型并用于新知识库。'),
-                  ),
-              ],
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
+                    const SizedBox(height: 18),
+                    if (_loading) const LinearProgressIndicator(),
+                    if (!_loading) ...[
+                      modelField(
+                        context,
+                        '服务商',
+                        ModelSelect(
+                          key: const ValueKey('model-provider'),
+                          value: _providerId,
+                          selectedChild: _provider == null
+                              ? const Text('自定义（OpenAI 兼容接口）')
+                              : _providerRow(_provider!),
+                          entries: [
+                            for (final provider in _providerChoices)
+                              DropdownMenuEntry(
+                                value: provider.id,
+                                label: provider.label,
+                                labelWidget: _providerRow(provider, menu: true),
+                              ),
+                          ],
+                          onChanged: _fixedEmbedding || _saving
+                              ? null
+                              : (value) => _changeProvider(value!),
+                        ),
+                        hint: '选择已接入的供应商，或使用自定义配置',
+                      ),
+                      if (_type != KnowledgeModelType.rerank &&
+                          _type != KnowledgeModelType.speech)
+                        modelField(
+                          context,
+                          '接口协议',
+                          ModelSelect(
+                            key: const ValueKey('model-protocol'),
+                            value: _protocol,
+                            entries: [
+                              if (_providerId != 'generic')
+                                const DropdownMenuEntry(
+                                  value: 'provider',
+                                  label: '厂商原生协议',
+                                ),
+                              const DropdownMenuEntry(
+                                value: 'openai',
+                                label: 'OpenAI 兼容协议',
+                              ),
+                              const DropdownMenuEntry(
+                                value: 'ollama',
+                                label: 'Ollama 本地服务',
+                              ),
+                            ],
+                            onChanged: _fixedEmbedding || _saving
+                                ? null
+                                : (v) => setState(() {
+                                      _protocol = v!;
+                                      if (v == 'ollama' && _url.text.isEmpty) {
+                                        _url.text = 'http://localhost:11434';
+                                      }
+                                    }),
+                          ),
+                          hint: '决定请求格式和错误校验方式：Ollama、vllm 通常选择 OpenAI 兼容协议',
+                        ),
+                      modelField(
+                        context,
+                        '接口地址',
+                        TextFormField(
+                          key: const ValueKey('model-url'),
+                          controller: _url,
+                          readOnly: _fixedEmbedding,
+                          decoration: modelInputDecoration(
+                            context,
+                            hint: '例如：http://api.openai.com/v1',
+                          ),
+                          validator: (value) {
+                            final uri = Uri.tryParse(value?.trim() ?? '');
+                            return uri == null ||
+                                    !['http', 'https'].contains(uri.scheme) ||
+                                    uri.host.isEmpty
+                                ? '请输入有效的 HTTP 或 HTTPS 地址'
+                                : null;
+                          },
+                        ),
+                        hint: '格式：http://域名/路径，需包含完整的请求路径',
+                      ),
+                      modelField(
+                        context,
+                        _credentialLabel,
+                        TextFormField(
+                          key: const ValueKey('model-key'),
+                          controller: _key,
+                          obscureText: _obscureKey,
+                          enableSuggestions: false,
+                          autocorrect: false,
+                          decoration: modelInputDecoration(
+                            context,
+                            hint: widget.initial == null
+                                ? '输入 API Key'
+                                : '留空保留已保存的密钥',
+                            suffix: IconButton(
+                              constraints: const BoxConstraints.tightFor(
+                                width: 32,
+                                height: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              tooltip: _obscureKey ? '显示密钥' : '隐藏密钥',
+                              onPressed: () =>
+                                  setState(() => _obscureKey = !_obscureKey),
+                              icon: Icon(
+                                _obscureKey
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                          validator: (value) => widget.initial == null &&
+                                  _protocol != 'ollama' &&
+                                  _providerId != 'generic' &&
+                                  (value?.trim().isEmpty ?? true)
+                              ? '请输入访问凭据'
+                              : null,
+                        ),
+                        hint: _protocol == 'ollama' || _providerId == 'generic'
+                            ? '格式：以 sk- 开头的字符串，本地模型无 Key 时可填写 ollama-local'
+                            : '输入服务商提供的访问凭据',
+                      ),
+                      if ((_provider?.models(_type) ?? []).isNotEmpty)
+                        modelField(
+                          context,
+                          '厂商模型',
+                          ModelSelect(
+                            key: const ValueKey('model-preset'),
+                            value: _provider!
+                                    .models(_type)
+                                    .any((m) => m['id'] == _name.text)
+                                ? _name.text
+                                : null,
+                            hint: '选择预设，或在下方填写模型名称',
+                            entries: [
+                              for (final model in _provider!.models(_type))
+                                DropdownMenuEntry(
+                                  value: model['id'] as String,
+                                  label: model['name'] as String? ??
+                                      model['id'] as String,
+                                ),
+                            ],
+                            onChanged: _fixedEmbedding || _saving
+                                ? null
+                                : (id) => setState(() {
+                                      _name.text = id!;
+                                      final model = _provider!
+                                          .models(_type)
+                                          .firstWhere((m) => m['id'] == id);
+                                      if ((model['dimension'] as num? ?? 0) >
+                                          0) {
+                                        _dimension.text =
+                                            modelThousands(model['dimension']);
+                                      }
+                                      if ((model['context_window'] as num? ??
+                                              0) >
+                                          0) {
+                                        _context.text = modelThousands(
+                                          model['context_window'],
+                                        );
+                                      }
+                                      if ((model['max_output_tokens'] as num? ??
+                                              0) >
+                                          0) {
+                                        _maxTokens.text = modelThousands(
+                                          model['max_output_tokens'],
+                                        );
+                                      }
+                                      _reasoning = model['reasoning'] != false;
+                                    }),
+                          ),
+                        ),
+                      modelField(
+                        context,
+                        '模型名称',
+                        TextFormField(
+                          key: const ValueKey('model-name'),
+                          controller: _name,
+                          readOnly: _fixedEmbedding,
+                          decoration:
+                              modelInputDecoration(context, hint: '输入你的模型名称'),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                                  ? '请输入模型名称'
+                                  : null,
+                        ),
+                      ),
+                      for (final field in _fields) _extraField(field),
+                      if (_chat) ...[
+                        _numbers([
+                          ModelTokenControl(
+                            id: 'model-context',
+                            label: '上下文长度',
+                            controller: _context,
+                            hint: '正整数，范围 1-2,000,000',
+                            validator: _positive,
+                          ),
+                          ModelTokenControl(
+                            id: 'model-output',
+                            label: 'MAX tokens',
+                            controller: _maxTokens,
+                            hint: '正整数，不能超过上下文长度',
+                            validator: (v) {
+                              final error = _positive(v);
+                              if (error != null) return error;
+                              return modelNumber(v)! >
+                                      (modelNumber(_context.text) ?? 0)
+                                  ? '不能超过上下文长度'
+                                  : null;
+                            },
+                          ),
+                          ModelSliderControl(
+                            id: 'model-temperature',
+                            label: '温度',
+                            valueLabel:
+                                '${_temperature.toStringAsFixed(1)} 温度',
+                            value: _temperature,
+                            min: 0,
+                            max: 2,
+                            divisions: 20,
+                            onChanged: _saving
+                                ? null
+                                : (v) => setState(() => _temperature = v),
+                            hint: '0~2 的小数，越低越稳定',
+                          ),
+                        ]),
+                      ],
+                      if (_type == KnowledgeModelType.embedding) ...[
+                        _numbers([
+                          _number('向量维度', _dimension, max: 65536),
+                          _number('最大输入 tokens', _truncate),
+                        ]),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('支持指定输出维度'),
+                          value: _dimensionOverride,
+                          onChanged: _fixedEmbedding
+                              ? null
+                              : (v) => setState(() => _dimensionOverride = v),
+                        ),
+                      ],
+                      if (_type == KnowledgeModelType.rerank)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 20),
+                          child: Text('保存后，在“知识库使用设置”中选用此 ReRank 模型并设置返回数量。'),
+                        ),
+                      if (_type == KnowledgeModelType.speech)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 20),
+                          child: Text('用于知识库音频内容的语音转写（ASR）。'),
+                        ),
+                      if (_fixedEmbedding)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 20),
+                          child: Text('向量模型定义保持固定。需更换模型或维度时，请添加新模型并用于新知识库。'),
+                        ),
+                    ],
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                  ],
                 ),
-              const SizedBox(height: 12),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton(
-                    onPressed: _saving ? null : widget.onCancel,
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: modelAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: _saving ||
-                            _loading ||
-                            (_providers.isEmpty && _error != null)
-                        ? null
-                        : _save,
-                    child: Text(_saving ? '保存中…' : '保存'),
-                  ),
-                  if (_error != null && _providers.isEmpty)
-                    TextButton(
-                      onPressed: _loadProviders,
-                      child: const Text('重试'),
-                    ),
-                ],
               ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: modelPagePadding(context).copyWith(top: 8, bottom: 20),
+              child: _actions(),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  Widget _actions() => Align(
+        alignment: Alignment.centerRight,
+        child: Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 24,
+          runSpacing: 8,
+          children: [
+            OutlinedButton(
+              onPressed: _saving ? null : widget.onCancel,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(86, 32),
+                tapTargetSize: MediaQuery.sizeOf(context).width >= 480
+                    ? MaterialTapTargetSize.shrinkWrap
+                    : MaterialTapTargetSize.padded,
+              ),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(86, 32),
+                tapTargetSize: MediaQuery.sizeOf(context).width >= 480
+                    ? MaterialTapTargetSize.shrinkWrap
+                    : MaterialTapTargetSize.padded,
+              ),
+              onPressed:
+                  _saving || _loading || (_providers.isEmpty && _error != null)
+                      ? null
+                      : _save,
+              child: Text(_saving ? '保存中…' : '保存'),
+            ),
+            if (_error != null && _providers.isEmpty)
+              TextButton(
+                onPressed: _loadProviders,
+                child: const Text('重试'),
+              ),
+          ],
+        ),
+      );
 
   List<KnowledgeModelProvider> get _providerChoices => [
         if (!_providers.any((p) => p.id == 'generic'))
@@ -567,7 +632,9 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
         provider.models(_type).take(3).map((m) => m['id']).join('、');
     final description = examples.isNotEmpty
         ? examples
-        : _localized(provider.data, 'description');
+        : provider.id == 'generic'
+            ? '任意 OpenAI 兼容接口（vLLM、SGLang、Xinference、Ollama 等）'
+            : _localized(provider.data, 'description');
     return Row(
       children: [
         KnowledgeProviderIcon(provider: provider),
@@ -582,7 +649,10 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                  height: 1.4,
                   color: menu && selected
                       ? modelAccent
                       : theme.textColorScheme.primary,
@@ -595,7 +665,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: theme.textColorScheme.primary.withValues(alpha: .48),
                   ),
                 ),
@@ -603,10 +673,6 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
             ],
           ),
         ),
-        if (menu && selected) ...[
-          const SizedBox(width: 10),
-          const Icon(Icons.check, size: 18, color: modelAccent),
-        ],
       ],
     );
   }
@@ -618,7 +684,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
         return _localized(Map<String, dynamic>.from(label as Map), 'label');
       }
     }
-    return _providerId == 'generic' ? 'API Key（可选）' : 'API Key';
+    return 'API Key';
   }
 
   Widget _number(
@@ -634,18 +700,25 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
           controller: controller,
           readOnly: _fixedEmbedding,
           keyboardType: TextInputType.number,
+          inputFormatters: const [ModelThousandsFormatter()],
           decoration: modelInputDecoration(context),
           validator: validator ?? (v) => _positive(v, max: max),
         ),
       );
+  // 168px is the narrowest card that still fits a five-character label next to
+  // the 86px grouped value box, so the default 1280px window keeps three cards
+  // side by side instead of using the slightly wider 12px padding layout.
   Widget _numbers(List<Widget> children) => LayoutBuilder(
-        builder: (context, c) => c.maxWidth < 480
+        builder: (context, c) => c.maxWidth <
+                (children.length * 168 + (children.length - 1) * 10) *
+                    MediaQuery.textScalerOf(context).scale(12) /
+                    12
             ? Column(children: children)
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (var i = 0; i < children.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 12),
+                    if (i > 0) const SizedBox(width: 10),
                     Expanded(child: children[i]),
                   ],
                 ],
@@ -667,19 +740,18 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
       return modelField(
         context,
         label,
-        DropdownButtonFormField<String>(
-          isExpanded: true,
-          initialValue: options.any((o) => o['value'] == controller.text)
+        ModelSelect(
+          key: ValueKey('model-extra-${field['key']}'),
+          value: options.any((o) => o['value'] == controller.text)
               ? controller.text
               : null,
-          items: [
+          entries: [
             for (final o in options)
-              DropdownMenuItem(
+              DropdownMenuEntry(
                 value: o['value'] as String,
-                child: Text(o['label'] as String? ?? o['value'] as String),
+                label: o['label'] as String? ?? o['value'] as String,
               ),
           ],
-          decoration: modelInputDecoration(context),
           onChanged: (v) => controller.text = v ?? '',
         ),
       );

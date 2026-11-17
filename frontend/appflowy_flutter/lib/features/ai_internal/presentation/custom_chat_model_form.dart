@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/application/internal_ai_service.dart';
+import 'package:appflowy/features/ai_internal/presentation/knowledge_model_widgets.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -216,7 +217,7 @@ class _CustomChatModelFormState extends State<CustomChatModelForm> {
           const VSpace(12),
           FlowyText(
             _testMessage!,
-            fontSize: 13,
+            fontSize: 12,
             color: _testOk
                 ? AppFlowyTheme.of(context).textColorScheme.primary
                 : Theme.of(context).colorScheme.error,
@@ -259,11 +260,7 @@ class _CustomChatModelFormState extends State<CustomChatModelForm> {
         const VSpace(6),
         TextField(
           controller: controller,
-          decoration: InputDecoration(
-            hintText: hint,
-            border: const OutlineInputBorder(),
-            isDense: true,
-          ),
+          decoration: modelInputDecoration(context, hint: hint),
         ),
       ],
     );
@@ -282,11 +279,10 @@ class _CustomChatModelFormState extends State<CustomChatModelForm> {
         TextField(
           controller: _apiKeyController,
           obscureText: _obscureKey,
-          decoration: InputDecoration(
-            hintText: 'sk-…',
-            border: const OutlineInputBorder(),
-            isDense: true,
-            suffixIcon: IconButton(
+          decoration: modelInputDecoration(
+            context,
+            hint: 'sk-…',
+            suffix: IconButton(
               icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
               onPressed: () => setState(() => _obscureKey = !_obscureKey),
             ),
@@ -314,7 +310,7 @@ class _CustomChatModelFormState extends State<CustomChatModelForm> {
         children: [
           FlowyText(
             '关于写操作',
-            fontSize: 13,
+            fontSize: 12,
             color: AppFlowyTheme.of(context).textColorScheme.primary,
           ),
           const VSpace(4),

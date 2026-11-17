@@ -137,6 +137,9 @@ class _KnowledgeModelBindingsState extends State<KnowledgeModelBindings> {
                   DropdownButtonFormField<String>(
                     initialValue: _baseId,
                     isExpanded: true,
+                    elevation: 2,
+                    borderRadius: BorderRadius.circular(12),
+                    menuMaxHeight: 320,
                     decoration: modelInputDecoration(context),
                     items: [
                       for (final base in _bases)
@@ -196,10 +199,6 @@ class _KnowledgeModelBindingsState extends State<KnowledgeModelBindings> {
                   ),
                   if (_settings != null)
                     FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: modelAccent,
-                        foregroundColor: Colors.white,
-                      ),
                       onPressed: _loading || _saving ? null : _save,
                       child: Text(_saving ? '保存中…' : '保存使用设置'),
                     ),
@@ -225,6 +224,9 @@ class _KnowledgeModelBindingsState extends State<KnowledgeModelBindings> {
         key: ValueKey('binding-$field'),
         initialValue: selected,
         isExpanded: true,
+        elevation: 2,
+        borderRadius: BorderRadius.circular(12),
+        menuMaxHeight: 320,
         decoration: modelInputDecoration(context),
         items: [
           if (type != KnowledgeModelType.embedding || selected.isEmpty)

@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:appflowy/features/ai_internal/application/knowledge_model_service.dart';
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
+import 'package:appflowy/features/ai_internal/presentation/knowledge_model_widgets.dart';
+import 'package:appflowy/features/ai_internal/presentation/knowledge_model_form_controls.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -18,6 +21,8 @@ class ModelApiFixture {
   bool canManage = true;
   final deleted = <String>[];
   Map<String, String> providerIcons = {};
+  List<Map<String, dynamic>> additionalProviders = [];
+  List<Map<String, dynamic>>? aliyunModels;
   static const workspace = '11111111-1111-4111-8111-111111111111';
   static const base = '22222222-2222-4222-8222-222222222222';
   List<Map<String, dynamic>> get models => [
@@ -115,21 +120,22 @@ class ModelApiFixture {
                     frontendType:
                         'https://dashscope.aliyuncs.com/compatible-mode/v1',
                   },
-                  'models': [
-                    {
-                      'id': type == 'Embedding'
-                          ? 'text-embedding-v4'
-                          : 'gte-rerank-v2',
-                      'name': type == 'Embedding' ? '通义向量' : '通义重排',
-                      if (type == 'Embedding') 'dimension': 1024,
-                      'type': frontendType,
-                    },
-                    {
-                      'id': 'must-not-show-chat',
-                      'name': '不应显示的对话模型',
-                      'type': 'chat',
-                    },
-                  ],
+                  'models': aliyunModels ??
+                      [
+                        {
+                          'id': type == 'Embedding'
+                              ? 'text-embedding-v4'
+                              : 'gte-rerank-v2',
+                          'name': type == 'Embedding' ? '通义向量' : '通义重排',
+                          if (type == 'Embedding') 'dimension': 1024,
+                          'type': frontendType,
+                        },
+                        {
+                          'id': 'must-not-show-chat',
+                          'name': '不应显示的对话模型',
+                          'type': 'chat',
+                        },
+                      ],
                   'extraFields': [
                     {
                       'key': 'embedding_only',
@@ -145,6 +151,7 @@ class ModelApiFixture {
                     },
                   ],
                 },
+                ...additionalProviders,
               ],
             };
           case 'model_save':
@@ -193,6 +200,7 @@ Future<void> pumpModelManager(
   double width = 640,
   bool dark = false,
   double scale = 1,
+  ThemeData? materialTheme,
 }) async {
   tester.view.devicePixelRatio = 1;
   tester.view.physicalSize = Size(width, 800);
@@ -203,7 +211,8 @@ Future<void> pumpModelManager(
       data:
           dark ? AppFlowyDefaultTheme().dark() : AppFlowyDefaultTheme().light(),
       child: MaterialApp(
-        theme: ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
+        theme: materialTheme ??
+            ThemeData(brightness: dark ? Brightness.dark : Brightness.light),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),
@@ -222,6 +231,77 @@ void main() {
       {'ai_internal.model': 'existing-chat'},
     ),
   );
+  for (final dark in [false, true]) {
+    testWidgets(
+        'model controls use neutral focus and hover in ${dark ? 'dark' : 'light'} mode',
+        (tester) async {
+      final fixture = ModelApiFixture();
+      addTearDown(fixture.service.close);
+      final material =
+          ThemeData(brightness: dark ? Brightness.dark : Brightness.light);
+      await pumpModelManager(
+        tester,
+        fixture,
+        dark: dark,
+        materialTheme: material.copyWith(
+          colorScheme: material.colorScheme.copyWith(primary: modelAccent),
+          hoverColor: modelAccent,
+          focusColor: modelAccent,
+        ),
+      );
+      expect(tester.widget<Text>(find.text('DeepSeek')).style!.fontSize, 14);
+      expect(
+        Theme.of(tester.element(find.text('DeepSeek')))
+            .textTheme
+            .bodyLarge!
+            .fontSize,
+        14,
+      );
+      await tester.tap(find.text('添加模型'));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('model-provider'));
+      final theme = Theme.of(tester.element(field));
+      expect(theme.textTheme.bodyLarge!.fontSize, 14);
+      expect(theme.colorScheme.primary, isNot(modelAccent));
+      expect(theme.hoverColor.a, lessThan(.1));
+      expect(theme.splashFactory, NoSplash.splashFactory);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      final option = find.text('阿里云 DashScope').last;
+      expect(Theme.of(tester.element(option)).hoverColor, theme.hoverColor);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('阿里云 DashScope'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('model-url')));
+      await tester.pumpAndSettle();
+      final decoration = tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('model-url')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .decoration!;
+      expect(
+        (decoration.focusedBorder! as OutlineInputBorder).borderSide.color,
+        isNot(modelAccent),
+      );
+      expect(
+        (decoration.focusedBorder! as OutlineInputBorder).borderSide.width,
+        1,
+      );
+      await tester.ensureVisible(find.text('保存'));
+      final button = tester.element(find.byType(FilledButton));
+      final style = Theme.of(button).filledButtonTheme.style!;
+      expect(style.backgroundColor!.resolve({}), modelAccent);
+      expect(
+        style.backgroundColor!.resolve({WidgetState.disabled})!.a,
+        lessThan(1),
+      );
+      expect(style.foregroundColor!.resolve({}), Colors.white);
+      expect(tester.takeException(), isNull);
+    });
+  }
   test('model service uses the authenticated workspace-scoped Cloud API',
       () async {
     final fixture = ModelApiFixture();
@@ -229,6 +309,70 @@ void main() {
     final models = await fixture.service.list();
     expect(models.first.label, 'DeepSeek');
     expect(fixture.service.canManage, isTrue);
+  });
+  testWidgets(
+      'provider panel stays below its field and supports keyboard selection',
+      (tester) async {
+    final fixture = ModelApiFixture();
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    await tester.tap(find.text('添加模型'));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('model-provider'));
+    final anchor = tester.getRect(field);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    final option = find.byKey(const ValueKey('model-option-aliyun'));
+    final rect = tester.getRect(option);
+    expect(rect.top, greaterThan(anchor.bottom));
+    expect(rect.left, greaterThanOrEqualTo(anchor.left));
+    expect(rect.right, lessThanOrEqualTo(anchor.right));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(option, findsNothing);
+    expect(find.text('阿里云 DashScope'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('token sliders and exact inputs persist validated model limits',
+      (tester) async {
+    final fixture = ModelApiFixture();
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    await tester.tap(find.text('添加模型'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('model-url')),
+      'https://chat.example/v1',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('model-name')));
+    await tester.enterText(
+      find.byKey(const ValueKey('model-name')),
+      'chat-model',
+    );
+    final contextSlider = find.byKey(const ValueKey('model-context-slider'));
+    await tester.ensureVisible(contextSlider);
+    tester.widget<Slider>(contextSlider).onChanged!(123456);
+    await tester.pumpAndSettle();
+    expect(find.text('123,456'), findsOneWidget);
+    final output = find.byKey(const ValueKey('model-output-value'));
+    await tester.ensureVisible(output);
+    await tester.enterText(output, '123457');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('不能超过上下文长度'), findsOneWidget);
+    expect(fixture.saved, isNull);
+    await tester.ensureVisible(output);
+    await tester.enterText(output, '6543');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(fixture.saved!['parameters']['context_window'], 123456);
+    expect(fixture.saved!['parameters']['max_output_tokens'], 6543);
+    expect(fixture.saved!['parameters'].containsKey('temperature'), isFalse);
+    expect(tester.takeException(), isNull);
   });
   testWidgets(
       'categories show only their models and type-specific provider fields',
@@ -247,14 +391,14 @@ void main() {
     expect(fixture.requests.last.$2['type'], 'Embedding');
     expect(find.text('向量维度'), findsOneWidget);
     expect(find.text('上下文长度'), findsNothing);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.byKey(const ValueKey('model-provider')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('阿里云 DashScope').last);
     await tester.pumpAndSettle();
     expect(find.text('向量专用字段'), findsOneWidget);
     expect(find.text('重排专用字段'), findsNothing);
     await tester.ensureVisible(find.text('厂商模型'));
-    await tester.tap(find.byType(DropdownButtonFormField<String>).last);
+    await tester.tap(find.byKey(const ValueKey('model-preset')));
     await tester.pumpAndSettle();
     expect(find.text('不应显示的对话模型'), findsNothing);
     await tester.tap(find.text('通义向量').last);
@@ -375,7 +519,36 @@ void main() {
     expect(params['context_window'], 128000);
     expect(params['max_output_tokens'], 8192);
     expect(params['spec']['api'], 'openai-completions');
+    expect(params['spec']['reasoning'], isTrue);
     expect(params.containsKey('embedding_parameters'), isFalse);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'temperature card stays local and is never written to model parameters',
+      (tester) async {
+    final fixture = ModelApiFixture();
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    await tester.tap(find.text('添加模型'));
+    await tester.pumpAndSettle();
+    final slider = find.byKey(const ValueKey('model-temperature-slider'));
+    expect(find.text('1.3 温度'), findsOneWidget);
+    await tester.ensureVisible(slider);
+    tester.widget<Slider>(slider).onChanged!(1.8);
+    await tester.pumpAndSettle();
+    expect(find.text('1.8 温度'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('model-url')),
+      'https://chat.example/v1',
+    );
+    await tester.ensureVisible(find.byKey(const ValueKey('model-name')));
+    await tester.enterText(find.byKey(const ValueKey('model-name')), 'my-chat');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    final params = fixture.saved!['parameters'] as Map;
+    expect(params.containsKey('temperature'), isFalse);
+    expect((params['spec'] as Map).containsKey('temperature'), isFalse);
     expect(tester.takeException(), isNull);
   });
   testWidgets(

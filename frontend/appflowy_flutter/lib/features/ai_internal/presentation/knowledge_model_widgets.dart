@@ -7,6 +7,152 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 const modelAccent = Color(0xFFFF3800);
+
+ThemeData modelControlsTheme(BuildContext context) {
+  final base = Theme.of(context);
+  final appTheme = AppFlowyTheme.of(context);
+  final text = appTheme.textColorScheme.primary;
+  final surface = appTheme.backgroundColorScheme.primary;
+  final feedback = text.withValues(alpha: .045);
+  final border = text.withValues(alpha: .14);
+  final button = ButtonStyle(
+    foregroundColor: WidgetStateProperty.resolveWith(
+      (states) => text.withValues(
+        alpha: states.contains(WidgetState.disabled) ? .35 : 1,
+      ),
+    ),
+    overlayColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.pressed)
+          ? text.withValues(alpha: .08)
+          : feedback,
+    ),
+    side: WidgetStateProperty.resolveWith(
+      (states) => BorderSide(
+        color: states.contains(WidgetState.focused)
+            ? text.withValues(alpha: .5)
+            : border,
+      ),
+    ),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    ),
+    minimumSize: const WidgetStatePropertyAll(Size(0, 34)),
+    elevation: const WidgetStatePropertyAll(0),
+    textStyle: WidgetStatePropertyAll(
+      DefaultTextStyle.of(context).style.copyWith(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+    ),
+    splashFactory: NoSplash.splashFactory,
+  );
+  return base.copyWith(
+    textTheme: base.textTheme.copyWith(
+      bodyLarge: base.textTheme.bodyLarge?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        letterSpacing: 0,
+        height: 1.4,
+        color: text,
+      ),
+      bodyMedium: base.textTheme.bodyMedium?.copyWith(
+        fontSize: 14,
+        letterSpacing: 0,
+        height: 1.4,
+        color: text,
+      ),
+      bodySmall: base.textTheme.bodySmall?.copyWith(
+        fontSize: 12,
+        letterSpacing: 0,
+        height: 1.4,
+        color: text.withValues(alpha: .56),
+      ),
+      titleLarge:
+          base.textTheme.titleLarge?.copyWith(fontSize: 24),
+      titleMedium:
+          base.textTheme.titleMedium?.copyWith(fontSize: 16),
+      titleSmall:
+          base.textTheme.titleSmall?.copyWith(fontSize: 14),
+      labelLarge: base.textTheme.labelLarge?.copyWith(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 0,
+      ),
+    ),
+    canvasColor: surface,
+    hoverColor: feedback,
+    focusColor: text.withValues(alpha: .07),
+    highlightColor: Colors.transparent,
+    splashColor: Colors.transparent,
+    splashFactory: NoSplash.splashFactory,
+    colorScheme: base.colorScheme.copyWith(
+      primary: text,
+      onPrimary: surface,
+      primaryContainer: feedback,
+      onPrimaryContainer: text,
+      secondary: text,
+      onSecondary: surface,
+      secondaryContainer: feedback,
+      onSecondaryContainer: text,
+      surface: surface,
+      onSurface: text,
+      surfaceTint: Colors.transparent,
+      outline: border,
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: button.copyWith(
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled)
+              ? modelAccent.withValues(alpha: .38)
+              : modelAccent,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => Colors.white.withValues(
+            alpha: states.contains(WidgetState.disabled) ? .78 : 1,
+          ),
+        ),
+        overlayColor: const WidgetStatePropertyAll(Color(0x1FFFFFFF)),
+        side: const WidgetStatePropertyAll(BorderSide.none),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: button),
+    textButtonTheme: TextButtonThemeData(
+      style: button.copyWith(
+        side: const WidgetStatePropertyAll(BorderSide.none),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: ButtonStyle(
+        foregroundColor:
+            WidgetStatePropertyAll(appTheme.iconColorScheme.secondary),
+        overlayColor: WidgetStatePropertyAll(feedback),
+        splashFactory: NoSplash.splashFactory,
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      overlayColor: WidgetStatePropertyAll(feedback),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => text.withValues(
+          alpha: states.contains(WidgetState.selected) ? .6 : .1,
+        ),
+      ),
+      thumbColor: WidgetStatePropertyAll(surface),
+      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: text,
+      selectionColor: text.withValues(alpha: .14),
+      selectionHandleColor: text,
+    ),
+  );
+}
+
 IconData knowledgeModelIcon(KnowledgeModelType? type) => switch (type) {
       null => Symbols.grid_view,
       KnowledgeModelType.chat => Symbols.chat_bubble,
@@ -30,8 +176,10 @@ String modelError(Object error, {bool deleting = false}) => switch (error) {
 Widget modelHeading(BuildContext context, String text) => Text(
       text,
       style: TextStyle(
-        fontSize: 20,
+        fontSize: Theme.of(context).textTheme.titleLarge?.fontSize ?? 24,
         fontWeight: FontWeight.w600,
+        height: 1.35,
+        letterSpacing: 0,
         color: AppFlowyTheme.of(context).textColorScheme.primary,
       ),
     );
@@ -109,7 +257,7 @@ class KnowledgeModelTypes extends StatelessWidget {
                         ? theme.textColorScheme.primary.withValues(alpha: .68)
                         : theme.textColorScheme.secondary,
                     textStyle: DefaultTextStyle.of(context).style,
-                    minimumSize: const Size(0, 28),
+                    minimumSize: const Size(0, 26),
                     tapTargetSize: MediaQuery.sizeOf(context).width >= 480
                         ? MaterialTapTargetSize.shrinkWrap
                         : MaterialTapTargetSize.padded,
@@ -130,7 +278,11 @@ class KnowledgeModelTypes extends StatelessWidget {
                   ),
                   label: Text(
                     '${type?.label ?? '全部'}${models == null ? '' : ' (${models!.where((m) => type == null || m.type == type).length})'}',
-                    style: const TextStyle(fontSize: 12),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
                   ),
                 ),
               ),
@@ -141,7 +293,7 @@ class KnowledgeModelTypes extends StatelessWidget {
   }
 }
 
-BoxDecoration modelSurface(BuildContext context, {double radius = 14}) {
+BoxDecoration modelSurface(BuildContext context, {double radius = 12}) {
   final theme = AppFlowyTheme.of(context);
   final dark = Theme.of(context).brightness == Brightness.dark;
   return BoxDecoration(
@@ -152,13 +304,13 @@ BoxDecoration modelSurface(BuildContext context, {double radius = 14}) {
     ),
     boxShadow: [
       BoxShadow(
-        color: Colors.black.withValues(alpha: dark ? .14 : .035),
-        blurRadius: 18,
-        offset: const Offset(0, 4),
+        color: Colors.black.withValues(alpha: dark ? .16 : .032),
+        blurRadius: 10,
+        offset: const Offset(0, 3),
       ),
       BoxShadow(
-        color: Colors.black.withValues(alpha: dark ? .08 : .018),
-        blurRadius: 4,
+        color: Colors.black.withValues(alpha: dark ? .08 : .025),
+        blurRadius: 3,
         offset: const Offset(0, 1),
       ),
     ],
@@ -166,10 +318,39 @@ BoxDecoration modelSurface(BuildContext context, {double radius = 14}) {
 }
 
 EdgeInsets modelPagePadding(BuildContext context) => EdgeInsets.fromLTRB(
-      MediaQuery.sizeOf(context).width < 480 ? 16 : 24,
+      MediaQuery.sizeOf(context).width < 480 ? 16 : 28,
       24,
-      MediaQuery.sizeOf(context).width < 480 ? 16 : 24,
+      MediaQuery.sizeOf(context).width < 480 ? 16 : 28,
       24,
+    );
+
+// Field styling follows the model settings design: 0.5px #E9E9E9 inner border
+// and a single soft shadow, while dark mode derives the border from the text.
+Color modelFieldBorder(BuildContext context) {
+  final theme = AppFlowyTheme.of(context);
+  return Theme.of(context).brightness == Brightness.dark
+      ? theme.textColorScheme.primary.withValues(alpha: .12)
+      : const Color(0xFFE9E9E9);
+}
+
+/// The design asks for 0.5pt, which only survives at 2x. On 1x screens a half
+/// pixel border antialiases to near-white, so it needs a full pixel to stay
+/// visible at the same visual weight.
+double modelFieldBorderWidth(BuildContext context) =>
+    MediaQuery.devicePixelRatioOf(context) >= 2 ? .5 : 1;
+
+BoxDecoration modelFieldSurface(BuildContext context) => BoxDecoration(
+      color: AppFlowyTheme.of(context).backgroundColorScheme.primary,
+      borderRadius: BorderRadius.circular(10),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(
+            alpha: Theme.of(context).brightness == Brightness.dark ? .18 : .05,
+          ),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
     );
 
 InputDecoration modelInputDecoration(
@@ -179,31 +360,46 @@ InputDecoration modelInputDecoration(
 }) =>
     InputDecoration(
       hintText: hint,
+      hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 12,
+            color: AppFlowyTheme.of(context)
+                .textColorScheme
+                .primary
+                .withValues(alpha: .48),
+          ),
       suffixIcon: suffix,
+      suffixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 34),
+      isDense: true,
       filled: true,
+      hoverColor: AppFlowyTheme.of(context)
+          .textColorScheme
+          .primary
+          .withValues(alpha: .025),
+      focusColor: Colors.transparent,
       fillColor: AppFlowyTheme.of(context).backgroundColorScheme.primary,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: AppFlowyTheme.of(context)
-              .textColorScheme
-              .primary
-              .withValues(alpha: .055),
+          color: modelFieldBorder(context),
+          width: modelFieldBorderWidth(context),
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: AppFlowyTheme.of(context)
-              .textColorScheme
-              .primary
-              .withValues(alpha: .055),
+          color: modelFieldBorder(context),
+          width: modelFieldBorderWidth(context),
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: modelAccent),
+        borderSide: BorderSide(
+          color: AppFlowyTheme.of(context)
+              .textColorScheme
+              .primary
+              .withValues(alpha: .45),
+        ),
       ),
     );
 
@@ -226,8 +422,11 @@ Widget modelField(
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontSize:
+                      Theme.of(context).textTheme.bodyMedium?.fontSize ?? 13,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4,
+                  letterSpacing: 0,
                   color: AppFlowyTheme.of(context).textColorScheme.primary,
                 ),
               ),
@@ -235,7 +434,8 @@ Widget modelField(
                 Text(
                   hint,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize:
+                        Theme.of(context).textTheme.bodySmall?.fontSize ?? 12,
                     height: 1.5,
                     color: AppFlowyTheme.of(context)
                         .textColorScheme
@@ -245,9 +445,9 @@ Widget modelField(
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           DecoratedBox(
-            decoration: modelSurface(context, radius: 10),
+            decoration: modelFieldSurface(context),
             child: input,
           ),
         ],

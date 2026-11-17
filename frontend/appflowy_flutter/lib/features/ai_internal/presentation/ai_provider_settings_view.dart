@@ -70,7 +70,21 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+        data: modelControlsTheme(context),
+        child: DefaultTextStyle.merge(
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            letterSpacing: 0,
+            height: 1.4,
+            color: AppFlowyTheme.of(context).textColorScheme.primary,
+          ),
+          child: Builder(builder: _build),
+        ),
+      );
+
+  Widget _build(BuildContext context) {
     if (widget.onSaved != null) {
       return CustomChatModelForm(
         onSaved: widget.onSaved,
@@ -86,6 +100,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     }
     if (_editing) {
       return KnowledgeModelForm(
+        models: _models,
         service: _service!,
         initial: _initial,
         initialType: _filter ?? KnowledgeModelType.chat,
@@ -99,16 +114,16 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     final theme = AppFlowyTheme.of(context);
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
-        MediaQuery.sizeOf(context).width < 480 ? 12 : 20,
-        20,
-        MediaQuery.sizeOf(context).width < 480 ? 12 : 20,
-        20,
+        MediaQuery.sizeOf(context).width < 480 ? 16 : 28,
+        22,
+        MediaQuery.sizeOf(context).width < 480 ? 16 : 28,
+        24,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _header(context),
-          const SizedBox(height: 16),
+          const SizedBox(height: 22),
           KnowledgeModelTypes(
             spread: true,
             selected: _filter,
@@ -128,13 +143,13 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
             TextButton(onPressed: _load, child: const Text('重试')),
           ],
           if (!_loading && _error == null) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             _title(context, '小马内置模型'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _cards(context, builtin: true),
-            const SizedBox(height: 20),
+            const SizedBox(height: 36),
             _title(context, '自定义模型'),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _cards(context, builtin: false),
           ],
         ],
@@ -150,7 +165,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         Text(
           '模型配置',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 24,
             height: 1.3,
             fontWeight: FontWeight.w600,
             color: theme.textColorScheme.primary,
@@ -181,7 +196,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         side: BorderSide(
           color: theme.textColorScheme.primary.withValues(alpha: .1),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
     return LayoutBuilder(
@@ -217,7 +232,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   Widget _title(BuildContext context, String title) => Text(
         title,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: FontWeight.w600,
           color: AppFlowyTheme.of(context).textColorScheme.primary,
         ),
@@ -237,7 +252,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         child: Text(
           builtin ? '此分类暂无内置模型' : '此分类暂无自定义模型',
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: theme.textColorScheme.secondary,
           ),
         ),
@@ -246,12 +261,11 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     return LayoutBuilder(
       builder: (context, c) {
         final minWidth = 200 * MediaQuery.textScalerOf(context).scale(14) / 14;
-        final columns =
-            ((c.maxWidth + 10) / (minWidth + 10)).floor().clamp(1, 3);
-        final width = (c.maxWidth - (columns - 1) * 10) / columns;
+        final columns = ((c.maxWidth + 8) / (minWidth + 8)).floor().clamp(1, 3);
+        final width = (c.maxWidth - (columns - 1) * 8) / columns;
         return Wrap(
-          spacing: 10,
-          runSpacing: 10,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             for (final model in visible)
               SizedBox(
@@ -259,7 +273,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
                 key: ValueKey('model-card-${model.id}'),
                 child: Container(
                   constraints: const BoxConstraints(minHeight: 74),
-                  decoration: modelSurface(context, radius: 12),
+                  decoration: modelSurface(context),
                   child: Material(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
@@ -273,7 +287,10 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
                         _edit(model);
                       },
                       child: Padding(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 11,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -288,9 +305,9 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 14,
                                         height: 1.4,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w600,
                                         color: theme.textColorScheme.primary,
                                       ),
                                     ),
@@ -298,12 +315,12 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
                                 ),
                                 if (!builtin &&
                                     model.data['status'] != null) ...[
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 4),
                                   _status(context, model),
                                 ],
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             SizedBox(
                               height: 24,
                               child: Row(
@@ -372,7 +389,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ? (dark ? const Color(0xFF70DAB0) : const Color(0xFF35B987))
         : (dark ? const Color(0xFFFF8D90) : const Color(0xFFF45D67));
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: dark ? .16 : .12),
         borderRadius: BorderRadius.circular(5),
@@ -382,7 +399,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         active ? '已启用' : '未就绪',
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 12,
           height: 1.3,
           fontWeight: FontWeight.w500,
         ),
@@ -443,7 +460,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               color: AppFlowyTheme.of(context)
                   .textColorScheme
                   .primary
