@@ -73,7 +73,9 @@ class AgentInternalService {
     account ??= await _account();
     final client = _client ?? http.Client();
     try {
-      final uri = Uri.parse('${account.baseUrl}/api/ai/agent/$path');
+      final uri = Uri.parse(
+        '${account.baseUrl}${path.startsWith('/') ? path : '/api/ai/agent/$path'}',
+      );
       final headers = {'Authorization': 'Bearer ${account.accessToken}'};
       final pending = post
           ? client.post(uri, headers: headers)
@@ -101,12 +103,14 @@ class AgentInternalService {
   }
 
   Future<List<AiProviderConfig>> models({AgentCloudAccount? account}) async {
-    final body = await _request('models', account: account);
-    return (body['data'] as List)
+    final body = await _request('/api/ai/chat/models', account: account);
+    return ((body['data'] as Map)['models'] as List)
         .map(
           (dynamic value) => AiProviderConfig(
             modelName: value['id'] as String,
-            supportsReasoning: value['supports_reasoning'] == true,
+            displayName: value['name'] as String? ?? '',
+            supportsReasoning: value['supports_reasoning'] == true ||
+                {'deepseek-chat', 'doubao'}.contains(value['id']),
             isInternal: true,
           ),
         )
@@ -134,10 +138,10 @@ class AgentInternalService {
     final prefs = await SharedPreferences.getInstance();
     final model = prefs.getString(account.selectionKey);
     if (model != null) {
-      return available
-              ?.where((value) => value.modelName == model)
-              .firstOrNull ??
-          AiProviderConfig(modelName: model, isInternal: true);
+      available ??= await models(account: account);
+      if (available.isEmpty) throw StateError('暂无可用内部模型，请联系管理员');
+      return available.where((value) => value.modelName == model).firstOrNull ??
+          available.first;
     }
     final selectedCustom = await _secure.read(key: account.customSelectionKey);
     if (selectedCustom != null) {
@@ -208,9 +212,25 @@ class AgentInternalService {
     );
   }
 
-  Future<AgentCredits> credits() async {
-    final body = await _request('usage');
+  Future<AgentCredits> credits({
+    AiProviderConfig? model,
+    String? workspace,
+  }) async {
+    final query = Uri(
+      queryParameters: {
+        if (model != null) 'model': model.modelName,
+        if (workspace != null) 'workspace_id': workspace,
+      },
+    ).query;
+    final body = await _request('usage${query.isEmpty ? '' : '?$query'}');
     final remaining = body['remaining'];
+    if (body['unit'] == 'AI_CALLS' && remaining is int && remaining >= 0) {
+      return AgentCredits(
+        usd: 0,
+        remainingCalls: remaining,
+        unlimited: body['unlimited'] == true,
+      );
+    }
     final rate = body['credits_per_usd'];
     if (body['unit'] != 'USD' ||
         remaining is! num ||

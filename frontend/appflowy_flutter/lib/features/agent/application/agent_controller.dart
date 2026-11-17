@@ -1139,7 +1139,10 @@ class AgentController extends ChangeNotifier {
         throw StateError('账号或工作区已切换');
       }
       final value = config.isInternal
-          ? await internalService.credits()
+          ? await internalService.credits(
+              model: config,
+              workspace: _workspaceId,
+            )
           : await fetchAgentCredits(config);
       if (_identity != null && !await _isCurrent()) {
         throw StateError('账号或工作区已切换');

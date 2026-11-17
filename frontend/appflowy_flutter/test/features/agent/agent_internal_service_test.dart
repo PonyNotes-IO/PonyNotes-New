@@ -34,10 +34,12 @@ void main() {
       if (request.url.path.endsWith('/models')) {
         return http.Response(
           jsonEncode({
-            'data': [
-              {'id': 'gateway-reasoner', 'supports_reasoning': true},
-              {'id': 'gateway-chat'},
-            ],
+            'data': {
+              'models': [
+                {'id': 'gateway-reasoner', 'supports_reasoning': true},
+                {'id': 'gateway-chat'},
+              ],
+            },
           }),
           200,
         );
@@ -77,7 +79,7 @@ void main() {
       account: () async => current,
       client: MockClient(
         (_) async => http.Response(
-          '{"data":[{"id":"other-managed"}]}',
+          '{"data":{"models":[{"id":"other-managed"},{"id":"managed"}]}}',
           200,
         ),
       ),
@@ -140,6 +142,66 @@ void main() {
     expect((await service.preferred()).modelName, 'custom');
     expect(await service.runtimeConfig(custom), same(custom));
     await service.revoke(custom);
+  });
+
+  test(
+      'built-in models use project discovery and replace stale gateway selections',
+      () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(account.selectionKey, 'old-sub2api-model');
+    final service = AgentInternalService(
+      account: () async => account,
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/ai/chat/models');
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'data': {
+                'models': [
+                  {'id': 'deepseek-chat', 'name': 'DeepSeek'},
+                  {'id': 'qwen3-vl-plus', 'name': '通义千问'},
+                  {'id': 'doubao', 'name': '豆包'},
+                ],
+              },
+            }),
+          ),
+          200,
+        );
+      }),
+    );
+    final models = await service.models();
+    expect(models.map((model) => model.label), ['DeepSeek', '通义千问', '豆包']);
+    expect(
+      models.every((model) => model.isInternal && model.apiKey.isEmpty),
+      true,
+    );
+    expect(models.map((model) => model.supportsReasoning), [true, false, true]);
+    expect((await service.preferred()).modelName, 'deepseek-chat');
+  });
+
+  test('built-in usage displays project calls for the selected workspace',
+      () async {
+    final service = AgentInternalService(
+      account: () async => account,
+      client: MockClient((request) async {
+        expect(
+          request.url.queryParameters,
+          {'model': 'deepseek-chat', 'workspace_id': 'workspace'},
+        );
+        return http.Response(
+          '{"unit":"AI_CALLS","remaining":12,"unlimited":false}',
+          200,
+        );
+      }),
+    );
+    final usage = await service.credits(
+      model: const AiProviderConfig(
+        modelName: 'deepseek-chat',
+        isInternal: true,
+      ),
+      workspace: 'workspace',
+    );
+    expect(usage.label, '剩余 12 次 AI 调用');
   });
 
   test('cloud identity failure never falls back to a device custom key',

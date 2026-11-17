@@ -12,12 +12,20 @@ class AgentCredits {
     required this.usd,
     this.serverCredits,
     this.unlimited = false,
+    this.remainingCalls,
   });
   final double usd;
   final num? serverCredits;
   final bool unlimited;
+  final int? remainingCalls;
   num get credits => serverCredits ?? usd * creditsPerUsd;
-  String get label => unlimited ? '积分不限额' : '${credits.toStringAsFixed(2)} 积分';
+  String get label => remainingCalls != null
+      ? unlimited
+          ? 'AI 调用不限次'
+          : '剩余 $remainingCalls 次 AI 调用'
+      : unlimited
+          ? '积分不限额'
+          : '${credits.toStringAsFixed(2)} 积分';
 }
 
 /// Reads the gateway balance for the configured key. Returns null when the

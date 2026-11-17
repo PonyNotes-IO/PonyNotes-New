@@ -14,6 +14,7 @@ class AiProviderConfig {
     this.apiKey = '',
     this.supportsReasoning = false,
     this.isInternal = false,
+    this.displayName = '',
   });
 
   /// OpenAI 兼容端点，例如 `https://api.deepseek.com`。
@@ -21,6 +22,8 @@ class AiProviderConfig {
 
   /// 模型名，例如 `deepseek-chat`。
   final String modelName;
+  final String displayName;
+  String get label => displayName.isEmpty ? modelName : displayName;
 
   /// 用户自己的 API Key，只用于小马访问模型服务，与 MCP Token 无关。
   final String apiKey;
@@ -45,6 +48,7 @@ class AiProviderConfig {
       apiKey: apiKey ?? this.apiKey,
       supportsReasoning: supportsReasoning ?? this.supportsReasoning,
       isInternal: isInternal,
+      displayName: displayName,
     );
   }
 }
