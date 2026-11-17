@@ -8,23 +8,28 @@ import 'package:appflowy/features/mcp/application/mcp_tools.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// MCP 接入设置：服务开关、Token、Agent 配置、工具权限、审计日志。
 class McpSettingsView extends StatefulWidget {
-  const McpSettingsView({super.key});
+  const McpSettingsView({super.key}) : _isGuide = false;
+
+  const McpSettingsView._guide() : _isGuide = true;
+
+  final bool _isGuide;
 
   @override
   State<McpSettingsView> createState() => _McpSettingsViewState();
 }
 
 class _McpSettingsViewState extends State<McpSettingsView> {
+  static const _accent = Color(0xFFFF3800);
   final _service = McpServerService.instance;
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
   late final Timer _statusTimer;
-  int _selectedTab = 0;
   bool _showSearch = false;
   bool _showToken = false;
   bool _resettingToken = false;
@@ -71,7 +76,10 @@ class _McpSettingsViewState extends State<McpSettingsView> {
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
                 foregroundColor: theme.textColorScheme.primary,
-                textStyle: const TextStyle(fontSize: 12),
+                textStyle: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontSize: 12),
               ),
             ),
             outlinedButtonTheme: OutlinedButtonThemeData(
@@ -81,7 +89,10 @@ class _McpSettingsViewState extends State<McpSettingsView> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
                 ),
-                textStyle: const TextStyle(fontSize: 12),
+                textStyle: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(fontSize: 12),
               ),
             ),
           ),
@@ -91,59 +102,14 @@ class _McpSettingsViewState extends State<McpSettingsView> {
               child: SingleChildScrollView(
                 controller: _scrollController,
                 padding: EdgeInsets.fromLTRB(
-                  constraints.maxWidth < 480 ? 16 : 28,
+                  constraints.maxWidth < 640 ? 16 : 28,
                   28,
-                  constraints.maxWidth < 480 ? 16 : 28,
+                  constraints.maxWidth < 640 ? 16 : 28,
                   32,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '小马笔记 MCP',
-                      style: TextStyle(
-                        fontSize: 24,
-                        height: 1.3,
-                        fontWeight: FontWeight.w600,
-                        color: theme.textColorScheme.primary,
-                      ),
-                    ),
-                    const VSpace(8),
-                    Text(
-                      '在其他应用中使用小马笔记。让 AI 客户端连接你的工作区，查找、整理和编辑笔记。',
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.6,
-                        color: theme.textColorScheme.secondary,
-                      ),
-                    ),
-                    const VSpace(24),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _tab(context, 0, '发现 MCP 客户端'),
-                        _tab(context, 1, '连接与权限'),
-                      ],
-                    ),
-                    const VSpace(20),
-                    _buildServiceCard(context),
-                    const VSpace(20),
-                    if (_selectedTab == 0) ...[
-                      _buildRecentClients(context),
-                      const VSpace(20),
-                      _buildAgentCards(context),
-                    ] else ...[
-                      _buildTokenCard(context),
-                      const VSpace(24),
-                      _buildDisconnectAll(context),
-                      const VSpace(24),
-                      _buildToolPermissions(context),
-                      const VSpace(24),
-                      _buildAuditLog(context),
-                    ],
-                  ],
-                ),
+                child: widget._isGuide
+                    ? _buildGuide(context)
+                    : _buildConfiguration(context),
               ),
             ),
           ),
@@ -152,100 +118,150 @@ class _McpSettingsViewState extends State<McpSettingsView> {
     );
   }
 
-  Widget _tab(BuildContext context, int index, String label) {
+  Widget _buildConfiguration(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final selected = _selectedTab == index;
-    return TextButton(
-      style: TextButton.styleFrom(
-        backgroundColor: selected ? theme.fillColorScheme.primary : null,
-        foregroundColor: selected
-            ? theme.textColorScheme.primary
-            : theme.textColorScheme.secondary,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        minimumSize: const Size(0, 34),
-        shape: const StadiumBorder(),
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'MCP服务器配置',
+          style: TextStyle(
+            fontSize: 22,
+            height: 1.4,
+            fontWeight: FontWeight.w600,
+            color: theme.textColorScheme.primary,
+          ),
+        ),
+        const VSpace(6),
+        Text(
+          '管理您的MCP服务器API访问凭证',
+          style: TextStyle(
+            fontSize: 14,
+            color: theme.textColorScheme.secondary,
+          ),
+        ),
+      ],
+    );
+    final guide = TextButton(
+      onPressed: () => showDialog<void>(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: theme.backgroundColorScheme.primary,
+          insetPadding: const EdgeInsets.all(16),
+          child: const SizedBox(
+            width: 900,
+            height: 750,
+            child: McpSettingsView._guide(),
+          ),
+        ),
       ),
-      onPressed: () {
-        setState(() => _selectedTab = index);
-        _scrollController.jumpTo(0);
-      },
-      child: Text(label),
+      style: TextButton.styleFrom(
+        foregroundColor: _accent,
+        textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+      ),
+      child: const Text('查看完整设置指南'),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        LayoutBuilder(
+          builder: (context, constraints) => constraints.maxWidth <
+                  440 * MediaQuery.textScalerOf(context).scale(14) / 14
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [heading, const VSpace(8), guide],
+                )
+              : Row(
+                  children: [
+                    Expanded(child: heading),
+                    const HSpace(16),
+                    guide,
+                  ],
+                ),
+        ),
+        const VSpace(24),
+        _buildServiceCard(context),
+        if (_service.isRunning) ...[
+          const VSpace(20),
+          _buildAccessCard(context),
+        ],
+      ],
     );
   }
 
-  // ---------------------------------------------------------------- 服务
+  Widget _card(BuildContext context, Widget child) {
+    final theme = AppFlowyTheme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.backgroundColorScheme.primary,
+        border: Border.all(
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.025),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 
   Widget _buildServiceCard(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.borderColorScheme.primary),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
+    return _card(
+      context,
+      Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                Icons.circle,
-                size: 7,
-                color: _service.isRunning
-                    ? theme.textColorScheme.success
-                    : theme.textColorScheme.tertiary,
-              ),
-              const HSpace(8),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _service.isStarting
-                          ? '本机服务 · 启动中'
-                          : _service.isRunning
-                              ? '本机服务 · 运行中'
-                              : '本机服务 · 已关闭',
+                      '启用MCP服务器',
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                         color: theme.textColorScheme.primary,
                       ),
                     ),
-                    const VSpace(5),
+                    const VSpace(6),
                     Text(
-                      _service.endpoint,
+                      '启用后将允许使用MCP服务器功能',
                       style: TextStyle(
-                        fontFamily: 'RobotoMono',
-                        fontSize: 11,
+                        fontSize: 13,
                         color: theme.textColorScheme.secondary,
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: '复制连接地址',
-                onPressed: () => _copy(_service.endpoint, '连接地址已复制'),
-                icon: const Icon(Icons.copy_outlined, size: 15),
-                color: theme.iconColorScheme.secondary,
-                visualDensity: VisualDensity.compact,
-              ),
+              const HSpace(12),
               if (_service.isStarting)
                 const SizedBox.square(
-                  dimension: 20,
+                  dimension: 24,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
-                SizedBox(
-                  height: 30,
-                  child: Semantics(
-                    label: '本机 MCP 服务',
-                    child: Switch.adaptive(
-                      value: _service.isRunning,
-                      activeTrackColor: theme.fillColorScheme.infoThick,
-                      onChanged: _resettingToken ? null : _toggle,
-                    ),
+                Semantics(
+                  label: '启用MCP服务器',
+                  child: CupertinoSwitch(
+                    value: _service.isRunning,
+                    activeTrackColor: _accent,
+                    inactiveTrackColor:
+                        theme.textColorScheme.primary.withValues(alpha: 0.18),
+                    onChanged: _resettingToken ? null : _toggle,
                   ),
                 ),
             ],
@@ -264,6 +280,215 @@ class _McpSettingsViewState extends State<McpSettingsView> {
       ),
     );
   }
+
+  Widget _buildAccessCard(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final specs = _registry.toolSpecs;
+    final selected = McpPermissions.instance.presetFor(specs);
+    const labels = ['只读模式', '安全编辑', '完全控制'];
+    const descriptions = ['仅查询，不可编辑', '可编辑可修改，不可删除', '可编辑、修改、删除，谨慎使用'];
+    final config = _agentPresets(_service.token ?? '').last.json;
+    final preview = _agentPresets('••••••••').last.json;
+    final used = _service.clients
+        .map((c) => c.lastUsedAt)
+        .whereType<DateTime>()
+        .toList()
+      ..sort();
+    String date(DateTime? at) {
+      if (at == null) return '—';
+      final local = at.toLocal();
+      return '${local.year}/${_formatTime(local)}';
+    }
+
+    return _card(
+      context,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(context, '权限控制'),
+          const VSpace(20),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final minCardWidth =
+                  100 * MediaQuery.textScalerOf(context).scale(16) / 16;
+              final narrow = constraints.maxWidth < minCardWidth * 3 + 16;
+              final width = narrow
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - 16) / 3;
+              final cards = <Widget>[
+                for (final preset in McpPermissionPreset.values)
+                  SizedBox(
+                    width: width,
+                    child: Semantics(
+                      selected: selected == preset,
+                      child: TextButton(
+                        onPressed: () =>
+                            McpPermissions.instance.applyPreset(preset, specs),
+                        style: TextButton.styleFrom(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 12,
+                          ),
+                          backgroundColor: selected == preset
+                              ? _accent.withValues(alpha: 0.06)
+                              : theme.textColorScheme.primary
+                                  .withValues(alpha: 0.025),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: selected == preset
+                                  ? _accent.withValues(alpha: 0.4)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              labels[preset.index],
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: selected == preset
+                                    ? _accent
+                                    : theme.textColorScheme.primary,
+                              ),
+                            ),
+                            const VSpace(6),
+                            Text(
+                              descriptions[preset.index],
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: selected == preset
+                                    ? _accent
+                                    : theme.textColorScheme.secondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ];
+              if (narrow) {
+                return Wrap(runSpacing: 12, children: cards);
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const HSpace(8),
+                      Expanded(child: cards[i]),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+          const VSpace(18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.textColorScheme.primary.withValues(alpha: 0.025),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, right: 36),
+                  child: SelectableText(
+                    preview,
+                    style: TextStyle(
+                      fontFamily: 'RobotoMono',
+                      fontSize: 13,
+                      height: 1.6,
+                      color: theme.textColorScheme.primary,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: IconButton(
+                    tooltip: '复制 MCP 配置',
+                    onPressed: _service.token == null
+                        ? null
+                        : () => _copy(config, 'MCP 配置已复制'),
+                    icon: const Icon(Icons.code, size: 20),
+                    color: theme.iconColorScheme.secondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const VSpace(20),
+          Wrap(
+            spacing: 48,
+            runSpacing: 8,
+            children: [
+              Text(
+                '创建时间：${date(_service.tokenCreatedAt)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              Text(
+                '最后使用：${date(used.lastOrNull)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuide(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _sectionTitle(context, 'MCP 完整设置指南')),
+              IconButton(
+                tooltip: '关闭指南',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, size: 20),
+              ),
+            ],
+          ),
+          const VSpace(16),
+          Row(
+            children: [
+              Expanded(child: SelectableText(_service.endpoint)),
+              IconButton(
+                tooltip: '复制连接地址',
+                icon: const Icon(Icons.copy_outlined, size: 18),
+                onPressed: () => _copy(_service.endpoint, '连接地址已复制'),
+              ),
+            ],
+          ),
+          const VSpace(16),
+          _buildRecentClients(context),
+          const VSpace(20),
+          _buildAgentCards(context),
+          const VSpace(24),
+          _buildTokenCard(context),
+          const VSpace(24),
+          _buildDisconnectAll(context),
+          const VSpace(24),
+          _buildToolPermissions(context),
+          const VSpace(24),
+          _buildAuditLog(context),
+        ],
+      );
 
   Widget _buildRecentClients(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -616,7 +841,10 @@ class _McpSettingsViewState extends State<McpSettingsView> {
                     foregroundColor: theme.textColorScheme.onFill,
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     minimumSize: const Size(0, 30),
-                    textStyle: const TextStyle(fontSize: 12),
+                    textStyle: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(fontSize: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6),
                     ),
