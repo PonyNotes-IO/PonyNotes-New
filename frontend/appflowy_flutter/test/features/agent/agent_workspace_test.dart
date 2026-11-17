@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/features/agent/application/agent_definition.dart';
+import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/application/agent_credits.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
 import 'package:appflowy/features/agent/presentation/agent_composer.dart';
@@ -70,6 +73,27 @@ void main() {
       final artifactFile = fixture!.$2;
       final controller = AgentController(
         chatId: 'visual-test',
+        workspaceId: () async => 'workspace',
+        service: AgentService(
+          account: () async => const AgentCloudAccount(
+            baseUrl: 'https://cloud.test',
+            accessToken: 'token',
+            userId: '1',
+          ),
+          client: MockClient(
+            (_) async => http.Response.bytes(
+              utf8.encode(
+                jsonEncode({
+                  'items': [
+                    AgentDefinition.quick.toJson(),
+                    AgentDefinition.smartReasoning.toJson(),
+                  ],
+                }),
+              ),
+              200,
+            ),
+          ),
+        ),
         internalService: AgentInternalService(
           account: () async => const AgentCloudAccount(
             baseUrl: 'https://cloud.test',
@@ -189,7 +213,7 @@ void main() {
       }
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('对话设置'));
+      await tester.tap(find.text('配置智能体'));
       await tester.pumpAndSettle();
       expect(find.text('99.74 积分'), findsOneWidget);
       expect(find.text('产物云同步'), findsOneWidget);

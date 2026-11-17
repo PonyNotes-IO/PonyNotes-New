@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../application/agent_conversations.dart';
 import '../application/agent_attachments.dart';
 import '../application/agent_controller.dart';
+import '../application/agent_definition.dart';
 import '../application/agent_model_preferences.dart';
 import 'agent_workspace.dart';
 import 'agent_model_settings.dart';
@@ -42,6 +43,7 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
   late final files = widget.initialAttachments.toList();
   final scaffold = GlobalKey<ScaffoldState>();
   AgentController? active;
+  AgentDefinition? selectedAgent;
   String initialMessage = '';
   List<PlatformFile> initialFiles = [];
   final selectedReferences = <AgentReference>[];
@@ -131,6 +133,7 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
     active?.removeListener(_activity);
     active?.dispose();
     active = null;
+    selectedAgent = null;
     sessions.clear();
     input.clear();
     files.clear();
@@ -166,6 +169,9 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
         );
     if (model != null) active!.providerConfig = model;
     if (smartMode != null) active!.configureMode(smartMode);
+    if (smartMode != null && selectedAgent != null) {
+      active!.configureAgent(selectedAgent!);
+    }
     active!.addListener(_activity);
     wasRunning = false;
     setState(() {
@@ -443,7 +449,12 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                   selected: selectedReferences,
                   enabled: enabled,
                   smartMode: smart,
-                  onModeChanged: (value) => setState(() => smart = value),
+                  onModeChanged: (value) => setState(() {
+                    smart = value;
+                    selectedAgent = value
+                        ? AgentDefinition.smartReasoning
+                        : AgentDefinition.quick;
+                  }),
                   load: _loadReferences,
                   onChanged: (items) => setState(
                     () => selectedReferences
@@ -462,8 +473,23 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                         ),
                         child: AiModeButton(
                           agentMode: smart,
+                          selectedAgent: selectedAgent,
+                          loadAgents: () async {
+                            final workspace = sessions.workspaceId ??
+                                await sessions.workspace();
+                            if (workspace == null) throw StateError('请先打开工作区');
+                            final agents =
+                                await sessions.service.agents(workspace);
+                            if (workspace != await sessions.workspace()) {
+                              throw StateError('工作区已切换，请重新选择智能体');
+                            }
+                            return agents;
+                          },
+                          onAgentSelected: (agent) => setState(() {
+                            selectedAgent = agent;
+                            smart = agent.smart;
+                          }),
                           enabled: enabled,
-                          onSelected: (value) => setState(() => smart = value),
                         ),
                       ),
                       IconButton(
@@ -478,17 +504,19 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                       ),
                       referenceButton,
                     ],
-                    modelSelector: AgentModelSettingsButton(
-                      enabled: enabled,
-                      currentConfig: model,
-                      currentThinking: thinking,
-                      onChanged: (config, level) async {
-                        setState(() {
-                          model = config;
-                          thinking = level;
-                        });
-                      },
-                    ),
+                    modelSelector: selectedAgent?.sourceTenantId != null
+                        ? const Text('共享方模型', style: TextStyle(fontSize: 12))
+                        : AgentModelSettingsButton(
+                            enabled: enabled,
+                            currentConfig: model,
+                            currentThinking: thinking,
+                            onChanged: (config, level) async {
+                              setState(() {
+                                model = config;
+                                thinking = level;
+                              });
+                            },
+                          ),
                     actions: [
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: input,

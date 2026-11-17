@@ -9,6 +9,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:http/http.dart' as http;
 import 'agent_internal_service.dart';
 import 'agent_reference.dart';
+import 'agent_definition.dart';
 
 /// Cloud scopes requests; WeKnora runs the tool loop.
 class AgentService {
@@ -23,6 +24,17 @@ class AgentService {
   final Future<AgentCloudAccount> Function() _account;
   final Future<List<ViewPB>> Function()? _referenceViews;
   http.Client? _streamClient;
+
+  Future<List<AgentDefinition>> agents(String workspace) async {
+    final before = await identity(workspace);
+    final data = await request('GET', workspace, '', '/agents');
+    if (before != await identity(workspace)) {
+      throw StateError('账号或工作区已切换，请重新选择智能体');
+    }
+    return (data['items'] as List)
+        .map((item) => AgentDefinition.fromJson(item as Map))
+        .toList();
+  }
 
   Future<List<AgentReference>> references(
     String workspace, {

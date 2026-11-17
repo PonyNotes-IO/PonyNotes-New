@@ -15,6 +15,7 @@ import 'agent_internal_service.dart';
 import 'agent_model_preferences.dart';
 import 'agent_service.dart';
 import 'agent_reference.dart';
+import 'agent_definition.dart';
 import 'agent_note_bridge.dart';
 import 'agent_permissions.dart';
 import 'agent_prompt.dart';
@@ -75,6 +76,7 @@ class AgentController extends ChangeNotifier {
   final AgentArtifacts artifacts;
   final Map<String, dynamic> cloudArtifacts;
   String mode;
+  AgentDefinition? selectedAgent;
   bool _modeSelected = false;
   bool cloudSync = false;
   bool savingArtifacts = false;
@@ -167,7 +169,9 @@ class AgentController extends ChangeNotifier {
           (await SharedPreferences.getInstance()).getBool(_storageKey) ?? false;
       await permissions.load(_identity!, chatId);
       _clientId = const Uuid().v4();
-      if (mode == 'smart-reasoning') await _registerNoteTools();
+      if (mode == 'smart-reasoning' && selectedAgent?.sourceTenantId == null) {
+        await _registerNoteTools();
+      }
       _startHeartbeat();
       thinkingLevel =
           initialThinking ?? await AgentModelPreferences.loadThinking();
@@ -190,6 +194,7 @@ class AgentController extends ChangeNotifier {
           epoch,
         );
       }
+      if (selectedAgent?.sourceTenantId != null) return;
       final selected = providerConfig ?? await internalService.preferred();
       if (epoch != _epoch || !await _isCurrent()) return;
       providerConfig = selected;
@@ -216,6 +221,10 @@ class AgentController extends ChangeNotifier {
     if (!_modeSelected &&
         ['quick-answer', 'smart-reasoning'].contains(data['mode'])) {
       mode = data['mode'] as String;
+    }
+    if (!_modeSelected && data['selected_agent'] is Map) {
+      selectedAgent = AgentDefinition.fromJson(data['selected_agent'] as Map);
+      mode = selectedAgent!.mode;
     }
     messages
       ..clear()
@@ -358,13 +367,17 @@ class AgentController extends ChangeNotifier {
       changed();
       return true;
     }
-    final config = providerConfig;
+    final config = selectedAgent?.sourceTenantId != null
+        ? const AiProviderConfig(modelName: 'shared-agent', isInternal: true)
+        : providerConfig;
     if (config == null) {
       error = '请先选择可用模型；已有文件仍可打开';
       changed();
       return false;
     }
-    if (mode == 'smart-reasoning') await _registerNoteTools();
+    if (mode == 'smart-reasoning' && selectedAgent?.sourceTenantId == null) {
+      await _registerNoteTools();
+    }
     final run = ++_run;
     final epoch = _epoch;
     await _subscription?.cancel();
@@ -405,7 +418,7 @@ class AgentController extends ChangeNotifier {
     changed();
     var noteContext = <Map<String, dynamic>>[];
     var noteSearchStatus = '';
-    if (mode == 'quick-answer') {
+    if (mode == 'quick-answer' && selectedAgent?.sourceTenantId == null) {
       preparingNotes = true;
       final retrieved = await _quickNotes(text, epoch, run);
       if (epoch != _epoch || run != _run || _disposed) {
@@ -429,6 +442,7 @@ class AgentController extends ChangeNotifier {
       'query': text,
       'client_id': _clientId,
       'mode': mode,
+      if (selectedAgent != null) 'agent': selectedAgent!.toJson(),
       'model': {
         'model_name': config.modelName,
         'is_internal': config.isInternal,
@@ -998,9 +1012,27 @@ class AgentController extends ChangeNotifier {
   }
 
   void configureMode(bool smart) {
+    configureAgent(
+      smart ? AgentDefinition.smartReasoning : AgentDefinition.quick,
+    );
+  }
+
+  void configureAgent(AgentDefinition agent) {
     _modeSelected = true;
-    mode = smart ? 'smart-reasoning' : 'quick-answer';
+    selectedAgent = agent;
+    mode = agent.mode;
+    if (agent.sourceTenantId != null) webSearch = agent.webSearch;
     changed();
+  }
+
+  Future<List<AgentDefinition>> loadAgents() async {
+    final workspace = await _workspace();
+    if (workspace == null) throw StateError('请先打开工作区');
+    final agents = await service.agents(workspace);
+    if (workspace != await _workspace()) {
+      throw StateError('工作区已切换，请重新选择智能体');
+    }
+    return agents;
   }
 
   Future<void> configureCloudSync(bool enabled) async {

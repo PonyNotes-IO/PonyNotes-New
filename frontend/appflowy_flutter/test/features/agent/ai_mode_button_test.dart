@@ -2,7 +2,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:appflowy/features/agent/application/agent_controller.dart';
-import 'package:appflowy/features/agent/presentation/agent_mode_details.dart';
+import 'package:appflowy/features/agent/application/agent_definition.dart';
+import 'package:appflowy/features/agent/presentation/agent_picker_panel.dart';
 import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/gestures.dart';
@@ -10,6 +11,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+const agents = [
+  AgentDefinition.quick,
+  AgentDefinition.smartReasoning,
+  AgentDefinition(
+    id: 'rag',
+    name: '我的RAG回答',
+    mode: 'quick-answer',
+    group: 'private',
+  ),
+  AgentDefinition(
+    id: 'personal',
+    name: '小马笔记智能体',
+    mode: 'smart-reasoning',
+    group: 'private',
+  ),
+  AgentDefinition(
+    id: 'team',
+    name: '小马笔记智能体',
+    mode: 'smart-reasoning',
+    group: 'shared',
+    sourceTenantId: 7,
+  ),
+];
 
 void main() {
   setUpAll(() async {
@@ -75,6 +100,7 @@ void main() {
                     child: StatefulBuilder(
                       builder: (_, setState) => AiModeButton(
                         agentMode: smart,
+                        loadAgents: () async => agents,
                         onSelected: (value) => setState(() {
                           smart = value;
                           changes++;
@@ -92,11 +118,13 @@ void main() {
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
       expect(find.text('内置智能体'), findsOneWidget);
-      expect(find.text('当前模式'), findsOneWidget);
-      expect(
-        tester.widget<AgentModeDetails>(find.byType(AgentModeDetails)).smart,
-        isTrue,
-      );
+      expect(find.text('当前智能体'), findsOneWidget);
+      expect(find.text('私有自定义智能体'), findsOneWidget);
+      expect(find.text('协作智能体'), findsOneWidget);
+      expect(find.text('我的RAG回答'), findsOneWidget);
+      expect(find.text('小马笔记智能体'), findsNWidgets(2));
+      expect(find.text('网络搜索'), findsOneWidget);
+      expect(find.text('未启用'), findsOneWidget);
       final panel =
           tester.getRect(find.byKey(const ValueKey('agent-mode-panel')));
       expect(panel.left, greaterThanOrEqualTo(0));
@@ -124,8 +152,12 @@ void main() {
       await mouse.moveTo(tester.getCenter(quick));
       await tester.pumpAndSettle();
       expect(
-        tester.widget<AgentModeDetails>(find.byType(AgentModeDetails)).smart,
-        isFalse,
+        tester
+            .widget<Text>(
+              find.byKey(const ValueKey('agent-picker-detail-title')),
+            )
+            .data,
+        '快速问答',
       );
       expect(smart, isTrue);
       expect(changes, 0);
@@ -138,7 +170,7 @@ void main() {
       await mouse.moveTo(Offset.zero);
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('对话设置'));
+      await tester.tap(find.text('配置智能体'));
       await tester.pumpAndSettle();
       expect(settings, 1);
       expect(find.byKey(const ValueKey('agent-mode-panel')), findsNothing);
@@ -146,6 +178,71 @@ void main() {
       debugDisableShadows = shadowsDisabled;
     });
   }
+
+  testWidgets('render the reference agent picker UI and browse draft entries',
+      (tester) async {
+    tester.view.physicalSize = const Size(522, 333);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final capture = GlobalKey();
+    var changes = 0;
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: capture,
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            fontFamily: 'AgentPickerTestFont',
+          ),
+          home: Scaffold(
+            backgroundColor: const Color(0xFF191919),
+            body: Stack(
+              children: [
+                Positioned(
+                  left: 15,
+                  top: 23,
+                  width: 494,
+                  height: 310,
+                  child: AgentPickerPanel(
+                    smartMode: false,
+                    agents: agents,
+                    onModeSelected: (_) => changes++,
+                    onConfigure: () {},
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final output = Platform.environment['PONYNOTES_AGENT_PICKER_SCREENSHOTS'];
+    if (output != null) {
+      await tester.runAsync(() async {
+        final image = await (capture.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary)
+            .toImage();
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        await Directory(output).create(recursive: true);
+        await File('$output/agent-picker-reference-ui.png')
+            .writeAsBytes(bytes!.buffer.asUint8List());
+        image.dispose();
+      });
+    }
+    await tester.tap(find.byKey(const ValueKey('agent-mode-0:rag')));
+    await tester.pumpAndSettle();
+    expect(changes, 0);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('agent-picker-detail-title')))
+          .data,
+      '我的RAG回答',
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('keyboard selection, dismiss and account clearance',
       (tester) async {

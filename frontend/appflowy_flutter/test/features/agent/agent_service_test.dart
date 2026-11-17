@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:appflowy/features/agent/application/agent_artifacts.dart';
 import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/features/agent/application/agent_definition.dart';
 import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/application/agent_reference.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
@@ -300,6 +301,7 @@ void main() {
       () async {
     final streams = <StreamController<List<int>>>[];
     final sentModes = <String>[];
+    final sentAgents = <Map?>[];
     final refreshRequested = Completer<void>();
     final history = Completer<String>();
     var historyReads = 0;
@@ -327,6 +329,7 @@ void main() {
       expect(request.url.path.endsWith('/messages'), true);
       final data = jsonDecode(await body.bytesToString()) as Map;
       sentModes.add(data['mode'] as String);
+      sentAgents.add(data['agent'] as Map?);
       final stream = StreamController<List<int>>();
       streams.add(stream);
       stream.add(utf8.encode('data: {"response_type":"scope"}\n\n'));
@@ -365,7 +368,13 @@ void main() {
     controller.permissions.disabledTools.add('search_notes');
     expect(await controller.send('第一轮'), true);
     expect(controller.running, true);
-    controller.configureMode(false);
+    const custom = AgentDefinition(
+      id: '30d7a11c-1bb2-47a1-9c0b-a005643982d1',
+      name: '我的检索助手',
+      mode: 'quick-answer',
+      group: 'private',
+    );
+    controller.configureAgent(custom);
     expect(controller.mode, 'quick-answer');
     expect(controller.running, true);
     expect(controller.messages.single['content'], '第一轮');
@@ -384,6 +393,7 @@ void main() {
     history.complete(
       jsonEncode({
         'mode': 'smart-reasoning',
+        'selected_agent': AgentDefinition.smartReasoning.toJson(),
         'messages': [
           {'id': 'question', 'role': 'user', 'content': '第一轮'},
           {'id': 'answer', 'role': 'assistant', 'content': '回答'},
@@ -397,6 +407,8 @@ void main() {
     expect(controller.messages.length, 2);
     expect(await controller.send('第二轮'), true);
     expect(sentModes, ['smart-reasoning', 'quick-answer']);
+    expect(sentAgents.last?['id'], custom.id);
+    expect(controller.selectedAgent?.id, custom.id);
     expect(controller.chatId, 'document');
     expect(controller.messages.length, 3);
   });

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_conversations.dart';
 import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/features/agent/application/agent_definition.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/presentation/agent_conversations_page.dart';
@@ -96,6 +97,19 @@ void main() {
             return http.Response(
               request.method == 'GET' ? '{"calls":[]}' : '',
               request.method == 'GET' ? 200 : 204,
+            );
+          }
+          if (request.url.path.endsWith('/agents')) {
+            return http.Response.bytes(
+              utf8.encode(
+                jsonEncode({
+                  'items': [
+                    AgentDefinition.quick.toJson(),
+                    AgentDefinition.smartReasoning.toJson(),
+                  ],
+                }),
+              ),
+              200,
             );
           }
           if (request.url.path == '/api/ai/agent/conversations/workspace') {

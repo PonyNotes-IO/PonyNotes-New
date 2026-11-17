@@ -9,7 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
 import '../application/agent_conversations.dart';
 import 'agent_conversations_page.dart';
-import 'agent_mode_details.dart';
+import '../application/agent_definition.dart';
+import 'agent_picker_panel.dart';
 import '../application/agent_controller.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -59,11 +60,17 @@ class AiModeButton extends StatefulWidget {
     this.onSelected,
     this.onSettings,
     this.enabled = true,
+    this.selectedAgent,
+    this.loadAgents,
+    this.onAgentSelected,
   });
   final bool agentMode;
   final ValueChanged<bool>? onSelected;
   final VoidCallback? onSettings;
   final bool enabled;
+  final AgentDefinition? selectedAgent;
+  final Future<List<AgentDefinition>> Function()? loadAgents;
+  final ValueChanged<AgentDefinition>? onAgentSelected;
 
   @override
   State<AiModeButton> createState() => _AiModeButtonState();
@@ -71,14 +78,49 @@ class AiModeButton extends StatefulWidget {
 
 class _AiModeButtonState extends State<AiModeButton> {
   final _menu = MenuController();
-  final _quickFocus = FocusNode();
-  final _smartFocus = FocusNode();
-  late bool _preview = widget.agentMode;
+  List<AgentDefinition> _agents = const [
+    AgentDefinition.quick,
+    AgentDefinition.smartReasoning,
+  ];
+  bool _loading = false;
+  String? _loadError;
+  int _loadVersion = 0;
+
+  Future<void> _load() async {
+    final load = widget.loadAgents;
+    if (load == null) return;
+    final version = ++_loadVersion;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+      _agents = const [AgentDefinition.quick, AgentDefinition.smartReasoning];
+    });
+    try {
+      final agents = await load();
+      if (mounted && version == _loadVersion) setState(() => _agents = agents);
+    } catch (_) {
+      if (mounted && version == _loadVersion) {
+        setState(() => _loadError = '智能体加载失败，请重试');
+      }
+    } finally {
+      if (mounted && version == _loadVersion) setState(() => _loading = false);
+    }
+  }
+
+  void _selectAgent(AgentDefinition agent) {
+    _close();
+    if (!widget.enabled) return;
+    if (widget.onAgentSelected != null) {
+      widget.onAgentSelected!(agent);
+    } else {
+      _select(agent.smart);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    AgentController.accountClearance.addListener(_close);
+    AgentController.accountClearance.addListener(_clear);
   }
 
   @override
@@ -93,16 +135,17 @@ class _AiModeButtonState extends State<AiModeButton> {
 
   @override
   void dispose() {
-    AgentController.accountClearance.removeListener(_close);
-    _quickFocus.dispose();
-    _smartFocus.dispose();
+    AgentController.accountClearance.removeListener(_clear);
+    _loadVersion++;
     super.dispose();
   }
 
   void _close() => _menu.close();
 
-  void _previewMode(bool smart) {
-    if (_preview != smart) setState(() => _preview = smart);
+  void _clear() {
+    _loadVersion++;
+    _agents = [];
+    _close();
   }
 
   Future<void> _select(bool smart) async {
@@ -135,85 +178,50 @@ class _AiModeButtonState extends State<AiModeButton> {
     }
   }
 
+  void _configure() {
+    _close();
+    if (widget.onSettings != null) {
+      widget.onSettings!.call();
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('配置智能体'),
+        content: const Text('智能体配置即将开放'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.maybeOf(context);
     final foreground = theme?.textColorScheme.primary ??
         Theme.of(context).colorScheme.onSurface;
-    final background = theme?.surfaceColorScheme.layer01 ??
-        Theme.of(context).colorScheme.surface;
     final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontSize: 12,
+          fontSize: 13,
           color: foreground,
         );
     final media = MediaQuery.of(context);
-    final width = math.min(420.0, media.size.width - 24);
+    final width = math.min(494.0, media.size.width - 24);
     final height = math.min(
-      248.0,
+      310.0,
       math.max(0.0, media.size.height - media.viewInsets.bottom - 48),
     );
-
-    Widget surface(Widget child) => Material(
-          color: background,
-          elevation: 8,
-          shadowColor: Colors.black.withValues(alpha: .2),
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: foreground.withValues(alpha: .12)),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        );
-
-    Widget modeItem(bool smart) => MouseRegion(
-          onEnter: (_) => _previewMode(smart),
-          child: Semantics(
-            selected: smart == widget.agentMode,
-            child: MenuItemButton(
-              key: ValueKey('agent-mode-${smart ? 'smart' : 'quick'}'),
-              focusNode: smart ? _smartFocus : _quickFocus,
-              onFocusChange: (focused) {
-                if (focused) _previewMode(smart);
-              },
-              onPressed: () => _select(smart),
-              style: MenuItemButton.styleFrom(
-                foregroundColor: foreground,
-                backgroundColor: _preview == smart
-                    ? foreground.withValues(alpha: .08)
-                    : null,
-                textStyle: textStyle,
-                padding: const EdgeInsets.symmetric(horizontal: 7),
-                minimumSize: const Size(0, 30),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-              leadingIcon: Icon(
-                AgentModeDetails.icon(smart),
-                size: 16,
-                color: Colors.indigo.shade400,
-              ),
-              trailingIcon: smart == widget.agentMode
-                  ? Icon(Icons.check, size: 13, color: foreground)
-                  : const SizedBox(width: 13),
-              child: Text(AgentModeDetails.label(smart)),
-            ),
-          ),
-        );
 
     return MenuAnchor(
       controller: _menu,
       crossAxisUnconstrained: false,
       consumeOutsideTap: true,
       onOpen: () {
-        setState(() => _preview = widget.agentMode);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _menu.isOpen) {
-            (widget.agentMode ? _smartFocus : _quickFocus).requestFocus();
-          }
-        });
+        setState(() {});
+        _load();
       },
       onClose: () => setState(() {}),
       style: MenuStyle(
@@ -232,73 +240,17 @@ class _AiModeButtonState extends State<AiModeButton> {
           key: const ValueKey('agent-mode-panel'),
           width: width,
           height: height,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: width < 380 ? 128 : 166,
-                child: surface(
-                  SingleChildScrollView(
-                    primary: false,
-                    padding: const EdgeInsets.all(5),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(7, 5, 7, 6),
-                          child: Text(
-                            '内置智能体',
-                            style: textStyle?.copyWith(
-                              fontSize: 10,
-                              color: foreground.withValues(alpha: .5),
-                            ),
-                          ),
-                        ),
-                        modeItem(false),
-                        modeItem(true),
-                        if (widget.onSettings != null) ...[
-                          Divider(
-                            height: 13,
-                            color: foreground.withValues(alpha: .06),
-                          ),
-                          MenuItemButton(
-                            onPressed: () {
-                              _close();
-                              widget.onSettings?.call();
-                            },
-                            style: MenuItemButton.styleFrom(
-                              foregroundColor: foreground,
-                              textStyle: textStyle,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 7),
-                              minimumSize: const Size(0, 30),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            leadingIcon: const Icon(Icons.tune, size: 15),
-                            child: const Text('对话设置'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: surface(
-                  SizedBox(
-                    height: height,
-                    child: AgentModeDetails(
-                      smart: _preview,
-                      current: _preview == widget.agentMode,
-                      startsNewConversation: widget.onSelected == null,
-                      onSelected: () => _select(_preview),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          child: AgentPickerPanel(
+            smartMode: widget.agentMode,
+            autofocus: true,
+            onModeSelected: _select,
+            onConfigure: _configure,
+            agents: _agents,
+            selectedAgent: widget.selectedAgent,
+            onAgentSelected: _selectAgent,
+            loading: _loading,
+            error: _loadError,
+            onRetry: _load,
           ),
         ),
       ],
@@ -319,7 +271,14 @@ class _AiModeButtonState extends State<AiModeButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(AgentModeDetails.label(widget.agentMode)),
+              Flexible(
+                child: Text(
+                  widget.selectedAgent?.name ??
+                      (widget.agentMode ? '智能推理' : '快速问答'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const SizedBox(width: 3),
               Icon(
                 controller.isOpen ? Icons.expand_less : Icons.expand_more,

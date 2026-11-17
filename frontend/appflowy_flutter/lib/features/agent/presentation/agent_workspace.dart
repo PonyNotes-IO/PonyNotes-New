@@ -1208,6 +1208,9 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                   ),
                   child: AiModeButton(
                     agentMode: agent.mode == 'smart-reasoning',
+                    selectedAgent: agent.selectedAgent,
+                    loadAgents: agent.loadAgents,
+                    onAgentSelected: agent.configureAgent,
                     enabled: !submitting,
                     onSelected: agent.configureMode,
                     onSettings: _settings,
@@ -1225,16 +1228,19 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
               ),
               referenceButton,
             ],
-            modelSelector: AgentModelSettingsButton(
-              currentConfig: agent.providerConfig,
-              currentThinking: agent.connected ? agent.thinkingLevel : null,
-              internalService: agent.internalService,
-              enabled: !agent.running && !agent.connecting && !submitting,
-              onChanged: (config, thinking) async {
-                await agent.configureModel(config, thinking);
-                if (!agent.connected) await agent.connect();
-              },
-            ),
+            modelSelector: agent.selectedAgent?.sourceTenantId != null
+                ? const Text('共享方模型', style: TextStyle(fontSize: 12))
+                : AgentModelSettingsButton(
+                    currentConfig: agent.providerConfig,
+                    currentThinking:
+                        agent.connected ? agent.thinkingLevel : null,
+                    internalService: agent.internalService,
+                    enabled: !agent.running && !agent.connecting && !submitting,
+                    onChanged: (config, thinking) async {
+                      await agent.configureModel(config, thinking);
+                      if (!agent.connected) await agent.connect();
+                    },
+                  ),
             actions: [
               if (!widget.showModeSelector)
                 IconButton(
