@@ -161,18 +161,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
       expect(find.text('项目会议记录'), findsOneWidget);
-      expect(find.text('99.74 积分'), findsOneWidget);
+      expect(find.text('99.74 积分'), findsNothing);
       expect(find.byType(TextField), findsOneWidget);
       expect(find.byType(AiModeButton), findsOneWidget);
       expect(find.textContaining('项目行动清单.md'), findsOneWidget);
-      expect(find.text('产物云同步'), findsOneWidget);
+      expect(find.text('产物云同步'), findsNothing);
       for (final control in [
         find.byTooltip('添加图片或文件'),
         find.byTooltip('发送'),
-        find.byKey(const Key('agent-approval-mode')),
-        find.text('产物云同步'),
         find.byType(AiModeButton),
-        find.byTooltip('笔记工具设置'),
       ]) {
         expect(
           tester.getRect(find.byType(AgentComposer)).contains(
@@ -190,6 +187,19 @@ void main() {
             (ink.computeLuminance() + .05) / (paper.computeLuminance() + .05);
         expect(contrast, greaterThanOrEqualTo(4.5));
       }
+      await tester.tap(find.byType(AiModeButton));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('对话设置'));
+      await tester.pumpAndSettle();
+      expect(find.text('99.74 积分'), findsOneWidget);
+      expect(find.text('产物云同步'), findsOneWidget);
+      expect(find.byKey(const Key('agent-approval-mode')), findsOneWidget);
+      expect(find.byTooltip('笔记工具设置'), findsOneWidget);
+      await tester.tap(find.text('联网'));
+      await tester.pump();
+      expect(controller.webSearch, true);
+      await tester.tap(find.text('完成'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('agent-mode-quick')));

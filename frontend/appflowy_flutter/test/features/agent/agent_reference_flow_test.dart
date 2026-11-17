@@ -7,6 +7,7 @@ import 'package:appflowy/features/agent/application/agent_internal_service.dart'
 import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/presentation/agent_conversations_page.dart';
 import 'package:appflowy/features/agent/presentation/agent_workspace.dart';
+import 'package:appflowy/features/agent/presentation/ai_mode_button.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:file_picker/file_picker.dart';
@@ -137,9 +138,10 @@ void main() {
                   'main.dart',
                 ])
                   PlatformFile(
-                      name: name,
-                      size: 4,
-                      bytes: Uint8List.fromList([1, 2, 3, 4]),),
+                    name: name,
+                    size: 4,
+                    bytes: Uint8List.fromList([1, 2, 3, 4]),
+                  ),
               ],
               controllerFactory: (row, workspace) => AgentController(
                 chatId: row.id,
@@ -151,7 +153,9 @@ void main() {
                   account: () async => account,
                 ),
               )..providerConfig = const AiProviderConfig(
-                  modelName: 'DeepSeek', isInternal: true,),
+                  modelName: 'DeepSeek',
+                  isInternal: true,
+                ),
             ),
           ),
         ),
@@ -159,6 +163,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '对比这些资料');
+    final inputHeight = tester.getSize(find.byType(TextField)).height;
     for (final item in [('知识库', '项目资料库'), ('文件', '项目方案.pdf'), ('笔记', '项目会议')]) {
       await tester.tap(find.byTooltip('引用知识库、文件或笔记'));
       await tester.pumpAndSettle();
@@ -183,14 +188,34 @@ void main() {
         image.dispose();
       });
     }
-    await tester.tap(find.byTooltip('发送消息'));
+    await tester.tap(find.byType(TextField));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(created, 1);
     expect(find.byType(AgentWorkspace), findsOneWidget);
+    expect(
+      tester.getSize(find.byType(TextField)).height,
+      closeTo(inputHeight, .01),
+      reason: 'Entering a conversation keeps the single-line input height',
+    );
+    final toolbarY = tester.getCenter(find.byTooltip('发送')).dy;
+    for (final control in [
+      find.byTooltip('添加图片或文件'),
+      find.byTooltip('引用知识库、文件或笔记'),
+      find.byType(AiModeButton),
+    ]) {
+      expect(
+        tester.getCenter(control).dy,
+        closeTo(toolbarY, 1),
+        reason: 'Conversation tools stay together after pressing Enter',
+      );
+    }
     expect(sent?['query'], '对比这些资料');
     expect(sent?['images'], isEmpty);
-    expect((sent?['attachments'] as List).map((f) => f['file_name']),
-        ['photo.jpg', 'plan.docx', 'data.xlsx', 'main.dart'],);
+    expect(
+      (sent?['attachments'] as List).map((f) => f['file_name']),
+      ['photo.jpg', 'plan.docx', 'data.xlsx', 'main.dart'],
+    );
     for (final file in sent?['attachments'] as List) {
       expect(base64Decode(file['data'] as String), [1, 2, 3, 4]);
       expect(file['file_size'], 4);

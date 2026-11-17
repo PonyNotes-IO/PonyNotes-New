@@ -48,6 +48,7 @@ class AgentWorkspace extends StatefulWidget {
 
 class _AgentWorkspaceState extends State<AgentWorkspace> {
   final input = TextEditingController();
+  final inputFocus = FocusNode();
   final scroll = ScrollController();
   final attachments = <PlatformFile>[];
   final selectedReferences = <AgentReference>[];
@@ -109,6 +110,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     agent.removeListener(_clearRevokedContext);
     agent.removeListener(_followConversation);
     input.dispose();
+    inputFocus.dispose();
     scroll.dispose();
     super.dispose();
   }
@@ -229,7 +231,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 832),
+                      constraints: const BoxConstraints(maxWidth: 884),
                       child: Column(
                         children: [
                           Padding(
@@ -376,6 +378,15 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                                       child: const Text('重新连接'),
                                     ),
                                 ],
+                              ),
+                            ),
+                          if (agent.queuedInputs.isNotEmpty)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              child: Text(
+                                '待处理 ${agent.queuedInputs.length} 条补充',
+                                style: const TextStyle(fontSize: 12),
                               ),
                             ),
                           if (agent.prompts.isEmpty) _composer(),
@@ -678,11 +689,13 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
             'image' => '图片',
             _ => '已上传',
           };
-          final uploaded =
-              file['uploaded'] is num ? (file['uploaded'] as num).toInt() : null;
-          final progressLabel = file['status'] == 'uploading' && uploaded != null
-              ? ' · $uploaded%'
-              : '';
+          final uploaded = file['uploaded'] is num
+              ? (file['uploaded'] as num).toInt()
+              : null;
+          final progressLabel =
+              file['status'] == 'uploading' && uploaded != null
+                  ? ' · $uploaded%'
+                  : '';
           final failed =
               ['failed', 'expired', 'unconfirmed'].contains(file['status']);
           final size =
@@ -977,6 +990,68 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
         ),
       );
 
+  Future<void> _settings() => showDialog<void>(
+        context: context,
+        builder: (dialogContext) => ListenableBuilder(
+          listenable: agent,
+          builder: (_, __) => StatefulBuilder(
+            builder: (_, setDialogState) => AlertDialog(
+              title: const Text('对话设置'),
+              content: SizedBox(
+                width: 400,
+                child: SingleChildScrollView(
+                  child: AgentWorkspaceControls(
+                    agent: agent,
+                    leading: [
+                      if (agent.running)
+                        DropdownButton<String>(
+                          value: behavior,
+                          underline: const SizedBox.shrink(),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'steer',
+                              child: Text('补充指令'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'follow_up',
+                              child: Text('排队发送'),
+                            ),
+                          ],
+                          onChanged: (value) =>
+                              setDialogState(() => behavior = value!),
+                        ),
+                      FilterChip(
+                        label: const Text('联网'),
+                        selected: agent.webSearch,
+                        onSelected: agent.running
+                            ? null
+                            : (value) {
+                                agent.webSearch = value;
+                                agent.changed();
+                              },
+                      ),
+                      IconButton(
+                        tooltip: '笔记工具设置',
+                        icon: const Icon(Icons.tune, size: 20),
+                        onPressed: agent.running || !agent.connected
+                            ? null
+                            : _toolSettings,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('完成'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
   Future<void> _toolSettings() async {
     final disabled = agent.permissions.disabledTools.toSet();
     final saved = await showDialog<bool>(
@@ -1087,93 +1162,68 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     }
   }
 
-  Widget _composer() => SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: AgentComposer(
-            input: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Focus(
-                  onKeyEvent: (_, event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.escape &&
-                        agent.running) {
-                      unawaited(agent.stop());
-                      return KeyEventResult.handled;
-                    }
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.enter &&
-                        !HardwareKeyboard.instance.isShiftPressed) {
-                      unawaited(_send());
-                      return KeyEventResult.handled;
-                    }
-                    return KeyEventResult.ignored;
-                  },
-                  child: AgentReferenceField(
-                    controller: input,
-                    selected: selectedReferences,
-                    enabled: !submitting && !agent.running && !agent.connecting,
-                    smartMode: agent.mode == 'smart-reasoning',
-                    onModeChanged:
-                        widget.showModeSelector ? agent.configureMode : null,
-                    load: agent.loadReferences,
-                    onChanged: (items) => setState(
-                      () => selectedReferences
-                        ..clear()
-                        ..addAll(items),
-                    ),
-                    child: TextField(
-                      controller: input,
-                      minLines: 3,
-                      maxLines: 6,
-                      decoration: const InputDecoration(
-                        hintText: '提问，或描述你想了解的内容',
-                        border: InputBorder.none,
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ),
-                if (attachments.isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 6,
-                      children: attachments
-                          .map(
-                            (file) => InputChip(
-                              label: Text(file.name),
-                              tooltip: '待上传',
-                              onDeleted: submitting
-                                  ? null
-                                  : () => setState(
-                                        () => attachments.remove(file),
-                                      ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                if (agent.queuedInputs.isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '待处理 ${agent.queuedInputs.length} 条补充',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-              ],
-            ),
+  Widget _composer() {
+    final theme = AppFlowyTheme.of(context);
+    return AgentComposerFrame(
+      child: Focus(
+        onKeyEvent: (_, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape &&
+              agent.running) {
+            unawaited(agent.stop());
+            return KeyEventResult.handled;
+          }
+          if (event is KeyDownEvent &&
+              inputFocus.hasFocus &&
+              event.logicalKey == LogicalKeyboardKey.enter &&
+              !HardwareKeyboard.instance.isShiftPressed &&
+              input.value.composing.isCollapsed) {
+            unawaited(_send());
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: AgentReferenceField(
+          controller: input,
+          selected: selectedReferences,
+          enabled: !submitting && !agent.running && !agent.connecting,
+          smartMode: agent.mode == 'smart-reasoning',
+          onModeChanged: widget.showModeSelector ? agent.configureMode : null,
+          load: agent.loadReferences,
+          onChanged: (items) => setState(
+            () => selectedReferences
+              ..clear()
+              ..addAll(items),
+          ),
+          // Keep the reference button in the toolbar across the first send.
+          builder: (field, referenceButton) => AgentComposer(
+            compact: true,
+            input: field,
             leading: [
-              if (!agent.running)
-                IconButton(
-                  tooltip: '添加图片或文件',
-                  onPressed: submitting ? null : _attach,
-                  icon: const Icon(Icons.attach_file, size: 18),
+              if (widget.showModeSelector)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: theme.textColorScheme.primary.withValues(alpha: .04),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: AiModeButton(
+                    agentMode: agent.mode == 'smart-reasoning',
+                    enabled: !submitting,
+                    onSelected: agent.configureMode,
+                    onSettings: _settings,
+                  ),
                 ),
+              IconButton(
+                tooltip: '添加图片或文件',
+                style: IconButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(30, 30),
+                ),
+                visualDensity: VisualDensity.compact,
+                onPressed: submitting || agent.running ? null : _attach,
+                icon: const Icon(Icons.attach_file, size: 18),
+              ),
+              referenceButton,
             ],
             modelSelector: AgentModelSettingsButton(
               currentConfig: agent.providerConfig,
@@ -1186,61 +1236,102 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
               },
             ),
             actions: [
-              if (agent.running)
+              if (!widget.showModeSelector)
                 IconButton(
-                  tooltip: '停止任务',
-                  onPressed: agent.stop,
-                  icon: const Icon(Icons.stop_circle_outlined),
+                  tooltip: '对话设置',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: _settings,
+                  icon: const Icon(Icons.tune, size: 18),
                 ),
-              IconButton(
-                tooltip: agent.running ? '发送指令' : '发送',
-                onPressed: agent.connecting || submitting ? null : _send,
-                icon: const Icon(Icons.arrow_upward),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: input,
+                builder: (context, value, _) {
+                  final hasText = value.text.trim().isNotEmpty;
+                  final stop = agent.running && !hasText;
+                  return IconButton.filled(
+                    tooltip: stop
+                        ? '停止任务'
+                        : agent.running
+                            ? '发送指令'
+                            : '发送',
+                    onPressed: stop
+                        ? agent.stop
+                        : agent.connecting || submitting || !hasText
+                            ? null
+                            : _send,
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.textColorScheme.primary,
+                      foregroundColor: theme.surfaceColorScheme.primary,
+                      disabledBackgroundColor:
+                          theme.textColorScheme.primary.withValues(alpha: .12),
+                      disabledForegroundColor: theme.surfaceColorScheme.primary,
+                      minimumSize: const Size(30, 30),
+                      maximumSize: const Size(30, 30),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: Icon(
+                      stop ? Icons.stop_rounded : Icons.arrow_upward,
+                      size: 18,
+                    ),
+                  );
+                },
               ),
             ],
-            footer: AgentWorkspaceControls(
-              agent: agent,
-              leading: [
-                if (widget.showModeSelector)
-                  AiModeButton(
-                    agentMode: agent.mode == 'smart-reasoning',
-                    enabled: !submitting,
-                    onSelected: agent.configureMode,
-                  ),
-                if (agent.running)
-                  DropdownButton<String>(
-                    value: behavior,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'steer',
-                        child: Text('补充指令'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'follow_up',
-                        child: Text('排队发送'),
-                      ),
-                    ],
-                    onChanged: (value) => setState(() => behavior = value!),
-                  ),
-                FilterChip(
-                  label: const Text('联网'),
-                  selected: agent.webSearch,
-                  onSelected: agent.running
-                      ? null
-                      : (value) => setState(() => agent.webSearch = value),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: input,
+                focusNode: inputFocus,
+                minLines: 1,
+                maxLines: 5,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: theme.textColorScheme.primary,
                 ),
-                IconButton(
-                  tooltip: '笔记工具设置',
-                  icon: const Icon(Icons.tune, size: 20),
-                  onPressed:
-                      agent.running || !agent.connected ? null : _toolSettings,
+                decoration: InputDecoration(
+                  hintText: '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                  hintMaxLines: 1,
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: theme.textColorScheme.primary.withValues(alpha: .42),
+                  ),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.only(top: 2, bottom: 8),
+                  isDense: true,
                 ),
-              ],
-            ),
+              ),
+              if (attachments.isNotEmpty)
+                Wrap(
+                  spacing: 6,
+                  children: attachments
+                      .map(
+                        (file) => InputChip(
+                          label: Text(file.name),
+                          tooltip: '待上传',
+                          onDeleted: submitting
+                              ? null
+                              : () => setState(
+                                    () => attachments.remove(file),
+                                  ),
+                        ),
+                      )
+                      .toList(),
+                ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 
   Widget _details() => ListenableBuilder(
         listenable: agent,

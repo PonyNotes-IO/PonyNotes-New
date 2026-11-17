@@ -435,180 +435,148 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
                 ),
               ),
             ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 16 : 52,
-                  12,
-                  compact ? 16 : 52,
-                  16,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 780),
+            AgentComposerFrame(
+              child: Focus(
+                onKeyEvent: _submitKey,
+                child: AgentReferenceField(
+                  controller: input,
+                  selected: selectedReferences,
+                  enabled: enabled,
+                  smartMode: smart,
+                  onModeChanged: (value) => setState(() => smart = value),
+                  load: _loadReferences,
+                  onChanged: (items) => setState(
+                    () => selectedReferences
+                      ..clear()
+                      ..addAll(items),
+                  ),
+                  builder: (field, referenceButton) => AgentComposer(
+                    compact: true,
+                    input: field,
+                    leading: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: theme.textColorScheme.primary
+                              .withValues(alpha: .04),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: AiModeButton(
+                          agentMode: smart,
+                          enabled: enabled,
+                          onSelected: (value) => setState(() => smart = value),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '上传文件',
+                        style: IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(30, 30),
+                        ),
+                        onPressed: enabled ? _attach : null,
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.attach_file, size: 18),
+                      ),
+                      referenceButton,
+                    ],
+                    modelSelector: AgentModelSettingsButton(
+                      enabled: enabled,
+                      currentConfig: model,
+                      currentThinking: thinking,
+                      onChanged: (config, level) async {
+                        setState(() {
+                          model = config;
+                          thinking = level;
+                        });
+                      },
+                    ),
+                    actions: [
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: input,
+                        builder: (context, value, _) => IconButton.filled(
+                          tooltip: '发送消息',
+                          onPressed: enabled && value.text.trim().isNotEmpty
+                              ? () => _create(send: true)
+                              : null,
+                          style: IconButton.styleFrom(
+                            backgroundColor: theme.textColorScheme.primary,
+                            foregroundColor: theme.surfaceColorScheme.primary,
+                            disabledBackgroundColor: theme
+                                .textColorScheme.primary
+                                .withValues(alpha: .12),
+                            disabledForegroundColor:
+                                theme.surfaceColorScheme.primary,
+                            minimumSize: const Size(30, 30),
+                            maximumSize: const Size(30, 30),
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: sessions.creating
+                              ? const SizedBox.square(
+                                  dimension: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.arrow_upward,
+                                  size: 18,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Focus(
-                        onKeyEvent: _submitKey,
-                        child: AgentReferenceField(
-                          controller: input,
-                          selected: selectedReferences,
-                          enabled: enabled,
-                          smartMode: smart,
-                          onModeChanged: (value) =>
-                              setState(() => smart = value),
-                          load: _loadReferences,
-                          onChanged: (items) => setState(
-                            () => selectedReferences
-                              ..clear()
-                              ..addAll(items),
-                          ),
-                          builder: (field, referenceButton) => AgentComposer(
-                            compact: true,
-                            input: field,
-                            leading: [
-                              DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: theme.textColorScheme.primary
-                                      .withValues(alpha: .04),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: AiModeButton(
-                                  agentMode: smart,
-                                  enabled: enabled,
-                                  onSelected: (value) =>
-                                      setState(() => smart = value),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: '上传文件',
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  minimumSize: const Size(30, 30),
-                                ),
-                                onPressed: enabled ? _attach : null,
-                                visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.attach_file, size: 18),
-                              ),
-                              referenceButton,
-                            ],
-                            modelSelector: AgentModelSettingsButton(
-                              enabled: enabled,
-                              currentConfig: model,
-                              currentThinking: thinking,
-                              onChanged: (config, level) async {
-                                setState(() {
-                                  model = config;
-                                  thinking = level;
-                                });
-                              },
-                            ),
-                            actions: [
-                              ValueListenableBuilder<TextEditingValue>(
-                                valueListenable: input,
-                                builder: (context, value, _) =>
-                                    IconButton.filled(
-                                  tooltip: '发送消息',
-                                  onPressed:
-                                      enabled && value.text.trim().isNotEmpty
-                                          ? () => _create(send: true)
-                                          : null,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor:
-                                        theme.textColorScheme.primary,
-                                    foregroundColor:
-                                        theme.surfaceColorScheme.primary,
-                                    disabledBackgroundColor: theme
-                                        .textColorScheme.primary
-                                        .withValues(alpha: .12),
-                                    disabledForegroundColor:
-                                        theme.surfaceColorScheme.primary,
-                                    minimumSize: const Size(30, 30),
-                                    maximumSize: const Size(30, 30),
-                                    padding: EdgeInsets.zero,
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                  icon: sessions.creating
-                                      ? const SizedBox.square(
-                                          dimension: 14,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(
-                                          Icons.arrow_upward,
-                                          size: 18,
-                                        ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              TextField(
-                                controller: input,
-                                focusNode: inputFocus,
-                                minLines: 1,
-                                maxLines: 5,
-                                enabled: enabled,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  height: 1.5,
-                                  color: theme.textColorScheme.primary,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
-                                  hintStyle: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w400,
-                                    color: tertiary,
-                                  ),
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  disabledBorder: InputBorder.none,
-                                  contentPadding:
-                                      const EdgeInsets.only(top: 2, bottom: 8),
-                                  isDense: true,
-                                ),
-                              ),
-                              if (files.isNotEmpty)
-                                Wrap(
-                                  spacing: 8,
-                                  children: files
-                                      .map(
-                                        (f) => InputChip(
-                                          label: Text(f.name),
-                                          onDeleted: () =>
-                                              setState(() => files.remove(f)),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              if (uploadError != null)
-                                Text(
-                                  uploadError!,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '内容由 AI 生成，请仔细甄别',
+                      TextField(
+                        controller: input,
+                        focusNode: inputFocus,
+                        minLines: 1,
+                        maxLines: 5,
+                        enabled: enabled,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: tertiary,
+                          fontSize: 14,
+                          height: 1.5,
+                          color: theme.textColorScheme.primary,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '我可以帮你写代码、写作各种创意内容，请把你的任务交给我吧～',
+                          hintMaxLines: 1,
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: tertiary,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          disabledBorder: InputBorder.none,
+                          contentPadding:
+                              const EdgeInsets.only(top: 2, bottom: 8),
+                          isDense: true,
                         ),
                       ),
+                      if (files.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          children: files
+                              .map(
+                                (f) => InputChip(
+                                  label: Text(f.name),
+                                  onDeleted: () =>
+                                      setState(() => files.remove(f)),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      if (uploadError != null)
+                        Text(
+                          uploadError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
                     ],
                   ),
                 ),
