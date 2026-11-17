@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:http/http.dart' as http;
 import 'agent_internal_service.dart';
 import 'agent_reference.dart';
@@ -10,10 +15,13 @@ class AgentService {
   AgentService({
     http.Client? client,
     Future<AgentCloudAccount> Function()? account,
+    Future<List<ViewPB>> Function()? referenceViews,
   })  : _client = client,
-        _account = account ?? AgentCloudAccount.current;
+        _account = account ?? AgentCloudAccount.current,
+        _referenceViews = referenceViews;
   final http.Client? _client;
   final Future<AgentCloudAccount> Function() _account;
+  final Future<List<ViewPB>> Function()? _referenceViews;
   http.Client? _streamClient;
 
   Future<List<AgentReference>> references(
@@ -25,9 +33,68 @@ class AgentService {
     if (before != await identity(workspace)) {
       throw StateError('账号已切换，请重新选择引用');
     }
-    return (data['items'] as List)
+    final items = (data['items'] as List)
         .map((item) => AgentReference.fromJson(item as Map))
         .toList();
+    // Older Cloud catalogs omit location metadata; reuse the sidebar's folder.
+    if (items.any(
+      (i) => i.kind == 'note' && (i.visibility == null || i.spaceName.isEmpty),
+    )) {
+      try {
+        final snapshot = await (_referenceViews?.call() ??
+            ViewBackendService.getAllViews().then(
+              (result) => result.fold(
+                (value) => value.items,
+                (error) => throw StateError(error.msg),
+              ),
+            ));
+        final views = {for (final view in snapshot) view.id: view};
+        for (var i = 0; i < items.length; i++) {
+          final item = items[i];
+          if (item.kind != 'note' ||
+              (item.visibility != null && item.spaceName.isNotEmpty)) {
+            continue;
+          }
+          final ancestors = <ViewPB>[];
+          final visited = <String>{};
+          var view = views[item.id];
+          while (view != null && view.id != workspace && visited.add(view.id)) {
+            ancestors.add(view);
+            view = views[view.parentViewId];
+          }
+          // The native folder follows the active workspace, so reject another
+          // workspace's snapshot and incomplete or cyclic ancestry.
+          if (view?.id != workspace) continue;
+          final spaces = ancestors.where((v) {
+            if (!v.isSpace) return false;
+            final permission = (jsonDecode(v.extra) as Map)['space_permission'];
+            return permission is int &&
+                permission >= 0 &&
+                permission < SpacePermission.values.length;
+          }).toList();
+          if (spaces.isEmpty) continue;
+          items[i] = AgentReference(
+            kind: item.kind,
+            id: item.id,
+            name: item.name,
+            subtitle: item.subtitle,
+            available: item.available,
+            visibility: item.visibility ??
+                (spaces.any((v) => v.spacePermission == SpacePermission.private)
+                    ? 'private'
+                    : 'shared'),
+            spaceName:
+                item.spaceName.isEmpty ? spaces.first.name : item.spaceName,
+          );
+        }
+      } catch (error) {
+        Log.warn('Failed to read reference space metadata: $error');
+      }
+    }
+    if (before != await identity(workspace)) {
+      throw StateError('账号已切换，请重新选择引用');
+    }
+    return items;
   }
 
   Future<String> uploadArtifact(

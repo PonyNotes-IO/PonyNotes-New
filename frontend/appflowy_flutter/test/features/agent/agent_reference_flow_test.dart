@@ -103,7 +103,11 @@ void main() {
       }
       return http.Response('{"messages":[],"sources":{}}', 200);
     });
-    final service = AgentService(client: client, account: () async => account);
+    final service = AgentService(
+      client: client,
+      account: () async => account,
+      referenceViews: () async => [],
+    );
     final sessions = AgentConversations(
       service: service,
       workspace: () async => 'workspace',
@@ -164,12 +168,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '对比这些资料');
     final inputHeight = tester.getSize(find.byType(TextField)).height;
-    for (final item in [('知识库', '项目资料库'), ('文件', '项目方案.pdf'), ('笔记', '项目会议')]) {
+    for (final item in [
+      ('base', '项目资料库'),
+      ('file', '项目方案.pdf'),
+      ('note', '项目会议'),
+    ]) {
       await tester.tap(find.byTooltip('引用知识库、文件或笔记'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('关闭引用选择'), findsOneWidget);
       expect(find.text('引用列表加载失败，请重试'), findsNothing);
-      await tester.tap(find.text(item.$1));
+      await tester
+          .tap(find.byKey(ValueKey('agent-reference-category-${item.$1}')));
       await tester.pumpAndSettle();
       await tester.tap(find.text(item.$2));
       await tester.pumpAndSettle();

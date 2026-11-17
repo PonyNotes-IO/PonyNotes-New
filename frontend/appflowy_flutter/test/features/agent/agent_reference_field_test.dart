@@ -19,7 +19,7 @@ const references = [
   AgentReference(
     kind: 'note',
     id: 'note',
-    name: '项目会议记录',
+    name: '项目会议记录与跨部门方案评审说明及后续行动清单',
     subtitle: '协作空间 / 项目',
   ),
 ];
@@ -57,7 +57,7 @@ void main() {
       addTearDown(controller.dispose);
       var selected = <AgentReference>[];
       var submitted = 0;
-      var smart = true;
+      var smart = !variant.dark;
       final capture = GlobalKey();
       Future<void> screenshot(String state) async {
         final output = Platform.environment['PONYNOTES_REFERENCE_SCREENSHOTS'];
@@ -132,8 +132,18 @@ void main() {
       final input = find.byType(TextField).first;
       await tester.enterText(input, '请分析 @');
       await tester.pumpAndSettle();
-      expect(find.text('当前模式'), findsOneWidget);
-      await screenshot('mention-modes');
+      expect(find.text('当前模式'), findsNothing);
+      expect(find.text('点击切换'), findsNothing);
+      expect(find.text('快问快答'), findsNothing);
+      expect(find.text('智能推理'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-reference-categories')),
+        findsOneWidget,
+      );
+      if (variant.size.width >= 504) {
+        expect(find.text(references.last.name), findsOneWidget);
+      }
+      await screenshot('mention-references');
       final panel =
           tester.getRect(find.byKey(const ValueKey('agent-mention-panel')));
       expect(panel.left, greaterThanOrEqualTo(0));
@@ -142,19 +152,11 @@ void main() {
       expect(panel.bottom, lessThanOrEqualTo(variant.size.height));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pumpAndSettle();
-      expect(find.text('点击切换'), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
-      expect(smart, false);
-      expect(controller.text, '请分析 ');
+      expect(smart, !variant.dark);
+      expect(controller.text, '请分析 @');
       expect(submitted, 0);
-      await tester.enterText(input, '请分析 @');
-      await tester.pumpAndSettle();
-      expect(find.text('知识库'), findsOneWidget);
-      expect(find.text('文件'), findsOneWidget);
-      expect(find.text('笔记'), findsOneWidget);
-      await tester.tap(find.text('文件'));
-      await tester.pumpAndSettle();
       expect(find.text('需求说明.pdf'), findsOneWidget);
       await screenshot('reference-picker');
       await tester.tap(find.text('需求说明.pdf'));
@@ -175,8 +177,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(selected.map((r) => r.kind), ['file', 'note']);
       expect(submitted, 0);
-      final chip = tester.widget<InputChip>(find.byType(InputChip).first);
-      chip.onDeleted!();
+      await tester.enterText(input, '请分析 @产品');
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(selected.map((r) => r.kind), ['file', 'note', 'base']);
+      expect(
+        find.byTooltip('${references.last.name}\n${references.last.subtitle}'),
+        findsOneWidget,
+      );
+      expect(
+        tester.getBottomLeft(find.byType(InputChip).last).dy,
+        lessThan(tester.getTopLeft(input).dy),
+      );
+      await screenshot('selected-references');
+      await tester.tap(find.byTooltip('移除引用：产品知识库'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('移除引用：需求说明.pdf'));
       await tester.pumpAndSettle();
       expect(selected.single.kind, 'note');
       await tester.enterText(input, 'name@example.com');
@@ -194,7 +211,194 @@ void main() {
     });
   }
 
-  testWidgets('reference errors can retry without blocking mode selection',
+  for (final variant in [
+    (name: 'reference-dark', size: const Size(870, 471), dark: true),
+    (name: 'desktop-light', size: const Size(1100, 800), dark: false),
+    (name: 'phone-dark', size: const Size(390, 844), dark: true),
+    (name: 'compact-light', size: const Size(320, 480), dark: false),
+  ]) {
+    testWidgets('note groups search and keyboard selection on ${variant.name}',
+        (tester) async {
+      final shadowsDisabled = debugDisableShadows;
+      debugDisableShadows = false;
+      addTearDown(() => debugDisableShadows = shadowsDisabled);
+      tester.view.physicalSize = variant.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = TextEditingController(text: '帮我总结小马笔记二期需求');
+      addTearDown(controller.dispose);
+      final notes = [
+        for (final visibility in ['private', 'shared'])
+          for (var i = 0; i < 3; i++)
+            AgentReference.fromJson({
+              'kind': 'note',
+              'id': '$visibility-$i',
+              'name': ['水土保持方案中AI如何自动匹配适用条款', '未命名白板', '小马笔记bug反馈'][i],
+              'subtitle': visibility == 'private'
+                  ? '工作区 / 默认的工作空间 / 项目'
+                  : '工作区 / 小马笔记 / 协作',
+              'visibility': visibility,
+              'space_name': visibility == 'private' ? '默认的工作空间' : '小马笔记',
+              'knowledge_ids': [],
+            }),
+      ];
+      var selected = <AgentReference>[];
+      final capture = GlobalKey();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: capture,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              brightness: variant.dark ? Brightness.dark : Brightness.light,
+              fontFamily: 'ReferenceTestFont',
+            ),
+            builder: (_, child) => AppFlowyTheme(
+              data: variant.dark
+                  ? AppFlowyDefaultTheme().dark()
+                  : AppFlowyDefaultTheme().light(),
+              child: child!,
+            ),
+            home: Scaffold(
+              backgroundColor:
+                  variant.dark ? const Color(0xFF191919) : Colors.white,
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 814),
+                    child: StatefulBuilder(
+                      builder: (_, setState) => AgentReferenceField(
+                        controller: controller,
+                        selected: selected,
+                        onChanged: (items) => setState(() => selected = items),
+                        load: () async =>
+                            [references.first, references[2], ...notes],
+                        builder: (field, button) => AgentComposer(
+                          compact: true,
+                          input: field,
+                          leading: [
+                            const Text(
+                              '快速问答',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.attach_file, size: 18),
+                            button,
+                          ],
+                          modelSelector: const Text(
+                            '选择模型',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          actions: const [
+                            Icon(Icons.arrow_upward, size: 18),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: controller,
+                          minLines: 3,
+                          maxLines: 3,
+                          style: const TextStyle(fontSize: 13),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byTooltip('引用知识库、文件或笔记'));
+      await tester.pumpAndSettle();
+      expect(find.text('当前模式'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('agent-reference-category-note')),
+        findsOneWidget,
+      );
+      if (variant.size.width >= 504) {
+        expect(find.text('私有笔记'), findsOneWidget);
+        expect(find.text('协作笔记'), findsOneWidget);
+      }
+      await tester
+          .tap(find.byKey(const ValueKey('agent-reference-category-note')));
+      await tester.pumpAndSettle();
+      expect(find.text('私有笔记'), findsOneWidget);
+      expect(find.text('协作笔记'), findsOneWidget);
+      final panel =
+          tester.getRect(find.byKey(const ValueKey('agent-mention-panel')));
+      expect(panel.left, greaterThanOrEqualTo(12));
+      expect(panel.right, lessThanOrEqualTo(variant.size.width - 12));
+      expect(panel.top, greaterThanOrEqualTo(0));
+      expect(panel.bottom, lessThanOrEqualTo(variant.size.height));
+      final output = Platform.environment['PONYNOTES_NOTE_PICKER_SCREENSHOTS'];
+      if (output != null) {
+        await tester.runAsync(() async {
+          final image = await (capture.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await Directory(output).create(recursive: true);
+          await File('$output/notes-${variant.name}.png')
+              .writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+      // Collapsed notes must also be excluded from keyboard navigation.
+      await tester.tap(find.text('私有笔记'));
+      await tester.pumpAndSettle();
+      expect(find.text('默认的工作空间'), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(selected.single.id, 'shared-1');
+      expect(controller.text, '帮我总结小马笔记二期需求');
+      await tester.tap(find.byTooltip('引用知识库、文件或笔记'));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('agent-reference-category-note')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('默认的工作空间'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('reference-note:private-2')),
+        findsNothing,
+      );
+      // Search reveals matching notes even inside collapsed spaces.
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-reference-search')),
+        'bug',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('小马笔记bug反馈'), findsNWidgets(2));
+      expect(find.text('未命名白板'), findsOneWidget); // Previously selected chip.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(selected.map((r) => r.id), ['shared-1', 'private-2']);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      debugDisableShadows = shadowsDisabled;
+    });
+  }
+
+  test('note catalog metadata does not infer access from a path', () {
+    final item = AgentReference.fromJson({
+      'kind': 'note',
+      'id': 'legacy',
+      'name': '笔记',
+      'subtitle': '私有名字的空间 / 项目',
+    });
+    expect(item.noteSection, '笔记');
+    expect(item.noteSpace, '私有名字的空间');
+    expect(item.toJson(), {'kind': 'note', 'id': 'legacy'});
+  });
+
+  testWidgets('reference errors can retry and reopen in the reference browser',
       (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
@@ -221,7 +425,11 @@ void main() {
     );
     await tester.enterText(find.byType(TextField).first, '草稿 @');
     await tester.pumpAndSettle();
-    expect(find.text('当前模式'), findsOneWidget);
+    expect(find.text('当前模式'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('agent-reference-categories')),
+      findsOneWidget,
+    );
     await tester.tap(find.text('文件'));
     await tester.pumpAndSettle();
     expect(find.text('引用列表加载失败，请重试'), findsOneWidget);
@@ -229,9 +437,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('需求说明.pdf'), findsOneWidget);
     expect(attempts, 2);
-    await tester.tap(find.text('快问快答'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(mode, false);
+    controller.clear();
+    await tester.enterText(find.byType(TextField).first, '草稿 @');
+    await tester.pumpAndSettle();
+    expect(find.text(references.last.name), findsOneWidget);
+    await tester.tap(find.text(references.last.name));
+    await tester.pumpAndSettle();
+    expect(mode, isNull);
     expect(controller.text, '草稿 ');
     expect(find.byKey(const ValueKey('agent-mention-panel')), findsNothing);
   });

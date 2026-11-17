@@ -42,7 +42,11 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   final _anchor = GlobalKey();
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
+  final _scopedSearch = TextEditingController();
+  final _scopedFocus = FocusNode();
   final _scroll = AutoScrollController();
+  final _collapsedSections = <String>{};
+  final _collapsedSpaces = <(String, String)>{};
   List<AgentReference> _items = [];
   String? _kind;
   String? _error;
@@ -53,8 +57,6 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   bool _loading = false;
   bool _above = true;
   double _height = 320;
-  double _width = 440;
-  double _offsetX = 0;
   bool _browsing = false;
 
   static const _modes = [
@@ -63,9 +65,9 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   ];
 
   static const _categories = [
-    (kind: 'base', label: '知识库', icon: Icons.storage_outlined),
-    (kind: 'file', label: '文件', icon: Icons.insert_drive_file_outlined),
-    (kind: 'note', label: '笔记', icon: Icons.description_outlined),
+    (kind: 'base', label: '知识库', icon: Icons.menu_book_outlined),
+    (kind: 'file', label: '文件', icon: Icons.folder_outlined),
+    (kind: 'note', label: '笔记', icon: Icons.insert_drive_file_outlined),
   ];
 
   @override
@@ -92,6 +94,8 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     AgentController.accountClearance.removeListener(_close);
     _search.dispose();
     _searchFocus.dispose();
+    _scopedSearch.dispose();
+    _scopedFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -121,6 +125,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     } else {
       setState(() {
         _kind = null;
+        _scopedSearch.clear();
         _browsing = _search.text.isNotEmpty;
       });
     }
@@ -132,13 +137,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       _typedStart = null;
       _search.clear();
     }
-    _kind = _search.text.isNotEmpty
-        ? null
-        : widget.onModeChanged == null
-            ? 'base'
-            : widget.smartMode
-                ? 'smart'
-                : 'quick';
+    _kind = _search.text.isNotEmpty ? null : 'note';
     _browsing = _search.text.isNotEmpty;
     _focused = _browsing
         ? 0
@@ -153,11 +152,10 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         box.size.height -
         16;
     _above = above >= below;
-    _height = math.min(280, math.max(0, _above ? above : below));
-    _width = math.min(440, media.size.width - 24);
-    _offsetX = (offset.dx - 96)
-            .clamp(12.0, math.max(12.0, media.size.width - _width - 12)) -
-        offset.dx;
+    _height = math.min(344, math.max(0, _above ? above : below));
+    _scopedSearch.clear();
+    _collapsedSections.clear();
+    _collapsedSpaces.clear();
     _portal.show();
     unawaited(_load());
     if (!fromTyping) _searchFocus.requestFocus();
@@ -189,26 +187,100 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     _typedStart = null;
     _items = [];
     _search.clear();
+    _scopedSearch.clear();
     _portal.hide();
   }
 
   List<AgentReference> get _filtered {
-    final query = _search.text.trim().toLowerCase();
+    final query =
+        (_kind != null && !_showModes ? _scopedSearch.text : _search.text)
+            .trim()
+            .toLowerCase();
     final selected = widget.selected.map((r) => r.key).toSet();
     return _items
         .where(
           (r) =>
               (_kind == null || _showModes || r.kind == _kind) &&
               !selected.contains(r.key) &&
-              '${r.name} ${r.subtitle}'.toLowerCase().contains(query),
+              '${r.name} ${r.subtitle} ${r.spaceName}'
+                  .toLowerCase()
+                  .contains(query),
         )
         .toList();
   }
 
   bool get _showModes => _kind == 'smart' || _kind == 'quick';
 
+  double get _width => math.min(
+        _showModes ? 440 : 506,
+        MediaQuery.sizeOf(context).width - 24,
+      );
+
+  bool get _singlePane => !_showModes && _width < 480;
+
+  double get _offsetX {
+    final box = _anchor.currentContext!.findRenderObject()! as RenderBox;
+    final x = box.localToGlobal(Offset.zero).dx;
+    return (x - 8).clamp(
+          12.0,
+          math.max(12.0, MediaQuery.sizeOf(context).width - _width - 12),
+        ) -
+        x;
+  }
+
+  Map<String, Map<String, List<AgentReference>>> get _noteGroups {
+    final groups = <String, Map<String, List<AgentReference>>>{};
+    for (final item in _filtered) {
+      groups
+          .putIfAbsent(item.noteSection, () => {})
+          .putIfAbsent(item.noteSpace, () => [])
+          .add(item);
+    }
+    return {
+      for (final section in ['私有笔记', '协作笔记', '笔记'])
+        if (groups.containsKey(section)) section: groups[section]!,
+    };
+  }
+
+  bool get _searchingNotes => _scopedSearch.text.trim().isNotEmpty;
+
+  List<AgentReference> get _visibleItems => _kind == 'note'
+      ? [
+          for (final section in _noteGroups.entries)
+            if (_searchingNotes || !_collapsedSections.contains(section.key))
+              for (final space in section.value.entries)
+                if (_searchingNotes ||
+                    !_collapsedSpaces.contains((section.key, space.key)))
+                  ...space.value,
+        ]
+      : _filtered;
+
+  void _browse(String kind, {bool enter = false}) {
+    setState(() {
+      if (_kind != kind) _scopedSearch.clear();
+      _kind = kind;
+      _browsing = enter;
+      _focused = enter ? 0 : _navigation.indexWhere((e) => e.kind == kind);
+    });
+    if (enter) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _portal.isShowing && _kind == kind && _browsing) {
+          _scopedFocus.requestFocus();
+        }
+      });
+    }
+  }
+
+  void _backToCategories() {
+    setState(() {
+      _browsing = false;
+      _focused = math.max(0, _navigation.indexWhere((e) => e.kind == _kind));
+    });
+    _searchFocus.requestFocus();
+  }
+
   List<({String kind, String label, IconData icon})> get _navigation => [
-        if (widget.onModeChanged != null) ..._modes,
+        if (_showModes && widget.onModeChanged != null) ..._modes,
         ..._categories,
       ];
 
@@ -237,7 +309,8 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   void _select(AgentReference item) {
     if (!item.available || widget.selected.length >= 20) return;
     if (!widget.controller.value.composing.isCollapsed ||
-        !_search.value.composing.isCollapsed) {
+        !_search.value.composing.isCollapsed ||
+        !_scopedSearch.value.composing.isCollapsed) {
       return;
     }
     _consumeMention();
@@ -249,7 +322,8 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       return KeyEventResult.ignored;
     }
     if (!widget.controller.value.composing.isCollapsed ||
-        !_search.value.composing.isCollapsed) {
+        !_search.value.composing.isCollapsed ||
+        !_scopedSearch.value.composing.isCollapsed) {
       return KeyEventResult.ignored;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -257,16 +331,15 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
-        _search.text.isEmpty) {
-      setState(() {
-        _browsing = false;
-        _focused = _navigation.indexWhere((entry) => entry.kind == _kind);
-        if (_focused < 0) _focused = 0;
-      });
+        !_searchingNotes &&
+        _search.text.isEmpty &&
+        !_scopedFocus.hasFocus) {
+      _backToCategories();
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
         _search.text.isEmpty &&
+        !_scopedFocus.hasFocus &&
         !_showModes) {
       setState(() {
         _browsing = true;
@@ -274,7 +347,8 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       });
       return KeyEventResult.handled;
     }
-    final length = _browsing ? _filtered.length : _navigation.length;
+    final navigation = _navigation;
+    final length = _browsing ? _visibleItems.length : navigation.length;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
         event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (length > 0) {
@@ -285,7 +359,11 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
                         ? 1
                         : -1)) %
                 length;
-            if (!_browsing) _kind = _navigation[_focused].kind;
+            if (!_browsing) {
+              _kind = navigation[_focused].kind;
+              _focused = _navigation.indexWhere((entry) => entry.kind == _kind);
+              _scopedSearch.clear();
+            }
           },
         );
         if (_browsing) unawaited(_scroll.scrollToIndex(_focused));
@@ -295,7 +373,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     if (event.logicalKey == LogicalKeyboardKey.enter) {
       if (length > 0) {
         if (!_browsing) {
-          final kind = _navigation[_focused.clamp(0, length - 1)].kind;
+          final kind = navigation[_focused.clamp(0, length - 1)].kind;
           if (kind == 'smart' || kind == 'quick') {
             _selectMode(kind);
           } else {
@@ -306,7 +384,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
             });
           }
         } else if (!_loading && _error == null) {
-          _select(_filtered[_focused.clamp(0, length - 1)]);
+          _select(_visibleItems[_focused.clamp(0, length - 1)]);
         }
       }
       return KeyEventResult.handled;
@@ -320,14 +398,18 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
 
   Color get _accent => Colors.indigo.shade400;
 
-  Widget _surface(Widget child) => Material(
-        color: AppFlowyTheme.maybeOf(context)?.surfaceColorScheme.layer01 ??
-            Theme.of(context).colorScheme.surface,
+  Widget _surface(Widget child, {bool reference = false}) => Material(
+        color: reference
+            ? Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF262626)
+                : Colors.white
+            : AppFlowyTheme.maybeOf(context)?.surfaceColorScheme.layer01 ??
+                Theme.of(context).colorScheme.surface,
         elevation: 8,
         shadowColor: Colors.black.withValues(alpha: .2),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(reference ? 12 : 10),
           side: BorderSide(color: _foreground.withValues(alpha: .12)),
         ),
         clipBehavior: Clip.antiAlias,
@@ -359,11 +441,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         .length;
     final current = mode && widget.smartMode == (entry.kind == 'smart');
     return MouseRegion(
-      onEnter: (_) => setState(() {
-        _kind = entry.kind;
-        _browsing = false;
-        _focused = _navigation.indexOf(entry);
-      }),
+      onEnter: (_) => _browse(entry.kind),
       child: Semantics(
         selected: selected,
         child: InkWell(
@@ -372,11 +450,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
             if (mode) {
               _selectMode(entry.kind);
             } else {
-              setState(() {
-                _kind = entry.kind;
-                _browsing = true;
-                _focused = 0;
-              });
+              _browse(entry.kind, enter: true);
             }
           },
           child: Ink(
@@ -419,6 +493,240 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     );
   }
 
+  Widget _referenceBrowser() {
+    final menu = _surface(
+      Column(
+        key: const ValueKey('agent-reference-categories'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 37,
+            child: TextField(
+              controller: _search,
+              focusNode: _searchFocus,
+              style: TextStyle(fontSize: 12, color: _foreground),
+              decoration: InputDecoration(
+                hintText: '搜索知识库、文件、笔记等',
+                hintStyle: TextStyle(color: _foreground.withValues(alpha: .4)),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 17,
+                  color: _foreground.withValues(alpha: .4),
+                ),
+                prefixIconConstraints: const BoxConstraints(minWidth: 30),
+                suffixIcon: IconButton(
+                  tooltip: '关闭引用选择',
+                  onPressed: _close,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.close, size: 12),
+                ),
+                suffixIconConstraints:
+                    const BoxConstraints.tightFor(width: 24, height: 28),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 11),
+              ),
+              onChanged: (_) => setState(() {
+                _kind = null;
+                _browsing = _search.text.isNotEmpty;
+                _focused = 0;
+              }),
+            ),
+          ),
+          Divider(
+            height: 1,
+            indent: 10,
+            endIndent: 10,
+            color: _foreground.withValues(alpha: .08),
+          ),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(5),
+              children: [for (final entry in _categories) _categoryRow(entry)],
+            ),
+          ),
+        ],
+      ),
+      reference: true,
+    );
+    final results = _surface(_referenceResults(), reference: true);
+    if (_singlePane) {
+      return _browsing
+          ? results
+          : Align(
+              alignment: _above ? Alignment.bottomCenter : Alignment.topCenter,
+              child: menu,
+            );
+    }
+    return Row(
+      crossAxisAlignment:
+          _above ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Padding(
+            padding: _above
+                ? const EdgeInsets.only(bottom: 14)
+                : const EdgeInsets.only(top: 14),
+            child: menu,
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(child: results),
+      ],
+    );
+  }
+
+  Widget _categoryRow(({String kind, String label, IconData icon}) entry) {
+    final active = _kind == entry.kind;
+    final selected = widget.selected.map((r) => r.key).toSet();
+    final count = _items
+        .where(
+          (item) => item.kind == entry.kind && !selected.contains(item.key),
+        )
+        .length;
+    return MouseRegion(
+      key: ValueKey('agent-reference-category-${entry.kind}'),
+      onEnter: (_) => _browse(entry.kind),
+      child: Semantics(
+        selected: active,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(5),
+          onTap: () => _browse(entry.kind, enter: true),
+          child: Ink(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5),
+              color: active ? _foreground.withValues(alpha: .08) : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  entry.icon,
+                  size: 17,
+                  color: _foreground.withValues(alpha: .8),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    entry.label,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                if (!_loading)
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: _foreground.withValues(alpha: .35),
+                    ),
+                  ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right,
+                  size: 15,
+                  color: _foreground.withValues(alpha: .35),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _referenceResults() {
+    final label = _kind == null
+        ? '搜索结果'
+        : _categories.firstWhere((c) => c.kind == _kind).label;
+    return Column(
+      key: const ValueKey('agent-reference-results'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 37,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.search,
+                  size: 17,
+                  color: _foreground.withValues(alpha: .4),
+                ),
+                const SizedBox(width: 7),
+                Tooltip(
+                  message: '返回资料分类',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(5),
+                    onTap: _backToCategories,
+                    child: Ink(
+                      padding: const EdgeInsets.fromLTRB(2, 3, 5, 3),
+                      decoration: BoxDecoration(
+                        color: _foreground.withValues(alpha: .05),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chevron_left,
+                            size: 13,
+                            color: _foreground.withValues(alpha: .45),
+                          ),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _foreground.withValues(alpha: .6),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                if (_kind != null)
+                  Expanded(
+                    child: TextField(
+                      key: const ValueKey('agent-reference-search'),
+                      controller: _scopedSearch,
+                      focusNode: _scopedFocus,
+                      style: TextStyle(fontSize: 13, color: _foreground),
+                      decoration: InputDecoration(
+                        hintText: '在$label中搜索…',
+                        hintStyle: TextStyle(
+                          fontSize: 12,
+                          color: _foreground.withValues(alpha: .4),
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      onChanged: (_) => setState(() {
+                        _browsing = true;
+                        _focused = 0;
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        Divider(
+          height: 1,
+          indent: 10,
+          endIndent: 10,
+          color: _foreground.withValues(alpha: .08),
+        ),
+        Expanded(child: _referenceBody()),
+      ],
+    );
+  }
+
   Widget _panel() => DefaultTextStyle.merge(
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               fontSize: 12,
@@ -427,105 +735,111 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         child: SizedBox(
           key: const ValueKey('agent-mention-panel'),
           width: _width,
-          height: _height,
+          height: _showModes ? math.min(280, _height) : _height,
           child: Focus(
             onKeyEvent: _key,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: _width < 380 ? 128 : 174,
-                  child: _surface(
-                    Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 4, 4, 0),
-                          child: Row(
+            child: !_showModes
+                ? _referenceBrowser()
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: _width < 380 ? 128 : 174,
+                        child: _surface(
+                          Column(
                             children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(6, 4, 4, 0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _search,
+                                        focusNode: _searchFocus,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: _foreground,
+                                        ),
+                                        decoration: const InputDecoration(
+                                          hintText: '搜索资料',
+                                          prefixIcon:
+                                              Icon(Icons.search, size: 14),
+                                          prefixIconConstraints:
+                                              BoxConstraints(minWidth: 24),
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                          contentPadding:
+                                              EdgeInsets.symmetric(vertical: 9),
+                                        ),
+                                        onChanged: (_) => setState(() {
+                                          _kind = null;
+                                          _browsing = true;
+                                          _focused = 0;
+                                        }),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: '关闭引用选择',
+                                      onPressed: _close,
+                                      icon: const Icon(Icons.close, size: 13),
+                                      padding: EdgeInsets.zero,
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                        width: 24,
+                                        height: 28,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      style: IconButton.styleFrom(
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                color: _foreground.withValues(alpha: .06),
+                              ),
                               Expanded(
-                                child: TextField(
-                                  controller: _search,
-                                  focusNode: _searchFocus,
+                                child: ListView(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 5),
+                                  children: [
+                                    if (widget.onModeChanged != null) ...[
+                                      _heading('对话模式'),
+                                      ..._modes.map(_navigationItem),
+                                    ],
+                                    _heading('引用资料'),
+                                    ..._categories.map(_navigationItem),
+                                  ],
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 7),
+                                child: Text(
+                                  widget.selected.length >= 20
+                                      ? '最多引用 20 项'
+                                      : '↑↓ 选择 · Enter 确认',
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    color: _foreground,
+                                    fontSize: 9,
+                                    color: _foreground.withValues(alpha: .4),
                                   ),
-                                  decoration: const InputDecoration(
-                                    hintText: '搜索资料',
-                                    prefixIcon: Icon(Icons.search, size: 14),
-                                    prefixIconConstraints:
-                                        BoxConstraints(minWidth: 24),
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding:
-                                        EdgeInsets.symmetric(vertical: 9),
-                                  ),
-                                  onChanged: (_) => setState(() {
-                                    _kind = null;
-                                    _browsing = true;
-                                    _focused = 0;
-                                  }),
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: '关闭引用选择',
-                                onPressed: _close,
-                                icon: const Icon(Icons.close, size: 13),
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 24,
-                                  height: 28,
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        Divider(
-                          height: 1,
-                          color: _foreground.withValues(alpha: .06),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _surface(
+                          _modeDetails(),
                         ),
-                        Expanded(
-                          child: ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            children: [
-                              if (widget.onModeChanged != null) ...[
-                                _heading('对话模式'),
-                                ..._modes.map(_navigationItem),
-                              ],
-                              _heading('引用资料'),
-                              ..._categories.map(_navigationItem),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Text(
-                            widget.selected.length >= 20
-                                ? '最多引用 20 项'
-                                : '↑↓ 选择 · Enter 确认',
-                            style: TextStyle(
-                              fontSize: 9,
-                              color: _foreground.withValues(alpha: .4),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _surface(
-                    _showModes ? _modeDetails() : _referenceList(),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       );
@@ -536,67 +850,178 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         onSelected: () => _selectMode(_kind!),
       );
 
-  Widget _referenceList() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _referenceBody() => _loading
+      ? const Center(
+          child: SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        )
+      : _error != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _error!,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    TextButton(
+                      onPressed: _load,
+                      child: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : _kind == 'note'
+              ? _noteList()
+              : _list();
+
+  Widget _noteList() {
+    if (_filtered.isEmpty) return _list();
+    final items = _visibleItems;
+    final indices = {for (var i = 0; i < items.length; i++) items[i].key: i};
+    final rows = <Widget Function()>[];
+    for (final section in _noteGroups.entries) {
+      final expanded =
+          _searchingNotes || !_collapsedSections.contains(section.key);
+      final first = rows.isEmpty;
+      rows.add(
+        () => Padding(
+          padding: EdgeInsets.only(top: first ? 0 : 13),
+          child: _groupHeader(
+            section.key,
+            expanded: expanded,
+            section: true,
+            onTap: () => setState(() {
+              if (!_collapsedSections.add(section.key)) {
+                _collapsedSections.remove(section.key);
+              }
+              _focused = 0;
+            }),
+          ),
+        ),
+      );
+      if (!expanded) continue;
+      for (final space in section.value.entries) {
+        final spaceKey = (section.key, space.key);
+        final open = _searchingNotes || !_collapsedSpaces.contains(spaceKey);
+        rows.add(
+          () => _groupHeader(
+            space.key,
+            expanded: open,
+            section: false,
+            onTap: () => setState(() {
+              if (!_collapsedSpaces.add(spaceKey)) {
+                _collapsedSpaces.remove(spaceKey);
+              }
+              _focused = 0;
+            }),
+          ),
+        );
+        if (!open) continue;
+        for (final item in space.value) {
+          final index = indices[item.key]!;
+          rows.add(
+            () => AutoScrollTag(
+              key: ValueKey('reference-${item.key}'),
+              controller: _scroll,
+              index: index,
+              child: Tooltip(
+                message: item.subtitle.isEmpty
+                    ? item.name
+                    : '${item.name}\n${item.subtitle}',
+                child: ListTile(
+                  dense: true,
+                  minTileHeight: 28,
+                  minVerticalPadding: 0,
+                  minLeadingWidth: 16,
+                  horizontalTitleGap: 4,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  selectedTileColor: _foreground.withValues(alpha: .08),
+                  selectedColor: _foreground,
+                  enabled: item.available && widget.selected.length < 20,
+                  selected: _browsing && index == _focused,
+                  leading: Icon(
+                    Icons.insert_drive_file_outlined,
+                    size: 17,
+                    color: _foreground.withValues(alpha: .6),
+                  ),
+                  title: Text(
+                    item.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  onTap: () => _select(item),
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    }
+    return ListView.builder(
+      controller: _scroll,
+      padding: const EdgeInsets.fromLTRB(5, 8, 5, 8),
+      itemCount: rows.length,
+      itemBuilder: (_, index) => rows[index](),
+    );
+  }
+
+  Widget _groupHeader(
+    String label, {
+    required bool expanded,
+    required bool section,
+    required VoidCallback onTap,
+  }) =>
+      Semantics(
+        expanded: expanded,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(5),
+          onTap: _searchingNotes ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+            child: Row(
               children: [
-                Text(
-                  _kind == null
-                      ? '搜索结果'
-                      : _categories
-                          .firstWhere((entry) => entry.kind == _kind)
-                          .label,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                if (!section) ...[
+                  Icon(
+                    Icons.workspaces_outline,
+                    size: 17,
+                    color: _foreground.withValues(alpha: .7),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: section ? 12 : 13,
+                      fontWeight: FontWeight.w500,
+                      color: section
+                          ? const Color(0xFFFF4D00)
+                          : _foreground.withValues(alpha: .85),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '选择资料，添加到当前问题',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _foreground.withValues(alpha: .45),
-                  ),
+                const SizedBox(width: 4),
+                Icon(
+                  expanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 14,
+                  color: _foreground.withValues(alpha: .45),
                 ),
               ],
             ),
           ),
-          Divider(height: 1, color: _foreground.withValues(alpha: .06)),
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : _error != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _error!,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              TextButton(
-                                onPressed: _load,
-                                child: const Text('重试'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : _list(),
-          ),
-        ],
+        ),
       );
 
   Widget _list() {
@@ -606,7 +1031,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Text(
-            _search.text.isEmpty ? '暂无可引用的资料' : '没有找到匹配的资料',
+            _search.text.isEmpty && !_searchingNotes ? '暂无可引用的资料' : '没有找到匹配的资料',
             style: TextStyle(
               fontSize: 11,
               color: _foreground.withValues(alpha: .5),
@@ -686,20 +1111,65 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         icon: const Icon(Icons.alternate_email, size: 18),
       ),
     );
+    final tagColor = Color.alphaBlend(
+      _foreground.withValues(alpha: .06),
+      AppFlowyTheme.maybeOf(context)?.surfaceColorScheme.layer01 ??
+          Theme.of(context).colorScheme.surface,
+    );
     final references = [
       for (final reference in widget.selected)
         InputChip(
+          key: ValueKey('agent-reference-${reference.key}'),
+          backgroundColor: tagColor,
+          disabledColor: tagColor,
+          surfaceTintColor: Colors.transparent,
+          side: BorderSide.none,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+          padding: const EdgeInsets.only(left: 6, right: 2),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          avatarBoxConstraints: const BoxConstraints.tightFor(
+            width: 14,
+            height: 14,
+          ),
           avatar: Icon(
-            _categories.firstWhere((c) => c.kind == reference.kind).icon,
-            size: 16,
+            reference.kind == 'base'
+                ? Icons.menu_book_outlined
+                : _categories.firstWhere((c) => c.kind == reference.kind).icon,
+            size: 14,
+            color: reference.kind == 'base'
+                ? const Color(0xFFFF4D00)
+                : _foreground.withValues(alpha: .65),
           ),
-          label: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 200),
-            child: Text(reference.name, overflow: TextOverflow.ellipsis),
+          labelStyle: TextStyle(
+            fontSize: 12,
+            height: 1.3,
+            fontWeight: FontWeight.w400,
+            color: _foreground.withValues(alpha: .85),
           ),
-          tooltip: reference.subtitle.isEmpty
-              ? reference.name
-              : '${reference.name}\n${reference.subtitle}',
+          label: Tooltip(
+            message: reference.subtitle.isEmpty
+                ? reference.name
+                : '${reference.name}\n${reference.subtitle}',
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: Text(
+                reference.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          deleteIcon: const Icon(Icons.close, size: 12),
+          deleteIconColor: _foreground.withValues(alpha: .5),
+          deleteIconBoxConstraints: const BoxConstraints.tightFor(
+            width: 20,
+            height: 20,
+          ),
+          deleteButtonTooltipMessage: '移除引用：${reference.name}',
           onDeleted: widget.enabled
               ? () => widget.onChanged(
                     widget.selected
@@ -710,6 +1180,19 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         ),
       if (widget.selected.length >= 20) const Text('最多引用 20 项'),
     ];
+    // Keep the selected sources above the draft in both composer states.
+    final field = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (references.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(spacing: 6, runSpacing: 6, children: references),
+          ),
+        widget.child,
+      ],
+    );
     return OverlayPortal(
       controller: _portal,
       overlayChildBuilder: (_) => Stack(
@@ -733,30 +1216,15 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       child: Focus(
         onKeyEvent: _key,
         child: widget.builder?.call(
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  widget.child,
-                  if (references.isNotEmpty)
-                    Wrap(spacing: 6, runSpacing: 4, children: references),
-                ],
-              ),
+              field,
               referenceButton,
             ) ??
             Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                widget.child,
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 6,
-                  children: [
-                    referenceButton,
-                    ...references,
-                  ],
-                ),
+                field,
+                referenceButton,
               ],
             ),
       ),

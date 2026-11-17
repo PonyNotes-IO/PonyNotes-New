@@ -7,6 +7,7 @@ import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/application/agent_reference.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -47,6 +48,94 @@ void main() {
         );
       }),
     );
+    await expectLater(service.references('workspace'), throwsStateError);
+  });
+  test(
+      'legacy reference catalogs use real workspace spaces without widening scope',
+      () async {
+    var current = account;
+    var switchDuringRead = false;
+    ViewPB view(String id, String parent, {String extra = '', String? name}) =>
+        ViewPB(id: id, parentViewId: parent, name: name ?? id, extra: extra);
+    final service = AgentService(
+      account: () async => current,
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'items': [
+              for (final id in [
+                'private',
+                'shared',
+                'unknown',
+                'cycle',
+                'other',
+              ])
+                {'kind': 'note', 'id': id, 'name': id},
+              {
+                'kind': 'note',
+                'id': 'server',
+                'name': 'server',
+                'visibility': 'private',
+                'space_name': '服务器空间',
+              },
+              {'kind': 'file', 'id': 'private', 'name': 'file'},
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        ),
+      ),
+      referenceViews: () async {
+        if (switchDuringRead) {
+          current = const AgentCloudAccount(
+            baseUrl: 'https://cloud.test',
+            accessToken: 'other',
+            userId: 'two',
+          );
+        }
+        return [
+          view('workspace', ''),
+          view(
+            'private-space',
+            'workspace',
+            name: '研发 / 个人',
+            extra: '{"is_space":true,"space_permission":1}',
+          ),
+          view(
+            'shared-space',
+            'workspace',
+            name: '团队空间',
+            extra: '{"is_space":true,"space_permission":0}',
+          ),
+          view('unknown-space', 'workspace', extra: '{"is_space":true}'),
+          view('private', 'nested'),
+          view('nested', 'private-space'),
+          view('shared', 'shared-space'),
+          view('unknown', 'unknown-space'),
+          view('cycle', 'cycle'),
+          view('other', 'other-workspace'),
+          view(
+            'other-workspace',
+            '',
+            extra: '{"is_space":true,"space_permission":1}',
+          ),
+          view('server', 'shared-space'),
+          view('local-only', 'private-space'),
+        ];
+      },
+    );
+    final items = await service.references('workspace');
+    expect(items, hasLength(7));
+    expect(items[0].noteSection, '私有笔记');
+    expect(items[0].noteSpace, '研发 / 个人');
+    expect(items[1].noteSection, '协作笔记');
+    expect(items[1].noteSpace, '团队空间');
+    expect(items.sublist(2, 5).map((i) => i.visibility), everyElement(isNull));
+    expect(items[5].visibility, 'private');
+    expect(items[5].spaceName, '服务器空间');
+    expect(items[6].kind, 'file');
+    expect(items[6].visibility, isNull);
+    switchDuringRead = true;
     await expectLater(service.references('workspace'), throwsStateError);
   });
   test('SSE preserves split UTF8, multiline data and complete boundaries',
