@@ -15,6 +15,7 @@ class AiProviderConfig {
     this.supportsReasoning = false,
     this.isInternal = false,
     this.displayName = '',
+    this.creatorName = '',
   });
 
   /// OpenAI 兼容端点，例如 `https://api.deepseek.com`。
@@ -23,6 +24,7 @@ class AiProviderConfig {
   /// 模型名，例如 `deepseek-chat`。
   final String modelName;
   final String displayName;
+  final String creatorName;
   String get label => displayName.isEmpty ? modelName : displayName;
 
   /// 用户自己的 API Key，只用于小马访问模型服务，与 MCP Token 无关。
@@ -41,6 +43,7 @@ class AiProviderConfig {
     String? modelName,
     String? apiKey,
     bool? supportsReasoning,
+    String? creatorName,
   }) {
     return AiProviderConfig(
       baseUrl: baseUrl ?? this.baseUrl,
@@ -49,6 +52,7 @@ class AiProviderConfig {
       supportsReasoning: supportsReasoning ?? this.supportsReasoning,
       isInternal: isInternal,
       displayName: displayName,
+      creatorName: creatorName ?? this.creatorName,
     );
   }
 }
@@ -62,6 +66,7 @@ class AiProviderConfigStorage {
   static const _apiKeyKey = 'ai_internal.api_key';
   static const _profilesKey = 'ai_internal.profiles';
   static const _reasoningKey = 'ai_internal.supports_reasoning';
+  static const _creatorKey = 'ai_internal.creator_name';
   static const _secure = FlutterSecureStorage();
 
   Future<AiProviderConfig> load() async {
@@ -78,6 +83,7 @@ class AiProviderConfigStorage {
       modelName: prefs.getString(_modelKey) ?? '',
       apiKey: apiKey ?? '',
       supportsReasoning: prefs.getBool(_reasoningKey) ?? false,
+      creatorName: prefs.getString(_creatorKey) ?? '',
     );
   }
 
@@ -86,6 +92,16 @@ class AiProviderConfigStorage {
       throw ArgumentError('内部模型凭据不能保存为自定义配置');
     }
     final profiles = await loadProfiles();
+    final existing = profiles
+        .where(
+          (p) =>
+              p.baseUrl == config.baseUrl.trim() &&
+              p.modelName == config.modelName.trim(),
+        )
+        .firstOrNull;
+    if (existing != null && existing.creatorName.isNotEmpty) {
+      config = config.copyWith(creatorName: existing.creatorName);
+    }
     profiles.removeWhere(
       (p) =>
           p.baseUrl == config.baseUrl.trim() &&
@@ -102,6 +118,7 @@ class AiProviderConfigStorage {
                 'modelName': p.modelName.trim(),
                 'apiKey': p.apiKey.trim(),
                 'supportsReasoning': p.supportsReasoning,
+                'creatorName': p.creatorName.trim(),
               },
             )
             .toList(),
@@ -113,6 +130,7 @@ class AiProviderConfigStorage {
     await prefs.setString(_baseUrlKey, config.baseUrl.trim());
     await prefs.setString(_modelKey, config.modelName.trim());
     await prefs.setBool(_reasoningKey, config.supportsReasoning);
+    await prefs.setString(_creatorKey, config.creatorName.trim());
   }
 
   Future<List<AiProviderConfig>> loadProfiles() async {
@@ -126,6 +144,7 @@ class AiProviderConfigStorage {
                 modelName: p['modelName'] as String,
                 apiKey: p['apiKey'] as String,
                 supportsReasoning: p['supportsReasoning'] == true,
+                creatorName: p['creatorName'] as String? ?? '',
               ),
             )
             .toList();
@@ -145,6 +164,7 @@ class AiProviderConfigStorage {
     await _secure.delete(key: _apiKeyKey);
     await _secure.delete(key: _profilesKey);
     await prefs.remove(_reasoningKey);
+    await prefs.remove(_creatorKey);
     await prefs.remove(_baseUrlKey);
     await prefs.remove(_modelKey);
     await prefs.remove(_apiKeyKey);

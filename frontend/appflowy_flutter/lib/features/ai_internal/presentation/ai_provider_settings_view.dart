@@ -3,17 +3,24 @@ import 'dart:async';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/application/internal_ai_service.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
+import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// 内部 AI 的模型配置页：模型地址、模型名称、API Key。
 ///
 /// 与「AI 接入 (MCP)」是两个方向：
 /// MCP 是外部 Agent 访问小马，这里是 小马访问用户自己的模型服务。
 class AiProviderSettingsView extends StatefulWidget {
-  const AiProviderSettingsView({super.key, this.onSaved});
+  const AiProviderSettingsView({
+    super.key,
+    this.onSaved,
+    this.creatorName = '',
+  });
   final ValueChanged<AiProviderConfig>? onSaved;
+  final String creatorName;
 
   @override
   State<AiProviderSettingsView> createState() => _AiProviderSettingsViewState();
@@ -29,6 +36,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   bool _testing = false;
   bool _obscureKey = true;
   bool _supportsReasoning = false;
+  AiProviderConfig _loadedConfig = const AiProviderConfig();
 
   /// 连通性测试的结果，null 表示还没测过。
   String? _testMessage;
@@ -52,6 +60,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     try {
       final config = await const AiProviderConfigStorage().load();
       if (!mounted) return;
+      _loadedConfig = config;
       _serverUrlController.text = config.baseUrl;
       _modelController.text = config.modelName;
       _apiKeyController.text = config.apiKey;
@@ -63,12 +72,23 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     }
   }
 
-  AiProviderConfig _currentConfig() => AiProviderConfig(
-        baseUrl: _serverUrlController.text.trim(),
-        modelName: _modelController.text.trim(),
-        apiKey: _apiKeyController.text.trim(),
-        supportsReasoning: _supportsReasoning,
-      );
+  AiProviderConfig _currentConfig() {
+    final sameModel =
+        _loadedConfig.baseUrl == _serverUrlController.text.trim() &&
+            _loadedConfig.modelName == _modelController.text.trim();
+    final creator = sameModel && _loadedConfig.creatorName.isNotEmpty
+        ? _loadedConfig.creatorName
+        : widget.creatorName.isNotEmpty
+            ? widget.creatorName
+            : context.read<UserWorkspaceBloc?>()?.state.userProfile.name ?? '';
+    return AiProviderConfig(
+      baseUrl: _serverUrlController.text.trim(),
+      modelName: _modelController.text.trim(),
+      apiKey: _apiKeyController.text.trim(),
+      supportsReasoning: _supportsReasoning,
+      creatorName: creator,
+    );
+  }
 
   Future<void> _save() async {
     setState(() => _saving = true);

@@ -96,6 +96,7 @@ void main() {
       baseUrl: 'https://custom.test/v1',
       modelName: 'custom',
       apiKey: 'own-key',
+      creatorName: '原创建人',
     );
     await const AiProviderConfigStorage().save(custom);
     expect((await service.preferred()).modelName, 'other-managed');
@@ -122,6 +123,7 @@ void main() {
     await service.select(changedCustom);
     current = account;
     expect((await service.preferred()).apiKey, 'own-key');
+    expect((await service.preferred()).creatorName, '原创建人');
   });
 
   test('custom models stay usable without a cloud account or cloud requests',

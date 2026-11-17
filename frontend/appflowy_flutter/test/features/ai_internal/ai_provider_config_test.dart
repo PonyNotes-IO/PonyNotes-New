@@ -19,6 +19,7 @@ void main() {
         baseUrl: 'https://api.deepseek.com',
         modelName: 'deepseek-chat',
         apiKey: 'sk-test',
+        creatorName: '马同学',
       ),
     );
 
@@ -26,6 +27,8 @@ void main() {
     expect(loaded.baseUrl, 'https://api.deepseek.com');
     expect(loaded.modelName, 'deepseek-chat');
     expect(loaded.apiKey, 'sk-test');
+    expect(loaded.creatorName, '马同学');
+    expect((await storage.loadProfiles()).single.creatorName, '马同学');
     expect(loaded.isComplete, isTrue);
     expect(
       (await SharedPreferences.getInstance())
@@ -65,6 +68,7 @@ void main() {
       modelName: 'model-one',
       apiKey: 'first-key',
       supportsReasoning: true,
+      creatorName: '原创建人',
     );
     const second = AiProviderConfig(
       baseUrl: 'https://second.example/v1',
@@ -73,9 +77,16 @@ void main() {
     );
     await storage.save(first);
     await storage.save(second);
-    await storage.save(first.copyWith(apiKey: 'updated-key'));
+    await storage.save(
+      first.copyWith(apiKey: 'updated-key', creatorName: '修改人'),
+    );
     final profiles = await storage.loadProfiles();
     expect(profiles.length, 2);
+    expect(
+      profiles.singleWhere((p) => p.modelName == 'model-one').creatorName,
+      '原创建人',
+    );
+    expect((await storage.load()).creatorName, '原创建人');
     expect(
       profiles.singleWhere((p) => p.modelName == 'model-one').apiKey,
       'updated-key',
@@ -106,6 +117,7 @@ void main() {
     });
     final loaded = await const AiProviderConfigStorage().load();
     expect(loaded.apiKey, 'legacy-key');
+    expect(loaded.creatorName, isEmpty);
     expect(loaded.modelName, 'existing-model');
     expect(loaded.baseUrl, 'https://existing.example/v1');
     expect(

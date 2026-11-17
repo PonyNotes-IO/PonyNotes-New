@@ -358,7 +358,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       case SettingsPage.mcp:
         return const McpSettingsView();
       case SettingsPage.aiProvider:
-        return const AiProviderSettingsView();
+        return AiProviderSettingsView(creatorName: user.name);
       case SettingsPage.aiChat:
         return const AiChatView();
       // return const SizedBox.shrink();

@@ -9,6 +9,7 @@ import 'package:appflowy/features/ai_internal/application/ai_provider_config.dar
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -22,12 +23,14 @@ void main() {
     modelName: 'reasoner-one',
     apiKey: 'first-key',
     supportsReasoning: true,
+    creatorName: '马同学',
   );
   const second = AiProviderConfig(
     baseUrl: 'https://second.example/v1',
     modelName: 'reasoner-two',
     apiKey: 'second-key',
     supportsReasoning: true,
+    creatorName: '谷谷爸爸',
   );
   const storage = AiProviderConfigStorage();
   setUpAll(() async {
@@ -151,6 +154,86 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('custom model hover shows its creator without selecting it',
+      (tester) async {
+    await storage.save(first);
+    await storage.save(second);
+    AiProviderConfig? selected;
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: AgentModelSettingsButton(
+          onChanged: (config, _) async => selected = config,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    await mouse.moveTo(
+      tester.getCenter(find.widgetWithText(MenuItemButton, first.modelName)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.text('创建人：马同学'), findsOneWidget);
+    expect(find.text(first.modelName), findsNWidgets(2));
+    expect(selected, isNull);
+    expect((await storage.load()).modelName, second.modelName);
+    expect(find.textContaining(first.baseUrl), findsNothing);
+    await mouse.moveTo(
+      tester.getCenter(find.widgetWithText(MenuItemButton, second.modelName)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.text('创建人：马同学'), findsNothing);
+    expect(find.text('创建人：谷谷爸爸'), findsOneWidget);
+    await tester.tap(find.widgetWithText(MenuItemButton, second.modelName));
+    await tester.pumpAndSettle();
+    expect(selected?.modelName, second.modelName);
+    expect(find.byKey(const ValueKey('agent-model-details')), findsNothing);
+    await mouse.removePointer();
+  });
+
+  testWidgets('legacy model details dismiss on exit and menu cancellation',
+      (tester) async {
+    await storage.save(first.copyWith(creatorName: ''));
+    await tester.pumpWidget(
+      const WidgetTestWrapper(child: AgentModelSettingsButton()),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    final target =
+        tester.getCenter(find.widgetWithText(MenuItemButton, first.modelName));
+    await mouse.moveTo(target);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.text('创建人：未知'), findsOneWidget);
+    await mouse.moveTo(const Offset(1, 1));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('agent-model-details')), findsNothing);
+    await mouse.moveTo(target);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('agent-model-details')), findsNothing);
+    // Closing before the hover delay expires must cancel the pending card too.
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    await mouse.moveTo(const Offset(1, 1));
+    await mouse.moveTo(target);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('agent-model-details')), findsNothing);
+    expect(tester.takeException(), isNull);
+    await mouse.removePointer();
+  });
+
   testWidgets(
       'an open document shows its actual model when another document changes the default',
       (tester) async {
@@ -243,6 +326,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('按任务难度选择思考深度'), findsNothing);
     expect(effort, 'high');
+  });
+
+  testWidgets('custom model settings record the creator and retain it on edit',
+      (tester) async {
+    Future<void> openSettings(String creator) async {
+      await tester.pumpWidget(
+        WidgetTestWrapper(
+          child: AiProviderSettingsView(
+            key: ValueKey(creator),
+            creatorName: creator,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openSettings('马同学');
+    await tester.enterText(find.byType(TextField).at(0), first.baseUrl);
+    await tester.enterText(find.byType(TextField).at(1), first.modelName);
+    await tester.enterText(find.byType(TextField).at(2), first.apiKey);
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect((await storage.load()).creatorName, '马同学');
+    await openSettings('修改人');
+    await tester.enterText(find.byType(TextField).at(2), 'updated-key');
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect((await storage.load()).creatorName, '马同学');
+    expect((await storage.load()).apiKey, 'updated-key');
   });
 
   testWidgets('failed thinking changes restore the previous level',
@@ -439,6 +553,58 @@ void main() {
                 .writeAsBytes(bytes!.buffer.asUint8List());
             rendered.dispose();
           });
+        }
+        if (menu == 'model') {
+          final mouse =
+              await tester.createGesture(kind: PointerDeviceKind.mouse);
+          await mouse.addPointer(location: const Offset(1, 1));
+          await mouse.moveTo(
+            tester.getCenter(
+              find.descendant(
+                of: find.byKey(
+                  ValueKey('${firstProfile.baseUrl}|${firstProfile.modelName}'),
+                ),
+                matching: find.byType(MenuItemButton),
+              ),
+            ),
+          );
+          await tester.pump(const Duration(milliseconds: 250));
+          await tester.pumpAndSettle();
+          final card = tester.getRect(
+            find.byKey(const ValueKey('agent-model-details')),
+          );
+          expect(card.left, greaterThanOrEqualTo(8));
+          expect(card.top, greaterThanOrEqualTo(8));
+          expect(card.right, lessThanOrEqualTo(variant.size.width - 8));
+          expect(card.bottom, lessThanOrEqualTo(variant.size.height - 8));
+          expect(find.text('创建人：马同学'), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          if (variant.size.width >= 890) {
+            final menuItem = tester.getRect(
+              find.widgetWithText(MenuItemButton, '配置自定义模型'),
+            );
+            expect(card.right, lessThan(menuItem.left));
+            expect(card.top, lessThan(tester.getTopLeft(find.text('平台模型')).dy));
+          } else {
+            expect(
+              card.bottom,
+              lessThan(tester.getTopLeft(find.text('平台模型')).dy),
+            );
+          }
+          if (output != null) {
+            await tester.runAsync(() async {
+              final rendered = await (boundary.currentContext!
+                      .findRenderObject()! as RenderRepaintBoundary)
+                  .toImage();
+              final bytes =
+                  await rendered.toByteData(format: ui.ImageByteFormat.png);
+              await File('$output/model-details-${variant.name}.png')
+                  .writeAsBytes(bytes!.buffer.asUint8List());
+              rendered.dispose();
+            });
+          }
+          await mouse.removePointer();
+          await tester.pumpAndSettle();
         }
         await tester.tapAt(const Offset(5, 5));
         await tester.pumpAndSettle();

@@ -6,37 +6,44 @@ import 'package:flowy_svg/flowy_svg.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../application/agent_credits.dart';
 import '../application/agent_model_preferences.dart';
 import '../application/agent_internal_service.dart';
+import 'agent_model_details.dart';
 
-Future<AiProviderConfig?> showAgentModelSettings(BuildContext context) =>
-    showDialog<AiProviderConfig>(
-      context: context,
-      builder: (context) => Dialog(
-        child: SizedBox(
-          width: 640,
-          height: MediaQuery.sizeOf(context).height * .8,
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  tooltip: '关闭模型设置',
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
+Future<AiProviderConfig?> showAgentModelSettings(BuildContext context) {
+  final creatorName =
+      context.read<UserWorkspaceBloc?>()?.state.userProfile.name ?? '';
+  return showDialog<AiProviderConfig>(
+    context: context,
+    builder: (context) => Dialog(
+      child: SizedBox(
+        width: 640,
+        height: MediaQuery.sizeOf(context).height * .8,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: '关闭模型设置',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
               ),
-              Expanded(
-                child: AiProviderSettingsView(
-                  onSaved: (config) => Navigator.pop(context, config),
-                ),
+            ),
+            Expanded(
+              child: AiProviderSettingsView(
+                creatorName: creatorName,
+                onSaved: (config) => Navigator.pop(context, config),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    );
+    ),
+  );
+}
 
 class AgentModelSettingsButton extends StatefulWidget {
   const AgentModelSettingsButton({
@@ -70,6 +77,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   String thinking = AgentModelPreferences.defaultLevel;
   bool updating = false;
   int loadGeneration = 0;
+  final modelMenuHeaderKey = GlobalKey();
 
   @override
   void initState() {
@@ -191,7 +199,8 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     }
   }
 
-  Widget _heading(String label) => Padding(
+  Widget _heading(String label, {Key? key}) => Padding(
+        key: key,
         padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
         child: Text(
           label,
@@ -216,40 +225,42 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
         : name.contains('glm') || name.contains('zhipu')
             ? 'zai'
             : null;
-    return Tooltip(
-      message: config.isInternal
-          ? config.label
-          : '${config.modelName}\n${Uri.tryParse(config.baseUrl)?.host ?? config.baseUrl}',
-      child: Semantics(
-        selected: selected,
-        child: MenuItemButton(
-          onPressed: widget.enabled && !updating
-              ? () => _select(config, thinking)
-              : null,
-          style: MenuItemButton.styleFrom(
-            backgroundColor: selected ? color.withValues(alpha: .08) : null,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          ),
-          leadingIcon: brand == null
-              ? Icon(Icons.auto_awesome_outlined, size: 14, color: color)
-              : FlowySvg(
-                  FlowySvgData('assets/images/setting/model_$brand.svg'),
-                  size: const Size.square(14),
-                  color: color,
-                ),
-          trailingIcon: selected
-              ? Icon(Icons.check, size: 14, color: color)
-              : const SizedBox(width: 14),
-          overflowAxis: Axis.vertical,
-          child: Text(
-            config.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+    final item = Semantics(
+      selected: selected,
+      child: MenuItemButton(
+        onPressed: widget.enabled && !updating
+            ? () => _select(config, thinking)
+            : null,
+        style: MenuItemButton.styleFrom(
+          backgroundColor: selected ? color.withValues(alpha: .08) : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        leadingIcon: brand == null
+            ? Icon(Icons.auto_awesome_outlined, size: 14, color: color)
+            : FlowySvg(
+                FlowySvgData('assets/images/setting/model_$brand.svg'),
+                size: const Size.square(14),
+                color: color,
+              ),
+        trailingIcon: selected
+            ? Icon(Icons.check, size: 14, color: color)
+            : const SizedBox(width: 14),
+        overflowAxis: Axis.vertical,
+        child: Text(
+          config.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
+    return config.isInternal
+        ? Tooltip(message: config.label, child: item)
+        : AgentModelDetails(
+            key: ValueKey('${config.baseUrl}|${config.modelName}'),
+            config: config,
+            menuHeaderKey: modelMenuHeaderKey,
+            child: item,
+          );
   }
 
   int get _thinkingIndex {
@@ -388,7 +399,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
             alignmentOffset: const Offset(-224, 8),
             onOpen: _load,
             menuChildren: [
-              _heading('平台模型'),
+              _heading('平台模型', key: modelMenuHeaderKey),
               if (loadingInternal ||
                   internalError != null ||
                   internalModels.isEmpty)

@@ -151,6 +151,7 @@ class AgentInternalService {
         modelName: data['modelName'] as String,
         apiKey: data['apiKey'] as String,
         supportsReasoning: data['supportsReasoning'] == true,
+        creatorName: data['creatorName'] as String? ?? '',
       );
       if (config.isComplete) return config;
     }
@@ -182,6 +183,7 @@ class AgentInternalService {
             'modelName': config.modelName,
             'apiKey': config.apiKey,
             'supportsReasoning': config.supportsReasoning,
+            'creatorName': config.creatorName,
           }),
         );
         await prefs.remove(account.selectionKey);
