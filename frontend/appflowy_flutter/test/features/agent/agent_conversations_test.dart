@@ -11,34 +11,137 @@ import 'package:http/testing.dart';
 
 void main() {
   const account = AgentCloudAccount(
-      baseUrl: 'https://cloud.test', accessToken: 'token', userId: 'one');
+    baseUrl: 'https://cloud.test',
+    accessToken: 'token',
+    userId: 'one',
+  );
+  test('legacy conversations stay private and shared rows retain their creator',
+      () {
+    expect(
+      AgentConversation.fromJson({'id': 'old', 'title': '旧对话'}).shared,
+      false,
+    );
+    final shared = AgentConversation.fromJson({
+      'id': 'shared',
+      'title': '共同讨论',
+      'visibility': 'shared',
+      'creator_name': '小马',
+    });
+    expect(shared.shared, true);
+    expect(shared.creatorName, '小马');
+  });
+  test('create retries keep separate identities for private and shared scopes',
+      () async {
+    final requests = <Map>[];
+    final service = AgentService(
+      account: () async => account,
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response('{"conversations":[]}', 200);
+        }
+        final body = jsonDecode(request.body) as Map;
+        requests.add(body);
+        return requests.length < 3
+            ? http.Response('temporary unavailable', 503)
+            : http.Response(
+                jsonEncode(body),
+                200,
+                headers: {'content-type': 'application/json; charset=utf-8'},
+              );
+      }),
+    );
+    final store = AgentConversations(
+      service: service,
+      workspace: () async => 'workspace',
+    );
+    addTearDown(store.dispose);
+    await store.load();
+    expect(await store.create('私有'), isNull);
+    expect(
+      await store.create('协作', visibility: AgentConversationVisibility.shared),
+      isNull,
+    );
+    expect((await store.create('私有'))!.shared, false);
+    expect(
+      (await store.create(
+        '协作',
+        visibility: AgentConversationVisibility.shared,
+      ))!
+          .shared,
+      true,
+    );
+    expect(
+      requests.map((r) => r['visibility']),
+      ['private', 'shared', 'private', 'shared'],
+    );
+    expect(requests[0]['id'], requests[2]['id']);
+    expect(requests[1]['id'], requests[3]['id']);
+    expect(requests[0]['id'], isNot(requests[1]['id']));
+  });
+  test('an older server cannot silently create a private collaborative chat',
+      () async {
+    final store = AgentConversations(
+      workspace: () async => 'workspace',
+      service: AgentService(
+        account: () async => account,
+        client: MockClient(
+          (request) async => http.Response(
+            request.method == 'GET'
+                ? '{"conversations":[]}'
+                : '{"id":"old-server","title":"共同讨论"}',
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          ),
+        ),
+      ),
+    );
+    addTearDown(store.dispose);
+    await store.load();
+    expect(
+      await store.create(
+        '共同讨论',
+        visibility: AgentConversationVisibility.shared,
+      ),
+      isNull,
+    );
+    expect(store.entries, isEmpty);
+    expect(store.error, contains('服务端尚未支持'));
+  });
   test(
       'independent history paginates and creating a conversation never creates a note',
       () async {
     var page = 0;
     final service = AgentService(
-        account: () async => account,
-        client: MockClient((request) async {
-          expect(request.url.path, '/api/ai/agent/conversations/workspace');
-          expect(request.headers['Authorization'], 'Bearer token');
-          if (request.method == 'GET') {
-            expect(request.url.queryParameters['offset'], '${page * 100}');
-            return http.Response(
-                jsonEncode({
-                  'conversations': List.generate(page++ == 0 ? 100 : 1,
-                      (i) => {'id': '$page-$i', 'title': '对话$i'})
-                }),
-                200,
-                headers: {'content-type': 'application/json; charset=utf-8'});
-          }
-          final body = jsonDecode(request.body) as Map;
-          expect(body['title'], '分析笔记内容');
+      account: () async => account,
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/ai/agent/conversations/workspace');
+        expect(request.headers['Authorization'], 'Bearer token');
+        if (request.method == 'GET') {
+          expect(request.url.queryParameters['offset'], '${page * 100}');
           return http.Response(
-              jsonEncode({'id': body['id'], 'title': body['title']}), 200,
-              headers: {'content-type': 'application/json; charset=utf-8'});
-        }));
+            jsonEncode({
+              'conversations': List.generate(
+                page++ == 0 ? 100 : 1,
+                (i) => {'id': '$page-$i', 'title': '对话$i'},
+              ),
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        final body = jsonDecode(request.body) as Map;
+        expect(body['title'], '分析笔记内容');
+        return http.Response(
+          jsonEncode({'id': body['id'], 'title': body['title']}),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
     final store = AgentConversations(
-        service: service, workspace: () async => 'workspace');
+      service: service,
+      workspace: () async => 'workspace',
+    );
     addTearDown(store.dispose);
     await store.load();
     expect(store.error, isNull);
@@ -56,18 +159,22 @@ void main() {
     var user = account;
     final pending = Completer<http.Response>();
     final service = AgentService(
-        account: () async => user,
-        client: MockClient((request) async {
-          if (request.method == 'GET')
-            return http.Response('{"conversations":[]}', 200);
-          final body = jsonDecode(request.body) as Map;
-          id ??= body['id'] as String;
-          expect(body['id'], id);
-          if (tries++ == 0) return http.Response('temporary unavailable', 503);
-          return pending.future;
-        }));
+      account: () async => user,
+      client: MockClient((request) async {
+        if (request.method == 'GET') {
+          return http.Response('{"conversations":[]}', 200);
+        }
+        final body = jsonDecode(request.body) as Map;
+        id ??= body['id'] as String;
+        expect(body['id'], id);
+        if (tries++ == 0) return http.Response('temporary unavailable', 503);
+        return pending.future;
+      }),
+    );
     final store = AgentConversations(
-        service: service, workspace: () async => 'workspace');
+      service: service,
+      workspace: () async => 'workspace',
+    );
     addTearDown(store.dispose);
     await store.load();
     expect(await store.create('first'), isNull);
@@ -77,7 +184,10 @@ void main() {
     await store.load();
     expect(store.creating, true);
     user = const AgentCloudAccount(
-        baseUrl: 'https://cloud.test', accessToken: 'other', userId: 'two');
+      baseUrl: 'https://cloud.test',
+      accessToken: 'other',
+      userId: 'two',
+    );
     pending
         .complete(http.Response(jsonEncode({'id': id, 'title': 'first'}), 200));
     expect(await retry, isNull);
@@ -90,8 +200,10 @@ void main() {
         ViewPB(id: 'old', name: '我的AI会话', extra: '{"is_space":true}');
     expect(isLegacyAiSpace(legacy), true);
     expect(isLegacyAiSpace(ViewPB(name: '我的AI会话')), false);
-    expect(isLegacyAiSpace(ViewPB(name: '团队笔记', extra: '{"is_space":true}')),
-        false);
+    expect(
+      isLegacyAiSpace(ViewPB(name: '团队笔记', extra: '{"is_space":true}')),
+      false,
+    );
     expect(legacy.id, 'old');
   });
   for (final creating in [false, true]) {
@@ -109,15 +221,19 @@ void main() {
           }
           return account;
         },
-        client: MockClient((request) async => http.Response(
-              request.method == 'POST'
-                  ? request.body
-                  : '{"conversations":[{"id":"history","title":"history"}]}',
-              200,
-            )),
+        client: MockClient(
+          (request) async => http.Response(
+            request.method == 'POST'
+                ? request.body
+                : '{"conversations":[{"id":"history","title":"history"}]}',
+            200,
+          ),
+        ),
       );
       final store = AgentConversations(
-          service: service, workspace: () async => 'workspace');
+        service: service,
+        workspace: () async => 'workspace',
+      );
       addTearDown(store.dispose);
       if (creating) await store.load();
       final operation = creating ? store.create('new') : store.load();

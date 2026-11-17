@@ -303,7 +303,12 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                           ),
                           if (agent.interactions.isNotEmpty)
                             _approval(agent.interactions.first),
-                          if (agent.prompts.isNotEmpty)
+                          if (agent.prompts.isNotEmpty && !agent.canControlRun)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(20, 8, 20, 8),
+                              child: Text('等待当前发言成员回答或确认操作'),
+                            ),
+                          if (agent.prompts.isNotEmpty && agent.canControlRun)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                               child: ConstrainedBox(

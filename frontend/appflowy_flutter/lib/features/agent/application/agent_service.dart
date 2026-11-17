@@ -16,9 +16,12 @@ class AgentService {
   final Future<AgentCloudAccount> Function() _account;
   http.Client? _streamClient;
 
-  Future<List<AgentReference>> references(String workspace) async {
+  Future<List<AgentReference>> references(
+    String workspace, {
+    String conversation = '',
+  }) async {
     final before = await identity(workspace);
-    final data = await request('GET', workspace, '', '/references');
+    final data = await request('GET', workspace, conversation, '/references');
     if (before != await identity(workspace)) {
       throw StateError('账号已切换，请重新选择引用');
     }
@@ -150,7 +153,8 @@ class AgentService {
         expectedIdentity != '${account.baseUrl}|${account.userId}|$workspace') {
       throw StateError('账号或工作区已切换');
     }
-    final request = http.Request(method, _uri(account, workspace, document, suffix));
+    final request =
+        http.Request(method, _uri(account, workspace, document, suffix));
     request.followRedirects = false;
     request.headers['Authorization'] = 'Bearer ${account.accessToken}';
     if (body != null) {
@@ -193,13 +197,18 @@ class AgentService {
       ..headers['Content-Type'] = 'application/json';
     var sent = 0;
     // The map only runs when the transport pulls, so this tracks real progress.
-    request.sink.addStream(
-      Stream<List<int>>.fromIterable(_chunks(encoded)).map((chunk) {
-        sent += chunk.length;
-        onProgress(sent, encoded.length);
-        return chunk;
-      }),
-    ).whenComplete(request.sink.close).catchError((Object _) {});
+    unawaited(
+      request.sink
+          .addStream(
+            Stream<List<int>>.fromIterable(_chunks(encoded)).map((chunk) {
+              sent += chunk.length;
+              onProgress(sent, encoded.length);
+              return chunk;
+            }),
+          )
+          .whenComplete(request.sink.close)
+          .catchError((Object _) {}),
+    );
     return request;
   }
 

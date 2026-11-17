@@ -4,14 +4,28 @@ import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'agent_service.dart';
 import 'package:file_picker/file_picker.dart';
 
+enum AgentConversationVisibility { private, shared }
+
 class AgentConversation {
-  const AgentConversation({required this.id, required this.title});
+  const AgentConversation({
+    required this.id,
+    required this.title,
+    this.visibility = AgentConversationVisibility.private,
+    this.creatorName = '',
+  });
   factory AgentConversation.fromJson(Map value) => AgentConversation(
         id: value['id'] as String,
         title: value['title'] as String,
+        visibility: value['visibility'] == 'shared'
+            ? AgentConversationVisibility.shared
+            : AgentConversationVisibility.private,
+        creatorName: value['creator_name'] as String? ?? '',
       );
   final String id;
   final String title;
+  final AgentConversationVisibility visibility;
+  final String creatorName;
+  bool get shared => visibility == AgentConversationVisibility.shared;
 }
 
 class AgentConversations extends ChangeNotifier {
@@ -39,7 +53,7 @@ class AgentConversations extends ChangeNotifier {
   String? error;
   bool _disposed = false;
   int _epoch = 0;
-  String? _pendingCreate;
+  final _pendingCreates = <AgentConversationVisibility, String>{};
   void changed() {
     if (!_disposed) notifyListeners();
   }
@@ -83,7 +97,11 @@ class AgentConversations extends ChangeNotifier {
     }
   }
 
-  Future<AgentConversation?> create(String query) async {
+  Future<AgentConversation?> create(
+    String query, {
+    AgentConversationVisibility visibility =
+        AgentConversationVisibility.private,
+  }) async {
     if (creating || loading) return null;
     final wid = workspaceId;
     final account = identity;
@@ -102,7 +120,8 @@ class AgentConversations extends ChangeNotifier {
       }
       final title = query.trim().replaceAll(RegExp(r'\s+'), ' ');
       final row = await service.request('POST', wid, '', '', {
-        'id': _pendingCreate ??= const Uuid().v4(),
+        'id': _pendingCreates[visibility] ??= const Uuid().v4(),
+        'visibility': visibility.name,
         'title':
             title.isEmpty ? '新对话' : String.fromCharCodes(title.runes.take(40)),
       });
@@ -114,7 +133,10 @@ class AgentConversations extends ChangeNotifier {
       }
       if (_disposed || epoch != _epoch) return null;
       final conversation = AgentConversation.fromJson(row);
-      _pendingCreate = null;
+      if (conversation.visibility != visibility) {
+        throw StateError('服务端尚未支持协作对话，请更新服务后重试');
+      }
+      _pendingCreates.remove(visibility);
       entries.insert(0, conversation);
       return conversation;
     } catch (e) {
@@ -138,7 +160,7 @@ class AgentConversations extends ChangeNotifier {
     creating = false;
     requestedConversation.value = null;
     requestedPrompt.value = null;
-    _pendingCreate = null;
+    _pendingCreates.clear();
     changed();
   }
 

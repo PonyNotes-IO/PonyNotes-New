@@ -44,6 +44,7 @@ class AgentController extends ChangeNotifier {
     this.mode = 'smart-reasoning',
     this.documentName = '',
     this.independent = false,
+    this.collaborative = false,
     this.initialThinking,
     AgentArtifacts? artifacts,
     Map<String, dynamic> cloudArtifacts = const {},
@@ -64,6 +65,9 @@ class AgentController extends ChangeNotifier {
   final String chatId;
   final String documentName;
   final bool independent;
+  bool collaborative;
+  bool canControlRun = true;
+  Future<void>? _historyRefresh;
   final String? initialThinking;
   final AgentService service;
   final AgentInternalService internalService;
@@ -202,6 +206,8 @@ class AgentController extends ChangeNotifier {
   }
 
   void _history(Map<String, dynamic> data) {
+    if (data['visibility'] == 'shared') collaborative = true;
+    canControlRun = data['can_control_run'] != false;
     if (data['cloud_artifacts'] is Map) {
       cloudArtifacts
           .addAll(Map<String, dynamic>.from(data['cloud_artifacts'] as Map));
@@ -286,7 +292,10 @@ class AgentController extends ChangeNotifier {
     final workspace = await _workspace();
     if (workspace == null) throw StateError('请先打开工作区');
     if (_identity != null && !await _isCurrent()) throw StateError('账号或工作区已切换');
-    final items = await service.references(workspace);
+    final items = await service.references(
+      workspace,
+      conversation: collaborative ? chatId : '',
+    );
     if (_disposed ||
         version != clearanceVersion ||
         await _workspace() != workspace ||
@@ -302,7 +311,7 @@ class AgentController extends ChangeNotifier {
     final data = await service.request(
       'GET',
       _workspaceId!,
-      '',
+      collaborative ? chatId : '',
       '/references/${Uri.encodeComponent(id)}?page=$page',
     );
     if (_disposed || version != clearanceVersion || !await _isCurrent()) {
@@ -325,7 +334,12 @@ class AgentController extends ChangeNotifier {
       await disconnect();
       throw StateError('账号或工作区已切换，请重新打开文档');
     }
+    if (collaborative && !running && !_streamOpen) await _reloadHistory();
+    if (_disposed || !connected || !await _isCurrent()) return false;
     if (running) {
+      if (!canControlRun) {
+        throw StateError('其他成员正在对话，请等待当前回答结束后发送');
+      }
       if (behavior == 'prompt' || activeMessageId == null) {
         throw StateError('当前回答尚未结束');
       }
@@ -356,6 +370,7 @@ class AgentController extends ChangeNotifier {
     await _subscription?.cancel();
     final accepted = Completer<bool>();
     running = true;
+    canControlRun = true;
     error = null;
     activities.clear();
     references.clear();
@@ -482,7 +497,8 @@ class AgentController extends ChangeNotifier {
     if (pending == null || running) return false;
     _pendingRetry = null;
     final question = pending['question'] as Map<String, dynamic>;
-    final index = messages.indexWhere((message) => identical(message, question));
+    final index =
+        messages.indexWhere((message) => identical(message, question));
     if (index >= 0) messages.removeAt(index);
     changed();
     return send(
@@ -490,8 +506,8 @@ class AgentController extends ChangeNotifier {
       attachments: (pending['attachments'] as List)
           .whereType<Map<String, dynamic>>()
           .toList(),
-      contextReferences: (pending['references'] as List<AgentReference>),
-      images: (pending['images'] as List<Map<String, dynamic>>),
+      contextReferences: pending['references'] as List<AgentReference>,
+      images: pending['images'] as List<Map<String, dynamic>>,
     );
   }
 
@@ -852,7 +868,11 @@ class AgentController extends ChangeNotifier {
     changed();
   }
 
-  Future<void> _reloadHistory() async {
+  Future<void> _reloadHistory() => _historyRefresh ??=
+      _readHistory().whenComplete(() => _historyRefresh = null);
+
+  Future<void> _readHistory() async {
+    if (_workspaceId == null || _disposed || !connected) return;
     final epoch = _epoch;
     final run = _run;
     try {
@@ -877,7 +897,7 @@ class AgentController extends ChangeNotifier {
       }
     } catch (e) {
       if (epoch == _epoch && run == _run) {
-        error = '回答已结束，但历史刷新失败：$e';
+        error = '会话历史刷新失败：$e';
         changed();
       }
     }
@@ -890,6 +910,7 @@ class AgentController extends ChangeNotifier {
     if (prompt.submitting ||
         !prompt.open ||
         !connected ||
+        !canControlRun ||
         !await _isCurrent()) {
       return;
     }
@@ -1249,6 +1270,14 @@ class AgentController extends ChangeNotifier {
     _toolTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_acceptNoteCalls) unawaited(_pollNoteTools());
       if (connected && timer.tick % 5 == 0) unawaited(refreshCredits());
+      if (collaborative &&
+          connected &&
+          timer.tick % 5 == 0 &&
+          !running &&
+          !_streamOpen &&
+          _pendingRetry == null) {
+        unawaited(_reloadHistory());
+      }
     });
   }
 
@@ -1259,7 +1288,10 @@ class AgentController extends ChangeNotifier {
     if (mode != null && !AgentPermissions.modes.contains(mode)) {
       throw ArgumentError.value(mode, 'mode');
     }
-    if (running || connecting || interactions.isNotEmpty || prompts.isNotEmpty) {
+    if (running ||
+        connecting ||
+        interactions.isNotEmpty ||
+        prompts.isNotEmpty) {
       throw StateError('请等待当前任务结束后修改审批模式或笔记工具');
     }
     final previousMode = permissions.mode;

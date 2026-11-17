@@ -15,6 +15,7 @@ import 'ai_mode_button.dart';
 import '../application/agent_reference.dart';
 import 'agent_reference_field.dart';
 import 'agent_composer.dart';
+import 'agent_conversation_sidebar.dart';
 
 class AgentConversationsPage extends StatefulWidget {
   const AgentConversationsPage({
@@ -158,6 +159,7 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
           chatId: row.id,
           documentName: row.title,
           independent: true,
+          collaborative: row.shared,
           initialThinking: thinking,
           service: sessions.service,
           workspaceId: () async => sessions.workspaceId,
@@ -174,10 +176,14 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
     scaffold.currentState?.closeDrawer();
   }
 
-  Future<void> _create({bool send = false}) async {
+  Future<void> _create({
+    bool send = false,
+    AgentConversationVisibility visibility =
+        AgentConversationVisibility.private,
+  }) async {
     final message = send ? input.text.trim() : '';
     if (send && message.isEmpty) return;
-    final row = await sessions.create(message);
+    final row = await sessions.create(message, visibility: visibility);
     if (!mounted || revoked || row == null) return;
     _open(
       row,
@@ -242,148 +248,39 @@ class _AgentConversationsPageState extends State<AgentConversationsPage> {
   Widget _history() {
     final theme = AppFlowyTheme.of(context);
     final muted = theme.textColorScheme.primary.withValues(alpha: .6);
-    final enabled = !sessions.creating && !revoked && !sessions.loading;
-    return Material(
-      color: theme.surfaceColorScheme.primary,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-            child: Text(
-              '小马笔记AI',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: theme.textColorScheme.primary,
-              ),
+    return AgentConversationSidebar(
+      entries: sessions.entries,
+      selectedId: active?.chatId,
+      loading: sessions.loading,
+      enabled: !sessions.creating && !revoked && !sessions.loading,
+      error: sessions.error,
+      onOpen: _open,
+      onCreate: (visibility) => _create(visibility: visibility),
+      onRefresh: _load,
+      footer: Padding(
+        padding: const EdgeInsets.all(8),
+        child: TextButtonTheme(
+          data: TextButtonThemeData(
+            style: TextButton.styleFrom(
+              foregroundColor: muted,
+              textStyle:
+                  Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12),
+              alignment: Alignment.centerLeft,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(left: 14, right: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '我的对话',
-                    style: TextStyle(fontSize: 12, color: muted),
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const AllAgentArtifactsButton(),
+              if (widget.onLegacy != null)
+                TextButton.icon(
+                  onPressed: widget.onLegacy,
+                  icon: const Icon(Icons.history, size: 17),
+                  label: const Text('旧对话（保留）'),
                 ),
-                IconButton(
-                  tooltip: '刷新会话',
-                  onPressed: enabled ? _load : null,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.refresh, size: 15, color: muted),
-                ),
-                IconButton(
-                  tooltip: '新建对话',
-                  onPressed: enabled ? _create : null,
-                  visualDensity: VisualDensity.compact,
-                  icon: Icon(Icons.add, size: 20, color: muted),
-                ),
-              ],
-            ),
+            ],
           ),
-          if (sessions.loading) const LinearProgressIndicator(),
-          if (sessions.error != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                '会话加载失败：${sessions.error}',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          Expanded(
-            child: sessions.entries.isEmpty && !sessions.loading
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-                    child: Text(
-                      '还没有对话\n从右侧开始你的第一个问题',
-                      style: TextStyle(fontSize: 12, height: 1.8, color: muted),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: sessions.entries.length,
-                    itemBuilder: (_, i) {
-                      final entry = sessions.entries[i];
-                      return ListTile(
-                        dense: true,
-                        visualDensity: const VisualDensity(vertical: -4),
-                        minTileHeight: 36,
-                        contentPadding:
-                            const EdgeInsets.only(left: 8, right: 2),
-                        minLeadingWidth: 18,
-                        horizontalTitleGap: 8,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        selected: active?.chatId == entry.id,
-                        selectedColor: theme.textColorScheme.primary,
-                        selectedTileColor: theme.surfaceColorScheme.layer02,
-                        leading: Icon(
-                          Icons.chat_bubble_outline,
-                          size: 16,
-                          color: muted,
-                        ),
-                        title: Text(
-                          entry.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        trailing: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: PopupMenuButton<String>(
-                            tooltip: '对话选项',
-                            icon:
-                                Icon(Icons.more_horiz, size: 18, color: muted),
-                            padding: EdgeInsets.zero,
-                            onSelected: (_) => Clipboard.setData(
-                              ClipboardData(text: entry.title),
-                            ),
-                            itemBuilder: (_) => [
-                              const PopupMenuItem(
-                                value: 'copy',
-                                child: Text('复制标题'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        onTap: () => _open(entry),
-                      );
-                    },
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: TextButtonTheme(
-              data: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: muted,
-                  textStyle: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(fontSize: 12),
-                  alignment: Alignment.centerLeft,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const AllAgentArtifactsButton(),
-                  if (widget.onLegacy != null)
-                    TextButton.icon(
-                      onPressed: widget.onLegacy,
-                      icon: const Icon(Icons.history, size: 17),
-                      label: const Text('旧对话（保留）'),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

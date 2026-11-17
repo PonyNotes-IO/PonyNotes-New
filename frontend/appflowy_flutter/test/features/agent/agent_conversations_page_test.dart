@@ -103,6 +103,7 @@ void main() {
               created++;
               final row =
                   Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+              row['creator_name'] = '小马';
               rows.insert(0, row);
               return http.Response(
                 jsonEncode(row),
@@ -149,6 +150,7 @@ void main() {
             chatId: row.id,
             documentName: row.title,
             independent: true,
+            collaborative: row.shared,
             workspaceId: () async => workspace,
             service: service,
             internalService: AgentInternalService(
@@ -269,7 +271,7 @@ void main() {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
-      expect(find.text('我的对话'), findsOneWidget);
+      expect(find.text('私有对话'), findsOneWidget);
       expect(find.text('我的AI会话'), findsNothing);
       await tester.tap(find.text('最新的笔记是什么'));
       await tester.pumpAndSettle();
@@ -352,6 +354,26 @@ void main() {
       expect(created, 2);
       expect(store.entries.first.title, '整理摘要');
       expect(tester.takeException(), isNull);
+      if (variant.size.width < 820) {
+        await tester.tap(find.byTooltip('AI 历史会话'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byTooltip('新建协作对话'));
+      await tester.pumpAndSettle();
+      expect(created, 3);
+      expect(store.entries.first.shared, true);
+      expect(
+        tester
+            .widget<AgentWorkspace>(find.byType(AgentWorkspace))
+            .controller
+            .collaborative,
+        true,
+      );
+      if (variant.size.width < 820) {
+        await tester.tap(find.byTooltip('AI 历史会话'));
+        await tester.pumpAndSettle();
+      }
+      await screenshot('agent-shared-conversation');
       await AgentController.revokeAll();
       await tester.pumpAndSettle();
       expect(find.text('账号或工作区已切换，请重新打开问 AI'), findsOneWidget);
