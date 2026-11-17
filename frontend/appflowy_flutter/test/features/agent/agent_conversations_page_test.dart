@@ -255,7 +255,7 @@ void main() {
       await tester.enterText(find.byType(TextField), '保留输入草稿');
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('快问快答').last);
+      await tester.tap(find.byKey(const ValueKey('agent-mode-quick')));
       await tester.pumpAndSettle();
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -288,7 +288,7 @@ void main() {
       await tester.enterText(find.byType(TextField), '会话内草稿');
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('快问快答').last);
+      await tester.tap(find.byKey(const ValueKey('agent-mode-quick')));
       await tester.pumpAndSettle();
       expect(active.mode, 'quick-answer');
       expect(active.chatId, 'history');
@@ -303,7 +303,7 @@ void main() {
       await tester.tap(find.byType(AiModeButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));
-      await tester.tap(find.text('智能推理').last);
+      await tester.tap(find.byKey(const ValueKey('agent-mode-smart')));
       await tester.pump(const Duration(milliseconds: 350));
       expect(active.mode, 'smart-reasoning');
       expect(active.running, true);

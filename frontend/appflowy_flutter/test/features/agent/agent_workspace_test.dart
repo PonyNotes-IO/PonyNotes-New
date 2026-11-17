@@ -192,7 +192,7 @@ void main() {
       }
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('快问快答').last);
+      await tester.tap(find.byKey(const ValueKey('agent-mode-quick')));
       await tester.pumpAndSettle();
       expect(controller.mode, 'quick-answer');
       expect(controller.chatId, 'visual-test');

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 import '../application/agent_controller.dart';
+import 'agent_mode_details.dart';
 import '../application/agent_reference.dart';
 
 /// The welcome page and conversation share the same reference draft and picker.
@@ -529,119 +530,11 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         ),
       );
 
-  Widget _modeDetails() {
-    final smart = _kind == 'smart';
-    final entry = _modes[smart ? 1 : 0];
-    final current = widget.smartMode == smart;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                entry.icon,
-                size: 30,
-                color: _accent,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.label,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      current ? '当前模式' : '点击切换',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: _foreground.withValues(alpha: .45),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
-          Text(
-            smart ? '多步思考，深入分析与执行任务' : '检索相关资料，快速获得回答',
-            style: TextStyle(
-              fontSize: 11,
-              color: _foreground.withValues(alpha: .55),
-            ),
-          ),
-          Divider(height: 22, color: _foreground.withValues(alpha: .06)),
-          Wrap(
-            spacing: 5,
-            runSpacing: 5,
-            children: [
-              for (final label in [smart ? '多步推理' : '快速回答', '知识检索', '多轮对话'])
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: _foreground.withValues(alpha: .06),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 6,
-                    ),
-                    child: Text(label, style: const TextStyle(fontSize: 10)),
-                  ),
-                ),
-            ],
-          ),
-          Divider(height: 22, color: _foreground.withValues(alpha: .06)),
-          Text(
-            '能力',
-            style: TextStyle(
-              fontSize: 10,
-              color: _foreground.withValues(alpha: .45),
-            ),
-          ),
-          const SizedBox(height: 7),
-          for (final label in ['资料引用', '附件上传'])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle_outline, size: 13),
-                  const SizedBox(width: 6),
-                  Text(label, style: const TextStyle(fontSize: 11)),
-                  const Spacer(),
-                  Text(
-                    '支持',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: _foreground.withValues(alpha: .45),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (!current)
-            TextButton(
-              onPressed: () => _selectMode(entry.kind),
-              style: TextButton.styleFrom(
-                textStyle: const TextStyle(fontSize: 11),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 28),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text('使用此模式'),
-            ),
-        ],
-      ),
-    );
-  }
+  Widget _modeDetails() => AgentModeDetails(
+        smart: _kind == 'smart',
+        current: widget.smartMode == (_kind == 'smart'),
+        onSelected: () => _selectMode(_kind!),
+      );
 
   Widget _referenceList() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
