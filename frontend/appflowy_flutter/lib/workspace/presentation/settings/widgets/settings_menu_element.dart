@@ -3,6 +3,7 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_ui/platform_font.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../../../generated/flowy_svgs.g.dart';
 
@@ -29,6 +30,28 @@ class SettingsMenuElement extends StatelessWidget {
   final bool isEnabled;
   final bool showIcon;
   final FlowySvgData? svg;
+
+  IconData get _icon => switch (page) {
+        SettingsPage.workspace => Symbols.settings,
+        SettingsPage.account || SettingsPage.userProfile => Symbols.person,
+        SettingsPage.accountManagement => Symbols.upgrade,
+        SettingsPage.rechargeRecords => Symbols.receipt_long,
+        SettingsPage.workspaceManagement => Symbols.space_dashboard,
+        SettingsPage.storage => Symbols.hard_drive,
+        SettingsPage.plan => Symbols.workspace_premium,
+        SettingsPage.billing => Symbols.credit_card,
+        SettingsPage.sites || SettingsPage.sharing => Symbols.language,
+        SettingsPage.aboutXiaoma => Symbols.info,
+        SettingsPage.notifications => Symbols.notifications,
+        SettingsPage.member => Symbols.group,
+        SettingsPage.manageData => Symbols.database,
+        SettingsPage.shortcuts => Symbols.keyboard,
+        SettingsPage.ai || SettingsPage.aiProvider => Symbols.auto_awesome,
+        SettingsPage.aiChat => Symbols.forum,
+        SettingsPage.cloud => Symbols.cloud,
+        SettingsPage.featureFlags => Symbols.flag,
+        SettingsPage.mcp => Symbols.network_node,
+      };
 
   static const _fontFamilyFallback = [
     'SimHei',
@@ -82,14 +105,21 @@ class SettingsMenuElement extends StatelessWidget {
         builder: (_, __, ___) {
           return Row(
             children: [
-              if (showIcon) ...[
+              if (showIcon)
                 FlowySvg(
                   svg ?? FlowySvgs.icon_setting_upgrade_s,
                   blendMode: null,
                   size: Size(18, 18),
+                )
+              else
+                Icon(
+                  _icon,
+                  size: 18,
+                  color: isEnabled
+                      ? theme.iconColorScheme.secondary
+                      : theme.iconColorScheme.secondary.withValues(alpha: 0.5),
                 ),
-                const HSpace(4),
-              ],
+              const HSpace(8),
               Expanded(
                 flex: hasTrailingText ? 2 : 1,
                 child: Text(

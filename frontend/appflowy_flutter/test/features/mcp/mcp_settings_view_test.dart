@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/features/mcp/application/mcp_audit_log.dart';
 import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/presentation/mcp_settings_view.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +24,7 @@ void main() {
     double width = 620,
     bool dark = false,
     double textScale = 1,
+    bool guide = true,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 760);
@@ -46,6 +49,10 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    if (guide) {
+      await tester.tap(find.text('查看完整设置指南'));
+      await tester.pumpAndSettle();
+    }
   }
 
   testWidgets('recent client opens live details and preserves unknown history',
@@ -157,19 +164,14 @@ void main() {
     expect(McpServerService.instance.isRunning, isFalse);
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
-    expect(find.byType(Dialog), findsNothing);
-    await tester.ensureVisible(find.text('连接与权限'));
-    await tester.tap(find.text('连接与权限'));
-    await tester.pumpAndSettle();
+    expect(find.text('连接 Codex'), findsNothing);
+    expect(find.text('MCP 完整设置指南'), findsOneWidget);
     final disconnect = find.widgetWithText(TextButton, '断开所有连接');
     await tester.ensureVisible(disconnect);
     expect(tester.widget<TextButton>(disconnect).onPressed, isNull);
-    expect(
-      tester.getTopLeft(disconnect).dx,
-      greaterThan(
-        tester.getTopLeft(find.text('解除所有与小马笔记 MCP 的连接')).dx,
-      ),
-    );
+    final buttonRect = tester.getRect(disconnect);
+    final descriptionRect = tester.getRect(find.text('解除所有与小马笔记 MCP 的连接'));
+    expect(buttonRect.overlaps(descriptionRect), isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -191,9 +193,6 @@ void main() {
     await tester.tap(find.byTooltip('关闭'));
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('连接与权限'));
-    await tester.tap(find.text('连接与权限'));
-    await tester.pumpAndSettle();
     expect(find.text('连接凭证'), findsOneWidget);
     expect(find.text('工具权限'), findsOneWidget);
     final disconnect = find.widgetWithText(TextButton, '断开所有连接');
@@ -220,4 +219,140 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('disabled MCP hides permissions and connection credentials',
+      (tester) async {
+    await pumpSettings(tester, guide: false);
+    expect(find.text('MCP服务器配置'), findsOneWidget);
+    expect(find.text('启用MCP服务器'), findsOneWidget);
+    expect(find.text('权限控制'), findsNothing);
+    expect(find.byTooltip('复制 MCP 配置'), findsNothing);
+    expect(find.byType(CupertinoSwitch), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'enabled presets control tools; copy includes the real credential',
+      (tester) async {
+    final service = McpServerService.instance;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'mcp_token_hash',
+      McpServerService.hashToken('ui-test-token'),
+    );
+    await prefs.setString('mcp_token_plain', 'ui-test-token');
+    await prefs.setString('mcp_token_created_at', '2026-10-31T16:44:00');
+    await service.restore();
+    await tester.runAsync(
+      () => IOOverrides.runWithIOOverrides(
+        service.start,
+        _EphemeralMcpPort(),
+      ),
+    );
+    expect(service.isRunning, isTrue);
+    addTearDown(() async => service.shutdown());
+    String? copied;
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    await pumpSettings(tester, width: 960, guide: false);
+    expect(find.text('权限控制'), findsOneWidget);
+    expect(find.text('创建时间：2026/10/31 16:44'), findsOneWidget);
+    expect(find.text('最后使用：—'), findsOneWidget);
+    await tester.tap(find.text('只读模式'));
+    await tester.pumpAndSettle();
+    expect(McpPermissions.instance.isAllowed('get_page'), isTrue);
+    expect(McpPermissions.instance.isAllowed('update_block'), isFalse);
+    await tester.tap(find.text('安全编辑'));
+    await tester.pumpAndSettle();
+    expect(McpPermissions.instance.isAllowed('update_block'), isTrue);
+    expect(McpPermissions.instance.isAllowed('delete_page'), isFalse);
+    await tester.tap(find.text('完全控制'));
+    await tester.pumpAndSettle();
+    expect(McpPermissions.instance.disabledTools, isEmpty);
+    await tester.tap(find.byTooltip('复制 MCP 配置'));
+    await tester.pumpAndSettle();
+    final config = jsonDecode(copied!) as Map<String, dynamic>;
+    expect(config['mcpServers']['ponynotes']['url'], service.endpoint);
+    expect(
+      config['mcpServers']['ponynotes']['headers']['Authorization'],
+      'Bearer ui-test-token',
+    );
+    expect(find.textContaining('ui-test-token'), findsNothing);
+
+    // 在比默认设置内容区更窄的 396px 下，三个权限档位仍需并排。
+    await pumpSettings(tester, width: 396, guide: false);
+    final presetButtons = ['只读模式', '安全编辑', '完全控制']
+        .map(
+          (label) => find.widgetWithText(TextButton, label),
+        )
+        .toList();
+    final rowTop = tester.getTopLeft(presetButtons.first).dy;
+    for (final button in presetButtons) {
+      expect(tester.getTopLeft(button).dy, rowTop);
+      expect(
+        tester.getSize(button).height,
+        tester.getSize(presetButtons.first).height,
+      );
+      expect(tester.getTopLeft(button).dx, greaterThanOrEqualTo(0));
+      expect(tester.getBottomRight(button).dx, lessThanOrEqualTo(396));
+    }
+    await tester.tap(presetButtons[0]);
+    await tester.pumpAndSettle();
+    expect(McpPermissions.instance.isAllowed('update_block'), isFalse);
+    expect(tester.takeException(), isNull);
+    await pumpSettings(
+      tester,
+      width: 320,
+      dark: true,
+      textScale: 1.3,
+      guide: false,
+    );
+    expect(
+      tester.getTopLeft(find.widgetWithText(TextButton, '安全编辑')).dy,
+      greaterThan(
+        tester.getTopLeft(find.widgetWithText(TextButton, '只读模式')).dy,
+      ),
+    );
+    await tester.ensureVisible(find.text('安全编辑'));
+    await tester.tap(find.text('安全编辑'));
+    await tester.pumpAndSettle();
+    expect(McpPermissions.instance.isAllowed('delete_page'), isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.byType(CupertinoSwitch));
+    await tester.tap(find.byType(CupertinoSwitch));
+    await tester.pumpAndSettle();
+    expect(service.isRunning, isFalse);
+    expect(find.text('权限控制'), findsNothing);
+    expect(service.token, 'ui-test-token');
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+// UI tests only need a running service; leave the desktop client's port alone.
+class _EphemeralMcpPort extends IOOverrides {
+  @override
+  Future<ServerSocket> serverSocketBind(
+    dynamic address,
+    int port, {
+    int backlog = 0,
+    bool v6Only = false,
+    bool shared = false,
+  }) =>
+      super.serverSocketBind(
+        address,
+        0,
+        backlog: backlog,
+        v6Only: v6Only,
+        shared: shared,
+      );
 }

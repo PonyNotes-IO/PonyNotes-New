@@ -1,3 +1,5 @@
+import 'package:appflowy/features/mcp/application/mcp_tools.dart'
+    show McpToolSpec;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +18,27 @@ class McpPermissions extends ChangeNotifier {
   Set<String> get disabledTools => Set.unmodifiable(_disabled);
 
   bool isAllowed(String tool) => !_disabled.contains(tool);
+
+  McpPermissionPreset? presetFor(List<McpToolSpec> tools) {
+    for (final preset in McpPermissionPreset.values) {
+      if (tools.every((tool) => isAllowed(tool.name) == preset.allows(tool))) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  Future<void> applyPreset(
+    McpPermissionPreset preset,
+    List<McpToolSpec> tools,
+  ) async {
+    _disabled
+      ..clear()
+      ..addAll(tools.where((tool) => !preset.allows(tool)).map((t) => t.name));
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKey, _disabled.toList()..sort());
+  }
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -41,4 +64,16 @@ class McpPermissions extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefsKey);
   }
+}
+
+enum McpPermissionPreset {
+  readOnly,
+  safeEdit,
+  fullControl;
+
+  bool allows(McpToolSpec tool) => switch (this) {
+        readOnly => tool.readOnly,
+        safeEdit => !tool.destructive,
+        fullControl => true,
+      };
 }

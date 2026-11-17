@@ -63,11 +63,13 @@ class McpServerService extends ChangeNotifier {
   static const String _prefsTokenUserId = 'mcp_token_user_id';
   static const String _prefsTokenBackend = 'mcp_token_backend';
   static const String _prefsClients = 'mcp_clients';
+  static const String _prefsTokenCreatedAt = 'mcp_token_created_at';
   static const int _maxRequestBytes = 1024 * 1024;
 
   StreamableMcpServer? _server;
   String? _tokenHash;
   String? _tokenPlain;
+  DateTime? _tokenCreatedAt;
 
   // ponytail: 同名客户端合并展示；需要区分设备时再增加客户端实例标识。
   final _clients = <String, McpClientConnection>{};
@@ -87,6 +89,7 @@ class McpServerService extends ChangeNotifier {
   ///
   /// 只存在本机 SharedPreferences；鉴权仍按 SHA-256 摘要比对。
   String? get token => _tokenPlain;
+  DateTime? get tokenCreatedAt => _tokenCreatedAt;
   String? get lastError => _lastError;
   String get endpoint => 'http://127.0.0.1:$port$path';
 
@@ -140,6 +143,8 @@ class McpServerService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     _tokenHash = prefs.getString(_prefsTokenHash);
     _tokenPlain = prefs.getString(_prefsTokenPlain);
+    _tokenCreatedAt =
+        DateTime.tryParse(prefs.getString(_prefsTokenCreatedAt) ?? '');
     _tokenUserId = prefs.getString(_prefsTokenUserId);
     _tokenBackend = prefs.getString(_prefsTokenBackend);
     await McpPermissions.instance.load();
@@ -232,11 +237,16 @@ class McpServerService extends ChangeNotifier {
     ).replaceAll('=', '');
     _tokenHash = hashToken(token);
     _tokenPlain = token;
+    _tokenCreatedAt = DateTime.now();
     _tokenUserId = profile.id.toString();
     _tokenBackend = _currentBackend();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsTokenHash, _tokenHash!);
     await prefs.setString(_prefsTokenPlain, token);
+    await prefs.setString(
+      _prefsTokenCreatedAt,
+      _tokenCreatedAt!.toIso8601String(),
+    );
     await prefs.setString(_prefsTokenUserId, _tokenUserId!);
     if (_tokenBackend != null) {
       await prefs.setString(_prefsTokenBackend, _tokenBackend!);
@@ -253,11 +263,13 @@ class McpServerService extends ChangeNotifier {
     await stop();
     _tokenHash = null;
     _tokenPlain = null;
+    _tokenCreatedAt = null;
     _tokenUserId = null;
     _tokenBackend = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_prefsTokenHash);
     await prefs.remove(_prefsTokenPlain);
+    await prefs.remove(_prefsTokenCreatedAt);
     await prefs.remove(_prefsTokenUserId);
     await prefs.remove(_prefsTokenBackend);
     Log.info('[MCP] authorization revoked');
