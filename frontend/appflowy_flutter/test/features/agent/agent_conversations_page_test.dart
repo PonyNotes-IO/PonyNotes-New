@@ -42,13 +42,16 @@ void main() {
   testWidgets(
       'opening independent conversations exits the retained legacy mode',
       (tester) async {
-    await tester.pumpWidget(AppFlowyTheme(
-      data: AppFlowyDefaultTheme().light(),
-      child: MaterialApp(
-        home:
-            AIWelcomePage(onMessageSent: (_, __, ___, ____, _____, ______) {}),
+    await tester.pumpWidget(
+      AppFlowyTheme(
+        data: AppFlowyDefaultTheme().light(),
+        child: MaterialApp(
+          home: AIWelcomePage(
+            onMessageSent: (_, __, ___, ____, _____, ______) {},
+          ),
+        ),
       ),
-    ));
+    );
     tester
         .widget<AgentConversationsPage>(find.byType(AgentConversationsPage))
         .onLegacy!();
@@ -60,6 +63,7 @@ void main() {
   });
   for (final variant in [
     (name: 'desktop', size: const Size(1360, 900)),
+    (name: 'reference', size: const Size(927, 754)),
     (name: 'phone', size: const Size(390, 844)),
     (name: 'compact', size: const Size(320, 640)),
   ]) {
@@ -186,11 +190,12 @@ void main() {
                 conversations: store,
                 controllerFactory: controller,
                 initialAttachments: [
-                  PlatformFile(
-                    name: 'draft.txt',
-                    size: 3,
-                    bytes: Uint8List.fromList([1, 2, 3]),
-                  ),
+                  if (variant.name != 'reference')
+                    PlatformFile(
+                      name: 'draft.txt',
+                      size: 3,
+                      bytes: Uint8List.fromList([1, 2, 3]),
+                    ),
                 ],
                 onLegacy: () {},
               ),
@@ -206,7 +211,7 @@ void main() {
         find.byTooltip('上传文件'),
         find.byTooltip('发送消息'),
         find.byType(AiModeButton),
-        find.text('draft.txt'),
+        if (variant.name != 'reference') find.text('draft.txt'),
       ]) {
         expect(
           tester.getRect(composer).contains(tester.getCenter(control)),
@@ -214,6 +219,39 @@ void main() {
         );
       }
       await screenshot('agent-welcome');
+      expect(
+        tester.getBottomRight(composer).dy,
+        greaterThan(variant.size.height - 90),
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.arrow_upward),
+            )
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('帮我总结最近的笔记，提炼重点'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '帮我总结最近的笔记，提炼重点',
+      );
+      expect(
+        tester
+            .widget<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.arrow_upward),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byTooltip('换一组问题'));
+      await tester.pumpAndSettle();
+      expect(find.text('梳理笔记中的关键观点和结论'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        '帮我总结最近的笔记，提炼重点',
+      );
       await tester.enterText(find.byType(TextField), '保留输入草稿');
       await tester.tap(find.byType(AiModeButton));
       await tester.pumpAndSettle();
@@ -223,12 +261,15 @@ void main() {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         '保留输入草稿',
       );
-      expect(find.text('draft.txt'), findsOneWidget);
-      if (variant.name != 'desktop') {
+      expect(
+        find.text('draft.txt'),
+        variant.name == 'reference' ? findsNothing : findsOneWidget,
+      );
+      if (variant.size.width < 820) {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
-      expect(find.text('历史会话'), findsOneWidget);
+      expect(find.text('我的对话'), findsOneWidget);
       expect(find.text('我的AI会话'), findsNothing);
       await tester.tap(find.text('最新的笔记是什么'));
       await tester.pumpAndSettle();
@@ -272,11 +313,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await screenshot('independent-conversations');
-      if (variant.name != 'desktop') {
+      if (variant.size.width < 820) {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
-      await tester.tap(find.text('新建对话'));
+      await tester.tap(find.byTooltip('新建对话'));
       await tester.pumpAndSettle();
       expect(created, 1);
       expect(find.byType(AgentComposer), findsOneWidget);
@@ -296,7 +337,7 @@ void main() {
             .chatId,
         store.entries.first.id,
       );
-      if (variant.name != 'desktop') {
+      if (variant.size.width < 820) {
         await tester.tap(find.byTooltip('AI 历史会话'));
         await tester.pumpAndSettle();
       }
