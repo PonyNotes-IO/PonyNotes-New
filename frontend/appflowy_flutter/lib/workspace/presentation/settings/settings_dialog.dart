@@ -160,91 +160,93 @@ class _SettingsDialogState extends State<SettingsDialog> {
         initPage: widget.initPage,
       )..add(const SettingsDialogEvent.initial()),
       child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
-        builder: (context, state) => FlowyDialog(
-          width: width,
-          backgroundColor: theme.backgroundColorScheme.primary,
-          constraints: BoxConstraints(
-            minWidth: width,
-            maxWidth: width,
-            minHeight: minHeight,
-            maxHeight: height,
-          ),
-          expandHeight: false,
-          child: ScaffoldMessenger(
-            child: Scaffold(
-              backgroundColor: theme.backgroundColorScheme.primary,
-              body: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
-                builder: (context, workspaceState) {
-                  final currentWorkspace = workspaceState.currentWorkspace;
-                  return BlocProvider<SpaceBloc>(
-                    create: (context) => SpaceBloc(
-                      userProfile: widget.user,
-                      workspaceId: currentWorkspace?.workspaceId ?? '',
-                    )..add(const SpaceEvent.initial(openFirstPage: false)),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: settingsMenuWidth,
-                          child: SettingsMenu(
-                            userProfile: state.userProfile,
-                            changeSelectedPage: (index) => context
-                                .read<SettingsDialogBloc>()
-                                .add(
-                                  SettingsDialogEvent.setSelectedPage(index),
-                                ),
-                            currentPage:
-                                context.read<SettingsDialogBloc>().state.page,
-                            currentUserRole: currentWorkspaceMemberRole,
-                            isBillingEnabled: state.isBillingEnabled,
-                            workspaceId:
-                                workspaceState.currentWorkspace?.workspaceId ??
-                                    '',
-                            currentSubscription: context
-                                .read<SettingsDialogBloc>()
-                                .state
-                                .currentSubscription,
-                          ),
-                        ),
-                        AFDivider(
-                          axis: Axis.vertical,
-                          color: theme.borderColorScheme.primary,
-                        ),
-                        Expanded(
-                          flex: 6,
-                          child: Container(
-                            // Ensure right pane fully covers dialog area to avoid tiny gap
-                            // caused by rounding or inner padding of children.
-                            color: theme.backgroundColorScheme.primary,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              child: currentWorkspace == null
-                                  ? const Center(
-                                      child:
-                                          CircularProgressIndicator.adaptive(),
-                                    )
-                                  : getSettingsView(
-                                      currentWorkspace,
-                                      context
-                                          .read<SettingsDialogBloc>()
-                                          .state
-                                          .page,
-                                      state.userProfile,
-                                      currentWorkspace.role,
-                                      context,
-                                    ),
+        builder: (context, state) {
+          return FlowyDialog(
+            width: width,
+            backgroundColor: theme.backgroundColorScheme.primary,
+            constraints: BoxConstraints(
+              minWidth: width,
+              maxWidth: width,
+              minHeight: minHeight,
+              maxHeight: height,
+            ),
+            expandHeight: false,
+            child: ScaffoldMessenger(
+              child: Scaffold(
+                backgroundColor: theme.backgroundColorScheme.primary,
+                body: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
+                  builder: (context, workspaceState) {
+                    final currentWorkspace = workspaceState.currentWorkspace;
+                    return BlocProvider<SpaceBloc>(
+                      create: (context) => SpaceBloc(
+                        userProfile: widget.user,
+                        workspaceId: currentWorkspace?.workspaceId ?? '',
+                      )..add(const SpaceEvent.initial(openFirstPage: false)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: settingsMenuWidth,
+                            child: SettingsMenu(
+                              userProfile: state.userProfile,
+                              changeSelectedPage: (index) => context
+                                  .read<SettingsDialogBloc>()
+                                  .add(
+                                    SettingsDialogEvent.setSelectedPage(index),
+                                  ),
+                              currentPage:
+                                  context.read<SettingsDialogBloc>().state.page,
+                              currentUserRole: currentWorkspaceMemberRole,
+                              isBillingEnabled: state.isBillingEnabled,
+                              workspaceId: workspaceState
+                                      .currentWorkspace?.workspaceId ??
+                                  '',
+                              currentSubscription: context
+                                  .read<SettingsDialogBloc>()
+                                  .state
+                                  .currentSubscription,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+                          AFDivider(
+                            axis: Axis.vertical,
+                            color: theme.borderColorScheme.primary,
+                          ),
+                          Expanded(
+                            flex: 6,
+                            child: Container(
+                              // Ensure right pane fully covers dialog area to avoid tiny gap
+                              // caused by rounding or inner padding of children.
+                              color: theme.backgroundColorScheme.primary,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: currentWorkspace == null
+                                    ? const Center(
+                                        child: CircularProgressIndicator
+                                            .adaptive(),
+                                      )
+                                    : getSettingsView(
+                                        currentWorkspace,
+                                        context
+                                            .read<SettingsDialogBloc>()
+                                            .state
+                                            .page,
+                                        state.userProfile,
+                                        currentWorkspace.role,
+                                        context,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -358,7 +360,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
       case SettingsPage.mcp:
         return const McpSettingsView();
       case SettingsPage.aiProvider:
-        return AiProviderSettingsView(creatorName: user.name);
+        return AiProviderSettingsView(
+          key: ValueKey(workspace.workspaceId),
+          workspaceId: workspace.workspaceId,
+          creatorName: user.name,
+        );
       case SettingsPage.aiChat:
         return const AiChatView();
       // return const SizedBox.shrink();

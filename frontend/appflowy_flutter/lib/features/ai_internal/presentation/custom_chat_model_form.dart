@@ -1,0 +1,331 @@
+import 'dart:async';
+
+import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
+import 'package:appflowy/features/ai_internal/application/internal_ai_service.dart';
+import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
+import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+/// 内部 AI 的模型配置页：模型地址、模型名称、API Key。
+///
+/// 与「AI 接入 (MCP)」是两个方向：
+/// MCP 是外部 Agent 访问小马，这里是 小马访问用户自己的模型服务。
+class CustomChatModelForm extends StatefulWidget {
+  const CustomChatModelForm({
+    super.key,
+    this.onSaved,
+    this.creatorName = '',
+  });
+  final ValueChanged<AiProviderConfig>? onSaved;
+  final String creatorName;
+
+  @override
+  State<CustomChatModelForm> createState() => _CustomChatModelFormState();
+}
+
+class _CustomChatModelFormState extends State<CustomChatModelForm> {
+  final _serverUrlController = TextEditingController();
+  final _modelController = TextEditingController();
+  final _apiKeyController = TextEditingController();
+
+  bool _loading = true;
+  bool _saving = false;
+  bool _testing = false;
+  bool _obscureKey = true;
+  bool _supportsReasoning = false;
+  AiProviderConfig _loadedConfig = const AiProviderConfig();
+
+  /// 连通性测试的结果，null 表示还没测过。
+  String? _testMessage;
+  bool _testOk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _serverUrlController.dispose();
+    _modelController.dispose();
+    _apiKeyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final config = await const AiProviderConfigStorage().load();
+      if (!mounted) return;
+      _loadedConfig = config;
+      _serverUrlController.text = config.baseUrl;
+      _modelController.text = config.modelName;
+      _apiKeyController.text = config.apiKey;
+      _supportsReasoning = config.supportsReasoning;
+    } catch (_) {
+      if (mounted) setState(() => _testMessage = '无法读取系统安全存储，请解锁系统钥匙串后重试。');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  AiProviderConfig _currentConfig() {
+    final sameModel =
+        _loadedConfig.baseUrl == _serverUrlController.text.trim() &&
+            _loadedConfig.modelName == _modelController.text.trim();
+    final creator = sameModel && _loadedConfig.creatorName.isNotEmpty
+        ? _loadedConfig.creatorName
+        : widget.creatorName.isNotEmpty
+            ? widget.creatorName
+            : context.read<UserWorkspaceBloc?>()?.state.userProfile.name ?? '';
+    return AiProviderConfig(
+      baseUrl: _serverUrlController.text.trim(),
+      modelName: _modelController.text.trim(),
+      apiKey: _apiKeyController.text.trim(),
+      supportsReasoning: _supportsReasoning,
+      creatorName: creator,
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final config = _currentConfig();
+      if (widget.onSaved != null && !config.isComplete) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '请填写模型地址、模型名称和 API Key。';
+        });
+        return;
+      }
+      await const AiProviderConfigStorage().save(config);
+      if (mounted) {
+        setState(() {
+          _testOk = true;
+          _testMessage = '已保存';
+        });
+        widget.onSaved?.call(config);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '保存失败，请检查系统安全存储后重试。';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// 用当前填写的配置发一次最小请求，只验证通路与鉴权，不实际生成笔记操作。
+  Future<void> _testConnection() async {
+    if (_testing) return;
+    setState(() {
+      _testing = true;
+      _testMessage = null;
+    });
+
+    final config = _currentConfig();
+
+    final service = InternalAiService();
+    try {
+      if (!service.isConfigured(config)) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '地址、模型名称和 API Key 都需要填写。';
+        });
+        return;
+      }
+      // 直接问一句最轻量的话，不触发任何工具。用未保存的表单值，便于先测后存。
+      await service.ask(
+        question: '你好',
+        configOverride: config,
+        withTools: false,
+      );
+      if (mounted) {
+        setState(() {
+          _testOk = true;
+          _testMessage = '连接成功。';
+        });
+      }
+    } on InternalAiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _testOk = false;
+          _testMessage = e.message;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _testOk = false;
+          _testMessage = '测试失败：$e';
+        });
+      }
+    } finally {
+      service.dispose();
+      if (mounted) setState(() => _testing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const SettingsBody(
+        title: '内部 AI 模型',
+        autoSeparate: false,
+        children: [VSpace(20), Center(child: CircularProgressIndicator())],
+      );
+    }
+
+    return SettingsBody(
+      title: '内部 AI 模型',
+      description: '配置你自己拥有的模型服务（OpenAI 兼容接口）。'
+          '小马会用它理解你的意图，并通过本地工具读取和修改笔记。'
+          '模型调用产生的费用由你的账号自行承担，与 MCP Token 分别管理。'
+          '这组配置单独保存，与「Ollama」设置互不覆盖。',
+      autoSeparate: false,
+      children: [
+        _buildField(
+          context,
+          label: '模型地址',
+          hint: 'https://api.deepseek.com 或 https://api.openai.com/v1',
+          controller: _serverUrlController,
+        ),
+        const VSpace(12),
+        _buildField(
+          context,
+          label: '模型名称',
+          hint: 'deepseek-chat、gpt-4o-mini 等',
+          controller: _modelController,
+        ),
+        const VSpace(12),
+        _buildApiKeyField(context),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('支持推理 / 思考程度'),
+          subtitle: const Text('仅为支持思考参数的模型开启'),
+          value: _supportsReasoning,
+          onChanged: (value) => setState(() => _supportsReasoning = value),
+        ),
+        if (_testMessage != null) ...[
+          const VSpace(12),
+          FlowyText(
+            _testMessage!,
+            fontSize: 13,
+            color: _testOk
+                ? AppFlowyTheme.of(context).textColorScheme.primary
+                : Theme.of(context).colorScheme.error,
+          ),
+        ],
+        const VSpace(20),
+        Row(
+          children: [
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? '保存中…' : '保存'),
+            ),
+            const HSpace(12),
+            OutlinedButton(
+              onPressed: _testing ? null : _testConnection,
+              child: Text(_testing ? '测试中…' : '测试连接'),
+            ),
+          ],
+        ),
+        const VSpace(20),
+        _buildNotice(context),
+      ],
+    );
+  }
+
+  Widget _buildField(
+    BuildContext context, {
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          label,
+          fontSize: 14,
+          color: AppFlowyTheme.of(context).textColorScheme.primary,
+        ),
+        const VSpace(6),
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: hint,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildApiKeyField(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          'API Key',
+          fontSize: 14,
+          color: AppFlowyTheme.of(context).textColorScheme.primary,
+        ),
+        const VSpace(6),
+        TextField(
+          controller: _apiKeyController,
+          obscureText: _obscureKey,
+          decoration: InputDecoration(
+            hintText: 'sk-…',
+            border: const OutlineInputBorder(),
+            isDense: true,
+            suffixIcon: IconButton(
+              icon: Icon(_obscureKey ? Icons.visibility : Icons.visibility_off),
+              onPressed: () => setState(() => _obscureKey = !_obscureKey),
+            ),
+          ),
+        ),
+        const VSpace(4),
+        FlowyText(
+          '密钥保存在系统安全存储中，仅用于访问模型服务和你配置的 Agent 执行器。',
+          fontSize: 12,
+          color: AppFlowyTheme.of(context).textColorScheme.secondary,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotice(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppFlowyTheme.of(context).surfaceColorScheme.layer01,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FlowyText(
+            '关于写操作',
+            fontSize: 13,
+            color: AppFlowyTheme.of(context).textColorScheme.primary,
+          ),
+          const VSpace(4),
+          FlowyText(
+            'AI 具备创建页面、追加内容、修改和删除块的能力。'
+            '涉及写入的操作会先征求你的确认，确认前不会执行。',
+            fontSize: 12,
+            color: AppFlowyTheme.of(context).textColorScheme.secondary,
+          ),
+        ],
+      ),
+    );
+  }
+}

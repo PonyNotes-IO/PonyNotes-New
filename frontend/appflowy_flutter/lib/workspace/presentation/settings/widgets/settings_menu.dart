@@ -241,7 +241,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
             SettingsMenuElement(
               page: SettingsPage.aiProvider,
               selectedPage: widget.currentPage,
-              label: "内部 AI 模型",
+              label: "模型管理",
               changeSelectedPage: widget.changeSelectedPage,
             ),
             SettingsMenuElement(

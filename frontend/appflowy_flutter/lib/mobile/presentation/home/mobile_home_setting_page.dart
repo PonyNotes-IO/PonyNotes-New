@@ -545,7 +545,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                   onTap: () => onNavigate(MobileSettingsSection.storage),
                 ),
                 _SettingsItem(
-                  label: '内部 AI 模型',
+                  label: '模型管理',
                   onTap: () =>
                       context.push(MobileInternalAiProviderPage.routeName),
                 ),
