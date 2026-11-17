@@ -46,7 +46,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets('a new user can select sub2api models without a custom key',
+  testWidgets('a new user can select project models without a custom key',
       (tester) async {
     AiProviderConfig? selected;
     final service = AgentInternalService(
@@ -57,8 +57,9 @@ void main() {
       ),
       client: MockClient(
         (_) async => http.Response(
-          '{"data":[{"id":"managed-first"},{"id":"managed-second"}]}',
+          '{"data":{"models":[{"id":"deepseek-chat","name":"DeepSeek"},{"id":"qwen3-vl-plus","name":"通义千问"},{"id":"doubao","name":"豆包"}]}}',
           200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
         ),
       ),
     );
@@ -71,16 +72,17 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('managed-first'), findsOneWidget);
+    expect(find.text('DeepSeek'), findsOneWidget);
     await tester.tap(find.byTooltip('选择模型'));
     await tester.pumpAndSettle();
-    expect(find.text('内部模型'), findsOneWidget);
+    expect(find.text('平台模型'), findsOneWidget);
     expect(find.text('配置自定义模型'), findsOneWidget);
-    await tester.tap(find.text('managed-second'));
+    expect(find.text('豆包'), findsOneWidget);
+    await tester.tap(find.text('通义千问'));
     await tester.pumpAndSettle();
     expect(selected?.isInternal, true);
     expect(selected?.apiKey, isEmpty);
-    expect((await service.preferred()).modelName, 'managed-second');
+    expect((await service.preferred()).modelName, 'qwen3-vl-plus');
     expect(await storage.loadProfiles(), isEmpty);
   });
 
@@ -109,15 +111,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(selected?.modelName, first.modelName);
     expect(selected?.apiKey, first.apiKey);
-    await tester.tap(find.text('思考 · 中'));
+    await tester.tap(find.byTooltip('思考强度'));
     await tester.pumpAndSettle();
-    final slider = tester.widget<Slider>(find.byType(Slider));
-    slider.onChanged!(6);
-    slider.onChangeEnd!(6);
+    await tester.tap(find.byKey(const ValueKey('agent-thinking-max')));
     await tester.pumpAndSettle();
     expect(effort, 'max');
     expect(await AgentModelPreferences.loadThinking(), 'max');
-    expect(find.text('思考 · 最大'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byTooltip('思考强度'),
+        matching: find.text('思考 · 最大'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('按任务难度选择思考深度'), findsNothing);
   });
 
   testWidgets('failed model changes keep the previous active model',
@@ -209,9 +216,66 @@ void main() {
     expect(find.text('my-custom-model'), findsOneWidget);
   });
 
+  testWidgets('thinking choices support keyboard selection and Escape',
+      (tester) async {
+    String? effort;
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: AgentModelSettingsButton(
+          currentConfig: first,
+          currentThinking: 'medium',
+          onChanged: (_, level) async => effort = level,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('思考强度'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(effort, 'high');
+    expect(await AgentModelPreferences.loadThinking(), 'high');
+    expect(find.text('按任务难度选择思考深度'), findsNothing);
+    await tester.tap(find.byTooltip('思考强度'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('按任务难度选择思考深度'), findsNothing);
+    expect(effort, 'high');
+  });
+
+  testWidgets('failed thinking changes restore the previous level',
+      (tester) async {
+    await storage.save(first);
+    await AgentModelPreferences.saveThinking('low');
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: AgentModelSettingsButton(
+          currentConfig: first,
+          currentThinking: 'low',
+          onChanged: (_, __) async => throw StateError('思考强度切换失败'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('思考强度'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-thinking-max')));
+    await tester.pumpAndSettle();
+    expect(await AgentModelPreferences.loadThinking(), 'low');
+    expect(find.text('思考 · 低'), findsOneWidget);
+    expect(find.textContaining('思考强度切换失败'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+  });
+
   for (final variant in [
     (name: 'desktop-light', size: const Size(1360, 900), dark: false),
+    (name: 'reference-dark', size: const Size(1215, 828), dark: true),
+    (name: 'screenshot-dark', size: const Size(890, 606), dark: true),
     (name: 'phone-dark', size: const Size(390, 844), dark: true),
+    (name: 'compact-light', size: const Size(320, 480), dark: false),
   ]) {
     testWidgets('model and thinking popovers fit ${variant.name}',
         (tester) async {
@@ -222,16 +286,27 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await storage.save(first);
-      await storage.save(second);
+      final reference =
+          variant.name == 'reference-dark' || variant.name == 'screenshot-dark';
+      final firstProfile =
+          reference ? first.copyWith(modelName: 'DeepSeek-V4.1-Flash') : first;
+      final secondProfile = reference
+          ? second.copyWith(modelName: 'DeepSeek-V4.1-Flash')
+          : second;
+      await storage.save(firstProfile);
+      await storage.save(secondProfile);
+      if (reference) {
+        await storage
+            .save(firstProfile.copyWith(baseUrl: 'https://third.example/v1'));
+      }
       await AgentInternalService(
         account: () async => const AgentCloudAccount(
           baseUrl: 'https://cloud.test',
           accessToken: 'login',
           userId: '1',
         ),
-      ).select(second);
-      await AgentModelPreferences.saveThinking('high');
+      ).select(reference ? firstProfile : secondProfile);
+      await AgentModelPreferences.saveThinking(reference ? 'medium' : 'high');
       final theme = AppFlowyDefaultTheme();
       final boundary = GlobalKey();
       await tester.pumpWidget(
@@ -270,17 +345,24 @@ void main() {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          AgentModelSettingsButton(
-                            internalService: AgentInternalService(
-                              account: () async => const AgentCloudAccount(
-                                baseUrl: 'https://cloud.test',
-                                accessToken: 'login',
-                                userId: '1',
-                              ),
-                              client: MockClient(
-                                (_) async => http.Response(
-                                  '{"data":[{"id":"sub2api-chat"},{"id":"sub2api-reasoner-long-model-name"}]}',
-                                  200,
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: AgentModelSettingsButton(
+                              internalService: AgentInternalService(
+                                account: () async => const AgentCloudAccount(
+                                  baseUrl: 'https://cloud.test',
+                                  accessToken: 'login',
+                                  userId: '1',
+                                ),
+                                client: MockClient(
+                                  (_) async => http.Response(
+                                    '{"data":{"models":[{"id":"deepseek-chat","name":"DeepSeek"},{"id":"qwen3-vl-plus","name":"通义千问"},{"id":"doubao","name":"豆包"}]}}',
+                                    200,
+                                    headers: {
+                                      'content-type':
+                                          'application/json; charset=utf-8',
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
@@ -298,10 +380,52 @@ void main() {
       await tester.pumpAndSettle();
       for (final menu in ['model', 'thinking']) {
         await tester.tap(
-          menu == 'model' ? find.byTooltip('选择模型') : find.text('思考 · 高'),
+          menu == 'model' ? find.byTooltip('选择模型') : find.byTooltip('思考强度'),
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        if (menu == 'model') {
+          expect(find.text('平台模型'), findsOneWidget);
+          expect(find.text('自定义模型'), findsOneWidget);
+          expect(find.byIcon(Icons.check), findsOneWidget);
+          final lastItem =
+              tester.getRect(find.widgetWithText(MenuItemButton, '配置自定义模型'));
+          expect(lastItem.left, greaterThanOrEqualTo(0));
+          expect(lastItem.right, lessThanOrEqualTo(variant.size.width));
+          final triggerRight = tester.getTopRight(find.byTooltip('选择模型')).dx;
+          if (triggerRight >= 224) {
+            expect(lastItem.right, closeTo(triggerRight - 6, 1));
+          }
+          expect(
+            tester
+                .getBottomRight(find.widgetWithText(MenuItemButton, '配置自定义模型'))
+                .dy,
+            lessThan(tester.getTopLeft(find.byTooltip('选择模型')).dy),
+          );
+        } else {
+          final firstItem = tester.getRect(
+            find.byKey(const ValueKey('agent-thinking-off')),
+          );
+          final lastItem = tester.getRect(
+            find.byKey(const ValueKey('agent-thinking-max')),
+          );
+          expect(firstItem.left, greaterThanOrEqualTo(0));
+          expect(firstItem.top, greaterThanOrEqualTo(0));
+          expect(lastItem.right, lessThanOrEqualTo(variant.size.width));
+          expect(lastItem.bottom, lessThanOrEqualTo(variant.size.height));
+          expect(find.text('默认'), findsOneWidget);
+          expect(find.byIcon(Icons.check), findsOneWidget);
+          expect(
+            tester
+                .getSize(
+                  find.byKey(
+                    const ValueKey('agent-thinking-medium'),
+                  ),
+                )
+                .height,
+            greaterThanOrEqualTo(40),
+          );
+        }
         final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
         if (output != null) {
           await tester.runAsync(() async {

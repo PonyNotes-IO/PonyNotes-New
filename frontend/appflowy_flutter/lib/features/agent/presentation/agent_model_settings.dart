@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flowy_svg/flowy_svg.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -190,278 +191,369 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          PopupMenuButton<AiProviderConfig>(
-            enabled: widget.enabled &&
-                !updating &&
-                (!loadingInternal || profiles.isNotEmpty),
-            tooltip: '选择模型',
-            color: AppFlowyTheme.of(context).surfaceColorScheme.layer01,
-            elevation: 6,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Theme.of(context).dividerColor),
-            ),
-            constraints: const BoxConstraints(minWidth: 260, maxWidth: 340),
-            onOpened: _load,
-            onSelected: (config) =>
-                config.isComplete ? _select(config, thinking) : _custom(),
-            itemBuilder: (_) => [
-              PopupMenuItem<AiProviderConfig>(
-                enabled: false,
-                height: 36,
-                child: Text(
-                  '内部模型',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+  Widget _heading(String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: 11,
+                color: AppFlowyTheme.of(context)
+                    .textColorScheme
+                    .primary
+                    .withValues(alpha: .45),
+              ),
+        ),
+      );
+
+  Widget _modelItem(AiProviderConfig config) {
+    final color = AppFlowyTheme.of(context).textColorScheme.primary;
+    final selected = config.isInternal == active.isInternal &&
+        config.modelName == active.modelName &&
+        (config.isInternal || config.baseUrl == active.baseUrl);
+    final name = config.modelName.toLowerCase();
+    final brand = name.contains('deepseek')
+        ? 'deepseek'
+        : name.contains('glm') || name.contains('zhipu')
+            ? 'zai'
+            : null;
+    return Tooltip(
+      message: config.isInternal
+          ? config.label
+          : '${config.modelName}\n${Uri.tryParse(config.baseUrl)?.host ?? config.baseUrl}',
+      child: Semantics(
+        selected: selected,
+        child: MenuItemButton(
+          onPressed: widget.enabled && !updating
+              ? () => _select(config, thinking)
+              : null,
+          style: MenuItemButton.styleFrom(
+            backgroundColor: selected ? color.withValues(alpha: .08) : null,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          leadingIcon: brand == null
+              ? Icon(Icons.auto_awesome_outlined, size: 14, color: color)
+              : FlowySvg(
+                  FlowySvgData('assets/images/setting/model_$brand.svg'),
+                  size: const Size.square(14),
+                  color: color,
+                ),
+          trailingIcon: selected
+              ? Icon(Icons.check, size: 14, color: color)
+              : const SizedBox(width: 14),
+          overflowAxis: Axis.vertical,
+          child: Text(
+            config.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  int get _thinkingIndex {
+    final index = AgentModelPreferences.levels.indexOf(thinking);
+    return index < 0
+        ? AgentModelPreferences.levels
+            .indexOf(AgentModelPreferences.defaultLevel)
+        : index;
+  }
+
+  Widget _thinkingItem(int index) {
+    const descriptions = [
+      '直接回答',
+      '简单问答',
+      '轻量分析',
+      '日常任务，均衡思考',
+      '深入分析',
+      '复杂问题，多步推理',
+      '高难度任务，充分思考',
+    ];
+    final theme = AppFlowyTheme.of(context);
+    final foreground = theme.textColorScheme.primary;
+    final accent = theme.fillColorScheme.themeThick;
+    final level = AgentModelPreferences.levels[index];
+    final selected = index == _thinkingIndex;
+    return Semantics(
+      selected: selected,
+      child: MenuItemButton(
+        key: ValueKey('agent-thinking-$level'),
+        autofocus: selected,
+        onPressed:
+            widget.enabled && !updating ? () => _select(active, level) : null,
+        style: MenuItemButton.styleFrom(
+          foregroundColor: foreground,
+          backgroundColor: selected ? accent.withValues(alpha: .10) : null,
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          visualDensity: VisualDensity.standard,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        trailingIcon: selected
+            ? Icon(Icons.check, size: 16, color: accent)
+            : const SizedBox(width: 16),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 30,
+              child: Text(
+                AgentModelPreferences.labels[index],
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                descriptions[index],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: foreground.withValues(alpha: .65),
+                ),
+              ),
+            ),
+            if (level == AgentModelPreferences.defaultLevel)
+              Container(
+                margin: const EdgeInsets.only(left: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: foreground.withValues(alpha: .06),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '默认',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: foreground.withValues(alpha: .65),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final foreground = theme.textColorScheme.primary;
+    final textStyle =
+        Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12);
+    final thinkingWidth =
+        (MediaQuery.sizeOf(context).width - 48).clamp(0.0, 300.0);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        MenuButtonTheme(
+          data: MenuButtonThemeData(
+            style: MenuItemButton.styleFrom(
+              foregroundColor: foreground,
+              iconColor: foreground,
+              textStyle: textStyle,
+              minimumSize: const Size(0, 26),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              visualDensity: VisualDensity.standard,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          child: MenuAnchor(
+            crossAxisUnconstrained: false,
+            style: MenuStyle(
+              backgroundColor:
+                  WidgetStatePropertyAll(theme.surfaceColorScheme.layer01),
+              surfaceTintColor:
+                  const WidgetStatePropertyAll(Colors.transparent),
+              elevation: const WidgetStatePropertyAll(8),
+              padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+              minimumSize: const WidgetStatePropertyAll(Size(224, 0)),
+              maximumSize:
+                  const WidgetStatePropertyAll(Size(224, double.infinity)),
+              side: WidgetStatePropertyAll(
+                BorderSide(color: foreground.withValues(alpha: .12)),
+              ),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              alignment: AlignmentDirectional.bottomEnd,
+            ),
+            alignmentOffset: const Offset(-224, 8),
+            onOpen: _load,
+            menuChildren: [
+              _heading('平台模型'),
               if (loadingInternal ||
                   internalError != null ||
                   internalModels.isEmpty)
-                PopupMenuItem<AiProviderConfig>(
-                  enabled: false,
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Text(
-                    loadingInternal ? '正在加载内部模型…' : internalError ?? '暂无可用内部模型',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
-              for (final config in internalModels)
-                PopupMenuItem(
-                  value: config,
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome_outlined, size: 18),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          config.modelName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (active.isInternal &&
-                          config.modelName == active.modelName)
-                        const Icon(Icons.check, size: 18),
-                    ],
-                  ),
-                ),
-              const PopupMenuDivider(),
-              if (profiles.isNotEmpty)
-                PopupMenuItem<AiProviderConfig>(
-                  enabled: false,
-                  height: 36,
-                  child: Text(
-                    '自定义模型',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ),
-              for (var i = 0; i < profiles.length; i++)
-                PopupMenuItem(
-                  value: profiles[i],
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome_outlined, size: 18),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              profiles[i].modelName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              Uri.tryParse(profiles[i].baseUrl)?.host ?? '',
-                              style: Theme.of(context).textTheme.bodySmall,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!active.isInternal &&
-                          profiles[i].modelName == active.modelName &&
-                          profiles[i].baseUrl == active.baseUrl)
-                        const Icon(Icons.check, size: 18),
-                    ],
-                  ),
-                ),
-              if (profiles.isNotEmpty) const PopupMenuDivider(),
-              const PopupMenuItem(
-                value: AiProviderConfig(),
-                child: Row(
-                  children: [
-                    Icon(Icons.tune, size: 18),
-                    SizedBox(width: 12),
-                    Text('配置自定义模型'),
-                  ],
-                ),
-              ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 140),
-                      child: Text(
-                        active.isComplete
-                            ? active.modelName
-                            : loadingInternal
-                                ? '加载模型…'
-                                : '选择模型',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13),
-                      ),
+                    loadingInternal ? '正在加载平台模型…' : internalError ?? '暂无可用平台模型',
+                    style: textStyle?.copyWith(
+                      color: foreground.withValues(alpha: .55),
                     ),
                   ),
-                  const Icon(Icons.expand_more, size: 16),
-                ],
-              ),
-            ),
-          ),
-          if (active.supportsReasoning)
-            MenuAnchor(
-              style: MenuStyle(
-                backgroundColor: WidgetStatePropertyAll(
-                  AppFlowyTheme.of(context).surfaceColorScheme.layer01,
                 ),
-                elevation: const WidgetStatePropertyAll(6),
-                side: WidgetStatePropertyAll(
-                  BorderSide(color: Theme.of(context).dividerColor),
-                ),
-                shape: WidgetStatePropertyAll(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              menuChildren: [
-                SizedBox(
-                  width: 280,
-                  child: _ThinkingControl(
-                    model: active.modelName,
-                    value: thinking,
-                    onSelected: (level) => _select(active, level),
-                  ),
-                ),
+              ...internalModels.map(_modelItem),
+              if (profiles.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                _heading('自定义模型'),
+                ...profiles.map(_modelItem),
               ],
-              builder: (context, controller, child) => TextButton(
+              Divider(height: 9, color: foreground.withValues(alpha: .08)),
+              MenuItemButton(
+                onPressed: widget.enabled && !updating ? _custom : null,
+                leadingIcon: const Icon(Icons.edit_outlined, size: 14),
+                child: const Text('配置自定义模型'),
+              ),
+            ],
+            builder: (context, controller, child) => Tooltip(
+              message: '选择模型',
+              child: TextButton(
                 onPressed: widget.enabled && !updating
                     ? () => controller.isOpen
                         ? controller.close()
                         : controller.open()
                     : null,
-                child: Text(
-                  '思考 · ${AgentModelPreferences.labels[AgentModelPreferences.levels.indexOf(thinking)]}',
+                style: TextButton.styleFrom(
+                  foregroundColor: foreground,
+                  textStyle: textStyle,
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 160),
+                        child: Text(
+                          active.isComplete
+                              ? active.label
+                              : loadingInternal
+                                  ? '加载模型…'
+                                  : '选择模型',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      controller.isOpen ? Icons.expand_less : Icons.expand_more,
+                      size: 14,
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
-      );
-}
-
-class _ThinkingControl extends StatefulWidget {
-  const _ThinkingControl({
-    required this.model,
-    required this.value,
-    required this.onSelected,
-  });
-  final String model;
-  final String value;
-  final ValueChanged<String> onSelected;
-  @override
-  State<_ThinkingControl> createState() => _ThinkingControlState();
-}
-
-class _ThinkingControlState extends State<_ThinkingControl> {
-  late double value = _indexOf(widget.value);
-  static double _indexOf(String level) {
-    var index = AgentModelPreferences.levels.indexOf(level);
-    if (index < 0) {
-      index = AgentModelPreferences.levels
-          .indexOf(AgentModelPreferences.defaultLevel);
-    }
-    return index.toDouble();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ThinkingControl oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
-      value = _indexOf(widget.value);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '思考程度 · ${AgentModelPreferences.labels[value.round()]}',
-                        style: Theme.of(context).textTheme.titleSmall,
+          ),
+        ),
+        if (active.supportsReasoning)
+          MenuAnchor(
+            crossAxisUnconstrained: false,
+            alignmentOffset: Offset(-thinkingWidth, 8),
+            style: MenuStyle(
+              backgroundColor: WidgetStatePropertyAll(
+                theme.surfaceColorScheme.layer01,
+              ),
+              surfaceTintColor:
+                  const WidgetStatePropertyAll(Colors.transparent),
+              elevation: const WidgetStatePropertyAll(8),
+              padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+              minimumSize: WidgetStatePropertyAll(Size(thinkingWidth, 0)),
+              maximumSize:
+                  WidgetStatePropertyAll(Size(thinkingWidth, double.infinity)),
+              side: WidgetStatePropertyAll(
+                BorderSide(color: foreground.withValues(alpha: .12)),
+              ),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              alignment: AlignmentDirectional.bottomEnd,
+            ),
+            menuChildren: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '思考强度',
+                      style: textStyle?.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: foreground,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.model,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '按任务难度选择思考深度',
+                      style: textStyle?.copyWith(
+                        fontSize: 11,
+                        color: foreground.withValues(alpha: .65),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+              for (var i = 0; i < AgentModelPreferences.levels.length; i++)
+                _thinkingItem(i),
+              Divider(height: 13, color: foreground.withValues(alpha: .08)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Text(
+                  '思考越深入，通常耗时越长',
+                  style: textStyle?.copyWith(
+                    fontSize: 11,
+                    color: foreground.withValues(alpha: .65),
                   ),
                 ),
-                IconButton(
-                  tooltip: '重置思考程度',
-                  icon: const Icon(Icons.restart_alt, size: 20),
-                  onPressed: () {
-                    final index = AgentModelPreferences.levels
-                        .indexOf(AgentModelPreferences.defaultLevel)
-                        .toDouble();
-                    setState(() => value = index);
-                    widget.onSelected(AgentModelPreferences.defaultLevel);
-                  },
+              ),
+            ],
+            builder: (context, controller, child) => Tooltip(
+              message: '思考强度',
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  foregroundColor: foreground,
+                  textStyle: textStyle,
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-              ],
+                onPressed: widget.enabled && !updating
+                    ? () => controller.isOpen
+                        ? controller.close()
+                        : controller.open()
+                    : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '思考 · ${AgentModelPreferences.labels[_thinkingIndex]}',
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      controller.isOpen ? Icons.expand_less : Icons.expand_more,
+                      size: 14,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            Slider(
-              value: value,
-              max: (AgentModelPreferences.levels.length - 1).toDouble(),
-              divisions: AgentModelPreferences.levels.length - 1,
-              label: AgentModelPreferences.labels[value.round()],
-              onChanged: (v) => setState(() => value = v),
-              onChangeEnd: (v) =>
-                  widget.onSelected(AgentModelPreferences.levels[v.round()]),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(AgentModelPreferences.labels.first),
-                Text(AgentModelPreferences.labels.last),
-              ],
-            ),
-          ],
-        ),
-      );
+          ),
+      ],
+    );
+  }
 }
