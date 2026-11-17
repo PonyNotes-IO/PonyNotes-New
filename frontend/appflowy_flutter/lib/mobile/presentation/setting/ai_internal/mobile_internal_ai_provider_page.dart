@@ -11,7 +11,7 @@ class MobileInternalAiProviderPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      appBar: MobileAppBar(title: '内部 AI 模型'),
+      appBar: MobileAppBar(title: '模型管理'),
       body: AiProviderSettingsView(),
     );
   }

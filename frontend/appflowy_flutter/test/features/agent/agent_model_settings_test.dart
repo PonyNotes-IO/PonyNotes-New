@@ -336,6 +336,7 @@ void main() {
           child: AiProviderSettingsView(
             key: ValueKey(creator),
             creatorName: creator,
+            onSaved: (_) {},
           ),
         ),
       );
