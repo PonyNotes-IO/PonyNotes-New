@@ -1111,6 +1111,9 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                     controller: input,
                     selected: selectedReferences,
                     enabled: !submitting && !agent.running && !agent.connecting,
+                    smartMode: agent.mode == 'smart-reasoning',
+                    onModeChanged:
+                        widget.showModeSelector ? agent.configureMode : null,
                     load: agent.loadReferences,
                     onChanged: (items) => setState(
                       () => selectedReferences

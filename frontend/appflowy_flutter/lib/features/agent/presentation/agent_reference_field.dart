@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
@@ -16,6 +17,9 @@ class AgentReferenceField extends StatefulWidget {
     required this.load,
     required this.child,
     this.enabled = true,
+    this.builder,
+    this.smartMode = true,
+    this.onModeChanged,
   });
   final TextEditingController controller;
   final List<AgentReference> selected;
@@ -23,6 +27,9 @@ class AgentReferenceField extends StatefulWidget {
   final Future<List<AgentReference>> Function() load;
   final Widget child;
   final bool enabled;
+  final Widget Function(Widget field, Widget referenceButton)? builder;
+  final bool smartMode;
+  final ValueChanged<bool>? onModeChanged;
 
   @override
   State<AgentReferenceField> createState() => _AgentReferenceFieldState();
@@ -45,6 +52,14 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   bool _loading = false;
   bool _above = true;
   double _height = 320;
+  double _width = 440;
+  double _offsetX = 0;
+  bool _browsing = false;
+
+  static const _modes = [
+    (kind: 'quick', label: '快问快答', icon: Icons.bolt_outlined),
+    (kind: 'smart', label: '智能推理', icon: Icons.auto_awesome_outlined),
+  ];
 
   static const _categories = [
     (kind: 'base', label: '知识库', icon: Icons.storage_outlined),
@@ -103,7 +118,10 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     if (!_portal.isShowing) {
       _open(fromTyping: true);
     } else {
-      setState(() {});
+      setState(() {
+        _kind = null;
+        _browsing = _search.text.isNotEmpty;
+      });
     }
   }
 
@@ -113,8 +131,17 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       _typedStart = null;
       _search.clear();
     }
-    _kind = null;
-    _focused = 0;
+    _kind = _search.text.isNotEmpty
+        ? null
+        : widget.onModeChanged == null
+            ? 'base'
+            : widget.smartMode
+                ? 'smart'
+                : 'quick';
+    _browsing = _search.text.isNotEmpty;
+    _focused = _browsing
+        ? 0
+        : math.max(0, _navigation.indexWhere((entry) => entry.kind == _kind));
     final box = _anchor.currentContext!.findRenderObject()! as RenderBox;
     final offset = box.localToGlobal(Offset.zero);
     final media = MediaQuery.of(context);
@@ -125,7 +152,11 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         box.size.height -
         16;
     _above = above >= below;
-    _height = math.min(380, math.max(120, _above ? above : below));
+    _height = math.min(280, math.max(0, _above ? above : below));
+    _width = math.min(440, media.size.width - 24);
+    _offsetX = (offset.dx - 96)
+            .clamp(12.0, math.max(12.0, media.size.width - _width - 12)) -
+        offset.dx;
     _portal.show();
     unawaited(_load());
     if (!fromTyping) _searchFocus.requestFocus();
@@ -166,14 +197,41 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     return _items
         .where(
           (r) =>
-              (_kind == null || r.kind == _kind) &&
+              (_kind == null || _showModes || r.kind == _kind) &&
               !selected.contains(r.key) &&
               '${r.name} ${r.subtitle}'.toLowerCase().contains(query),
         )
         .toList();
   }
 
-  bool get _showCategories => _kind == null && _search.text.isEmpty;
+  bool get _showModes => _kind == 'smart' || _kind == 'quick';
+
+  List<({String kind, String label, IconData icon})> get _navigation => [
+        if (widget.onModeChanged != null) ..._modes,
+        ..._categories,
+      ];
+
+  void _consumeMention() {
+    final start = _typedStart;
+    final end = _end;
+    _close();
+    if (start != null) {
+      widget.controller.value = TextEditingValue(
+        text: widget.controller.text.replaceRange(start, end, ''),
+        selection: TextSelection.collapsed(offset: start),
+      );
+    }
+  }
+
+  void _selectMode(String kind) {
+    if (!widget.enabled ||
+        !widget.controller.value.composing.isCollapsed ||
+        !_search.value.composing.isCollapsed) {
+      return;
+    }
+    _consumeMention();
+    widget.onModeChanged?.call(kind == 'smart');
+  }
 
   void _select(AgentReference item) {
     if (!item.available || widget.selected.length >= 20) return;
@@ -181,16 +239,7 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         !_search.value.composing.isCollapsed) {
       return;
     }
-    final start = _typedStart;
-    final end = _end;
-    _close();
-    if (start != null) {
-      final text = widget.controller.text;
-      widget.controller.value = TextEditingValue(
-        text: text.replaceRange(start, end, ''),
-        selection: TextSelection.collapsed(offset: start),
-      );
-    }
+    _consumeMention();
     widget.onChanged([...widget.selected, item]);
   }
 
@@ -206,27 +255,56 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
       _close();
       return KeyEventResult.handled;
     }
-    final length = _showCategories ? _categories.length : _filtered.length;
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+        _search.text.isEmpty) {
+      setState(() {
+        _browsing = false;
+        _focused = _navigation.indexWhere((entry) => entry.kind == _kind);
+        if (_focused < 0) _focused = 0;
+      });
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
+        _search.text.isEmpty &&
+        !_showModes) {
+      setState(() {
+        _browsing = true;
+        _focused = 0;
+      });
+      return KeyEventResult.handled;
+    }
+    final length = _browsing ? _filtered.length : _navigation.length;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
         event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (length > 0) {
         setState(
-          () => _focused = (_focused +
-                  (event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1)) %
-              length,
+          () {
+            _focused = (_focused +
+                    (event.logicalKey == LogicalKeyboardKey.arrowDown
+                        ? 1
+                        : -1)) %
+                length;
+            if (!_browsing) _kind = _navigation[_focused].kind;
+          },
         );
-        unawaited(_scroll.scrollToIndex(_focused));
+        if (_browsing) unawaited(_scroll.scrollToIndex(_focused));
       }
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.enter) {
-      if (!_loading && _error == null && length > 0) {
-        if (_showCategories) {
-          setState(() {
-            _kind = _categories[_focused].kind;
-            _focused = 0;
-          });
-        } else {
+      if (length > 0) {
+        if (!_browsing) {
+          final kind = _navigation[_focused.clamp(0, length - 1)].kind;
+          if (kind == 'smart' || kind == 'quick') {
+            _selectMode(kind);
+          } else {
+            setState(() {
+              _kind = kind;
+              _browsing = true;
+              _focused = 0;
+            });
+          }
+        } else if (!_loading && _error == null) {
           _select(_filtered[_focused.clamp(0, length - 1)]);
         }
       }
@@ -235,84 +313,215 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
     return KeyEventResult.ignored;
   }
 
-  Widget _panel(double width) => Material(
+  Color get _foreground =>
+      AppFlowyTheme.maybeOf(context)?.textColorScheme.primary ??
+      Theme.of(context).colorScheme.onSurface;
+
+  Color get _accent => Colors.indigo.shade400;
+
+  Widget _surface(Widget child) => Material(
+        color: AppFlowyTheme.maybeOf(context)?.surfaceColorScheme.layer01 ??
+            Theme.of(context).colorScheme.surface,
         elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: .2),
         surfaceTintColor: Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: _foreground.withValues(alpha: .12)),
+        ),
         clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          width: math.min(440, width),
-          height: math.min(
-            _height,
-            72 +
-                (_loading || _error != null
-                        ? 1
-                        : math.max(
-                            1,
-                            _showCategories
-                                ? _categories.length
-                                : _filtered.length,
-                          )) *
-                    72,
+        child: child,
+      );
+
+  Widget _heading(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(6, 8, 6, 5),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 10,
+            color: _foreground.withValues(alpha: .45),
           ),
-          child: Focus(
-            onKeyEvent: _key,
-            child: Column(
+        ),
+      );
+
+  Widget _navigationItem(
+    ({String kind, String label, IconData icon}) entry,
+  ) {
+    final mode = entry.kind == 'quick' || entry.kind == 'smart';
+    final selected = _kind == entry.kind;
+    final count = _items
+        .where(
+          (item) =>
+              item.kind == entry.kind &&
+              !widget.selected.any((selected) => selected.key == item.key),
+        )
+        .length;
+    final current = mode && widget.smartMode == (entry.kind == 'smart');
+    return MouseRegion(
+      onEnter: (_) => setState(() {
+        _kind = entry.kind;
+        _browsing = false;
+        _focused = _navigation.indexOf(entry);
+      }),
+      child: Semantics(
+        selected: selected,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(5),
+          onTap: () {
+            if (mode) {
+              _selectMode(entry.kind);
+            } else {
+              setState(() {
+                _kind = entry.kind;
+                _browsing = true;
+                _focused = 0;
+              });
+            }
+          },
+          child: Ink(
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: selected ? _foreground.withValues(alpha: .08) : null,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 12, 4),
-                  child: Row(
-                    children: [
-                      if (_kind != null)
-                        IconButton(
-                          tooltip: '返回引用分类',
-                          icon: const Icon(Icons.arrow_back, size: 18),
-                          onPressed: () => setState(() {
-                            _kind = null;
-                            _focused = 0;
-                          }),
-                        ),
-                      Expanded(
-                        child: TextField(
-                          controller: _search,
-                          focusNode: _searchFocus,
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search, size: 18),
-                            hintText: _kind == null
-                                ? '搜索知识库、文件、笔记'
-                                : '搜索${_categories.firstWhere((c) => c.kind == _kind).label}',
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                          onChanged: (_) => setState(() => _focused = 0),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '关闭引用选择',
-                        onPressed: _close,
-                        icon: const Icon(Icons.close, size: 18),
-                      ),
-                    ],
+                Icon(
+                  entry.icon,
+                  size: 15,
+                  color: _accent,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    entry.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Divider(height: 1),
-                Expanded(
-                  child: _loading
-                      ? const Center(child: CircularProgressIndicator())
-                      : _error != null
-                          ? Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(_error!),
-                                  TextButton(
-                                    onPressed: _load,
-                                    child: const Text('重试'),
+                if (current)
+                  const Icon(Icons.check, size: 12)
+                else if (!mode)
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _foreground.withValues(alpha: .45),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _panel() => DefaultTextStyle.merge(
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 12,
+              color: _foreground,
+            ),
+        child: SizedBox(
+          key: const ValueKey('agent-mention-panel'),
+          width: _width,
+          height: _height,
+          child: Focus(
+            onKeyEvent: _key,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: _width < 380 ? 128 : 174,
+                  child: _surface(
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(6, 4, 4, 0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _search,
+                                  focusNode: _searchFocus,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _foreground,
                                   ),
-                                ],
+                                  decoration: const InputDecoration(
+                                    hintText: '搜索资料',
+                                    prefixIcon: Icon(Icons.search, size: 14),
+                                    prefixIconConstraints:
+                                        BoxConstraints(minWidth: 24),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding:
+                                        EdgeInsets.symmetric(vertical: 9),
+                                  ),
+                                  onChanged: (_) => setState(() {
+                                    _kind = null;
+                                    _browsing = true;
+                                    _focused = 0;
+                                  }),
+                                ),
                               ),
-                            )
-                          : _list(),
+                              IconButton(
+                                tooltip: '关闭引用选择',
+                                onPressed: _close,
+                                icon: const Icon(Icons.close, size: 13),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 24,
+                                  height: 28,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                style: IconButton.styleFrom(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Divider(
+                          height: 1,
+                          color: _foreground.withValues(alpha: .06),
+                        ),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            children: [
+                              if (widget.onModeChanged != null) ...[
+                                _heading('对话模式'),
+                                ..._modes.map(_navigationItem),
+                              ],
+                              _heading('引用资料'),
+                              ..._categories.map(_navigationItem),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 7),
+                          child: Text(
+                            widget.selected.length >= 20
+                                ? '最多引用 20 项'
+                                : '↑↓ 选择 · Enter 确认',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: _foreground.withValues(alpha: .4),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _surface(
+                    _showModes ? _modeDetails() : _referenceList(),
+                  ),
                 ),
               ],
             ),
@@ -320,61 +529,241 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
         ),
       );
 
+  Widget _modeDetails() {
+    final smart = _kind == 'smart';
+    final entry = _modes[smart ? 1 : 0];
+    final current = widget.smartMode == smart;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                entry.icon,
+                size: 30,
+                color: _accent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      current ? '当前模式' : '点击切换',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: _foreground.withValues(alpha: .45),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Text(
+            smart ? '多步思考，深入分析与执行任务' : '检索相关资料，快速获得回答',
+            style: TextStyle(
+              fontSize: 11,
+              color: _foreground.withValues(alpha: .55),
+            ),
+          ),
+          Divider(height: 22, color: _foreground.withValues(alpha: .06)),
+          Wrap(
+            spacing: 5,
+            runSpacing: 5,
+            children: [
+              for (final label in [smart ? '多步推理' : '快速回答', '知识检索', '多轮对话'])
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _foreground.withValues(alpha: .06),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 6,
+                    ),
+                    child: Text(label, style: const TextStyle(fontSize: 10)),
+                  ),
+                ),
+            ],
+          ),
+          Divider(height: 22, color: _foreground.withValues(alpha: .06)),
+          Text(
+            '能力',
+            style: TextStyle(
+              fontSize: 10,
+              color: _foreground.withValues(alpha: .45),
+            ),
+          ),
+          const SizedBox(height: 7),
+          for (final label in ['资料引用', '附件上传'])
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_outline, size: 13),
+                  const SizedBox(width: 6),
+                  Text(label, style: const TextStyle(fontSize: 11)),
+                  const Spacer(),
+                  Text(
+                    '支持',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _foreground.withValues(alpha: .45),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (!current)
+            TextButton(
+              onPressed: () => _selectMode(entry.kind),
+              style: TextButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 11),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('使用此模式'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _referenceList() => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _kind == null
+                      ? '搜索结果'
+                      : _categories
+                          .firstWhere((entry) => entry.kind == _kind)
+                          .label,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '选择资料，添加到当前问题',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: _foreground.withValues(alpha: .45),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: _foreground.withValues(alpha: .06)),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _error!,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              TextButton(
+                                onPressed: _load,
+                                child: const Text('重试'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : _list(),
+          ),
+        ],
+      );
+
   Widget _list() {
     final items = _filtered;
-    if (!_showCategories && items.isEmpty) {
+    if (items.isEmpty) {
       return Center(
-        child: Text(_search.text.isEmpty ? '暂无可引用的资料' : '没有找到匹配的资料'),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            _search.text.isEmpty ? '暂无可引用的资料' : '没有找到匹配的资料',
+            style: TextStyle(
+              fontSize: 11,
+              color: _foreground.withValues(alpha: .5),
+            ),
+          ),
+        ),
       );
     }
     return ListView.builder(
       controller: _scroll,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      itemCount: _showCategories ? _categories.length : items.length,
+      padding: const EdgeInsets.all(5),
+      itemCount: items.length,
       itemBuilder: (_, index) {
-        if (_showCategories) {
-          final category = _categories[index];
-          final count = items.where((r) => r.kind == category.kind).length;
-          return AutoScrollTag(
-            key: ValueKey('reference-category-${category.kind}'),
-            controller: _scroll,
-            index: index,
-            child: ListTile(
-              selected: index == _focused,
-              leading: Icon(category.icon, size: 20),
-              title: Text(category.label),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('$count'),
-                  const Icon(Icons.chevron_right, size: 18),
-                ],
-              ),
-              onTap: () => setState(() {
-                _kind = category.kind;
-                _focused = 0;
-              }),
-            ),
-          );
-        }
         final item = items[index];
         return AutoScrollTag(
           key: ValueKey('reference-${item.key}'),
           controller: _scroll,
           index: index,
           child: ListTile(
+            dense: true,
+            minTileHeight: 44,
+            minLeadingWidth: 16,
+            horizontalTitleGap: 7,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+            selectedTileColor: _foreground.withValues(alpha: .06),
+            selectedColor: _foreground,
             enabled: item.available && widget.selected.length < 20,
-            selected: index == _focused,
+            selected: _browsing && index == _focused,
             leading: Icon(
               _categories.firstWhere((c) => c.kind == item.kind).icon,
-              size: 20,
+              size: 16,
             ),
-            title:
-                Text(item.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              item.available ? item.subtitle : '暂无可检索内容',
+            title: Text(
+              item.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12),
+            ),
+            subtitle: Text(
+              item.available
+                  ? (item.subtitle.isEmpty ? '可引用' : item.subtitle)
+                  : '暂无可检索内容',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                color: _foreground.withValues(alpha: .45),
+              ),
             ),
             onTap: () => _select(item),
           ),
@@ -384,85 +773,100 @@ class _AgentReferenceFieldState extends State<AgentReferenceField> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (_, constraints) => CompositedTransformTarget(
-          key: _anchor,
-          link: _link,
-          child: OverlayPortal(
-            controller: _portal,
-            overlayChildBuilder: (_) => Stack(
-              children: [
-                Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _close,
-                  ),
-                ),
-                CompositedTransformFollower(
-                  link: _link,
-                  showWhenUnlinked: false,
-                  targetAnchor:
-                      _above ? Alignment.topLeft : Alignment.bottomLeft,
-                  followerAnchor:
-                      _above ? Alignment.bottomLeft : Alignment.topLeft,
-                  offset: Offset(0, _above ? -8 : 8),
-                  child: _panel(constraints.maxWidth),
-                ),
-              ],
+  Widget build(BuildContext context) {
+    final referenceButton = CompositedTransformTarget(
+      key: _anchor,
+      link: _link,
+      child: IconButton(
+        tooltip: '引用知识库、文件或笔记',
+        onPressed: widget.enabled &&
+                (widget.selected.length < 20 || widget.onModeChanged != null)
+            ? _open
+            : null,
+        visualDensity: VisualDensity.compact,
+        style: widget.builder == null
+            ? null
+            : IconButton.styleFrom(
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(30, 30),
+              ),
+        icon: const Icon(Icons.alternate_email, size: 18),
+      ),
+    );
+    final references = [
+      for (final reference in widget.selected)
+        InputChip(
+          avatar: Icon(
+            _categories.firstWhere((c) => c.kind == reference.kind).icon,
+            size: 16,
+          ),
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Text(reference.name, overflow: TextOverflow.ellipsis),
+          ),
+          tooltip: reference.subtitle.isEmpty
+              ? reference.name
+              : '${reference.name}\n${reference.subtitle}',
+          onDeleted: widget.enabled
+              ? () => widget.onChanged(
+                    widget.selected
+                        .where((r) => r.key != reference.key)
+                        .toList(),
+                  )
+              : null,
+        ),
+      if (widget.selected.length >= 20) const Text('最多引用 20 项'),
+    ];
+    return OverlayPortal(
+      controller: _portal,
+      overlayChildBuilder: (_) => Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _close,
             ),
-            child: Focus(
-              onKeyEvent: _key,
-              child: Column(
+          ),
+          CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            targetAnchor: _above ? Alignment.topLeft : Alignment.bottomLeft,
+            followerAnchor: _above ? Alignment.bottomLeft : Alignment.topLeft,
+            offset: Offset(_offsetX, _above ? -8 : 8),
+            child: _panel(),
+          ),
+        ],
+      ),
+      child: Focus(
+        onKeyEvent: _key,
+        child: widget.builder?.call(
+              Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   widget.child,
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
-                    children: [
-                      IconButton(
-                        tooltip: '引用知识库、文件或笔记',
-                        onPressed: widget.enabled && widget.selected.length < 20
-                            ? _open
-                            : null,
-                        icon: const Icon(Icons.alternate_email, size: 18),
-                      ),
-                      for (final reference in widget.selected)
-                        InputChip(
-                          avatar: Icon(
-                            _categories
-                                .firstWhere(
-                                  (c) => c.kind == reference.kind,
-                                )
-                                .icon,
-                            size: 16,
-                          ),
-                          label: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 200),
-                            child: Text(
-                              reference.name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          tooltip: reference.subtitle.isEmpty
-                              ? reference.name
-                              : '${reference.name}\n${reference.subtitle}',
-                          onDeleted: widget.enabled
-                              ? () => widget.onChanged(
-                                    widget.selected
-                                        .where((r) => r.key != reference.key)
-                                        .toList(),
-                                  )
-                              : null,
-                        ),
-                      if (widget.selected.length >= 20) const Text('最多引用 20 项'),
-                    ],
-                  ),
+                  if (references.isNotEmpty)
+                    Wrap(spacing: 6, runSpacing: 4, children: references),
                 ],
               ),
+              referenceButton,
+            ) ??
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                widget.child,
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  children: [
+                    referenceButton,
+                    ...references,
+                  ],
+                ),
+              ],
             ),
-          ),
-        ),
-      );
+      ),
+    );
+  }
 }

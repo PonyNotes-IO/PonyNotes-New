@@ -5,6 +5,8 @@ import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/features/agent/application/agent_reference.dart';
 import 'package:appflowy/features/agent/presentation/agent_reference_field.dart';
 import 'package:appflowy/features/agent/presentation/agent_reference_preview.dart';
+import 'package:appflowy/features/agent/presentation/agent_composer.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -37,20 +39,42 @@ void main() {
 
   for (final variant in [
     (name: 'desktop', size: const Size(1100, 800), dark: false),
+    (name: 'reference-dark', size: const Size(925, 630), dark: true),
     (name: 'phone-dark', size: const Size(390, 844), dark: true),
+    (name: 'compact', size: const Size(320, 640), dark: false),
   ]) {
     testWidgets(
         'typed references select, deduplicate and delete on ${variant.name}',
         (tester) async {
       tester.view.physicalSize = variant.size;
       tester.view.devicePixelRatio = 1;
+      final shadowsDisabled = debugDisableShadows;
+      debugDisableShadows = false;
+      addTearDown(() => debugDisableShadows = shadowsDisabled);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final controller = TextEditingController();
       addTearDown(controller.dispose);
       var selected = <AgentReference>[];
       var submitted = 0;
+      var smart = true;
       final capture = GlobalKey();
+      Future<void> screenshot(String state) async {
+        final output = Platform.environment['PONYNOTES_REFERENCE_SCREENSHOTS'];
+        if (output == null) return;
+        await tester.pump();
+        await tester.runAsync(() async {
+          final image = await (capture.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary)
+              .toImage();
+          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+          await Directory(output).create(recursive: true);
+          await File('$output/$state-${variant.name}.png')
+              .writeAsBytes(bytes!.buffer.asUint8List());
+          image.dispose();
+        });
+      }
+
       await tester.pumpWidget(
         RepaintBoundary(
           key: capture,
@@ -60,22 +84,42 @@ void main() {
               brightness: variant.dark ? Brightness.dark : Brightness.light,
               fontFamily: 'ReferenceTestFont',
             ),
+            builder: (_, child) => AppFlowyTheme(
+              data: variant.dark
+                  ? AppFlowyDefaultTheme().dark()
+                  : AppFlowyDefaultTheme().light(),
+              child: child!,
+            ),
             home: Scaffold(
               body: Align(
                 alignment: Alignment.bottomCenter,
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: StatefulBuilder(
-                    builder: (_, setState) => AgentReferenceField(
-                      controller: controller,
-                      selected: selected,
-                      load: () async => references,
-                      onChanged: (items) => setState(() => selected = items),
-                      child: TextField(
+                    builder: (_, setState) => ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 740),
+                      child: AgentReferenceField(
                         controller: controller,
-                        onSubmitted: (_) => submitted++,
-                        decoration:
-                            const InputDecoration(hintText: '提问或输入 @ 引用资料'),
+                        selected: selected,
+                        smartMode: smart,
+                        onModeChanged: (value) => setState(() => smart = value),
+                        load: () async => references,
+                        onChanged: (items) => setState(() => selected = items),
+                        builder: (field, button) => AgentComposer(
+                          compact: true,
+                          input: field,
+                          leading: [button],
+                          modelSelector: const SizedBox.shrink(),
+                          actions: const [],
+                        ),
+                        child: TextField(
+                          controller: controller,
+                          onSubmitted: (_) => submitted++,
+                          decoration: const InputDecoration(
+                            hintText: '提问或输入 @ 引用资料',
+                            border: InputBorder.none,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -88,29 +132,31 @@ void main() {
       final input = find.byType(TextField).first;
       await tester.enterText(input, '请分析 @');
       await tester.pumpAndSettle();
+      expect(find.text('当前模式'), findsOneWidget);
+      await screenshot('mention-modes');
+      final panel =
+          tester.getRect(find.byKey(const ValueKey('agent-mention-panel')));
+      expect(panel.left, greaterThanOrEqualTo(0));
+      expect(panel.right, lessThanOrEqualTo(variant.size.width));
+      expect(panel.top, greaterThanOrEqualTo(0));
+      expect(panel.bottom, lessThanOrEqualTo(variant.size.height));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      expect(find.text('点击切换'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(smart, false);
+      expect(controller.text, '请分析 ');
+      expect(submitted, 0);
+      await tester.enterText(input, '请分析 @');
+      await tester.pumpAndSettle();
       expect(find.text('知识库'), findsOneWidget);
       expect(find.text('文件'), findsOneWidget);
       expect(find.text('笔记'), findsOneWidget);
       await tester.tap(find.text('文件'));
       await tester.pumpAndSettle();
       expect(find.text('需求说明.pdf'), findsOneWidget);
-      final output = Platform.environment['PONYNOTES_REFERENCE_SCREENSHOTS'];
-      if (output != null) {
-        debugDisableShadows = false;
-        await tester.pump();
-        await tester.runAsync(() async {
-          final image = await (capture.currentContext!.findRenderObject()!
-                  as RenderRepaintBoundary)
-              .toImage();
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await Directory(output).create(recursive: true);
-          await File('$output/reference-picker-${variant.name}.png')
-              .writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
-        debugDisableShadows = true;
-        await tester.pump();
-      }
+      await screenshot('reference-picker');
       await tester.tap(find.text('需求说明.pdf'));
       await tester.pumpAndSettle();
       expect(selected.single.id, 'file');
@@ -144,8 +190,51 @@ void main() {
       expect(find.byTooltip('关闭引用选择'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      debugDisableShadows = shadowsDisabled;
     });
   }
+
+  testWidgets('reference errors can retry without blocking mode selection',
+      (tester) async {
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    var attempts = 0;
+    bool? mode;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: AgentReferenceField(
+              controller: controller,
+              selected: const [],
+              onChanged: (_) {},
+              onModeChanged: (value) => mode = value,
+              load: () async {
+                if (++attempts == 1) throw StateError('offline');
+                return references;
+              },
+              child: TextField(controller: controller),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.enterText(find.byType(TextField).first, '草稿 @');
+    await tester.pumpAndSettle();
+    expect(find.text('当前模式'), findsOneWidget);
+    await tester.tap(find.text('文件'));
+    await tester.pumpAndSettle();
+    expect(find.text('引用列表加载失败，请重试'), findsOneWidget);
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('需求说明.pdf'), findsOneWidget);
+    expect(attempts, 2);
+    await tester.tap(find.text('快问快答'));
+    await tester.pumpAndSettle();
+    expect(mode, false);
+    expect(controller.text, '草稿 ');
+    expect(find.byKey(const ValueKey('agent-mention-panel')), findsNothing);
+  });
 
   testWidgets('revocation closes the picker and discards a late response',
       (tester) async {
