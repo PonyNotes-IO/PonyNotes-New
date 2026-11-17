@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:appflowy/features/agent/application/agent_model_preferences.dart';
@@ -87,6 +88,57 @@ void main() {
     expect(selected?.apiKey, isEmpty);
     expect((await service.preferred()).modelName, 'qwen3-vl-plus');
     expect(await storage.loadProfiles(), isEmpty);
+  });
+
+  testWidgets('opening the model menu keeps its anchor stable during a refresh',
+      (tester) async {
+    final refresh = Completer<http.Response>();
+    final response = http.Response(
+      '{"data":{"models":[{"id":"doubao","name":"豆包"}]}}',
+      200,
+      headers: {'content-type': 'application/json; charset=utf-8'},
+    );
+    var requests = 0;
+    final service = AgentInternalService(
+      account: () async => const AgentCloudAccount(
+        baseUrl: 'https://cloud.test',
+        accessToken: 'login',
+        userId: '1',
+      ),
+      client: MockClient(
+        (_) async => ++requests == 1 ? response : await refresh.future,
+      ),
+    );
+    await tester.pumpWidget(
+      WidgetTestWrapper(
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: AgentModelSettingsButton(internalService: service),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final trigger = find.byTooltip('选择模型');
+    final anchor = tester.getRect(trigger);
+    await tester.tap(trigger);
+    await tester.pumpAndSettle();
+    final anchorDuringRefresh = tester.getRect(trigger);
+    final thinkingDuringRefresh = find.byTooltip('思考强度').evaluate().length;
+    final menuItem = find.widgetWithText(MenuItemButton, '配置自定义模型');
+    final menuRect = tester.getRect(menuItem);
+    refresh.complete(response);
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+    expect(thinkingDuringRefresh, 1);
+    expect(anchorDuringRefresh, anchor);
+    expect(tester.getRect(trigger), anchor);
+    expect(tester.getRect(menuItem), menuRect);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

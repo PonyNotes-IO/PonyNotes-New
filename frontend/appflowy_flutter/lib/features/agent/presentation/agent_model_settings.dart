@@ -100,11 +100,13 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
       final level =
           widget.currentThinking ?? await AgentModelPreferences.loadThinking();
       if (!mounted || generation != loadGeneration) return;
-      setState(() {
-        active = config;
-        profiles = saved;
-        thinking = level;
-      });
+      if (loadingInternal) {
+        setState(() {
+          active = config;
+          profiles = saved;
+          thinking = level;
+        });
+      }
       List<AiProviderConfig> managed = [];
       String? failure;
       try {
