@@ -53,6 +53,7 @@ void main() {
   testWidgets('a new user can select project models without a custom key',
       (tester) async {
     AiProviderConfig? selected;
+    String? effort;
     final service = AgentInternalService(
       account: () async => const AgentCloudAccount(
         baseUrl: 'https://cloud.test',
@@ -71,7 +72,10 @@ void main() {
       WidgetTestWrapper(
         child: AgentModelSettingsButton(
           internalService: service,
-          onChanged: (config, _) async => selected = config,
+          onChanged: (config, level) async {
+            selected = config;
+            effort = level;
+          },
         ),
       ),
     );
@@ -88,6 +92,14 @@ void main() {
     expect(selected?.apiKey, isEmpty);
     expect((await service.preferred()).modelName, 'qwen3-vl-plus');
     expect(await storage.loadProfiles(), isEmpty);
+    expect(selected?.supportsReasoning, true);
+    await tester.tap(find.byTooltip('思考强度'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('agent-thinking-max')));
+    await tester.pumpAndSettle();
+    expect(selected?.modelName, 'qwen3-vl-plus');
+    expect(effort, 'max');
+    expect(await AgentModelPreferences.loadThinking(), 'max');
   });
 
   testWidgets('opening the model menu keeps its anchor stable during a refresh',
@@ -175,11 +187,11 @@ void main() {
     expect(
       find.descendant(
         of: find.byTooltip('思考强度'),
-        matching: find.text('思考 · 最大'),
+        matching: find.text('最大'),
       ),
       findsOneWidget,
     );
-    expect(find.text('按任务难度选择思考深度'), findsNothing);
+    expect(find.byKey(const ValueKey('agent-thinking-max')), findsNothing);
   });
 
   testWidgets('failed model changes keep the previous active model',
@@ -300,7 +312,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text(first.modelName), findsOneWidget);
-    expect(find.text('思考 · 低'), findsOneWidget);
+    expect(find.text('低'), findsOneWidget);
     await tester.tap(find.byTooltip('选择模型'));
     await tester.pumpAndSettle();
     expect(find.text(first.modelName), findsWidgets);
@@ -371,12 +383,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(effort, 'high');
     expect(await AgentModelPreferences.loadThinking(), 'high');
-    expect(find.text('按任务难度选择思考深度'), findsNothing);
+    expect(find.byKey(const ValueKey('agent-thinking-high')), findsNothing);
     await tester.tap(find.byTooltip('思考强度'));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('按任务难度选择思考深度'), findsNothing);
+    expect(find.byKey(const ValueKey('agent-thinking-high')), findsNothing);
     expect(effort, 'high');
   });
 
@@ -431,7 +443,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('agent-thinking-max')));
     await tester.pumpAndSettle();
     expect(await AgentModelPreferences.loadThinking(), 'low');
-    expect(find.text('思考 · 低'), findsOneWidget);
+    expect(find.text('低'), findsOneWidget);
     expect(find.textContaining('思考强度切换失败'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
@@ -580,18 +592,16 @@ void main() {
           expect(firstItem.top, greaterThanOrEqualTo(0));
           expect(lastItem.right, lessThanOrEqualTo(variant.size.width));
           expect(lastItem.bottom, lessThanOrEqualTo(variant.size.height));
-          expect(find.text('默认'), findsOneWidget);
+          expect(find.text('思考强度'), findsOneWidget);
+          expect(find.text('默认'), findsNothing);
+          expect(find.text('按任务难度选择思考深度'), findsNothing);
+          expect(find.text('思考越深入，通常耗时越长'), findsNothing);
           expect(find.byIcon(Icons.check), findsOneWidget);
-          expect(
-            tester
-                .getSize(
-                  find.byKey(
-                    const ValueKey('agent-thinking-medium'),
-                  ),
-                )
-                .height,
-            greaterThanOrEqualTo(40),
-          );
+          expect(lastItem.width, closeTo(78, 1));
+          expect(lastItem.bottom - firstItem.top, lessThanOrEqualTo(186));
+          final trigger = tester.getRect(find.byTooltip('思考强度'));
+          expect(lastItem.bottom, lessThan(trigger.top));
+          expect(lastItem.right, closeTo(trigger.right - 6, 1));
         }
         final output = Platform.environment['PONYNOTES_AGENT_SCREENSHOTS'];
         if (output != null) {
