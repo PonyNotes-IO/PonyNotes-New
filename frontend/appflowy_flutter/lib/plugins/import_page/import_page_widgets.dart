@@ -1,7 +1,245 @@
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-class ImportFileCard extends StatefulWidget {
+String _text(BuildContext context, String zh, String en) =>
+    context.locale.languageCode == 'zh' ? zh : en;
+
+class ImportPageContent extends StatefulWidget {
+  const ImportPageContent({
+    super.key,
+    required this.onFileImport,
+    required this.onNotionImport,
+    required this.onObsidianImport,
+    required this.onOpenSync,
+  });
+
+  final ValueChanged<String> onFileImport;
+  final VoidCallback onNotionImport;
+  final VoidCallback onObsidianImport;
+  final VoidCallback onOpenSync;
+
+  @override
+  State<ImportPageContent> createState() => _ImportPageContentState();
+}
+
+class _ImportPageContentState extends State<ImportPageContent> {
+  bool _showSync = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surface,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+            constraints.maxWidth < 600 ? 24 : 35,
+            35,
+            constraints.maxWidth < 600 ? 24 : 65,
+            32,
+          ),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _text(context, '导入同步', 'Import & sync'),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                      color: colors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _text(
+                      context,
+                      '从其他应用和文件导入数据到小马笔记',
+                      'Bring your notes and files into PonyNotes',
+                    ),
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                      color: colors.onSurface.withValues(alpha: 0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  Row(
+                    children: [
+                      _tab(_text(context, '导入', 'Import'), false),
+                      const SizedBox(width: 14),
+                      _tab(_text(context, '同步', 'Sync'), true),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  if (_showSync)
+                    _syncSection(context)
+                  else ...[
+                    _heading(_text(context, '基于文件导入', 'Import from a file')),
+                    const SizedBox(height: 14),
+                    _fileCards(context),
+                    const SizedBox(height: 42),
+                    _heading(
+                      _text(context, '从笔记软件导入', 'Import from a notes app'),
+                    ),
+                    const SizedBox(height: 14),
+                    _serviceCards(context),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tab(String label, bool sync) {
+    final colors = Theme.of(context).colorScheme;
+    final selected = _showSync == sync;
+    return Semantics(
+      selected: selected,
+      child: TextButton(
+        onPressed: () => setState(() => _showSync = sync),
+        style: TextButton.styleFrom(
+          foregroundColor:
+              colors.onSurface.withValues(alpha: selected ? 1 : 0.65),
+          backgroundColor: selected
+              ? colors.onSurface.withValues(alpha: 0.045)
+              : Colors.transparent,
+          minimumSize: const Size(42, 26),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 12,
+                height: 1.2,
+                fontWeight: FontWeight.w400,
+              ),
+        ),
+        child: Text(label),
+      ),
+    );
+  }
+
+  Widget _heading(String title) => Text(
+        title,
+        style: TextStyle(
+          fontSize: 14,
+          height: 1.5,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
+      );
+
+  Widget _fileCards(BuildContext context) {
+    final types = [
+      ('csv', 'CSV', Icons.table_chart_outlined),
+      ('pdf', 'PDF', FontAwesomeIcons.filePdf),
+      (
+        'markdown',
+        _text(context, '文本与Markdown', 'Text & Markdown'),
+        FontAwesomeIcons.fileLines
+      ),
+      ('html', 'HTML', FontAwesomeIcons.fileCode),
+    ];
+    Widget card(int index) => ImportFileCard(
+          key: ValueKey('import-file-${types[index].$1}'),
+          icon: types[index].$3,
+          title: types[index].$2,
+          onTap: () => widget.onFileImport(types[index].$1),
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 680) {
+          return Row(
+            children: [
+              for (var i = 0; i < types.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(flex: i == 2 ? 135 : 100, child: card(i)),
+              ],
+            ],
+          );
+        }
+        final columns = constraints.maxWidth >= 380 ? 2 : 1;
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (var i = 0; i < types.length; i++)
+              SizedBox(
+                width: (constraints.maxWidth - (columns - 1) * 8) / columns,
+                child: card(i),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _serviceCards(BuildContext context) {
+    final cards = [
+      ImportServiceCard(
+        title: 'Notion',
+        subtitle: _text(
+          context,
+          '导入完整 ZIP，保留父子页面层级',
+          'Import a full ZIP with nested pages',
+        ),
+        onTap: widget.onNotionImport,
+      ),
+      ImportServiceCard(
+        title: 'Obsidian',
+        subtitle: _text(
+          context,
+          '导入整个仓库，保留文件夹层级',
+          'Import a vault with its folder hierarchy',
+        ),
+        onTap: widget.onObsidianImport,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) => constraints.maxWidth >= 680
+          ? Row(
+              children: [
+                Expanded(child: cards[0]),
+                const SizedBox(width: 8),
+                Expanded(child: cards[1]),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [cards[0], const SizedBox(height: 8), cards[1]],
+            ),
+    );
+  }
+
+  Widget _syncSection(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _heading(_text(context, '同步到知识库', 'Sync to a knowledge base')),
+          const SizedBox(height: 14),
+          ImportServiceCard(
+            title: _text(context, '知识库数据源', 'Knowledge base sources'),
+            subtitle: _text(
+              context,
+              '在知识库中连接 Notion、飞书等数据源，持续更新内容',
+              'Connect Notion, Feishu and other sources in a knowledge base',
+            ),
+            actionLabel: _text(context, '前往知识库', 'Open knowledge bases'),
+            onTap: widget.onOpenSync,
+          ),
+        ],
+      );
+}
+
+class ImportFileCard extends StatelessWidget {
   const ImportFileCard({
     super.key,
     required this.icon,
@@ -14,57 +252,102 @@ class ImportFileCard extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<ImportFileCard> createState() => _ImportFileCardState();
-}
-
-class _ImportFileCardState extends State<ImportFileCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          height: 88,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: _isHovered 
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
+  Widget build(BuildContext context) => _ImportCard(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+          child: Row(
+            children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.4,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 31),
-            child: Row(
-              children: [
-                Icon(
-                  widget.icon,
-                  size: 22,
-                  color: Theme.of(context).colorScheme.onSurface,
+        ),
+      );
+}
+
+class ImportServiceCard extends StatelessWidget {
+  const ImportServiceCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.actionLabel,
+  });
+
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final String? actionLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return _ImportCard(
+      onTap: onTap,
+      child: LayoutBuilder(
+        builder: (context, constraints) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            constraints.maxWidth >= 340 ? 64 : 24,
+            16,
+            16,
+            16,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 10,
+                        height: 1.5,
+                        color: colors.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: FlowyText(
-                    widget.title,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 12),
+              ExcludeSemantics(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: colors.onSurface.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Text(
+                    actionLabel ?? _text(context, '导入', 'Import'),
+                    style: const TextStyle(fontSize: 11, height: 1.4),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -72,95 +355,43 @@ class _ImportFileCardState extends State<ImportFileCard> {
   }
 }
 
-class ImportServiceCard extends StatefulWidget {
-  const ImportServiceCard({
-    super.key,
-    required this.iconPath,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _ImportCard extends StatelessWidget {
+  const _ImportCard({required this.onTap, required this.child});
 
-  final String iconPath;
-  final String title;
-  final String subtitle;
   final VoidCallback onTap;
-
-  @override
-  State<ImportServiceCard> createState() => _ImportServiceCardState();
-}
-
-class _ImportServiceCardState extends State<ImportServiceCard> {
-  bool _isHovered = false;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          height: 88,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: _isHovered 
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8,
-              ),
-            ],
+    final colors = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(11);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 21),
-            child: Row(
-              children: [
-                // Service icon - fallback to text for now
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Center(
-                    child: FlowyText(
-                      widget.title[0].toUpperCase(),
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FlowyText(
-                        widget.title,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      const SizedBox(height: 4),
-                      FlowyText(
-                        widget.subtitle,
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        ],
+      ),
+      child: Material(
+        color: colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: radius,
+          side: BorderSide(color: colors.onSurface.withValues(alpha: 0.055)),
+        ),
+        child: Semantics(
+          button: true,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            hoverColor: colors.onSurface.withValues(alpha: 0.025),
+            focusColor: colors.primary.withValues(alpha: 0.1),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 70),
+              child: child,
             ),
           ),
         ),
