@@ -16,6 +16,7 @@ import 'agent_model_preferences.dart';
 import 'agent_service.dart';
 import 'agent_reference.dart';
 import 'agent_definition.dart';
+import 'agent_error.dart';
 import 'agent_note_bridge.dart';
 import 'agent_permissions.dart';
 import 'agent_prompt.dart';
@@ -100,6 +101,8 @@ class AgentController extends ChangeNotifier {
   String _clientId = const Uuid().v4();
   Timer? _toolTimer;
   bool _pollingTools = false;
+  int _notePollFailures = 0;
+  String? _notePollError;
   int _toolEpoch = 0;
   bool _acceptNoteCalls = false;
   McpTools get noteTools => McpTools(
@@ -1296,6 +1299,8 @@ class AgentController extends ChangeNotifier {
           )
           .toList(),
     });
+    _notePollFailures = 0;
+    _notePollError = null;
     _acceptNoteCalls = true;
   }
 
@@ -1367,6 +1372,12 @@ class AgentController extends ChangeNotifier {
           .request('GET', _workspaceId!, chatId, '/tools?client_id=$_clientId')
           .timeout(const Duration(seconds: 10));
       if (epoch != _epoch) return;
+      _notePollFailures = 0;
+      if (_notePollError != null) {
+        if (error == _notePollError) error = null;
+        _notePollError = null;
+        changed();
+      }
       if (!running && queuedInputs.isNotEmpty) await _reloadHistory();
       for (final value in data['calls'] as List? ?? []) {
         final call = Map<String, dynamic>.from(value as Map);
@@ -1376,6 +1387,15 @@ class AgentController extends ChangeNotifier {
       }
     } catch (e) {
       if (epoch == _epoch) {
+        // A gateway failure says nothing about authorization. Keep the same
+        // channel and call IDs while polling recovers; never replay a write.
+        if (isTransientAgentError(e) && ++_notePollFailures < 3) {
+          _notePollError = '笔记工具连接暂时不可用，正在重试：${agentDisplayText('$e')}';
+          error = _notePollError;
+          changed();
+          return;
+        }
+        _acceptNoteCalls = false;
         _cancelApprovals();
         _toolTimer?.cancel();
         error = '笔记工具连接已断开，请重新连接：${agentDisplayText('$e')}';

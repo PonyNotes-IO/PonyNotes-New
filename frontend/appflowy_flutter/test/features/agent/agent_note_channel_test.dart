@@ -1,4 +1,5 @@
 import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/features/agent/application/agent_error.dart';
 import 'package:appflowy/features/agent/application/agent_service.dart';
 import 'package:appflowy/features/agent/application/agent_permissions.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
@@ -11,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _Service extends AgentService {
   Map<String, dynamic>? call;
   final results = <Map<String, dynamic>>[];
+  final pollErrors = <Object>[];
   @override
   Future<String> identity(String workspace) async => 'server|user|$workspace';
   @override
@@ -26,6 +28,7 @@ class _Service extends AgentService {
       call = null;
     }
     if (suffix.startsWith('/tools?') && method == 'GET') {
+      if (pollErrors.isNotEmpty) throw pollErrors.removeAt(0);
       return {
         'calls': [if (call != null) call],
       };
@@ -187,6 +190,77 @@ void main() {
     expect(controller.interactions, isEmpty);
     controller.dispose();
   });
+  testWidgets(
+      'a temporary 502 preserves approval and resumes without duplicate writes',
+      (tester) async {
+    final service = _Service();
+    final controller = _Controller(service)
+      ..providerConfig = const AiProviderConfig(modelName: 'custom');
+    await controller.connect();
+    service.call = {
+      'id': 'recoverable',
+      'name': 'write',
+      'arguments': {'workspace_id': 'workspace', 'text': '内容'},
+    };
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.interactions.length, 1);
+    service.pollErrors.add(AgentRequestError(502, 'Bad Gateway'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.connected, isTrue);
+    expect(controller.interactions.length, 1);
+    expect(controller.error, contains('正在重试'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.error, isNull);
+    expect(controller.interactions.length, 1);
+    controller.respond(controller.interactions.single, true);
+    await tester.pump();
+    expect(controller.tools.writes, 1);
+    expect(service.results.single['result']['isError'], isNot(true));
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.tools.writes, 1);
+    await controller.disconnect();
+    controller.dispose();
+    await tester.pump();
+  });
+
+  testWidgets(
+      'persistent gateway failures stop the note channel after bounded retries',
+      (tester) async {
+    final service = _Service();
+    final controller = _Controller(service)
+      ..providerConfig = const AiProviderConfig(modelName: 'custom');
+    await controller.connect();
+    service.pollErrors.addAll(
+      List.generate(3, (_) => AgentRequestError(502, 'Bad Gateway')),
+    );
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(controller.connected, isFalse);
+    expect(controller.error, contains('请重新连接'));
+    expect(controller.tools.writes, 0);
+    await controller.disconnect();
+    controller.dispose();
+    await tester.pump();
+  });
+
+  for (final status in [401, 403, 409]) {
+    testWidgets('HTTP $status stops the note channel immediately',
+        (tester) async {
+      final service = _Service();
+      final controller = _Controller(service)
+        ..providerConfig = const AiProviderConfig(modelName: 'custom');
+      await controller.connect();
+      service.pollErrors.add(AgentRequestError(status, 'Access rejected'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(controller.connected, isFalse);
+      expect(controller.tools.writes, 0);
+      await controller.disconnect();
+      controller.dispose();
+      await tester.pump();
+    });
+  }
+
   test('display text keeps the product identity in engine errors', () {
     expect(
       agentDisplayText('WeKnora upstream error / WEKNORA'),

@@ -1,8 +1,24 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+
+class AgentRequestError extends StateError {
+  AgentRequestError(this.statusCode, super.message);
+
+  final int statusCode;
+}
+
+bool isTransientAgentError(Object error) =>
+    (error is AgentRequestError && error.statusCode >= 500) ||
+    error is TimeoutException ||
+    error is SocketException ||
+    error is http.ClientException;
 
 void checkAgentResponse(int status, String body) {
   if (status >= 200 && status < 300) return;
-  if (status == 401) throw StateError('登录已过期，请重新登录后重试');
+  if (status == 401) throw AgentRequestError(status, '登录已过期，请重新登录后重试');
   var message = body.trim();
   try {
     final data = jsonDecode(message);
@@ -19,7 +35,8 @@ void checkAgentResponse(int status, String body) {
     // Cloud also returns plain text errors.
   }
   if (message.startsWith('<')) message = '';
-  throw StateError(
+  throw AgentRequestError(
+    status,
     message.isNotEmpty
         ? message
         : switch (status) {
