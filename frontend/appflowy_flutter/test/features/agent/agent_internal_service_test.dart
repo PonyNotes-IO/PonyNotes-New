@@ -177,7 +177,7 @@ void main() {
       models.every((model) => model.isInternal && model.apiKey.isEmpty),
       true,
     );
-    expect(models.map((model) => model.supportsReasoning), [true, false, true]);
+    expect(models.every((model) => model.supportsReasoning), true);
     expect((await service.preferred()).modelName, 'deepseek-chat');
   });
 

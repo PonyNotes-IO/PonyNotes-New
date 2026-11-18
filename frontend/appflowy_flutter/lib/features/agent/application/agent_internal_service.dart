@@ -109,7 +109,8 @@ class AgentInternalService {
             modelName: value['id'] as String,
             displayName: value['name'] as String? ?? '',
             supportsReasoning: value['supports_reasoning'] == true ||
-                {'deepseek-chat', 'doubao'}.contains(value['id']),
+                {'deepseek-chat', 'qwen3-vl-plus', 'doubao'}
+                    .contains(value['id']),
             isInternal: true,
           ),
         )
