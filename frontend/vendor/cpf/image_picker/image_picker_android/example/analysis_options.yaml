@@ -1,0 +1,6 @@
+# 第三方鸿蒙适配包快照（来自 CPF-Flutter/flutter_packages），只读 vendor。
+# 该子包没有 .dart_tool/package_config.json，分析器无法解析 package:flutter 等导入，
+# 会产出大量假错误，因此本目录不参与静态分析。
+analyzer:
+  exclude:
+    - "**"

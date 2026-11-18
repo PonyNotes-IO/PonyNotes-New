@@ -106,6 +106,13 @@ class ApplicationInfoTask extends LaunchTask {
           // we only support x86_64 on Linux
           architecture = 'x86_64';
           os = 'linux';
+        } else if (Platform.operatingSystem == 'ohos') {
+          // 鸿蒙：device_info_plus 默认 MethodChannel 的 getDeviceInfo 已由
+          // ohos_native_bridge 实现，返回包含 os/architecture/model 等字段的 map。
+          final BaseDeviceInfo info = await deviceInfoPlugin.deviceInfo;
+          final data = info.data;
+          architecture = (data['architecture'] as String?) ?? 'arm64';
+          os = (data['os'] as String?) ?? 'ohos';
         } else {
           architecture = null;
           os = null;

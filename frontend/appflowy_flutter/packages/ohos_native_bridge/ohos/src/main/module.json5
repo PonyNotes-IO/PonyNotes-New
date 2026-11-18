@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "ohos_native_bridge",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}

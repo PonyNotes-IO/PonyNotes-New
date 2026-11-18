@@ -15,6 +15,8 @@ dependencies:
   app_links: ^6.3.3
   appflowy_backend:
     path: packages/appflowy_backend
+  ohos_native_bridge:
+    path: packages/ohos_native_bridge
   appflowy_board:
     git:
       url: https://github.com/AppFlowy-IO/appflowy-board.git
@@ -239,6 +241,83 @@ dependency_overrides:
   # 原生动态字体初始化不在该桥接版本中，macOS 会在首次解析 PDF 时卡住。
   pdfrx_engine: 0.1.13
 
+  # ===== CPF-Flutter 鸿蒙适配官方插件（vendor/cpf，来自 atomgit.com/CPF-Flutter/flutter_packages）=====
+  # 这些包在 pub.dev 版本无 ohos 实现，统一换成本地 vendor 的鸿蒙适配版。
+  # path_provider
+  path_provider:
+    path: ../vendor/cpf/path_provider/path_provider
+  path_provider_android:
+    path: ../vendor/cpf/path_provider/path_provider_android
+  path_provider_foundation:
+    path: ../vendor/cpf/path_provider/path_provider_foundation
+  path_provider_linux:
+    path: ../vendor/cpf/path_provider/path_provider_linux
+  path_provider_windows:
+    path: ../vendor/cpf/path_provider/path_provider_windows
+  path_provider_ohos:
+    path: ../vendor/cpf/path_provider/path_provider_ohos
+  path_provider_platform_interface:
+    path: ../vendor/cpf/path_provider/path_provider_platform_interface
+  # shared_preferences
+  shared_preferences:
+    path: ../vendor/cpf/shared_preferences/shared_preferences
+  shared_preferences_android:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_android
+  shared_preferences_foundation:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_foundation
+  shared_preferences_linux:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_linux
+  shared_preferences_windows:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_windows
+  shared_preferences_ohos:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_ohos
+  shared_preferences_web:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_web
+  shared_preferences_platform_interface:
+    path: ../vendor/cpf/shared_preferences/shared_preferences_platform_interface
+  # url_launcher
+  url_launcher:
+    path: ../vendor/cpf/url_launcher/url_launcher
+  url_launcher_android:
+    path: ../vendor/cpf/url_launcher/url_launcher_android
+  url_launcher_ios:
+    path: ../vendor/cpf/url_launcher/url_launcher_ios
+  url_launcher_linux:
+    path: ../vendor/cpf/url_launcher/url_launcher_linux
+  url_launcher_macos:
+    path: ../vendor/cpf/url_launcher/url_launcher_macos
+  url_launcher_windows:
+    path: ../vendor/cpf/url_launcher/url_launcher_windows
+  url_launcher_ohos:
+    path: ../vendor/cpf/url_launcher/url_launcher_ohos
+  url_launcher_web:
+    path: ../vendor/cpf/url_launcher/url_launcher_web
+  url_launcher_platform_interface:
+    path: ../vendor/cpf/url_launcher/url_launcher_platform_interface
+  # image_picker
+  image_picker:
+    path: ../vendor/cpf/image_picker/image_picker
+  image_picker_android:
+    path: ../vendor/cpf/image_picker/image_picker_android
+  image_picker_for_web:
+    path: ../vendor/cpf/image_picker/image_picker_for_web
+  image_picker_ios:
+    path: ../vendor/cpf/image_picker/image_picker_ios
+  image_picker_linux:
+    path: ../vendor/cpf/image_picker/image_picker_linux
+  image_picker_macos:
+    path: ../vendor/cpf/image_picker/image_picker_macos
+  image_picker_windows:
+    path: ../vendor/cpf/image_picker/image_picker_windows
+  image_picker_ohos:
+    path: ../vendor/cpf/image_picker/image_picker_ohos
+  image_picker_platform_interface:
+    path: ../vendor/cpf/image_picker/image_picker_platform_interface
+  # in_app_purchase：保留 pub.dev 3.2.3。IAP 仅 iOS 使用（StoreKit 2），鸿蒙无应用内购买，
+  # 且 CPF 3.1.11 缺少 StoreKit 2 包装类会导致 apple_iap_service.dart 编译失败，故不替换。
+
+  # ====================================================================================
+
   # pub.dev douyin_login 1.0.6 包含重复的 Objective-C 方法声明，导致 Xcode 编译失败。
   # 使用仓库内修复版本，确保团队和 CI 不依赖本机 pub 缓存补丁。
   douyin_login:
@@ -264,6 +343,11 @@ dependency_overrides:
   # image 是传递依赖且没有上界，任何一次全量 pub get 都可能把它升上去，
   # 因此在这里精确锁定，避免只改 pubspec.lock 后再次被覆盖。
   image: 4.5.4
+
+  # CPF image_picker_for_web 声明 mime ^1.0.4，与项目 mime ^2.0.0 冲突，强制覆盖。
+  mime: ^2.0.0
+  # CPF shared_preferences_windows 声明 file ^6.0.0，与项目 file ^7.0.0 冲突，强制覆盖。
+  file: ^7.0.0
 
   # 使用官方兼容版本
   quill_native_bridge: ^11.1.0

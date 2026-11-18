@@ -1,0 +1,5 @@
+# 第三方鸿蒙适配包分组目录（不含 pubspec），其下全部为 vendor 快照源码。
+# 不参与静态分析，避免分析器因缺少 package_config 产生大量假错误。
+analyzer:
+  exclude:
+    - "**"

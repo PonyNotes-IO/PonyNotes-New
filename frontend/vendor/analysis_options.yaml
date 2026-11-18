@@ -1,0 +1,12 @@
+# vendor 目录存放从 CPF-Flutter/flutter_packages 同步的第三方鸿蒙适配包，
+# 属于只读的第三方源码快照：
+#   1. 每个子包都有自己的 pubspec.yaml，但没有（也无法）生成 .dart_tool/package_config.json，
+#      分析器会为它们各自建立独立的 analysis context，导致 package:flutter 等导入无法解析，
+#      在 IDE 中出现大量假错误。
+#   2. 子包的 example/ 与 test/ 是上游演示代码，不参与本工程构建。
+#
+# 因此整个 vendor 目录不纳入静态分析。真正的校验在 appflowy_flutter 中通过
+# `fvm dart analyze lib packages` 与 `flutter build hap` 完成。
+analyzer:
+  exclude:
+    - "**"

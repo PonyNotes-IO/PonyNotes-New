@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy_backend/log.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
+import 'package:ohos_native_bridge/ohos_native_bridge.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'startup/startup.dart';
@@ -59,6 +61,15 @@ Future<void> main(List<String> args) async {
     if (!await AndroidPrivacyConsent.ensureAccepted()) return;
     await AndroidPrivacyConsent.initializePlugins();
   }
+  // 用 operatingSystem 字符串判断而非 Platform.isOhos：后者是鸿蒙 fork 私有 getter，
+  // 标准 Dart SDK 的 dart:io 没有它，在 Android 构建上会抛 NoSuchMethodError 卡启动。
+  if (Platform.operatingSystem == 'ohos') {
+    // 鸿蒙：显式注册仍使用旧版 static platform 模式的插件。
+    // ohos_native_bridge 的 ArkTS 侧已注册各插件原有的 MethodChannel，
+    // 这里把 Dart 侧平台实现切到通用 MethodChannel 实现，使业务调用点无需改动。
+    FilePicker.platform = FilePickerIO();
+    await OhosNativeBridge.registerOhosPlatformOverrides();
+  }
   pdfrxFlutterInitialize();
   PerformanceTrace.mark('flutter_binding_ready');
 
@@ -67,7 +78,10 @@ Future<void> main(List<String> args) async {
     return;
   }
 
-  if (Platform.isAndroid || Platform.isIOS || Platform.isLinux || Platform.isOhos) {
+  if (Platform.isAndroid ||
+      Platform.isIOS ||
+      Platform.isLinux ||
+      Platform.operatingSystem == 'ohos') {
     // Render a Flutter frame before the dependency-heavy application startup.
     // Linux also needs a visible surface while the Rust SDK restores the
     // workspace, which may involve slow cloud requests.

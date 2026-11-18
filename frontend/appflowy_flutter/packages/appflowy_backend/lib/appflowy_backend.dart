@@ -32,7 +32,7 @@ class FlowySDK {
 
   /// 鸿蒙专用：获取应用文件目录（替代 path_provider 的 getApplicationSupportDirectory）
   static Future<String?> getFilesDir() async {
-    if (!Platform.isOhos) return null;
+    if (Platform.operatingSystem != 'ohos') return null;
     try {
       return await _channel.invokeMethod<String>('getFilesDir');
     } catch (e) {
@@ -43,7 +43,7 @@ class FlowySDK {
 
   /// 鸿蒙专用：获取应用缓存目录（替代 path_provider 的 getTemporaryDirectory）
   static Future<String?> getCacheDir() async {
-    if (!Platform.isOhos) return null;
+    if (Platform.operatingSystem != 'ohos') return null;
     try {
       return await _channel.invokeMethod<String>('getCacheDir');
     } catch (e) {

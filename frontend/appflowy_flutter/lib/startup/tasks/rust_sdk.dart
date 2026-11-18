@@ -30,7 +30,7 @@ class InitRustSDKTask extends LaunchTask {
 
     Directory root;
     try {
-      if (Platform.isOhos) {
+      if (Platform.operatingSystem == 'ohos') {
         // 鸿蒙上 path_provider 无 ohos 实现，通过 appflowy_backend 插件获取
         final dir = await FlowySDK.getFilesDir();
         if (dir != null && dir.isNotEmpty) {
@@ -45,7 +45,7 @@ class InitRustSDKTask extends LaunchTask {
       Log.error('Failed to get application support directory: $e');
       if (Platform.isAndroid) {
         root = Directory('/data/data/com.xiaomabiji.app.note/cache');
-      } else if (Platform.isOhos) {
+      } else if (Platform.operatingSystem == 'ohos') {
         // 鸿蒙 fallback：尝试通过插件获取缓存目录
         final cacheDir = await FlowySDK.getCacheDir();
         root = Directory(cacheDir ?? './cache');
@@ -108,7 +108,7 @@ AppFlowyConfiguration _makeAppFlowyConfiguration(
 /// customized by the user via the [ApplicationDataStorage]
 Future<Directory> appFlowyApplicationDataDirectory() async {
   // 鸿蒙：path_provider 无 ohos 实现，通过 appflowy_backend 插件获取路径
-  if (Platform.isOhos) {
+  if (Platform.operatingSystem == 'ohos') {
     final dir = await FlowySDK.getFilesDir();
     if (dir != null && dir.isNotEmpty) {
       final mode = integrationMode();

@@ -1,0 +1,24 @@
+name: ohos_native_bridge
+description: 鸿蒙原生能力统一桥接插件。在 ArkTS 侧注册各三方库使用的 MethodChannel/EventChannel，
+  使 pub.dev 原版插件在鸿蒙上无需修改 Dart 调用点即可工作；同时提供统一通道 ponynotes/ohos_native 供业务自定义调用。
+version: 0.0.1
+publish_to: "none"
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      ohos:
+        pluginClass: OhosNativeBridgePlugin

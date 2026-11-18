@@ -21,7 +21,7 @@ class _StartupShellState extends State<StartupShell>
   static bool get _isMobileTarget =>
       defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS ||
-      Platform.isOhos;
+      Platform.operatingSystem == 'ohos';
 
   static String _launchAsset(BuildContext context, {required bool isDark}) {
     final size = MediaQuery.sizeOf(context);
