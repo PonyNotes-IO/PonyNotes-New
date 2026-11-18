@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:appflowy/env/backend_env.dart';
 import 'package:appflowy/features/mcp/application/mcp_server_service.dart';
 import 'package:appflowy/features/mcp/application/mcp_tools.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/appflowy_backend.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -123,6 +125,77 @@ void main() {
       isNot(McpServerService.hashToken(previous)),
     );
     expect(prefs.getBool('mcp_server_enabled'), isNot(true));
+  });
+
+  test(
+      'create_space persists native privacy, refreshes sidebar and hosts pages',
+      () async {
+    final registry = tools();
+    for (final visibility in ['private', 'shared']) {
+      final result = await registry.executeTool('create_space', {
+        'workspace_id': workspaceId,
+        'name': '  MCP $visibility space  ',
+        'visibility': visibility,
+      });
+      expect(result.isError, isFalse, reason: body(result).toString());
+      final created = body(result);
+      final spaceId = created['space_id'] as String;
+      final space = await ViewBackendService.getView(spaceId).getOrThrow();
+      expect(space.isSpace, isTrue);
+      expect(space.name, 'MCP $visibility space');
+      expect(space.parentViewId, workspaceId);
+      expect(created['visibility'], visibility);
+      expect(SpaceChangeNotifier.instance.lastCreatedSpace?.id, spaceId);
+      final query = GetWorkspaceViewPB(value: workspaceId);
+      final private =
+          await FolderEventReadPrivateViews(query).send().getOrThrow();
+      final shared =
+          await FolderEventReadWorkspaceViews(query).send().getOrThrow();
+      expect(
+        private.items.any((v) => v.id == spaceId),
+        visibility == 'private',
+      );
+      expect(shared.items.any((v) => v.id == spaceId), visibility == 'shared');
+      final page = await registry.executeTool('create_page', {
+        'workspace_id': workspaceId,
+        'parent_id': spaceId,
+        'title': 'Child note',
+      });
+      expect(page.isError, isFalse, reason: body(page).toString());
+      expect(body(page)['page']['parent_id'], spaceId);
+      expect(body(page)['page']['is_space'], isFalse);
+      final child = await ViewBackendService.getView(
+        body(page)['page']['page_id'] as String,
+      ).getOrThrow();
+      expect(child.parentViewId, spaceId);
+      expect(
+        (await FolderEventReadCurrentWorkspace().send().getOrThrow()).id,
+        workspaceId,
+      );
+      await ViewBackendService.deleteView(viewId: spaceId).getOrThrow();
+      SpaceChangeNotifier.instance.resolvePending([spaceId]);
+    }
+  });
+
+  test('create_space rejects ambiguous visibility and another workspace',
+      () async {
+    final registry = tools();
+    for (final visibility in [null, 'public', 'closed']) {
+      final result = await registry.executeTool('create_space', {
+        'workspace_id': workspaceId,
+        'name': 'Invalid space',
+        if (visibility != null) 'visibility': visibility,
+      });
+      expect(result.isError, isTrue);
+      expect(body(result)['error']['code'], 'invalid_params');
+    }
+    final foreign = await registry.executeTool('create_space', {
+      'workspace_id': 'another-workspace',
+      'name': 'Other workspace',
+      'visibility': 'private',
+    });
+    expect(foreign.isError, isTrue);
+    expect(body(foreign)['error']['code'], 'workspace_mismatch');
   });
 
   test('successful inserts confirm backend data for every resource type',

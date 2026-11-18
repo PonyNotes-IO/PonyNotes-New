@@ -18,6 +18,8 @@ import 'package:appflowy/plugins/document/application/note_link_data.dart';
 import 'package:appflowy/plugins/note_graph/application/note_graph_data.dart';
 import 'package:appflowy/plugins/document/presentation/note_block_navigation.dart';
 import 'package:appflowy/plugins/note_graph/note_graph_plugin.dart';
+import 'package:appflowy/mobile/presentation/home/space/space_change_notifier.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/plugins/document/application/editor_transaction_adapter.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
@@ -326,6 +328,19 @@ class McpTools {
       'name': JsonString(description: '工作区名称'),
     },
     required: ['name'],
+    additionalProperties: false,
+  );
+
+  static const JsonObject _createSpaceSchema = JsonObject(
+    properties: {
+      'workspace_id': JsonString(description: '客户端当前工作区 ID'),
+      'name': JsonString(description: '空间名称'),
+      'visibility': JsonString(
+        description: 'private：侧栏私有空间；shared：侧栏协作空间',
+        enumValues: ['private', 'shared'],
+      ),
+    },
+    required: ['workspace_id', 'name', 'visibility'],
     additionalProperties: false,
   );
 
@@ -668,7 +683,8 @@ class McpTools {
     ..._noteLinkSpecs,
     McpToolSpec(
       name: 'create_workspace',
-      description: '按名称创建一个与当前工作区同类型的工作区，返回新工作区 ID；不会自动切换。',
+      description: '在左上角工作区列表中创建独立工作区，返回新工作区 ID；不会自动切换。'
+          '创建侧栏私有/协作空间请使用 create_space。',
       inputSchema: _createWorkspaceSchema,
       handler: _createWorkspace,
     ),
@@ -679,8 +695,16 @@ class McpTools {
       handler: _openWorkspace,
     ),
     McpToolSpec(
+      name: 'create_space',
+      description: '在当前工作区侧栏的「私有」或「协作」分组下创建空间，'
+          '按 visibility 设置权限，返回 space_id；可作为 create_page 的 parent_id。',
+      inputSchema: _createSpaceSchema,
+      handler: _createSpace,
+    ),
+    McpToolSpec(
       name: 'create_page',
-      description: '在指定空间或页面下创建文档页面，可选携带初始 Markdown 内容；不会自动打开页面。',
+      description: '在指定空间或页面下创建普通文档页面，可选携带初始 Markdown 内容；不会自动打开页面。'
+          '创建私有/协作空间请使用 create_space。',
       inputSchema: _createPageSchema,
       handler: _createPage,
     ),
@@ -1772,6 +1796,69 @@ class McpTools {
       'name': target.name,
       'type': target.workspaceType.name,
       'switched': true,
+    });
+  }
+
+  Future<CallToolResult> _createSpace(Map<String, dynamic> args) async {
+    final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
+    final name = _stringArg(args, 'name')?.trim() ?? '';
+    final visibility = _stringArg(args, 'visibility');
+    if (workspaceId.isEmpty ||
+        name.isEmpty ||
+        !['private', 'shared'].contains(visibility)) {
+      return _error(
+        'invalid_params',
+        '需要 workspace_id、name 和 visibility（private 或 shared）。',
+      );
+    }
+    final accessError = await _requireWriteAccess(workspaceId);
+    if (accessError != null) return accessError;
+    final permission = visibility == 'private'
+        ? SpacePermission.private
+        : SpacePermission.publicToAll;
+    // Use the sidebar's native space metadata and section, so privacy and
+    // sidebar placement are persisted together by the Rust folder service.
+    final result = await ViewBackendService.createView(
+      layoutType: ViewLayoutPB.Document,
+      parentViewId: workspaceId,
+      name: name,
+      openAfterCreate: false,
+      section: visibility == 'private'
+          ? ViewSectionPB.Private
+          : ViewSectionPB.Public,
+      extra: jsonEncode({
+        ViewExtKeys.isSpaceKey: true,
+        ViewExtKeys.spaceIconKey: '',
+        ViewExtKeys.spaceIconColorKey: '',
+        ViewExtKeys.spacePermissionKey: permission.index,
+        ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+      }),
+    );
+    FlowyError? failure;
+    final space = result.fold((value) => value, (error) {
+      failure = error;
+      return null;
+    });
+    if (space == null) {
+      return _error('write_failed', '创建空间失败：${failure?.msg ?? '未知错误'}');
+    }
+    final confirmed = await _view(space.id);
+    if (confirmed == null ||
+        !confirmed.isSpace ||
+        confirmed.parentViewId != workspaceId ||
+        confirmed.name != name ||
+        confirmed.spacePermission != permission) {
+      return _error(
+        'write_unconfirmed',
+        '空间创建尚未确认（space_id=${space.id}），请用 list_pages 查询实际结果，不要重复创建。',
+      );
+    }
+    SpaceChangeNotifier.instance.notifySpaceCreated(confirmed);
+    return _ok({
+      ..._viewToJson(confirmed),
+      'workspace_id': workspaceId,
+      'space_id': confirmed.id,
+      'name': confirmed.name,
     });
   }
 
@@ -3457,6 +3544,12 @@ class McpTools {
       'parent_id': view.parentViewId,
       'is_document': view.layout == ViewLayoutPB.Document,
       'is_space': view.isSpace,
+      if (view.isSpace)
+        'visibility': view.spacePermission == SpacePermission.private
+            ? 'private'
+            : view.spacePermission == SpacePermission.closed
+                ? 'closed'
+                : 'shared',
       'last_edited': view.lastEdited.toInt(),
       if (view.icon.value.isNotEmpty) 'icon': view.icon.value,
       if (view.isLocked) 'is_locked': true,
