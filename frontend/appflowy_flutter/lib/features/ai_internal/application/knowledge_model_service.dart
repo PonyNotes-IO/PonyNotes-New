@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 
 enum KnowledgeModelType {
   chat('KnowledgeQA', '对话', 'chat'),
@@ -29,6 +30,7 @@ class KnowledgeModel {
   Map<String, dynamic> get parameters =>
       Map<String, dynamic>.from(data['parameters'] as Map? ?? {});
   bool get builtin => data['is_builtin'] == true;
+  bool get canEdit => data['can_edit'] as bool? ?? !builtin;
   String get provider => parameters['provider'] as String? ?? 'generic';
 }
 
@@ -53,10 +55,16 @@ class KnowledgeModelProvider {
 
 /// Cloud authenticates the account and resolves the single WeKnora tenant; clients only send workspace/KB IDs.
 class KnowledgeModelService {
-  KnowledgeModelService(this.knowledge, this.workspaceId);
+  KnowledgeModelService(
+    this.knowledge,
+    this.workspaceId, {
+    AgentInternalService? customService,
+  }) : customService = customService ?? AgentInternalService();
   final KnowledgeBaseService knowledge;
   final String workspaceId;
+  final AgentInternalService customService;
   bool canManage = false;
+  bool canManageChat = false;
   List<KnowledgeModelProvider> catalog = [];
 
   static Future<KnowledgeModelService> current({String? workspaceId}) async {
@@ -76,6 +84,8 @@ class KnowledgeModelService {
 
   Future<List<KnowledgeModel>> list() async {
     final data = await knowledge.post('models', {'workspace_id': workspaceId});
+    final custom = await customService.customCatalog(workspaceId);
+    canManageChat = custom['can_manage'] == true;
     canManage = data['can_manage'] == true;
     catalog = [
       for (final p in data['providers'] as List? ?? [])
@@ -83,6 +93,8 @@ class KnowledgeModelService {
     ];
     return [
       for (final item in data['models'] as List)
+        KnowledgeModel(Map<String, dynamic>.from(item as Map)),
+      for (final item in custom['models'] as List)
         KnowledgeModel(Map<String, dynamic>.from(item as Map)),
     ];
   }
@@ -101,6 +113,11 @@ class KnowledgeModelService {
   }
 
   Future<void> save(Map<String, dynamic> model, {String? id}) async {
+    if (id?.startsWith('custom:') == true ||
+        (id == null && model['type'] == KnowledgeModelType.chat.apiValue)) {
+      await customService.saveCustomModel(workspaceId, model, id: id);
+      return;
+    }
     await knowledge.post('model_save', {
       'workspace_id': workspaceId,
       if (id != null) 'id': id,
@@ -112,6 +129,10 @@ class KnowledgeModelService {
       .where((b) => b.workspaceId == workspaceId && b.canManage && b.ready)
       .toList();
   Future<void> delete(String id) async {
+    if (id.startsWith('custom:')) {
+      await customService.deleteCustomModel(workspaceId, id);
+      return;
+    }
     await knowledge
         .post('model_delete', {'workspace_id': workspaceId, 'id': id});
   }

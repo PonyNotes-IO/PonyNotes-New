@@ -53,6 +53,9 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
       _providers.where((p) => p.id == _providerId).firstOrNull;
   bool get _chat =>
       _type == KnowledgeModelType.chat || _type == KnowledgeModelType.vision;
+  bool get _workspaceChat =>
+      _type == KnowledgeModelType.chat &&
+      (widget.initial == null || widget.initial!.id.startsWith('custom:'));
   bool get _fixedEmbedding =>
       widget.initial?.type == KnowledgeModelType.embedding;
 
@@ -72,6 +75,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                 (params['spec'] as Map?)?['api'] == 'openai-completions'
             ? 'openai'
             : 'provider';
+    if (_workspaceChat) _protocol = 'openai';
     _context.text = modelThousands(params['context_window'] ?? 128000);
     _maxTokens.text = modelThousands(params['max_output_tokens'] ?? 8192);
     _dimension.text = modelThousands(
@@ -153,7 +157,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
   void _changeProvider(String id) {
     setState(() {
       _providerId = id;
-      _protocol = id == 'generic' ? 'openai' : 'provider';
+      _protocol = id == 'generic' || _workspaceChat ? 'openai' : 'provider';
       _key.clear();
       _name.clear();
       for (final controller in _extras.values) {
@@ -327,7 +331,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                             key: const ValueKey('model-protocol'),
                             value: _protocol,
                             entries: [
-                              if (_providerId != 'generic')
+                              if (_providerId != 'generic' && !_workspaceChat)
                                 const DropdownMenuEntry(
                                   value: 'provider',
                                   label: '厂商原生协议',
@@ -336,10 +340,11 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                                 value: 'openai',
                                 label: 'OpenAI 兼容协议',
                               ),
-                              const DropdownMenuEntry(
-                                value: 'ollama',
-                                label: 'Ollama 本地服务',
-                              ),
+                              if (!_workspaceChat)
+                                const DropdownMenuEntry(
+                                  value: 'ollama',
+                                  label: 'Ollama 本地服务',
+                                ),
                             ],
                             onChanged: _fixedEmbedding || _saving
                                 ? null
@@ -365,6 +370,9 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                           ),
                           validator: (value) {
                             final uri = Uri.tryParse(value?.trim() ?? '');
+                            if (_workspaceChat && uri?.scheme != 'https') {
+                              return '工作区问AI模型需要 HTTPS 地址';
+                            }
                             return uri == null ||
                                     !['http', 'https'].contains(uri.scheme) ||
                                     uri.host.isEmpty
@@ -410,7 +418,8 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                           ),
                           validator: (value) => widget.initial == null &&
                                   _protocol != 'ollama' &&
-                                  _providerId != 'generic' &&
+                                  (_workspaceChat ||
+                                      _providerId != 'generic') &&
                                   (value?.trim().isEmpty ?? true)
                               ? '请输入访问凭据'
                               : null,
@@ -511,8 +520,7 @@ class _KnowledgeModelFormState extends State<KnowledgeModelForm> {
                           ModelSliderControl(
                             id: 'model-temperature',
                             label: '温度',
-                            valueLabel:
-                                '${_temperature.toStringAsFixed(1)} 温度',
+                            valueLabel: '${_temperature.toStringAsFixed(1)} 温度',
                             value: _temperature,
                             min: 0,
                             max: 2,

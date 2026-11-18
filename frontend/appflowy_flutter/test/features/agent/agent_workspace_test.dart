@@ -101,8 +101,8 @@ void main() {
             userId: '1',
           ),
           client: MockClient(
-            (_) async =>
-                http.Response('{"data":{"models":[{"id":"DeepSeek"}]}}', 200),
+            (_) async => http.Response(
+                '{"data":[{"id":"DeepSeek","supports_reasoning":false}]}', 200),
           ),
         ),
       )

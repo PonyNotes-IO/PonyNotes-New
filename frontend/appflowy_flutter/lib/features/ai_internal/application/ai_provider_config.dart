@@ -16,6 +16,12 @@ class AiProviderConfig {
     this.isInternal = false,
     this.displayName = '',
     this.creatorName = '',
+    this.providerName = '',
+    this.upstreamModel = '',
+    this.reasoningModel = '',
+    this.supportsVision = false,
+    this.customModelId = '',
+    this.workspaceId = '',
   });
 
   /// OpenAI 兼容端点，例如 `https://api.deepseek.com`。
@@ -25,6 +31,12 @@ class AiProviderConfig {
   final String modelName;
   final String displayName;
   final String creatorName;
+  final String providerName;
+  final String upstreamModel;
+  final String reasoningModel;
+  final bool supportsVision;
+  final String customModelId;
+  final String workspaceId;
   String get label => displayName.isEmpty ? modelName : displayName;
 
   /// 用户自己的 API Key，只用于小马访问模型服务，与 MCP Token 无关。
@@ -36,7 +48,9 @@ class AiProviderConfig {
 
   bool get isComplete =>
       modelName.trim().isNotEmpty &&
-      (isInternal || (baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty));
+      (isInternal ||
+          customModelId.isNotEmpty ||
+          (baseUrl.trim().isNotEmpty && apiKey.trim().isNotEmpty));
 
   AiProviderConfig copyWith({
     String? baseUrl,
@@ -53,6 +67,12 @@ class AiProviderConfig {
       isInternal: isInternal,
       displayName: displayName,
       creatorName: creatorName ?? this.creatorName,
+      providerName: providerName,
+      upstreamModel: upstreamModel,
+      reasoningModel: reasoningModel,
+      supportsVision: supportsVision,
+      customModelId: customModelId,
+      workspaceId: workspaceId,
     );
   }
 }
@@ -88,7 +108,7 @@ class AiProviderConfigStorage {
   }
 
   Future<void> save(AiProviderConfig config) async {
-    if (config.isInternal) {
+    if (config.isInternal || config.customModelId.isNotEmpty) {
       throw ArgumentError('内部模型凭据不能保存为自定义配置');
     }
     final profiles = await loadProfiles();

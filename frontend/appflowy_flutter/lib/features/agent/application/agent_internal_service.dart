@@ -69,6 +69,8 @@ class AgentInternalService {
     String path, {
     bool post = false,
     AgentCloudAccount? account,
+    String? method,
+    Map<String, dynamic>? body,
   }) async {
     account ??= await _account();
     final client = _client ?? http.Client();
@@ -76,12 +78,15 @@ class AgentInternalService {
       final uri = Uri.parse(
         '${account.baseUrl}${path.startsWith('/') ? path : '/api/ai/agent/$path'}',
       );
-      final headers = {'Authorization': 'Bearer ${account.accessToken}'};
-      final pending = post
-          ? client.post(uri, headers: headers)
-          : client.get(uri, headers: headers);
+      final request = http.Request(method ?? (post ? 'POST' : 'GET'), uri);
+      request.headers['Authorization'] = 'Bearer ${account.accessToken}';
+      if (body != null) {
+        request.headers['Content-Type'] = 'application/json';
+        request.body = jsonEncode(body);
+      }
+      final pending = client.send(request).then(http.Response.fromStream);
       final response = await pending.timeout(const Duration(seconds: 90));
-      if (response.statusCode != 200) {
+      if (response.statusCode < 200 || response.statusCode >= 300) {
         if (response.statusCode == 401) throw StateError('登录已过期，请重新登录后使用内部模型');
         throw StateError(
           response.statusCode == 404
@@ -89,28 +94,32 @@ class AgentInternalService {
               : utf8.decode(response.bodyBytes),
         );
       }
-      final body =
+      if (response.statusCode == 204) return {};
+      final result =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      if (body['code'] != null && body['code'] != 0) {
+      if (result['code'] != null && result['code'] != 0) {
         throw StateError(
-          (body['message'] ?? body['msg']) as String? ?? '内部模型请求失败',
+          (result['message'] ?? result['msg']) as String? ?? '内部模型请求失败',
         );
       }
-      return body;
+      return result;
     } finally {
       if (_client == null) client.close();
     }
   }
 
   Future<List<AiProviderConfig>> models({AgentCloudAccount? account}) async {
-    final body = await _request('/api/ai/chat/models', account: account);
-    return ((body['data'] as Map)['models'] as List)
+    final body = await _request('models', account: account);
+    return (body['data'] as List)
         .map(
           (dynamic value) => AiProviderConfig(
             modelName: value['id'] as String,
             displayName: value['name'] as String? ?? '',
-            supportsReasoning: value['supports_reasoning'] == true ||
-                {'deepseek-chat', 'doubao'}.contains(value['id']),
+            supportsReasoning: value['supports_reasoning'] == true,
+            providerName: value['provider_name'] as String? ?? '',
+            upstreamModel: value['upstream_model'] as String? ?? '',
+            reasoningModel: value['reasoning_model'] as String? ?? '',
+            supportsVision: value['supports_vision'] == true,
             isInternal: true,
           ),
         )
@@ -119,6 +128,7 @@ class AgentInternalService {
 
   Future<AiProviderConfig> preferred({
     List<AiProviderConfig>? available,
+    String? workspaceId,
   }) async {
     final custom = await const AiProviderConfigStorage().load();
     // Existing custom endpoints keep working without a cloud account.
@@ -146,6 +156,18 @@ class AgentInternalService {
     final selectedCustom = await _secure.read(key: account.customSelectionKey);
     if (selectedCustom != null) {
       final data = jsonDecode(selectedCustom) as Map<String, dynamic>;
+      if (data['customModelId'] != null) {
+        workspaceId ??= (await UserBackendService.getCurrentWorkspace())
+            .fold((value) => value.id, (_) => throw StateError('无法读取工作区'));
+        final models = await customModels(workspaceId!, personal: true);
+        final match = models
+            .where((m) => m['id'] == 'custom:${data['customModelId']}')
+            .firstOrNull;
+        if (match != null) return customConfig(match);
+        available ??= await this.models(account: account);
+        if (available.isEmpty) throw StateError('所选模型已删除或无权使用，请重新选择');
+        return available.first;
+      }
       final config = AiProviderConfig(
         baseUrl: data['baseUrl'] as String,
         modelName: data['modelName'] as String,
@@ -166,19 +188,24 @@ class AgentInternalService {
       try {
         account = await _account();
       } catch (_) {
-        if (getIt.isRegistered<AppFlowyCloudSharedEnv>() &&
-            getIt<AppFlowyCloudSharedEnv>()
-                .authenticatorType
-                .isAppFlowyCloudEnabled) {
+        if (config.customModelId.isNotEmpty ||
+            (getIt.isRegistered<AppFlowyCloudSharedEnv>() &&
+                getIt<AppFlowyCloudSharedEnv>()
+                    .authenticatorType
+                    .isAppFlowyCloudEnabled)) {
           rethrow;
         }
       }
-      await const AiProviderConfigStorage().save(config);
+      if (config.customModelId.isEmpty) {
+        await const AiProviderConfigStorage().save(config);
+      }
       if (account != null) {
         final prefs = await SharedPreferences.getInstance();
         await _secure.write(
           key: account.customSelectionKey,
           value: jsonEncode({
+            if (config.customModelId.isNotEmpty)
+              'customModelId': config.customModelId,
             'baseUrl': config.baseUrl,
             'modelName': config.modelName,
             'apiKey': config.apiKey,
@@ -194,6 +221,79 @@ class AgentInternalService {
     final prefs = await SharedPreferences.getInstance();
     await _secure.delete(key: account.customSelectionKey);
     await prefs.setString(account.selectionKey, config.modelName);
+  }
+
+  Future<Map<String, dynamic>> customCatalog(
+    String workspaceId, {
+    bool personal = false,
+  }) =>
+      _request('/api/ai/agent/custom-models/$workspaceId?personal=$personal');
+
+  Future<List<Map<String, dynamic>>> customModels(
+    String workspaceId, {
+    bool personal = false,
+  }) async =>
+      [
+        for (final model
+            in (await customCatalog(workspaceId, personal: personal))['models']
+                as List)
+          Map<String, dynamic>.from(model as Map),
+      ];
+
+  Future<String> saveCustomModel(
+    String workspaceId,
+    Map<String, dynamic> model, {
+    String? id,
+  }) async {
+    final response = await _request(
+      '/api/ai/agent/custom-models/$workspaceId${id == null ? '' : '/${id.replaceFirst('custom:', '')}'}',
+      method: id == null ? 'POST' : 'PUT',
+      body: model,
+    );
+    return response['id'] as String;
+  }
+
+  Future<void> deleteCustomModel(String workspaceId, String id) async {
+    await _request(
+      '/api/ai/agent/custom-models/$workspaceId/${id.replaceFirst('custom:', '')}',
+      method: 'DELETE',
+    );
+  }
+
+  static AiProviderConfig customConfig(Map<String, dynamic> model) {
+    final parameters = model['parameters'] as Map? ?? {};
+    return AiProviderConfig(
+      customModelId: (model['id'] as String).replaceFirst('custom:', ''),
+      workspaceId: model['workspace_id'] as String? ?? '',
+      modelName: model['name'] as String,
+      displayName: model['display_name'] as String? ?? '',
+      creatorName: model['creator_name'] as String? ?? '',
+      supportsReasoning: (parameters['spec'] as Map?)?['reasoning'] == true,
+      supportsVision: parameters['supports_vision'] == true,
+      baseUrl: parameters['base_url'] as String? ?? '',
+    );
+  }
+
+  Future<List<AiProviderConfig>> legacyProfiles() async {
+    final profiles = await const AiProviderConfigStorage().loadProfiles();
+    if (profiles.isEmpty) return profiles;
+    AgentCloudAccount account;
+    try {
+      account = await _account();
+    } catch (_) {
+      return profiles;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'ponynotes.agent.legacy-profile-owner';
+    final owner = prefs.getString(key);
+    if (owner == null) await prefs.setString(key, account.selectionKey);
+    final imported =
+        prefs.getStringList('${account.selectionKey}.imported-profiles') ?? [];
+    return owner == null || owner == account.selectionKey
+        ? profiles
+            .where((p) => !imported.contains('${p.baseUrl}|${p.modelName}'))
+            .toList()
+        : [];
   }
 
   Future<AiProviderConfig> runtimeConfig(AiProviderConfig model) async {

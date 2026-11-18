@@ -215,7 +215,9 @@ class _KnowledgeModelBindingsState extends State<KnowledgeModelBindings> {
         ),
       );
   Widget _selector(String field, KnowledgeModelType type) {
-    final options = widget.models.where((model) => model.type == type).toList();
+    final options = widget.models
+        .where((model) => model.type == type && !model.id.startsWith('custom:'))
+        .toList();
     final selected = _settings![field] as String? ?? '';
     return modelField(
       context,

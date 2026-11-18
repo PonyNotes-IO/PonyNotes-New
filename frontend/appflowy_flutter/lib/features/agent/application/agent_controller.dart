@@ -195,7 +195,8 @@ class AgentController extends ChangeNotifier {
         );
       }
       if (selectedAgent?.sourceTenantId != null) return;
-      final selected = providerConfig ?? await internalService.preferred();
+      final selected = providerConfig ??
+          await internalService.preferred(workspaceId: _workspaceId);
       if (epoch != _epoch || !await _isCurrent()) return;
       providerConfig = selected;
       model = selected.modelName;
@@ -446,8 +447,12 @@ class AgentController extends ChangeNotifier {
       'model': {
         'model_name': config.modelName,
         'is_internal': config.isInternal,
-        if (!config.isInternal) 'base_url': config.baseUrl,
-        if (!config.isInternal) 'api_key': config.apiKey,
+        if (config.customModelId.isNotEmpty)
+          'custom_model_id': config.customModelId,
+        if (!config.isInternal && config.customModelId.isEmpty)
+          'base_url': config.baseUrl,
+        if (!config.isInternal && config.customModelId.isEmpty)
+          'api_key': config.apiKey,
         'supports_reasoning': config.supportsReasoning,
       },
       'reasoning_effort': thinkingLevel,
@@ -1191,12 +1196,14 @@ class AgentController extends ChangeNotifier {
       if (_identity != null && !await _isCurrent()) {
         throw StateError('账号或工作区已切换');
       }
-      final value = config.isInternal
-          ? await internalService.credits(
-              model: config,
-              workspace: _workspaceId,
-            )
-          : await fetchAgentCredits(config);
+      final value = config.customModelId.isNotEmpty
+          ? null
+          : config.isInternal
+              ? await internalService.credits(
+                  model: config,
+                  workspace: _workspaceId,
+                )
+              : await fetchAgentCredits(config);
       if (_identity != null && !await _isCurrent()) {
         throw StateError('账号或工作区已切换');
       }

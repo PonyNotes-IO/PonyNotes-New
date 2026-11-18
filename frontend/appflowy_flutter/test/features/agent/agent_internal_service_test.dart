@@ -34,12 +34,10 @@ void main() {
       if (request.url.path.endsWith('/models')) {
         return http.Response(
           jsonEncode({
-            'data': {
-              'models': [
-                {'id': 'gateway-reasoner', 'supports_reasoning': true},
-                {'id': 'gateway-chat'},
-              ],
-            },
+            'data': [
+              {'id': 'gateway-reasoner', 'supports_reasoning': true},
+              {'id': 'gateway-chat'},
+            ],
           }),
           200,
         );
@@ -79,7 +77,7 @@ void main() {
       account: () async => current,
       client: MockClient(
         (_) async => http.Response(
-          '{"data":{"models":[{"id":"other-managed"},{"id":"managed"}]}}',
+          '{"data":[{"id":"other-managed","supports_reasoning":false},{"id":"managed","supports_reasoning":false}]}',
           200,
         ),
       ),
@@ -154,17 +152,27 @@ void main() {
     final service = AgentInternalService(
       account: () async => account,
       client: MockClient((request) async {
-        expect(request.url.path, '/api/ai/chat/models');
+        expect(request.url.path, '/api/ai/agent/models');
         return http.Response.bytes(
           utf8.encode(
             jsonEncode({
-              'data': {
-                'models': [
-                  {'id': 'deepseek-chat', 'name': 'DeepSeek'},
-                  {'id': 'qwen3-vl-plus', 'name': '通义千问'},
-                  {'id': 'doubao', 'name': '豆包'},
-                ],
-              },
+              'data': [
+                {
+                  'id': 'deepseek-chat',
+                  'name': 'DeepSeek',
+                  'supports_reasoning': true,
+                  'provider_name': '火山引擎',
+                  'upstream_model': 'configured-deepseek',
+                  'reasoning_model': 'configured-reasoner',
+                },
+                {'id': 'qwen3-vl-plus', 'name': '通义千问'},
+                {
+                  'id': 'doubao',
+                  'name': '豆包',
+                  'supports_reasoning': true,
+                  'supports_vision': true,
+                },
+              ],
             }),
           ),
           200,
@@ -178,6 +186,13 @@ void main() {
       true,
     );
     expect(models.map((model) => model.supportsReasoning), [true, false, true]);
+    expect(models.first.providerName, '火山引擎');
+    expect(models.first.upstreamModel, 'configured-deepseek');
+    expect(
+      models.first.copyWith(apiKey: 'session').reasoningModel,
+      'configured-reasoner',
+    );
+    expect(models.last.supportsVision, true);
     expect((await service.preferred()).modelName, 'deepseek-chat');
   });
 
@@ -359,5 +374,91 @@ void main() {
         isInternal: true,
       ),
     );
+  });
+  test(
+      'workspace custom selections keep only a model reference and refresh access',
+      () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    var accessible = true;
+    final requests = <http.Request>[];
+    final service = AgentInternalService(
+      account: () async => account,
+      client: MockClient((request) async {
+        requests.add(request);
+        expect(request.headers['Authorization'], 'Bearer login-token');
+        expect(request.url.queryParameters['personal'], 'true');
+        return http.Response(
+          jsonEncode({
+            'models': accessible
+                ? [
+                    {
+                      'id': 'custom:$id',
+                      'workspace_id': 'home',
+                      'name': 'reasoner',
+                      'display_name': '我的模型',
+                      'creator_name': '马同学',
+                      'parameters': {
+                        'base_url': 'https://model.example/v1',
+                        'spec': {'reasoning': true},
+                      },
+                    },
+                  ]
+                : [],
+            'can_manage': false,
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }),
+    );
+    final model = AgentInternalService.customConfig(
+      (await service.customModels('home', personal: true)).single,
+    );
+    expect(model.isComplete, true);
+    expect(model.isInternal, false);
+    expect(model.apiKey, isEmpty);
+    await service.select(model);
+    expect(await const AiProviderConfigStorage().loadProfiles(), isEmpty);
+    const builtins = [AiProviderConfig(modelName: 'builtin', isInternal: true)];
+    expect(
+      (await service.preferred(available: builtins, workspaceId: 'home'))
+          .customModelId,
+      id,
+    );
+    expect(
+      (await service.preferred(available: builtins, workspaceId: 'other'))
+          .customModelId,
+      id,
+    );
+    accessible = false;
+    expect(
+      (await service.preferred(available: builtins, workspaceId: 'other'))
+          .modelName,
+      'builtin',
+    );
+    expect(requests.last.url.path, '/api/ai/agent/custom-models/other');
+  });
+
+  test(
+      'legacy profiles stay account scoped without changing secure credentials',
+      () async {
+    var current = account;
+    final service = AgentInternalService(account: () async => current);
+    const model = AiProviderConfig(
+      baseUrl: 'https://model.example',
+      modelName: 'legacy',
+      apiKey: 'private',
+    );
+    await const AiProviderConfigStorage().save(model);
+    expect((await service.legacyProfiles()).single.modelName, 'legacy');
+    current = const AgentCloudAccount(
+      baseUrl: 'https://cloud.test',
+      accessToken: 'other',
+      userId: '2',
+    );
+    expect(await service.legacyProfiles(), isEmpty);
+    current = account;
+    expect((await service.legacyProfiles()).single.modelName, model.modelName);
+    expect((await const AiProviderConfigStorage().load()).apiKey, 'private');
   });
 }
