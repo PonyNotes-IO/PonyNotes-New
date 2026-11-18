@@ -317,6 +317,14 @@ class AgentService {
       final response =
           await http.Response.fromStream(await client.send(request))
               .timeout(const Duration(seconds: 90));
+      if (method == 'GET' && document.isEmpty && suffix == '/agents') {
+        if (response.statusCode >= 400) {
+          Log.warn('Agent catalog request failed: HTTP ${response.statusCode}');
+        }
+        if (response.statusCode == 404) {
+          throw StateError('当前服务器尚未提供智能体列表，请更新服务器后重试');
+        }
+      }
       checkAgentResponse(response.statusCode, utf8.decode(response.bodyBytes));
       if (response.statusCode == 204) return {};
       return Map<String, dynamic>.from(

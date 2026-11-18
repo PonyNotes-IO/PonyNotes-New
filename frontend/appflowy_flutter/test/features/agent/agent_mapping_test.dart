@@ -94,6 +94,23 @@ void main() {
     await expectLater(service.agents('workspace'), throwsStateError);
   });
 
+  test('a missing catalog explains that the server needs updating', () async {
+    final service = AgentService(
+      account: () async => account,
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    await expectLater(
+      service.agents('workspace'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          '当前服务器尚未提供智能体列表，请更新服务器后重试',
+        ),
+      ),
+    );
+  });
+
   test(
       'history restores a shared agent and sends its source without a local model',
       () async {
@@ -203,7 +220,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a failed catalog can be retried without showing sample agents',
+  testWidgets('a failed catalog shows its cause and can be retried',
       (tester) async {
     var calls = 0;
     await tester.pumpWidget(
@@ -212,7 +229,9 @@ void main() {
           body: AiModeButton(
             agentMode: false,
             loadAgents: () async {
-              if (++calls == 1) throw StateError('offline');
+              if (++calls == 1) {
+                throw StateError('知识库账户尚未同步，请稍后重试');
+              }
               return [shared];
             },
             onAgentSelected: (_) {},
@@ -222,11 +241,40 @@ void main() {
     );
     await tester.tap(find.byType(AiModeButton));
     await tester.pumpAndSettle();
-    expect(find.text('智能体加载失败，请重试'), findsOneWidget);
+    expect(find.text('知识库账户尚未同步，请稍后重试'), findsOneWidget);
+    expect(find.text('暂无智能体'), findsNothing);
+    expect(find.textContaining('Bad state:'), findsNothing);
     expect(find.text('我的RAG回答'), findsNothing);
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('agent-mode-17:same-id')), findsOneWidget);
-    expect(find.text('智能体加载失败，请重试'), findsNothing);
+    expect(find.text('知识库账户尚未同步，请稍后重试'), findsNothing);
+  });
+
+  testWidgets('an old server reports the missing catalog in the menu',
+      (tester) async {
+    final service = AgentService(
+      account: () async => account,
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AiModeButton(
+            agentMode: false,
+            loadAgents: () => service.agents('workspace'),
+            onAgentSelected: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(AiModeButton));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('当前服务器尚未提供智能体列表，请更新服务器后重试'),
+      findsOneWidget,
+    );
+    expect(find.text('暂无智能体'), findsNothing);
+    expect(find.text('快速问答'), findsWidgets);
   });
 }
