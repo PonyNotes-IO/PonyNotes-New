@@ -7,42 +7,44 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
-class NotionImporter extends StatelessWidget {
+class NotionImporter extends StatefulWidget {
   const NotionImporter({required this.filePath, super.key});
 
   final String filePath;
+
+  @override
+  State<NotionImporter> createState() => _NotionImporterState();
+}
+
+class _NotionImporterState extends State<NotionImporter> {
+  late final Future<FlowyResult<void, FlowyError>> _upload;
+
+  @override
+  void initState() {
+    super.initState();
+    _upload = ImportBackendService.importZipFiles(
+      [ImportZipPB()..filePath = widget.filePath],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 30, maxHeight: 200),
       child: FutureBuilder(
-        future: _uploadFile(),
-        builder: (context, snapshots) {
-          if (!snapshots.hasData) {
-            return const _Uploading();
+        future: _upload,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return _UploadError(message: LocaleKeys.error_unexpectedError.tr());
           }
-
-          final result = snapshots.data;
-          if (result == null) {
-            return const _UploadSuccess();
-          } else {
-            return result.fold(
-              (_) => const _UploadSuccess(),
-              (err) => _UploadError(error: err),
-            );
-          }
+          return snapshot.data?.fold(
+                (_) => const _UploadSuccess(),
+                (error) => _UploadError(message: error.msg),
+              ) ??
+              const _Uploading();
         },
       ),
     );
-  }
-
-  Future<FlowyResult<void, FlowyError>> _uploadFile() async {
-    final importResult = await ImportBackendService.importZipFiles(
-      [ImportZipPB()..filePath = filePath],
-    );
-
-    return importResult;
   }
 }
 
@@ -83,12 +85,12 @@ class _Uploading extends StatelessWidget {
 }
 
 class _UploadError extends StatelessWidget {
-  const _UploadError({required this.error});
+  const _UploadError({required this.message});
 
-  final FlowyError error;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return FlowyText(error.msg, maxLines: 10);
+    return FlowyText(message, maxLines: 10);
   }
 }

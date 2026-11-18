@@ -10,6 +10,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'import_page_widgets.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_plugin.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_import_notion.dart';
 import 'package:appflowy/plugins/import_page/import_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
@@ -29,6 +31,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'enhanced_pdf_import_dialog.dart';
 import 'enhanced_word_import_dialog.dart';
 import 'enhanced_html_import_dialog.dart';
+import 'obsidian_import_dialog.dart';
 
 class ImportPageScreen extends StatefulWidget {
   const ImportPageScreen({super.key});
@@ -40,38 +43,13 @@ class ImportPageScreen extends StatefulWidget {
 class _ImportPageScreenState extends State<ImportPageScreen> {
   @override
   Widget build(BuildContext context) {
-    final pageContent = Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(45.0, 68.0, 45.0, 32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            _buildHeader(),
-            const SizedBox(height: 20),
-
-            // Separator line
-            Container(
-              height: 1,
-              width: double.infinity,
-              color: Theme.of(context).dividerColor,
-            ),
-            const SizedBox(height: 17),
-
-            // Description
-            _buildDescription(),
-            const SizedBox(height: 30),
-
-            // File-based import section
-            _buildFileImportSection(context),
-            const SizedBox(height: 30),
-
-            // Third-party import section
-            // _buildThirdPartyImportSection(),
-          ],
-        ),
-      ),
+    final pageContent = ImportPageContent(
+      onFileImport: (type) => _handleFileImport(context, type),
+      onNotionImport: _handleNotionImport,
+      onObsidianImport: _handleObsidianImport,
+      onOpenSync: () => context.read<TabsBloc>().add(
+            TabsEvent.openPlugin(plugin: KnowledgeBasePlugin(null)),
+          ),
     );
 
     // 侧边栏收起时，在页面左上角显示展开按钮
@@ -105,145 +83,6 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildHeader() {
-    return FlowyText.semibold(
-      "导入或者迁移",
-      fontSize: 20,
-      color: Theme.of(context).colorScheme.onSurface,
-    );
-  }
-
-  Widget _buildDescription() {
-    return Row(
-      children: [
-        Expanded(
-          child: FlowyText(
-            "从其他应用和文件导入数据到 小马AI笔记",
-            fontSize: 20,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-        // const SizedBox(width: 10),
-        // GestureDetector(
-        //   onTap: () {
-        //     // TODO: Show details
-        //   },
-        //   child: FlowyText(
-        //     "了解详情",
-        //     fontSize: 20,
-        //     color: const Color(0xFFF89575), // Orange color from design
-        //     fontWeight: FontWeight.w500,
-        //   ),
-        // ),
-      ],
-    );
-  }
-
-  Widget _buildFileImportSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText(
-          "基于文件导入",
-          fontSize: 16,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(height: 20),
-        
-        // First row: CSV, PDF, Markdown
-        Row(
-          children: [
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.table_chart,
-                title: "CSV",
-                onTap: () => _handleFileImport(context,'csv'),
-              ),
-            ),
-            const SizedBox(width: 30),
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.picture_as_pdf,
-                title: "PDF",
-                onTap: () => _handleFileImport(context,'pdf'),
-              ),
-            ),
-            const SizedBox(width: 30),
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.text_snippet,
-                title: "文本与 Markdown",
-                onTap: () => _handleFileImport(context,'markdown'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        //
-        // // Second row: HTML, Word
-        Row(
-          children: [
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.code,
-                title: "HTML",
-                onTap: () => _handleFileImport(context,'html'),
-              ),
-            ),
-        //     const SizedBox(width: 30),
-        //     Expanded(
-        //       child: ImportFileCard(
-        //         icon: Icons.description,
-        //         title: "Word",
-        //         onTap: () => _handleFileImport('word'),
-        //       ),
-        //     ),
-            const SizedBox(width: 30),
-            const Expanded(child: SizedBox()),
-            const SizedBox(width: 30),
-            const Expanded(child: SizedBox()), // Empty space for alignment
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildThirdPartyImportSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText(
-          "第三方导入",
-          fontSize: 16,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(height: 20),
-        
-        Row(
-          children: [
-            Expanded(
-              child: ImportServiceCard(
-                iconPath: 'assets/images/notion_icon.png', // You'll need to add this asset
-                title: "Notion",
-                subtitle: "你的笔记和笔记本",
-                onTap: () => _handleServiceImport('notion'),
-              ),
-            ),
-            const SizedBox(width: 30),
-            Expanded(
-              child: ImportServiceCard(
-                iconPath: 'assets/images/evernote_icon.png', // You'll need to add this asset
-                title: "Evernote",
-                subtitle: "引入你的笔记和笔记本",
-                onTap: () => _handleServiceImport('evernote'),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -671,26 +510,67 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     }
   }
 
-
-  void _handleServiceImport(String service) async {
+  Future<void> _handleNotionImport() async {
     try {
-      await ImportService.importFromService(service);
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入 Notion'),
+          content: const Text(
+            '请在 Notion 中导出「Markdown 与 CSV」，并开启「包含子页面」，'
+            '然后选择完整 ZIP 文件。\n\n'
+            '此功能需要连接云端。导入完成后，父子页面会保留在新工作区中。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('选择 ZIP 文件'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+      final result = await getIt<FilePickerService>().pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+      );
+      if (!mounted || result == null || result.files.isEmpty) return;
+      final path = result.files.first.path;
+      if (path == null) return;
+      await showDialog<void>(
+        context: context,
+        builder: (_) => NavigatorCustomDialog(
+          hideCancelButton: true,
+          confirm: () {},
+          child: NotionImporter(filePath: path),
+        ),
+      );
+    } catch (error) {
       if (mounted) {
         showToastNotification(
-          message: '正在从 $service 导入数据...',
-          type: ToastificationType.info,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        showToastNotification(
-          message: '导入失败: $e',
+          message: 'Notion 导入失败: $error',
           type: ToastificationType.error,
         );
       }
     }
   }
 
+  Future<void> _handleObsidianImport() async {
+    final count = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const ObsidianImportDialog(),
+    );
+    if (count != null && mounted) {
+      showToastNotification(
+        message: '已保留文件夹层级，导入 $count 篇 Obsidian 笔记到外部导入空间',
+      );
+    }
+  }
 
   Future<void> _handleEnhancedHtmlImport() async {
     try {

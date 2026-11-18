@@ -10,7 +10,7 @@ class ImportPagePlugin {
   static Widget buildScreen() {
     return const ImportPageScreen();
   }
-  
+
   static String get pluginName => "导入页面";
   static String get pluginId => "import_page";
 }
@@ -54,6 +54,9 @@ class ImportPagePluginImpl extends Plugin {
 
 class ImportPagePluginWidgetBuilder extends PluginWidgetBuilder {
   @override
+  EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
   String? get viewName => "导入页面";
 
   @override
@@ -80,5 +83,3 @@ class ImportPagePluginWidgetBuilder extends PluginWidgetBuilder {
   @override
   NavigationCallback get action => (id) {};
 }
-
-
