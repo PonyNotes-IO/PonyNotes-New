@@ -318,80 +318,42 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   }
 
   Widget _thinkingItem(int index) {
-    const descriptions = [
-      '直接回答',
-      '简单问答',
-      '轻量分析',
-      '日常任务，均衡思考',
-      '深入分析',
-      '复杂问题，多步推理',
-      '高难度任务，充分思考',
-    ];
-    final theme = AppFlowyTheme.of(context);
-    final foreground = theme.textColorScheme.primary;
-    final accent = theme.fillColorScheme.themeThick;
+    final foreground = AppFlowyTheme.of(context).textColorScheme.primary;
     final level = AgentModelPreferences.levels[index];
     final selected = index == _thinkingIndex;
     return Semantics(
       selected: selected,
-      child: MenuItemButton(
-        key: ValueKey('agent-thinking-$level'),
-        autofocus: selected,
-        onPressed:
-            widget.enabled && !updating ? () => _select(active, level) : null,
-        style: MenuItemButton.styleFrom(
-          foregroundColor: foreground,
-          backgroundColor: selected ? accent.withValues(alpha: .10) : null,
-          minimumSize: const Size(0, 40),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          visualDensity: VisualDensity.standard,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        trailingIcon: selected
-            ? Icon(Icons.check, size: 16, color: accent)
-            : const SizedBox(width: 16),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 30,
-              child: Text(
-                AgentModelPreferences.labels[index],
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: MenuItemButton(
+          key: ValueKey('agent-thinking-$level'),
+          autofocus: selected,
+          onPressed:
+              widget.enabled && !updating ? () => _select(active, level) : null,
+          style: MenuItemButton.styleFrom(
+            foregroundColor: foreground.withValues(alpha: .8),
+            backgroundColor:
+                selected ? foreground.withValues(alpha: .08) : null,
+            overlayColor: foreground.withValues(alpha: .06),
+            textStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  height: 1.2,
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                descriptions[index],
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: foreground.withValues(alpha: .65),
-                ),
-              ),
-            ),
-            if (level == AgentModelPreferences.defaultLevel)
-              Container(
-                margin: const EdgeInsets.only(left: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                decoration: BoxDecoration(
-                  color: foreground.withValues(alpha: .06),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '默认',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: foreground.withValues(alpha: .65),
-                  ),
-                ),
-              ),
-          ],
+            minimumSize: const Size(0, 18),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            visualDensity: VisualDensity.standard,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          trailingIcon: selected
+              ? Icon(
+                  Icons.check,
+                  size: 12,
+                  color: foreground.withValues(alpha: .8),
+                )
+              : const SizedBox(width: 12),
+          child: Text(AgentModelPreferences.labels[index]),
         ),
       ),
     );
@@ -403,8 +365,6 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     final foreground = theme.textColorScheme.primary;
     final textStyle =
         Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12);
-    final thinkingWidth =
-        (MediaQuery.sizeOf(context).width - 48).clamp(0.0, 300.0);
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
@@ -523,18 +483,20 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
         if (active.supportsReasoning)
           MenuAnchor(
             crossAxisUnconstrained: false,
-            alignmentOffset: Offset(-thinkingWidth, 8),
+            alignmentOffset: const Offset(-90, 8),
             style: MenuStyle(
               backgroundColor: WidgetStatePropertyAll(
-                theme.surfaceColorScheme.layer01,
+                Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF262626)
+                    : theme.surfaceColorScheme.layer01,
               ),
               surfaceTintColor:
                   const WidgetStatePropertyAll(Colors.transparent),
               elevation: const WidgetStatePropertyAll(8),
               padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
-              minimumSize: WidgetStatePropertyAll(Size(thinkingWidth, 0)),
+              minimumSize: const WidgetStatePropertyAll(Size(90, 0)),
               maximumSize:
-                  WidgetStatePropertyAll(Size(thinkingWidth, double.infinity)),
+                  const WidgetStatePropertyAll(Size(90, double.infinity)),
               side: WidgetStatePropertyAll(
                 BorderSide(color: foreground.withValues(alpha: .12)),
               ),
@@ -547,42 +509,19 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
             ),
             menuChildren: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '思考强度',
-                      style: textStyle?.copyWith(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: foreground,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '按任务难度选择思考深度',
-                      style: textStyle?.copyWith(
-                        fontSize: 11,
-                        color: foreground.withValues(alpha: .65),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              for (var i = 0; i < AgentModelPreferences.levels.length; i++)
-                _thinkingItem(i),
-              Divider(height: 13, color: foreground.withValues(alpha: .08)),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 child: Text(
-                  '思考越深入，通常耗时越长',
+                  '思考强度',
                   style: textStyle?.copyWith(
-                    fontSize: 11,
-                    color: foreground.withValues(alpha: .65),
+                    fontSize: 10,
+                    height: 1.4,
+                    color: foreground.withValues(alpha: .45),
                   ),
                 ),
               ),
+              Divider(height: 1, color: foreground.withValues(alpha: .06)),
+              for (var i = 0; i < AgentModelPreferences.levels.length; i++)
+                _thinkingItem(i),
             ],
             builder: (context, controller, child) => Tooltip(
               message: '思考强度',
@@ -602,9 +541,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      '思考 · ${AgentModelPreferences.labels[_thinkingIndex]}',
-                    ),
+                    Text(AgentModelPreferences.labels[_thinkingIndex]),
                     const SizedBox(width: 4),
                     Icon(
                       controller.isOpen ? Icons.expand_less : Icons.expand_more,

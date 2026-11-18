@@ -344,6 +344,7 @@ void main() {
         'reindex_page_links',
         'create_workspace',
         'open_workspace',
+        'create_space',
         'create_page',
         'rename_page',
         'move_page',
@@ -358,14 +359,14 @@ void main() {
   });
 
   // 回归：注册表一度只填了 3 个工具，内部 AI 因此看不到检索与写操作。
-  test('工具注册表覆盖全部 36 个工具，只读/破坏性标记正确', () async {
+  test('工具注册表覆盖全部 37 个工具，只读/破坏性标记正确', () async {
     final tools = McpTools(endpoint: 'test', version: '1.0.0');
     final specs = tools.toolSpecs;
 
-    expect(specs.length, 36);
+    expect(specs.length, 37);
     expect(
       specs.map((spec) => spec.name).toSet().length,
-      36,
+      37,
       reason: '工具名不应重复',
     );
     expect(
@@ -395,7 +396,7 @@ void main() {
         'remove_note_reference',
       ]),
     );
-    expect(specs.where((spec) => !spec.readOnly).length, 24);
+    expect(specs.where((spec) => !spec.readOnly).length, 25);
 
     final unknown = await tools.executeTool('no_such_tool', const {});
     expect(unknown.isError, isTrue);

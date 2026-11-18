@@ -114,7 +114,9 @@ class AgentInternalService {
           (dynamic value) => AiProviderConfig(
             modelName: value['id'] as String,
             displayName: value['name'] as String? ?? '',
-            supportsReasoning: value['supports_reasoning'] == true,
+            supportsReasoning: value['supports_reasoning'] as bool? ??
+                {'deepseek-chat', 'qwen3-vl-plus', 'doubao'}
+                    .contains(value['id']),
             providerName: value['provider_name'] as String? ?? '',
             upstreamModel: value['upstream_model'] as String? ?? '',
             reasoningModel: value['reasoning_model'] as String? ?? '',

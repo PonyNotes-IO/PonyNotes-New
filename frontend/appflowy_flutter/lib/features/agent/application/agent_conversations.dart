@@ -133,10 +133,10 @@ class AgentConversations extends ChangeNotifier {
       }
       if (_disposed || epoch != _epoch) return null;
       final conversation = AgentConversation.fromJson(row);
+      _pendingCreates.remove(visibility);
       if (conversation.visibility != visibility) {
         throw StateError('服务端尚未支持协作对话，请更新服务后重试');
       }
-      _pendingCreates.remove(visibility);
       entries.insert(0, conversation);
       return conversation;
     } catch (e) {

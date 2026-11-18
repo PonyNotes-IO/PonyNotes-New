@@ -78,21 +78,29 @@ void main() {
     expect(requests[1]['id'], requests[3]['id']);
     expect(requests[0]['id'], isNot(requests[1]['id']));
   });
-  test('an older server cannot silently create a private collaborative chat',
+  test('an older server rejects collaborative creation and upgrade can retry',
       () async {
+    final requests = <Map>[];
     final store = AgentConversations(
       workspace: () async => 'workspace',
       service: AgentService(
         account: () async => account,
-        client: MockClient(
-          (request) async => http.Response(
-            request.method == 'GET'
-                ? '{"conversations":[]}'
-                : '{"id":"old-server","title":"共同讨论"}',
+        client: MockClient((request) async {
+          if (request.method == 'GET') {
+            return http.Response('{"conversations":[]}', 200);
+          }
+          final row = jsonDecode(request.body) as Map;
+          requests.add(Map.of(row));
+          if (requests.length == 1) row.remove('visibility');
+          if (requests.length > 1 && row['id'] == requests.first['id']) {
+            return http.Response('conversation ID already used', 409);
+          }
+          return http.Response(
+            jsonEncode(row),
             200,
             headers: {'content-type': 'application/json; charset=utf-8'},
-          ),
-        ),
+          );
+        }),
       ),
     );
     addTearDown(store.dispose);
@@ -106,6 +114,13 @@ void main() {
     );
     expect(store.entries, isEmpty);
     expect(store.error, contains('服务端尚未支持'));
+    final retried = await store.create(
+      '共同讨论',
+      visibility: AgentConversationVisibility.shared,
+    );
+    expect(retried!.shared, true);
+    expect(requests.last['id'], isNot(requests.first['id']));
+    expect(store.error, isNull);
   });
   test(
       'independent history paginates and creating a conversation never creates a note',
