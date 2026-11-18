@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'agent_automation.dart';
 import 'agent_internal_service.dart';
+import 'agent_error.dart';
 
 /// Thin client for the Cloud automation proxy. Cloud owns the WeKnora session
 /// and the model credentials, so the client only ever sees workspace-scoped
@@ -124,11 +125,12 @@ class AgentAutomationService {
     }
     final client = _client ?? http.Client();
     try {
-      final response = await http.Response.fromStream(await client.send(request))
-          .timeout(const Duration(seconds: 60));
+      final response =
+          await http.Response.fromStream(await client.send(request))
+              .timeout(const Duration(seconds: 60));
       final text = utf8.decode(response.bodyBytes);
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        _fail(response.statusCode, text);
+        checkAgentResponse(response.statusCode, text);
       }
       if (response.statusCode == 204 || text.trim().isEmpty) {
         return const {};
@@ -137,23 +139,5 @@ class AgentAutomationService {
     } finally {
       if (_client == null) client.close();
     }
-  }
-
-  static Never _fail(int status, String body) {
-    if (status == 401) throw StateError('登录已过期，请重新登录');
-    if (status == 403) throw StateError('无权访问此工作区');
-    var message = body.trim();
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map) {
-        final value = decoded['message'] ?? decoded['error'];
-        if (value != null) message = value.toString();
-      }
-    } catch (_) {
-      // Non-JSON error bodies are already readable enough.
-    }
-    throw StateError(
-      message.isEmpty ? '自动化请求失败（$status）' : message,
-    );
   }
 }

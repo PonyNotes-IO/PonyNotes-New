@@ -98,9 +98,13 @@ class _AiModeButtonState extends State<AiModeButton> {
     try {
       final agents = await load();
       if (mounted && version == _loadVersion) setState(() => _agents = agents);
-    } catch (_) {
+    } catch (error) {
       if (mounted && version == _loadVersion) {
-        setState(() => _loadError = '智能体加载失败，请重试');
+        setState(() {
+          _loadError = error is StateError
+              ? error.message.toString()
+              : '智能体加载失败，请检查网络后重试';
+        });
       }
     } finally {
       if (mounted && version == _loadVersion) setState(() => _loading = false);

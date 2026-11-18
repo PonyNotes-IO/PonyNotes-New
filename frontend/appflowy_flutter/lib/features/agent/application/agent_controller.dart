@@ -32,6 +32,7 @@ class AgentActivity {
   final Map<String, dynamic> arguments;
   String status = 'running';
   String result = '';
+  Map<String, dynamic> resultData = {};
   String? before;
   String? after;
 }
@@ -202,7 +203,7 @@ class AgentController extends ChangeNotifier {
       model = selected.modelName;
       unawaited(refreshCredits());
     } catch (e) {
-      if (epoch == _epoch) error = '$e';
+      if (epoch == _epoch) error = agentDisplayText('$e');
     } finally {
       if (epoch == _epoch) {
         connecting = false;
@@ -841,6 +842,7 @@ class AgentController extends ChangeNotifier {
         );
         activity.status = data['success'] == true ? 'completed' : 'failed';
         activity.result = '${event['content'] ?? data['error'] ?? ''}';
+        activity.resultData = data;
       case 'references':
         references
           ..clear()
@@ -916,7 +918,7 @@ class AgentController extends ChangeNotifier {
       }
     } catch (e) {
       if (epoch == _epoch && run == _run) {
-        error = '会话历史刷新失败：$e';
+        error = '会话历史刷新失败：${agentDisplayText('$e')}';
         changed();
       }
     }
@@ -1000,7 +1002,7 @@ class AgentController extends ChangeNotifier {
       running = false;
       await _reloadHistory();
     } catch (e) {
-      error = '$e';
+      error = agentDisplayText('$e');
       changed();
     }
   }

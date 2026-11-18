@@ -254,6 +254,7 @@ class _AgentPickerPanelState extends State<AgentPickerPanel> {
                     in widget.agents.where((a) => a.group == group.key))
                   _entry(entry),
                 if (!widget.loading &&
+                    widget.error == null &&
                     !widget.agents.any((a) => a.group == group.key))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
