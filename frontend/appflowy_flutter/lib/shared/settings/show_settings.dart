@@ -20,17 +20,17 @@ void dismissSettingsDialog() {
 }
 
 // show settings dialog with user profile for fully customized settings dialog
-void showSettingsDialog(
+Future<void> showSettingsDialog(
   BuildContext context,
   UserProfilePB userProfile, [
   UserWorkspaceBloc? bloc,
   SettingsPage? initPage,
-]) {
+]) async {
   final focusManager = AFFocusManager.maybeOf(context);
   if (focusManager != null) {
     focusManager.notifyLoseFocus();
   }
-  showDialog(
+  await showDialog<void>(
     context: context,
     builder: (dialogContext) => MultiBlocProvider(
       key: settingsDialogKey,

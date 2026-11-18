@@ -1,7 +1,9 @@
+import 'dart:math' as math;
+
+import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/application/knowledge_model_service.dart';
 import 'package:appflowy/features/ai_internal/presentation/custom_chat_model_form.dart';
-import 'package:appflowy/features/ai_internal/presentation/knowledge_model_bindings.dart';
 import 'package:appflowy/features/ai_internal/presentation/knowledge_model_form.dart';
 import 'package:appflowy/features/ai_internal/presentation/knowledge_model_widgets.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -15,11 +17,13 @@ class AiProviderSettingsView extends StatefulWidget {
     this.creatorName = '',
     this.workspaceId,
     this.service,
+    this.internalService,
   });
   final ValueChanged<AiProviderConfig>? onSaved;
   final String creatorName;
   final String? workspaceId;
   final KnowledgeModelService? service;
+  final AgentInternalService? internalService;
   @override
   State<AiProviderSettingsView> createState() => _AiProviderSettingsViewState();
 }
@@ -27,17 +31,40 @@ class AiProviderSettingsView extends StatefulWidget {
 class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   KnowledgeModelService? _service;
   List<KnowledgeModel> _models = [];
+  List<AiProviderConfig> _internalModels = [];
+  bool _loadingInternal = true;
+  String? _internalError;
   KnowledgeModelType? _filter;
   bool _loading = true;
   bool _editing = false;
-  bool _binding = false;
   KnowledgeModel? _initial;
   String? _error;
   String? _deleting;
   @override
   void initState() {
     super.initState();
-    if (widget.onSaved == null) _load();
+    if (widget.onSaved == null) {
+      _load();
+      _loadInternal();
+    }
+  }
+
+  Future<void> _loadInternal() async {
+    setState(() {
+      _loadingInternal = true;
+      _internalError = null;
+    });
+    try {
+      final models =
+          await (widget.internalService ?? AgentInternalService()).models();
+      if (mounted) setState(() => _internalModels = models);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _internalError = '$e'.replaceFirst('Bad state: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _loadingInternal = false);
+    }
   }
 
   @override
@@ -61,7 +88,11 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
       }
       _service = service;
       final models = await service.list();
-      if (mounted) setState(() => _models = models);
+      if (mounted) {
+        setState(() {
+          _models = models;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _error = modelError(e));
     } finally {
@@ -91,13 +122,6 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         creatorName: widget.creatorName,
       );
     }
-    if (_binding) {
-      return KnowledgeModelBindings(
-        service: _service!,
-        models: _models,
-        onBack: () => setState(() => _binding = false),
-      );
-    }
     if (_editing) {
       return KnowledgeModelForm(
         models: _models,
@@ -123,35 +147,34 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _header(context),
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
           KnowledgeModelTypes(
             spread: true,
             selected: _filter,
-            models: _models,
+            models: _displayModels,
             onSelected: (type) => setState(() => _filter = type),
           ),
-          if (_loading) ...[
-            const SizedBox(height: 20),
-            const LinearProgressIndicator(),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 16),
+          const SizedBox(height: 28),
+          _title(context, '小马内置模型'),
+          const SizedBox(height: 12),
+          if (_loadingInternal) const LinearProgressIndicator(),
+          if (_internalError != null) ...[
             Text(
-              _error!,
+              _internalError!,
               style: TextStyle(color: theme.textColorScheme.error),
             ),
+            TextButton(onPressed: _loadInternal, child: const Text('重试内置模型')),
+          ],
+          _cards(context, builtin: true),
+          const SizedBox(height: 36),
+          _title(context, '自定义模型'),
+          const SizedBox(height: 12),
+          if (_loading) const LinearProgressIndicator(),
+          if (_error != null) ...[
+            Text(_error!, style: TextStyle(color: theme.textColorScheme.error)),
             TextButton(onPressed: _load, child: const Text('重试')),
           ],
-          if (!_loading && _error == null) ...[
-            const SizedBox(height: 24),
-            _title(context, '小马内置模型'),
-            const SizedBox(height: 10),
-            _cards(context, builtin: true),
-            const SizedBox(height: 36),
-            _title(context, '自定义模型'),
-            const SizedBox(height: 10),
-            _cards(context, builtin: false),
-          ],
+          _cards(context, builtin: false),
         ],
       ),
     );
@@ -182,23 +205,6 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ),
       ],
     );
-    final add = OutlinedButton.icon(
-      onPressed: _loading || _service?.canManage != true ? null : () => _edit(),
-      icon: const Icon(Symbols.add, size: 16, weight: 400),
-      label: const Text('添加模型'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: modelAccent,
-        textStyle: DefaultTextStyle.of(context)
-            .style
-            .copyWith(fontSize: 12, fontWeight: FontWeight.w500),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        minimumSize: const Size(0, 32),
-        side: BorderSide(
-          color: theme.textColorScheme.primary.withValues(alpha: .1),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth <
@@ -208,7 +214,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
             children: [
               heading,
               const SizedBox(height: 12),
-              add,
+              _addButton(context),
             ],
           );
         }
@@ -217,12 +223,36 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
           children: [
             Expanded(child: heading),
             const SizedBox(width: 16),
-            add,
+            _addButton(context),
           ],
         );
       },
     );
   }
+
+  Widget _addButton(BuildContext context) => OutlinedButton.icon(
+        onPressed: _loading ||
+                (_service?.canManage != true && _service?.canManageChat != true)
+            ? null
+            : () => _edit(),
+        icon: const Icon(Symbols.add, size: 16, weight: 400),
+        label: const Text('添加模型'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: modelAccent,
+          textStyle: DefaultTextStyle.of(context)
+              .style
+              .copyWith(fontSize: 12, fontWeight: FontWeight.w500),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          minimumSize: const Size(0, 32),
+          side: BorderSide(
+            color: AppFlowyTheme.of(context)
+                .textColorScheme
+                .primary
+                .withValues(alpha: .1),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
 
   void _edit([KnowledgeModel? model]) => setState(() {
         _initial = model;
@@ -237,16 +267,51 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
           color: AppFlowyTheme.of(context).textColorScheme.primary,
         ),
       );
+  // Display-only entries: Agent aliases never enter forms or UUID model bindings.
+  List<KnowledgeModel> get _displayModels => [
+        for (final model in _internalModels)
+          KnowledgeModel({
+            'id': 'agent:${model.modelName}',
+            'name': model.modelName,
+            'display_name': model.label,
+            'type': KnowledgeModelType.chat.apiValue,
+            'is_builtin': true,
+            'can_edit': false,
+            'parameters': {
+              'provider': switch (model.providerName) {
+                '火山引擎' => 'volcengine',
+                '阿里云 DashScope' => 'aliyun',
+                'DeepSeek' => 'deepseek',
+                _ => 'generic',
+              },
+            },
+          }),
+        ..._models.where(
+          (model) =>
+              model.builtin || model.canEdit || model.id.startsWith('custom:'),
+        ),
+      ];
+
+  AiProviderConfig? _agentModel(KnowledgeModel model) => _internalModels
+      .where((m) => model.id == 'agent:${m.modelName}')
+      .firstOrNull;
+
   KnowledgeModelProvider? _provider(KnowledgeModel model) =>
-      _service!.catalog.where((p) => p.id == model.provider).firstOrNull;
+      _service?.catalog.where((p) => p.id == model.provider).firstOrNull;
+
   Widget _cards(BuildContext context, {required bool builtin}) {
     final theme = AppFlowyTheme.of(context);
-    final visible = _models
+    final visible = _displayModels
         .where(
           (m) => m.builtin == builtin && (_filter == null || m.type == _filter),
         )
         .toList();
     if (visible.isEmpty) {
+      if (_loading ||
+          (builtin && _loadingInternal) ||
+          (builtin ? _internalError != null : _error != null)) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Text(
@@ -260,106 +325,154 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
     }
     return LayoutBuilder(
       builder: (context, c) {
-        final minWidth = 200 * MediaQuery.textScalerOf(context).scale(14) / 14;
-        final columns = ((c.maxWidth + 8) / (minWidth + 8)).floor().clamp(1, 3);
-        final width = (c.maxWidth - (columns - 1) * 8) / columns;
+        final minWidth = 240 * MediaQuery.textScalerOf(context).scale(14) / 14;
+        final columns =
+            ((c.maxWidth + 12) / (minWidth + 12)).floor().clamp(1, 3);
+        final width =
+            ((c.maxWidth - (columns - 1) * 12) / columns).clamp(0.0, 306.0);
         return Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 12,
+          runSpacing: 12,
           children: [
             for (final model in visible)
               SizedBox(
                 width: width,
-                key: ValueKey('model-card-${model.id}'),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 74),
-                  decoration: modelSurface(context),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () {
-                        if (builtin || _service?.canManage != true) {
-                          _details(model);
-                          return;
-                        }
-                        _edit(model);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 11,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Tooltip(
-                                    message: model.label,
-                                    child: Text(
-                                      model.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        height: 1.4,
-                                        fontWeight: FontWeight.w600,
-                                        color: theme.textColorScheme.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (!builtin &&
-                                    model.data['status'] != null) ...[
-                                  const SizedBox(width: 4),
-                                  _status(context, model),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              height: 24,
-                              child: Row(
-                                children: [
-                                  Expanded(child: _providerLine(model)),
-                                  if (!builtin &&
-                                      _service?.canManage == true) ...[
-                                    const SizedBox(width: 4),
-                                    _action(
-                                      '编辑模型',
-                                      Symbols.edit,
-                                      () => _edit(model),
-                                    ),
-                                    _action(
-                                      '知识库使用设置',
-                                      Symbols.link,
-                                      () => setState(() => _binding = true),
-                                    ),
-                                    _action(
-                                      '删除模型',
-                                      Symbols.delete,
-                                      _deleting == null
-                                          ? () => _delete(model)
-                                          : null,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                key: ValueKey(
+                  _agentModel(model) != null
+                      ? 'agent-model-card-${model.name}'
+                      : 'model-card-${model.id}',
                 ),
+                child: _modelCard(context, model, builtin: builtin),
               ),
           ],
         );
       },
+    );
+  }
+
+  Widget _modelCard(
+    BuildContext context,
+    KnowledgeModel model, {
+    required bool builtin,
+  }) {
+    final theme = AppFlowyTheme.of(context);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final canEdit = model.canEdit &&
+        (model.id.startsWith('custom:')
+            ? _service?.canManageChat == true
+            : _service?.canManage == true);
+    final title = Text(
+      model.label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 14,
+        height: 1.4,
+        fontWeight: FontWeight.w600,
+        color: theme.textColorScheme.primary,
+      ),
+    );
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: builtin
+                    ? title
+                    : Tooltip(message: model.label, child: title),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 24,
+            child: Row(
+              children: [
+                Expanded(child: _providerLine(model)),
+                if (!builtin) ...[
+                  const SizedBox(width: 4),
+                  _action(
+                    '编辑模型',
+                    Symbols.edit,
+                    canEdit ? () => _edit(model) : null,
+                  ),
+                  // shortcut: sharing has no defined behavior yet; keep this slot inert until specified.
+                  GestureDetector(
+                    key: ValueKey('model-share-placeholder-${model.id}'),
+                    behavior: HitTestBehavior.opaque,
+                    excludeFromSemantics: true,
+                    onTap: () {},
+                    child: Semantics(
+                      label: '分享',
+                      enabled: false,
+                      child: SizedBox.square(
+                        dimension: 24,
+                        child: Transform.rotate(
+                          angle: -math.pi / 4,
+                          child: Icon(
+                            Symbols.link,
+                            size: 16,
+                            weight: 350,
+                            color: theme.textColorScheme.primary
+                                .withValues(alpha: .5),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  _action(
+                    '删除模型',
+                    Symbols.delete,
+                    canEdit && _deleting == null ? () => _delete(model) : null,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    return Container(
+      constraints: const BoxConstraints(minHeight: 100),
+      decoration: BoxDecoration(
+        color: dark ? theme.backgroundColorScheme.primary : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: dark
+              ? theme.textColorScheme.primary.withValues(alpha: .12)
+              : const Color(0xFFE9E9E9),
+          width: .5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? .16 : .05),
+            offset: const Offset(0, 2),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: builtin
+          ? content
+          : Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                children: [
+                  content,
+                  if (model.data['status'] != null)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: _status(context, model),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -413,7 +526,9 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
       builder: (context) => AlertDialog(
         title: const Text('删除模型'),
         content: Text(
-          '确定删除“${model.label}”及其保存的密钥？此操作无法撤销。正在使用的模型需先在知识库中解除绑定。',
+          model.id.startsWith('custom:')
+              ? '确定删除“${model.label}”？删除后，你和工作区成员将无法继续使用此模型。'
+              : '确定删除“${model.label}”及其保存的密钥？此操作无法撤销。正在使用的模型需先在知识库中解除绑定。',
         ),
         actions: [
           TextButton(
@@ -450,13 +565,20 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
 
   Widget _providerLine(KnowledgeModel model) {
     final provider = _provider(model);
+    final agent = _agentModel(model);
+    final label = agent != null && agent.providerName.isNotEmpty
+        ? agent.providerName
+        : provider?.id == 'aliyun'
+            ? '阿里云'
+            : provider?.label ??
+                (model.id.startsWith('custom:') ? '自定义接口' : '小马笔记');
     return Row(
       children: [
         KnowledgeProviderIcon(provider: provider, size: 16),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
-            '${provider?.id == 'aliyun' ? '阿里云' : provider?.label ?? '小马笔记'} | ${model.type.label}',
+            '$label | ${model.type.label}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -471,35 +593,4 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
       ],
     );
   }
-
-  void _details(KnowledgeModel model) => showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(model.label),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _providerLine(model),
-              const SizedBox(height: 16),
-              Text(
-                model.builtin ? '由小马知识库提供。可在“知识库使用设置”中选用。' : '此模型由工作区所有者管理。',
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                setState(() => _binding = true);
-              },
-              child: const Text('知识库使用设置'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('关闭'),
-            ),
-          ],
-        ),
-      );
 }

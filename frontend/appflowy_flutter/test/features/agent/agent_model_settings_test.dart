@@ -18,6 +18,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../widget_test/widget_test_wrapper.dart';
 
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/presentation/settings/settings_dialog.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+class _Workspace extends MockBloc<UserWorkspaceEvent, UserWorkspaceState>
+    implements UserWorkspaceBloc {}
+
 void main() {
   const first = AiProviderConfig(
     baseUrl: 'https://first.example/v1',
@@ -61,7 +74,7 @@ void main() {
       ),
       client: MockClient(
         (_) async => http.Response(
-          '{"data":{"models":[{"id":"deepseek-chat","name":"DeepSeek"},{"id":"qwen3-vl-plus","name":"通义千问"},{"id":"doubao","name":"豆包"}]}}',
+          '{"data":[{"id":"deepseek-chat","name":"DeepSeek","supports_reasoning":true},{"id":"qwen3-vl-plus","name":"通义千问","supports_reasoning":false},{"id":"doubao","name":"豆包","supports_reasoning":true}]}',
           200,
           headers: {'content-type': 'application/json; charset=utf-8'},
         ),
@@ -94,7 +107,7 @@ void main() {
       (tester) async {
     final refresh = Completer<http.Response>();
     final response = http.Response(
-      '{"data":{"models":[{"id":"doubao","name":"豆包"}]}}',
+      '{"data":[{"id":"doubao","name":"豆包","supports_reasoning":true}]}',
       200,
       headers: {'content-type': 'application/json; charset=utf-8'},
     );
@@ -310,16 +323,98 @@ void main() {
     expect(find.text(second.modelName), findsNothing);
   });
 
-  testWidgets('custom configuration is available directly from the model menu',
+  testWidgets(
+      'workspace custom models refresh and select without copying a key',
       (tester) async {
+    final requests = <http.Request>[];
+    final service = AgentInternalService(
+      account: () async => const AgentCloudAccount(
+        baseUrl: 'https://cloud.test',
+        accessToken: 'login',
+        userId: '2',
+      ),
+      client: MockClient((request) async {
+        requests.add(request);
+        if (request.url.path.contains('/custom-models/')) {
+          return http.Response(
+            request.url.path.endsWith('/home')
+                ? '{"models":[{"id":"custom:11111111-1111-4111-8111-111111111111","name":"workspace-reasoner","workspace_id":"home","parameters":{"spec":{"reasoning":true}}}]}'
+                : '{"models":[]}',
+            200,
+          );
+        }
+        return http.Response('{"data":[{"id":"builtin","name":"平台模型"}]}', 200);
+      }),
+    );
     AiProviderConfig? selected;
+    Widget view(String workspace) => WidgetTestWrapper(
+          child: AgentModelSettingsButton(
+            workspaceId: workspace,
+            internalService: service,
+            onChanged: (config, _) async => selected = config,
+          ),
+        );
+    await tester.pumpWidget(view('home'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('workspace-reasoner'));
+    await tester.pumpAndSettle();
+    expect(selected?.customModelId, '11111111-1111-4111-8111-111111111111');
+    expect(selected?.apiKey, isEmpty);
+    expect(await storage.loadProfiles(), isEmpty);
+    await tester.pumpWidget(view('other'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('选择模型'));
+    await tester.pumpAndSettle();
+    expect(find.text('workspace-reasoner'), findsNothing);
+    expect(
+      requests.where((r) => r.url.path.endsWith('/other')).isNotEmpty,
+      true,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'configure opens full desktop settings on the model page at design size',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final profile = UserProfilePB()
+      ..name = '马同学'
+      ..workspaceType = WorkspaceTypePB.LocalW;
+    final workspace = _Workspace();
+    whenListen(
+      workspace,
+      const Stream<UserWorkspaceState>.empty(),
+      initialState: UserWorkspaceState.initial(profile),
+    );
+    final appearance = DocumentAppearanceCubit();
+    getIt.registerSingleton<SubscriptionSuccessListenable>(
+      SubscriptionSuccessListenable(),
+    );
+    addTearDown(() async {
+      await getIt.unregister<SubscriptionSuccessListenable>();
+      await workspace.close();
+      await appearance.close();
+    });
+    final boundaryKey = GlobalKey();
     await tester.pumpWidget(
-      WidgetTestWrapper(
-        child: AgentModelSettingsButton(
-          currentConfig: first,
-          onChanged: (config, _) async {
-            selected = config;
-          },
+      RepaintBoundary(
+        key: boundaryKey,
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider<UserWorkspaceBloc>.value(value: workspace),
+            BlocProvider<DocumentAppearanceCubit>.value(value: appearance),
+          ],
+          child: WidgetTestWrapper(
+            child: Theme(
+              data: ThemeData(platform: TargetPlatform.windows),
+              child: const AgentModelSettingsButton(currentConfig: first),
+            ),
+          ),
         ),
       ),
     );
@@ -327,28 +422,22 @@ void main() {
     await tester.tap(find.byTooltip('选择模型'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('配置自定义模型'));
-    await tester.pumpAndSettle();
-    expect(find.byType(AiProviderSettingsView), findsOneWidget);
-    expect(find.text('模型地址'), findsOneWidget);
-    expect(find.text('支持推理 / 思考程度'), findsOneWidget);
-    await tester.ensureVisible(find.text('保存'));
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-    expect(find.text('请填写模型地址、模型名称和 API Key。'), findsOneWidget);
-    expect(find.byType(AiProviderSettingsView), findsOneWidget);
-    await tester.enterText(
-      find.byType(TextField).at(0),
-      'https://custom.example/v1',
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SettingsDialog), findsOneWidget);
+    expect(
+      tester.widget<SettingsDialog>(find.byType(SettingsDialog)).initPage,
+      SettingsPage.aiProvider,
     );
-    await tester.enterText(find.byType(TextField).at(1), 'my-custom-model');
-    await tester.enterText(find.byType(TextField).at(2), 'custom-key');
-    await tester.ensureVisible(find.text('保存'));
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(Scaffold)), const Size(1261, 800));
+    tester.view.physicalSize = const Size(1000, 700);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.getSize(find.byType(Scaffold)), const Size(920, 676));
+    expect(tester.takeException(), isNull);
+
     expect(find.byType(AiProviderSettingsView), findsNothing);
-    expect(selected?.modelName, 'my-custom-model');
-    expect(selected?.apiKey, 'custom-key');
-    expect(find.text('my-custom-model'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
   });
 
   testWidgets('thinking choices support keyboard selection and Escape',
@@ -523,7 +612,7 @@ void main() {
                                 ),
                                 client: MockClient(
                                   (_) async => http.Response(
-                                    '{"data":{"models":[{"id":"deepseek-chat","name":"DeepSeek"},{"id":"qwen3-vl-plus","name":"通义千问"},{"id":"doubao","name":"豆包"}]}}',
+                                    '{"data":[{"id":"deepseek-chat","name":"DeepSeek","supports_reasoning":true},{"id":"qwen3-vl-plus","name":"通义千问","supports_reasoning":false},{"id":"doubao","name":"豆包","supports_reasoning":true}]}',
                                     200,
                                     headers: {
                                       'content-type':

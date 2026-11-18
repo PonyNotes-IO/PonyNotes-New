@@ -128,24 +128,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    const goldenRatio = 1.618;
     const settingsMenuWidthRatio = 0.275;
     final horizontalMargin = screenSize.width < 900 ? 24.0 : 80.0;
     final verticalMargin = screenSize.height < 720 ? 24.0 : 80.0;
-    final availableWidth = math.max(360.0, screenSize.width - horizontalMargin);
-    final availableHeight = math.max(420.0, screenSize.height - verticalMargin);
-    final minWidth = math.min(720.0, availableWidth);
-    final maxWidth = math.min(1120.0, availableWidth);
-    final width = math.min(
-      maxWidth,
-      math.max(minWidth, screenSize.width * 0.72),
-    );
-    final minHeight = math.min(560.0, availableHeight);
-    final maxHeight = math.min(760.0, availableHeight);
-    final height = math.min(
-      maxHeight,
-      math.max(minHeight, width / goldenRatio),
-    );
+    final width = math.min(1261.0, screenSize.width - horizontalMargin);
+    final height = math.min(800.0, screenSize.height - verticalMargin);
     final settingsMenuWidth = math.min(
       360.0,
       math.max(300.0, width * settingsMenuWidthRatio),
@@ -163,11 +150,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
         builder: (context, state) {
           return FlowyDialog(
             width: width,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: horizontalMargin / 2,
+              vertical: verticalMargin / 2,
+            ),
             backgroundColor: theme.backgroundColorScheme.primary,
             constraints: BoxConstraints(
               minWidth: width,
               maxWidth: width,
-              minHeight: minHeight,
+              minHeight: height,
               maxHeight: height,
             ),
             expandHeight: false,

@@ -1,6 +1,9 @@
 import 'dart:async';
 
-import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/mobile/presentation/setting/ai_internal/mobile_internal_ai_provider_page.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flowy_svg/flowy_svg.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
@@ -13,36 +16,19 @@ import '../application/agent_model_preferences.dart';
 import '../application/agent_internal_service.dart';
 import 'agent_model_details.dart';
 
-Future<AiProviderConfig?> showAgentModelSettings(BuildContext context) {
-  final creatorName =
-      context.read<UserWorkspaceBloc?>()?.state.userProfile.name ?? '';
-  return showDialog<AiProviderConfig>(
-    context: context,
-    builder: (context) => Dialog(
-      child: SizedBox(
-        width: 640,
-        height: MediaQuery.sizeOf(context).height * .8,
-        child: Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: '关闭模型设置',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ),
-            Expanded(
-              child: AiProviderSettingsView(
-                creatorName: creatorName,
-                onSaved: (config) => Navigator.pop(context, config),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+Future<void> openAgentModelSettings(BuildContext context) async {
+  final platform = Theme.of(context).platform;
+  if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) {
+    await context.push(MobileInternalAiProviderPage.routeName);
+  } else {
+    final bloc = context.read<UserWorkspaceBloc>();
+    await showSettingsDialog(
+      context,
+      bloc.state.userProfile,
+      bloc,
+      SettingsPage.aiProvider,
+    );
+  }
 }
 
 class AgentModelSettingsButton extends StatefulWidget {
@@ -53,11 +39,13 @@ class AgentModelSettingsButton extends StatefulWidget {
     this.currentConfig,
     this.currentThinking,
     this.internalService,
+    this.workspaceId,
   });
   final bool enabled;
   final AiProviderConfig? currentConfig;
   final String? currentThinking;
   final AgentInternalService? internalService;
+  final String? workspaceId;
   final Future<void> Function(AiProviderConfig config, String thinking)?
       onChanged;
 
@@ -67,22 +55,34 @@ class AgentModelSettingsButton extends StatefulWidget {
 }
 
 class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
-  final storage = const AiProviderConfigStorage();
   AiProviderConfig active = const AiProviderConfig();
   List<AiProviderConfig> profiles = [];
   List<AiProviderConfig> internalModels = [];
   String? internalError;
+  String? customError;
   bool loadingInternal = true;
   late final internal = widget.internalService ?? AgentInternalService();
   String thinking = AgentModelPreferences.defaultLevel;
   bool updating = false;
   int loadGeneration = 0;
   final modelMenuHeaderKey = GlobalKey();
+  String? loadedWorkspaceId;
+  bool loaded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final workspaceId = widget.workspaceId ??
+        context
+            .watch<UserWorkspaceBloc?>()
+            ?.state
+            .currentWorkspace
+            ?.workspaceId;
+    if (!loaded || loadedWorkspaceId != workspaceId) {
+      loaded = true;
+      loadedWorkspaceId = workspaceId;
+      _load();
+    }
   }
 
   @override
@@ -90,13 +90,44 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     super.didUpdateWidget(oldWidget);
     if (widget.currentConfig != null) active = widget.currentConfig!;
     if (widget.currentThinking != null) thinking = widget.currentThinking!;
+    if (oldWidget.workspaceId != widget.workspaceId) _load();
   }
 
   Future<void> _load({AiProviderConfig? selected}) async {
     final generation = ++loadGeneration;
     try {
       var config = selected ?? widget.currentConfig ?? const AiProviderConfig();
-      final saved = await storage.loadProfiles();
+      final workspaceId = widget.workspaceId ??
+          context
+              .read<UserWorkspaceBloc?>()
+              ?.state
+              .currentWorkspace
+              ?.workspaceId;
+      final saved = await internal.legacyProfiles();
+      List<AiProviderConfig> shared = [];
+      String? customFailure;
+      if (workspaceId != null) {
+        try {
+          shared = (await internal.customModels(workspaceId, personal: true))
+              .map(AgentInternalService.customConfig)
+              .toList();
+        } catch (_) {
+          customFailure = '自定义模型加载失败，重新打开菜单重试';
+        }
+      }
+      saved.removeWhere(
+        (p) => shared
+            .any((m) => m.baseUrl == p.baseUrl && m.modelName == p.modelName),
+      );
+      saved.insertAll(0, shared);
+      final requested = selected ?? widget.currentConfig;
+      final current = requested != null &&
+              requested.customModelId.isNotEmpty &&
+              customFailure == null
+          ? shared
+              .where((m) => m.customModelId == requested.customModelId)
+              .firstOrNull
+          : requested;
       final level =
           widget.currentThinking ?? await AgentModelPreferences.loadThinking();
       if (!mounted || generation != loadGeneration) return;
@@ -111,14 +142,19 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
       String? failure;
       try {
         managed = await internal.models();
-        config = selected ??
-            widget.currentConfig ??
-            await internal.preferred(available: managed);
+        config = current ??
+            await internal.preferred(
+              available: managed,
+              workspaceId: workspaceId,
+            );
       } catch (e) {
         failure = '$e'.replaceFirst('Bad state: ', '');
-        if (selected == null && widget.currentConfig == null) {
+        if (current == null) {
           try {
-            config = await internal.preferred(available: managed);
+            config = await internal.preferred(
+              available: managed,
+              workspaceId: workspaceId,
+            );
           } catch (_) {
             // Keep the model unselected if account identification failed.
           }
@@ -129,12 +165,14 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
         active = config;
         internalModels = managed;
         internalError = failure;
+        customError = customFailure;
         loadingInternal = false;
       });
       // A gateway key can serve several models; offer each one under the same endpoint and key.
       final seen = {for (final p in saved) '${p.baseUrl}|${p.modelName}'};
       for (final endpoint in {
-        for (final p in saved) '${p.baseUrl}|${p.apiKey}': p,
+        for (final p in saved.where((p) => p.customModelId.isEmpty))
+          '${p.baseUrl}|${p.apiKey}': p,
       }.values.toList()) {
         for (final model in await fetchGatewayModels(endpoint)) {
           if (seen.add('${endpoint.baseUrl}|$model')) {
@@ -148,6 +186,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
         profiles = saved;
         internalModels = managed;
         internalError = failure;
+        customError = customFailure;
         loadingInternal = false;
         thinking = level;
       });
@@ -195,10 +234,10 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   }
 
   Future<void> _custom() async {
-    final config = await showAgentModelSettings(context);
-    if (mounted && config != null && config.isComplete) {
-      await _select(config, thinking);
-    }
+    await openAgentModelSettings(context);
+    if (!mounted) return;
+    await _load();
+    if (mounted && active.isComplete) await _select(active, thinking);
   }
 
   Widget _heading(String label, {Key? key}) => Padding(
@@ -219,6 +258,7 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
   Widget _modelItem(AiProviderConfig config) {
     final color = AppFlowyTheme.of(context).textColorScheme.primary;
     final selected = config.isInternal == active.isInternal &&
+        config.customModelId == active.customModelId &&
         config.modelName == active.modelName &&
         (config.isInternal || config.baseUrl == active.baseUrl);
     final name = config.modelName.toLowerCase();
@@ -258,7 +298,11 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
     return config.isInternal
         ? Tooltip(message: config.label, child: item)
         : AgentModelDetails(
-            key: ValueKey('${config.baseUrl}|${config.modelName}'),
+            key: ValueKey(
+              config.customModelId.isEmpty
+                  ? '${config.baseUrl}|${config.modelName}'
+                  : 'custom:${config.customModelId}',
+            ),
             config: config,
             menuHeaderKey: modelMenuHeaderKey,
             child: item,
@@ -416,9 +460,14 @@ class _AgentModelSettingsButtonState extends State<AgentModelSettingsButton> {
                   ),
                 ),
               ...internalModels.map(_modelItem),
-              if (profiles.isNotEmpty) ...[
+              if (profiles.isNotEmpty || customError != null) ...[
                 const SizedBox(height: 4),
                 _heading('自定义模型'),
+                if (customError != null)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Text(customError!, style: textStyle),
+                  ),
                 ...profiles.map(_modelItem),
               ],
               Divider(height: 9, color: foreground.withValues(alpha: .08)),

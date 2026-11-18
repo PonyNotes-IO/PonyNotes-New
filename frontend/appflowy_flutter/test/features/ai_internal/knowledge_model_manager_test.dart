@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:appflowy/features/agent/application/agent_internal_service.dart';
+import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/application/knowledge_model_service.dart';
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
+import 'package:appflowy/features/ai_internal/presentation/knowledge_model_bindings.dart';
 import 'package:appflowy/features/ai_internal/presentation/knowledge_model_widgets.dart';
 import 'package:appflowy/features/ai_internal/presentation/knowledge_model_form_controls.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
@@ -11,14 +14,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ModelApiFixture {
   final requests = <(String, Map<String, dynamic>)>[];
   Map<String, dynamic>? saved;
+  String? savedId;
   Map<String, dynamic>? bound;
   bool rejectSave = false;
   bool rejectDelete = false;
   bool canManage = true;
+  bool rejectModels = false;
+  bool rejectInternal = false;
+  String chatLabel = 'DeepSeek';
+  bool chatBuiltin = true;
+  bool embeddingBuiltin = true;
+  bool rankCanEdit = true;
+  List<Map<String, dynamic>> additionalModels = [];
+  List<Map<String, dynamic>> internalModels = [];
+  List<Map<String, dynamic>> customModels = [];
+  late final internalService = AgentInternalService(
+    account: () async => const AgentCloudAccount(
+      baseUrl: 'https://cloud.example',
+      accessToken: 'account-token',
+      userId: '1',
+    ),
+    client: MockClient((request) async {
+      if (request.url.path.contains('/custom-models/')) {
+        if (request.method == 'GET') {
+          return http.Response(
+            jsonEncode({'models': customModels, 'can_manage': canManage}),
+            rejectModels ? 503 : 200,
+          );
+        }
+        savedId =
+            request.method == 'PUT' ? request.url.pathSegments.last : null;
+        saved = Map<String, dynamic>.from(jsonDecode(request.body) as Map);
+        return http.Response(
+          jsonEncode({'id': 'custom:new-model'}),
+          rejectSave ? 409 : 201,
+        );
+      }
+      expect(request.url.path, '/api/ai/agent/models');
+      expect(request.headers['Authorization'], 'Bearer account-token');
+      return http.Response.bytes(
+        utf8.encode(jsonEncode({'data': internalModels})),
+        rejectInternal ? 503 : 200,
+      );
+    }),
+  );
   final deleted = <String>[];
   Map<String, String> providerIcons = {};
   List<Map<String, dynamic>> additionalProviders = [];
@@ -29,9 +73,10 @@ class ModelApiFixture {
         {
           'id': 'chat',
           'name': 'deepseek-chat',
-          'display_name': 'DeepSeek',
+          'display_name': chatLabel,
           'type': 'KnowledgeQA',
-          'is_builtin': true,
+          'is_builtin': chatBuiltin,
+          'can_edit': false,
           'status': 'active',
           'parameters': {'provider': 'deepseek'},
         },
@@ -39,7 +84,8 @@ class ModelApiFixture {
           'id': 'embed',
           'name': 'text-embedding-v4',
           'type': 'Embedding',
-          'is_builtin': true,
+          'is_builtin': embeddingBuiltin,
+          'can_edit': false,
           'status': 'active',
           'parameters': {'provider': 'aliyun'},
         },
@@ -48,20 +94,30 @@ class ModelApiFixture {
           'name': 'gte-rerank-v2',
           'type': 'Rerank',
           'is_builtin': false,
+          'can_edit': rankCanEdit,
           'status': 'active',
           'parameters': {
             'provider': 'aliyun',
             'base_url': 'https://example.com/v1',
           },
         },
-        if (saved != null)
+        ...additionalModels,
+        if (saved != null && savedId == null)
           {
             ...saved!,
-            'id': 'new-model',
+            'id': savedId ?? 'new-model',
             'is_builtin': false,
+            'can_edit': true,
             'status': 'active',
           },
-      ].where((model) => !deleted.contains(model['id'])).toList();
+      ]
+          .where((model) => !deleted.contains(model['id']))
+          .map(
+            (model) => savedId != null && model['id'] == savedId
+                ? {...model, ...saved!}
+                : model,
+          )
+          .toList();
   Map<String, dynamic> settings = {
     'embedding_model_id': 'embed',
     'summary_model_id': 'chat',
@@ -82,6 +138,7 @@ class ModelApiFixture {
         final Map<String, dynamic> result;
         switch (action) {
           case 'models':
+            if (rejectModels) return http.Response('{}', 503);
             result = {
               'models': models,
               'can_manage': canManage,
@@ -95,6 +152,11 @@ class ModelApiFixture {
                   'value': 'aliyun',
                   'label': '阿里云 DashScope',
                   'icon': providerIcons['aliyun'] ?? '',
+                },
+                {
+                  'value': 'volcengine',
+                  'label': '火山引擎',
+                  'icon': providerIcons['volcengine'] ?? '',
                 },
               ],
             };
@@ -156,6 +218,7 @@ class ModelApiFixture {
             };
           case 'model_save':
             if (rejectSave) return http.Response('{}', 409);
+            savedId = data['id'] as String?;
             saved = Map<String, dynamic>.from(data['model'] as Map);
             result = {'model': saved};
           case 'model_delete':
@@ -191,6 +254,7 @@ class ModelApiFixture {
       }),
     ),
     workspace,
+    customService: internalService,
   );
 }
 
@@ -218,7 +282,12 @@ Future<void> pumpModelManager(
               .copyWith(textScaler: TextScaler.linear(scale)),
           child: child!,
         ),
-        home: Scaffold(body: AiProviderSettingsView(service: fixture.service)),
+        home: Scaffold(
+          body: AiProviderSettingsView(
+            service: fixture.service,
+            internalService: fixture.internalService,
+          ),
+        ),
       ),
     ),
   );
@@ -226,11 +295,203 @@ Future<void> pumpModelManager(
 }
 
 void main() {
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   setUp(
     () => SharedPreferences.setMockInitialValues(
       {'ai_internal.model': 'existing-chat'},
     ),
   );
+  testWidgets('one model list filters Agent builtins and custom models by type',
+      (tester) async {
+    final fixture = ModelApiFixture()
+      ..chatLabel = '知识库 DeepSeek'
+      ..chatBuiltin = false
+      ..internalModels = [
+        {
+          'id': 'deepseek-chat',
+          'name': 'DeepSeek',
+          'provider_name': '火山引擎',
+          'upstream_model': 'deepseek-current',
+          'reasoning_model': 'deepseek-reasoner',
+          'supports_reasoning': true,
+        },
+        {
+          'id': 'qwen3-vl-plus',
+          'name': '通义千问',
+          'provider_name': '阿里云 DashScope',
+          'upstream_model': 'qwen-current',
+          'supports_vision': true,
+        },
+        {
+          'id': 'doubao',
+          'name': '豆包',
+          'provider_name': '火山引擎',
+          'upstream_model': 'doubao-current',
+          'supports_reasoning': true,
+          'supports_vision': true,
+        },
+      ];
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture, width: 960);
+    for (final name in [
+      'DeepSeek',
+      '通义千问',
+      '豆包',
+    ]) {
+      expect(find.text(name), findsOneWidget);
+    }
+    expect(find.text('全部 (5)'), findsOneWidget);
+    expect(find.text('知识库 DeepSeek'), findsNothing);
+    expect(find.byKey(const ValueKey('model-card-chat')), findsNothing);
+    expect(find.text('对话 (3)'), findsOneWidget);
+    expect(find.text('小马内置模型'), findsOneWidget);
+    expect(find.text('自定义模型'), findsOneWidget);
+    expect(find.text('知识库模型'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('全部 (5)')).dy,
+      lessThan(tester.getTopLeft(find.text('小马内置模型')).dy),
+    );
+    await tester.tap(find.text('对话 (3)'));
+    await tester.pumpAndSettle();
+    expect(find.text('通义千问'), findsOneWidget);
+    expect(find.text('豆包'), findsOneWidget);
+    expect(find.text('text-embedding-v4'), findsNothing);
+    final builtin =
+        find.byKey(const ValueKey('agent-model-card-deepseek-chat'));
+    expect(
+      find.descendant(
+        of: builtin,
+        matching: find.byWidgetPredicate(
+          (w) => w is IconButton && w.tooltip == '编辑模型',
+        ),
+      ),
+      findsNothing,
+    );
+    await tester.tap(builtin);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(
+      find.descendant(of: builtin, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: builtin, matching: find.byType(Tooltip)),
+      findsNothing,
+    );
+    expect(find.text('知识库使用设置'), findsNothing);
+    await tester.ensureVisible(find.text('Embedding (1)'));
+    await tester.tap(find.text('Embedding (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('知识库 DeepSeek'), findsNothing);
+    expect(find.text('通义千问'), findsNothing);
+    expect(find.text('豆包'), findsNothing);
+    expect(find.text('DeepSeek'), findsNothing);
+    expect(find.text('text-embedding-v4'), findsOneWidget);
+    final models = await fixture.service.list();
+    expect(models.any((model) => model.id == 'deepseek-chat'), false);
+  });
+
+  testWidgets(
+      'server shared models never appear as custom cards or category counts',
+      (tester) async {
+    final fixture = ModelApiFixture()
+      ..chatBuiltin = false
+      ..embeddingBuiltin = false
+      ..rankCanEdit = false
+      ..internalModels = [
+        {'id': 'deepseek-chat', 'name': 'DeepSeek'},
+        {'id': 'qwen3-vl-plus', 'name': '通义千问'},
+        {'id': 'doubao', 'name': '豆包'},
+      ];
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    expect(find.text('全部 (3)'), findsOneWidget);
+    expect(find.text('对话 (3)'), findsOneWidget);
+    expect(find.text('Embedding (0)'), findsOneWidget);
+    expect(find.text('ReRank (0)'), findsOneWidget);
+    expect(find.text('此分类暂无自定义模型'), findsOneWidget);
+    for (final id in ['chat', 'embed', 'rank']) {
+      expect(find.byKey(ValueKey('model-card-$id')), findsNothing);
+    }
+    expect(find.byType(IconButton), findsNothing);
+    expect((await fixture.service.list()).length, 3);
+  });
+
+  testWidgets(
+      'cards match the design size and surface; builtins and share slots stay inert',
+      (tester) async {
+    final fixture = ModelApiFixture();
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture, width: 1254);
+    final builtin = find.byKey(const ValueKey('model-card-chat'));
+    final custom = find.byKey(const ValueKey('model-card-rank'));
+    expect(tester.getSize(builtin), const Size(306, 100));
+    expect(tester.getSize(custom), const Size(306, 100));
+    final box = tester
+        .widget<Container>(
+          find.descendant(of: builtin, matching: find.byType(Container)).first,
+        )
+        .decoration! as BoxDecoration;
+    expect(box.color, Colors.white);
+    expect(box.borderRadius, BorderRadius.circular(14));
+    expect((box.border! as Border).top.width, .5);
+    expect((box.border! as Border).top.color, const Color(0xFFE9E9E9));
+    expect(box.boxShadow!.single.offset, const Offset(0, 2));
+    expect(box.boxShadow!.single.blurRadius, 10);
+    expect(box.boxShadow!.single.color, Colors.black.withValues(alpha: .05));
+    expect(
+      find.descendant(of: builtin, matching: find.byType(IconButton)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: builtin, matching: find.byType(InkWell)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: builtin, matching: find.byType(Tooltip)),
+      findsNothing,
+    );
+    await tester.tap(builtin);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    final share = find.byKey(const ValueKey('model-share-placeholder-rank'));
+    final requests = fixture.requests.length;
+    await tester.tap(share);
+    await tester.pumpAndSettle();
+    expect(fixture.requests.length, requests);
+    expect(fixture.saved, isNull);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('编辑模型'), findsNothing);
+    expect(
+      find.descendant(of: custom, matching: find.byType(IconButton)),
+      findsNWidgets(2),
+    );
+    expect(share, findsOneWidget);
+  });
+
+  testWidgets(
+      'knowledge availability and internal catalog failures are independent',
+      (tester) async {
+    final fixture = ModelApiFixture()..rejectInternal = true;
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    expect(find.text('重试内置模型'), findsOneWidget);
+    expect(find.byKey(const ValueKey('model-card-chat')), findsOneWidget);
+    fixture.rejectInternal = false;
+    fixture.internalModels = [
+      {'id': 'doubao', 'name': '豆包'},
+    ];
+    await tester.tap(find.text('重试内置模型'));
+    await tester.pumpAndSettle();
+    expect(find.text('豆包'), findsOneWidget);
+    expect(find.text('重试内置模型'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    fixture.rejectModels = true;
+    await pumpModelManager(tester, fixture);
+    expect(find.text('豆包'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+  });
+
   for (final dark in [false, true]) {
     testWidgets(
         'model controls use neutral focus and hover in ${dark ? 'dark' : 'light'} mode',
@@ -351,6 +612,8 @@ void main() {
       find.byKey(const ValueKey('model-name')),
       'chat-model',
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('model-key')));
+    await tester.enterText(find.byKey(const ValueKey('model-key')), 'user-key');
     final contextSlider = find.byKey(const ValueKey('model-context-slider'));
     await tester.ensureVisible(contextSlider);
     tester.widget<Slider>(contextSlider).onChanged!(123456);
@@ -463,9 +726,21 @@ void main() {
       (tester) async {
     final fixture = ModelApiFixture();
     addTearDown(fixture.service.close);
-    await pumpModelManager(tester, fixture);
-    await tester.ensureVisible(find.byTooltip('知识库使用设置').first);
-    await tester.tap(find.byTooltip('知识库使用设置').first);
+    final models = await fixture.service.list();
+    await tester.pumpWidget(
+      AppFlowyTheme(
+        data: AppFlowyDefaultTheme().light(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: KnowledgeModelBindings(
+              service: fixture.service,
+              models: models,
+              onBack: () {},
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(
       tester
@@ -509,13 +784,15 @@ void main() {
 
     await tester.ensureVisible(find.byKey(const ValueKey('model-name')));
     await tester.enterText(find.byKey(const ValueKey('model-name')), 'my-chat');
+    await tester.ensureVisible(find.byKey(const ValueKey('model-key')));
+    await tester.enterText(find.byKey(const ValueKey('model-key')), 'user-key');
     expect(find.text('向量维度'), findsNothing);
     await tester.ensureVisible(find.text('保存'));
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
     final params = fixture.saved!['parameters'] as Map;
     expect(fixture.saved!['type'], 'KnowledgeQA');
-    expect(params.containsKey('api_key'), isFalse);
+    expect(params['api_key'], 'user-key');
     expect(params['context_window'], 128000);
     expect(params['max_output_tokens'], 8192);
     expect(params['spec']['api'], 'openai-completions');
@@ -543,6 +820,8 @@ void main() {
     );
     await tester.ensureVisible(find.byKey(const ValueKey('model-name')));
     await tester.enterText(find.byKey(const ValueKey('model-name')), 'my-chat');
+    await tester.ensureVisible(find.byKey(const ValueKey('model-key')));
+    await tester.enterText(find.byKey(const ValueKey('model-key')), 'user-key');
     await tester.ensureVisible(find.text('保存'));
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle();
@@ -551,6 +830,70 @@ void main() {
     expect((params['spec'] as Map).containsKey('temperature'), isFalse);
     expect(tester.takeException(), isNull);
   });
+  testWidgets(
+      'custom model edit icon saves the same id and delete icon removes the saved model',
+      (tester) async {
+    final fixture = ModelApiFixture()
+      ..additionalModels = [
+        {
+          'id': 'editable-chat',
+          'name': 'my-chat',
+          'display_name': '我的模型',
+          'type': 'KnowledgeQA',
+          'source': 'remote',
+          'is_builtin': false,
+          'can_edit': true,
+          'status': 'active',
+          'parameters': {
+            'provider': 'generic',
+            'base_url': 'https://custom.example/v1',
+          },
+        },
+      ];
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture, width: 960);
+    final card = find.byKey(const ValueKey('model-card-editable-chat'));
+    expect(
+      find.descendant(of: card, matching: find.byType(InkWell)),
+      findsNWidgets(2),
+    );
+    final requests = fixture.requests.length;
+    await tester.tapAt(tester.getTopLeft(card) + const Offset(12, 40));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑模型'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(fixture.requests.length, requests);
+    await tester
+        .tap(find.descendant(of: card, matching: find.byTooltip('编辑模型')));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑模型'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('model-name')));
+    await tester.enterText(
+      find.byKey(const ValueKey('model-name')),
+      'my-updated-chat',
+    );
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    final save = fixture.requests.lastWhere((r) => r.$1 == 'model_save').$2;
+    expect(save['id'], 'editable-chat');
+    expect(save['model']['name'], 'my-updated-chat');
+    expect(save['model']['parameters'].containsKey('api_key'), isFalse);
+    expect(find.text('编辑模型'), findsNothing);
+    await tester.ensureVisible(
+      find.descendant(of: card, matching: find.byTooltip('删除模型')),
+    );
+    await tester
+        .tap(find.descendant(of: card, matching: find.byTooltip('删除模型')));
+    await tester.pumpAndSettle();
+    expect(fixture.deleted, isEmpty);
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+    expect(fixture.deleted, ['editable-chat']);
+    expect(card, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'card actions edit, cancel deletion and delete after confirmation',
       (tester) async {
@@ -562,8 +905,13 @@ void main() {
       tester.getTopLeft(find.text('添加模型')).dy,
       lessThan(tester.getTopLeft(find.text('全部 (3)')).dy),
     );
-    await tester
-        .tap(find.descendant(of: card, matching: find.byTooltip('编辑模型')));
+    await tester.tap(
+      find.descendant(
+        of: card,
+        matching: find
+            .byWidgetPredicate((w) => w is IconButton && w.tooltip == '编辑模型'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('编辑模型'), findsOneWidget);
     expect(find.text('gte-rerank-v2'), findsOneWidget);
@@ -606,8 +954,26 @@ void main() {
     final readonly = ModelApiFixture()..canManage = false;
     addTearDown(readonly.service.close);
     await pumpModelManager(tester, readonly);
-    expect(find.byTooltip('编辑模型'), findsNothing);
-    expect(find.byTooltip('删除模型'), findsNothing);
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (w) => w is IconButton && w.tooltip == '编辑模型',
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(
+      tester
+          .widget<IconButton>(
+            find.byWidgetPredicate(
+              (w) => w is IconButton && w.tooltip == '删除模型',
+            ),
+          )
+          .onPressed,
+      isNull,
+    );
     expect(
       tester
           .widget<OutlinedButton>(
@@ -624,5 +990,58 @@ void main() {
       isNull,
     );
     expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'workspace members see custom chat models without management actions',
+      (tester) async {
+    final fixture = ModelApiFixture()
+      ..canManage = false
+      ..customModels = [
+        {
+          'id': 'custom:owned',
+          'name': 'workspace-reasoner',
+          'type': 'KnowledgeQA',
+          'is_builtin': false,
+          'can_edit': false,
+          'status': 'active',
+          'parameters': {'provider': 'generic'},
+        },
+      ];
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    expect(find.text('workspace-reasoner'), findsOneWidget);
+    final card = find.byKey(const ValueKey('model-card-custom:owned'));
+    final edit =
+        find.descendant(of: card, matching: find.byType(IconButton)).first;
+    expect(tester.widget<IconButton>(edit).onPressed, isNull);
+    final add = find
+        .ancestor(
+          of: find.text('添加模型'),
+          matching: find.byWidgetPredicate((w) => w is OutlinedButton),
+        )
+        .first;
+    expect(tester.widget<OutlinedButton>(add).onPressed, isNull);
+  });
+  testWidgets(
+      'model settings use the workspace catalog without a local import step',
+      (tester) async {
+    const config = AiProviderConfig(
+      baseUrl: 'https://legacy.example/v1',
+      modelName: 'legacy-model',
+      apiKey: 'private-key',
+    );
+    const storage = AiProviderConfigStorage();
+    await storage.save(config);
+    final fixture = ModelApiFixture();
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    expect(find.text('导入本机问AI模型'), findsNothing);
+    expect(find.text('添加模型'), findsOneWidget);
+    expect(fixture.saved, isNull);
+    expect((await storage.load()).apiKey, config.apiKey);
+    expect(
+      (await fixture.internalService.legacyProfiles()).single.modelName,
+      config.modelName,
+    );
   });
 }
