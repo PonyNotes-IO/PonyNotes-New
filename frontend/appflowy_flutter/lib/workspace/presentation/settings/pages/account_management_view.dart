@@ -787,7 +787,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                   ),
                                   const VSpace(8),
                                   FlowyText(
-                                    "工作区限制${config?.collaborativeWorkspaceLimit}个",
+                                    "空间限制${config?.collaborativeWorkspaceLimit}个",
                                     fontSize: 12,
                                     color: theme.textColorScheme.secondary,
                                     maxLines: 1,

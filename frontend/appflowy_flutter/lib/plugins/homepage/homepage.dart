@@ -167,17 +167,45 @@ class _HomePageState extends State<HomePage> {
     if (message.isEmpty) return;
 
     try {
+      // 1. 获取当前workspace ID
+      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
+      if (workspaceId == null) {
+        Log.error('❌ 主页: 无法获取空间信息');
+        _showError('无法获取空间信息');
+        return;
+      }
+
       final attachments = <PlatformFile>[];
       for (final image in images ?? <ChatImage>[]) {
         final bytes = image.bytes ??
             (image.filePath == null
                 ? null
                 : await File(image.filePath!).readAsBytes());
-        if (bytes != null)
+        if (bytes != null) {
           attachments.add(PlatformFile(
               name: image.name ?? 'image.png',
               size: bytes.length,
               bytes: bytes));
+        }
+      }
+
+      Log.info('✅ 主页: 获取到workspace ID: $workspaceId');
+
+      // 2. 创建并打开原生AI Chat视图
+      final view = await AIChatViewService.createAndOpenAIChat(
+        parentViewId: workspaceId,
+        initialMessage: message,
+        selectedModelId: selectedModel?.id,
+        enableDeepThinking: enableDeepThinking,
+        enableWebSearch: enableWebSearch,
+        initialImages: images, // 传递图片数据
+      );
+
+      if (view == null) {
+        Log.error('❌ 主页: 创建AI对话失败');
+        _showError('创建AI对话失败');
+      } else {
+        Log.info('✅ 主页: AI Chat视图创建成功，view.id=${view.id}');
       }
       if (!mounted) return;
       AgentConversations.requestedPrompt.value = (message, attachments);
@@ -510,7 +538,7 @@ class _HomePageState extends State<HomePage> {
       if (userProfile == null || workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
           showToastNotification(
-            message: '无法获取当前用户或工作空间信息',
+            message: '无法获取当前用户或空间信息',
             type: ToastificationType.error,
           );
         }

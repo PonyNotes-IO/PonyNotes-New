@@ -105,7 +105,7 @@ class MembershipCheckerService {
             context,
             userProfile: userProfile,
             workspaceId: workspaceId,
-            featureName: '创建工作区',
+            featureName: '创建空间',
           );
           return false;
       }
@@ -326,7 +326,7 @@ class MembershipCheckerService {
         // 显示提示并跳转到升级页面
         if (showToast) {
           showToastNotification(
-            message: '您已达到工作区数量限制，请升级会员以创建更多工作区',
+            message: '您已达到空间数量限制，请升级会员以创建更多空间',
             type: ToastificationType.error,
           );
         }
@@ -336,7 +336,7 @@ class MembershipCheckerService {
           context,
           userProfile: userProfile,
           workspaceId: workspaceId,
-          featureName: '创建工作区',
+          featureName: '创建空间',
         );
         
         return false;

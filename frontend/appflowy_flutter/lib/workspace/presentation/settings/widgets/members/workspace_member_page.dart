@@ -866,7 +866,7 @@ class _RoleActionWrapper extends ActionCell {
   String get name {
     switch (role) {
       case AFRolePB.Owner:
-        return '工作空间所有者';
+        return '空间所有者';
       case AFRolePB.Member:
         return '成员';
       case AFRolePB.Guest:
@@ -944,7 +944,7 @@ class _MemberRoleActionList extends StatelessWidget {
   String _getRoleDisplayName(AFRolePB role) {
     switch (role) {
       case AFRolePB.Owner:
-        return '工作空间所有者';
+        return '空间所有者';
       case AFRolePB.Member:
         return '成员';
       case AFRolePB.Guest:

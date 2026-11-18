@@ -139,7 +139,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         // 获取当前用户的工作区ID（而不是使用链接中的发布者工作区ID）
         final currentWorkspaceId = await _getCurrentWorkspaceId();
         if (currentWorkspaceId == null || currentWorkspaceId.isEmpty) {
-          Log.warn('[OpenNoteDeepLinkHandler] 无法获取当前用户工作区，使用链接中的workspaceId');
+          Log.warn('[OpenNoteDeepLinkHandler] 无法获取当前用户空间，使用链接中的workspaceId');
           // 如果获取失败，尝试使用链接中的workspaceId（这可能会导致问题）
         }
 
@@ -902,16 +902,16 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final result = await FolderEventGetCurrentWorkspaceSetting().send();
       return result.fold(
         (ws) {
-          Log.info('[OpenNoteDeepLinkHandler] 获取到当前工作区: ${ws.workspaceId}');
+          Log.info('[OpenNoteDeepLinkHandler] 获取到当前空间: ${ws.workspaceId}');
           return ws.workspaceId.isEmpty ? null : ws.workspaceId;
         },
         (e) {
-          Log.error('[OpenNoteDeepLinkHandler] 获取当前工作区失败: $e');
+          Log.error('[OpenNoteDeepLinkHandler] 获取当前空间失败: $e');
           return null;
         },
       );
     } catch (e, stackTrace) {
-      Log.error('[OpenNoteDeepLinkHandler] 获取工作区信息时出错: $e', stackTrace);
+      Log.error('[OpenNoteDeepLinkHandler] 获取空间信息时出错: $e', stackTrace);
     }
     return null;
   }

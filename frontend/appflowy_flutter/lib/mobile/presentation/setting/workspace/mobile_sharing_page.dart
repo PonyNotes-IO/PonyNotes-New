@@ -214,7 +214,7 @@ class _MobileSharingPageState extends State<MobileSharingPage> {
     final ownerWorkspaceId = entry.ownerWorkspaceId;
 
     if (ownerWorkspaceId.isEmpty && _workspaceType == WorkspaceTypePB.LocalW) {
-      showToastNotification(message: '当前工作区暂不支持共享权限管理');
+      showToastNotification(message: '当前空间暂不支持共享权限管理');
       return;
     }
 

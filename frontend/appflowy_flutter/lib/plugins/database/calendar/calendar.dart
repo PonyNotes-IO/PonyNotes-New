@@ -695,7 +695,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                   workspaceId == null ||
                                   workspaceId.isEmpty) {
                                 showToastNotification(
-                                  message: '无法获取当前用户或工作空间信息',
+                                  message: '无法获取当前用户或空间信息',
                                   type: ToastificationType.error,
                                 );
                                 setDialogState(() {
