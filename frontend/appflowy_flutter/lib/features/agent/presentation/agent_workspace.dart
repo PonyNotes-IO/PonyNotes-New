@@ -23,6 +23,7 @@ import '../application/agent_reference.dart';
 import 'agent_reference_field.dart';
 import 'agent_reference_preview.dart';
 import 'agent_prompt_card.dart';
+import 'agent_citation_syntax.dart';
 
 class AgentWorkspace extends StatefulWidget {
   const AgentWorkspace({
@@ -553,7 +554,10 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
                                     as List<AgentActivity>,
                               ),
                             if (_messageText(message).isNotEmpty)
-                              _markdown(_messageText(message)),
+                              _markdown(
+                                _messageText(message),
+                                message: message,
+                              ),
                             if (message['role'] == 'user')
                               ..._messageAttachments(message),
                             if (message['role'] == 'user')
@@ -1367,7 +1371,7 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
         .join('\n');
   }
 
-  Widget _markdown(String text) {
+  Widget _markdown(String text, {Map<String, dynamic>? message}) {
     final theme = AppFlowyTheme.of(context);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final codeBackground = Color.alphaBlend(
@@ -1376,6 +1380,30 @@ class _AgentWorkspaceState extends State<AgentWorkspace> {
     );
     return MarkdownWidget(
       data: agentDisplayText(text),
+      markdownGenerator: MarkdownGenerator(
+        blockSyntaxList: [
+          if (message == null || message['role'] == 'assistant')
+            AgentCitationBlockSyntax(),
+        ],
+        inlineSyntaxList: [
+          if (message == null || message['role'] == 'assistant')
+            AgentCitationSyntax(agent.sources, [
+              ...(message?['knowledge_references'] as List? ?? agent.references)
+                  .whereType<Map>(),
+              for (final step
+                  in (message?['agent_steps'] as List? ?? []).whereType<Map>())
+                for (final call
+                    in (step['tool_calls'] as List? ?? []).whereType<Map>())
+                  if (call['result'] is Map && call['result']['data'] is Map)
+                    call['result']['data'] as Map,
+              for (final activity in message == null
+                  ? agent.activities.values
+                  : (message['local_activities'] as List? ?? [])
+                      .whereType<AgentActivity>())
+                activity.resultData,
+            ]),
+        ],
+      ),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       config: (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig)

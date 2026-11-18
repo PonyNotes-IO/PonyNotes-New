@@ -32,6 +32,7 @@ class AgentActivity {
   final Map<String, dynamic> arguments;
   String status = 'running';
   String result = '';
+  Map<String, dynamic> resultData = {};
   String? before;
   String? after;
 }
@@ -836,6 +837,7 @@ class AgentController extends ChangeNotifier {
         );
         activity.status = data['success'] == true ? 'completed' : 'failed';
         activity.result = '${event['content'] ?? data['error'] ?? ''}';
+        activity.resultData = data;
       case 'references':
         references
           ..clear()
