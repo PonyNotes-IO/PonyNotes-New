@@ -48,4 +48,7 @@ class AgentPermissions {
 }
 
 String agentDisplayText(String text) =>
-    text.replaceAll(RegExp('weknora', caseSensitive: false), '小马 Agent');
+    text.replaceFirst('Bad state: ', '').replaceAll(
+          RegExp('weknora', caseSensitive: false),
+          '小马 Agent',
+        );

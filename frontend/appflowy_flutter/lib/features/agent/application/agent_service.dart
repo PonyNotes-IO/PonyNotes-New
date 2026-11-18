@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'agent_internal_service.dart';
 import 'agent_reference.dart';
 import 'agent_definition.dart';
+import 'agent_error.dart';
 
 /// Cloud scopes requests; WeKnora runs the tool loop.
 class AgentService {
@@ -138,7 +139,7 @@ class AgentService {
       await request.sink.close();
       final response = await http.Response.fromStream(await pending)
           .timeout(const Duration(seconds: 600));
-      _checkStatus(response.statusCode, utf8.decode(response.bodyBytes));
+      checkAgentResponse(response.statusCode, utf8.decode(response.bodyBytes));
       final result = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
       if (result['code'] != null && result['code'] != 0) {
         throw StateError('${result['message'] ?? result['msg'] ?? '云同步失败'}');
@@ -200,7 +201,7 @@ class AgentService {
       final response =
           await client.send(request).timeout(const Duration(seconds: 90));
       if (response.statusCode != 200) {
-        _checkStatus(
+        checkAgentResponse(
           response.statusCode,
           await response.stream.bytesToString(),
         );
@@ -316,7 +317,7 @@ class AgentService {
       final response =
           await http.Response.fromStream(await client.send(request))
               .timeout(const Duration(seconds: 90));
-      _checkStatus(response.statusCode, utf8.decode(response.bodyBytes));
+      checkAgentResponse(response.statusCode, utf8.decode(response.bodyBytes));
       if (response.statusCode == 204) return {};
       return Map<String, dynamic>.from(
         jsonDecode(utf8.decode(response.bodyBytes)) as Map,
@@ -383,7 +384,7 @@ class AgentService {
       final response =
           await client.send(request).timeout(const Duration(seconds: 90));
       if (response.statusCode != 200) {
-        _checkStatus(
+        checkAgentResponse(
           response.statusCode,
           await response.stream.bytesToString(),
         );
@@ -397,14 +398,6 @@ class AgentService {
       if (identical(_streamClient, client)) _streamClient = null;
       if (_client == null) client.close();
     }
-  }
-
-  static void _checkStatus(int status, String body) {
-    if (status >= 200 && status < 300) return;
-    if (status == 401) throw StateError('登录已过期，请重新登录');
-    if (status == 403) throw StateError('无权访问此工作区或笔记');
-    if (status == 404) throw StateError('知识助手服务或会话尚未就绪');
-    throw StateError(body.isEmpty ? '知识助手请求失败（$status）' : body);
   }
 
   static Stream<Map<String, dynamic>> decodeEvents(

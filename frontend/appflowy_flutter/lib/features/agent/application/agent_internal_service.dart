@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'agent_credits.dart';
+import 'agent_error.dart';
 
 class AgentCloudAccount {
   const AgentCloudAccount({
@@ -82,11 +83,9 @@ class AgentInternalService {
           : client.get(uri, headers: headers);
       final response = await pending.timeout(const Duration(seconds: 90));
       if (response.statusCode != 200) {
-        if (response.statusCode == 401) throw StateError('登录已过期，请重新登录后使用内部模型');
-        throw StateError(
-          response.statusCode == 404
-              ? '内部模型服务尚未上线，请联系管理员'
-              : utf8.decode(response.bodyBytes),
+        checkAgentResponse(
+          response.statusCode,
+          utf8.decode(response.bodyBytes),
         );
       }
       final body =
