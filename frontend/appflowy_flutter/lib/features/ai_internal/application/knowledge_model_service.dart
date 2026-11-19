@@ -31,6 +31,9 @@ class KnowledgeModel {
       Map<String, dynamic>.from(data['parameters'] as Map? ?? {});
   bool get builtin => data['is_builtin'] == true;
   bool get canEdit => data['can_edit'] as bool? ?? !builtin;
+  String? get visibleCreatorName => data['show_creator'] == true
+      ? (data['creator_name'] as String?)?.trim()
+      : null;
   String get provider => parameters['provider'] as String? ?? 'generic';
 }
 
