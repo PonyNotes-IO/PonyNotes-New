@@ -17,8 +17,10 @@ class SharedUserWidget extends StatelessWidget {
     required this.currentUser,
     this.isInPublicPage = false,
     this.callbacks,
+    this.compact = false,
   });
 
+  final bool compact;
   final SharedUser user;
   final SharedUser currentUser;
   final AccessLevelListCallbacks? callbacks;
@@ -27,6 +29,25 @@ class SharedUserWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            AFAvatar(name: user.name, url: user.avatarUrl),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_buildTitle(context), _buildSubtitle(context)],
+              ),
+            ),
+            _buildTrailing(context),
+          ],
+        ),
+      );
+    }
 
     return AFMenuItem(
       padding: EdgeInsets.symmetric(
@@ -46,11 +67,19 @@ class SharedUserWidget extends StatelessWidget {
     );
   }
 
+  bool get isCurrentUser => !compact
+      ? user.userId == currentUser.userId
+      : (user.userId?.isNotEmpty == true &&
+              user.userId == currentUser.userId) ||
+          (user.uid?.isNotEmpty == true && user.uid == currentUser.uid) ||
+          (user.email.trim().isNotEmpty &&
+              user.email.trim().toLowerCase() ==
+                  currentUser.email.trim().toLowerCase());
+
   Widget _buildTitle(
     BuildContext context,
   ) {
     final theme = AppFlowyTheme.of(context);
-    final isCurrentUser = user.userId == currentUser.userId;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -90,9 +119,11 @@ class SharedUserWidget extends StatelessWidget {
     BuildContext context,
   ) {
     final theme = AppFlowyTheme.of(context);
-    final subtitle = user.email.trim().isNotEmpty
-        ? user.email
-        : user.uid ?? '';
+    final subtitle = compact && user.phone?.isNotEmpty == true
+        ? user.phone!
+        : user.email.trim().isNotEmpty
+            ? user.email
+            : user.uid ?? '';
 
     if (subtitle.isEmpty) {
       return const SizedBox.shrink();
@@ -100,6 +131,8 @@ class SharedUserWidget extends StatelessWidget {
 
     return Text(
       subtitle,
+      maxLines: compact ? 1 : null,
+      overflow: compact ? TextOverflow.ellipsis : null,
       style: theme.textStyle.caption.standard(
         color: theme.textColorScheme.secondary,
       ),
@@ -107,7 +140,6 @@ class SharedUserWidget extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
-    final isCurrentUser = user.userId == currentUser.userId;
     final theme = AppFlowyTheme.of(context);
     final currentAccessLevel = currentUser.accessLevel;
 
@@ -120,6 +152,7 @@ class SharedUserWidget extends StatelessWidget {
 
     Widget editAccessWidget(List<ShareAccessLevel> supported) =>
         EditAccessLevelWidget(
+          compact: compact,
           selectedAccessLevel: user.accessLevel,
           supportedAccessLevels: supported,
           additionalUserManagementOptions: [
@@ -134,10 +167,13 @@ class SharedUserWidget extends StatelessWidget {
       return disabledAccessButton();
     }
 
+    if (compact && user.role == ShareRole.owner) return disabledAccessButton();
+
     // Full access user can turn a guest into a member
     if (user.role == ShareRole.guest &&
         currentAccessLevel == ShareAccessLevel.fullAccess) {
       return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           TurnIntoMemberWidget(
             onTap: () => callbacks?.onTurnIntoMember.call(),
