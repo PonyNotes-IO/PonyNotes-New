@@ -57,8 +57,16 @@ class AgentController extends ChangeNotifier {
         cloudArtifacts = Map<String, dynamic>.from(cloudArtifacts),
         _workspace = workspaceId ?? AIChatViewService.getCurrentWorkspaceId;
   static final _instances = <AgentController>{};
+  /// MCP controls the same live session as the UI; never creates a second run.
+  static AgentController? forWorkspaceConversation(String workspace, String conversation) {
+    for (final controller in _instances) {
+      if (!controller._disposed && controller._workspaceId == workspace && controller.chatId == conversation) return controller;
+    }
+    return null;
+  }
   static final accountClearance = ValueNotifier(0);
   static Future<void> revokeAll() async {
+    await McpTools.revokeSessionState();
     accountClearance.value++;
     await Future.wait(
       _instances.toList().map((controller) => controller.disconnect()),
@@ -105,13 +113,17 @@ class AgentController extends ChangeNotifier {
   String? _notePollError;
   int _toolEpoch = 0;
   bool _acceptNoteCalls = false;
-  McpTools get noteTools => McpTools(
+  McpTools get noteTools {
+    final epoch=_epoch,toolEpoch=_toolEpoch;
+    return McpTools(
         endpoint: 'internal-agent',
         version: '1.0.0',
         isAgentChannel: true,
         agentName: () => '小马 Agent',
         isToolAllowed: (name) => !permissions.disabledTools.contains(name),
+        isAuthorizationCurrent:()=>!_disposed && epoch==_epoch && toolEpoch==_toolEpoch && connected,
       );
+  }
   StreamSubscription<Map<String, dynamic>>? _subscription;
   String? _workspaceId;
   String? _identity;

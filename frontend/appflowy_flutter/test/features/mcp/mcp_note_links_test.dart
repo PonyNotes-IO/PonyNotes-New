@@ -202,7 +202,7 @@ void main() {
       'MCP registry exposes six new tools with accurate read and write annotations',
       () {
     final specs = McpTools(endpoint: 'test', version: 'test').toolSpecs;
-    expect(specs.map((spec) => spec.name).toSet(), hasLength(37));
+    expect(specs.map((spec) => spec.name).toSet(), hasLength(97));
     for (final name in [
       'insert_note_reference',
       'remove_note_reference',

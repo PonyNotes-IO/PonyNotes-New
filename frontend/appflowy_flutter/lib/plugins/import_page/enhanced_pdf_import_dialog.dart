@@ -23,11 +23,13 @@ import 'import_service.dart' as pdf_import_service;
 class EnhancedPdfImportDialog extends StatefulWidget {
   final String parentViewId;
   final VoidCallback? onImportSuccess;
+  final File? initialFile;
 
   const EnhancedPdfImportDialog({
     super.key,
     required this.parentViewId,
     this.onImportSuccess,
+    this.initialFile,
   });
 
   @override
@@ -36,7 +38,7 @@ class EnhancedPdfImportDialog extends StatefulWidget {
 }
 
 class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
-  File? _selectedFile;
+  late File? _selectedFile = widget.initialFile;
   Uint8List? _pdfBytes;
   String? _extractedContent;
   String? _processingError;
@@ -219,7 +221,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _selectedFile!.path.split('/').last,
+                    p.basename(_selectedFile!.path),
                     style: TextStyle(
                       fontWeight: FontWeight.w500,
                       color: colorScheme.onSurface,

@@ -17,11 +17,13 @@ import 'processor/aliyun_doc_parse_processor.dart';
 class EnhancedWordImportDialog extends StatefulWidget {
   final String parentViewId;
   final VoidCallback? onImportSuccess;
+  final File? initialFile;
 
   const EnhancedWordImportDialog({
     super.key,
     required this.parentViewId,
     this.onImportSuccess,
+    this.initialFile,
   });
 
   @override
@@ -29,7 +31,7 @@ class EnhancedWordImportDialog extends StatefulWidget {
 }
 
 class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
-  File? _selectedFile;
+  late File? _selectedFile = widget.initialFile;
   String? _extractedContent;
   String? _processingError;
   bool _isProcessing = false;
@@ -130,7 +132,7 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _selectedFile!.path.split('/').last,
+                    p.basename(_selectedFile!.path),
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
