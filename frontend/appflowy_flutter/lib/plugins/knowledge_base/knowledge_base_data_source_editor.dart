@@ -7,15 +7,17 @@ import 'package:uuid/uuid.dart';
 class KnowledgeBaseDataSourceEditor extends StatefulWidget {
   const KnowledgeBaseDataSourceEditor({
     super.key,
-    required this.base,
+    this.base,
+    this.workspaceId,
     required this.service,
     required this.definition,
     required this.onBack,
     required this.onChanged,
     this.source,
-  });
+  }) : assert((base == null) != (workspaceId == null));
 
-  final KnowledgeBase base;
+  final KnowledgeBase? base;
+  final String? workspaceId;
   final KnowledgeBaseService service;
   final Map<String, dynamic> definition;
   final Map<String, dynamic>? source;
@@ -56,6 +58,7 @@ class _KnowledgeBaseDataSourceEditorState
   Timer? _poll;
 
   String get _type => widget.definition['type'] as String;
+  bool get _forWorkspace => widget.workspaceId != null;
   bool get _drive => _type == 'feishu_drive' || _type == 'lark_drive';
   bool get _syncing => _source?['latest_sync_log']?['status'] == 'running';
   List<Map<String, dynamic>> get _fields =>
@@ -74,7 +77,7 @@ class _KnowledgeBaseDataSourceEditorState
     }
     if (widget.source != null) _adopt(widget.source!);
     _poll = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_busy && _syncing) {
+      if (!_forWorkspace && !_busy && _syncing) {
         unawaited(_run(_refresh));
       }
     });
@@ -101,8 +104,11 @@ class _KnowledgeBaseDataSourceEditorState
     String operation, [
     Map<String, dynamic> data = const {},
   ]) =>
-      widget.service.post('data_source', {
-        ...widget.base.target,
+      widget.service.post(_forWorkspace ? 'workspace_sync' : 'data_source', {
+        if (_forWorkspace)
+          'workspace_id': widget.workspaceId
+        else
+          ...widget.base!.target,
         'operation': operation,
         if (_source != null) 'source_id': _source!['id'],
         ...data,
@@ -201,10 +207,13 @@ class _KnowledgeBaseDataSourceEditorState
       for (final controller in _credentials.values) {
         controller.clear();
       }
-      _notice = text(
-        '连接已保存并暂停。请选择同步范围，保存后可手动同步或启用计划同步。',
-        'Connection saved and paused. Select and save its scope before syncing.',
-      );
+      _notice = _forWorkspace
+          ? text('连接已保存。请选择并保存同步范围。',
+              'Connection saved. Select and save its scope.')
+          : text(
+              '连接已保存并暂停。请选择同步范围，保存后可手动同步或启用计划同步。',
+              'Connection saved and paused. Select and save its scope before syncing.',
+            );
       widget.onChanged();
     });
   }
@@ -537,7 +546,7 @@ class _KnowledgeBaseDataSourceEditorState
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(_status(_source!['status'])),
+                    if (!_forWorkspace) Text(_status(_source!['status'])),
                     Wrap(
                       spacing: 8,
                       children: [
@@ -633,108 +642,115 @@ class _KnowledgeBaseDataSourceEditorState
                       ],
                     ),
                     const SizedBox(height: 20),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('source-schedule-$_schedule'),
-                      initialValue: _schedule,
-                      isExpanded: true,
-                      decoration: _decoration(text('同步计划', 'Schedule')),
-                      items: [
-                        DropdownMenuItem(
-                          value: '',
-                          child: Text(text('仅手动同步', 'Manual only')),
-                        ),
-                        DropdownMenuItem(
-                          value: '0 0 * * * *',
-                          child: Text(text('每小时', 'Hourly')),
-                        ),
-                        DropdownMenuItem(
-                          value: '0 0 */6 * * *',
-                          child: Text(text('每 6 小时', 'Every 6 hours')),
-                        ),
-                        DropdownMenuItem(
-                          value: '0 0 */12 * * *',
-                          child: Text(text('每 12 小时', 'Every 12 hours')),
-                        ),
-                        if (![
-                          '',
-                          '0 0 * * * *',
-                          '0 0 */6 * * *',
-                          '0 0 */12 * * *',
-                        ].contains(_schedule))
+                    if (_forWorkspace)
+                      Text(text(
+                        '同步到当前工作空间的「私有」。保存范围后，在同步卡片点击「立即同步」。',
+                        'Pages go to Private in this workspace. Save the scope and use Sync now on the sync card.',
+                      )),
+                    if (!_forWorkspace) ...[
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('source-schedule-$_schedule'),
+                        initialValue: _schedule,
+                        isExpanded: true,
+                        decoration: _decoration(text('同步计划', 'Schedule')),
+                        items: [
                           DropdownMenuItem(
-                            value: _schedule,
-                            child: Text(_schedule),
+                            value: '',
+                            child: Text(text('仅手动同步', 'Manual only')),
                           ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() {
-                                _schedule = value!;
-                                _dirty = true;
-                              }),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('source-mode-$_mode'),
-                      initialValue: _mode,
-                      decoration: _decoration(text('同步方式', 'Sync mode')),
-                      items: [
-                        DropdownMenuItem(
-                          value: 'incremental',
-                          child: Text(text('增量同步', 'Incremental')),
-                        ),
-                        DropdownMenuItem(
-                          value: 'full',
-                          child: Text(text('全量同步', 'Full')),
-                        ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() {
-                                _mode = value!;
-                                _dirty = true;
-                              }),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('source-conflict-$_conflict'),
-                      initialValue: _conflict,
-                      decoration:
-                          _decoration(text('内容冲突处理', 'Conflict handling')),
-                      items: [
-                        DropdownMenuItem(
-                          value: 'overwrite',
-                          child: Text(text('覆盖已有内容', 'Overwrite')),
-                        ),
-                        DropdownMenuItem(
-                          value: 'skip',
-                          child: Text(text('跳过已有内容', 'Skip')),
-                        ),
-                      ],
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() {
-                                _conflict = value!;
-                                _dirty = true;
-                              }),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(text('同步源端删除', 'Sync source deletions')),
-                      subtitle: Text(
-                        text(
-                          '开启后，源端移除的文档也会从知识库中删除。',
-                          'Removing source documents will also remove their knowledge base copies.',
-                        ),
+                          DropdownMenuItem(
+                            value: '0 0 * * * *',
+                            child: Text(text('每小时', 'Hourly')),
+                          ),
+                          DropdownMenuItem(
+                            value: '0 0 */6 * * *',
+                            child: Text(text('每 6 小时', 'Every 6 hours')),
+                          ),
+                          DropdownMenuItem(
+                            value: '0 0 */12 * * *',
+                            child: Text(text('每 12 小时', 'Every 12 hours')),
+                          ),
+                          if (![
+                            '',
+                            '0 0 * * * *',
+                            '0 0 */6 * * *',
+                            '0 0 */12 * * *',
+                          ].contains(_schedule))
+                            DropdownMenuItem(
+                              value: _schedule,
+                              child: Text(_schedule),
+                            ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() {
+                                  _schedule = value!;
+                                  _dirty = true;
+                                }),
                       ),
-                      value: _deletions,
-                      onChanged: _busy
-                          ? null
-                          : (value) => setState(() {
-                                _deletions = value;
-                                _dirty = true;
-                              }),
-                    ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('source-mode-$_mode'),
+                        initialValue: _mode,
+                        decoration: _decoration(text('同步方式', 'Sync mode')),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'incremental',
+                            child: Text(text('增量同步', 'Incremental')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'full',
+                            child: Text(text('全量同步', 'Full')),
+                          ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() {
+                                  _mode = value!;
+                                  _dirty = true;
+                                }),
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('source-conflict-$_conflict'),
+                        initialValue: _conflict,
+                        decoration:
+                            _decoration(text('内容冲突处理', 'Conflict handling')),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'overwrite',
+                            child: Text(text('覆盖已有内容', 'Overwrite')),
+                          ),
+                          DropdownMenuItem(
+                            value: 'skip',
+                            child: Text(text('跳过已有内容', 'Skip')),
+                          ),
+                        ],
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() {
+                                  _conflict = value!;
+                                  _dirty = true;
+                                }),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(text('同步源端删除', 'Sync source deletions')),
+                        subtitle: Text(
+                          text(
+                            '开启后，源端移除的文档也会从知识库中删除。',
+                            'Removing source documents will also remove their knowledge base copies.',
+                          ),
+                        ),
+                        value: _deletions,
+                        onChanged: _busy
+                            ? null
+                            : (value) => setState(() {
+                                  _deletions = value;
+                                  _dirty = true;
+                                }),
+                      ),
+                    ],
                     if (_dirty)
                       Text(text('更改尚未保存。', 'Changes are not saved yet.')),
                     Wrap(
@@ -745,42 +761,47 @@ class _KnowledgeBaseDataSourceEditorState
                           onPressed: _busy ? null : _save,
                           child: Text(text('保存同步配置', 'Save sync settings')),
                         ),
-                        OutlinedButton(
-                          onPressed:
-                              _busy || _syncing ? null : () => _operate('sync'),
-                          child: Text(text('立即同步', 'Sync now')),
-                        ),
-                        OutlinedButton(
-                          onPressed: _busy
-                              ? null
-                              : () => _operate(
-                                    _source!['status'] == 'paused'
-                                        ? 'resume'
-                                        : 'pause',
-                                  ),
-                          child: Text(
-                            _source!['status'] == 'paused'
-                                ? text('启用计划同步', 'Resume schedule')
-                                : text('暂停计划同步', 'Pause schedule'),
+                        if (!_forWorkspace) ...[
+                          OutlinedButton(
+                            onPressed: _busy || _syncing
+                                ? null
+                                : () => _operate('sync'),
+                            child: Text(text('立即同步', 'Sync now')),
                           ),
-                        ),
+                          OutlinedButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _operate(
+                                      _source!['status'] == 'paused'
+                                          ? 'resume'
+                                          : 'pause',
+                                    ),
+                            child: Text(
+                              _source!['status'] == 'paused'
+                                  ? text('启用计划同步', 'Resume schedule')
+                                  : text('暂停计划同步', 'Pause schedule'),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
-                    const Divider(height: 28),
-                    Text(
-                      text('同步记录', 'Sync history'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    if (_source!['latest_sync_log'] != null)
-                      Text(_status(_source!['latest_sync_log']['status'])),
-                    for (final log in _logs)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(_status(log['status'])),
-                        subtitle: Text(
-                          '${log['started_at'] ?? ''}\n${text('新增 / 更新 / 删除 / 失败', 'Created / updated / deleted / failed')}: ${log['items_created'] ?? 0} / ${log['items_updated'] ?? 0} / ${log['items_deleted'] ?? 0} / ${log['items_failed'] ?? 0}',
-                        ),
+                    if (!_forWorkspace) ...[
+                      const Divider(height: 28),
+                      Text(
+                        text('同步记录', 'Sync history'),
+                        style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
+                      if (_source!['latest_sync_log'] != null)
+                        Text(_status(_source!['latest_sync_log']['status'])),
+                      for (final log in _logs)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(_status(log['status'])),
+                          subtitle: Text(
+                            '${log['started_at'] ?? ''}\n${text('新增 / 更新 / 删除 / 失败', 'Created / updated / deleted / failed')}: ${log['items_created'] ?? 0} / ${log['items_updated'] ?? 0} / ${log['items_deleted'] ?? 0} / ${log['items_failed'] ?? 0}',
+                          ),
+                        ),
+                    ],
                     const SizedBox(height: 16),
                     Align(
                       alignment: Alignment.centerLeft,
