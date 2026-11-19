@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../application/knowledge_graph_tool_bridge.dart';
 
 import 'package:appflowy/plugins/document/application/note_link_service.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -115,11 +116,16 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
   void initState() {
     super.initState();
     _entitiesOnly = false;
+    if(widget.layoutCacheKey!=null)KnowledgeGraphToolBridge.register(widget.layoutCacheKey!,_updateFromTool);
   }
 
   @override
   void didUpdateWidget(KnowledgeGraphView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if(oldWidget.layoutCacheKey!=widget.layoutCacheKey) {
+      if(oldWidget.layoutCacheKey!=null)KnowledgeGraphToolBridge.unregister(oldWidget.layoutCacheKey!);
+      if(widget.layoutCacheKey!=null)KnowledgeGraphToolBridge.register(widget.layoutCacheKey!,_updateFromTool);
+    }
     if (oldWidget.focusView?.id != widget.focusView?.id) {
       _source = null;
       _focus = null;
@@ -145,8 +151,24 @@ class _KnowledgeGraphViewState extends State<KnowledgeGraphView> {
 
   @override
   void dispose() {
+    if(widget.layoutCacheKey!=null)KnowledgeGraphToolBridge.unregister(widget.layoutCacheKey!);
     _search.dispose();
     super.dispose();
+  }
+
+  Future<Map<String,dynamic>> _updateFromTool(Map<String,dynamic> settings) async {
+    if(!mounted)throw StateError('图谱已关闭');
+    setState(() {
+      if(settings['query'] is String)_search.text=settings['query'] as String;
+      if(settings['show_labels'] is bool)_labels=settings['show_labels'] as bool;
+      if(settings['show_hierarchy'] is bool)_hierarchy=settings['show_hierarchy'] as bool;
+      if(settings['show_isolated'] is bool)_orphans=settings['show_isolated'] as bool;
+      if(settings['depth'] is int)_depth=(settings['depth'] as int).clamp(1,2);
+      _source=null;
+    });
+    if(settings['zoom'] is num)_canvasKey.currentState?.zoom((settings['zoom'] as num).toDouble());
+    if(settings['positions'] is Map)await _canvasKey.currentState?.updatePositions(Map<String,dynamic>.from(settings['positions'] as Map));
+    return {'query':_search.text,'show_labels':_labels,'show_hierarchy':_hierarchy,'show_isolated':_orphans,'depth':_depth};
   }
 
   @override

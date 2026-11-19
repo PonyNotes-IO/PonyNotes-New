@@ -6,15 +6,15 @@ import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/people_with_access_section.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/access_level_list_widget.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/shared_user_widget.dart';
+import 'package:appflowy/features/share_tab/presentation/widgets/edit_access_level_widget.dart';
 import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/colorscheme/default_colorscheme.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -62,161 +62,334 @@ String? _extractCurrentUserUuid(UserProfilePB? user) {
 }
 
 class ShareTab extends StatefulWidget {
-  const ShareTab({
-    super.key,
-    required this.workspaceId,
-    required this.pageId,
-    required this.workspaceName,
-    required this.workspaceIcon,
-    required this.isInProPlan,
-    required this.onUpgradeToPro,
-  });
-
-  final String workspaceId;
-  final String pageId;
-
-  // these 2 values should be provided by the share tab bloc
-  final String workspaceName;
-  final String workspaceIcon;
-
-  final bool isInProPlan;
-  final VoidCallback onUpgradeToPro;
+  const ShareTab({super.key});
 
   @override
   State<ShareTab> createState() => _ShareTabState();
 }
 
 class _ShareTabState extends State<ShareTab> {
-  final TextEditingController _inviteController = TextEditingController();
+  final _inviteController = TextEditingController();
   late final ShareTabBloc _bloc;
-
-  int _permissionIdFromAccessLevel(ShareAccessLevel level) {
-    switch (level) {
-      case ShareAccessLevel.readOnly:
-        return 1;
-      case ShareAccessLevel.readAndComment:
-        return 2;
-      case ShareAccessLevel.readAndWrite:
-        return 3;
-      case ShareAccessLevel.fullAccess:
-        return 4;
-    }
-  }
+  String? _selectedUserId;
+  ShareAccessLevel _inviteAccess = ShareAccessLevel.readAndWrite;
+  bool _inviting = false;
 
   @override
   void initState() {
     super.initState();
-
     _bloc = context.read<ShareTabBloc>();
+    _bloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
+    if (_bloc.state.selectedPermissionId !=
+        ShareAccessLevel.readAndWrite.permissionId) {
+      _bloc.add(ShareTabEvent.updateShareLinkPermission(
+        permissionId: ShareAccessLevel.readAndWrite.permissionId,
+      ));
+    }
   }
 
   @override
   void dispose() {
     _inviteController.dispose();
-    _bloc.add(ShareTabEvent.clearState());
-
+    if (!_bloc.isClosed) {
+      _bloc.add(ShareTabEvent.clearState());
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocListener<ShareTabBloc, ShareTabState>(
+      listenWhen: (previous, current) =>
+          !previous.linkCopied && current.linkCopied,
+      listener: (_, __) => showToastNotification(
+        message: LocaleKeys.shareTab_copiedLinkToClipboard.tr(),
+      ),
+      child: BlocConsumer<ShareTabBloc, ShareTabState>(
+        listenWhen: (previous, current) =>
+            previous.addCollaboratorResult != current.addCollaboratorResult ||
+            previous.errorMessage != current.errorMessage ||
+            previous.removeResult != current.removeResult ||
+            previous.updateAccessLevelResult !=
+                current.updateAccessLevelResult ||
+            previous.turnIntoMemberResult != current.turnIntoMemberResult,
+        listener: _onListenShareWithUserState,
+        builder: (context, state) {
+          final theme = AppFlowyTheme.of(context);
+          if (_isShareManagementReadOnly(context, state)) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '该文档为接收的只读发布内容，不能复制分享链接或邀请协作者。',
+                style: theme.textStyle.body
+                    .standard(color: theme.textColorScheme.secondary),
+              ),
+            );
+          }
+
+          final searching = _inviteController.text.trim().isNotEmpty;
+          final members = state.users.isEmpty
+              ? state.users
+              : buildUsersListWithOwner(
+                  users: state.users, currentUser: state.currentUser);
+          final memberIds = members.map((user) => user.userId).toSet();
+          final results = searching
+              ? state.availableUsers
+                  .where(
+                    (user) =>
+                        user.userId != null &&
+                        user.userId!.isNotEmpty &&
+                        !memberIds.contains(user.userId),
+                  )
+                  .toList()
+              : const <SharedUser>[];
+          final selected = results
+              .firstWhereOrNull((user) => user.userId == _selectedUserId);
+          final callbacks = _buildPeopleWithAccessSectionCallbacks(context);
+          final currentUser = state.currentUser;
+          final viewer = SharedUser(
+            userId: _extractCurrentUserUuid(currentUser) ??
+                currentUser?.id.toString(),
+            uid: currentUser?.id.toString(),
+            name: currentUser?.name ?? '',
+            email: currentUser?.email ?? '',
+            role: ShareRole.member,
+            accessLevel:
+                _currentShareAccessLevel(state) ?? ShareAccessLevel.readOnly,
+          );
+          final rows = searching ? results : members;
+          final input = _buildInviteField(context, selected);
+          final footer = _buildLinkAndCopyButton(state);
+          final showList = rows.isNotEmpty || state.isLoading || searching;
+          final list = showList
+              ? ListView(
+                  key: ValueKey(
+                      searching ? 'share-search-results' : 'share-members'),
+                  primary: false,
+                  shrinkWrap: true,
+                  padding:
+                      EdgeInsets.only(top: 12, bottom: rows.isEmpty ? 0 : 32),
+                  children: [
+                    if (state.isLoading ||
+                        (searching && state.isSearchingUsers))
+                      const LinearProgressIndicator(minHeight: 2)
+                    else if (rows.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        child: Text(
+                          'shareTab.noMatchingUsers'.tr(),
+                          style: theme.textStyle.caption
+                              .standard(color: theme.textColorScheme.secondary),
+                        ),
+                      )
+                    else
+                      for (final user in rows)
+                        if (searching)
+                          _buildSearchResult(context, user)
+                        else
+                          SharedUserWidget(
+                            compact: true,
+                            user: user,
+                            currentUser: viewer,
+                            callbacks: AccessLevelListCallbacks(
+                              onSelectAccessLevel: (level) =>
+                                  callbacks.onSelectAccessLevel(user, level),
+                              onRemoveAccess: () =>
+                                  callbacks.onRemoveAccess(user),
+                              onTurnIntoMember: () =>
+                                  callbacks.onTurnIntoMember(user),
+                            ),
+                          ),
+                  ],
+                )
+              : null;
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxHeight < 163) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(children: [
+                    input,
+                    if (list != null) SizedBox(height: 120, child: list),
+                    const SizedBox(height: 16),
+                    footer,
+                  ]),
+                );
+              }
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 19),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    input,
+                    if (list != null) Flexible(child: list),
+                    const SizedBox(height: 16),
+                    footer,
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildInviteField(BuildContext context, SharedUser? selected) {
     final theme = AppFlowyTheme.of(context);
+    final colors = Theme.of(context).colorScheme;
+    void invite() {
+      if (selected == null || _inviting) return;
+      setState(() => _inviting = true);
+      _bloc.add(ShareTabEvent.addCollaborator(
+          user: selected, accessLevel: _inviteAccess));
+    }
 
-    return BlocConsumer<ShareTabBloc, ShareTabState>(
-      listener: (context, state) {
-        _onListenShareWithUserState(context, state);
-      },
-      builder: (context, state) {
-        if (state.isLoading) {
-          return const SizedBox.shrink();
-        }
-        final isReadOnly = _isShareManagementReadOnly(context, state);
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _inviteController,
+            enabled: !_inviting,
+            textInputAction: TextInputAction.done,
+            style: theme.textStyle.body
+                .standard(color: theme.textColorScheme.primary),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              hintText: 'shareTab.collaboratorSearch'.tr(),
+              hintStyle: theme.textStyle.body
+                  .standard(color: theme.textColorScheme.secondary),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                    color: _inviteController.text.isEmpty
+                        ? theme.textColorScheme.primary.withValues(alpha: .16)
+                        : colors.primary.withValues(alpha: .55)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.primary),
+              ),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _selectedUserId = null;
+                _inviteAccess = ShareAccessLevel.readAndWrite;
+              });
+              _bloc.add(ShareTabEvent.searchAvailableUsers(query: value));
+            },
+            onSubmitted: (_) => invite(),
+          ),
+        ),
+        const SizedBox(width: 10),
+        FilledButton(
+          onPressed: selected == null || _inviting ? null : invite,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(76, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          child: Text(LocaleKeys.shareTab_invite.tr()),
+        ),
+      ],
+    );
+  }
 
-        // final currentUser = state.currentUser;
-        // final accessLevel = state.users
-        //     .firstWhereOrNull(
-        //       (user) => user.email == currentUser?.email,
-        //     )
-        //     ?.accessLevel;
-        // final isFullAccess = accessLevel == ShareAccessLevel.fullAccess;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isReadOnly) ...[
-              VSpace(theme.spacing.l),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(theme.spacing.m),
-                decoration: BoxDecoration(
-                  color: theme.surfaceContainerColorScheme.layer01,
-                  borderRadius: BorderRadius.circular(theme.spacing.m),
+  Widget _buildSearchResult(BuildContext context, SharedUser user) {
+    final theme = AppFlowyTheme.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.primary;
+    final dark = colors.brightness == Brightness.dark;
+    final selected = user.userId == _selectedUserId;
+    return Material(
+      color: selected
+          ? (dark ? const Color(0xFF343434) : _subtleShareSurface(context))
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: InkWell(
+          overlayColor: WidgetStatePropertyAll(
+            theme.textColorScheme.primary.withValues(alpha: .06),
+          ),
+          borderRadius: BorderRadius.circular(12),
+          onTap: _inviting
+              ? null
+              : () => setState(() {
+                    _selectedUserId = selected ? null : user.userId;
+                    _inviteAccess = ShareAccessLevel.readAndWrite;
+                  }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                AFAvatar(
+                    name: user.name, url: user.avatarUrl, size: AFAvatarSize.l),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(user.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textStyle.body.standard(
+                              weight: FontWeight.w600,
+                              color: theme.textColorScheme.primary)),
+                      Text(user.phone ?? user.email,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textStyle.caption.standard(
+                              color: theme.textColorScheme.secondary)),
+                    ],
+                  ),
                 ),
-                child: FlowyText.regular(
-                  '该文档为接收的只读发布内容，不能复制分享链接或邀请协作者。',
-                  color: theme.textColorScheme.secondary,
+                if (selected)
+                  EditAccessLevelWidget(
+                    compact: true,
+                    disabled: _inviting,
+                    selectedAccessLevel: _inviteAccess,
+                    supportedAccessLevels: const [
+                      ShareAccessLevel.readOnly,
+                      ShareAccessLevel.readAndWrite,
+                      ShareAccessLevel.fullAccess
+                    ],
+                    additionalUserManagementOptions: const [],
+                    callbacks: AccessLevelListCallbacks.none().copyWith(
+                      onSelectAccessLevel: (level) =>
+                          setState(() => _inviteAccess = level),
+                    ),
+                  ),
+                const SizedBox(width: 18),
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? accent
+                        : _subtleShareSurface(context, opacity: .08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: selected
+                      ? Icon(Icons.check,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.onPrimary)
+                      : null,
                 ),
-              ),
-            ] else ...[
-              // share page with user by email
-              // only user with full access can invite others
-              VSpace(theme.spacing.l),
-              Row(
-                children: [
-                  FlowyText("当前文档为私密，仅自己和协作者可访问"),
-                ],
-              ),
-              VSpace(theme.spacing.m),
-
-              // 添加权限选择器
-              _buildPermissionSelector(context, state),
-
-              VSpace(theme.spacing.m),
-              _buildLinkAndCopyButton(
-                state.shareLink,
-                state.users.isNotEmpty,
-              ),
-            ],
-
-            // ShareWithUserWidget(
-            //   controller: controller,
-            //   disabled: !isFullAccess,
-            //   onInvite: (emails) => _handleShareWithUser(
-            //     emails: emails,
-            //   ),
-            // ),
-
-            // if (!widget.isInProPlan && !state.hasClickedUpgradeToPro) ...[
-            //   UpgradeToProWidget(
-            //     onClose: () {
-            //       context.read<ShareTabBloc>().add(
-            //             ShareTabEvent.upgradeToProClicked(),
-            //           );
-            //     },
-            //     onUpgrade: widget.onUpgradeToPro,
-            //   ),
-            // ],
-
-            // general access
-            // if (state.sectionType == SharedSectionType.public) ...[
-            //   VSpace(theme.spacing.m),
-            //   GeneralAccessSection(
-            //     group: SharedGroup(
-            //       id: widget.workspaceId,
-            //       name: widget.workspaceName,
-            //       icon: widget.workspaceIcon,
-            //     ),
-            //   ),
-            // ],
-
-            // copy link
-            // VSpace(theme.spacing.xl),
-            // CopyLinkWidget(shareLink: state.shareLink),
-            // VSpace(theme.spacing.m),
-          ],
-        );
-      },
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -301,9 +474,13 @@ class _ShareTabState extends State<ShareTab> {
         final shareTabBloc = context.read<ShareTabBloc>();
         final currentUser = shareTabBloc.state.currentUser;
         final currentUid = currentUser?.id.toString();
-        final removingSelf = currentUid != null &&
-            currentUid.isNotEmpty &&
-            user.userId == currentUid;
+        final currentUuid = _extractCurrentUserUuid(currentUser);
+        final currentEmail = currentUser?.email.trim().toLowerCase();
+        final removingSelf = (currentUid != null &&
+                (user.userId == currentUid || user.uid == currentUid)) ||
+            (currentUuid != null && user.userId == currentUuid) ||
+            (currentEmail?.isNotEmpty == true &&
+                user.email.trim().toLowerCase() == currentEmail);
         if (removingSelf) {
           showConfirmDialog(
             context: context,
@@ -329,72 +506,29 @@ class _ShareTabState extends State<ShareTab> {
     );
   }
 
-  void _handleShareWithUser({required List<String> emails}) {
-    _bloc.add(
-      ShareTabEvent.inviteUsers(
-        emails: emails,
-        accessLevel: ShareAccessLevel.readAndWrite,
-      ),
-    );
-  }
-
-  /// 构建包含拥有者的完整用户列表，拥有者始终在最前面
-  List<SharedUser> _buildUsersListWithOwner({
-    required SharedUsers users,
-    required UserProfilePB? currentUser,
-  }) =>
-      buildUsersListWithOwner(users: users, currentUser: currentUser);
-
   void _onListenShareWithUserState(
     BuildContext context,
     ShareTabState shareState,
   ) {
-    // 【健壮性修复 2026-07-19】复制分享链接的成功/失败提示改由此处统一反馈。
-    //
-    // 原实现在按钮 onTap 中「派发事件后立刻无条件弹出『已复制』」，完全不等写入结果。
-    // 一旦服务端未写入邀请记录（如鉴权失效返回 401），用户拿到的是**死链**——
-    // 接收方打开只会转圈失败，而分享者以为分享成功。
-    // 详见 devops-docs/2026-07-19-全线登录失败故障复盘-gotrue端口未发布.md
-    if (shareState.linkCopied) {
-      showToastNotification(
-        message: LocaleKeys.shareTab_copiedLinkToClipboard.tr(),
-      );
-    } else if (shareState.errorMessage.isNotEmpty) {
+    if (shareState.errorMessage.isNotEmpty) {
       showToastNotification(
         message: shareState.errorMessage,
         type: ToastificationType.error,
       );
     }
 
-    final shareResult = shareState.shareResult;
-    if (shareResult != null) {
-      shareResult.fold((success) {
-        // clear the controller to avoid showing the previous emails
-        _inviteController.clear();
-
-        showToastNotification(
-          message: LocaleKeys.shareTab_invitationSent.tr(),
-        );
-      }, (error) {
-        String message;
-        switch (error.code) {
-          case ErrorCode.InvalidGuest:
-            message = LocaleKeys.shareTab_emailAlreadyInList.tr();
-            break;
-          case ErrorCode.FreePlanGuestLimitExceeded:
-            message = LocaleKeys.shareTab_upgradeToProToInviteGuests.tr();
-            break;
-          case ErrorCode.PaidPlanGuestLimitExceeded:
-            message = LocaleKeys.shareTab_maxGuestsReached.tr();
-            break;
-          default:
-            message = error.msg;
-        }
-        showToastNotification(
-          message: message,
-          type: ToastificationType.error,
-        );
-      });
+    final addResult = shareState.addCollaboratorResult;
+    if (_inviting && addResult != null) {
+      setState(() => _inviting = false);
+      addResult.fold((_) {
+        setState(() {
+          _inviteController.clear();
+          _selectedUserId = null;
+          _inviteAccess = ShareAccessLevel.readAndWrite;
+        });
+        _bloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
+        showToastNotification(message: LocaleKeys.shareTab_invitationSent.tr());
+      }, (_) {});
     }
 
     final removeResult = shareState.removeResult;
@@ -440,258 +574,98 @@ class _ShareTabState extends State<ShareTab> {
     }
   }
 
-  Widget _buildPermissionDescription(AppFlowyThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText.medium(
-          '权限说明',
-          color: theme.textColorScheme.primary,
-        ),
-        VSpace(theme.spacing.xs),
-        ...ShareAccessLevel.values.map(
-          (level) => Padding(
-            padding: EdgeInsets.only(bottom: theme.spacing.xs),
-            child: Text(
-              '${level.title}: ${level.subtitle}',
-              style: theme.textStyle.caption.standard(
-                color: theme.textColorScheme.secondary,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _showCollaboratorsDialog(BuildContext context) {
-    _bloc.add(ShareTabEvent.loadSharedUsers());
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return BlocProvider.value(
-          value: _bloc,
-          child: CollaboratorsDialog(
-            workspaceId: _bloc.workspaceId,
-            pageId: _bloc.pageId,
-          ),
-        );
-      },
-    );
-  }
-
-  /// 是否启用链接权限下拉选择（默认隐藏，后续可开放）
-  static const bool _enablePermissionDropdown = false;
-
-  /// 构建权限选择器
-  Widget _buildPermissionSelector(BuildContext context, ShareTabState state) {
+  Color _subtleShareSurface(BuildContext context, {double opacity = .045}) {
     final theme = AppFlowyTheme.of(context);
-    final permissions = ShareAccessLevel.values
-        .where((level) => level != ShareAccessLevel.readAndComment)
-        .toList();
-    final permissionItems = permissions
-        .map((level) => MapEntry(_permissionIdFromAccessLevel(level), level))
-        .fold<Map<int, ShareAccessLevel>>(<int, ShareAccessLevel>{},
-            (acc, entry) {
-          acc.putIfAbsent(entry.key, () => entry.value);
-          return acc;
-        })
-        .entries
-        .toList();
+    return Color.alphaBlend(
+      theme.textColorScheme.primary.withValues(alpha: opacity),
+      theme.surfaceContainerColorScheme.layer01,
+    );
+  }
 
-    final selectedPermissionId =
-        permissionItems.any((entry) => entry.key == state.selectedPermissionId)
-            ? state.selectedPermissionId
-            : (permissionItems.isNotEmpty ? permissionItems.first.key : null);
-
-    // 固定使用"编辑"权限（readAndWrite = 3），同步状态
-    const editPermissionId = 3;
-    if (state.selectedPermissionId != editPermissionId) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          context.read<ShareTabBloc>().add(
-                ShareTabEvent.updateShareLinkPermission(
-                    permissionId: editPermissionId),
-              );
-        }
-      });
-    }
-
+  Widget _buildLinkAndCopyButton(ShareTabState state) {
+    final theme = AppFlowyTheme.of(context);
+    final colors = Theme.of(context).colorScheme;
+    final accent = colors.primary;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: theme.spacing.m,
-        vertical: theme.spacing.s,
-      ),
+      constraints: const BoxConstraints(minHeight: 70),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
-        borderRadius: BorderRadius.circular(theme.spacing.m),
-        border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
-        ),
+        color: _subtleShareSurface(context),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          FlowyText(
-            '链接权限：',
-            color: theme.textColorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          if (_enablePermissionDropdown)
-            // 下拉选择器（暂时隐藏，后续开放）
-            Expanded(
-              child: DropdownButton<int>(
-                value: selectedPermissionId,
-                isExpanded: true,
-                underline: const SizedBox(),
-                style: theme.textStyle.body.standard(
-                  color: theme.textColorScheme.primary,
-                ),
-                dropdownColor: theme.surfaceContainerColorScheme.layer01,
-                borderRadius: BorderRadius.circular(8),
-                items: permissionItems.map((entry) {
-                  final level = entry.value;
-                  return DropdownMenuItem<int>(
-                    value: entry.key,
-                    child: Row(
-                      children: [
-                        FlowySvg(
-                          level.icon,
-                          size: const Size(18, 18),
-                          color: theme.textColorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        FlowyText(
-                          level.title,
-                          color: theme.textColorScheme.primary,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    context.read<ShareTabBloc>().add(
-                          ShareTabEvent.updateShareLinkPermission(
-                              permissionId: value),
-                        );
-                  }
-                },
+          if (MediaQuery.sizeOf(context).width >= 380) ...[
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: theme.surfaceContainerColorScheme.layer01,
+                borderRadius: BorderRadius.circular(10),
               ),
-            )
-          else ...[
-            // 固定显示"编辑"权限（当前默认）
-            FlowySvg(
-              ShareAccessLevel.readAndWrite.icon,
-              size: const Size(18, 18),
-              color: theme.textColorScheme.primary,
+              child: Center(
+                child: Icon(
+                  Icons.group_rounded,
+                  size: 18,
+                  color: colors.brightness == Brightness.dark
+                      ? Colors.white
+                      : ColorSchemeConstants.lightMain1,
+                ),
+              ),
             ),
-            const SizedBox(width: 8),
-            FlowyText(
-              ShareAccessLevel.readAndWrite.title,
-              color: theme.textColorScheme.primary,
-            ),
+            const SizedBox(width: 12),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLinkAndCopyButton(String shareLink, bool hasSharedUsers) {
-    final theme = AppFlowyTheme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: EdgeInsets.all(theme.spacing.l),
-      decoration: BoxDecoration(
-        color:
-            isDark ? theme.surfaceContainerColorScheme.layer01 : Colors.white,
-        borderRadius: BorderRadius.circular(theme.spacing.l),
-        border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
-        ),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: theme.brandColorScheme.skyline,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Center(
-              child: FlowySvg(
-                FlowySvgs.share_tab_icon_s,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          HSpace(theme.spacing.l),
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                FlowyText.medium(
-                  LocaleKeys.shareAction_shareTabTitle.tr(),
-                  figmaLineHeight: 18.0,
-                  color: theme.textColorScheme.primary,
-                ),
-                VSpace(theme.spacing.xs),
-                FlowyText.regular(
-                  LocaleKeys.shareAction_shareTabDescription.tr(),
-                  fontSize: 13.0,
-                  figmaLineHeight: 18.0,
-                  color: Theme.of(context).hintColor,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Text('shareTab.inviteByLink'.tr(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textStyle.body.standard(
+                        weight: FontWeight.w600,
+                        color: theme.textColorScheme.primary)),
+                Text(LocaleKeys.shareAction_shareTabDescription.tr(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textStyle.caption
+                        .standard(color: theme.textColorScheme.secondary)),
               ],
             ),
           ),
-          HSpace(theme.spacing.m),
-          _RoundIconButton(
-            icon: FlowySvgs.toolbar_link_m,
-            tooltip: LocaleKeys.shareTab_copyLink.tr(),
-            onTap: () {
-              final enableCloudShare =
-                  context.read<ShareBloc?>()?.state.enablePublish ?? false;
-
-              // 当前工作区未连接云服务或不支持发布，同步状态未知，阻止分享
-              if (!enableCloudShare) {
-                showToastNotification(
-                  message: '当前笔记未同步到云端，无法生成分享链接',
-                  description: '请先在设置中连接云服务并开启同步，然后再尝试分享此笔记。',
-                  type: ToastificationType.warning,
-                );
-                return;
-              }
-
-              // 已连接云服务，视为已同步或会自动同步，允许复制链接。
-              // 成功/失败提示由 _onListenShareWithUserState 依据实际写入结果给出，
-              // 此处不再无条件弹「已复制」（否则写入失败时用户会拿到死链而不自知）。
-              context.read<ShareTabBloc>().add(
-                    ShareTabEvent.copyShareLink(link: shareLink),
-                  );
-            },
-          ),
-          HSpace(theme.spacing.s),
-          _RoundIconButton(
-            icon: FlowySvgs.share_tab_icon_s,
-            tooltip: LocaleKeys.shareAction_shareTabTitle.tr(),
-            onTap: () {
-              _showCollaboratorsDialog(context);
-            },
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.textColorScheme.primary,
+              backgroundColor: theme.surfaceContainerColorScheme.layer01,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: const Size(0, 38),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              side: BorderSide(
+                  color: theme.textColorScheme.primary.withValues(alpha: .16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: FlowySvg(FlowySvgs.toolbar_link_m,
+                size: const Size.square(16), color: accent),
+            label: Text(LocaleKeys.shareTab_copyLink.tr()),
+            onPressed: state.shareLink.isEmpty ||
+                    state.selectedPermissionId !=
+                        ShareAccessLevel.readAndWrite.permissionId
+                ? null
+                : () {
+                    if (!(context.read<ShareBloc?>()?.state.enablePublish ??
+                        false)) {
+                      showToastNotification(
+                          message: '当前笔记未同步到云端，无法生成分享链接',
+                          description: '请先在设置中连接云服务并开启同步，然后再尝试分享此笔记。',
+                          type: ToastificationType.warning);
+                      return;
+                    }
+                    _bloc.add(
+                        ShareTabEvent.copyShareLink(link: state.shareLink));
+                  },
           ),
         ],
       ),
@@ -1493,45 +1467,6 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         color: theme.textColorScheme.primary,
         fontSize: 14,
         fontWeight: FontWeight.w500,
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final FlowySvgData icon;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    final bgColor = theme.surfaceContainerColorScheme.layer02;
-
-    return Tooltip(
-      message: tooltip,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: bgColor,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: FlowySvg(
-              icon,
-              color: theme.iconColorScheme.primary,
-            ),
-          ),
-        ),
       ),
     );
   }

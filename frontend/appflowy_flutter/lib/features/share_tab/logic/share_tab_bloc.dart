@@ -207,6 +207,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     } catch (_) {}
 
     final workspaceResolution = await _resolveOwnerWorkspace();
+    final users = await _getSharedUsers();
+
+    final hasClickedUpgradeToPro = workspaceResolution.canProceed
+        ? await repository.getUpgradeToProButtonClicked(
+            workspaceId: workspaceId,
+          )
+        : false;
+
     final shareLink = workspaceResolution.canProceed
         ? ShareConstants.buildShareUrl(
             workspaceId: workspaceId,
@@ -215,14 +223,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             layout: viewLayout,
           )
         : '';
-
-    final users = await _getSharedUsers();
-
-    final hasClickedUpgradeToPro = workspaceResolution.canProceed
-        ? await repository.getUpgradeToProButtonClicked(
-            workspaceId: workspaceId,
-          )
-        : false;
 
     emit(
       state.copyWith(
@@ -392,6 +392,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventCopyShareLink event,
     Emitter<ShareTabState> emit,
   ) async {
+    emit(state.copyWith(linkCopied: false, errorMessage: ''));
     final workspaceResolution = await _resolveOwnerWorkspace();
     if (!workspaceResolution.canProceed) {
       emit(
@@ -518,46 +519,29 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     }
   }
 
+  int _userSearchRevision = 0;
+
   Future<void> _onSearchAvailableUsers(
     ShareTabEventSearchAvailableUsers event,
     Emitter<ShareTabState> emit,
   ) async {
-    emit(
-      state.copyWith(
-        errorMessage: '',
-      ),
-    );
-
-    // If query is empty, return empty list
-    if (event.query.trim().isEmpty) {
-      emit(
-        state.copyWith(
-          availableUsers: [],
-        ),
-      );
-      return;
-    }
-
-    // Use the new search API
-    final result = await repository.searchUsers(
-      query: event.query.trim(),
-      pageNo: 1,
-    );
-
+    final revision = ++_userSearchRevision;
+    final query = event.query.trim();
+    emit(state.copyWith(
+      errorMessage: '',
+      availableUsers: [],
+      isSearchingUsers: query.isNotEmpty,
+    ));
+    if (query.isEmpty) return;
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (revision != _userSearchRevision || emit.isDone) return;
+    final result = await repository.searchUsers(query: query);
+    if (revision != _userSearchRevision || emit.isDone) return;
     result.fold(
-      (users) {
-        emit(
-          state.copyWith(
-            availableUsers: users,
-          ),
-        );
-      },
+      (users) =>
+          emit(state.copyWith(availableUsers: users, isSearchingUsers: false)),
       (error) => emit(
-        state.copyWith(
-          errorMessage: error.msg,
-          availableUsers: [],
-        ),
-      ),
+          state.copyWith(errorMessage: error.msg, isSearchingUsers: false)),
     );
   }
 
@@ -1418,7 +1402,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       // 同类问题此前已在"首次生成分享链接"处修过一次（提交 982696181）。
       final code = _businessCode(response.body);
       if (code != null && code != 0) {
-        final errorMessage = '移除成员失败: ${_businessMessage(response.body) ?? "错误码 $code"}';
+        final errorMessage =
+            '移除成员失败: ${_businessMessage(response.body) ?? "错误码 $code"}';
         Log.error('$errorMessage (code=$code, body=${response.body})');
         return (false, errorMessage);
       }

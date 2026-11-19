@@ -498,6 +498,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       widget.view.id,
       _captureSnapshotForDuplicate,
     );
+    HandwritingSaberDataService.registerToolController(widget.view.id,_controlToolFromMcp);
     // 合并 repaint：当当前笔迹或激光笔列表变化时，更新 tick 以触发局部重绘
     _currentStrokeNotifier.addListener(() {
       _repaintTick.value++;
@@ -522,6 +523,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       unawaited(_flushSaveForView(oldWidget.view.id));
       HandwritingSaberDataService.unregisterReloadCallback(oldWidget.view.id);
       HandwritingSaberDataService.unregisterSnapshotProvider(oldWidget.view.id);
+      HandwritingSaberDataService.unregisterToolController(oldWidget.view.id);
+      HandwritingSaberDataService.registerToolController(widget.view.id,_controlToolFromMcp);
       HandwritingSaberDataService.registerReloadCallback(
         widget.view.id,
         _reloadAfterImport,
@@ -4257,6 +4260,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _scheduleSave();
   }
 
+  Map<String,dynamic> _controlToolFromMcp(Map<String,dynamic> request) {
+    if(!mounted)throw StateError('手写页面已关闭');
+    if(request['color'] is int)_onColorChanged(Color(request['color'] as int));
+    if(request['width'] is num) {
+      final width=(request['width'] as num).toDouble();
+      if(width<=0 || width>100)throw const FormatException('画笔宽度须为0到100之间');
+      _onStrokeWidthChanged(width);
+    }
+    if(request['tool'] is String) {
+      final id=ToolId.values.byName(request['tool'] as String);
+      final Tool tool=switch(id) {
+        ToolId.eraser=>Eraser(strokeWidth:_globalStrokeWidthNotifier.value),
+        ToolId.select=>const SelectTool(),
+        ToolId.pdfTextSelect=>const PdfTextSelectTool(),
+        _=>Pen(toolId:id,color:_globalColorNotifier.value,strokeWidth:_globalStrokeWidthNotifier.value),
+      };
+      _onToolChanged(tool);
+    }
+    return {'tool':_currentToolNotifier.value.toolId.name,'color':_globalColorNotifier.value.toARGB32(),'width':_globalStrokeWidthNotifier.value};
+  }
+
   void _onToolChanged(Tool tool) {
     debugPrint('🦋[HandwritingSaber] _onToolChanged: ${tool.toolId}');
 
@@ -5550,6 +5574,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 注销导入 reload 回调
     HandwritingSaberDataService.unregisterReloadCallback(widget.view.id);
     HandwritingSaberDataService.unregisterSnapshotProvider(widget.view.id);
+    HandwritingSaberDataService.unregisterToolController(widget.view.id);
     _remoteUpdateListener?.stop();
     _remoteUpdateListener = null;
     _remoteReloadTimer?.cancel();

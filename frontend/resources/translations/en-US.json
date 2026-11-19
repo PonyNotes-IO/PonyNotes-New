@@ -3712,6 +3712,10 @@
     "insertBelow": "Insert below"
   },
   "shareTab": {
+    "documentShare": "Share",
+    "collaboratorSearch": "Enter a username or phone number",
+    "inviteByLink": "Invite collaborators by link",
+    "noMatchingUsers": "No matching users",
     "accessLevel": {
       "view": "View",
       "comment": "Comment",

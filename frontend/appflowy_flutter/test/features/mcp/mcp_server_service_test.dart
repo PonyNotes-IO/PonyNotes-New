@@ -180,6 +180,7 @@ void main() {
         return CallToolResult(content: [TextContent(text: 'executed')]);
       },
     );
+    await McpPermissions.instance.setAllowed(spec.name, true);
     tools.toolSpecs
       ..clear()
       ..add(spec);
@@ -359,18 +360,18 @@ void main() {
   });
 
   // 回归：注册表一度只填了 3 个工具，内部 AI 因此看不到检索与写操作。
-  test('工具注册表覆盖全部 37 个工具，只读/破坏性标记正确', () async {
+  test('扩展目录保留原有36个工具及其只读/破坏性标记', () async {
     final tools = McpTools(endpoint: 'test', version: '1.0.0');
     final specs = tools.toolSpecs;
 
-    expect(specs.length, 37);
+    expect(specs.length, 97);
     expect(
       specs.map((spec) => spec.name).toSet().length,
-      37,
+      specs.length,
       reason: '工具名不应重复',
     );
     expect(
-      specs.where((spec) => spec.readOnly).map((spec) => spec.name),
+      specs.where((spec) => McpPermissions.legacyTools.contains(spec.name) && spec.readOnly).map((spec) => spec.name),
       unorderedEquals([
         'get_context',
         'list_workspaces',
@@ -387,7 +388,7 @@ void main() {
       ]),
     );
     expect(
-      specs.where((spec) => spec.destructive).map((spec) => spec.name),
+      specs.where((spec) => McpPermissions.legacyTools.contains(spec.name) && spec.destructive).map((spec) => spec.name),
       unorderedEquals([
         'delete_page',
         'delete_block',
@@ -396,7 +397,7 @@ void main() {
         'remove_note_reference',
       ]),
     );
-    expect(specs.where((spec) => !spec.readOnly).length, 25);
+    expect(specs.where((spec) => McpPermissions.legacyTools.contains(spec.name) && !spec.readOnly).length, 24);
 
     final unknown = await tools.executeTool('no_such_tool', const {});
     expect(unknown.isError, isTrue);

@@ -1,0 +1,593 @@
+{
+  "source": "MCP工具建议清单.xlsx",
+  "approved_count": 66,
+  "tools": [
+    {
+      "name": "create_workspace",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "manage_workspace",
+      "change": "建议新增",
+      "actions": [
+        "update_workspace",
+        "get_workspace_settings",
+        "update_workspace_settings",
+        "leave_workspace",
+        "delete_workspace"
+      ]
+    },
+    {
+      "name": "workspace_members",
+      "change": "建议新增",
+      "actions": [
+        "list_workspace_members",
+        "invite_workspace_member",
+        "update_workspace_member",
+        "remove_workspace_member",
+        "get_team_permissions",
+        "update_team_permissions"
+      ]
+    },
+    {
+      "name": "workspace_invitations",
+      "change": "建议新增",
+      "actions": [
+        "list_workspace_invitations",
+        "accept_workspace_invitation",
+        "join_workspace"
+      ]
+    },
+    {
+      "name": "manage_spaces",
+      "change": "建议新增",
+      "actions": [
+        "create_space",
+        "update_space",
+        "move_space",
+        "delete_space"
+      ]
+    },
+    {
+      "name": "view_navigation",
+      "change": "建议新增",
+      "actions": [
+        "open_view",
+        "list_views",
+        "get_view_link"
+      ]
+    },
+    {
+      "name": "create_view",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "move_page",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "transfer_page",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "page_properties",
+      "change": "建议新增",
+      "actions": [
+        "update_page_properties",
+        "set_page_locked",
+        "set_page_favorite",
+        "set_page_visibility"
+      ]
+    },
+    {
+      "name": "view_history",
+      "change": "建议新增",
+      "actions": [
+        "manage_favorites",
+        "manage_recent_views"
+      ]
+    },
+    {
+      "name": "trash_actions",
+      "change": "建议新增",
+      "actions": [
+        "restore_trash",
+        "purge_trash"
+      ]
+    },
+    {
+      "name": "document_text",
+      "change": "建议新增",
+      "actions": [
+        "get_block",
+        "edit_text",
+        "format_text"
+      ]
+    },
+    {
+      "name": "document_blocks",
+      "change": "建议新增",
+      "actions": [
+        "convert_block",
+        "update_block_style",
+        "duplicate_block",
+        "transform_blocks",
+        "update_media_block",
+        "update_equation",
+        "edit_simple_table",
+        "update_columns",
+        "insert_person_mention"
+      ]
+    },
+    {
+      "name": "editor_ai_action",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "document_versions",
+      "change": "建议新增",
+      "actions": [
+        "document_history_action",
+        "list_document_versions",
+        "get_document_version",
+        "diff_document_versions",
+        "save_document_version",
+        "restore_document_version"
+      ]
+    },
+    {
+      "name": "document_sync",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "knowledge_graph",
+      "change": "建议新增",
+      "actions": [
+        "get_knowledge_graph",
+        "extract_knowledge_graph",
+        "knowledge_graph_task",
+        "set_graph_view"
+      ]
+    },
+    {
+      "name": "query_database",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "database_rows",
+      "change": "建议新增",
+      "actions": [
+        "get_database_row",
+        "duplicate_database_row",
+        "move_database_row",
+        "database_row_meta",
+        "database_row_document"
+      ]
+    },
+    {
+      "name": "update_database_cell",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "database_cells",
+      "change": "建议新增",
+      "actions": [
+        "update_checklist_cell",
+        "update_date_cell",
+        "update_relation_cell",
+        "list_relation_targets",
+        "update_media_cell",
+        "rename_database_media"
+      ]
+    },
+    {
+      "name": "database_fields",
+      "change": "建议新增",
+      "actions": [
+        "duplicate_database_field",
+        "move_database_field",
+        "clear_database_field",
+        "update_field_options",
+        "manage_select_options",
+        "update_field_settings"
+      ]
+    },
+    {
+      "name": "update_database_field",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "create_database_field",
+      "change": "调整现有工具",
+      "actions": []
+    },
+    {
+      "name": "database_views",
+      "change": "建议新增",
+      "actions": [
+        "list_database_views",
+        "create_database_view",
+        "update_database_view",
+        "manage_database_filters",
+        "manage_database_sorts",
+        "set_database_grouping",
+        "manage_database_groups",
+        "move_database_group",
+        "database_calendar_events",
+        "manage_database_calculations",
+        "list_database_snapshots"
+      ]
+    },
+    {
+      "name": "database_ai_action",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "document_transfer",
+      "change": "建议新增",
+      "actions": [
+        "export_database",
+        "import_document",
+        "import_workspace_data",
+        "export_document",
+        "export_workspace",
+        "restore_workspace_data"
+      ]
+    },
+    {
+      "name": "knowledge_bases",
+      "change": "建议新增",
+      "actions": [
+        "list_knowledge_bases",
+        "create_knowledge_base",
+        "set_knowledge_base_visibility",
+        "set_knowledge_base_favorite",
+        "manage_knowledge_resource"
+      ]
+    },
+    {
+      "name": "knowledge_documents",
+      "change": "建议新增",
+      "actions": [
+        "list_knowledge_documents",
+        "get_knowledge_document",
+        "list_knowledge_sources",
+        "read_knowledge_wiki",
+        "get_web_import_options",
+        "import_knowledge_url"
+      ]
+    },
+    {
+      "name": "search_knowledge",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "data_sources",
+      "change": "建议新增",
+      "actions": [
+        "read_data_sources",
+        "test_data_source",
+        "create_data_source",
+        "update_data_source",
+        "data_source_resources",
+        "control_data_source",
+        "delete_data_source"
+      ]
+    },
+    {
+      "name": "set_data_source_credentials",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "ai_models",
+      "change": "建议新增",
+      "actions": [
+        "list_ai_models",
+        "save_ai_model",
+        "delete_ai_model",
+        "select_ai_model",
+        "get_knowledge_model_settings",
+        "bind_knowledge_models",
+        "set_ai_prompt_database"
+      ]
+    },
+    {
+      "name": "local_ai_control",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "get_ai_usage",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "agent_conversations",
+      "change": "建议新增",
+      "actions": [
+        "list_agent_conversations",
+        "create_agent_conversation",
+        "get_agent_conversation",
+        "configure_agent_conversation",
+        "list_agent_resources",
+        "update_agent_conversation"
+      ]
+    },
+    {
+      "name": "agent_runs",
+      "change": "建议新增",
+      "actions": [
+        "send_agent_message",
+        "agent_attachments",
+        "stop_agent_run",
+        "steer_agent_run",
+        "read_agent_run"
+      ]
+    },
+    {
+      "name": "respond_agent_prompt",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "resolve_agent_approval",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "set_agent_permissions",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "agent_artifacts",
+      "change": "建议新增",
+      "actions": [
+        "list_agent_artifacts",
+        "save_agent_artifact",
+        "download_agent_artifact",
+        "manage_agent_resource"
+      ]
+    },
+    {
+      "name": "ai_chat_action",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "agent_automations",
+      "change": "建议新增",
+      "actions": [
+        "list_agent_automations",
+        "get_agent_automation",
+        "validate_agent_trigger",
+        "create_agent_automation",
+        "update_agent_automation",
+        "control_agent_automation",
+        "delete_agent_automation",
+        "list_agent_automation_runs",
+        "cancel_agent_automation_run"
+      ]
+    },
+    {
+      "name": "library_files",
+      "change": "建议新增",
+      "actions": [
+        "list_library_files",
+        "import_library_file",
+        "get_library_file",
+        "open_library_file",
+        "delete_library_file",
+        "manage_library_file"
+      ]
+    },
+    {
+      "name": "assets",
+      "change": "建议新增",
+      "actions": [
+        "upload_asset",
+        "download_asset",
+        "delete_asset"
+      ]
+    },
+    {
+      "name": "storage_authorization",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "remote_storage_files",
+      "change": "建议新增",
+      "actions": [
+        "list_remote_storage_files",
+        "import_remote_storage_file"
+      ]
+    },
+    {
+      "name": "whiteboards",
+      "change": "建议新增",
+      "actions": [
+        "get_whiteboard",
+        "edit_whiteboard",
+        "import_whiteboard",
+        "export_whiteboard",
+        "save_whiteboard",
+        "whiteboard_capabilities"
+      ]
+    },
+    {
+      "name": "handwriting_documents",
+      "change": "建议新增",
+      "actions": [
+        "get_handwriting",
+        "edit_handwriting",
+        "set_handwriting_tool",
+        "manage_handwriting_pages",
+        "import_handwriting_asset",
+        "extract_pdf_text",
+        "export_handwriting",
+        "save_handwriting",
+        "handwriting_capabilities"
+      ]
+    },
+    {
+      "name": "templates",
+      "change": "建议新增",
+      "actions": [
+        "list_templates",
+        "get_template",
+        "apply_template",
+        "set_template_favorite",
+        "sync_templates",
+        "save_template"
+      ]
+    },
+    {
+      "name": "reminders",
+      "change": "建议新增",
+      "actions": [
+        "list_reminders",
+        "get_reminder",
+        "create_reminder",
+        "update_reminder",
+        "set_reminder_completed",
+        "delete_reminder"
+      ]
+    },
+    {
+      "name": "notifications",
+      "change": "建议新增",
+      "actions": [
+        "list_notifications",
+        "update_notification"
+      ]
+    },
+    {
+      "name": "user_preferences",
+      "change": "建议新增",
+      "actions": [
+        "update_user_preferences",
+        "get_user_preferences",
+        "manage_themes",
+        "manage_shortcuts"
+      ]
+    },
+    {
+      "name": "page_sharing",
+      "change": "建议新增",
+      "actions": [
+        "get_page_access",
+        "invite_page_member",
+        "update_page_member",
+        "revoke_page_access",
+        "create_page_share_link",
+        "request_resource_access",
+        "manage_access_requests"
+      ]
+    },
+    {
+      "name": "site_publishing",
+      "change": "建议新增",
+      "actions": [
+        "publish_page",
+        "unpublish_pages",
+        "list_published_pages",
+        "update_publish_settings",
+        "update_site_settings",
+        "published_page_interaction",
+        "import_published_page",
+        "manage_site_domain"
+      ]
+    },
+    {
+      "name": "account_authentication",
+      "change": "建议新增",
+      "actions": [
+        "update_user_profile",
+        "start_authentication",
+        "complete_authentication",
+        "switch_account",
+        "sign_out",
+        "bind_contact",
+        "change_account_password",
+        "delete_account",
+        "manage_login_sessions",
+        "unbind_contact"
+      ]
+    },
+    {
+      "name": "local_data",
+      "change": "建议新增",
+      "actions": [
+        "manage_data_location",
+        "manage_local_data"
+      ]
+    },
+    {
+      "name": "manage_cloud_connection",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "app_update",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "app_navigation",
+      "change": "建议新增",
+      "actions": [
+        "navigate_app",
+        "manage_tabs",
+        "editor_selection_action",
+        "update_app_view"
+      ]
+    },
+    {
+      "name": "clipboard_action",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "system_action",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "device_capability_request",
+      "change": "建议新增",
+      "actions": []
+    },
+    {
+      "name": "billing_records",
+      "change": "建议新增",
+      "actions": [
+        "get_subscription",
+        "get_billing_records",
+        "get_billing_order"
+      ]
+    },
+    {
+      "name": "billing_actions",
+      "change": "建议新增",
+      "actions": [
+        "create_billing_order",
+        "open_billing_portal",
+        "update_subscription",
+        "billing_human_action"
+      ]
+    }
+  ]
+}

@@ -42,8 +42,11 @@ class ModelApiFixture {
     client: MockClient((request) async {
       if (request.url.path.contains('/custom-models/')) {
         if (request.method == 'GET') {
-          return http.Response(
-            jsonEncode({'models': customModels, 'can_manage': canManage}),
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'models': customModels,
+              'can_manage': canManage,
+            })),
             rejectModels ? 503 : 200,
           );
         }
@@ -1003,7 +1006,19 @@ void main() {
           'type': 'KnowledgeQA',
           'is_builtin': false,
           'can_edit': false,
+          'creator_name': '小马',
+          'show_creator': true,
           'status': 'active',
+          'parameters': {'provider': 'generic'},
+        },
+        {
+          'id': 'custom:mine',
+          'name': 'my-reasoner',
+          'type': 'KnowledgeQA',
+          'is_builtin': false,
+          'can_edit': false,
+          'creator_name': '当前用户',
+          'show_creator': false,
           'parameters': {'provider': 'generic'},
         },
       ];
@@ -1011,6 +1026,12 @@ void main() {
     await pumpModelManager(tester, fixture);
     expect(find.text('workspace-reasoner'), findsOneWidget);
     final card = find.byKey(const ValueKey('model-card-custom:owned'));
+    expect(
+      find.descendant(of: card, matching: find.text('创建人：小马')),
+      findsOneWidget,
+    );
+    expect(find.text('my-reasoner'), findsOneWidget);
+    expect(find.text('创建人：当前用户'), findsNothing);
     final edit =
         find.descendant(of: card, matching: find.byType(IconButton)).first;
     expect(tester.widget<IconButton>(edit).onPressed, isNull);
@@ -1021,6 +1042,26 @@ void main() {
         )
         .first;
     expect(tester.widget<OutlinedButton>(add).onPressed, isNull);
+  });
+  testWidgets('workspace managers see custom models without creator labels',
+      (tester) async {
+    final fixture = ModelApiFixture()
+      ..customModels = [
+        {
+          'id': 'custom:shared',
+          'name': 'workspace-reasoner',
+          'type': 'KnowledgeQA',
+          'is_builtin': false,
+          'can_edit': true,
+          'creator_name': '另一位管理者',
+          'show_creator': false,
+          'parameters': {'provider': 'generic'},
+        },
+      ];
+    addTearDown(fixture.service.close);
+    await pumpModelManager(tester, fixture);
+    expect(find.text('workspace-reasoner'), findsOneWidget);
+    expect(find.textContaining('创建人：'), findsNothing);
   });
   testWidgets(
       'model settings use the workspace catalog without a local import step',

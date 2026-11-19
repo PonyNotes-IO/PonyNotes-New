@@ -361,6 +361,9 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         (model.id.startsWith('custom:')
             ? _service?.canManageChat == true
             : _service?.canManage == true);
+    final creatorName = model.visibleCreatorName;
+    final showCreator =
+        !builtin && creatorName != null && creatorName.isNotEmpty;
     final title = Text(
       model.label,
       maxLines: 1,
@@ -388,7 +391,19 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          if (showCreator) ...[
+            const SizedBox(height: 4),
+            Text(
+              '创建人：$creatorName',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+          ],
+          SizedBox(height: showCreator ? 8 : 16),
           SizedBox(
             height: 24,
             child: Row(

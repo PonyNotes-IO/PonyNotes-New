@@ -21,15 +21,18 @@ Future<void> openShareSettingsDialog({
   required ShareBloc shareBloc,
   required UserWorkspaceBloc userWorkspaceBloc,
   required ShareTabBloc shareWithUserBloc,
+  Offset? anchor,
   DatabaseTabBarBloc? databaseBloc,
   PageAccessLevelBloc? pageAccessLevelBloc,
 }) async {
-  Log.info('openShareSettingsDialog: viewId=${shareBloc.view.id}, tabs=${tabs.length}, pageAccessLevelBloc=${pageAccessLevelBloc != null}');
+  Log.info(
+      'openShareSettingsDialog: viewId=${shareBloc.view.id}, tabs=${tabs.length}, pageAccessLevelBloc=${pageAccessLevelBloc != null}');
 
   if (pageAccessLevelBloc != null &&
       !pageAccessLevelBloc.state.isLoadingLockStatus &&
       pageAccessLevelBloc.state.isReadOnly) {
-    Log.info('openShareSettingsDialog: blocked by pageAccessLevelBloc.isReadOnly');
+    Log.info(
+        'openShareSettingsDialog: blocked by pageAccessLevelBloc.isReadOnly');
     showToastNotification(
       message: '该文档为只读内容，不能再次共享或发布',
       type: ToastificationType.warning,
@@ -41,7 +44,8 @@ Future<void> openShareSettingsDialog({
     final isGuestMode =
         userWorkspaceBloc.state.currentWorkspace?.workspaceType ==
             WorkspaceTypePB.LocalW;
-    Log.info('openShareSettingsDialog: blocked by empty tabs, isGuestMode=$isGuestMode');
+    Log.info(
+        'openShareSettingsDialog: blocked by empty tabs, isGuestMode=$isGuestMode');
     showToastNotification(
       message:
           isGuestMode ? '快速开始，无法分享和发布。如需分享和发布，请登录/注册' : '该文档为只读内容，不能再次共享或发布',
@@ -56,26 +60,32 @@ Future<void> openShareSettingsDialog({
   // 正常情况下初始化已完成，直接使用当前状态立即显示对话框
   // updatePublishStatus 在后台异步刷新，对话框内 BlocBuilder 会自动更新
   if (shareBloc.state.viewId != shareBloc.view.id) {
-    Log.info('openShareSettingsDialog: waiting for initial state, current viewId=${shareBloc.state.viewId}');
+    Log.info(
+        'openShareSettingsDialog: waiting for initial state, current viewId=${shareBloc.state.viewId}');
     try {
       await shareBloc.stream
           .firstWhere((state) => state.viewId == shareBloc.view.id)
           .timeout(const Duration(seconds: 5));
-      Log.info('openShareSettingsDialog: firstWhere completed, viewId=${shareBloc.state.viewId}');
+      Log.info(
+          'openShareSettingsDialog: firstWhere completed, viewId=${shareBloc.state.viewId}');
     } catch (e) {
       // 后端请求超时或流被中断时，继续使用当前状态
-      Log.warn('openShareSettingsDialog: firstWhere timeout/error: $e, using current state');
+      Log.warn(
+          'openShareSettingsDialog: firstWhere timeout/error: $e, using current state');
     }
   } else {
-    Log.info('openShareSettingsDialog: state already initialized, skipping wait, viewId=${shareBloc.state.viewId}');
+    Log.info(
+        'openShareSettingsDialog: state already initialized, skipping wait, viewId=${shareBloc.state.viewId}');
   }
 
   if (!context.mounted) {
-    Log.warn('openShareSettingsDialog: context unmounted after await, aborting');
+    Log.warn(
+        'openShareSettingsDialog: context unmounted after await, aborting');
     return;
   }
 
-  Log.info('openShareSettingsDialog: enablePublish=${shareBloc.state.enablePublish}');
+  Log.info(
+      'openShareSettingsDialog: enablePublish=${shareBloc.state.enablePublish}');
 
   if (!shareBloc.state.enablePublish) {
     showToastNotification(
@@ -90,7 +100,9 @@ Future<void> openShareSettingsDialog({
 
   await showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.35),
+    barrierColor: anchor != null && MediaQuery.sizeOf(context).width >= 600
+        ? Colors.transparent
+        : Colors.black.withValues(alpha: 0.35),
     builder: (dialogContext) {
       return MultiBlocProvider(
         providers: [
@@ -103,6 +115,7 @@ Future<void> openShareSettingsDialog({
         ],
         child: ShareSettingsDialog(
           tabs: tabs,
+          anchor: anchor,
           viewName: shareBloc.state.viewName,
         ),
       );
@@ -137,7 +150,8 @@ class ShareMenuButton extends StatelessWidget {
   }
 
   Future<void> _openShareSettings(BuildContext context) async {
-    Log.info('ShareMenuButton._openShareSettings: button clicked, tabs=${tabs.length}');
+    Log.info(
+        'ShareMenuButton._openShareSettings: button clicked, tabs=${tabs.length}');
     final shareBloc = context.read<ShareBloc>();
     final databaseBloc = context.read<DatabaseTabBarBloc?>();
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
@@ -153,7 +167,9 @@ class ShareMenuButton extends StatelessWidget {
       pageAccessLevelBloc = null;
     }
 
+    final button = context.findRenderObject() as RenderBox;
     await openShareSettingsDialog(
+      anchor: button.localToGlobal(button.size.bottomRight(Offset.zero)),
       context: context,
       tabs: tabs,
       shareBloc: shareBloc,

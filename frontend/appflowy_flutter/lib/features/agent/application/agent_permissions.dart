@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:appflowy/features/mcp/application/mcp_tools.dart';
+import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
 
 /// Reuse existing note-tool choices without loading retired executor settings.
 class AgentPermissions {
@@ -23,7 +25,16 @@ class AgentPermissions {
     final raw = await const FlutterSecureStorage()
         .read(key: 'ponynotes.agent.settings.v1.$_scope');
     disabledTools.clear();
+    final catalog = McpTools(endpoint: '', version: '')
+        .toolSpecs
+        .map((tool) => tool.name)
+        .toSet();
+    final extended = catalog.difference(McpPermissions.legacyTools);
+    disabledTools.addAll(extended);
     if (raw != null) {
+      final enabled = (jsonDecode(raw)['enabledExtendedTools'] as List? ?? [])
+          .cast<String>();
+      disabledTools.removeAll(enabled);
       disabledTools.addAll(
         (jsonDecode(raw)['disabledNoteTools'] as List? ?? []).cast<String>(),
       );
@@ -38,7 +49,18 @@ class AgentPermissions {
     if (!modes.contains(mode)) throw ArgumentError.value(mode);
     await const FlutterSecureStorage().write(
       key: 'ponynotes.agent.settings.v1.$_scope',
-      value: jsonEncode({'disabledNoteTools': disabledTools.toList()}),
+      value: jsonEncode({
+        'disabledNoteTools': disabledTools.toList(),
+        'enabledExtendedTools': McpTools(endpoint: '', version: '')
+            .toolSpecs
+            .map((tool) => tool.name)
+            .where(
+              (name) =>
+                  !McpPermissions.legacyTools.contains(name) &&
+                  !disabledTools.contains(name),
+            )
+            .toList(),
+      }),
     );
     await (await SharedPreferences.getInstance()).setString(
       'ponynotes.agent.workspace.$_document',
