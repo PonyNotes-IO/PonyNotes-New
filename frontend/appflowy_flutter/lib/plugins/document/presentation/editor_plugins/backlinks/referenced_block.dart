@@ -49,9 +49,11 @@ class ReferencedBlock extends BlockComponentStatelessWidget {
         borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
+        // Fixed-width table cells are measured under unbounded constraints.
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: child),
+          Flexible(child: child),
           if (count > 0)
             Tooltip(
               message: referenceText(
