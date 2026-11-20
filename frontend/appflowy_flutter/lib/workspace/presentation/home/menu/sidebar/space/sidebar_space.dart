@@ -89,7 +89,7 @@ class SidebarSpace extends StatelessWidget {
                 // 是否协作工作区
                 final isCollaborativeWorkspace =
                     context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
-                // 使用 SpaceBloc 中的 getter，只展示「空间」类型视图
+                // Keep spaces from SpaceBloc, including locally pending spaces.
                 final spaceBloc = context.read<SpaceBloc>();
                 final privateSpaces = spaceBloc.privateSpaces;
                 final publicSpaces = spaceBloc.publicSpaces;
@@ -97,9 +97,10 @@ class SidebarSpace extends StatelessWidget {
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                          // 私有空间（仅 Space）
+                          // 私有空间和根目录笔记
                           PrivateSectionFolder(
-                            views: privateSpaces,
+                            spaces: privateSpaces,
+                            privateViews: state.section.privateViews,
                           ),
                           const VSpace(sidebarPrimaryEntryGap),
                           // 协作区 / 公共空间（仅 Space）

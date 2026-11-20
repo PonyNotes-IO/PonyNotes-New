@@ -7,6 +7,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_section_folder.dart';
@@ -20,6 +21,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_knowledge_base_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -82,7 +84,7 @@ class SidebarFolder extends StatelessWidget {
                 final isCollaborativeWorkspace =
                     context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
 
-                // 使用 SpaceBloc 中的 getter，只展示「空间」类型视图
+                // Keep spaces from SpaceBloc, including locally pending spaces.
                 final spaceBloc = context.read<SpaceBloc>();
                 final privateSpaces = spaceBloc.privateSpaces;
                 final publicSpaces = spaceBloc.publicSpaces;
@@ -90,9 +92,10 @@ class SidebarFolder extends StatelessWidget {
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                          // 私有空间（仅 Space）
+                          // 私有空间和根目录笔记
                           PrivateSectionFolder(
-                            views: privateSpaces,
+                            spaces: privateSpaces,
+                            privateViews: state.section.privateViews,
                           ),
                           // 协作区 / 公共空间（仅 Space）
                           const VSpace(sidebarPrimaryEntryGap),
@@ -130,8 +133,12 @@ class SidebarFolder extends StatelessWidget {
 }
 
 class PrivateSectionFolder extends SectionFolder {
-  PrivateSectionFolder({super.key, required super.views})
-      : super(
+  PrivateSectionFolder({
+    super.key,
+    required List<ViewPB> spaces,
+    required List<ViewPB> privateViews,
+  }) : super(
+          views: [...spaces, ...privateViews.where((view) => !view.isSpace)],
           title: LocaleKeys.space_privateSpace.tr(),
           spaceType: FolderSpaceType.private,
           expandButtonTooltip: LocaleKeys.sideBar_clickToHidePrivate.tr(),
