@@ -59,6 +59,7 @@ class _KnowledgeBaseDataSourceEditorState
 
   String get _type => widget.definition['type'] as String;
   bool get _forWorkspace => widget.workspaceId != null;
+  bool get _explicitPages => _forWorkspace && _type == 'notion';
   bool get _drive => _type == 'feishu_drive' || _type == 'lark_drive';
   bool get _syncing => _source?['latest_sync_log']?['status'] == 'running';
   List<Map<String, dynamic>> get _fields =>
@@ -72,15 +73,19 @@ class _KnowledgeBaseDataSourceEditorState
     for (final field in _fields) {
       final key = field['key'] as String;
       _credentials[key] = TextEditingController(
-        text: key == 'edition' ? 'server' : '',
+        text: key == 'edition'
+            ? 'server'
+            : _type == 'gitlab' && key == 'base_url'
+                ? 'https://gitlab.com'
+                : '',
       );
     }
     if (widget.source != null) _adopt(widget.source!);
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (!_forWorkspace && !_busy && _syncing) {
-        unawaited(_run(_refresh));
-      }
-    });
+    if (!_forWorkspace) {
+      _poll = Timer.periodic(const Duration(seconds: 5), (_) {
+        if (!_busy && _syncing) unawaited(_run(_refresh));
+      });
+    }
   }
 
   @override
@@ -125,6 +130,16 @@ class _KnowledgeBaseDataSourceEditorState
     _conflict = source['conflict_strategy'] as String? ?? 'overwrite';
     _deletions = source['sync_deletions'] == true;
     _feed.text = source['config']['settings']?['feed_urls'] as String? ?? '';
+    if (_type == 'gitlab') {
+      final project = (source['config']['settings']?['projects'] as List?)
+          ?.cast<Map<String, dynamic>>()
+          .firstOrNull;
+      _project.text = project?['project_id'] as String? ?? '';
+      _ref.text = project?['ref'] as String? ?? '';
+      _paths.text = (project?['paths'] as List?)?.join('\n') ?? '';
+      final baseUrl = source['config']['settings']?['base_url'] as String?;
+      if (baseUrl != null) _credentials['base_url']?.text = baseUrl;
+    }
     _dirty = false;
   }
 
@@ -149,6 +164,12 @@ class _KnowledgeBaseDataSourceEditorState
           if (entry.value.text.isNotEmpty) entry.key: entry.value.text,
       };
 
+  void _clearCredentialInputs() {
+    for (final entry in _credentials.entries) {
+      if (_type != 'gitlab' || entry.key != 'base_url') entry.value.clear();
+    }
+  }
+
   String get _folderToken {
     final input = _folder.text.trim();
     return RegExp('/drive/folder/([^/?#]+)').firstMatch(input)?.group(1) ??
@@ -165,6 +186,8 @@ class _KnowledgeBaseDataSourceEditorState
           if (_type == 'confluence')
             for (final key in ['edition', 'base_url', 'username'])
               key: _credentials[key]!.text.trim(),
+          if (!_forWorkspace && _type == 'gitlab')
+            'base_url': _credentials['base_url']!.text.trim(),
           if (_type == 'gitlab')
             // ponytail: one project per connection; add a project list when needed.
             'projects': [
@@ -179,7 +202,12 @@ class _KnowledgeBaseDataSourceEditorState
               },
             ],
         },
-        'resource_ids': _drive ? [_folderToken] : <String>[],
+        if (!_forWorkspace || _type != 'gitlab')
+          'resource_ids': _drive
+              ? [_folderToken]
+              : _type == 'gitlab'
+                  ? [_project.text.trim()]
+                  : <String>[],
       };
 
   Future<void> _test() async {
@@ -204,16 +232,21 @@ class _KnowledgeBaseDataSourceEditorState
       });
       if (!mounted) return;
       _adopt(result['source'] as Map<String, dynamic>);
-      for (final controller in _credentials.values) {
-        controller.clear();
-      }
-      _notice = _forWorkspace
-          ? text('连接已保存。请选择并保存同步范围。',
-              'Connection saved. Select and save its scope.')
-          : text(
-              '连接已保存并暂停。请选择同步范围，保存后可手动同步或启用计划同步。',
-              'Connection saved and paused. Select and save its scope before syncing.',
-            );
+      _clearCredentialInputs();
+      _notice = _forWorkspace && _type == 'gitlab'
+          ? text(
+              '连接及同步范围已保存，可返回卡片点击「立即同步」。',
+              'Connection and scope saved. Use Sync now on the sync card.',
+            )
+          : _forWorkspace
+              ? text(
+                  '连接已保存。请选择并保存同步范围。',
+                  'Connection saved. Select and save its scope.',
+                )
+              : text(
+                  '连接已保存并暂停。请选择同步范围，保存后可手动同步或启用计划同步。',
+                  'Connection saved and paused. Select and save its scope before syncing.',
+                );
       widget.onChanged();
     });
   }
@@ -225,6 +258,7 @@ class _KnowledgeBaseDataSourceEditorState
         }
         final result = await _call('save', {
           'resource_ids': _ids.where((id) {
+            if (_explicitPages) return true;
             final parent = _resources[id]?['parent_id'] as String?;
             return parent == null || !_covered(parent);
           }).toList(),
@@ -296,7 +330,7 @@ class _KnowledgeBaseDataSourceEditorState
 
   bool _covered(String id, [Set<String> visited = const {}]) {
     if (_ids.contains(id)) return true;
-    if (visited.contains(id)) return false;
+    if (_explicitPages || visited.contains(id)) return false;
     final parent = _resources[id]?['parent_id'] as String?;
     return parent != null &&
         parent.isNotEmpty &&
@@ -326,7 +360,8 @@ class _KnowledgeBaseDataSourceEditorState
     final id = resource['external_id'] as String;
     if (ancestors.contains(id)) return const SizedBox.shrink();
     final parent = resource['parent_id'] as String?;
-    final inherited = parent != null && _covered(parent);
+    final inherited = !_explicitPages && parent != null && _covered(parent);
+    final selectable = !_explicitPages || resource['type'] == 'page';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -334,8 +369,9 @@ class _KnowledgeBaseDataSourceEditorState
           children: [
             Checkbox(
               value: _covered(id),
-              onChanged:
-                  _busy || inherited ? null : (value) => _select(id, value!),
+              onChanged: _busy || inherited || !selectable
+                  ? null
+                  : (value) => _select(id, value!),
             ),
             Expanded(
               child: Text(
@@ -395,6 +431,7 @@ class _KnowledgeBaseDataSourceEditorState
     bool required = false,
     bool secret = false,
     bool multiline = false,
+    bool readOnly = false,
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 16),
@@ -402,6 +439,7 @@ class _KnowledgeBaseDataSourceEditorState
           key: ValueKey('source-$key'),
           controller: controller,
           enabled: !_busy,
+          readOnly: readOnly,
           obscureText: secret && !multiline,
           enableSuggestions: !secret,
           autocorrect: !secret,
@@ -426,6 +464,9 @@ class _KnowledgeBaseDataSourceEditorState
                   : field['key'] as String,
               required: field['required'] == true,
               secret: field['secret'] == true,
+              readOnly: _type == 'gitlab' &&
+                  _source != null &&
+                  field['key'] == 'base_url',
               multiline: field['key'] == 'auth_headers',
             ),
         ],
@@ -517,11 +558,22 @@ class _KnowledgeBaseDataSourceEditorState
                         _paths,
                         'paths',
                         text(
-                          '文件路径（可选，每行一个）',
-                          'File paths (optional, one per line)',
+                          '目录路径（可选，每行一个，留空同步整个项目）',
+                          'Directories (one per line; empty means entire project)',
                         ),
                         multiline: true,
                       ),
+                      Text(
+                        text(
+                          _forWorkspace
+                              ? '每个连接一个项目。地址如 https://gitlab.com，项目填写数字 ID 或 group/project。仅同步 Markdown、TXT 文档；建议指定文档目录，单次最多 100 篇。'
+                              : '每个连接一个项目，填写数字 ID 或 group/project。目录会包含下级文件。',
+                          _forWorkspace
+                              ? 'One project per connection. Enter a GitLab URL and a numeric project ID or group/project. Only Markdown and TXT documents are imported, up to 100 per run. Prefer a documentation directory.'
+                              : 'One project per connection. Enter a numeric project ID or group/project. Directories include descendant files.',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                     ],
                     Wrap(
                       spacing: 10,
@@ -563,12 +615,13 @@ class _KnowledgeBaseDataSourceEditorState
                                   ),
                           child: Text(text('更新凭据', 'Replace credentials')),
                         ),
-                        TextButton(
-                          onPressed: _busy ? null : () => _run(_refresh),
-                          child: Text(
-                            text('刷新状态与日志', 'Refresh status and logs'),
+                        if (!_forWorkspace)
+                          TextButton(
+                            onPressed: _busy ? null : () => _run(_refresh),
+                            child: Text(
+                              text('刷新状态与日志', 'Refresh status and logs'),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                     if (_replaceCredentials) ...[
@@ -586,9 +639,7 @@ class _KnowledgeBaseDataSourceEditorState
                                       {'credentials': _credentialValues},
                                     );
                                     if (!mounted) return;
-                                    for (final field in _credentials.values) {
-                                      field.clear();
-                                    }
+                                    _clearCredentialInputs();
                                     _replaceCredentials = false;
                                     _notice =
                                         text('凭据已更新。', 'Credentials updated.');
@@ -603,50 +654,80 @@ class _KnowledgeBaseDataSourceEditorState
                       text('同步范围', 'Sync scope'),
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
-                    Text(
-                      text(
-                        '选择目录会包含其下级内容；最多选择 50 项。',
-                        'Selected folders include descendants. Select up to 50 items.',
+                    if (_type == 'gitlab') ...[
+                      SelectableText(
+                        '${text('项目', 'Project')}: ${_project.text}',
                       ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: OutlinedButton(
-                        onPressed: _busy ? null : _loadResources,
-                        child: Text(text('加载资源', 'Load resources')),
+                      Text(
+                        '${text('分支 / 标签', 'Branch / tag')}: ${_ref.text.isEmpty ? text('默认分支', 'Default branch') : _ref.text}',
                       ),
-                    ),
-                    if (_loaded.contains('') && _resources.isEmpty)
+                      SelectableText(
+                        '${text('目录', 'Directories')}: ${_paths.text.isEmpty ? text('整个项目', 'Entire project') : _paths.text}',
+                      ),
                       Text(
                         text(
-                          '没有可访问资源，请检查应用授权范围。',
-                          'No accessible resources. Check the app permissions.',
+                          _forWorkspace
+                              ? '项目、分支和目录已随连接保存。更换范围请新建连接。仅将 Markdown、TXT 文档写入「私有」。'
+                              : '项目、分支和目录已随连接保存。更换范围请新建连接。',
+                          _forWorkspace
+                              ? 'The project, branch and directories are saved with this connection. Create a new connection to change its scope. Only Markdown and TXT documents go to Private.'
+                              : 'The project, branch and directories are saved with this connection. Create a new connection to change its scope.',
                         ),
                       ),
-                    for (final resource in _resources.values.where(
-                      (r) =>
-                          r['parent_id'] == null ||
-                          r['parent_id'] == '' ||
-                          !_resources.containsKey(r['parent_id']),
-                    ))
-                      _resource(resource, {}),
-                    Wrap(
-                      spacing: 6,
-                      children: [
-                        for (final id in _ids)
-                          InputChip(
-                            label:
-                                Text(_resources[id]?['name'] as String? ?? id),
-                            onDeleted: _busy ? null : () => _select(id, false),
+                    ] else ...[
+                      Text(
+                        text(
+                          _explicitPages
+                              ? '逐页选择，最多 50 页。子页面需单独选择。'
+                              : '选择目录会包含其下级内容；最多选择 50 项。',
+                          _explicitPages
+                              ? 'Select up to 50 pages individually, including subpages.'
+                              : 'Selected folders include descendants. Select up to 50 items.',
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton(
+                          onPressed: _busy ? null : _loadResources,
+                          child: Text(text('加载资源', 'Load resources')),
+                        ),
+                      ),
+                      if (_loaded.contains('') && _resources.isEmpty)
+                        Text(
+                          text(
+                            '没有可访问资源，请检查应用授权范围。',
+                            'No accessible resources. Check the app permissions.',
                           ),
-                      ],
-                    ),
+                        ),
+                      for (final resource in _resources.values.where(
+                        (r) =>
+                            r['parent_id'] == null ||
+                            r['parent_id'] == '' ||
+                            !_resources.containsKey(r['parent_id']),
+                      ))
+                        _resource(resource, {}),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          for (final id in _ids)
+                            InputChip(
+                              label: Text(
+                                _resources[id]?['name'] as String? ?? id,
+                              ),
+                              onDeleted:
+                                  _busy ? null : () => _select(id, false),
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     if (_forWorkspace)
-                      Text(text(
-                        '同步到当前工作空间的「私有」。保存范围后，在同步卡片点击「立即同步」。',
-                        'Pages go to Private in this workspace. Save the scope and use Sync now on the sync card.',
-                      )),
+                      Text(
+                        text(
+                          '同步到当前工作空间的「私有」。在同步卡片点击「立即同步」。',
+                          'Pages go to Private in this workspace. Use Sync now on the sync card.',
+                        ),
+                      ),
                     if (!_forWorkspace) ...[
                       DropdownButtonFormField<String>(
                         key: ValueKey('source-schedule-$_schedule'),
@@ -757,10 +838,11 @@ class _KnowledgeBaseDataSourceEditorState
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        FilledButton(
-                          onPressed: _busy ? null : _save,
-                          child: Text(text('保存同步配置', 'Save sync settings')),
-                        ),
+                        if (!_forWorkspace || _type != 'gitlab')
+                          FilledButton(
+                            onPressed: _busy ? null : _save,
+                            child: Text(text('保存同步配置', 'Save sync settings')),
+                          ),
                         if (!_forWorkspace) ...[
                           OutlinedButton(
                             onPressed: _busy || _syncing

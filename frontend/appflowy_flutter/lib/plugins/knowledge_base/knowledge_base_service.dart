@@ -65,14 +65,26 @@ String kbError(BuildContext context, Object? error) {
   final status = error is KnowledgeBaseException ? error.status : 503;
   if (error is KnowledgeBaseException && error.action == 'workspace_sync') {
     return switch (status) {
-      400 => kbText(context, '请检查飞书凭据和同步范围。',
-          'Check the Feishu credentials and sync scope.'),
-      401 || 403 => kbText(context, '请登录有写入权限的云端工作空间。',
-          'Sign in to a cloud workspace you can edit.'),
-      404 => kbText(context, '工作空间同步接口不可用，请刷新后重试。',
-          'Workspace sync is unavailable. Refresh and try again.'),
-      _ => kbText(context, '工作空间同步暂不可用，请稍后重试。',
-          'Workspace sync is unavailable. Try again shortly.'),
+      400 => kbText(
+          context,
+          '请检查数据源凭据和同步范围。',
+          'Check the data source credentials and sync scope.',
+        ),
+      401 || 403 => kbText(
+          context,
+          '请登录有写入权限的云端工作空间。',
+          'Sign in to a cloud workspace you can edit.',
+        ),
+      404 => kbText(
+          context,
+          '工作空间同步接口不可用，请刷新后重试。',
+          'Workspace sync is unavailable. Refresh and try again.',
+        ),
+      _ => kbText(
+          context,
+          '工作空间同步暂不可用，请稍后重试。',
+          'Workspace sync is unavailable. Try again shortly.',
+        ),
     };
   }
   return switch (status) {

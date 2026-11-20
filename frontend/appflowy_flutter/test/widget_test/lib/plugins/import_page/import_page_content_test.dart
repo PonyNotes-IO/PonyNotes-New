@@ -71,7 +71,7 @@ void main() {
             'status': 'paused',
             'note_sync': noteStatus,
             'config': {
-              'resource_ids': ['test-id']
+              'resource_ids': ['test-id'],
             },
           };
       final service = KnowledgeBaseService(
@@ -88,13 +88,14 @@ void main() {
           switch (operation) {
             case 'list':
               data = {
-                'sources': [if (connected) source()]
+                'sources': [if (connected) source()],
               };
             case 'types':
               data = {
                 'types': [
-                  {'type': 'feishu', 'name': 'Feishu', 'fields': <Object>[]}
-                ]
+                  for (final kind in ['feishu', 'notion', 'yuque', 'gitlab'])
+                    {'type': kind, 'name': kind, 'fields': <Object>[]},
+                ],
               };
             case 'note_sync':
               noteStatus = {'status': 'running'};
@@ -255,7 +256,7 @@ void main() {
                   (widget) => widget is IconButton && widget.tooltip == tooltip,
                 ),
               );
-          expect(find.text('暂未支持'), findsNWidgets(3));
+          expect(find.text('暂未支持'), findsNothing);
           await tester.tap(action('编辑连接'));
           await tester.pumpAndSettle();
           final editor = tester.widget<KnowledgeBaseDataSourceEditor>(
@@ -274,7 +275,7 @@ void main() {
           noteStatus = {
             'status': 'success',
             'saved': 2,
-            'view_id': 'private-page'
+            'view_id': 'private-page',
           };
           await tester.pump(const Duration(seconds: 5));
           await tester.pumpAndSettle();
@@ -295,13 +296,23 @@ void main() {
           await tester.tap(find.widgetWithText(TextButton, '断开连接'));
           await tester.pumpAndSettle();
           expect(operations, contains('delete:feishu'));
-          expect(find.text('未连接'), findsOneWidget);
-          await tester.tap(feishu);
-          await tester.pumpAndSettle();
-          expect(find.byType(KnowledgeBaseDataSourceEditor), findsOneWidget);
-          expect(find.text('选择目标知识库'), findsNothing);
-          await tester.tap(find.text('返回数据源'));
-          await tester.pumpAndSettle();
+          expect(find.text('未连接'), findsNWidgets(4));
+          for (final kind in ['feishu', 'notion', 'yuque', 'gitlab']) {
+            final card = find.byKey(ValueKey('sync-$kind'));
+            await tester.ensureVisible(card);
+            await tester.tap(card);
+            await tester.pumpAndSettle();
+            final editorFinder = find.byType(KnowledgeBaseDataSourceEditor);
+            expect(
+              tester
+                  .widget<KnowledgeBaseDataSourceEditor>(editorFinder)
+                  .definition['type'],
+              kind,
+            );
+            expect(find.text('选择目标知识库'), findsNothing);
+            await tester.tap(find.text('返回数据源'));
+            await tester.pumpAndSettle();
+          }
         }
         await tester.tap(find.widgetWithText(TextButton, '导入'));
         await tester.pumpAndSettle();

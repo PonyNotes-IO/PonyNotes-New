@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:appflowy/plugins/import_page/import_sync_section.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_data_source_editor.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_data_sources.dart';
 import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
@@ -208,6 +209,8 @@ void main() {
     expect(creates, hasLength(2));
     expect(creates[0]['request_id'], creates[1]['request_id']);
     expect(find.byKey(const ValueKey('source-api_key')), findsNothing);
+    await tap('刷新状态与日志');
+    expect(calls.last['operation'], 'logs');
     await tap('加载资源');
     expect(find.text('知识库暂时无法连接，请稍后重试。'), findsOneWidget);
     await tap('加载资源');
@@ -348,6 +351,178 @@ void main() {
       'https://example.invalid/feed',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'GitLab workspace scope survives reopening and syncs from its card',
+      (tester) async {
+    tester.view.physicalSize = const Size(850, 1050);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const gitlab = {
+      'type': 'gitlab',
+      'name': 'GitLab',
+      'fields': [
+        {'key': 'base_url', 'label': 'GitLab 地址', 'required': true},
+        {
+          'key': 'access_token',
+          'label': 'Access Token',
+          'required': true,
+          'secret': true,
+        },
+      ],
+    };
+    const projects = [
+      {
+        'project_id': '42',
+        'ref': 'main',
+        'paths': ['docs', 'guides'],
+      },
+    ];
+    final calls = <Map<String, dynamic>>[];
+    final opened = <String>[];
+    Map<String, dynamic>? saved;
+    final service = KnowledgeBaseService(
+      () async => ('https://notes.example', 'user-token'),
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/knowledge/workspace_sync');
+        final data = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(data['workspace_id'], 'workspace');
+        expect(data.containsKey('base_id'), isFalse);
+        final operation = data['operation'];
+        if (operation == 'create' || operation == 'test') {
+          expect(data.containsKey('resource_ids'), isFalse);
+          expect(data['settings'], {'projects': projects});
+        }
+        calls.add(data);
+        final Map<String, dynamic> result;
+        switch (operation) {
+          case 'list':
+            result = {
+              'sources': [if (saved != null) saved],
+            };
+          case 'types':
+            result = {
+              'types': [gitlab],
+            };
+          case 'test':
+            expect(
+              data['credentials'],
+              {'base_url': 'https://gitlab.com', 'access_token': 'secret'},
+            );
+            result = {'connected': true};
+          case 'create':
+            saved = {
+              'id': 'gitlab-source',
+              'type': 'gitlab',
+              'name': data['name'],
+              'status': 'paused',
+              'config': {
+                'resource_ids': ['42'],
+                'settings': {
+                  'base_url': data['credentials']['base_url'],
+                  'projects': data['settings']['projects'],
+                },
+              },
+            };
+            result = {'source': saved};
+          case 'credentials':
+            expect(data['credentials'], {
+              'base_url': 'https://gitlab.com',
+              'access_token': 'replacement',
+            });
+            result = {'updated': true};
+          case 'note_sync':
+            result = {
+              'status': 'success',
+              'saved': 2,
+              'view_id': 'private-gitlab-note',
+            };
+          default:
+            fail('Unexpected GitLab operation: ${data['operation']}');
+        }
+        return http.Response.bytes(
+          utf8.encode(jsonEncode({'success': true, 'data': result})),
+          200,
+        );
+      }),
+    );
+    addTearDown(service.close);
+    await tester.pumpWidget(
+      app(
+        SingleChildScrollView(
+          child: ImportSyncSection(
+            workspaceId: 'workspace',
+            service: service,
+            onOpenSyncedPage: opened.add,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final card = find.byKey(const ValueKey('sync-gitlab'));
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+    expect(find.byType(KnowledgeBaseDataSourceEditor), findsOneWidget);
+    Future<void> tap(String label) async {
+      final button = find.text(label);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> enter(String key, String value) async {
+      final field = find.byKey(ValueKey('source-$key'));
+      await tester.ensureVisible(field);
+      await tester.enterText(field, value);
+    }
+
+    await enter('access_token', 'secret');
+    await enter('project', '42');
+    await enter('ref', 'main');
+    await enter('paths', 'docs\nguides');
+    await tap('测试连接');
+    await tap('保存连接');
+    expect(find.text('项目: 42'), findsOneWidget);
+    expect(find.text('分支 / 标签: main'), findsOneWidget);
+    expect(find.text('目录: docs\nguides'), findsOneWidget);
+    expect(find.text('加载资源'), findsNothing);
+    expect(find.text('保存同步配置'), findsNothing);
+    expect(find.text('刷新状态与日志'), findsNothing);
+    await tap('返回数据源');
+    final edit = find.descendant(of: card, matching: find.byTooltip('编辑连接'));
+    await tester.ensureVisible(edit);
+    await tester.tap(edit);
+    await tester.pumpAndSettle();
+    expect(find.text('项目: 42'), findsOneWidget);
+    expect(find.text('目录: docs\nguides'), findsOneWidget);
+    await tap('更新凭据');
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('source-base_url')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .readOnly,
+      isTrue,
+    );
+    await enter('access_token', 'replacement');
+    await tap('保存新凭据');
+    await tap('返回数据源');
+    final sync = find.descendant(of: card, matching: find.byTooltip('立即同步'));
+    await tester.ensureVisible(sync);
+    await tester.tap(sync);
+    await tester.pumpAndSettle();
+    expect(
+      calls.where((c) => c['operation'] == 'note_sync').single['source_id'],
+      'gitlab-source',
+    );
+    await tap('打开同步笔记');
+    expect(opened, ['private-gitlab-note']);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('non-managers cannot load source credentials or management APIs',

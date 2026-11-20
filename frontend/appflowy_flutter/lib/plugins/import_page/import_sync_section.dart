@@ -14,15 +14,20 @@ enum _Provider {
   notion(
     'Notion',
     'Notion',
-    '同步 Notion 中的页面和数据库',
-    'Sync Notion pages and databases',
+    '将选中的 Notion 页面同步到当前工作空间的「私有」',
+    'Sync selected Notion pages to Private in this workspace',
   ),
-  yuque('语雀', 'Yuque', '同步语雀知识库中的文档', 'Sync documents from Yuque'),
+  yuque(
+    '语雀',
+    'Yuque',
+    '将语雀知识库中的文档同步到当前工作空间的「私有」',
+    'Sync documents from Yuque to Private in this workspace',
+  ),
   gitlab(
     'GitLab',
     'GitLab',
-    '同步 GitLab 项目中的文件',
-    'Sync files from GitLab projects',
+    '将 GitLab 项目的 Markdown、TXT 文档同步到当前工作空间的「私有」',
+    'Sync GitLab Markdown and TXT documents to Private in this workspace',
   );
 
   const _Provider(this.zh, this.en, this.descriptionZh, this.descriptionEn);
@@ -147,12 +152,12 @@ class _ImportSyncSectionState extends State<ImportSyncSection> {
         SnackBar(content: Text(message)),
       );
 
-  Future<void> _edit({Map<String, dynamic>? source}) async {
+  Future<void> _edit(String type, {Map<String, dynamic>? source}) async {
     final result = await _call('types');
     if (!mounted || !_current) return;
     final types = (result['types'] as List).cast<Map<String, dynamic>>();
     final definition =
-        types.where((type) => type['type'] == 'feishu').firstOrNull;
+        types.where((definition) => definition['type'] == type).firstOrNull;
     if (definition == null) {
       _notice(
         kbText(
@@ -193,9 +198,9 @@ class _ImportSyncSectionState extends State<ImportSyncSection> {
           options,
           (item) => item['name'] as String,
         );
-        if (!_current || source == null) return;
+        if (!mounted || !_current || source == null) return;
         if (operation == 'edit') {
-          await _edit(source: source);
+          await _edit(source['type'] as String, source: source);
           return;
         }
         if (operation == 'delete') {
@@ -302,10 +307,9 @@ class _ImportSyncSectionState extends State<ImportSyncSection> {
   }
 
   Widget _buildCard(_Provider provider, {required bool actionable}) {
-    final supported = provider == _Provider.feishu;
-    final options = supported
-        ? _connections ?? <Map<String, dynamic>>[]
-        : <Map<String, dynamic>>[];
+    final options = (_connections ?? const <Map<String, dynamic>>[])
+        .where((item) => item['type'] == provider.name)
+        .toList();
     final idle =
         options.where((item) => _syncStatus(item) != 'running').toList();
     final openable = options
@@ -317,8 +321,8 @@ class _ImportSyncSectionState extends State<ImportSyncSection> {
       connections: options,
       loading: _connections == null && _loading,
       unknown: _error != null,
-      onConnect: supported && options.isEmpty && actionable
-          ? () => _run(() => _edit())
+      onConnect: options.isEmpty && actionable
+          ? () => _run(() => _edit(provider.name))
           : null,
       onSync: actionable && idle.isNotEmpty
           ? () => _manage(idle, 'note_sync')
@@ -333,7 +337,8 @@ class _ImportSyncSectionState extends State<ImportSyncSection> {
               );
               if (mounted && source != null) {
                 widget.onOpenSyncedPage!(
-                    source['note_sync']['view_id'] as String);
+                  source['note_sync']['view_id'] as String,
+                );
               }
             },
       onEdit:
@@ -554,8 +559,6 @@ class _SyncCard extends StatelessWidget {
 
   List<Widget> _status(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    if (provider != _Provider.feishu)
-      return [_SyncPill(kbText(context, '暂未支持', 'Not yet supported'))];
     if (loading) return [_SyncPill(kbText(context, '正在读取', 'Loading'))];
     if (unknown) {
       return [_SyncPill(kbText(context, '状态未知', 'Status unavailable'))];
@@ -613,8 +616,10 @@ class _SyncCard extends StatelessWidget {
           when unchanged > 0)
         _SyncPill(kbText(context, '$unchanged 篇无变化', '$unchanged unchanged')),
       if (source?['note_sync']?['failed'] case final int failed when failed > 0)
-        _SyncPill(kbText(context, '$failed 篇未同步', '$failed not synced'),
-            tint: colors.error),
+        _SyncPill(
+          kbText(context, '$failed 篇未同步', '$failed not synced'),
+          tint: colors.error,
+        ),
       if (stamp != null) _SyncPill(_lastSync(context, stamp), outlined: true),
     ];
   }
