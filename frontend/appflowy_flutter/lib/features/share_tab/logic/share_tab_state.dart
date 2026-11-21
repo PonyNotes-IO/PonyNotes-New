@@ -11,6 +11,7 @@ class ShareTabState {
     this.users = const [],
     this.availableUsers = const [],
     this.isLoading = false,
+    this.isSearchingUsers = false,
     this.errorMessage = '',
     this.shareLink = '',
     this.generalAccessRole,
@@ -30,6 +31,7 @@ class ShareTabState {
   final SharedUsers users;
   final SharedUsers availableUsers;
   final bool isLoading;
+  final bool isSearchingUsers;
   final String errorMessage;
   final String shareLink;
   final ShareAccessLevel? generalAccessRole;
@@ -49,6 +51,7 @@ class ShareTabState {
     SharedUsers? users,
     SharedUsers? availableUsers,
     bool? isLoading,
+    bool? isSearchingUsers,
     String? errorMessage,
     String? shareLink,
     ShareAccessLevel? generalAccessRole,
@@ -68,6 +71,7 @@ class ShareTabState {
       users: users ?? this.users,
       availableUsers: availableUsers ?? this.availableUsers,
       isLoading: isLoading ?? this.isLoading,
+      isSearchingUsers: isSearchingUsers ?? this.isSearchingUsers,
       errorMessage: errorMessage ?? this.errorMessage,
       shareLink: shareLink ?? this.shareLink,
       generalAccessRole: generalAccessRole ?? this.generalAccessRole,
@@ -93,6 +97,7 @@ class ShareTabState {
         other.users == users &&
         other.availableUsers == availableUsers &&
         other.isLoading == isLoading &&
+        other.isSearchingUsers == isSearchingUsers &&
         other.errorMessage == errorMessage &&
         other.shareLink == shareLink &&
         other.generalAccessRole == generalAccessRole &&
@@ -115,6 +120,7 @@ class ShareTabState {
       users,
       availableUsers,
       isLoading,
+      isSearchingUsers,
       errorMessage,
       shareLink,
       generalAccessRole,

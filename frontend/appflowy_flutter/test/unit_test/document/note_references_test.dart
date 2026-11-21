@@ -460,10 +460,19 @@ void main() {
         home: Scaffold(
           body: ChangeNotifierProvider<NoteRelationsController?>.value(
             value: controller,
-            child: ReferencedBlock(
-              node: node,
-              configuration: const BlockComponentConfiguration(),
-              child: const Text('Target passage'),
+            child: IntrinsicHeight(
+              child: Row(
+                children: [
+                  ReferencedBlock(
+                    node: node,
+                    configuration: const BlockComponentConfiguration(),
+                    child: const SizedBox(
+                      width: 160,
+                      child: Text('Target passage'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

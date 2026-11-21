@@ -456,11 +456,11 @@ impl FolderCloudService for ServerProvider {
       .await
   }
 
-  async fn import_zip(&self, file_path: &str) -> Result<(), FlowyError> {
+  async fn import_zip(&self, workspace_id: &Uuid, file_path: &str) -> Result<(), FlowyError> {
     self
       .get_server()?
       .folder_service()
-      .import_zip(file_path)
+      .import_zip(workspace_id, file_path)
       .await
   }
 

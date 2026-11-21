@@ -155,7 +155,7 @@ pub trait FolderCloudService: Send + Sync + 'static {
 
   async fn get_publish_namespace(&self, workspace_id: &Uuid) -> Result<String, FlowyError>;
 
-  async fn import_zip(&self, file_path: &str) -> Result<(), FlowyError>;
+  async fn import_zip(&self, workspace_id: &Uuid, file_path: &str) -> Result<(), FlowyError>;
 
   /// Share a page with a user (member or guest)
   async fn share_page_with_user(

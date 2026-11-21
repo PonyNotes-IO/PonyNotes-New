@@ -349,10 +349,13 @@ where
     Ok(namespace)
   }
 
-  async fn import_zip(&self, file_path: &str) -> Result<(), FlowyError> {
+  async fn import_zip(&self, workspace_id: &Uuid, file_path: &str) -> Result<(), FlowyError> {
     let file_path = PathBuf::from(file_path);
     let client = self.inner.try_get_client()?;
-    let url = client.create_import(&file_path).await?.presigned_url;
+    let url = client
+      .create_private_space_import(&file_path, workspace_id)
+      .await?
+      .presigned_url;
     trace!(
       "Importing zip file: {} to url: {}",
       file_path.display(),

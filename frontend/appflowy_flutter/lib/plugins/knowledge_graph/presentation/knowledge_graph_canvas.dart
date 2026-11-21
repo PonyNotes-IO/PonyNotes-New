@@ -173,6 +173,18 @@ class KnowledgeGraphCanvasState extends State<KnowledgeGraphCanvas>
     } catch (_) {/* A layout write must not affect the graph. */}
   }
 
+  Future<void> updatePositions(Map<String,dynamic> positions) async {
+    final updates=<String,Offset>{};
+    for(final entry in positions.entries) {
+      final value=entry.value;
+      if(!_positions.containsKey(entry.key) || value is! List || value.length!=2 || value.any((v)=>v is! num || !v.isFinite))throw const FormatException('图谱节点或坐标无效');
+      updates[entry.key]=Offset((value[0] as num).toDouble(),(value[1] as num).toDouble());
+    }
+    _springTicker.stop();
+    setState(() {_positions.addAll(updates);_anchors=Map.of(_positions);});
+    await _saveLayout();
+  }
+
   void _startSprings() {
     if (!_springTicker.isActive) {
       _lastFrame = null;

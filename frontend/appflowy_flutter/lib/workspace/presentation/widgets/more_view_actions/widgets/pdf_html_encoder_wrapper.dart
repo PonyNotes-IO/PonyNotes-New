@@ -422,10 +422,23 @@ class PdfHTMLEncoderWrapper {
                 else
                   pw.SizedBox(
                     width: 24,
-                    child: pw.Text(
-                      ordered ? '$index. ' : '• ',
-                      style: pw.TextStyle(font: font, fontFallback: fontFallback),
-                    ),
+                    child: ordered
+                        ? pw.Text(
+                            '$index. ',
+                            style: pw.TextStyle(font: font, fontFallback: fontFallback),
+                          )
+                        : pw.Align(
+                            alignment: pw.Alignment.topLeft,
+                            child: pw.Container(
+                              margin: const pw.EdgeInsets.only(left: 2, top: 5),
+                              width: 3.5,
+                              height: 3.5,
+                              decoration: const pw.BoxDecoration(
+                                color: pdf.PdfColors.black,
+                                shape: pw.BoxShape.circle,
+                              ),
+                            ),
+                          ),
                   ),
                 pw.Expanded(
                   child: pw.Wrap(children: childNodes),

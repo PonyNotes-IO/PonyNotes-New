@@ -35,6 +35,14 @@ typedef HandwritingSaberSnapshotProvider = HandwritingSaberSnapshot? Function();
 typedef HandwritingSession = ({String userId, String workspaceId});
 
 class HandwritingSaberDataService {
+  static final _toolControllers=<String,Map<String,dynamic> Function(Map<String,dynamic>)>{};
+  static void registerToolController(String view,Map<String,dynamic> Function(Map<String,dynamic>) control)=>_toolControllers[view]=control;
+  static void unregisterToolController(String view)=>_toolControllers.remove(view);
+  static Map<String,dynamic> controlTool(String view,Map<String,dynamic> request) {
+    final control=_toolControllers[view];
+    if(control==null)throw StateError('请先打开手写文档以调整当前画笔');
+    return control(request);
+  }
   HandwritingSaberDataService()
       : _readRemote = null,
         _writeRemote = null,

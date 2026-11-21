@@ -1417,6 +1417,7 @@ class _WhiteboardPageState extends State<WhiteboardPage>
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
       onInitialReady: _onWhiteboardInitialReady,
+      onFlush:_flushSave,
     );
 
     // 🚀 Pad端键盘动画优化：固定MediaQuery.viewInsets，防止键盘弹出时触发布局重建

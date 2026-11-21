@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../application/whiteboard_tool_bridge.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -123,6 +124,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
 
   @override
   void dispose() {
+    WhiteboardToolBridge.unregister(widget.view.id,_controller);
     WidgetsBinding.instance.removeObserver(this);
     _brightnessPollTimer?.cancel();
     _brightnessPollTimer = null;
@@ -585,6 +587,7 @@ class _MobileWhiteboardBodyState extends State<MobileWhiteboardBody>
           ]),
           onWebViewCreated: (controller) {
             _controller = controller;
+            WhiteboardToolBridge.register(widget.view.id,controller);
             _setupDownloadHandler(controller);
             _setupClipboardHandler(controller);
           },

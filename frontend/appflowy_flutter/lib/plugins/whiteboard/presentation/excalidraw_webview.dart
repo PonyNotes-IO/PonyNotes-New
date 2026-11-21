@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../application/whiteboard_tool_bridge.dart';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
@@ -68,6 +69,7 @@ class ExcalidrawWebView extends StatefulWidget {
     this.onExport,
     this.onError,
     this.onInitialReady,
+    this.onFlush,
   });
 
   final String viewId;
@@ -81,6 +83,7 @@ class ExcalidrawWebView extends StatefulWidget {
   final Function(String format, dynamic data)? onExport;
   final Function(String error)? onError;
   final VoidCallback? onInitialReady;
+  final Future<void> Function()? onFlush;
 
   @override
   State<ExcalidrawWebView> createState() => ExcalidrawWebViewState();
@@ -2256,6 +2259,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   @override
   void dispose() {
+    WhiteboardToolBridge.unregister(widget.viewId, _controller);
     // ⚠️ 不要停止本地HTTP服务器！
     // LocalAssetServer是单例，被所有白板视图共享
     // 如果在这里stop()，会导致其他白板视图的服务器也被停止
@@ -2691,6 +2695,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                         // 延迟销毁窗口内被外部方法误用。
                         if (_isDisposed) return;
                         _controller = controller;
+                        WhiteboardToolBridge.register(widget.viewId, controller,flush:widget.onFlush);
                         _webViewCreated = true;
                         _setupJavaScriptHandlers(controller);
                         // ✅ 修复：不再在 onWebViewCreated 中设置 localStorage

@@ -54,6 +54,9 @@ class ImportPagePluginImpl extends Plugin {
 
 class ImportPagePluginWidgetBuilder extends PluginWidgetBuilder {
   @override
+  EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
   String? get viewName => "导入页面";
 
   @override

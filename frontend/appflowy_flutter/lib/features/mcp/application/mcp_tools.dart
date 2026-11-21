@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
 import 'package:appflowy/plugins/database/application/row/row_service.dart';
@@ -54,13 +56,108 @@ import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:mcp_dart/mcp_dart.dart';
 import 'package:appflowy/features/mcp/application/mcp_audit_log.dart';
 import 'package:appflowy/features/mcp/application/mcp_permissions.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:uuid/uuid.dart';
+import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
+import 'package:appflowy/plugins/util.dart';
+import 'package:protobuf/protobuf.dart'
+    show GeneratedMessage, FieldInfo, MapFieldInfo, PbFieldType;
+import 'package:appflowy/features/agent/application/agent_internal_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:appflowy/features/version_history/version_history_service.dart';
+import 'package:appflowy/features/version_history/version_history_diff.dart';
+import 'package:appflowy/user/application/user_settings_service.dart';
+import 'package:appflowy/user/application/reminder/reminder_service.dart';
+import 'package:appflowy/plugins/inbox/application/inbox_service.dart';
+import 'package:appflowy_backend/protobuf/flowy-ai/protobuf.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path/path.dart' as paths;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:share_plus/share_plus.dart';
+import 'package:appflowy/core/helpers/url_launcher.dart';
+import 'package:appflowy/plugins/file_library/application/file_library_service.dart';
+import 'package:appflowy/plugins/file_library/application/file_library_models.dart';
+import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
+import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
+import 'package:appflowy/features/agent/application/agent_service.dart';
+import 'package:appflowy/features/agent/application/agent_attachments.dart';
+import 'package:appflowy/plugins/template/services/template_service.dart';
+import 'package:appflowy/plugins/template/services/appflowy_template_integration.dart';
+import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_cubit.dart';
+import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_extraction.dart';
+import 'package:appflowy/plugins/knowledge_graph/application/knowledge_graph_tool_bridge.dart';
+import 'package:appflowy/features/agent/application/agent_controller.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_update_executor.dart';
+import 'package:appflowy/shared/version_checker/version_checker.dart';
+import 'package:appflowy/startup/tasks/device_info_task.dart';
+import 'package:appflowy/shared/appflowy_cache_manager.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:permission_handler/permission_handler.dart' as permissions;
+import 'package:appflowy/plugins/document/application/doc_sync_state_listener.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_tool_bridge.dart';
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_saber_data_service.dart';
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/editor_core_info.dart';
+import 'package:appflowy/plugins/handwriting_saber/services/editor_exporter.dart';
+import 'package:appflowy/plugins/handwriting_saber/services/pdf_text_extraction_service.dart';
+import 'package:appflowy/plugins/handwriting_saber/application/handwriting_pdf_cache_service.dart';
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/page.dart'
+    as handwriting;
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/editor_image.dart';
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
+import 'package:appflowy/plugins/file_library/services/baidu_cloud_service.dart';
+import 'package:appflowy/plugins/import_page/file_upload_service.dart';
+import 'package:appflowy/plugins/import_page/enhanced_pdf_import_dialog.dart';
+import 'package:appflowy/plugins/import_page/enhanced_word_import_dialog.dart';
+import 'package:appflowy/plugins/import_page/processor/aliyun_doc_parse_processor.dart' show AliyunDocParseProcessor;
+import 'package:appflowy/plugins/import_page/professional_html_parser.dart';
+import 'package:appflowy/workspace/application/export/document_exporter.dart';
+import 'package:appflowy/workspace/application/export/document_pdf_exporter.dart';
+import 'package:appflowy/workspace/application/payment/payment_api.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/user/application/password/password_http_service.dart';
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/ai_internal/application/internal_ai_service.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcut_registry.dart';
+import 'package:appflowy/workspace/application/settings/shortcuts/shortcuts_model.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:flowy_infra/plugins/service/plugin_service.dart';
+import 'package:flowy_infra/plugins/service/models/flowy_dynamic_plugin.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/plugins/ai_chat/application/chat_stream_manager.dart';
 
 part 'mcp_note_links.dart';
+part 'mcp_database_tools.dart';
+part 'mcp_workspace_tools.dart';
+part 'mcp_extended_tools.dart';
+part 'mcp_cloud_tools.dart';
+part 'mcp_document_tools.dart';
+part 'mcp_native_tools.dart';
+part 'mcp_personal_tools.dart';
+part 'mcp_native_product_tools.dart';
+part 'mcp_file_tools.dart';
+part 'mcp_cloud_product_tools.dart';
+part 'mcp_graph_template_tools.dart';
+part 'mcp_agent_tools.dart';
+part 'mcp_app_tools.dart';
+part 'mcp_canvas_tools.dart';
+part 'mcp_storage_tools.dart';
+part 'mcp_account_tools.dart';
+part 'mcp_writing_tools.dart';
+part 'mcp_preference_tools.dart';
+part 'mcp_sharing_tools.dart';
+part 'mcp_chat_tools.dart';
+
+final _mcpExecutionScope = Object();
 
 /// 单个工具的定义：名称、描述、参数 schema 与处理函数。
 ///
@@ -105,10 +202,36 @@ class McpTools {
     this.isToolAllowed,
     DocumentService? documentService,
     this.noteLinks,
+    this.confirmOperation,
+    this.isAuthorizationCurrent,
+    this.cloudAccount = AgentCloudAccount.current,
   }) : _documentService = documentService ?? DocumentService();
+  static Future<void> revokeSessionState() async {
+    _mcpGrants.clear();
+    for (final task in _mcpWritingTasks.values) {
+      task.service.cancel();
+    }
+    _mcpWritingTasks.clear();
+    final runs = _mcpChatRuns.values.toList();
+    _mcpChatRuns.clear();
+    for (final run in runs) {
+      await run.manager.stopStream();
+      await run.finish('cancelled');
+    }
+    final graphs = _mcpGraphs.values.toList();
+    _mcpGraphs.clear();
+    for (final graph in graphs) {
+      graph.cancelExtraction();
+      await graph.close();
+    }
+  }
 
   final DocumentService _documentService;
   final McpNoteLinkDependencies? noteLinks;
+  final Future<bool> Function(String tool, Map<String, dynamic> args)?
+      confirmOperation;
+  final bool Function()? isAuthorizationCurrent;
+  final Future<AgentCloudAccount> Function() cloudAccount;
 
   final String endpoint;
   final String version;
@@ -143,6 +266,12 @@ class McpTools {
     'url': FieldType.URL,
     'checklist': FieldType.Checklist,
     'time': FieldType.Time,
+    'relation': FieldType.Relation,
+    'media': FieldType.Media,
+    'created_time': FieldType.CreatedTime,
+    'last_edited_time': FieldType.LastEditedTime,
+    'summary': FieldType.Summary,
+    'translate': FieldType.Translate,
   };
 
   static const JsonObject _noArgsSchema =
@@ -211,6 +340,40 @@ class McpTools {
         items: JsonString(),
         description: '只返回这些字段 ID；省略时返回全部字段',
       ),
+      'offset': JsonInteger(minimum: 0, description: '跳过的匹配行数，默认0'),
+      'row_ids': JsonArray(items: JsonString(), description: '只读取指定行ID'),
+      'filters': JsonArray(
+        items: JsonObject(
+          properties: {
+            'field_id': JsonString(),
+            'operator': JsonString(
+              enumValues: [
+                'eq',
+                'neq',
+                'contains',
+                'gt',
+                'gte',
+                'lt',
+                'lte',
+                'is_empty',
+              ],
+            ),
+            'value': JsonString(),
+          },
+          required: ['field_id', 'operator'],
+          additionalProperties: false,
+        ),
+      ),
+      'sorts': JsonArray(
+        items: JsonObject(
+          properties: {
+            'field_id': JsonString(),
+            'direction': JsonString(enumValues: ['asc', 'desc']),
+          },
+          required: ['field_id', 'direction'],
+          additionalProperties: false,
+        ),
+      ),
     },
     required: ['workspace_id', 'view_id'],
     additionalProperties: false,
@@ -247,9 +410,15 @@ class McpTools {
         description: '文本值；日期用 ISO 8601，勾选字段用 true/false，'
             '多选和检查清单用逗号分隔，关联和附件字段不支持写入',
       ),
+      'operation': JsonString(
+        enumValues: ['set', 'clear', 'add', 'remove'],
+        description: '省略时保留旧版写入行为',
+      ),
+      'option_ids':
+          JsonArray(items: JsonString(), description: '选项ID；set替换选项全集，clear清空'),
       'include_time': JsonBoolean(description: '日期字段是否包含时间，默认 false'),
     },
-    required: ['workspace_id', 'view_id', 'row_id', 'field', 'value'],
+    required: ['workspace_id', 'view_id', 'row_id', 'field'],
     additionalProperties: false,
   );
 
@@ -280,9 +449,21 @@ class McpTools {
           'url',
           'checklist',
           'time',
+          'relation',
+          'media',
+          'created_time',
+          'last_edited_time',
+          'summary',
+          'translate',
         ],
       ),
       'before_field': JsonString(description: '插入到该字段之前；省略时追加到末尾'),
+      'type_options': JsonObject(
+        description: '该字段类型的结构化TypeOption参数；与type_options_base64二选一',
+      ),
+      'type_options_base64': JsonString(
+        description: '该字段类型原生TypeOptionPB的Base64；结构见database_fields读取结果',
+      ),
     },
     required: ['workspace_id', 'view_id', 'name', 'type'],
     additionalProperties: false,
@@ -294,8 +475,10 @@ class McpTools {
       'view_id': JsonString(description: '数据库视图 ID'),
       'field': JsonString(description: '字段名或字段 ID'),
       'name': JsonString(description: '新的字段名'),
+      'type': JsonString(description: '新的字段类型，同create_database_field'),
+      'type_options': JsonObject(description: '按当前字段类型解析的选项；与name/type分开提交'),
     },
-    required: ['workspace_id', 'view_id', 'field', 'name'],
+    required: ['workspace_id', 'view_id', 'field'],
     additionalProperties: false,
   );
 
@@ -326,6 +509,10 @@ class McpTools {
   static const JsonObject _createWorkspaceSchema = JsonObject(
     properties: {
       'name': JsonString(description: '工作区名称'),
+      'workspace_type': JsonString(
+        enumValues: ['local', 'cloud'],
+        description: '省略时与当前工作区同类型',
+      ),
     },
     required: ['name'],
     additionalProperties: false,
@@ -378,6 +565,7 @@ class McpTools {
       'workspace_id': JsonString(description: '工作区 ID，必须是客户端当前工作区'),
       'page_id': JsonString(description: '要移动的页面 ID'),
       'new_parent_id': JsonString(description: '新的父空间或父页面 ID'),
+      'after_page_id': JsonString(description: '放到该同级页面之后；空字符串放到最前面'),
     },
     required: ['workspace_id', 'page_id', 'new_parent_id'],
     additionalProperties: false,
@@ -563,7 +751,7 @@ class McpTools {
   /// 避免两套入口各自实现笔记操作。
   List<McpToolSpec> get toolSpecs => _toolSpecs;
 
-  /// 30 个工具的唯一来源。新增工具只需在此追加一条，MCP 与内部 AI 同时生效。
+  /// MCP 与内部 AI 共用同一工具目录。
   late final List<McpToolSpec> _toolSpecs = [
     McpToolSpec(
       name: 'get_context',
@@ -604,7 +792,7 @@ class McpTools {
     ),
     McpToolSpec(
       name: 'query_database',
-      description: '读取表格/看板/日历视图的行数据，按字段名返回每个单元格的文本。',
+      description: '读取表格/看板/日历的行，支持分页、筛选、排序与指定行ID；cells_by_id保留同名字段。',
       inputSchema: _queryDatabaseSchema,
       readOnly: true,
       handler: _queryDatabase,
@@ -617,7 +805,7 @@ class McpTools {
     ),
     McpToolSpec(
       name: 'update_database_cell',
-      description: '按字段名或字段 ID 更新某一行的单元格值。',
+      description: '按字段名或字段ID更新或清空单元格；选项字段支持按ID替换、追加或移除。',
       inputSchema: _updateDatabaseCellSchema,
       handler: _updateDatabaseCell,
     ),
@@ -636,7 +824,7 @@ class McpTools {
     ),
     McpToolSpec(
       name: 'update_database_field',
-      description: '重命名数据库字段。',
+      description: '重命名、转换类型或修改现有字段选项。类型转换由客户端确认。',
       inputSchema: _updateDatabaseFieldSchema,
       handler: _updateDatabaseField,
     ),
@@ -683,7 +871,7 @@ class McpTools {
     ..._noteLinkSpecs,
     McpToolSpec(
       name: 'create_workspace',
-      description: '在左上角工作区列表中创建独立工作区，返回新工作区 ID；不会自动切换。'
+      description: '按名称创建本地或云工作区（缺省使用当前类型），返回新工作区 ID，不会自动切换。'
           '创建侧栏私有/协作空间请使用 create_space。',
       inputSchema: _createWorkspaceSchema,
       handler: _createWorkspace,
@@ -716,7 +904,7 @@ class McpTools {
     ),
     McpToolSpec(
       name: 'move_page',
-      description: '将页面移动到另一个空间或页面下，会检查目标层级是否合法并拒绝形成循环。',
+      description: '在当前工作区移动页面或调整同级顺序，拒绝形成循环。',
       inputSchema: _movePageSchema,
       handler: _movePage,
     ),
@@ -777,6 +965,21 @@ class McpTools {
       inputSchema: _moveBlockSchema,
       handler: _moveBlock,
     ),
+    ..._workspaceSpecs,
+    ..._cloudSpecs,
+    ..._documentSpecs,
+    ..._nativeSpecs,
+    ..._personalSpecs,
+    ..._nativeProductSpecs,
+    ..._fileSpecs,
+    ..._cloudProductSpecs,
+    ..._graphTemplateSpecs,
+    ..._agentSpecs,
+    ..._appSpecs,
+    ..._canvasSpecs,
+    ..._storageSpecs,
+    ..._accountSpecs,
+    ..._writingSpecs,
   ];
 
   /// 按名称执行工具，内部 AI 使用。未知工具名返回带 isError 的结果，不抛异常。
@@ -819,15 +1022,49 @@ class McpTools {
     final stopwatch = Stopwatch()..start();
     final target = _targetIds(args);
     try {
+      if (isAuthorizationCurrent?.call() == false) {
+        return _error('permission_denied', '当前工具会话已失效，请重新授权。');
+      }
+      final spec = toolSpecs.firstWhere((spec) => spec.name == name);
+      if (!isAgentChannel || _allowed(name)) spec.inputSchema.validate(args);
+      if (const [
+            'create_database_row',
+            'delete_database_row',
+            'create_database_field',
+            'update_database_field',
+            'delete_database_field',
+          ].contains(name) &&
+          (!isAgentChannel || _allowed(name))) {
+        final check = await _requireDatabaseView(
+          _requiredString(args, 'workspace_id'),
+          _requiredString(args, 'view_id'),
+          write: true,
+        );
+        if (check != null) return check;
+      }
       final result = isAgentChannel && !_allowed(name)
           ? _error('permission_denied', '该工具的权限已关闭：$name。')
-          : await handler(args).timeout(_toolTimeout);
+          : await runZoned(
+              () => handler(args),
+              zoneValues: {
+                _mcpExecutionScope: (
+                  name: name,
+                  deadline: DateTime.now().add(_toolTimeout)
+                ),
+              },
+            ).timeout(_toolTimeout);
       Log.info(
         '[MCP] tool=$name target=[$target] ok=${!result.isError} '
         'ms=${stopwatch.elapsedMilliseconds}',
       );
       _recordAudit(name, target, result.isError, stopwatch);
       return result;
+    } on JsonSchemaValidationException catch (e) {
+      _recordAudit(name, target, true, stopwatch);
+      return _error('invalid_params', e.message);
+    } on FormatException catch (e) {
+      _recordAudit(name, target, true, stopwatch);
+      return _error('invalid_params', e.message);
     } on TimeoutException {
       Log.error('[MCP] tool=$name target=[$target] timeout');
       _recordAudit(name, target, true, stopwatch);
@@ -880,6 +1117,16 @@ class McpTools {
       'target_page_id',
       'target_block_id',
       'focus_page_id',
+      'view_id',
+      'row_id',
+      'field',
+      'field_id',
+      'conversation_id',
+      'automation_id',
+      'run_id',
+      'base_id',
+      'source_id',
+      'file_id',
     ];
     final parts = <String>[];
     for (final key in keys) {
@@ -1100,6 +1347,8 @@ class McpTools {
     }
     final contextError = await _validateWorkspace(workspaceId);
     if (contextError != null) return contextError;
+    final resourceError = await _requireDatabaseView(workspaceId, viewId);
+    if (resourceError != null) return resourceError;
 
     final opened =
         await DatabaseViewBackendService(viewId: viewId).openDatabase();
@@ -1125,12 +1374,25 @@ class McpTools {
     }
 
     final limit = _intArg(args, 'limit', 20, 1, 100);
-    final rows = database.rows.toList();
-    final visible = rows.take(limit);
+    final offset = _intArg(args, 'offset', 0, 0, 0x7fffffff);
+    final requestedRows = (args['row_ids'] as List?)?.cast<String>().toSet();
+    final filters = (args['filters'] as List? ?? []).cast<Map>();
+    final sorts = (args['sorts'] as List? ?? []).cast<Map>();
+    final fieldIds = fields.map((f) => f.id).toSet();
+    if ([...filters, ...sorts]
+        .any((rule) => !fieldIds.contains(rule['field_id']))) {
+      return _error('invalid_params', '筛选或排序字段不存在。');
+    }
+    final rows = database.rows
+        .where((row) => requestedRows == null || requestedRows.contains(row.id))
+        .toList();
+    final needsAll = filters.isNotEmpty || sorts.isNotEmpty;
+    final visible = needsAll ? rows : rows.skip(offset).take(limit);
     final rowJson = <Map<String, dynamic>>[];
     for (final row in visible) {
       final cells = <String, String>{};
-      for (final field in visibleFields) {
+      final cellsById = <String, dynamic>{};
+      for (final field in needsAll ? fields : visibleFields) {
         final cellResult = await DatabaseEventGetCell(
           CellIdPB()
             ..viewId = viewId
@@ -1138,11 +1400,23 @@ class McpTools {
             ..fieldId = field.id,
         ).send();
         final cell = cellResult.fold((value) => value, (err) => null);
-        if (cell == null) continue;
+        if (cell == null) {
+          return _error('read_failed', '读取单元格失败：${row.id}/${field.id}');
+        }
         cells[field.name] = formatCellValue(cell.fieldType, cell.data);
+        cellsById[field.id] = {
+          'type': cell.fieldType.name,
+          'text': formatCellValue(cell.fieldType, cell.data),
+          'raw_base64': base64Encode(cell.data),
+        };
       }
-      rowJson.add({'row_id': row.id, 'cells': cells});
+      rowJson.add({'row_id': row.id, 'cells': cells, 'cells_by_id': cellsById});
     }
+    final selected =
+        needsAll ? filterDatabaseRows(rowJson, filters, sorts) : rowJson;
+    final total = needsAll ? selected.length : rows.length;
+    final page =
+        needsAll ? selected.skip(offset).take(limit).toList() : selected;
 
     return _ok({
       'view_id': viewId,
@@ -1153,13 +1427,17 @@ class McpTools {
               'id': field.id,
               'name': field.name,
               'type': field.fieldType.name,
+              'type_options_base64': base64Encode(field.typeOptionData),
             },
           )
           .toList(),
-      'rows': rowJson,
+      'rows': page,
       'row_count': rows.length,
-      'returned': rowJson.length,
-      'truncated': rows.length > rowJson.length,
+      'matched_count': total,
+      'offset': offset,
+      'next_offset': offset + page.length < total ? offset + page.length : null,
+      'returned': page.length,
+      'truncated': offset + page.length < total,
     });
   }
 
@@ -1236,6 +1514,9 @@ class McpTools {
     }
     final contextError = await _requireWriteAccess(workspaceId);
     if (contextError != null) return contextError;
+    final resourceError =
+        await _requireDatabaseView(workspaceId, viewId, write: true);
+    if (resourceError != null) return resourceError;
 
     final fields = await _databaseFields(viewId);
     if (fields == null) {
@@ -1246,13 +1527,19 @@ class McpTools {
       return _error('invalid_params', '字段不存在：$fieldKey');
     }
 
-    final error = await _writeCell(
-      viewId: viewId,
-      rowId: rowId,
-      field: field,
-      value: value,
-      includeTime: args['include_time'] == true,
-    );
+    final operation = args['operation'] as String?;
+    if (operation == null && !args.containsKey('value')) {
+      return _error('invalid_params', '旧版写入需要value；清空请使用operation=clear。');
+    }
+    final error = operation == null
+        ? await _writeCell(
+            viewId: viewId,
+            rowId: rowId,
+            field: field,
+            value: value,
+            includeTime: args['include_time'] == true,
+          )
+        : await _writeCellOperation(viewId, rowId, field, args);
     if (error != null) {
       return _error('write_failed', error);
     }
@@ -1326,6 +1613,7 @@ class McpTools {
       viewId: viewId,
       fieldType: fieldType,
       fieldName: name,
+      typeOptionData: _fieldOptionBytes(fieldType, args),
     );
     final field = created.fold((value) => value, (err) => null);
     if (field == null) {
@@ -1364,8 +1652,13 @@ class McpTools {
     if (workspaceId.isEmpty ||
         viewId.isEmpty ||
         fieldKey.isEmpty ||
-        newName.isEmpty) {
-      return _error('invalid_params', '缺少 workspace_id、view_id、field 或 name。');
+        (newName.isEmpty &&
+            args['type'] == null &&
+            args['type_options'] == null)) {
+      return _error(
+        'invalid_params',
+        '需要workspace_id、view_id、field及name、type或type_options。',
+      );
     }
     final contextError = await _requireWriteAccess(workspaceId);
     if (contextError != null) return contextError;
@@ -1379,10 +1672,35 @@ class McpTools {
       return _error('invalid_params', '字段不存在：$fieldKey');
     }
 
-    final result = await FieldBackendService(
-      viewId: viewId,
-      fieldId: field.id,
-    ).updateField(name: newName);
+    if (args['type_options'] != null && (args['type'] != null || newName.isNotEmpty)) {
+      return _error('invalid_params', '请将字段选项与改名或类型转换分开提交。');
+    }
+    final newType = args['type'] == null ? null : _fieldTypes[args['type']];
+    if (args['type'] != null && newType == null) {
+      return _error('invalid_params', '未知字段类型。');
+    }
+    if (newType != null &&
+        newType != field.fieldType &&
+        !await _confirm('update_database_field', args)) {
+      return _error('permission_denied', '用户未批准字段类型转换。');
+    }
+    final result = newType != null
+        ? await FieldBackendService.updateFieldType(
+            viewId: viewId,
+            fieldId: field.id,
+            fieldType: newType,
+            fieldName: newName.isEmpty ? null : newName,
+          )
+        : args['type_options'] != null
+            ? await FieldBackendService.updateFieldTypeOption(
+                viewId: viewId,
+                fieldId: field.id,
+                typeOptionData: _fieldOptionBytes(field.fieldType, args)!,
+              )
+            : await FieldBackendService(
+                viewId: viewId,
+                fieldId: field.id,
+              ).updateField(name: newName);
     final error = result.fold((_) => null, (err) => err.msg);
     if (error != null) {
       return _error('write_failed', error);
@@ -1390,7 +1708,8 @@ class McpTools {
     return _ok({
       'field_id': field.id,
       'old_name': field.name,
-      'name': newName,
+      'name': newName.isEmpty ? field.name : newName,
+      if (newType != null) 'type': newType.name,
     });
   }
 
@@ -1736,8 +2055,17 @@ class McpTools {
     if (profile == null) {
       return _error('not_logged_in', '客户端未登录，请先在小马笔记中登录账号。');
     }
+    final type = switch (args['workspace_type']) {
+      'local' => WorkspaceTypePB.LocalW,
+      'cloud' => WorkspaceTypePB.ServerW,
+      null => profile.workspaceType,
+      _ => null,
+    };
+    if (type == null) {
+      return _error('invalid_params', 'workspace_type必须为local或cloud。');
+    }
     final result = await UserBackendService(userId: profile.id)
-        .createUserWorkspace(name, profile.workspaceType);
+        .createUserWorkspace(name, type);
     FlowyError? failure;
     final workspace = result.fold((workspace) => workspace, (error) {
       failure = error;
@@ -1862,7 +2190,10 @@ class McpTools {
     });
   }
 
-  Future<CallToolResult> _createPage(Map<String, dynamic> args) async {
+  Future<CallToolResult> _createPage(
+    Map<String, dynamic> args, {
+    Document? initialDocument,
+  }) async {
     final workspaceId = _stringArg(args, 'workspace_id')?.trim() ?? '';
     final parentId = _stringArg(args, 'parent_id')?.trim() ?? '';
     final title = _stringArg(args, 'title')?.trim() ?? '';
@@ -1886,9 +2217,9 @@ class McpTools {
     List<int>? initialBytes;
     String? viewId;
     final markdown = _stringArg(args, 'markdown');
-    if (markdown != null && markdown.trim().isNotEmpty) {
+    if (initialDocument != null || (markdown != null && markdown.trim().isNotEmpty)) {
       viewId = const Uuid().v4();
-      final document = customMarkdownToDocument(markdown, tableWidth: 250.0);
+      final document = initialDocument ?? customMarkdownToDocument(markdown!, tableWidth: 250.0);
       final data = DocumentDataPBFromTo.fromDocument(document);
       if (data == null) {
         return _error('internal', 'Markdown 转换失败。');
@@ -2006,10 +2337,19 @@ class McpTools {
       return _error('invalid_params', '不能把页面移动到它自己的子页面下。');
     }
 
+    final afterId = _stringArg(args, 'after_page_id');
+    if (afterId != null && afterId.isNotEmpty) {
+      final sibling = await _view(afterId);
+      if (sibling == null ||
+          sibling.parentViewId != newParentId ||
+          sibling.id == pageId) {
+        return _error('invalid_params', 'after_page_id必须是目标父级下的其他页面。');
+      }
+    }
     final result = await ViewBackendService.moveViewV2(
       viewId: pageId,
       newParentId: newParentId,
-      prevViewId: null,
+      prevViewId: afterId?.isEmpty == true ? null : afterId,
     );
     FlowyError? failure;
     final moved = result.fold((_) => true, (error) {
@@ -3365,6 +3705,9 @@ class McpTools {
   }
 
   Future<CallToolResult?> _validateWorkspace(String workspaceId) async {
+    if (!_executionIsActive()) {
+      return _error('permission_denied', '调用已超时或授权已撤销。');
+    }
     final profile = await _currentProfile();
     if (profile == null) {
       return _error('not_logged_in', '客户端未登录，请先在小马笔记中登录账号。');

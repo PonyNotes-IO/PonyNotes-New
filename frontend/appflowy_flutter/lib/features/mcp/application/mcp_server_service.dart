@@ -260,6 +260,7 @@ class McpServerService extends ChangeNotifier {
 
   /// 撤销授权：停止服务并清除 Token，退出账号时调用。
   Future<void> revoke() async {
+    await McpTools.revokeSessionState();
     await stop();
     _tokenHash = null;
     _tokenPlain = null;
@@ -357,6 +358,8 @@ class McpServerService extends ChangeNotifier {
   McpServer buildServer() => _createMcpServer();
 
   McpServer _createMcpServer() {
+    final authorizationHash = _tokenHash;
+    var sessionActive = true;
     String? requestAgent;
     final server = _McpTrackedServer(
       const Implementation(name: 'ponynotes-mcp', version: version),
@@ -402,6 +405,7 @@ class McpServerService extends ChangeNotifier {
       unawaited(_persistClients());
     };
     server.server.onclose = () {
+      sessionActive = false;
       _sessions.remove(server);
       _onlineSessions.remove(server);
       notifyListeners();
@@ -411,6 +415,8 @@ class McpServerService extends ChangeNotifier {
       version: version,
       isAgentChannel: true,
       agentName: agentName,
+      isAuthorizationCurrent: () =>
+          sessionActive && _tokenHash == authorizationHash,
     ).registerAll(server);
     return server;
   }

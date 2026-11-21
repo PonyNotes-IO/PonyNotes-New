@@ -2662,7 +2662,8 @@ impl FolderManager {
   }
 
   pub(crate) async fn import_zip_file(&self, zip_file_path: &str) -> FlowyResult<()> {
-    self.cloud_service()?.import_zip(zip_file_path).await?;
+    let workspace_id = self.user.workspace_id()?;
+    self.cloud_service()?.import_zip(&workspace_id, zip_file_path).await?;
     Ok(())
   }
 

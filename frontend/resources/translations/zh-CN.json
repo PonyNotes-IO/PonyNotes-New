@@ -3438,6 +3438,10 @@
     "settingsUpdateWhatsNew": "最新消息"
   },
   "shareTab": {
+    "documentShare": "共享",
+    "collaboratorSearch": "输入用户名或手机号邀请协作",
+    "inviteByLink": "通过链接邀请他人来协作",
+    "noMatchingUsers": "未找到匹配的用户",
     "accessLevel": {
       "view": "查看",
       "comment": "评论",

@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:get_it/get_it.dart';
 import 'whiteboard_clipboard_bridge.dart';
+import '../application/whiteboard_tool_bridge.dart';
 
 String _androidWhiteboardImageMimeType(String extension) {
   switch (extension.toLowerCase()) {
@@ -269,6 +270,7 @@ class _RemoteWhiteboardPageState extends State<RemoteWhiteboardPage>
 
   @override
   void dispose() {
+    WhiteboardToolBridge.unregister(widget.view.id, _controller);
     WidgetsBinding.instance.removeObserver(this);
     _brightnessPollTimer?.cancel();
     _brightnessPollTimer = null;
@@ -907,6 +909,7 @@ return await window.__xmExportImage('$format');
                   onWebViewCreated: (controller) {
                     if (_isDisposed) return;
                     _controller = controller;
+                    WhiteboardToolBridge.register(widget.view.id, controller,flush:_flushSave);
                     _setupDownloadHandler(controller);
                     _setupMirrorHandler(controller);
                     if (Platform.isAndroid) {

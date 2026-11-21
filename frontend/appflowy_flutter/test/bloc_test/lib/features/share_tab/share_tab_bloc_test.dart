@@ -1,13 +1,40 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/data/collab_workspace_resolver.dart';
 import 'package:appflowy/features/share_tab/data/repositories/local_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+class _SearchRepository extends LocalShareWithUserRepositoryImpl {
+  final firstStarted = Completer<void>();
+  final firstResult = Completer<FlowyResult<SharedUsers, FlowyError>>();
+
+  @override
+  Future<FlowyResult<SharedUsers, FlowyError>> searchUsers({
+    required String query,
+    int pageNo = 1,
+  }) async {
+    if (query == 'first') {
+      firstStarted.complete();
+      return firstResult.future;
+    }
+    return FlowySuccess([
+      SharedUser(
+        email: 'latest@example.test',
+        name: 'Latest',
+        role: ShareRole.guest,
+        accessLevel: ShareAccessLevel.readOnly,
+      ),
+    ]);
+  }
+}
 
 void main() {
   const pageId = 'test_page_id';
@@ -31,6 +58,27 @@ void main() {
   const email = 'lucas.xu@appflowy.io';
 
   group('ShareTabBloc', () {
+    test('ignores a search response after the query changes', () async {
+      final searchRepository = _SearchRepository();
+      final searchBloc = ShareTabBloc(
+        repository: searchRepository,
+        pageId: pageId,
+        workspaceId: workspaceId,
+      );
+      addTearDown(searchBloc.close);
+      searchBloc.add(ShareTabEvent.searchAvailableUsers(query: 'first'));
+      await searchRepository.firstStarted.future;
+
+      final latest = searchBloc.stream
+          .firstWhere((state) => state.availableUsers.isNotEmpty);
+      searchBloc.add(ShareTabEvent.searchAvailableUsers(query: 'latest'));
+      final state = await latest;
+      searchRepository.firstResult.complete(FlowySuccess([]));
+      await Future<void>.delayed(Duration.zero);
+      expect(searchBloc.state.availableUsers, state.availableUsers);
+      expect(searchBloc.state.availableUsers.single.name, 'Latest');
+    });
+
     blocTest<ShareTabBloc, ShareTabState>(
       'shares page with user',
       build: () => bloc,

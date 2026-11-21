@@ -12,6 +12,8 @@ import '../../document/application/document_service.dart';
 /// AppFlowy模版集成服务
 /// 负责将模版转换为AppFlowy工作空间中的实际文档
 class AppFlowyTemplateIntegration {
+  /// The editor and MCP use the same template content conversion.
+  static String contentForTemplate(TemplateItem template) => _generateTemplateContent(template);
   
   /// 使用模版创建新文档
   static Future<bool> useTemplate({
