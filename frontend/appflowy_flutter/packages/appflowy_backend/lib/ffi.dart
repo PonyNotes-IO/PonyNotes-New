@@ -205,9 +205,29 @@ void rust_log(
 /// 延迟初始化的 Rust 日志函数指针
 _invoke_rust_log_Dart? _cachedInvokeRustLog;
 
+/// 鸿蒙启动健壮性修复：
+/// 首次 Log 调用会懒加载 libdart_ffi.so（`_initRustLogFunction` → `_open`）。
+/// 若 dlopen 失败（如缺少 libc++_shared.so）或引擎在加载期间回调日志，
+/// 日志路径可能重入这里。此标志确保在符号解析完成前不再次进入 FFI 日志，
+/// 并把加载失败转成可被上层 try/catch 捕获的异常，而不是静默卡死。
+/// 真正的 dlopen 失败根因需在构建侧解决（见 ohos/entry/libs 的 so 依赖）。
+/// 仅影响日志，不影响任何业务 FFI 调用。
+bool _rustLogResolving = false;
+
 void _invokeRustLog(int level, Pointer<ffi.Utf8> data) {
+  // 库或符号正在解析中（多半是被 dlopen 回调重入），直接丢弃这条日志。
+  if (_rustLogResolving) {
+    return;
+  }
   if (_cachedInvokeRustLog == null) {
-    _cachedInvokeRustLog = _initRustLogFunction();
+    _rustLogResolving = true;
+    try {
+      _cachedInvokeRustLog = _initRustLogFunction();
+    } catch (_) {
+      _cachedInvokeRustLog = null;
+    } finally {
+      _rustLogResolving = false;
+    }
   }
 
   final func = _cachedInvokeRustLog;

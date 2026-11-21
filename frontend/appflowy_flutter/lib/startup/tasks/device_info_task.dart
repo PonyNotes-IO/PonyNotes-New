@@ -4,6 +4,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:auto_updater/auto_updater.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flowy_infra/platform_extension.dart' show PlatformInfo;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:version/version.dart';
 
@@ -106,13 +107,18 @@ class ApplicationInfoTask extends LaunchTask {
           // we only support x86_64 on Linux
           architecture = 'x86_64';
           os = 'linux';
-        } else if (Platform.operatingSystem == 'ohos') {
+        } else if (PlatformInfo.isOhos) {
           // 鸿蒙：device_info_plus 默认 MethodChannel 的 getDeviceInfo 已由
-          // ohos_native_bridge 实现，返回包含 os/architecture/model 等字段的 map。
+          // ohos_native_bridge 实现，返回包含 os/architecture/model/deviceType 的 map。
           final BaseDeviceInfo info = await deviceInfoPlugin.deviceInfo;
           final data = info.data;
           architecture = (data['architecture'] as String?) ?? 'arm64';
           os = (data['os'] as String?) ?? 'ohos';
+          // 采集设备形态，供 PlatformInfo 区分手机/平板/桌面端。
+          final deviceType = data['deviceType'] as String?;
+          if (deviceType != null && deviceType.isNotEmpty) {
+            PlatformInfo.setOhosDeviceType(deviceType);
+          }
         } else {
           architecture = null;
           os = null;

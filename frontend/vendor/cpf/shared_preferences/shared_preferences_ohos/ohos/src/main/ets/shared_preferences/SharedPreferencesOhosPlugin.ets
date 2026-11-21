@@ -326,25 +326,26 @@ export default class SharedPreferencesOhosPlugin implements FlutterPlugin, Share
     return filteredPrefs;
   }
 
-  async getAll(prefix: string, allowList: Array<string>): Promise<Object> {
+  getAll(prefix: string, allowList: Array<string>): Promise<Object> {
+    // OHOS 卡启动页修复：原实现用 `await this.preferences.getAll()`（异步 Promise），
+    // 在真机上该 Promise 可能永不 settle，导致 Pigeon getAll 的 reply 永不发出，
+    // Dart 侧 SharedPreferences.getInstance() 的 Future 永久挂起、启动链卡死。
+    // 这里改用同步 getAllSync()（与 onAttachedToEngine / clear 中的同步读取一致），
+    // 保证同步完成并总是返回已决议的 Promise。
+    //
+    // 另修复原 `new Promise((reject) => {...})` 的错误写法：单参数构造器的入参其实是
+    // resolve，会把错误字符串当成成功值 resolve，导致 Dart 侧把 String 当作 Map 解码
+    // 而抛类型错误。改用 Promise.reject(new Error(...)) 走标准的错误分支。
     try {
-      let res = new Map<string, Object>();
       if (this.preferences == null) {
-        return new Promise((reject) => {
-          reject("Failed to getAll");
-        })
+        return Promise.reject(new Error("Preferences is not initialized"));
       }
-      await this.preferences.getAll().then((obj: Object) => {
-        res = this.filterData(obj as [string, ESObject], prefix, allowList);
-      })
-      return new Promise((resolve) => {
-        resolve(res);
-      })
+      const obj: Object = this.preferences.getAllSync();
+      const res = this.filterData(obj as [string, ESObject], prefix, allowList);
+      return Promise.resolve(res);
     } catch (err) {
-      Log.w(TAG, "Failed to excute getAll." + JSON.stringify(err));
-      return new Promise((reject) => {
-        reject("Failed to getAll");
-      })
+      Log.w(TAG, "Failed to getAll. " + JSON.stringify(err));
+      return Promise.reject(new Error("Failed to getAll"));
     }
   }
 

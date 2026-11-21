@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:ohos_native_bridge/ohos_native_bridge.dart';
 import 'package:pdfrx/pdfrx.dart';
 
@@ -101,7 +101,64 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  await runAppFlowy();
+  // 启动链健壮性：runAppFlowy() 内部任一 task 抛异常或挂起（如鸿蒙上
+  // shared_preferences 通道无返回），此前都会静默停在启动图且无任何提示。
+  // 加超时 + 异常兜底，失败时展示可重试的错误页，避免"假死"。
+  await _runAppFlowySafely();
+}
+
+Future<void> _runAppFlowySafely() async {
+  // 启动链包含 Rust SDK 初始化与云配置拉取，冷启动较慢，给足 60 秒避免误杀。
+  const timeout = Duration(seconds: 60);
+  try {
+    await runAppFlowy().timeout(timeout);
+  } on TimeoutException {
+    Log.error('Startup timed out after ${timeout.inSeconds}s, showing error page');
+    _showStartupError('启动超时，应用初始化耗时过长。请检查网络后重试。');
+  } catch (e, stackTrace) {
+    Log.error('Startup failed: $e', e, stackTrace);
+    _showStartupError('启动失败：$e');
+  }
+}
+
+void _showStartupError(String message) {
+  runApp(MaterialApp(
+    debugShowCheckedModeBanner: false,
+    home: Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Color(0xFFFF3800), size: 56),
+              const SizedBox(height: 20),
+              const Text(
+                '小马笔记启动失败',
+                style: TextStyle(color: Colors.white, fontSize: 20),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
+              ),
+              const SizedBox(height: 28),
+              ElevatedButton(
+                onPressed: () async {
+                  runApp(const StartupShell());
+                  await WidgetsBinding.instance.endOfFrame;
+                  await _runAppFlowySafely();
+                },
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ));
 }
 
 String? getInitialDeepLink() => _initialDeepLink;

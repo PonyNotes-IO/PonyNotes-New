@@ -248,6 +248,8 @@ export default class OhosNativeBridgePlugin implements FlutterPlugin {
         manufacturer: deviceInfo.manufacture,
         deviceName: deviceInfo.marketName,
         product: deviceInfo.productSeries,
+        // 设备形态：phone / tablet / 2in1 / pc，供 Dart 侧区分鸿蒙手机/平板/桌面端。
+        deviceType: deviceInfo.deviceType,
         isPhysicalDevice: true,
       });
     } catch (e) {

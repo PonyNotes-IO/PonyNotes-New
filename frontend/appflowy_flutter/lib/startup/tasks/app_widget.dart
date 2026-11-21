@@ -56,6 +56,11 @@ class InitAppWidgetTask extends LaunchTask {
   LaunchTaskType get type => LaunchTaskType.appLauncher;
 
   void _setPreferredOrientations() {
+    // 鸿蒙只在手机形态锁定方向；平板/桌面保持系统默认（不锁），
+    // 避免 UniversalPlatform 把鸿蒙一律判为 Android 导致的错误锁向。
+    if (PlatformInfo.isOhos && !PlatformInfo.isOhosPhone) {
+      return;
+    }
     if (UniversalPlatform.isIOS || UniversalPlatform.isAndroid) {
       if (PlatformInfo.isTablet) {
         SystemChrome.setPreferredOrientations([

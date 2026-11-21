@@ -272,14 +272,24 @@ Future<String> getAppFlowyShareDomain() async {
 }
 
 Future<bool> getSyncLogEnabled() async {
-  final result =
-      await getIt<KeyValueStorage>().get(KVKeys.kAppFlowyEnableSyncTrace);
+  // 启动链健壮性（鸿蒙适配）：这是 AppFlowyCloudSharedEnv.fromEnv() 冷启动链中
+  // 唯一触碰 KeyValueStorage/SharedPreferences 的必经点。底层 Pigeon 通道若异常
+  // 或挂起，绝不能让它阻塞整个启动——用超时 + 异常兜底，失败即返回默认值 false。
+  // 注意：单纯的 try/catch 抓不到"永不 complete 的 Future"，必须配合 timeout。
+  try {
+    final result = await getIt<KeyValueStorage>()
+        .get(KVKeys.kAppFlowyEnableSyncTrace)
+        .timeout(const Duration(seconds: 10));
 
-  if (result == null) {
+    if (result == null) {
+      return false;
+    }
+
+    return result.toLowerCase() == "true";
+  } catch (e) {
+    Log.error('Failed to read sync log flag, using default false: $e');
     return false;
   }
-
-  return result.toLowerCase() == "true";
 }
 
 Future<void> setSyncLogEnabled(bool enable) async {

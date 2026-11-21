@@ -32,6 +32,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:flowy_infra/platform_extension.dart' show PlatformInfo;
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
@@ -425,7 +426,9 @@ class AppFlowyCloudDeepLink {
 
     // 处理完 DeepLink 后，在桌面端恢复已有窗口。Windows 冷启动时窗口由
     // runner 在首帧后显示，这里不能提前争抢 Show，否则会重新引入启动竞态。
-    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isFuchsia) {
+    // 用 PlatformInfo.isDesktop 统一判定：鸿蒙手机/平板返回 false，避免误调
+    // window_manager 的 isMinimized（鸿蒙未实现该通道，会抛 MissingPluginException）。
+    if (PlatformInfo.isDesktop && !PlatformInfo.isOhos) {
       try {
         final isMinimized = await windowManager.isMinimized();
         final isVisible = await windowManager.isVisible();
