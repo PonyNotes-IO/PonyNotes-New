@@ -30,7 +30,6 @@ import 'package:appflowy/mobile/presentation/setting/language/language_picker_sc
 import 'package:appflowy/mobile/presentation/setting/launch_settings_page.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/invite_members_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_space_management_page.dart';
-import 'package:appflowy/mobile/presentation/setting/ai_internal/mobile_internal_ai_page.dart';
 import 'package:appflowy/mobile/presentation/setting/ai_internal/mobile_internal_ai_provider_page.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/mobile_sharing_page.dart';
 import 'package:appflowy/plugins/base/color/color_picker_screen.dart';
@@ -91,7 +90,6 @@ GoRouter generateRouter(Widget child) {
         _mobileEmailBindPageRoute(),
         _mobileSpaceManagementPageRoute(),
         _mobileSharingPageRoute(),
-        _mobileInternalAiPageRoute(),
         _mobileInternalAiProviderPageRoute(),
 
         // view page
@@ -420,17 +418,6 @@ GoRoute _mobileSpaceManagementPageRoute() {
         name: MobileSpaceManagementPage.routeName,
       );
     },
-  );
-}
-
-GoRoute _mobileInternalAiPageRoute() {
-  return GoRoute(
-    parentNavigatorKey: AppGlobals.rootNavKey,
-    path: MobileInternalAiPage.routeName,
-    pageBuilder: (context, state) => MaterialExtendedPage(
-      child: const MobileInternalAiPage(),
-      name: MobileInternalAiPage.routeName,
-    ),
   );
 }
 

@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/features/ai_internal/presentation/ai_chat_view.dart';
 import 'package:appflowy/features/ai_internal/presentation/ai_provider_settings_view.dart';
 import 'package:appflowy/features/mcp/presentation/mcp_settings_view.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -356,8 +355,6 @@ class _SettingsDialogState extends State<SettingsDialog> {
           workspaceId: workspace.workspaceId,
           creatorName: user.name,
         );
-      case SettingsPage.aiChat:
-        return const AiChatView();
       // return const SizedBox.shrink();
     }
   }

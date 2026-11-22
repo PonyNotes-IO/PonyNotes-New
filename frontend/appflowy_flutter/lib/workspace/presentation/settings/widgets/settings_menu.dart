@@ -244,12 +244,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
               label: "模型管理",
               changeSelectedPage: widget.changeSelectedPage,
             ),
-            SettingsMenuElement(
-              page: SettingsPage.aiChat,
-              selectedPage: widget.currentPage,
-              label: "内部 AI 对话",
-              changeSelectedPage: widget.changeSelectedPage,
-            ),
 
             // PonyNotes（2026-06-09）：彻底移除"付费计划(Plan)/账单"两个设置菜单入口
             // （产品决定不要）。仅删除这两个菜单项，不动 planBilling 开关、侧栏提示条、
