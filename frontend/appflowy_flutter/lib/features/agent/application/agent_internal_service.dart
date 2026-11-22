@@ -270,6 +270,15 @@ class AgentInternalService {
     return response['id'] as String;
   }
 
+  Future<bool> testCustomModel(String workspaceId, String id) async {
+    final path = Uri.encodeComponent(id.replaceFirst('custom:', ''));
+    final result = await _request(
+      '/api/ai/agent/custom-models/$workspaceId/$path/test',
+      post: true,
+    );
+    return result['available'] as bool;
+  }
+
   Future<void> deleteCustomModel(String workspaceId, String id) async {
     await _request(
       '/api/ai/agent/custom-models/$workspaceId/${id.replaceFirst('custom:', '')}',
