@@ -3,26 +3,39 @@ import 'dart:async';
 class Throttler {
   Throttler({
     this.duration = const Duration(milliseconds: 1000),
+    this.trailing = false,
   });
 
   final Duration duration;
+
+  /// When enabled, also run the latest call received during each cooldown.
+  final bool trailing;
   Timer? _timer;
+  void Function()? _pending;
 
-  void call(Function callback) {
-    if (_timer?.isActive ?? false) return;
+  void call(void Function() callback) {
+    if (_timer?.isActive ?? false) {
+      if (trailing) {
+        _pending = callback;
+      }
+      return;
+    }
 
-    // leading edge：立即执行首次调用，后续 duration 内的调用被丢弃
+    _timer = Timer(duration, () {
+      final pending = _pending;
+      _pending = null;
+      if (pending != null) {
+        call(pending);
+      }
+    });
     callback();
-
-    _timer = Timer(duration, () {});
   }
 
   void cancel() {
     _timer?.cancel();
+    _timer = null;
+    _pending = null;
   }
 
-  void dispose() {
-    _timer?.cancel();
-    _timer = null;
-  }
+  void dispose() => cancel();
 }

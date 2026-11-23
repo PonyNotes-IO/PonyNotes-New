@@ -4,6 +4,8 @@ import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/collab_view_mapper.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
+import 'package:appflowy/features/share_tab/data/stop_collab_sharing.dart';
+import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/share_tab.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -53,6 +55,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   List<SharedCollabView> _sharedNotes = const [];
   bool _isLoadingShared = true;
   String? _sharedError;
+  final Set<String> _stoppingSharedViewIds = {};
 
   @override
   void initState() {
@@ -322,7 +325,12 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     // 如果有更新，更新 UI
     if (hasUpdate && mounted) {
       setState(() {
-        _sharedNotes = updatedViews;
+        final details = {
+          for (final entry in updatedViews) entry.view.id: entry,
+        };
+        _sharedNotes = _sharedNotes
+            .map((entry) => details[entry.view.id] ?? entry)
+            .toList();
       });
     }
   }
@@ -486,6 +494,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               color: theme.textColorScheme.secondary,
             ),
           ),
+          const SizedBox(width: 96),
         ],
       ),
     );
@@ -551,6 +560,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final shareTime = _formatTimestamp(view.createTime.toInt());
     const accessLabel = '已共享';
     final theme = AppFlowyTheme.of(context);
+    final isStopping = _stoppingSharedViewIds.contains(view.id);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -584,10 +594,12 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
                   color: theme.textColorScheme.secondary,
                 ),
                 TextButton(
-                  onPressed: () {
-                    Log.debug('查看邀请成员: ${view.id}');
-                    _showInviteMembersDialog(entry);
-                  },
+                  onPressed: isStopping
+                      ? null
+                      : () {
+                          Log.debug('查看邀请成员: ${view.id}');
+                          _showInviteMembersDialog(entry);
+                        },
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(0, 24),
@@ -603,6 +615,16 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
                   ),
                 ),
               ],
+            ),
+          ),
+          SizedBox(
+            width: 96,
+            child: TextButton(
+              onPressed: isStopping ? null : () => _stopSharing(entry),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              child: Text(isStopping ? '停止中…' : '停止共享'),
             ),
           ),
         ],
@@ -761,6 +783,56 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     await afLaunchUrlString(url);
   }
 
+  Future<void> _stopSharing(SharedCollabView entry) async {
+    if (!_stoppingSharedViewIds.add(entry.view.id)) return;
+    setState(() {});
+    try {
+      final workspaceId = entry.ownerWorkspaceId.isNotEmpty
+          ? entry.ownerWorkspaceId
+          : entry.view.workspaceId;
+      final baseUrl =
+          getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url;
+      final profileResult = await UserBackendService.getCurrentUserProfile();
+      final accessToken = profileResult.fold(
+        (profile) => _extractAccessToken(profile.token),
+        (error) => throw Exception(error.msg),
+      );
+      if (workspaceId.isEmpty || baseUrl.isEmpty) {
+        throw Exception('未找到笔记所属空间或服务器配置');
+      }
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('请先登录');
+      }
+
+      await stopCollabSharing(
+        Uri.parse(baseUrl).replace(
+          path: '/api/workspace/$workspaceId/collab/${entry.view.id}/sharing',
+        ),
+        accessToken,
+      );
+      if (!mounted) return;
+      setState(() {
+        _sharedNotes = _sharedNotes
+            .where((note) => note.view.id != entry.view.id)
+            .toList();
+      });
+      ShareSectionRefreshNotifier.notify();
+      showToastNotification(message: '已停止共享');
+    } catch (e) {
+      Log.error('stop sharing ${entry.view.id} failed: $e');
+      if (mounted) {
+        showToastNotification(
+          message: '停止共享失败：$e',
+          type: ToastificationType.error,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _stoppingSharedViewIds.remove(entry.view.id));
+      }
+    }
+  }
+
   Future<void> _showInviteMembersDialog(SharedCollabView entry) async {
     final view = entry.view;
     final workspaceState = context.read<UserWorkspaceBloc>().state;
@@ -768,13 +840,13 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final ownerWorkspaceId = entry.ownerWorkspaceId;
 
     if (ownerWorkspaceId.isEmpty && workspace == null) {
-      showToastNotification(message: '未找到工作区');
+      showToastNotification(message: '未找到空间');
       return;
     }
 
     if (ownerWorkspaceId.isEmpty &&
         workspace?.workspaceType == WorkspaceTypePB.LocalW) {
-      showToastNotification(message: '当前工作区暂不支持共享权限管理');
+      showToastNotification(message: '当前空间暂不支持共享权限管理');
       return;
     }
 

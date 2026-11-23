@@ -104,7 +104,7 @@ class _MobileWorkspaceLoading extends StatelessWidget {
         children: [
           const CircularProgressIndicator.adaptive(),
           const SizedBox(height: 16),
-          Text('正在打开工作区…', style: Theme.of(context).textTheme.bodyMedium),
+          Text('正在打开空间…', style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );

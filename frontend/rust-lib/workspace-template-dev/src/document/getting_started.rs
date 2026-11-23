@@ -69,7 +69,7 @@ impl WorkspaceTemplate for GettingStartedTemplate {
         let created_at = timestamp();
         let mut view_builder = view_builder
           .with_view_id(general_view_uuid.clone())
-          .with_name("默认的工作空间")
+          .with_name("默认的空间")
           .with_extra(&format!(
               "{{\"is_space\":true,\"space_icon\":\"interface_essential/home-3\",\"space_icon_color\":\"0xFFA34AFD\",\"space_permission\":0,\"space_created_at\":{}}}",
               created_at

@@ -86,9 +86,9 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
     onStateChange(this, DeepLinkState.loading);
     // Android 端使用 showWhenReady 等待 overlay 就绪，避免黑屏
     if (UniversalPlatform.isAndroid) {
-      await DeepLinkLoadingOverlay.showWhenReady(message: '正在加入协作工作区...');
+      await DeepLinkLoadingOverlay.showWhenReady(message: '正在加入协作空间...');
     } else {
-      DeepLinkLoadingOverlay.show(message: '正在加入协作工作区...');
+      DeepLinkLoadingOverlay.show(message: '正在加入协作空间...');
     }
     try {
       final code = _firstNonEmpty(uri.queryParameters, [
@@ -173,8 +173,8 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
                 context: context,
                 builder: (dialogCtx) {
                   return AlertDialog(
-                    title: const Text('已加入工作区'),
-                    content: Text('已成功加入工作区 $joinedWorkspaceId，是否前往查看？'),
+                    title: const Text('已加入空间'),
+                    content: Text('已成功加入空间 $joinedWorkspaceId，是否前往查看？'),
                     actions: [
                       TextButton(
                         onPressed: () {
@@ -211,8 +211,8 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
               context: context,
               builder: (dialogCtx) {
                 return AlertDialog(
-                  title: const Text('已加入工作区'),
-                  content: Text('已成功加入工作区 $joinedWorkspaceId，是否前往查看？'),
+                  title: const Text('已加入空间'),
+                  content: Text('已成功加入空间 $joinedWorkspaceId，是否前往查看？'),
                   actions: [
                     TextButton(
                       onPressed: () {
@@ -259,7 +259,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
                   return AlertDialog(
                     title: const Text('加入失败'),
                     content: Text(
-                        '自动加入工作区失败：${resp.statusCode} ${body.isNotEmpty ? body : ''}'),
+                        '自动加入空间失败：${resp.statusCode} ${body.isNotEmpty ? body : ''}'),
                     actions: [
                       TextButton(
                         onPressed: () async {
@@ -314,7 +314,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
                 return AlertDialog(
                   title: const Text('加入失败'),
                   content: Text(
-                      '自动加入工作区失败：${resp.statusCode} ${body.isNotEmpty ? body : ''}'),
+                      '自动加入空间失败：${resp.statusCode} ${body.isNotEmpty ? body : ''}'),
                   actions: [
                     TextButton(
                       onPressed: () async {

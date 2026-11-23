@@ -619,9 +619,9 @@ class _WorkspaceDialogContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavigatorTextFieldDialog(
       title: title ?? '新建团队协作区',
-      subtitle: '为新工作区设置名称。创建成功后将自动切换到该工作区。',
+      subtitle: '为新空间设置名称。创建成功后将自动切换到该空间。',
       value: '',
-      hintText: '请输入工作区名称',
+      hintText: '请输入空间名称',
       maxLength: 256,
       autoSelectAllText: true,
       showCounter: true,
@@ -735,13 +735,13 @@ class _CreateWorkspaceButton extends StatelessWidget {
 
       // 检查云同步状态：如果云同步关闭，不能创建工作区
       if (!isCloudSyncEnabled) {
-        Log.warn('云同步已关闭，不能创建工作区');
+        Log.warn('云同步已关闭，不能创建空间');
         // 显示提示对话框，引导用户开启云同步
         if (!context.mounted) return;
         await showConfirmDialog(
           context: context,
           title: LocaleKeys.workspace_create.tr(),
-          description: '云同步已关闭，无法创建工作区。请先开启云同步功能。',
+          description: '云同步已关闭，无法创建空间。请先开启云同步功能。',
           confirmLabel: '知道了',
         );
         return;
@@ -751,7 +751,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
         title: LocaleKeys.workspace_create.tr(),
         onConfirm: (name) {
           // DEBUG BREAKPOINT 3: onConfirm 回调被调用
-          Log.info('=== DEBUG BREAKPOINT 3 === onConfirm 回调被调用，工作空间名称: $name');
+          Log.info('=== DEBUG BREAKPOINT 3 === onConfirm 回调被调用，空间名称: $name');
 
           if (name.trim().isEmpty) {
             Log.warn('Workspace name is empty, cannot create workspace');
@@ -773,7 +773,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
               'Creating workspace: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
 
           // DEBUG BREAKPOINT 4: 即将发送创建工作空间事件
-          Log.info('=== DEBUG BREAKPOINT 4 === 即将发送创建工作空间事件到 BLoC');
+          Log.info('=== DEBUG BREAKPOINT 4 === 即将发送创建空间事件到 BLoC');
 
           workspaceBloc.add(
             UserWorkspaceEvent.createWorkspace(
@@ -783,7 +783,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
           );
 
           // DEBUG BREAKPOINT 5: 创建工作空间事件已发送
-          Log.info('=== DEBUG BREAKPOINT 5 === 创建工作空间事件已发送到 BLoC');
+          Log.info('=== DEBUG BREAKPOINT 5 === 创建空间事件已发送到 BLoC');
         },
       );
 

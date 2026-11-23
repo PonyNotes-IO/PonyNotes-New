@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/plugins/document/application/document_awareness_metadata.dart';
@@ -8,6 +9,7 @@ import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/user/application/auth/device_id.dart';
 import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/json_print.dart';
+import 'package:appflowy/util/throttle.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -19,14 +21,31 @@ import 'package:flutter/material.dart';
 class DocumentCollabAdapter {
   DocumentCollabAdapter(
     this.editorState,
-    this.docId,
-  );
+    this.docId, {
+    DocumentService? documentService,
+  }) : _service = documentService ?? DocumentService();
 
   final EditorState editorState;
   final String docId;
   final DocumentDiff diff = const DocumentDiff();
 
-  final _service = DocumentService();
+  final DocumentService _service;
+  final _syncThrottle = Throttler(
+    duration: const Duration(milliseconds: 250),
+    trailing: true,
+  );
+
+  void scheduleSync(DocEventPB event) {
+    if (!event.isRemote || editorState.isDisposed) {
+      return;
+    }
+
+    // Each refresh reads the latest Rust document, so one trailing refresh
+    // can pick up all changes that arrived after the initial read.
+    _syncThrottle.call(() => unawaited(syncV3()));
+  }
+
+  void dispose() => _syncThrottle.dispose();
 
   /// Sync version 1
   ///
@@ -73,7 +92,7 @@ class DocumentCollabAdapter {
   /// Sync version 3
   ///
   /// Diff the local document with the remote document and apply the changes
-  Future<void> syncV3({DocEventPB? docEvent}) async {
+  Future<void> syncV3() async {
     final result = await _service.getDocument(documentId: docId);
     final document = result.fold((s) => s.toDocument(), (f) => null);
     if (document == null) {

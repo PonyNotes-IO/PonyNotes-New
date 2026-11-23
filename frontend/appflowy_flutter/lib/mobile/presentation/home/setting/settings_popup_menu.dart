@@ -114,7 +114,7 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
       final workspaceId =
           context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
       if (workspaceId == null || workspaceId.isEmpty) {
-        showToastNotification(message: '工作区正在加载，请稍后再试');
+        showToastNotification(message: '空间正在加载，请稍后再试');
         return;
       }
 

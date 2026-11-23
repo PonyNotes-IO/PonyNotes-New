@@ -401,7 +401,7 @@
     "link_title": "可共享連結",
     "link_details": "匯出為唯讀連結",
     "link_button": "匯出為連結",
-    "excalidrawplus_description": "將此場景儲存至你的 Excalidraw+ 工作區",
+    "excalidrawplus_description": "將此場景儲存至你的 Excalidraw+ 空間",
     "excalidrawplus_button": "輸出",
     "excalidrawplus_exportError": "目前無法輸出至 Excalidraw+"
   },
@@ -590,7 +590,7 @@
       "excalidrawPlus": {
         "title": "Excalidraw+",
         "button": "匯出至 Excalidraw+",
-        "description": "將此場景儲存至您的 Excalidraw+ 工作區"
+        "description": "將此場景儲存至您的 Excalidraw+ 空間"
       }
     },
     "modal": {

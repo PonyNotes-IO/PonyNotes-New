@@ -1076,7 +1076,7 @@ pub async fn invite_workspace_member_handler(
       if current_member.role != Role::Owner {
         return Err(FlowyError::new(
           ErrorCode::NotEnoughPermissions,
-          "仅工作空间所有者可以邀请成员",
+          "仅空间所有者可以邀请成员",
         ));
       }
     },
@@ -1223,7 +1223,7 @@ pub async fn handle_join_request_handler(
   if member.role != Role::Owner {
     return Err(FlowyError::new(
       ErrorCode::NotEnoughPermissions,
-      "仅工作空间所有者可以审批加入请求",
+      "仅空间所有者可以审批加入请求",
     ));
   }
 

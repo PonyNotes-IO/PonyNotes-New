@@ -94,8 +94,8 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
       // 1. 获取当前workspace ID
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
       if (workspaceId == null) {
-        Log.error('❌ AI欢迎页: 无法获取工作空间信息');
-        _showError('无法获取工作空间信息');
+        Log.error('❌ AI欢迎页: 无法获取空间信息');
+        _showError('无法获取空间信息');
         return;
       }
 

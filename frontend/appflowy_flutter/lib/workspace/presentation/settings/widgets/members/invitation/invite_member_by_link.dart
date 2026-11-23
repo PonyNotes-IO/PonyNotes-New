@@ -88,7 +88,7 @@ class _InviteMemberByLinkState extends State<InviteMemberByLink> {
     // Show iOS style confirm first
     await showSimpleConfirmDialog(
       context: context,
-      message: '确定要为工作空间所有成员重置邀请链接？旧链接将无法再使用。',
+      message: '确定要为空间所有成员重置邀请链接？旧链接将无法再使用。',
       confirmText: '重置',
       cancelText: '取消',
       confirmTextColor: Theme.of(context).colorScheme.error,

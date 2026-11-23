@@ -213,7 +213,7 @@ void main() {
       final resolver = _StubCollabWorkspaceResolver(
         const CollabWorkspaceResolution(
           status: CollabWorkspaceResolutionStatus.unavailable,
-          message: '无法确认文档所属工作区，请刷新后重试',
+          message: '无法确认文档所属空间，请刷新后重试',
         ),
       );
       final failClosedBloc = ShareTabBloc(
@@ -248,7 +248,7 @@ void main() {
       final state = await failed;
 
       expect(requestCount, 0);
-      expect(state.errorMessage, '无法确认文档所属工作区，请刷新后重试');
+      expect(state.errorMessage, '无法确认文档所属空间，请刷新后重试');
     });
   });
 }
