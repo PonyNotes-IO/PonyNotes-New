@@ -22,11 +22,74 @@ pub(crate) struct AFCloudDocumentCloudServiceImpl<T> {
   pub logged_user: Weak<dyn LoggedUser>,
 }
 
+fn version_meta(v: client_api::entity::history_dto::DocumentVersionMeta) -> DocumentVersionMeta {
+  DocumentVersionMeta {
+    snapshot_id: v.snapshot_id,
+    object_id: v.object_id,
+    created_at: v.created_at,
+    reused: v.reused,
+    source: v.source,
+  }
+}
+
+impl<T: AFServer> AFCloudDocumentCloudServiceImpl<T> {
+  async fn write_version(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+    restore_backup: bool,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    let result = self
+      .inner
+      .try_get_client()?
+      .write_document_version(
+        workspace,
+        document,
+        client_api::entity::history_dto::DocumentVersionData {
+          document: serde_json::to_value(data)?,
+        },
+        restore_backup,
+      )
+      .await?;
+    Ok(version_meta(result))
+  }
+}
+
 #[async_trait]
 impl<T> DocumentCloudService for AFCloudDocumentCloudServiceImpl<T>
 where
   T: AFServer,
 {
+  async fn list_documents_with_history(
+    &self,
+    search: &str,
+    workspace: &str,
+    before: i64,
+    before_document: &str,
+  ) -> Result<DocumentHistoryIndex, FlowyError> {
+    let result = self
+      .inner
+      .try_get_client()?
+      .list_documents_with_history(search, workspace, before, before_document)
+      .await?;
+    Ok(DocumentHistoryIndex {
+      items: result
+        .items
+        .into_iter()
+        .map(|item| DocumentHistorySummary {
+          workspace_id: item.workspace_id.to_string(),
+          document_id: item.document_id.to_string(),
+          name: item.name,
+          workspace_name: item.workspace_name,
+          path: item.path,
+          latest_version_at: item.latest_version_at,
+        })
+        .collect(),
+      has_more: result.has_more,
+    })
+  }
+
   async fn list_document_versions(
     &self,
     document: &Uuid,
@@ -39,18 +102,10 @@ where
       .list_document_versions(workspace, document, offset)
       .await?;
     Ok(DocumentVersionList {
-      items: result
-        .items
-        .into_iter()
-        .map(|v| DocumentVersionMeta {
-          snapshot_id: v.snapshot_id,
-          object_id: v.object_id,
-          created_at: v.created_at,
-            reused: v.reused,
-        })
-        .collect(),
+      items: result.items.into_iter().map(version_meta).collect(),
       has_more: result.has_more,
       retention_days: result.retention_days,
+      storage_limited: result.storage_limited,
     })
   }
 
@@ -74,23 +129,16 @@ where
     workspace: &Uuid,
     data: DocumentData,
   ) -> Result<DocumentVersionMeta, FlowyError> {
-    let result = self
-      .inner
-      .try_get_client()?
-      .save_document_version(
-        workspace,
-        document,
-        client_api::entity::history_dto::DocumentVersionData {
-          document: serde_json::to_value(data)?,
-        },
-      )
-      .await?;
-    Ok(DocumentVersionMeta {
-      snapshot_id: result.snapshot_id,
-      object_id: result.object_id,
-      created_at: result.created_at,
-      reused: result.reused,
-    })
+    self.write_version(document, workspace, data, false).await
+  }
+
+  async fn save_document_backup(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    self.write_version(document, workspace, data, true).await
   }
   #[instrument(level = "debug", skip_all, fields(document_id = %document_id))]
   async fn get_document_doc_state(

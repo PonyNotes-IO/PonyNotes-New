@@ -22,23 +22,29 @@ class VersionHistoryPage extends StatefulWidget {
     super.key,
     required this.view,
     this.service,
+    this.workspaceId,
   });
   final ViewPB view;
   final VersionHistoryService? service;
+  final String? workspaceId;
 
   @override
   State<VersionHistoryPage> createState() => _VersionHistoryPageState();
 }
 
 class _VersionHistoryPageState extends State<VersionHistoryPage> {
-  late final service = widget.service ?? VersionHistoryService();
+  late final service =
+      widget.service ?? VersionHistoryService(workspaceId: widget.workspaceId);
   final items = <DocumentSnapshotMetaPB>[];
   bool loading = true;
   bool saving = false;
   bool restoring = false;
   bool showDiff = true;
   bool loadingPreview = false;
+  bool showNarrowPreview = false;
+  int previewRequest = 0;
   bool hasMore = false;
+  bool storageLimited = false;
   int days = 0;
   String? error;
   String? previewError;
@@ -51,6 +57,7 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
   void initState() {
     super.initState();
     load();
+    selectCurrent();
   }
 
   @override
@@ -96,6 +103,7 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
         items.addAll(result.items);
         hasMore = result.hasMore;
         days = result.retentionDays;
+        storageLimited = result.storageLimited;
       });
     } catch (e) {
       if (mounted) setState(() => error = errorText(e));
@@ -124,35 +132,46 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
     }
   }
 
-  Future<void> select(DocumentSnapshotMetaPB item) async {
+  Future<void> selectCurrent({bool openPreview = false}) =>
+      select(null, openPreview: openPreview);
+
+  Future<void> select(
+    DocumentSnapshotMetaPB? item, {
+    bool openPreview = true,
+  }) async {
+    final request = ++previewRequest;
     setState(() {
-      selectedId = item.snapshotId;
+      selectedId = item?.snapshotId;
+      showNarrowPreview = openPreview;
       selectedDocument = null;
       difference = null;
       loadingPreview = true;
       previewError = null;
     });
     try {
-      final data = await service.get(widget.view.id, item.snapshotId);
       final current = await service.readCurrent(widget.view.id);
-      final diff = await compute(compareHistory, (current, data));
-      if (!mounted || selectedId != item.snapshotId) return;
+      final data = item == null
+          ? current
+          : await service.get(widget.view.id, item.snapshotId);
+      final diff =
+          item == null ? null : await compute(compareHistory, (current, data));
+      if (!mounted || previewRequest != request) return;
       final document = data.toDocument();
       if (document == null) throw StateError('Invalid document');
       final next = EditorState(document: document)..editable = false;
       final previous = editor;
       setState(() {
-        selectedDocument = data;
+        selectedDocument = item == null ? null : data;
         difference = diff;
         editor = next;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => previous?.dispose());
     } catch (e) {
-      if (mounted && selectedId == item.snapshotId) {
+      if (mounted && previewRequest == request) {
         setState(() => previewError = errorText(e));
       }
     } finally {
-      if (mounted && selectedId == item.snapshotId) {
+      if (mounted && previewRequest == request) {
         setState(() => loadingPreview = false);
       }
     }
@@ -187,6 +206,13 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
       DateFormat.yMMMd(context.locale.toString()).add_Hms().format(
             DateTime.fromMillisecondsSinceEpoch(item.createdAt.toInt()),
           );
+
+  String? sourceLabel(DocumentSnapshotMetaPB item) => switch (item.source) {
+        'automatic' => 'versionHistory.automatic'.tr(),
+        'manual' => 'versionHistory.manual'.tr(),
+        'restore_backup' => 'versionHistory.restoreBackup'.tr(),
+        _ => null,
+      };
 
   Widget list() => Column(
         children: [
@@ -229,7 +255,27 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
                 ],
               ),
             ),
+          if (storageLimited)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text('versionHistory.storageFull'.tr()),
+            ),
           if (loading) const LinearProgressIndicator(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton.icon(
+                onPressed: saving || restoring
+                    ? null
+                    : () => selectCurrent(openPreview: true),
+                icon: Icon(
+                  selectedId == null ? Icons.check : Icons.description_outlined,
+                ),
+                label: Text('versionHistory.currentVersion'.tr()),
+              ),
+            ),
+          ),
           Expanded(
             child: items.isEmpty && !loading && error == null
                 ? Center(
@@ -251,6 +297,7 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
                         );
                       }
                       final item = items[index];
+                      final source = sourceLabel(item);
                       final date = DateTime.fromMillisecondsSinceEpoch(
                         item.createdAt.toInt(),
                       );
@@ -291,6 +338,7 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
                             selected: selectedId == item.snapshotId,
                             leading: const Icon(Icons.history, size: 20),
                             title: Text(dateLabel(item)),
+                            subtitle: source == null ? null : Text(source),
                             onTap:
                                 saving || restoring ? null : () => select(item),
                           ),
@@ -312,7 +360,10 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
               alignment: WrapAlignment.spaceBetween,
               children: [
                 Text(
-                  'versionHistory.preview'.tr(),
+                  (selectedId == null
+                          ? 'versionHistory.currentVersion'
+                          : 'versionHistory.preview')
+                      .tr(),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 OutlinedButton.icon(
@@ -337,6 +388,14 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
               ],
             ),
           ),
+          if (selectedId == null && items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                'versionHistory.latestVersion'
+                    .tr(namedArgs: {'time': dateLabel(items.first)}),
+              ),
+            ),
           if (selectedId != null) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -381,10 +440,10 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
                     ? Center(child: Text(previewError!))
                     : editor == null
                         ? Center(child: Text('versionHistory.select'.tr()))
-                        : showDiff && difference != null
+                        : selectedId != null && showDiff && difference != null
                             ? HistoryDiffView(difference: difference!)
                             : HistoryDocumentPreview(
-                                key: ValueKey(selectedId),
+                                key: ValueKey(editor),
                                 editor: editor!,
                                 view: widget.view,
                               ),
@@ -395,18 +454,20 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: Text('versionHistory.title'.tr()),
+          title: Text(
+            widget.view.name.isEmpty
+                ? 'versionHistory.title'.tr()
+                : '${'versionHistory.title'.tr()} · ${widget.view.name}',
+            overflow: TextOverflow.ellipsis,
+          ),
           automaticallyImplyLeading: false,
-          leading: selectedId != null && MediaQuery.sizeOf(context).width < 760
+          leading: showNarrowPreview && MediaQuery.sizeOf(context).width < 760
               ? IconButton(
                   tooltip: 'versionHistory.back'.tr(),
                   icon: const Icon(Icons.arrow_back),
                   onPressed: restoring
                       ? null
-                      : () => setState(() {
-                            selectedId = null;
-                            selectedDocument = null;
-                          }),
+                      : () => setState(() => showNarrowPreview = false),
                 )
               : null,
           actions: [
@@ -430,9 +491,9 @@ class _VersionHistoryPageState extends State<VersionHistoryPage> {
                       Expanded(child: preview()),
                     ],
                   )
-                : selectedId == null
-                    ? list()
-                    : preview(),
+                : showNarrowPreview
+                    ? preview()
+                    : list(),
           ),
         ),
       );

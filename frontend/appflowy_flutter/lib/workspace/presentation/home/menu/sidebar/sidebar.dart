@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:appflowy/features/version_history/version_history_index_page.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -54,7 +55,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
-    show AFRolePB, UserProfilePB;
+    show AFRolePB, AuthTypePB, UserProfilePB, WorkspaceTypePB;
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/platform_extension.dart';
@@ -847,6 +848,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   static const Color _headerActionsPopupLightForegroundColor =
       Color(0xFF2B2B2B);
   static const double _headerActionsPopupWidth = 148.0;
+  static const double _headerActionsPopupHistoryWidth = 178.0;
   static const double _headerActionsPopupHeight = 50.0;
   static const double _headerActionsPopupButtonSize = 30.0;
   static const double _headerActionsPopupIconSize = 20.0;
@@ -980,6 +982,41 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
 
     final currentWidth = HomeSizes.minimumSidebarWidth + state.resizeOffset;
     return currentWidth <= _syncActionCollapseWidth;
+  }
+
+  bool get _showVersionHistory =>
+      !widget.isDrawerMenu &&
+      (Platform.isMacOS || Platform.isWindows) &&
+      widget.userProfile.userAuthType != AuthTypePB.Local;
+
+  Widget _buildVersionHistoryButton(
+    BuildContext context, {
+    Color? foregroundColor,
+  }) {
+    final tooltip = 'versionHistory.title'.tr();
+    return IconButton(
+      tooltip: tooltip,
+      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
+      padding: EdgeInsets.zero,
+      icon: Icon(Icons.history, size: 20, color: foregroundColor),
+      onPressed: () {
+        final workspaces = context.read<UserWorkspaceBloc>().state.workspaces;
+        final navigator = Navigator.of(context, rootNavigator: true);
+        _headerActionsPopoverController.close();
+        navigator.push(
+          MaterialPageRoute<void>(
+            fullscreenDialog: true,
+            builder: (_) => VersionHistoryIndexPage(
+              workspaces: {
+                for (final workspace in workspaces)
+                  if (workspace.workspaceType == WorkspaceTypePB.ServerW)
+                    workspace.workspaceId: workspace.name,
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -1236,6 +1273,15 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             foregroundColorOverride: foregroundColorOverride,
           ),
         ),
+        if (_showVersionHistory) ...[
+          const HSpace(4),
+          _buildHeaderActionSlot(
+            _buildVersionHistoryButton(
+              context,
+              foregroundColor: foregroundColorOverride,
+            ),
+          ),
+        ],
         // Windows 侧边栏收起按钮
         if (Platform.isWindows) ...[
           HSpace(highContrastOnDarkBackground ? 18.0 : 4.0),
@@ -1254,8 +1300,10 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
       direction: PopoverDirection.bottomWithCenterAligned,
       triggerActions: PopoverTriggerFlags.none,
       clickHandler: PopoverClickHandler.gestureDetector,
-      constraints: const BoxConstraints.tightFor(
-        width: _headerActionsPopupWidth,
+      constraints: BoxConstraints.tightFor(
+        width: _showVersionHistory
+            ? _headerActionsPopupHistoryWidth
+            : _headerActionsPopupWidth,
         height: _headerActionsPopupHeight,
       ),
       margin: EdgeInsets.zero,
@@ -1429,6 +1477,16 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             ),
             size: _headerActionsPopupButtonSize,
           ),
+          if (_showVersionHistory) ...[
+            const HSpace(_headerActionsPopupGap),
+            _buildHeaderActionSlot(
+              _buildVersionHistoryButton(
+                context,
+                foregroundColor: foregroundColor,
+              ),
+              size: _headerActionsPopupButtonSize,
+            ),
+          ],
         ],
       ),
     );

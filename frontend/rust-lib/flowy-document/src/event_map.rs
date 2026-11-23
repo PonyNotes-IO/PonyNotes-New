@@ -15,6 +15,10 @@ pub fn init(document_manager: Weak<DocumentManager>) -> AFPlugin {
     .name(env!("CARGO_PKG_NAME"))
     .state(document_manager)
     .event(
+      DocumentEvent::ListDocumentsWithHistory,
+      list_documents_with_history_handler,
+    )
+    .event(
       DocumentEvent::ListDocumentVersions,
       list_document_versions_handler,
     )
@@ -181,4 +185,9 @@ pub enum DocumentEvent {
   SaveDocumentVersion = 26,
   #[event(input = "DocumentHistoryQueryPB", output = "DocumentSnapshotMetaPB")]
   RestoreDocumentVersion = 27,
+  #[event(
+    input = "DocumentHistoryIndexQueryPB",
+    output = "DocumentHistoryIndexPB"
+  )]
+  ListDocumentsWithHistory = 28,
 }

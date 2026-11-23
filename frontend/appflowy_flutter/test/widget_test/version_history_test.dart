@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:appflowy/features/version_history/version_history_index_page.dart';
 import 'package:appflowy/features/version_history/version_history_page.dart';
 import 'package:appflowy/features/version_history/version_history_service.dart';
 import 'package:appflowy/features/version_history/version_history_diff_view.dart';
@@ -30,6 +31,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'test_asset_bundle.dart';
 
 class _Appearance extends Mock implements AppearanceSettingsCubit {}
+
+class _HistoryIndex extends VersionHistoryService {
+  final requests = <(String, String, String?)>[];
+
+  @override
+  Future<DocumentHistoryIndexPB> listDocuments({
+    required String search,
+    required String workspace,
+    DocumentHistorySummaryPB? after,
+  }) async {
+    requests.add((search, workspace, after?.documentId));
+    if (search.isNotEmpty) return DocumentHistoryIndexPB();
+    return DocumentHistoryIndexPB(
+      items: [
+        DocumentHistorySummaryPB(
+          documentId: after == null ? 'weekly' : 'plans',
+          name: after == null ? 'Weekly notes' : 'Plans',
+          workspaceId: 'team',
+          workspaceName: 'Team',
+          latestVersionAt: Int64(1793840400000),
+          path: ['Projects'],
+        ),
+      ],
+      hasMore: after == null && workspace.isEmpty,
+    );
+  }
+}
 
 class _History extends VersionHistoryService {
   int saves = 0;
@@ -166,6 +194,7 @@ void main() {
     WidgetTester tester,
     _History service, {
     Size size = const Size(1100, 760),
+    Widget? home,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -214,10 +243,11 @@ void main() {
               supportedLocales: context.supportedLocales,
               home: RepaintBoundary(
                 key: const ValueKey('history-capture'),
-                child: VersionHistoryPage(
-                  view: ViewPB(id: 'document', name: 'Project notes'),
-                  service: service,
-                ),
+                child: home ??
+                    VersionHistoryPage(
+                      view: ViewPB(id: 'document', name: 'Project notes'),
+                      service: service,
+                    ),
               ),
             ),
           ),
@@ -251,14 +281,45 @@ void main() {
       )!;
 
   testWidgets(
+      'history catalog pages and searches within the selected workspace',
+      (tester) async {
+    final service = _HistoryIndex();
+    await mount(
+      tester,
+      _History(),
+      home: VersionHistoryIndexPage(
+        workspaces: const {'team': 'Team'},
+        service: service,
+      ),
+    );
+    expect(find.text('Weekly notes'), findsOneWidget);
+    expect(find.text('Team / Projects'), findsOneWidget);
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+    expect(service.requests.last, ('', '', 'weekly'));
+    expect(find.text('Plans'), findsOneWidget);
+
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Team').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'missing');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    expect(service.requests.last, ('missing', 'team', null));
+    expect(find.text('No matching documents.'), findsOneWidget);
+  });
+
+  testWidgets(
       'manual save, diff, preview and repeated restores preserve both versions',
       (tester) async {
     final service = _History()..pending = Completer<DocumentSnapshotMetaPB>();
     await mount(tester, service);
     expect(service.saves, 0);
+    expect(find.text('Current version'), findsWidgets);
     expect(
       find.text(
-        'No saved versions yet. Save a version before making a major change.',
+        'No saved versions yet. Versions are saved automatically after editing, and you can save one manually.',
       ),
       findsOneWidget,
     );
