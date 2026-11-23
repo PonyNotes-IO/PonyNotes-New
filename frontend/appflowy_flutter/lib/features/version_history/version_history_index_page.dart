@@ -131,6 +131,7 @@ class _VersionHistoryIndexPageState extends State<VersionHistoryIndexPage> {
     final dates = DateFormat.yMMMd(context.locale.toString()).add_jm();
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: Text('versionHistory.title'.tr()),
         actions: [
           IconButton(

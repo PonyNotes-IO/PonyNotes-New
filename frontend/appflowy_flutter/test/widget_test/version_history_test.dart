@@ -287,11 +287,27 @@ void main() {
     await mount(
       tester,
       _History(),
-      home: VersionHistoryIndexPage(
-        workspaces: const {'team': 'Team'},
-        service: service,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                fullscreenDialog: true,
+                builder: (_) => VersionHistoryIndexPage(
+                  workspaces: const {'team': 'Team'},
+                  service: service,
+                ),
+              ),
+            ),
+            child: const Text('Open history'),
+          ),
+        ),
       ),
     );
+    await tester.tap(find.text('Open history'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CloseButton), findsNothing);
+    expect(find.byTooltip('Close'), findsOneWidget);
     expect(find.text('Weekly notes'), findsOneWidget);
     expect(find.text('Team / Projects'), findsOneWidget);
     await tester.tap(find.text('Load more'));
@@ -308,6 +324,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.requests.last, ('missing', 'team', null));
     expect(find.text('No matching documents.'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open history'), findsOneWidget);
   });
 
   testWidgets(
