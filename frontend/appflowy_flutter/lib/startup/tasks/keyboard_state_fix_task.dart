@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../startup.dart';
 
@@ -20,6 +21,28 @@ import '../startup.dart';
 /// 这样可以确保键盘状态相关的断言错误不会中断应用程序的正常运行。
 class KeyboardStateFixTask extends LaunchTask {
   const KeyboardStateFixTask();
+
+  static void installMacOSDebugKeyDataHandler() {
+    final dispatcher = PlatformDispatcher.instance;
+    final handleKeyData = dispatcher.onKeyData;
+    if (handleKeyData == null) return;
+
+    dispatcher.onKeyData = (data) {
+      try {
+        return handleKeyData(data);
+      } on AssertionError catch (error, stack) {
+        // macOS can synthesize a Caps Lock release before Flutter sees a press.
+        if (data.synthesized &&
+            data.type == KeyEventType.up &&
+            data.physical == PhysicalKeyboardKey.capsLock.usbHidUsage &&
+            error.message.toString().contains('physical key is not pressed') &&
+            stack.toString().contains('HardwareKeyboard._assertEventIsRegular')) {
+          return false;
+        }
+        rethrow;
+      }
+    };
+  }
   
   static bool _initialized = false;
   static FlutterExceptionHandler? _originalFlutterErrorHandler;
