@@ -20,7 +20,6 @@ import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/color_to_hex_string.dart';
 import 'package:appflowy/util/debounce.dart';
 import 'package:appflowy/util/diagnostic_build.dart';
-import 'package:appflowy/util/throttle.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
@@ -104,7 +103,6 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   static const _syncDuration = Duration(milliseconds: 250);
   final _updateSelectionDebounce = Debounce(duration: _syncDuration);
-  final _syncThrottle = Throttler(duration: _syncDuration);
 
   // The conflict handle logic is not fully implemented yet
   // use the syncTimer to force to reload the document state when the conflict happens.
@@ -139,7 +137,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   void _clearEditorState() {
     _updateSelectionDebounce.dispose();
-    _syncThrottle.dispose();
+    _documentCollabAdapter?.dispose();
 
     _syncTimer?.cancel();
     _syncTimer = null;
@@ -211,7 +209,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
               if (currentEditorState != null) {
                 // 删除成功后再销毁 editor 资源，避免失败时落入错误页。
                 _updateSelectionDebounce.dispose();
-                _syncThrottle.dispose();
+                _documentCollabAdapter?.dispose();
                 _syncTimer?.cancel();
                 _syncTimer = null;
                 currentEditorState.selectionNotifier
@@ -351,7 +349,7 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   /// subscribe to the document content change
   void _onDocumentChanged() {
     _documentListener.start(
-      onDocEventUpdate: _throttleSyncDoc,
+      onDocEventUpdate: _onDocumentStateUpdate,
       onDocAwarenessUpdate: _onAwarenessStatesUpdate,
     );
 
@@ -621,15 +619,19 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
     return editorState;
   }
 
-  Future<void> _onDocumentStateUpdate(DocEventPB docEvent) async {
-    if (!docEvent.isRemote || !FeatureFlag.syncDocument.isOn) {
+  void _onDocumentStateUpdate(DocEventPB docEvent) {
+    if (isClosing || !FeatureFlag.syncDocument.isOn) {
       return;
     }
+    if (enableDocumentInternalLog) {
+      Log.info('[DocumentBloc] schedule doc sync: ${docEvent.toProto3Json()}');
+    }
     if (_documentCollabAdapter != null) {
-      unawaited(_documentCollabAdapter!.syncV3(docEvent: docEvent));
+      _documentCollabAdapter!.scheduleSync(docEvent);
     } else {
       Log.debug(
-          '[DocumentBloc] _onDocumentStateUpdate called but _documentCollabAdapter is not initialized yet for documentId: $documentId');
+        '[DocumentBloc] _onDocumentStateUpdate called but _documentCollabAdapter is not initialized yet for documentId: $documentId',
+      );
     }
   }
 
@@ -656,15 +658,6 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   void _debounceOnSelectionUpdate() {
     _updateSelectionDebounce.call(_onSelectionUpdate);
-  }
-
-  void _throttleSyncDoc(DocEventPB docEvent) {
-    if (enableDocumentInternalLog) {
-      Log.info('[DocumentBloc] throttle sync doc: ${docEvent.toProto3Json()}');
-    }
-    _syncThrottle.call(() {
-      _onDocumentStateUpdate(docEvent);
-    });
   }
 
   Future<void> _onSelectionUpdate() async {
