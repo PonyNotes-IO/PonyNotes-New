@@ -3,32 +3,6 @@ part of 'mcp_tools.dart';
 extension _McpStorageTools on McpTools {
   List<McpToolSpec> get _storageSpecs => [
         _actionTool(
-          'storage_authorization',
-          '发起百度网盘授权、查询状态、用安全句柄提交授权码或撤销授权。',
-          {
-            'operation': const JsonString(
-              enumValues: ['start', 'status', 'complete', 'revoke'],
-            ),
-            'credential_ref': const JsonString(),
-          },
-          [],
-          _storageAuthorization,
-          required: const ['workspace_id', 'operation'],
-        ),
-        _actionTool(
-          'remote_storage_files',
-          '浏览已授权百度网盘或把指定文件导入本地文件库。',
-          {
-            'path': const JsonString(),
-            'remote_file_id': const JsonString(),
-            'name': const JsonString(),
-            'offset': const JsonInteger(minimum: 0),
-            'limit': const JsonInteger(minimum: 1, maximum: 100),
-          },
-          ['list_remote_storage_files', 'import_remote_storage_file'],
-          _remoteStorageFiles,
-        ),
-        _actionTool(
           'assets',
           '上传/下载/删除当前工作区附件，输入输出须使用用户选择文件后的授权句柄。',
           {
@@ -79,101 +53,6 @@ extension _McpStorageTools on McpTools {
           _documentTransfer,
         ),
       ];
-
-  Future<CallToolResult> _storageAuthorization(
-    Map<String, dynamic> args,
-  ) async {
-    final error =
-        await _validateWorkspace(_requiredString(args, 'workspace_id'));
-    if (error != null) return error;
-    final service = BaiduCloudService();
-    switch (args['operation']) {
-      case 'status':
-        return _ok({'authorized': await service.isAuthorized()});
-      case 'start':
-        return _ok({
-          'authorization_url': await service.getAuthorizationUrl(),
-          'status': 'requires_human',
-        });
-      case 'complete':
-        final code = await _resolveGrant(
-          _requiredString(args, 'credential_ref'),
-          'secret',
-        );
-        if (!await _confirm('storage_authorization', args)) {
-          return _error('permission_denied', '用户未批准网盘授权。');
-        }
-        final success = await service.exchangeCodeForToken(code);
-        return success
-            ? _ok({'authorized': true})
-            : _error('authorization_failed', '授权码交换失败。');
-      case 'revoke':
-        if (!await _confirm('storage_authorization', args)) {
-          return _error('permission_denied', '用户未批准撤销网盘授权。');
-        }
-        await service.logout();
-        return _ok({'authorized': false});
-      default:
-        throw const FormatException('未知网盘授权动作');
-    }
-  }
-
-  Future<CallToolResult> _remoteStorageFiles(Map<String, dynamic> args) async {
-    final error =
-        await _validateWorkspace(_requiredString(args, 'workspace_id'));
-    if (error != null) return error;
-    final service = BaiduCloudService();
-    if (!await service.isAuthorized()) {
-      return _error('not_authorized', '请先授权百度网盘。');
-    }
-    if (args['action'] == 'list_remote_storage_files') {
-      final files = await service.getFileList(
-        dir: args['path'] as String? ?? '/',
-        start: _intArg(args, 'offset', 0, 0, 0x7fffffff),
-        limit: _intArg(args, 'limit', 100, 1, 100),
-      );
-      return _ok({
-        'files': files
-            .map(
-              (f) => {
-                'id': f.fsId,
-                'path': f.path,
-                'name': f.serverFilename,
-                'size': f.size,
-                'directory': f.isDirectory,
-              },
-            )
-            .toList(),
-      });
-    }
-    if (!await _confirm('remote_storage_files', args)) {
-      return _error('permission_denied', '未批准网盘导入。');
-    }
-    final url = await service
-        .getFileDownloadUrl(_requiredString(args, 'remote_file_id'));
-    if (url == null) return _error('download_unavailable', '无法取得下载地址。');
-    final name = _requiredString(args, 'name');
-    if (paths.basename(name) != name ||
-        !FileLibraryService.isExtensionAllowed(paths.extension(name))) {
-      throw const FormatException('文件名或格式不支持');
-    }
-    final id = const Uuid().v4();
-    final root = Directory(
-      paths.join(
-        await getIt<ApplicationDataStorage>().getPath(),
-        'file_library',
-      ),
-    );
-    await root.create(recursive: true);
-    final target = paths.join(
-      root.path,
-      '${paths.basenameWithoutExtension(name)}_$id${paths.extension(name)}',
-    );
-    final result = await service.downloadFile(url, target);
-    return result == null
-        ? _error('download_failed', '网盘下载失败。')
-        : _ok({'imported': id, 'name': name});
-  }
 
   Future<CallToolResult> _assets(Map<String, dynamic> args) async {
     final workspace = _requiredString(args, 'workspace_id');

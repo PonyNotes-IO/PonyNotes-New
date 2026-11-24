@@ -1,6 +1,6 @@
 {
   "source": "MCP工具建议清单.xlsx",
-  "approved_count": 66,
+  "approved_count": 64,
   "tools": [
     {
       "name": "create_workspace",
@@ -400,19 +400,6 @@
         "upload_asset",
         "download_asset",
         "delete_asset"
-      ]
-    },
-    {
-      "name": "storage_authorization",
-      "change": "建议新增",
-      "actions": []
-    },
-    {
-      "name": "remote_storage_files",
-      "change": "建议新增",
-      "actions": [
-        "list_remote_storage_files",
-        "import_remote_storage_file"
       ]
     },
     {
