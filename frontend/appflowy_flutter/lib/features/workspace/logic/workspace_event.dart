@@ -83,8 +83,8 @@ sealed class UserWorkspaceEvent {
   }) =>
       WorkspaceEventEmitCurrentWorkspace(workspace: workspace);
 
-  factory UserWorkspaceEvent.fetchCurrentSubscription() =>
-      WorkspaceEventFetchCurrentSubscription();
+  factory UserWorkspaceEvent.fetchCurrentSubscription({bool forceRefresh}) =
+      WorkspaceEventFetchCurrentSubscription;
 
   factory UserWorkspaceEvent.updateCurrentSubscription({
     required CurrentSubscription? currentSubscription,
@@ -231,7 +231,9 @@ class WorkspaceEventEmitCurrentWorkspace extends UserWorkspaceEvent {
 
 /// Fetches current subscription info (including usage details).
 class WorkspaceEventFetchCurrentSubscription extends UserWorkspaceEvent {
-  WorkspaceEventFetchCurrentSubscription();
+  WorkspaceEventFetchCurrentSubscription({this.forceRefresh = false});
+
+  final bool forceRefresh;
 }
 
 /// Updates current subscription info.
