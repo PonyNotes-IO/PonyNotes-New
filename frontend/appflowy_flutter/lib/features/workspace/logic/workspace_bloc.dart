@@ -912,6 +912,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final currentSubscription = await SubscriptionService().getCurrentSubscription(
       userProfile: state.userProfile,
+      forceRefresh: event.forceRefresh,
       caller: 'UserWorkspaceBloc._onFetchCurrentSubscription',
     );
     if (!isClosed) {

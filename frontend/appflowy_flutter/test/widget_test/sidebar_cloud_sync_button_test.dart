@@ -36,6 +36,10 @@ class _NavigationObserver extends NavigatorObserver {
 }
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(UserWorkspaceEvent.fetchCurrentSubscription());
+  });
+
   for (final (inPopover, planCode, actionKey) in [
     (false, 'standard', LocaleKeys.newSettings_cloudSync_btnRenew),
     (true, 'standard', LocaleKeys.newSettings_cloudSync_btnRenew),
@@ -109,29 +113,44 @@ void main() {
           .widget<AFFocusManager>(find.byType(AFFocusManager))
           .loseFocusNotifier
           .addListener(() => focusNotifications++);
-      if (inPopover) {
-        await tester.tap(find.text('More'));
+      Future<void> openCloudSync() async {
+        if (inPopover) {
+          await tester.tap(find.text('More'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(
+          find.descendant(
+            of: find.byType(SidebarCloudSyncButton),
+            matching: find.byType(FlowyButton),
+          ),
+        );
         await tester.pumpAndSettle();
+        expect(find.byType(CloudSyncSettingsPanel), findsOneWidget);
+        verify(
+          () => bloc.add(
+            any(
+              that: isA<WorkspaceEventFetchCurrentSubscription>()
+                  .having((event) => event.forceRefresh, 'forceRefresh', true),
+            ),
+          ),
+        ).called(1);
       }
-      await tester.tap(
-        find.descendant(
-          of: find.byType(SidebarCloudSyncButton),
-          matching: find.byType(FlowyButton),
-        ),
-      );
+
+      await openCloudSync();
+      navigator.currentState!.pop();
       await tester.pumpAndSettle();
+      await openCloudSync();
 
       expect(
         find.byType(SidebarCloudSyncButton),
         inPopover ? findsNothing : findsOneWidget,
       );
-      expect(find.byType(CloudSyncSettingsPanel), findsOneWidget);
       final cloudSyncRoute = observer.pushed.last;
       await tester.tap(find.text(actionKey.tr()));
 
       expect(tester.takeException(), isNull);
       expect(observer.popped, contains(cloudSyncRoute));
-      expect(observer.pushed, hasLength(3));
+      expect(observer.pushed, hasLength(4));
       expect(observer.pushed.last, isA<DialogRoute<void>>());
       if (!inPopover) expect(focusNotifications, 1);
 
