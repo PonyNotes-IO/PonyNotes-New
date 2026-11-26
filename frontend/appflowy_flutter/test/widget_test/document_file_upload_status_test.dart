@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_upload_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
@@ -69,65 +70,102 @@ void main() {
     await EasyLocalization.ensureInitialized();
   });
 
-  testWidgets('selected file appears before upload preparation finishes',
-      (tester) async {
-    final directory =
-        Directory.systemTemp.createTempSync('document-attachment');
-    addTearDown(() => directory.deleteSync(recursive: true));
-    final file = File(p.join(directory.path, 'large-video.mp4'))
-      ..writeAsStringSync('video');
-    final storage = _PreparingStorage();
-    getIt.registerSingleton<ApplicationDataStorage>(storage);
-    addTearDown(() => getIt.unregister<ApplicationDataStorage>());
-    final node = fileNode(url: '');
-    final editor = EditorState.blank()
-      ..editorStyle = const EditorStyle.desktop();
-    await editor.apply(editor.transaction..insertNode([0], node));
-    addTearDown(editor.dispose);
-    final key = GlobalKey<FileBlockComponentState>();
-    await tester.pumpWidget(
-      WidgetTestApp(
-        child: MultiProvider(
-          providers: [
-            Provider<EditorState>.value(value: editor),
-            Provider<DocumentBloc>.value(value: _LocalDocumentBloc()),
-          ],
-          child: SizedBox(
-            width: 390,
-            child:
-                FileBlockComponent(key: key, node: editor.getNodeAtPath([0])!),
+  for (final errorCode in [
+    null,
+    ErrorCode.FileStorageLimitExceeded,
+    ErrorCode.RecordNotFound,
+  ]) {
+    testWidgets(
+        'selects a file in place for ${errorCode?.name ?? 'an empty block'}',
+        (tester) async {
+      final directory =
+          Directory.systemTemp.createTempSync('document-attachment');
+      addTearDown(() => directory.deleteSync(recursive: true));
+      final file = File(p.join(directory.path, 'large-video.mp4'))
+        ..writeAsStringSync('video');
+      final storage = _PreparingStorage();
+      getIt.registerSingleton<ApplicationDataStorage>(storage);
+      addTearDown(() => getIt.unregister<ApplicationDataStorage>());
+      final previousUrl = errorCode == null ? '' : _url;
+      if (errorCode != null) {
+        final cloudStorage = _TestStorage()
+          ..failure = FlowyError(code: errorCode, msg: 'Upload failed');
+        getIt.registerSingleton<FileStorageService>(cloudStorage);
+        addTearDown(() async {
+          await cloudStorage.dispose();
+          await getIt.unregister<FileStorageService>();
+        });
+      }
+      final node = errorCode == null
+          ? fileNode(url: '')
+          : fileNode(
+              url: previousUrl,
+              type: FileUrlType.cloud,
+              name: 'old-video.mp4',
+            );
+      final editor = EditorState.blank()
+        ..editorStyle = const EditorStyle.desktop();
+      await editor.apply(editor.transaction..insertNode([0], node));
+      final originalBlock = editor.getNodeAtPath([0])!;
+      addTearDown(editor.dispose);
+      final key = GlobalKey<FileBlockComponentState>();
+      await tester.pumpWidget(
+        WidgetTestApp(
+          child: MultiProvider(
+            providers: [
+              Provider<EditorState>.value(value: editor),
+              Provider<DocumentBloc>.value(value: _LocalDocumentBloc()),
+            ],
+            child: SizedBox(
+              width: 390,
+              child: FileBlockComponent(
+                key: key,
+                node: editor.getNodeAtPath([0])!,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    late Future<void> upload;
-    await tester.runAsync(() async {
-      upload = key.currentState!.insertFileFromLocal([XFile(file.path)]);
+      if (errorCode != null) {
+        await tester.tap(find.text('old-video.mp4'));
+        await tester.pumpAndSettle();
+        expect(find.byType(FileUploadMenu), findsOneWidget);
+        key.currentState!.controller.close();
+        await tester.pumpAndSettle();
+        expect(originalBlock.attributes[FileBlockKeys.url], previousUrl);
+      }
+
+      late Future<void> upload;
+      await tester.runAsync(() async {
+        upload = key.currentState!.insertFileFromLocal([XFile(file.path)]);
+      });
+      await tester.pump();
+
+      final ring = find.byType(CircularProgressIndicator);
+      expect(find.text('large-video.mp4'), findsOneWidget);
+      expect(find.text('Preparing file…'), findsOneWidget);
+      expect(tester.widget<CircularProgressIndicator>(ring).value, isNull);
+      expect(originalBlock.attributes[FileBlockKeys.url], previousUrl);
+
+      await tester.runAsync(() async {
+        storage.path.complete(directory.path);
+        await upload;
+      });
+      await tester.pumpAndSettle();
+      expect(ring, findsNothing);
+      expect(find.text('large-video.mp4'), findsOneWidget);
+      expect(find.text('Preparing file…'), findsNothing);
+      final updated = editor.getNodeAtPath([0])!;
+      expect(updated.id, originalBlock.id);
+      expect(
+        File(updated.attributes[FileBlockKeys.url] as String).existsSync(),
+        isTrue,
+      );
+      await tester.pumpWidget(const SizedBox());
     });
-    await tester.pump();
-
-    final ring = find.byType(CircularProgressIndicator);
-    expect(find.text('large-video.mp4'), findsOneWidget);
-    expect(find.text('Preparing file…'), findsOneWidget);
-    expect(tester.widget<CircularProgressIndicator>(ring).value, isNull);
-    expect(node.attributes[FileBlockKeys.url], isEmpty);
-
-    await tester.runAsync(() async {
-      storage.path.complete(directory.path);
-      await upload;
-    });
-    await tester.pumpAndSettle();
-    expect(ring, findsNothing);
-    expect(find.text('large-video.mp4'), findsOneWidget);
-    expect(find.text('Preparing file…'), findsNothing);
-    expect(
-      editor.getNodeAtPath([0])!.attributes[FileBlockKeys.url],
-      isNotEmpty,
-    );
-    await tester.pumpWidget(const SizedBox());
-  });
+  }
 
   testWidgets('shows upload progress and keeps quota failure after reopening',
       (tester) async {

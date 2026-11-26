@@ -203,6 +203,16 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   bool get _canOpenFile => _uploadProgress?.isReady ?? true;
 
+  bool get _canChooseFile {
+    final url = node.attributes[FileBlockKeys.url] as String?;
+    final progress = _uploadProgress;
+    return editorState.editable &&
+        (url == null ||
+            url.isEmpty ||
+            progress?.isMissing == true ||
+            progress?.error != null);
+  }
+
   String? get _uploadStatus {
     final progress = _uploadProgress;
     if (progress == null || progress.isReady) return null;
@@ -290,6 +300,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     _syncUploadProgressNotifier();
     final url = node.attributes[FileBlockKeys.url];
     final uploadProgress = _uploadProgress;
+    final canChooseFile = _canChooseFile && !_isUploadingFromLocal;
 
     Widget child = MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -308,9 +319,11 @@ class FileBlockComponentState extends State<FileBlockComponent>
         behavior: HitTestBehavior.translucent,
         onTap: _isUploadingFromLocal
             ? null
-            : url != null && url.isNotEmpty
-                ? () async => _openFile(context, url)
-                : _openMenu,
+            : canChooseFile
+                ? _openMenu
+                : url != null && url.isNotEmpty
+                    ? () async => _openFile(context, url)
+                    : null,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: isHovering
@@ -370,7 +383,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     );
 
     if (PlatformInfo.isDesktopOrTabletOrWeb) {
-      if ((url == null || url.isEmpty) && !_isUploadingFromLocal) {
+      if (canChooseFile) {
         child = DropTarget(
           enable: dropManagerState?.isDropEnabled == true ||
               dropManagerState?.contains(FileBlockKeys.type) == true,
@@ -490,6 +503,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   void _openMenu() {
+    if (!_canChooseFile || _isUploadingFromLocal) return;
     if (PlatformInfo.isDesktopOrTabletOrWeb) {
       controller.show();
       dropManagerState?.add(FileBlockComponent.uploadDragKey);
@@ -501,13 +515,13 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   List<Widget> _buildTrailing(BuildContext context) {
     final hasUrl = node.attributes[FileBlockKeys.url]?.isNotEmpty == true;
-    final name = hasUrl
-        ? node.attributes[FileBlockKeys.name] as String?
-        : _preparingFileName;
-    if (name != null) {
-      final status = hasUrl
-          ? _uploadStatus
-          : _preparationError ?? 'document.plugins.file.preparingUpload'.tr();
+    final isPreparing = _preparingFileName != null;
+    final name =
+        _preparingFileName ?? (node.attributes[FileBlockKeys.name] as String?);
+    if (name != null && (hasUrl || isPreparing)) {
+      final status = isPreparing
+          ? _preparationError ?? 'document.plugins.file.preparingUpload'.tr()
+          : _uploadStatus;
       return [
         Expanded(
           child: Column(
@@ -520,11 +534,12 @@ class FileBlockComponentState extends State<FileBlockComponent>
                   status,
                   fontSize: 12,
                   overflow: TextOverflow.ellipsis,
-                  color:
-                      (hasUrl ? _uploadProgress?.error : _preparationError) !=
-                              null
-                          ? Theme.of(context).colorScheme.error
-                          : Theme.of(context).hintColor,
+                  color: (isPreparing
+                              ? _preparationError
+                              : _uploadProgress?.error) !=
+                          null
+                      ? Theme.of(context).colorScheme.error
+                      : Theme.of(context).hintColor,
                 ),
             ],
           ),
@@ -652,7 +667,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   Future<void> insertFileFromLocal(List<XFile> files) async {
-    if (files.isEmpty || _isUploadingFromLocal) {
+    if (files.isEmpty || _isUploadingFromLocal || !_canChooseFile) {
       return;
     }
 
@@ -661,6 +676,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     final isLocalMode = documentBloc.isLocalMode;
     final editor = editorState;
     final targetNode = node;
+    final previousUrl = targetNode.attributes[FileBlockKeys.url];
     setState(() {
       _isUploadingFromLocal = true;
       _preparingFileName = file.name;
@@ -689,7 +705,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
           !editor.editable ||
           currentNode == null ||
           currentNode.id != targetNode.id ||
-          currentNode.attributes[FileBlockKeys.url]?.isNotEmpty == true) {
+          currentNode.attributes[FileBlockKeys.url] != previousUrl) {
         if (!isLocalMode && currentNode?.attributes[FileBlockKeys.url] != url) {
           await DocumentService().deleteFile(url: url);
         }
@@ -721,6 +737,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   Future<void> insertNetworkFile(String url) async {
+    if (!_canChooseFile || _isUploadingFromLocal) return;
     if (url.isEmpty || !isURL(url)) {
       // show error
       showToastNotification(
@@ -756,7 +773,12 @@ class FileBlockComponentState extends State<FileBlockComponent>
       FileBlockKeys.uploadedBy: currentUserId,
     });
     await editorState.apply(transaction);
-    _syncUploadProgressNotifier();
+    if (mounted) {
+      setState(() {
+        _preparingFileName = null;
+        _preparationError = null;
+      });
+    }
   }
 
   @override
