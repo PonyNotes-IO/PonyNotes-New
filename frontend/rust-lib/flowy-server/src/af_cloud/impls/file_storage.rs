@@ -73,6 +73,20 @@ where
     Some(value)
   }
 
+  async fn check_object_exists(
+    &self,
+    workspace_id: &Uuid,
+    parent_dir: &str,
+    file_id: &str,
+  ) -> FlowyResult<()> {
+    self
+      .client
+      .try_get_client()?
+      .get_blob_v1_metadata(&workspace_id.to_string(), parent_dir, file_id)
+      .await?;
+    Ok(())
+  }
+
   async fn create_upload(
     &self,
     workspace_id: &Uuid,

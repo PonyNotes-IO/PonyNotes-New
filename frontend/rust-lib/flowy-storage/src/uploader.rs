@@ -1,7 +1,6 @@
+use crate::manager::StorageServiceImpl;
 use crate::sqlite_sql::UploadFileTable;
-use crate::uploader::UploadTask::BackgroundTask;
 use flowy_storage_pub::storage::StorageService;
-use lib_infra::box_any::BoxAny;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt::Display;
@@ -56,7 +55,7 @@ impl UploadTaskQueue {
 }
 
 pub struct FileUploader {
-  storage_service: Arc<dyn StorageService>,
+  storage_service: Arc<StorageServiceImpl>,
   queue: Arc<UploadTaskQueue>,
   max_uploads: u8,
   current_uploads: AtomicU8,
@@ -72,7 +71,7 @@ impl Drop for FileUploader {
 
 impl FileUploader {
   pub fn new(
-    storage_service: Arc<dyn StorageService>,
+    storage_service: Arc<StorageServiceImpl>,
     queue: Arc<UploadTaskQueue>,
     is_exceed_limit: Arc<AtomicBool>,
   ) -> Self {
@@ -176,112 +175,54 @@ impl FileUploader {
       return None;
     }
 
-    let task = self.queue.tasks.write().await.pop()?;
-    if task.retry_count() > 5 {
-      // If the task has been retried more than 5 times, we should not retry it anymore.
-      let _ = self.queue.notifier.send(Signal::ProceedAfterSecs(2));
-      warn!("[File] Task has been retried more than 5 times: {}", task);
-      return None;
-    }
-
-    // increment the current uploads count
+    let mut task = self.queue.tasks.write().await.pop()?;
     self
       .current_uploads
       .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-    // 【离线上传支持 2026-07-19】标记本轮是否因断网失败，用于决定退避时长。
-    let mut offline_backoff = false;
-
-    match task {
+    let (workspace_id, parent_dir, file_id, retries) = match &mut task {
       UploadTask::Task {
-        local_file_path,
         record,
-        mut retry_count,
-      } => {
-        let record = BoxAny::new(record);
-        if let Err(err) = self.storage_service.start_upload(&record).await {
-          if err.is_file_limit_exceeded() && !err.is_single_file_limit_exceeded() {
-            error!("[File] Storage limit exceeded for task, skipping (won't retry)");
-          }
-
-          if err.should_retry_upload() {
-            // 【离线上传支持 2026-07-19】断网导致的失败**不消耗重试次数**。
-            //
-            // 原实现对所有可重试错误一律 retry_count += 1，而上限为 5
-            // （见本函数开头的 `task.retry_count() > 5` 判断，超限即丢弃任务）。
-            // 用户断网期间这 5 次会被迅速耗尽，任务被移出内存队列，
-            // 于是**联网后也再不会续传**——文件虽仍在本地与 SQLite 中，却永远传不上云端。
-            // 这与"断网可正常插入、联网后自动同步"的需求直接冲突。
-            //
-            // 故：网络不可用属于外部条件而非任务本身的问题，保持原计数重新入队即可；
-            // 真正的业务性失败仍照常累加、受上限保护，避免死循环重试。
-            let is_offline = err.is_network_unavailable();
-            if is_offline {
-              info!(
-                "[File] Network unavailable, requeue without consuming retry budget: {}",
-                err
-              );
-              // 断网期间放慢重试节奏：默认每轮仅退避 2 秒，若不加长会变成
-              // 约 30 次/分钟的无谓网络尝试（断网可能持续数小时）。
-              // 这里改为 30 秒；联网恢复时 update_network_reachable → uploader.resume()
-              // 会立即发 Signal::Proceed 唤醒，不会因为退避而延迟续传。
-              offline_backoff = true;
-            } else {
-              info!(
-                "[File] Failed to upload file: {}, retry_count:{}",
-                err, retry_count
-              );
-              retry_count += 1;
-            }
-            let record = record.unbox_or_error().unwrap();
-            self.queue.tasks.write().await.push(UploadTask::Task {
-              local_file_path,
-              record,
-              retry_count,
-            });
-          }
-        }
-      },
+        retry_count,
+        ..
+      } => (
+        &record.workspace_id,
+        &record.parent_dir,
+        &record.file_id,
+        retry_count,
+      ),
       UploadTask::BackgroundTask {
         workspace_id,
         parent_dir,
         file_id,
-        created_at,
-        mut retry_count,
-      } => {
-        if let Err(err) = self
-          .storage_service
-          .resume_upload(&workspace_id, &parent_dir, &file_id)
-          .await
-        {
-          if err.is_file_limit_exceeded() && !err.is_single_file_limit_exceeded() {
-            error!("[File] Storage limit exceeded during resume, skipping (won't retry)");
-          }
-
-          if err.should_retry_upload() {
-            if err.is_network_unavailable() {
-              info!(
-                "[File] Network unavailable, requeue resumed upload without consuming retry budget: {}",
-                err
-              );
-              offline_backoff = true;
-            } else {
-              info!(
-                "[File] failed to resume upload file: {}, retry_count:{}",
-                err, retry_count
-              );
-              retry_count += 1;
-            }
-            self.queue.tasks.write().await.push(BackgroundTask {
-              workspace_id,
-              parent_dir,
-              file_id,
-              created_at,
-              retry_count,
-            });
-          }
+        retry_count,
+        ..
+      } => (&*workspace_id, &*parent_dir, &*file_id, retry_count),
+    };
+    let mut offline_backoff = false;
+    if let Err(err) = self
+      .storage_service
+      .resume_upload(workspace_id, parent_dir, file_id)
+      .await
+    {
+      if err.is_network_unavailable() || (err.should_retry_upload() && *retries < 5) {
+        offline_backoff = err.is_network_unavailable();
+        if !offline_backoff {
+          *retries += 1;
         }
-      },
+        self
+          .storage_service
+          .publish_upload_state(workspace_id, parent_dir, file_id, &err, false)
+          .await;
+        info!("[File] requeue upload {file_id}, retries: {retries}, error: {err}");
+        self.queue.tasks.write().await.push(task);
+      } else {
+        warn!("[File] upload {file_id} failed: {err}");
+        self
+          .storage_service
+          .publish_upload_state(workspace_id, parent_dir, file_id, &err, true)
+          .await;
+      }
     }
 
     self

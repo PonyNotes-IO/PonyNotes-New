@@ -56,6 +56,13 @@ pub trait StorageCloudService: Send + Sync {
   /// Return workspace_id, parent_dir, file_id
   async fn parse_object_url_v1(&self, url: &str) -> Option<(Uuid, String, String)>;
 
+  async fn check_object_exists(
+    &self,
+    workspace_id: &Uuid,
+    parent_dir: &str,
+    file_id: &str,
+  ) -> FlowyResult<()>;
+
   async fn create_upload(
     &self,
     workspace_id: &Uuid,

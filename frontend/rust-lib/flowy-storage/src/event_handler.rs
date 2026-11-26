@@ -31,8 +31,6 @@ pub(crate) async fn query_file_handler(
 ) -> DataResult<FileStatePB, FlowyError> {
   let manager = upgrade_storage_manager(storage_manager)?;
   let data = data.into_inner();
-  let pb = manager.query_file_state(&data.url).await.ok_or_else(|| {
-    FlowyError::record_not_found().with_context(format!("File not found: {}", data.url))
-  })?;
+  let pb = manager.query_file_state(&data.url).await?;
   data_result_ok(pb)
 }

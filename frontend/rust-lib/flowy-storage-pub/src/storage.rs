@@ -68,6 +68,7 @@ pub struct FileProgress {
   pub file_id: String,
   pub progress: f64,
   pub error: Option<String>,
+  pub error_code: Option<i32>,
 }
 
 impl FileProgress {
@@ -77,15 +78,17 @@ impl FileProgress {
       file_id,
       progress: (progress * 10.0).round() / 10.0,
       error: None,
+      error_code: None,
     }
   }
 
-  pub fn new_error(file_url: String, file_id: String, error: String) -> Self {
+  pub fn new_error(file_url: String, file_id: String, error: &FlowyError) -> Self {
     FileProgress {
       file_url,
       file_id,
       progress: 0.0,
-      error: Some(error),
+      error: Some(error.msg.clone()),
+      error_code: Some(error.code.value()),
     }
   }
 }

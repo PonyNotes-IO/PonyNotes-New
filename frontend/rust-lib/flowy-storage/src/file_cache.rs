@@ -32,13 +32,11 @@ impl FileTempStorage {
     &self,
     existing_file_path: &Path,
   ) -> io::Result<String> {
-    let file_name = existing_file_path
-      .file_name()
-      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid file name"))?
-      .to_str()
-      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid file name"))?;
-
-    let temp_file_path = self.generate_temp_file_path_with_name(file_name);
+    // Each upload owns its cached bytes, even if two source files have the same name.
+    let mut temp_file_path = self.storage_dir.join(uuid::Uuid::new_v4().to_string());
+    if let Some(ext) = existing_file_path.extension() {
+      temp_file_path.set_extension(ext);
+    }
     fs::copy(existing_file_path, &temp_file_path).await?;
     Ok(
       temp_file_path

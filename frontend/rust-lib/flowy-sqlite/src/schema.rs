@@ -89,6 +89,7 @@ diesel::table! {
         upload_id -> Text,
         created_at -> BigInt,
         is_finish -> Bool,
+        upload_error -> Nullable<Text>,
     }
 }
 

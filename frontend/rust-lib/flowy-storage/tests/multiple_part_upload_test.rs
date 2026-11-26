@@ -2,8 +2,8 @@ use collab_importer::util::FileId;
 use flowy_sqlite::Database;
 use flowy_storage::sqlite_sql::{
   batch_select_upload_file, delete_upload_file, insert_upload_file, insert_upload_part,
-  is_upload_file_exist, select_latest_upload_part, select_upload_parts, UploadFilePartTable,
-  UploadFileTable,
+  is_upload_file_exist, mark_upload_failed, select_latest_upload_part, select_upload_file,
+  select_upload_parts, UploadFilePartTable, UploadFileTable,
 };
 use flowy_storage_pub::chunked_byte::{ChunkedBytes, MIN_CHUNK_SIZE};
 use rand::distributions::Alphanumeric;
@@ -17,6 +17,60 @@ use std::time::Duration;
 pub fn test_database() -> (Database, PathBuf) {
   let db_path = temp_dir().join(format!("test-{}.db", generate_random_string(8)));
   (flowy_sqlite::init(&db_path).unwrap(), db_path)
+}
+
+#[test]
+fn failed_upload_is_persisted_but_only_requeued_when_selected_again() {
+  let (db, _) = test_database();
+  let mut record = UploadFileTable {
+    workspace_id: "workspace".into(),
+    parent_dir: "document".into(),
+    file_id: "video".into(),
+    local_file_path: "old-cache".into(),
+    upload_id: "multipart-session".into(),
+    content_type: "video/mp4".into(),
+    chunk_size: MIN_CHUNK_SIZE as i32,
+    num_chunk: 1,
+    created_at: 0,
+    is_finish: false,
+    upload_error: None,
+  };
+  insert_upload_file(db.get_connection().unwrap(), &record).unwrap();
+  let error = "[100,\"Total storage limit exceeded\"]";
+  assert!(mark_upload_failed(
+    db.get_connection().unwrap(),
+    "workspace",
+    "document",
+    "video",
+    error
+  )
+  .unwrap());
+  assert!(
+    batch_select_upload_file(db.get_connection().unwrap(), "workspace", 100, false)
+      .unwrap()
+      .is_empty()
+  );
+  let previous = select_upload_file(
+    &mut db.get_connection().unwrap(),
+    "workspace",
+    "document",
+    "video",
+  )
+  .unwrap()
+  .unwrap();
+  assert_eq!(previous.upload_error.as_deref(), Some(error));
+
+  record.local_file_path = "new-cache".into();
+  record.upload_id.clear();
+  let replaced = insert_upload_file(db.get_connection().unwrap(), &record)
+    .unwrap()
+    .unwrap();
+  assert_eq!(replaced.local_file_path, "old-cache");
+  let queued =
+    batch_select_upload_file(db.get_connection().unwrap(), "workspace", 100, false).unwrap();
+  assert_eq!(queued.len(), 1);
+  assert_eq!(queued[0].local_file_path, "new-cache");
+  assert!(queued[0].upload_error.is_none());
 }
 
 #[tokio::test]
@@ -222,5 +276,6 @@ pub async fn create_upload_file_record(
     num_chunk: num_chunk as i32,
     created_at: chrono::Utc::now().timestamp(),
     is_finish: false,
+    upload_error: None,
   }
 }

@@ -19,4 +19,10 @@ pub struct FileStatePB {
 
   #[pb(index = 2)]
   pub is_finish: bool,
+
+  #[pb(index = 3)]
+  pub error_code: i32,
+
+  #[pb(index = 4)]
+  pub error_message: String,
 }

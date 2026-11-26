@@ -119,13 +119,12 @@ impl FlowyError {
   }
 
   pub fn should_retry_upload(&self) -> bool {
-    // 存储限制错误不应该重试
-    // 包括 FileStorageLimitExceeded (100) 和 PlanLimitExceeded (141)
-    if self.is_file_limit_exceeded() {
-      return false;
-    }
-    // 其他情况允许重试
-    true
+    !self.is_file_limit_exceeded()
+      && !self.is_single_file_limit_exceeded()
+      && !matches!(
+        self.code,
+        ErrorCode::NotEnoughPermissions | ErrorCode::RecordNotFound | ErrorCode::InvalidParams
+      )
   }
 
   pub fn is_ai_response_limit_exceeded(&self) -> bool {

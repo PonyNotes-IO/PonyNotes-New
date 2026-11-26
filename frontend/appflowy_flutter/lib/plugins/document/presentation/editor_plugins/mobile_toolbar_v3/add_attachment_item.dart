@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -14,10 +13,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
-import 'package:appflowy/user/application/user_service.dart';
-import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -245,48 +241,16 @@ class _AddAttachmentMenu extends StatelessWidget {
       if (isLocalMode) {
         path = await saveFileToLocalStorage(xFile.path);
       } else {
-        final fileSize = File(xFile.path).lengthSync();
-        try {
-          final userResult =
-              await UserBackendService.getCurrentUserProfile();
-          final userProfile =
-              userResult.fold((user) => user, (_) => null);
-          if (userProfile != null) {
-            final hasSpace =
-                await hasEnoughCloudStorage(userProfile, fileSize);
-            if (!hasSpace) {
-              if (context.mounted) {
-                final userProfileForDialog = userProfile;
-                await showSimpleAFDialog(
-                  context: context,
-                  title: '云存储空间不足',
-                  content: '您当前可用的云存储空间不足，无法上传文件。请升级会员以获得更多存储空间。',
-                  primaryAction: (
-                    '升级',
-                    (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                      ctx,
-                      userProfile: userProfileForDialog,
-                    ),
-                  ),
-                  secondaryAction: ('取消', null),
-                );
-              }
-              if (context.mounted) Navigator.pop(context);
-              return;
-            }
-          }
-        } catch (e) {
-          Log.error('Failed to check cloud storage in selectFile: $e');
-        }
-
-        (path, errorMsg) =
-            await saveFileToCloudStorage(xFile.path, documentId);
+        (path, errorMsg) = await saveFileToCloudStorage(xFile.path, documentId);
         type = FileUrlType.cloud;
       }
 
-  if (errorMsg != null && context.mounted) {
-    showToastNotification(message: errorMsg, type: ToastificationType.error);
-  } else if (path != null) {
+      if (errorMsg != null && context.mounted) {
+        showToastNotification(
+          message: errorMsg,
+          type: ToastificationType.error,
+        );
+      } else if (path != null) {
         final node = fileNode(url: path, type: type, name: xFile.name);
         await _insertNode(node);
       }

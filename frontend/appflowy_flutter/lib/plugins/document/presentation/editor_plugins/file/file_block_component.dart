@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
@@ -14,9 +15,8 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_p
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_util.dart';
 import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cross_file/cross_file.dart';
@@ -194,56 +194,36 @@ class FileBlockComponentState extends State<FileBlockComponent>
   bool isDragging = false;
   bool isHovering = false;
   bool _isUploadingFromLocal = false;
+  String? _preparingFileName;
+  String? _preparationError;
   AutoRemoveNotifier<FileProgress>? _uploadProgressNotifier;
   String? _progressFileUrl;
 
-  String? get _uploadedByUserId {
-    final value = node.attributes[FileBlockKeys.uploadedBy];
-    if (value == null) {
-      return null;
-    }
-    return value.toString();
-  }
+  FileProgress? get _uploadProgress => _uploadProgressNotifier?.value;
 
-  String? get _currentUserId {
-    final user = context.read<DocumentBloc?>()?.state.userProfilePB;
-    if (user == null) {
-      return null;
-    }
-    return user.id.toString();
-  }
+  bool get _canOpenFile => _uploadProgress?.isReady ?? true;
 
-  bool get _isUploading {
-    final value = _uploadProgressNotifier?.value;
-    if (value == null || value.error != null) {
-      return false;
+  String? get _uploadStatus {
+    final progress = _uploadProgress;
+    if (progress == null || progress.isReady) return null;
+    if (progress.isMissing) {
+      return 'document.plugins.file.uploadUnavailable'.tr();
     }
-    return value.progress >= 0 && value.progress < 1;
-  }
-
-  double get _uploadProgressValue {
-    final value = _uploadProgressNotifier?.value.progress ?? 0;
-    return value.clamp(0.0, 1.0).toDouble();
-  }
-
-  bool get _shouldShowUploadProgress {
-    if (!_isUploading) {
-      return false;
+    if (progress.error case final error?) {
+      final reason = uploadFailureMessage(progress.errorCode, error);
+      final failed = LocaleKeys.button_uploadFailed.tr();
+      return reason == failed
+          ? failed
+          : 'document.plugins.file.uploadFailureDetails'.tr(args: [reason]);
     }
-    // Always allow showing progress in the local upload session.
-    if (_isUploadingFromLocal) {
-      return true;
+    if (progress.progress < 0) {
+      return progress.errorCode == null
+          ? 'document.plugins.file.uploadChecking'.tr()
+          : 'document.plugins.file.uploadStatusUnavailable'.tr();
     }
-
-    final uploadedBy = _uploadedByUserId;
-    final currentUserId = _currentUserId;
-    if (uploadedBy == null ||
-        uploadedBy.isEmpty ||
-        currentUserId == null ||
-        currentUserId.isEmpty) {
-      return false;
-    }
-    return uploadedBy == currentUserId;
+    return progress.progress == 0
+        ? LocaleKeys.document_plugins_pendingSync.tr()
+        : 'document.plugins.file.uploadInProgress'.tr();
   }
 
   void _onUploadProgressChanged() {
@@ -266,11 +246,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     final url = node.attributes[FileBlockKeys.url] as String?;
     final urlType =
         FileUrlType.fromIntValue(node.attributes[FileBlockKeys.urlType] ?? 0);
-    final shouldTrack = urlType == FileUrlType.cloud &&
-        url?.isNotEmpty == true &&
-        (_isUploadingFromLocal ||
-            (_uploadedByUserId?.isNotEmpty == true &&
-                _uploadedByUserId == _currentUserId));
+    final shouldTrack = urlType == FileUrlType.cloud && url?.isNotEmpty == true;
     if (!shouldTrack) {
       _disposeUploadProgressNotifier();
       return;
@@ -313,8 +289,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   Widget build(BuildContext context) {
     _syncUploadProgressNotifier();
     final url = node.attributes[FileBlockKeys.url];
-    final FileUrlType urlType =
-        FileUrlType.fromIntValue(node.attributes[FileBlockKeys.urlType] ?? 0);
+    final uploadProgress = _uploadProgress;
 
     Widget child = MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -331,9 +306,11 @@ class FileBlockComponentState extends State<FileBlockComponent>
       opaque: false,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: url != null && url.isNotEmpty
-            ? () async => _openFile(context, urlType, url)
-            : _openMenu,
+        onTap: _isUploadingFromLocal
+            ? null
+            : url != null && url.isNotEmpty
+                ? () async => _openFile(context, url)
+                : _openMenu,
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: isHovering
@@ -362,11 +339,18 @@ class FileBlockComponentState extends State<FileBlockComponent>
                         color: Theme.of(context).hintColor,
                         size: const Size.square(24),
                       ),
-                      if (_shouldShowUploadProgress)
+                      if (_isUploadingFromLocal ||
+                          (uploadProgress != null &&
+                              uploadProgress.error == null &&
+                              !uploadProgress.isWaitingForNetwork &&
+                              uploadProgress.progress >= 0 &&
+                              !uploadProgress.isReady))
                         SizedBox.square(
                           dimension: 34,
                           child: CircularProgressIndicator(
-                            value: _uploadProgressValue,
+                            value: _isUploadingFromLocal
+                                ? null
+                                : uploadProgress?.progress,
                             strokeWidth: 3,
                             backgroundColor: Theme.of(
                               context,
@@ -386,7 +370,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     );
 
     if (PlatformInfo.isDesktopOrTabletOrWeb) {
-      if (url == null || url.isEmpty) {
+      if ((url == null || url.isEmpty) && !_isUploadingFromLocal) {
         child = DropTarget(
           enable: dropManagerState?.isDropEnabled == true ||
               dropManagerState?.contains(FileBlockKeys.type) == true,
@@ -484,11 +468,24 @@ class FileBlockComponentState extends State<FileBlockComponent>
     return child;
   }
 
-  Future<void> _openFile(
-    BuildContext context,
-    FileUrlType urlType,
-    String url,
-  ) async {
+  Future<void> _openFile(BuildContext context, String url) async {
+    final notifier = _uploadProgressNotifier;
+    if (notifier != null && notifier.value.progress < 0) {
+      await getIt<FileStorageService>().refreshFileProgress(notifier);
+    }
+    if (!context.mounted || node.attributes[FileBlockKeys.url] != url) return;
+    if (!_canOpenFile) {
+      final status = _uploadStatus;
+      if (status != null) {
+        showToastNotification(
+          message: status,
+          type: _uploadProgress?.error != null
+              ? ToastificationType.error
+              : ToastificationType.info,
+        );
+      }
+      return;
+    }
     await afLaunchUrlString(url, context: context);
   }
 
@@ -503,13 +500,33 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   List<Widget> _buildTrailing(BuildContext context) {
-    if (node.attributes[FileBlockKeys.url]?.isNotEmpty == true) {
-      final name = node.attributes[FileBlockKeys.name] as String;
+    final hasUrl = node.attributes[FileBlockKeys.url]?.isNotEmpty == true;
+    final name = hasUrl
+        ? node.attributes[FileBlockKeys.name] as String?
+        : _preparingFileName;
+    if (name != null) {
+      final status = hasUrl
+          ? _uploadStatus
+          : _preparationError ?? 'document.plugins.file.preparingUpload'.tr();
       return [
         Expanded(
-          child: FlowyText(
-            name,
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FlowyText(name, overflow: TextOverflow.ellipsis),
+              if (status != null)
+                FlowyText(
+                  status,
+                  fontSize: 12,
+                  overflow: TextOverflow.ellipsis,
+                  color:
+                      (hasUrl ? _uploadProgress?.error : _preparationError) !=
+                              null
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).hintColor,
+                ),
+            ],
           ),
         ),
         const HSpace(8),
@@ -543,6 +560,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
                       controller: menuController,
                       node: node,
                       editorState: editorState,
+                      canDownload: () => _canOpenFile,
                     );
                   },
                   child: const FileMenuTrigger(),
@@ -638,94 +656,67 @@ class FileBlockComponentState extends State<FileBlockComponent>
       return;
     }
 
-    _isUploadingFromLocal = true;
-    try {
-      final file = files.first;
-      final path = file.path;
-      final documentBloc = context.read<DocumentBloc>();
-      final isLocalMode = documentBloc.isLocalMode;
-      final urlType = isLocalMode ? FileUrlType.local : FileUrlType.cloud;
+    final file = files.first;
+    final documentBloc = context.read<DocumentBloc>();
+    final isLocalMode = documentBloc.isLocalMode;
+    final editor = editorState;
+    final targetNode = node;
+    setState(() {
+      _isUploadingFromLocal = true;
+      _preparingFileName = file.name;
+      _preparationError = null;
+      isDragging = false;
+    });
 
+    try {
       String? url;
       String? errorMsg;
       if (isLocalMode) {
-        url = await saveFileToLocalStorage(path);
+        url = await saveFileToLocalStorage(file.path);
+      } else if (await File(file.path).length() > kMaxUploadFileSizeBytes) {
+        errorMsg = LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
       } else {
-        // 检查1：单文件大小不能超过 3GB（客户端立即拒绝，无 I/O，仅读元数据）
-        final fileSize = File(path).lengthSync();
-        if (fileSize > kMaxUploadFileSizeBytes) {
-          if (mounted) {
-            showToastNotification(
-              message: '对不起，您最大可上传的单个文件不能超过3GB',
-              type: ToastificationType.error,
-            );
-          }
-          return;
-        }
-
-        // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
-        final userProfile = documentBloc.state.userProfilePB;
-        if (userProfile != null) {
-          final hasSpace = await hasEnoughCloudStorage(userProfile, fileSize);
-          if (!hasSpace) {
-            if (mounted) {
-              final userProfileForDialog = userProfile;
-              await showSimpleAFDialog(
-                context: context,
-                title: '云存储空间不足',
-                content: '您当前可用的云存储空间不足，无法上传文件。请升级会员以获得更多存储空间。',
-                primaryAction: (
-                  '升级',
-                  (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                        ctx,
-                        userProfile: userProfileForDialog,
-                      ),
-                ),
-                secondaryAction: ('取消', null),
-              );
-            }
-            return;
-          }
-        }
-
-        final result =
-            await saveFileToCloudStorage(path, documentBloc.documentId);
-        url = result.$1;
-        errorMsg = result.$2;
+        (url, errorMsg) =
+            await saveFileToCloudStorage(file.path, documentBloc.documentId);
       }
-
-      if (errorMsg != null && mounted) {
-        showToastNotification(
-          message: errorMsg,
-          type: ToastificationType.error,
-        );
+      if (url == null) {
+        _preparationError = errorMsg ?? LocaleKeys.button_uploadFailed.tr();
         return;
       }
 
-      final currentNode = editorState.getNodeAtPath(widget.node.path);
-      if (currentNode == null || currentNode.id != widget.node.id) {
-        if (!isLocalMode && url?.isNotEmpty == true) {
-          await DocumentService().deleteFile(url: url!);
+      final currentNode = editor.getNodeAtPath(targetNode.path);
+      if (editor.isDisposed ||
+          !editor.editable ||
+          currentNode == null ||
+          currentNode.id != targetNode.id ||
+          currentNode.attributes[FileBlockKeys.url]?.isNotEmpty == true) {
+        if (!isLocalMode && currentNode?.attributes[FileBlockKeys.url] != url) {
+          await DocumentService().deleteFile(url: url);
         }
         return;
       }
 
-      // Remove the file block from the drop state manager
       dropManagerState?.remove(FileBlockKeys.type);
-
-      final transaction = editorState.transaction;
-      final currentUserId = documentBloc.state.userProfilePB?.id.toString();
-      transaction.updateNode(currentNode, {
-        FileBlockKeys.url: url,
-        FileBlockKeys.urlType: urlType.toIntValue(),
-        FileBlockKeys.name: file.name,
-        FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
-        FileBlockKeys.uploadedBy: currentUserId,
-      });
-      await editorState.apply(transaction);
-      _syncUploadProgressNotifier();
+      final transaction = editor.transaction
+        ..updateNode(currentNode, {
+          FileBlockKeys.url: url,
+          FileBlockKeys.urlType:
+              (isLocalMode ? FileUrlType.local : FileUrlType.cloud)
+                  .toIntValue(),
+          FileBlockKeys.name: file.name,
+          FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
+          FileBlockKeys.uploadedBy:
+              documentBloc.state.userProfilePB?.id.toString(),
+        });
+      await editor.apply(transaction);
+      _preparingFileName = null;
+    } catch (error, stackTrace) {
+      Log.error('Failed to prepare document attachment', error, stackTrace);
+      _preparationError = LocaleKeys.button_uploadFailed.tr();
     } finally {
-      _isUploadingFromLocal = false;
+      if (mounted) {
+        setState(() => _isUploadingFromLocal = false);
+      }
     }
   }
 

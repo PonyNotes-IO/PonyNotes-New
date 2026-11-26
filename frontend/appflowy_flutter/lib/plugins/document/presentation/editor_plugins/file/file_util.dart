@@ -7,14 +7,11 @@ import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/util/xfile_ext.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
-import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
-import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy_backend/dispatch/error.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pb.dart';
@@ -31,35 +28,6 @@ import 'package:universal_platform/universal_platform.dart';
 
 /// 单文件最大上传限制：3GB
 const int kMaxUploadFileSizeBytes = 3 * 1024 * 1024 * 1024;
-
-/// 检查云存储空间是否足够
-///
-/// 返回 true 表示有足够空间，返回 false 表示空间不足。
-/// 获取订阅信息失败时默认允许上传（放行到服务端检查）。
-Future<bool> hasEnoughCloudStorage(
-  UserProfilePB userProfile,
-  int fileSizeInBytes,
-) async {
-  try {
-    final subscriptionService = SubscriptionService();
-    final subscription = await subscriptionService.getCurrentSubscription(
-      userProfile: userProfile,
-      caller: 'file_util.hasEnoughCloudStorage',
-    );
-
-    final storageUsedGb = subscription?.usage?.storageUsedGb ?? 0.0;
-    final storageTotalGb = subscription?.usage?.storageTotalGb ?? 0.0;
-
-    // 无法获取订阅信息时，允许上传（由服务端决策）
-    if (storageTotalGb <= 0) return true;
-
-    final fileSizeGb = fileSizeInBytes / (1024 * 1024 * 1024);
-    return (storageUsedGb + fileSizeGb) <= storageTotalGb;
-  } catch (e) {
-    Log.error('Failed to check cloud storage quota: $e');
-    return true; // 检查失败时默认允许上传
-  }
-}
 
 Future<String?> saveFileToLocalStorage(String localFilePath) async {
   final path = await getIt<ApplicationDataStorage>().getPath();
@@ -108,21 +76,7 @@ Future<(String? path, String? errorMessage)> saveFileToCloudStorage(
 
       return (s.url, null);
     },
-    (err) {
-      // 检查单文件大小限制错误
-      if (err.isSingleFileLimitExceeded) {
-        final message = LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
-        return (null, message);
-      }
-      // 检查存储空间限制错误
-      final message = Platform.isIOS
-          ? LocaleKeys.sideBar_storageLimitDialogTitleIOS.tr()
-          : LocaleKeys.sideBar_storageLimitDialogTitle.tr();
-      if (err.isStorageLimitExceeded) {
-        return (null, message);
-      }
-      return (null, err.msg);
-    },
+    (err) => (null, uploadFailureMessage(err.code.value, err.msg)),
   );
 }
 
@@ -269,29 +223,6 @@ Future<void> insertLocalFile(
       return;
     }
 
-    // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
-    if (userProfile != null) {
-      final hasEnoughSpace = await hasEnoughCloudStorage(userProfile, fileSize);
-      if (!hasEnoughSpace) {
-        if (context.mounted) {
-          await showSimpleAFDialog(
-            context: context,
-            title: '云存储空间不足',
-            content: '您当前可用的云存储空间不足，无法上传文件。请升级会员以获得更多存储空间。',
-            primaryAction: (
-              '升级',
-              (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                    ctx,
-                    userProfile: userProfile,
-                  ),
-            ),
-            secondaryAction: ('取消', null),
-          );
-        }
-        return;
-      }
-    }
-
     (path, errorMsg) = await saveFileToCloudStorage(
       file.path,
       documentId,
@@ -352,30 +283,6 @@ Future<void> insertLocalFiles(
           );
         }
         continue;
-      }
-
-      // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
-      if (userProfile != null) {
-        final hasEnoughSpace =
-            await hasEnoughCloudStorage(userProfile, fileSize);
-        if (!hasEnoughSpace) {
-          if (context.mounted) {
-            await showSimpleAFDialog(
-              context: context,
-              title: '云存储空间不足',
-              content: '您当前可用的云存储空间不足，无法上传文件。请升级会员以获得更多存储空间。',
-              primaryAction: (
-                '升级',
-                (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                      ctx,
-                      userProfile: userProfile,
-                    ),
-              ),
-              secondaryAction: ('取消', null),
-            );
-          }
-          continue;
-        }
       }
 
       (path, errorMsg) = await saveFileToCloudStorage(

@@ -68,19 +68,6 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
 
     final service = getIt<FileStorageService>();
 
-    // 先查一次当前状态：未完成则展示「待同步」。
-    //
-    // 这一步覆盖"重开文档"的场景：断网期间插入的附件此时既没有进行中的进度事件、
-    // 也还没触发新的错误，仅靠 onFileProgress 无法得知它仍未上传。
-    service.getFileState(url).then((result) {
-      if (!mounted) return;
-      result.fold(
-        (state) => _setPending(!state.isFinish),
-        // 查询失败时不展示，避免误报（错误的「待同步」比不提示更糟）。
-        (_) {},
-      );
-    });
-
     final notifier = service.onFileProgress(fileUrl: url);
     _notifier = notifier;
     notifier.addListener(_onProgress);
@@ -88,8 +75,7 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
 
   void _unbind() {
     _notifier?.removeListener(_onProgress);
-    // 注意：notifier 由 FileStorageService 统一管理生命周期（AutoRemoveNotifier），
-    // 此处只移除监听，不能 dispose，否则会影响其它监听方。
+    _notifier?.dispose();
     _notifier = null;
   }
 
@@ -97,31 +83,7 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
     final progress = _notifier?.value;
     if (progress == null) return;
 
-    // 已完成 → 一律隐藏。
-    if (progress.progress >= 1.0) {
-      _setPending(false);
-      return;
-    }
-
-    // 【避免与既有进度条重复】文件块自带 LinearProgressIndicator，
-    // 但其 `_isUploading` 在 `error != null` 时返回 false —— 也就是说
-    // **断网报错后进度条会消失，此时没有任何状态提示**，正是本角标要补的空缺。
-    //
-    // 因此：正在正常上传（无错误、进度推进中）时交给进度条，本角标不展示；
-    // 一旦出现错误（断网/失败待重试），才展示「待同步」。
-    final hasError = progress.error != null && progress.error!.isNotEmpty;
-    if (hasError) {
-      _setPending(true);
-      return;
-    }
-    // 进度为 0 且无错误：离线插入的图片就是这个状态 —— 队列里排着但一次
-    // 进度事件都没有过。此时进度条也不会显示（没有进展可展示），若这里也不展示，
-    // 用户就完全看不出它还没同步。
-    if (progress.progress <= 0.0) {
-      _setPending(true);
-      return;
-    }
-    _setPending(false);
+    _setPending(progress.error == null && progress.progress == 0);
   }
 
   void _setPending(bool value) {

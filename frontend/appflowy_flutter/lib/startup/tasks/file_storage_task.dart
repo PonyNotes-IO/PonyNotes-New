@@ -9,6 +9,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-storage/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -43,11 +44,19 @@ class FileStorageService {
           );
 
           if (fileProgress.error != null) {
-            _showUploadErrorToast(fileProgress.error!);
+            Log.error('[FileUpload] upload error: ${fileProgress.error}');
+            showToastNotification(
+              message: uploadFailureMessage(
+                fileProgress.errorCode,
+                fileProgress.error!,
+              ),
+              type: ToastificationType.error,
+            );
           }
 
-          final notifier = _notifierList[fileProgress.fileUrl];
-          if (notifier != null) {
+          for (final notifier
+              in _notifierList[fileProgress.fileUrl]?.toList() ??
+                  const <AutoRemoveNotifier<FileProgress>>[]) {
             notifier.value = fileProgress;
           }
         }
@@ -61,100 +70,50 @@ class FileStorageService {
     }
   }
 
-  final Map<String, AutoRemoveNotifier<FileProgress>> _notifierList = {};
+  final _notifierList = <String, Set<AutoRemoveNotifier<FileProgress>>>{};
   final RawReceivePort _port = RawReceivePort();
   final StreamController<String> _controller = StreamController.broadcast();
   late StreamSubscription<String> _subscription;
-  DateTime? _lastErrorToastTime;
-
-  /// 断网 / 连接失败属于**稍后续传**，不是上传失败。
-  ///
-  /// 文件此时已落本地缓存与上传队列，联网后会自动续传，UI 只需呈现「待同步」
-  /// 角标。弹一个红色「上传失败」既不准确，也会让用户以为内容丢了。
-  ///
-  /// 判定口径与 `image_util.dart` 的 `_isPendingUploadError` 保持一致 ——
-  /// client-api 底层 reqwest 的发送失败常被折叠为 Internal，只能按消息特征识别。
-  /// 两处必须同步修改，否则会出现「图片显示待同步、同时又弹上传失败」的矛盾提示
-  /// （这正是本次要修的现象）。
-  static bool _isPendingUploadError(String error) {
-    final e = error.toLowerCase();
-    return e.contains('error sending request') ||
-        e.contains('connection refused') ||
-        e.contains('connection reset') ||
-        e.contains('dns error') ||
-        e.contains('timed out') ||
-        e.contains('network is unreachable') ||
-        e.contains('no route to host') ||
-        e.contains('failed to lookup address');
-  }
-
-  void _showUploadErrorToast(String errorMsg) {
-    if (_isPendingUploadError(errorMsg)) {
-      Log.info(
-        '[FileUpload] 网络不可用，已转入待同步队列，不提示失败: $errorMsg',
-      );
-      return;
-    }
-
-    final now = DateTime.now();
-    if (_lastErrorToastTime != null &&
-        now.difference(_lastErrorToastTime!).inSeconds < 5) {
-      return;
-    }
-    _lastErrorToastTime = now;
-
-    final String displayMessage;
-    final lowerMsg = errorMsg.toLowerCase();
-    if (lowerMsg.contains('single upload limit') ||
-        lowerMsg.contains('single file size') ||
-        lowerMsg.contains('exceeds single')) {
-      displayMessage =
-          LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
-    } else if (lowerMsg.contains('storage limit') ||
-        lowerMsg.contains('plan limit') ||
-        lowerMsg.contains('total storage')) {
-      displayMessage =
-          LocaleKeys.sideBar_storageLimitDialogTitle.tr();
-    } else {
-      displayMessage =
-          '${LocaleKeys.button_uploadFailed.tr()}: $errorMsg';
-    }
-
-    Log.error('[FileUpload] upload error: $errorMsg');
-    showToastNotification(
-      message: displayMessage,
-      type: ToastificationType.error,
-    );
-  }
 
   AutoRemoveNotifier<FileProgress> onFileProgress({required String fileUrl}) {
-    _notifierList.remove(fileUrl)?.dispose();
-
+    final initial = FileProgress(fileUrl: fileUrl, progress: -1);
     final notifier = AutoRemoveNotifier<FileProgress>(
-      FileProgress(fileUrl: fileUrl, progress: 0),
-      notifierList: _notifierList,
+      initial,
       fileId: fileUrl,
+      notifierList: _notifierList,
     );
-    _notifierList[fileUrl] = notifier;
-
-    // Trigger the initial file state and sync it back to notifier immediately.
-    // This avoids UI being stuck at 0 when stream events are missed.
-    getFileState(fileUrl).then((result) {
-      result.fold(
-        (state) {
-          final currentNotifier = _notifierList[fileUrl];
-          if (currentNotifier != null) {
-            currentNotifier.value = FileProgress(
-              fileUrl: fileUrl,
-              progress: state.isFinish ? 1.0 : 0.0,
-            );
-          }
-        },
-        (_) {},
-      );
-    });
-
+    (_notifierList[fileUrl] ??= {}).add(notifier);
+    refreshFileProgress(notifier);
     return notifier;
+  }
+
+  Future<void> refreshFileProgress(
+    AutoRemoveNotifier<FileProgress> notifier,
+  ) async {
+    final previous = notifier.value;
+    final url = previous.fileUrl;
+    final result = await getFileState(url);
+    if (_notifierList[url]?.contains(notifier) != true ||
+        !identical(notifier.value, previous)) {
+      return;
+    }
+    notifier.value = result.fold(
+      (state) => FileProgress(
+        fileUrl: url,
+        progress: state.isFinish
+            ? 1
+            : state.errorCode != 0 || state.errorMessage.isNotEmpty
+                ? -1
+                : 0,
+        error: state.errorMessage.isEmpty ? null : state.errorMessage,
+        errorCode: state.errorCode == 0 ? null : state.errorCode,
+      ),
+      (_) => FileProgress(
+        fileUrl: url,
+        progress: -1,
+        errorCode: ErrorCode.NetworkError.value,
+      ),
+    );
   }
 
   Future<FlowyResult<FileStatePB, FlowyError>> getFileState(String url) {
@@ -164,7 +123,7 @@ class FileStorageService {
 
   Future<void> dispose() async {
     // Copy first because each notifier dispose removes itself from the map.
-    for (final notifier in _notifierList.values.toList()) {
+    for (final notifier in _notifierList.values.expand((set) => set).toList()) {
       notifier.dispose();
     }
 
@@ -174,11 +133,51 @@ class FileStorageService {
   }
 }
 
+String uploadFailureMessage(int? code, String message) {
+  if (code == ErrorCode.FileStorageLimitExceeded.value) {
+    return 'document.plugins.file.uploadQuotaExceeded'.tr();
+  }
+  final lower = message.toLowerCase();
+  if (code == ErrorCode.SingleUploadLimitExceeded.value ||
+      lower.contains('exceeds single upload limit')) {
+    final limit =
+        RegExp(r'single upload limit\s+([0-9]+(?:\.[0-9]+)?)\s*(bytes|mb)')
+            .firstMatch(lower);
+    final amount = double.tryParse(limit?.group(1) ?? '');
+    if (amount == null) {
+      return 'document.plugins.file.uploadSizeUnknown'.tr();
+    }
+    final mib = limit?.group(2) == 'mb' ? amount : amount / (1024 * 1024);
+    final value = mib >= 1024 ? mib / 1024 : mib;
+    final number =
+        value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
+    return 'document.plugins.file.uploadSizeLimit'.tr(
+      args: ['$number ${mib >= 1024 ? 'GB' : 'MB'}'],
+    );
+  }
+  if (code == ErrorCode.PlanLimitExceeded.value ||
+      lower.contains('storage limit')) {
+    return 'document.plugins.file.uploadQuotaExceeded'.tr();
+  }
+  if (code == ErrorCode.NotEnoughPermissions.value ||
+      code == ErrorCode.UserUnauthorized.value) {
+    return 'document.plugins.file.uploadNoPermission'.tr();
+  }
+  if (code == ErrorCode.RecordNotFound.value) {
+    return 'document.plugins.file.uploadUnavailable'.tr();
+  }
+  if (message == 'Local upload file is missing') {
+    return 'document.plugins.file.uploadSourceMissing'.tr();
+  }
+  return LocaleKeys.button_uploadFailed.tr();
+}
+
 class FileProgress {
   FileProgress({
     required this.fileUrl,
     required this.progress,
     this.error,
+    this.errorCode,
   });
 
   static FileProgress? fromJson(Map<String, dynamic>? json) {
@@ -192,6 +191,7 @@ class FileProgress {
           fileUrl: json['file_url'] as String,
           progress: (json['progress'] as num).toDouble(),
           error: json['error'] as String?,
+          errorCode: json['error_code'] as int?,
         );
       }
     } catch (e) {
@@ -213,21 +213,28 @@ class FileProgress {
   final double progress;
   final String fileUrl;
   final String? error;
+  final int? errorCode;
+
+  bool get isReady => error == null && progress >= 1;
+  bool get isWaitingForNetwork => errorCode == ErrorCode.NetworkError.value;
+  bool get isMissing => errorCode == ErrorCode.RecordNotFound.value;
 }
 
 class AutoRemoveNotifier<T> extends ValueNotifier<T> {
   AutoRemoveNotifier(
     super.value, {
     required this.fileId,
-    required Map<String, AutoRemoveNotifier<FileProgress>> notifierList,
+    required Map<String, Set<AutoRemoveNotifier<T>>> notifierList,
   }) : _notifierList = notifierList;
 
   final String fileId;
-  final Map<String, AutoRemoveNotifier<FileProgress>> _notifierList;
+  final Map<String, Set<AutoRemoveNotifier<T>>> _notifierList;
 
   @override
   void dispose() {
-    _notifierList.remove(fileId);
+    final notifiers = _notifierList[fileId];
+    notifiers?.remove(this);
+    if (notifiers?.isEmpty == true) _notifierList.remove(fileId);
     super.dispose();
   }
 }

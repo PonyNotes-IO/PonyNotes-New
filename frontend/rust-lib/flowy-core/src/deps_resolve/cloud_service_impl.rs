@@ -113,6 +113,19 @@ impl StorageCloudService for ServerProvider {
       .await
   }
 
+  async fn check_object_exists(
+    &self,
+    workspace_id: &Uuid,
+    parent_dir: &str,
+    file_id: &str,
+  ) -> FlowyResult<()> {
+    let server = self.get_server()?;
+    let storage = server.file_storage().ok_or(FlowyError::internal())?;
+    storage
+      .check_object_exists(workspace_id, parent_dir, file_id)
+      .await
+  }
+
   async fn create_upload(
     &self,
     workspace_id: &Uuid,

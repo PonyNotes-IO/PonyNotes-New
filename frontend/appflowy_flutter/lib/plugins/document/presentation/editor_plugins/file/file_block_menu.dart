@@ -21,11 +21,13 @@ class FileBlockMenu extends StatefulWidget {
     required this.controller,
     required this.node,
     required this.editorState,
+    required this.canDownload,
   });
 
   final PopoverController controller;
   final Node node;
   final EditorState editorState;
+  final bool Function() canDownload;
 
   @override
   State<FileBlockMenu> createState() => _FileBlockMenuState();
@@ -67,32 +69,35 @@ class _FileBlockMenuState extends State<FileBlockMenu> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        HoverButton(
-          itemHeight: 20,
-          leftIcon: const FlowySvg(FlowySvgs.download_s),
-          name: LocaleKeys.button_download.tr(),
-          onTap: () {
-            final userProfile = widget.editorState.document.root.context
-                ?.read<DocumentBloc>()
-                .state
-                .userProfilePB;
-            final url = widget.node.attributes[FileBlockKeys.url];
-            final name = widget.node.attributes[FileBlockKeys.name];
-            if (url != null && name != null) {
-              final filePB = MediaFilePB(
-                url: url,
-                name: name,
-                uploadType: fileUploadType,
-              );
-              downloadMediaFile(
-                context,
-                filePB,
-                userProfile: userProfile,
-              );
-            }
-          },
-        ),
-        const VSpace(4),
+        if (widget.canDownload()) ...[
+          HoverButton(
+            itemHeight: 20,
+            leftIcon: const FlowySvg(FlowySvgs.download_s),
+            name: LocaleKeys.button_download.tr(),
+            onTap: () {
+              if (!widget.canDownload()) return;
+              final userProfile = widget.editorState.document.root.context
+                  ?.read<DocumentBloc>()
+                  .state
+                  .userProfilePB;
+              final url = widget.node.attributes[FileBlockKeys.url];
+              final name = widget.node.attributes[FileBlockKeys.name];
+              if (url != null && name != null) {
+                final filePB = MediaFilePB(
+                  url: url,
+                  name: name,
+                  uploadType: fileUploadType,
+                );
+                downloadMediaFile(
+                  context,
+                  filePB,
+                  userProfile: userProfile,
+                );
+              }
+            },
+          ),
+          const VSpace(4),
+        ],
         HoverButton(
           itemHeight: 20,
           leftIcon: const FlowySvg(FlowySvgs.edit_s),
@@ -134,7 +139,7 @@ class _FileBlockMenuState extends State<FileBlockMenu> {
             widget.controller.close();
           },
         ),
-        if (uploadedAt != null) ...[
+        if (uploadedAt != null && widget.canDownload()) ...[
           const Divider(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -175,7 +180,6 @@ class _FileBlockMenuState extends State<FileBlockMenu> {
       Navigator.of(renameContext!).pop();
     }
   }
-
 }
 
 class FileRenameTextField extends StatefulWidget {

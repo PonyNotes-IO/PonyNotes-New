@@ -1,6 +1,4 @@
 use flowy_error::{FlowyError, FlowyResult};
-use flowy_sqlite::result::DatabaseErrorKind;
-use flowy_sqlite::result::Error::DatabaseError;
 use flowy_sqlite::schema::{upload_file_part, upload_file_table};
 use flowy_sqlite::{
   diesel, AsChangeset, BoolExpressionMethods, DBConnection, ExpressionMethods, Identifiable,
@@ -22,6 +20,7 @@ pub struct UploadFileTable {
   pub upload_id: String,
   pub created_at: i64,
   pub is_finish: bool,
+  pub upload_error: Option<String>,
 }
 
 #[derive(Queryable, Insertable, AsChangeset, Identifiable, Debug)]
@@ -54,19 +53,56 @@ pub fn is_upload_file_exist(
 pub fn insert_upload_file(
   mut conn: DBConnection,
   upload_file: &UploadFileTable,
-) -> FlowyResult<()> {
+) -> FlowyResult<Option<UploadFileTable>> {
   trace!("[File]: insert upload file: {:?}", upload_file);
-  match diesel::insert_into(upload_file_table::table)
-    .values(upload_file)
-    .execute(&mut *conn)
-  {
-    Ok(_) => Ok(()),
-    Err(DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => Err(FlowyError::new(
-      flowy_error::ErrorCode::DuplicateSqliteRecord,
-      "Upload file already exists",
-    )),
-    Err(e) => Err(e.into()),
-  }
+  conn.immediate_transaction(|conn| {
+    let previous = select_upload_file(
+      conn,
+      &upload_file.workspace_id,
+      &upload_file.parent_dir,
+      &upload_file.file_id,
+    )?;
+    if let Some(previous) = &previous {
+      if previous.upload_error.is_none() {
+        return Err(FlowyError::new(
+          flowy_error::ErrorCode::DuplicateSqliteRecord,
+          "Upload file already exists",
+        ));
+      }
+      if !previous.upload_id.is_empty() {
+        delete_all_upload_parts(conn, &previous.upload_id)?;
+      }
+      diesel::delete(upload_file_table::table.find((
+        &previous.workspace_id,
+        &previous.file_id,
+        &previous.parent_dir,
+      )))
+      .execute(conn)?;
+    }
+    diesel::insert_into(upload_file_table::table)
+      .values(upload_file)
+      .execute(conn)?;
+    Ok(previous)
+  })
+}
+
+pub fn mark_upload_failed(
+  mut conn: DBConnection,
+  workspace_id: &str,
+  parent_dir: &str,
+  file_id: &str,
+  error: &str,
+) -> FlowyResult<bool> {
+  let updated = diesel::update(
+    upload_file_table::table
+      .filter(upload_file_table::workspace_id.eq(workspace_id))
+      .filter(upload_file_table::parent_dir.eq(parent_dir))
+      .filter(upload_file_table::file_id.eq(file_id))
+      .filter(upload_file_table::is_finish.eq(false)),
+  )
+  .set(upload_file_table::upload_error.eq(Some(error)))
+  .execute(&mut *conn)?;
+  Ok(updated > 0)
 }
 
 pub fn update_upload_file_upload_id(
@@ -96,33 +132,6 @@ pub fn update_upload_file_completed(mut conn: DBConnection, upload_id: &str) -> 
   .set(upload_file_table::is_finish.eq(true))
   .execute(&mut *conn)?;
   Ok(())
-}
-
-pub fn is_upload_exist(mut conn: DBConnection, upload_id: &str) -> FlowyResult<bool> {
-  let result = upload_file_table::dsl::upload_file_table
-    .filter(upload_file_table::upload_id.eq(upload_id))
-    .first::<UploadFileTable>(&mut *conn)
-    .optional()?;
-  Ok(result.is_some())
-}
-
-pub fn is_upload_completed(
-  conn: &mut SqliteConnection,
-  workspace_id: &str,
-  parent_dir: &str,
-  file_id: &str,
-) -> FlowyResult<bool> {
-  let result = upload_file_table::dsl::upload_file_table
-    .filter(
-      upload_file_table::workspace_id
-        .eq(workspace_id)
-        .and(upload_file_table::parent_dir.eq(parent_dir))
-        .and(upload_file_table::file_id.eq(file_id))
-        .and(upload_file_table::is_finish.eq(true)),
-    )
-    .first::<UploadFileTable>(conn)
-    .optional()?;
-  Ok(result.is_some())
 }
 
 /// Delete upload file and its parts
@@ -219,6 +228,7 @@ pub fn select_upload_parts(
 ) -> FlowyResult<Vec<UploadFilePartTable>> {
   let results = upload_file_part::dsl::upload_file_part
     .filter(upload_file_part::upload_id.eq(upload_id))
+    .order(upload_file_part::part_num.asc())
     .load::<UploadFilePartTable>(conn)?;
   Ok(results)
 }
@@ -232,6 +242,7 @@ pub fn batch_select_upload_file(
   let results = upload_file_table::dsl::upload_file_table
     .filter(upload_file_table::workspace_id.eq(workspace_id))
     .filter(upload_file_table::is_finish.eq(is_finish))
+    .filter(upload_file_table::upload_error.is_null())
     .order(upload_file_table::created_at.desc())
     .limit(limit.into())
     .load::<UploadFileTable>(&mut *conn)?;

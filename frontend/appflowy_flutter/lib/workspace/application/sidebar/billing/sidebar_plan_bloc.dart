@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/settings/file_storage/file_storage_listener.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -22,16 +21,8 @@ class SidebarPlanBloc extends Bloc<SidebarPlanEvent, SidebarPlanState> {
     _subscriptionListener = getIt<SubscriptionSuccessListenable>();
     _subscriptionListener.addListener(_onPaymentSuccessful);
 
-    // 2. Listen to the storage notification
-    _storageListener = StoreageNotificationListener(
-      onError: (error) {
-        if (!isClosed) {
-          add(SidebarPlanEvent.receiveError(error));
-        }
-      },
-    );
-
-    // 3. Listen to specific error codes
+    // Background attachment failures are presented by FileStorageService.
+    // Listen for quota errors returned directly with commands here.
     _globalErrorListener = GlobalErrorCodeNotifier.add(
       onError: (error) {
         if (!isClosed) {
@@ -87,12 +78,9 @@ class SidebarPlanBloc extends Bloc<SidebarPlanEvent, SidebarPlanState> {
       GlobalErrorCodeNotifier.remove(_globalErrorListener!);
     }
     _subscriptionListener.removeListener(_onPaymentSuccessful);
-    await _storageListener?.stop();
-    _storageListener = null;
   }
 
   ErrorListener? _globalErrorListener;
-  StoreageNotificationListener? _storageListener;
   late final SubscriptionSuccessListenable _subscriptionListener;
 
   Future<void> _handleEvent(
