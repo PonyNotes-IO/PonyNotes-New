@@ -87,7 +87,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     on<WorkspaceEventEmitWorkspaces>(_onEmitWorkspaces);
     on<WorkspaceEventEmitUserProfile>(_onEmitUserProfile);
     on<WorkspaceEventEmitCurrentWorkspace>(_onEmitCurrentWorkspace);
-    on<WorkspaceEventFetchCurrentSubscription>(_onFetchCurrentSubscription);
+    on<WorkspaceEventFetchCurrentSubscription>(
+      _onFetchCurrentSubscription,
+      transformer: (events, mapper) => events.asyncExpand(mapper),
+    );
     on<WorkspaceEventUpdateCurrentSubscription>(_onUpdateCurrentSubscription);
     on<WorkspaceEventUpdateCloudSyncEnabled>(_onUpdateCloudSyncEnabled);
     on<WorkspaceEventUpdateFolderSyncState>(_onUpdateFolderSyncState);

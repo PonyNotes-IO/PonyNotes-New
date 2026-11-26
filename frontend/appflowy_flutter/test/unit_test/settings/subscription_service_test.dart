@@ -1,13 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/env/backend_env.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/workspace/data/repositories/workspace_repository.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:mocktail/mocktail.dart';
+
+class _WorkspaceRepository extends Mock implements WorkspaceRepository {}
 
 /// 覆盖 PonyNotes 新会员体系里 GET /api/subscription/current 在客户端的解析，
 /// 对应 devops-docs 2026-07-07 会员测试方案里的用例 A/E/F 涉及的响应字段
@@ -100,6 +107,50 @@ void main() {
   }
 
   group('SubscriptionService.getCurrentSubscription 用例A/C：升级/续费后套餐展示', () {
+    test('连续打开云同步时，按顺序查询并保留最后一次返回的专业版', () async {
+      final firstStarted = Completer<void>();
+      final releaseFirst = Completer<void>();
+      var requests = 0;
+      SubscriptionService().httpClientForTesting = MockClient((request) async {
+        final first = ++requests == 1;
+        if (first) {
+          firstStarted.complete();
+          await releaseFirst.future;
+        }
+        return http.Response(
+          jsonEncode(
+            currentResponseBody(
+              planCode: first ? 'standard' : 'profersor',
+              planNameCn: first ? '标准版' : '专业版',
+              status: 'active',
+            ),
+          ),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+      getIt.registerSingleton(SubscriptionSuccessListenable());
+      final bloc = UserWorkspaceBloc(
+        repository: _WorkspaceRepository(),
+        userProfile: userProfile,
+      );
+      addTearDown(bloc.close);
+      final pro = bloc.stream.firstWhere(
+        (state) =>
+            state.currentSubscription?.subscription?.planCode == 'profersor',
+      );
+      bloc.add(UserWorkspaceEvent.fetchCurrentSubscription(forceRefresh: true));
+      await firstStarted.future;
+      bloc.add(UserWorkspaceEvent.fetchCurrentSubscription(forceRefresh: true));
+      await Future<void>.delayed(Duration.zero);
+      final requestsWhileFirstPending = requests;
+      releaseFirst.complete();
+      await pro;
+      expect(requestsWhileFirstPending, 1);
+      expect(requests, 2);
+      expect(bloc.state.currentSubscription?.subscription?.planNameCn, '专业版');
+    });
+
     test('后端返回 profersor(专业版) 时，客户端应展示为专业版，非宽限期', () async {
       final mockClient = MockClient((request) async {
         expect(request.url.path, '/api/subscription/current');
