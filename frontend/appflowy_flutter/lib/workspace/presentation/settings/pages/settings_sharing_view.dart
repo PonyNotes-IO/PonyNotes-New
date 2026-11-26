@@ -821,8 +821,11 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     } catch (e) {
       Log.error('stop sharing ${entry.view.id} failed: $e');
       if (mounted) {
+        final reason = e is StopSharingFailure
+            ? e.message
+            : e.toString().replaceFirst(RegExp(r'^Exception: '), '');
         showToastNotification(
-          message: '停止共享失败：$e',
+          message: '停止共享失败：$reason',
           type: ToastificationType.error,
         );
       }
