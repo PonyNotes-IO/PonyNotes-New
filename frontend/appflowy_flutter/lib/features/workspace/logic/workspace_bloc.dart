@@ -87,7 +87,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     on<WorkspaceEventEmitWorkspaces>(_onEmitWorkspaces);
     on<WorkspaceEventEmitUserProfile>(_onEmitUserProfile);
     on<WorkspaceEventEmitCurrentWorkspace>(_onEmitCurrentWorkspace);
-    on<WorkspaceEventFetchCurrentSubscription>(_onFetchCurrentSubscription);
+    on<WorkspaceEventFetchCurrentSubscription>(
+      _onFetchCurrentSubscription,
+      transformer: (events, mapper) => events.asyncExpand(mapper),
+    );
     on<WorkspaceEventUpdateCurrentSubscription>(_onUpdateCurrentSubscription);
     on<WorkspaceEventUpdateCloudSyncEnabled>(_onUpdateCloudSyncEnabled);
     on<WorkspaceEventUpdateFolderSyncState>(_onUpdateFolderSyncState);
@@ -912,6 +915,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final currentSubscription = await SubscriptionService().getCurrentSubscription(
       userProfile: state.userProfile,
+      forceRefresh: event.forceRefresh,
       caller: 'UserWorkspaceBloc._onFetchCurrentSubscription',
     );
     if (!isClosed) {
