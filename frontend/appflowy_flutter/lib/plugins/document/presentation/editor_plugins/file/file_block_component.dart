@@ -69,6 +69,9 @@ class FileBlockKeys {
   ///
   static const String uploadedBy = 'uploaded_by';
 
+  // Only new, admitted uploads may be removed on a local terminal failure.
+  static const String pendingUpload = 'pending_upload';
+
   /// The GlobalKey of the FileBlockComponentState.
   ///
   /// **Note: This value is used in extraInfos of the Node, not in the attributes.**
@@ -120,6 +123,7 @@ Node fileNode({
   required String url,
   FileUrlType type = FileUrlType.local,
   String? name,
+  bool pendingUpload = false,
 }) {
   return Node(
     type: FileBlockKeys.type,
@@ -127,6 +131,7 @@ Node fileNode({
       FileBlockKeys.url: url,
       FileBlockKeys.urlType: type.toIntValue(),
       FileBlockKeys.name: name,
+      if (pendingUpload) FileBlockKeys.pendingUpload: true,
       FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
     },
   );
@@ -195,7 +200,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   bool isHovering = false;
   bool _isUploadingFromLocal = false;
   String? _preparingFileName;
-  String? _preparationError;
+  bool _settlingUpload = false;
   AutoRemoveNotifier<FileProgress>? _uploadProgressNotifier;
   String? _progressFileUrl;
 
@@ -203,19 +208,27 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   bool get _canOpenFile => _uploadProgress?.isReady ?? true;
 
+  bool get _awaitingRemoteUpload =>
+      node.attributes[FileBlockKeys.pendingUpload] == true &&
+      _uploadProgress?.isMissing == true &&
+      _uploadProgress?.uploadFailed == false;
+
   bool get _canChooseFile {
     final url = node.attributes[FileBlockKeys.url] as String?;
     final progress = _uploadProgress;
     return editorState.editable &&
         (url == null ||
             url.isEmpty ||
-            progress?.isMissing == true ||
-            progress?.error != null);
+            (!_awaitingRemoteUpload &&
+                (progress?.isMissing == true || progress?.error != null)));
   }
 
   String? get _uploadStatus {
     final progress = _uploadProgress;
     if (progress == null || progress.isReady) return null;
+    if (_awaitingRemoteUpload) {
+      return LocaleKeys.document_plugins_pendingSync.tr();
+    }
     if (progress.isMissing) {
       return 'document.plugins.file.uploadUnavailable'.tr();
     }
@@ -237,9 +250,54 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   void _onUploadProgressChanged() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _settlePendingUpload();
+  }
+
+  void _settlePendingUpload() {
+    final progress = _uploadProgress;
+    if (_settlingUpload ||
+        _isUploadingFromLocal ||
+        node.attributes[FileBlockKeys.pendingUpload] != true ||
+        progress == null ||
+        (!progress.isReady && !progress.uploadFailed)) {
+      return;
     }
+    _settlingUpload = true;
+    // Never mutate editor blocks while their widgets are being built.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted ||
+            !editorState.editable ||
+            editorState.isDisposed ||
+            _isUploadingFromLocal) {
+          return;
+        }
+        final current = editorState.getNodeAtPath(node.path);
+        if (current == null ||
+            current.id != node.id ||
+            current.attributes[FileBlockKeys.url] != progress.fileUrl ||
+            current.attributes[FileBlockKeys.pendingUpload] != true ||
+            !identical(_uploadProgress, progress)) {
+          return;
+        }
+        final transaction = editorState.transaction;
+        if (progress.uploadFailed) {
+          // Preserve historical attachments and remote missing objects; only
+          // remove an attachment whose own pending upload actually failed.
+          transaction.deleteNode(current);
+        } else {
+          transaction.updateNode(current, {FileBlockKeys.pendingUpload: null});
+        }
+        await editorState.apply(
+          transaction,
+          options: const ApplyOptions(recordUndo: false),
+        );
+      } finally {
+        _settlingUpload = false;
+      }
+    });
   }
 
   void _disposeUploadProgressNotifier() {
@@ -300,6 +358,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     _syncUploadProgressNotifier();
     final url = node.attributes[FileBlockKeys.url];
     final uploadProgress = _uploadProgress;
+    _settlePendingUpload();
     final canChooseFile = _canChooseFile && !_isUploadingFromLocal;
 
     Widget child = MouseRegion(
@@ -492,7 +551,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
       if (status != null) {
         showToastNotification(
           message: status,
-          type: _uploadProgress?.error != null
+          type: !_awaitingRemoteUpload && _uploadProgress?.error != null
               ? ToastificationType.error
               : ToastificationType.info,
         );
@@ -520,7 +579,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
         _preparingFileName ?? (node.attributes[FileBlockKeys.name] as String?);
     if (name != null && (hasUrl || isPreparing)) {
       final status = isPreparing
-          ? _preparationError ?? 'document.plugins.file.preparingUpload'.tr()
+          ? 'document.plugins.file.preparingUpload'.tr()
           : _uploadStatus;
       return [
         Expanded(
@@ -534,10 +593,9 @@ class FileBlockComponentState extends State<FileBlockComponent>
                   status,
                   fontSize: 12,
                   overflow: TextOverflow.ellipsis,
-                  color: (isPreparing
-                              ? _preparationError
-                              : _uploadProgress?.error) !=
-                          null
+                  color: !isPreparing &&
+                          !_awaitingRemoteUpload &&
+                          _uploadProgress?.error != null
                       ? Theme.of(context).colorScheme.error
                       : Theme.of(context).hintColor,
                 ),
@@ -680,7 +738,6 @@ class FileBlockComponentState extends State<FileBlockComponent>
     setState(() {
       _isUploadingFromLocal = true;
       _preparingFileName = file.name;
-      _preparationError = null;
       isDragging = false;
     });
 
@@ -696,7 +753,12 @@ class FileBlockComponentState extends State<FileBlockComponent>
             await saveFileToCloudStorage(file.path, documentBloc.documentId);
       }
       if (url == null) {
-        _preparationError = errorMsg ?? LocaleKeys.button_uploadFailed.tr();
+        if (mounted) {
+          showToastNotification(
+            message: errorMsg ?? LocaleKeys.button_uploadFailed.tr(),
+            type: ToastificationType.error,
+          );
+        }
         return;
       }
 
@@ -720,18 +782,27 @@ class FileBlockComponentState extends State<FileBlockComponent>
               (isLocalMode ? FileUrlType.local : FileUrlType.cloud)
                   .toIntValue(),
           FileBlockKeys.name: file.name,
+          FileBlockKeys.pendingUpload: isLocalMode ? null : true,
           FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
           FileBlockKeys.uploadedBy:
               documentBloc.state.userProfilePB?.id.toString(),
         });
       await editor.apply(transaction);
-      _preparingFileName = null;
     } catch (error, stackTrace) {
       Log.error('Failed to prepare document attachment', error, stackTrace);
-      _preparationError = LocaleKeys.button_uploadFailed.tr();
+      if (mounted) {
+        showToastNotification(
+          message: LocaleKeys.button_uploadFailed.tr(),
+          type: ToastificationType.error,
+        );
+      }
     } finally {
       if (mounted) {
-        setState(() => _isUploadingFromLocal = false);
+        setState(() {
+          _isUploadingFromLocal = false;
+          _preparingFileName = null;
+        });
+        _settlePendingUpload();
       }
     }
   }
@@ -768,6 +839,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
     transaction.updateNode(widget.node, {
       FileBlockKeys.url: url,
       FileBlockKeys.urlType: FileUrlType.network.toIntValue(),
+      FileBlockKeys.pendingUpload: null,
       FileBlockKeys.name: name,
       FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
       FileBlockKeys.uploadedBy: currentUserId,
@@ -776,7 +848,6 @@ class FileBlockComponentState extends State<FileBlockComponent>
     if (mounted) {
       setState(() {
         _preparingFileName = null;
-        _preparationError = null;
       });
     }
   }

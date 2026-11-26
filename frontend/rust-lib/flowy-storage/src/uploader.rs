@@ -128,6 +128,9 @@ impl FileUploader {
 
   #[instrument(name = "[File]: process next", level = "debug", skip(self))]
   pub async fn process_next(&self) -> Option<()> {
+    if !self.storage_service.network_reachable() {
+      return None;
+    }
     // Do not proceed if the uploader is paused.
     if self.pause_sync.load(std::sync::atomic::Ordering::Relaxed) {
       // If disable_upload was reset to false (by a new explicit upload attempt in

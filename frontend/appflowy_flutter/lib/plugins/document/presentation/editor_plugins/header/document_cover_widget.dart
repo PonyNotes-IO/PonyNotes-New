@@ -5,6 +5,7 @@ import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/plugins/base/emoji/emoji_picker_screen.dart';
@@ -822,7 +823,18 @@ class DocumentCoverState extends State<DocumentCover> {
         details = await saveImageToLocalStorage(details!);
       } else {
         // else we should save the image to cloud storage
-        (details, _) = await saveImageToCloudStorage(details!, widget.view.id);
+        final (path, error) =
+            await saveImageToCloudStorage(details!, widget.view.id);
+        if (path == null) {
+          if (mounted && error != null) {
+            showToastNotification(
+              message: error,
+              type: ToastificationType.error,
+            );
+          }
+          return;
+        }
+        details = path;
       }
     }
     widget.onChangeCover(type, details);

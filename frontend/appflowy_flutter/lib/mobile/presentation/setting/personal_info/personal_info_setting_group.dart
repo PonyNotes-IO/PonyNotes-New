@@ -2,6 +2,7 @@ import 'dart:io' as io;
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/edit_username_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/email_bind_page.dart';
@@ -532,6 +533,12 @@ class _AvatarSection extends StatelessWidget {
           // Upload to cloud with empty documentId for user icon
           final result = await saveImageToCloudStorage(image.path, 'user_icon');
           savedPath = result.$1;
+          if (result.$2 case final error? when context.mounted) {
+            showToastNotification(
+              message: error,
+              type: ToastificationType.error,
+            );
+          }
         }
 
         if (savedPath != null && savedPath.isNotEmpty) {

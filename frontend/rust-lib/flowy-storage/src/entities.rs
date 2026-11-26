@@ -25,4 +25,7 @@ pub struct FileStatePB {
 
   #[pb(index = 4)]
   pub error_message: String,
+
+  #[pb(index = 5)]
+  pub upload_failed: bool,
 }

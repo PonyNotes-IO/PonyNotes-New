@@ -47,6 +47,7 @@ pub struct StorageManager {
   uploader: Arc<FileUploader>,
   progress_notifiers: Arc<DashMap<String, ProgressNotifier>>,
   global_notifier: GlobalNotifier,
+  network_reachable: Arc<AtomicBool>,
 }
 
 impl Drop for StorageManager {
@@ -61,6 +62,7 @@ impl StorageManager {
     user_service: Arc<dyn StorageUserService>,
   ) -> Self {
     let is_exceed_storage_limit = Arc::new(AtomicBool::new(false));
+    let network_reachable = Arc::new(AtomicBool::new(true));
     let temp_storage_path = PathBuf::from(format!(
       "{}/cache_files",
       user_service.get_application_root_dir()
@@ -78,6 +80,7 @@ impl StorageManager {
       is_exceed_storage_limit: is_exceed_storage_limit.clone(),
       progress_notifiers: progress_notifiers.clone(),
       global_notifier: global_notifier.clone(),
+      network_reachable: network_reachable.clone(),
     });
 
     let uploader = Arc::new(FileUploader::new(
@@ -132,6 +135,7 @@ impl StorageManager {
       uploader,
       progress_notifiers,
       global_notifier,
+      network_reachable,
     }
   }
 
@@ -162,6 +166,9 @@ impl StorageManager {
         .sqlite_connection(self.user_service.user_id()?)?;
       select_upload_file(&mut conn, &workspace_id.to_string(), &parent_dir, &file_id)?
     };
+    let upload_failed = record
+      .as_ref()
+      .is_some_and(|record| record.upload_error.is_some());
     let (is_finish, error) = if let Some(record) = record {
       let error = record
         .upload_error
@@ -190,6 +197,7 @@ impl StorageManager {
       is_finish,
       error_code,
       error_message,
+      upload_failed,
     })
   }
 
@@ -210,6 +218,9 @@ impl StorageManager {
   }
 
   pub fn update_network_reachable(&self, reachable: bool) {
+    self
+      .network_reachable
+      .store(reachable, std::sync::atomic::Ordering::SeqCst);
     if reachable {
       self.uploader.resume();
     } else {
@@ -325,6 +336,7 @@ pub struct StorageServiceImpl {
   is_exceed_storage_limit: Arc<AtomicBool>,
   progress_notifiers: Arc<DashMap<String, ProgressNotifier>>,
   global_notifier: GlobalNotifier,
+  network_reachable: Arc<AtomicBool>,
 }
 
 #[async_trait]
@@ -448,19 +460,65 @@ impl StorageService for StorageServiceImpl {
           .with_context(format!("create temp file for upload file failed: {}", err))
       })?;
 
-    // 1. create a file record and chunk the file
-    let record = create_upload_record(workspace_id, parent_dir, local_file_path.clone()).await?;
-    // 2. save the record to sqlite
-    let conn = self
-      .user_service
-      .sqlite_connection(self.user_service.user_id()?)?;
-    let workspace_id = Uuid::from_str(&record.workspace_id)?;
-    let url = self
-      .cloud_service
-      .get_object_url_v1(&workspace_id, &record.parent_dir, &record.file_id)
-      .await?;
+    // Reuse the actual multipart admission request: a quota rejection must be
+    // returned before exposing a URL or adding this task to the local queue.
+    let result = async {
+      let mut record =
+        create_upload_record(workspace_id, parent_dir, local_file_path.clone()).await?;
+      let workspace_id = Uuid::from_str(&record.workspace_id)?;
+      let url = self
+        .cloud_service
+        .get_object_url_v1(&workspace_id, &record.parent_dir, &record.file_id)
+        .await?;
+      let existing = {
+        let mut conn = self
+          .user_service
+          .sqlite_connection(self.user_service.user_id()?)?;
+        select_upload_file(
+          &mut conn,
+          &record.workspace_id,
+          &record.parent_dir,
+          &record.file_id,
+        )?
+      };
+      if existing.is_some_and(|existing| existing.upload_error.is_none()) {
+        return Ok::<_, FlowyError>((record, url, true));
+      }
+      if self.network_reachable() {
+        let file_size = tokio::fs::metadata(&record.local_file_path).await?.len();
+        let admission = self
+          .cloud_service
+          .create_upload(
+            &workspace_id,
+            &record.parent_dir,
+            &record.file_id,
+            &record.content_type,
+            file_size,
+          )
+          .await;
+        record.upload_id = admitted_upload_id(admission)?;
+      }
+      Ok((record, url, false))
+    }
+    .await;
+    let (record, url, exists) = match result {
+      Ok(result) => result,
+      Err(err) => {
+        let _ = self.temp_storage.delete_temp_file(&local_file_path).await;
+        return Err(err);
+      },
+    };
     let file_id = record.file_id.clone();
-    match insert_upload_file(conn, &record) {
+    if exists {
+      let _ = self.temp_storage.delete_temp_file(&local_file_path).await;
+      return Ok((CreatedUpload { url, file_id }, None));
+    }
+    let inserted = self
+      .user_service
+      .user_id()
+      .and_then(|uid| self.user_service.sqlite_connection(uid))
+      .and_then(|conn| insert_upload_file(conn, &record));
+    match inserted {
       Ok(previous) => {
         if let Some(previous) = previous {
           let _ = self
@@ -564,6 +622,12 @@ impl StorageService for StorageServiceImpl {
 }
 
 impl StorageServiceImpl {
+  pub(crate) fn network_reachable(&self) -> bool {
+    self
+      .network_reachable
+      .load(std::sync::atomic::Ordering::SeqCst)
+  }
+
   pub(crate) async fn publish_upload_state(
     &self,
     workspace_id: &str,
@@ -611,6 +675,22 @@ impl StorageServiceImpl {
     if let Err(err) = result {
       error!("[File] failed to publish upload state for {file_id}: {err}");
     }
+  }
+}
+
+fn admitted_upload_id(
+  result: FlowyResult<flowy_storage_pub::storage::CreateUploadResponse>,
+) -> FlowyResult<String> {
+  match result {
+    Ok(response) => Ok(response.upload_id),
+    Err(err)
+      if err.is_network_unavailable()
+        && !err.is_file_limit_exceeded()
+        && !err.is_single_file_limit_exceeded() =>
+    {
+      Ok(String::new())
+    },
+    Err(err) => Err(err),
   }
 }
 

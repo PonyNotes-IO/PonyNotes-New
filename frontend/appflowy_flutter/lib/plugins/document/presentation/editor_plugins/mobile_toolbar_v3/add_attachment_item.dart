@@ -173,7 +173,12 @@ class _AddAttachmentMenu extends StatelessWidget {
     if (isLocalMode) {
       path = await saveImageToLocalStorage(image.path);
     } else {
-      (path, _) = await saveImageToCloudStorage(image.path, documentId);
+      final (uploadedPath, error) =
+          await saveImageToCloudStorage(image.path, documentId);
+      if (error != null && context.mounted) {
+        showToastNotification(message: error, type: ToastificationType.error);
+      }
+      path = uploadedPath;
       type = CustomImageType.internal;
     }
 
@@ -251,7 +256,12 @@ class _AddAttachmentMenu extends StatelessWidget {
           type: ToastificationType.error,
         );
       } else if (path != null) {
-        final node = fileNode(url: path, type: type, name: xFile.name);
+        final node = fileNode(
+          url: path,
+          type: type,
+          name: xFile.name,
+          pendingUpload: type == FileUrlType.cloud,
+        );
         await _insertNode(node);
       }
     }

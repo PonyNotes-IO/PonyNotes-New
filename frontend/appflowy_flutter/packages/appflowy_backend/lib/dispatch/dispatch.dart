@@ -60,7 +60,11 @@ class Dispatch {
     Future<FlowyResult<Uint8List, Uint8List>> _asyncRequest() async {
       final bytesFuture = _sendToRust(request);
       final response = await _extractResponse(bytesFuture);
-      final payload = _extractPayload(response);
+      // Upload callers already report the workspace owner's admission error.
+      final payload = _extractPayload(
+        response,
+        notifyGlobalError: request.event != DocumentEvent.UploadFile.toString(),
+      );
       return payload;
     }
 
@@ -77,8 +81,9 @@ class Dispatch {
 }
 
 FlowyResult<Uint8List, Uint8List> _extractPayload(
-  FlowyResult<FFIResponse, FlowyInternalError> response,
-) {
+  FlowyResult<FFIResponse, FlowyInternalError> response, {
+  required bool notifyGlobalError,
+}) {
   return response.fold(
     (response) {
       switch (response.code) {
@@ -86,7 +91,8 @@ FlowyResult<Uint8List, Uint8List> _extractPayload(
           return FlowySuccess(Uint8List.fromList(response.payload));
         case FFIStatusCode.Err:
           final errorBytes = Uint8List.fromList(response.payload);
-          GlobalErrorCodeNotifier.receiveErrorBytes(errorBytes);
+          if (notifyGlobalError)
+            GlobalErrorCodeNotifier.receiveErrorBytes(errorBytes);
           return FlowyFailure(errorBytes);
         case FFIStatusCode.Internal:
           final error = utf8.decode(response.payload);

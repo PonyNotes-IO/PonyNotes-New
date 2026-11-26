@@ -107,6 +107,7 @@ class FileStorageService {
                 : 0,
         error: state.errorMessage.isEmpty ? null : state.errorMessage,
         errorCode: state.errorCode == 0 ? null : state.errorCode,
+        uploadFailed: state.uploadFailed,
       ),
       (_) => FileProgress(
         fileUrl: url,
@@ -178,6 +179,7 @@ class FileProgress {
     required this.progress,
     this.error,
     this.errorCode,
+    this.uploadFailed = false,
   });
 
   static FileProgress? fromJson(Map<String, dynamic>? json) {
@@ -192,6 +194,7 @@ class FileProgress {
           progress: (json['progress'] as num).toDouble(),
           error: json['error'] as String?,
           errorCode: json['error_code'] as int?,
+          uploadFailed: json['error'] != null,
         );
       }
     } catch (e) {
@@ -214,6 +217,7 @@ class FileProgress {
   final String fileUrl;
   final String? error;
   final int? errorCode;
+  final bool uploadFailed;
 
   bool get isReady => error == null && progress >= 1;
   bool get isWaitingForNetwork => errorCode == ErrorCode.NetworkError.value;

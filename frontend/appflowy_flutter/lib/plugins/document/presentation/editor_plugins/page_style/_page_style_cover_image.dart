@@ -228,12 +228,13 @@ class PageStyleCoverImage extends StatelessWidget {
       final isAppFlowyCloud =
           userProfile?.workspaceType == WorkspaceTypePB.ServerW;
       final PageStyleCoverImageType type;
+      String? uploadError;
       if (!isAppFlowyCloud) {
         result = await saveImageToLocalStorage(path);
         type = PageStyleCoverImageType.localImage;
       } else {
         // else we should save the image to cloud storage
-        (result, _) = await saveImageToCloudStorage(path, documentId);
+        (result, uploadError) = await saveImageToCloudStorage(path, documentId);
         type = PageStyleCoverImageType.customImage;
       }
       if (!context.mounted) {
@@ -242,7 +243,8 @@ class PageStyleCoverImage extends StatelessWidget {
       if (result == null) {
         return showSnapBar(
           context,
-          LocaleKeys.document_plugins_image_imageUploadFailed.tr(),
+          uploadError ??
+              LocaleKeys.document_plugins_image_imageUploadFailed.tr(),
         );
       }
 

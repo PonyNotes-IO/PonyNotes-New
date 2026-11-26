@@ -55,6 +55,7 @@ extension PasteFromFile on EditorState {
             url: path,
             type: type,
             name: file.name,
+            pendingUpload: type == FileUrlType.cloud,
           ),
         );
       await apply(t);

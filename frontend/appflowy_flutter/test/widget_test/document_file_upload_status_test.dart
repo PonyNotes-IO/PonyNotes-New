@@ -30,6 +30,7 @@ const _quota =
 class _TestStorage extends FileStorageService {
   FlowyError? failure;
   bool finished = false;
+  bool uploadFailed = false;
   late AutoRemoveNotifier<FileProgress> notifier;
 
   @override
@@ -44,6 +45,7 @@ class _TestStorage extends FileStorageService {
         isFinish: finished,
         errorCode: error?.code.value,
         errorMessage: error?.msg,
+        uploadFailed: uploadFailed,
       ),
     );
   }
@@ -167,6 +169,77 @@ void main() {
     });
   }
 
+  for (final succeeded in [false, true]) {
+    testWidgets(
+        'settles new pending attachment on ${succeeded ? 'success' : 'terminal failure'}',
+        (tester) async {
+      final storage = _TestStorage();
+      getIt.registerSingleton<FileStorageService>(storage);
+      addTearDown(() async {
+        await storage.dispose();
+        await getIt.unregister<FileStorageService>();
+      });
+      final editor = EditorState.blank()
+        ..editorStyle = const EditorStyle.desktop();
+      addTearDown(editor.dispose);
+      await editor.apply(
+        editor.transaction
+          ..insertNode(
+            [0],
+            fileNode(
+              url: _url,
+              type: FileUrlType.cloud,
+              name: 'pending.mp4',
+              pendingUpload: true,
+            ),
+          ),
+      );
+      final pending = editor.getNodeAtPath([0])!;
+      await tester.pumpWidget(
+        WidgetTestApp(
+          child: Provider<EditorState>.value(
+            value: editor,
+            child: FileBlockComponent(node: pending),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('pending.mp4'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // A different device seeing an unavailable cloud object is not evidence
+      // that this upload failed; it may still be transferring elsewhere.
+      storage.failure = FlowyError(
+        code: ErrorCode.RecordNotFound,
+        msg: 'Missing cloud object',
+      );
+      await storage.refreshFileProgress(storage.notifier);
+      await tester.pumpAndSettle();
+      expect(editor.getNodeAtPath([0])?.id, pending.id);
+      expect(find.text('Pending sync'), findsOneWidget);
+
+      storage.failure = succeeded
+          ? null
+          : FlowyError(
+              code: ErrorCode.FileStorageLimitExceeded,
+              msg: 'Total storage limit exceeded',
+            );
+      storage.uploadFailed = !succeeded;
+      storage.finished = succeeded;
+      await storage.refreshFileProgress(storage.notifier);
+      await tester.pumpAndSettle();
+      final current = editor.getNodeAtPath([0]);
+      if (succeeded) {
+        expect(current?.id, pending.id);
+        expect(current?.attributes[FileBlockKeys.pendingUpload], isNot(true));
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+      } else {
+        expect(current?.id, isNot(pending.id));
+      }
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('shows upload progress and keeps quota failure after reopening',
       (tester) async {
     final storage = getIt.registerSingleton<FileStorageService>(_TestStorage())
@@ -223,6 +296,7 @@ void main() {
       code: ErrorCode.FileStorageLimitExceeded,
       msg: 'Total storage limit exceeded',
     );
+    storage.uploadFailed = true;
     await storage.refreshFileProgress(storage.notifier);
     await tester.pumpAndSettle();
     expect(find.text('video.mp4'), findsOneWidget);
@@ -258,6 +332,7 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     storage.failure = null;
+    storage.uploadFailed = false;
     storage.finished = true;
     await open();
     expect(find.text('video.mp4'), findsOneWidget);
