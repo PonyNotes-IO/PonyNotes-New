@@ -21,22 +21,32 @@ void main() {
     );
   });
 
-  test('HTTP 200 with a permission error is a failure', () async {
-    await http.runWithClient(
-      () => expectLater(
-        stopCollabSharing(uri, 'token'),
-        throwsA(
-          isA<Exception>().having(
-            (error) => error.toString(),
-            'message',
-            contains('owner only'),
+  test('shows a readable reason for a stale share or a permission error',
+      () async {
+    for (final (code, message, expected) in [
+      (-2, 'Record not found:Record not exist in db.', '在共享记录指定的空间中找不到这篇文档。'),
+      (1012, 'owner only', '当前账号没有权限停止这篇文档的共享。'),
+    ]) {
+      await http.runWithClient(
+        () => expectLater(
+          stopCollabSharing(uri, 'token'),
+          throwsA(
+            isA<StopSharingFailure>()
+                .having(
+                  (error) => error.message,
+                  'message',
+                  expected,
+                )
+                .having(
+                    (error) => error.detail, 'diagnostic', contains(message)),
           ),
         ),
-      ),
-      () => MockClient(
-        (_) async => http.Response('{"code":1012,"message":"owner only"}', 200),
-      ),
-    );
+        () => MockClient(
+          (_) async =>
+              http.Response('{"code":$code,"message":"$message"}', 200),
+        ),
+      );
+    }
   });
 
   test('rejects HTTP failures and malformed success responses', () async {
