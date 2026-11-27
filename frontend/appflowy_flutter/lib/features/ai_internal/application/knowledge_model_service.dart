@@ -131,6 +131,17 @@ class KnowledgeModelService {
   Future<List<KnowledgeBase>> bases() async => (await knowledge.bases())
       .where((b) => b.workspaceId == workspaceId && b.canManage && b.ready)
       .toList();
+  Future<bool> testConnection(String id) async {
+    if (id.startsWith('custom:')) {
+      return customService.testCustomModel(workspaceId, id);
+    }
+    final result = await knowledge.post('model_test', {
+      'workspace_id': workspaceId,
+      'id': id,
+    });
+    return result['available'] as bool;
+  }
+
   Future<void> delete(String id) async {
     if (id.startsWith('custom:')) {
       await customService.deleteCustomModel(workspaceId, id);

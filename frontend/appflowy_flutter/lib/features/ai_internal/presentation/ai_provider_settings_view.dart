@@ -1,5 +1,5 @@
-import 'dart:math' as math;
-
+import 'package:appflowy/features/agent/application/agent_error.dart';
+import 'package:appflowy/plugins/knowledge_base/knowledge_base_service.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/features/ai_internal/application/knowledge_model_service.dart';
@@ -40,6 +40,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   KnowledgeModel? _initial;
   String? _error;
   String? _deleting;
+  String? _testing;
   @override
   void initState() {
     super.initState();
@@ -205,6 +206,11 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ),
       ],
     );
+    if (_loading ||
+        _error != null ||
+        (_service?.canManage != true && _service?.canManageChat != true)) {
+      return heading;
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth <
@@ -231,10 +237,7 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
   }
 
   Widget _addButton(BuildContext context) => OutlinedButton.icon(
-        onPressed: _loading ||
-                (_service?.canManage != true && _service?.canManageChat != true)
-            ? null
-            : () => _edit(),
+        onPressed: () => _edit(),
         icon: const Icon(Symbols.add, size: 16, weight: 400),
         label: const Text('添加模型'),
         style: OutlinedButton.styleFrom(
@@ -416,30 +419,28 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
                     Symbols.edit,
                     canEdit ? () => _edit(model) : null,
                   ),
-                  // shortcut: sharing has no defined behavior yet; keep this slot inert until specified.
-                  GestureDetector(
-                    key: ValueKey('model-share-placeholder-${model.id}'),
-                    behavior: HitTestBehavior.opaque,
-                    excludeFromSemantics: true,
-                    onTap: () {},
-                    child: Semantics(
-                      label: '分享',
-                      enabled: false,
-                      child: SizedBox.square(
-                        dimension: 24,
-                        child: Transform.rotate(
-                          angle: -math.pi / 4,
-                          child: Icon(
-                            Symbols.link,
-                            size: 16,
-                            weight: 350,
-                            color: theme.textColorScheme.primary
-                                .withValues(alpha: .5),
-                          ),
+                  if (_testing == model.id)
+                    const SizedBox.square(
+                      dimension: 24,
+                      child: Padding(
+                        padding: EdgeInsets.all(5),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          semanticsLabel: '正在测试连通性',
                         ),
                       ),
+                    )
+                  else
+                    _action(
+                      '测试连通性',
+                      Symbols.link,
+                      _testing == null &&
+                              !_loading &&
+                              _error == null &&
+                              (canEdit || model.id.startsWith('custom:'))
+                          ? () => _testConnection(model)
+                          : null,
                     ),
-                  ),
                   _action(
                     '删除模型',
                     Symbols.delete,
@@ -533,6 +534,38 @@ class _AiProviderSettingsViewState extends State<AiProviderSettingsView> {
         ),
       ),
     );
+  }
+
+  Future<void> _testConnection(KnowledgeModel model) async {
+    final service = _service;
+    if (service == null || _testing != null) return;
+    setState(() => _testing = model.id);
+    String message;
+    try {
+      final available = await service.testConnection(model.id);
+      message = available
+          ? '「${model.label}」连通性测试通过'
+          : '「${model.label}」连通性测试失败，请检查接口地址、模型名称和 API Key。';
+    } catch (error) {
+      final status = switch (error) {
+        AgentRequestError() => error.statusCode,
+        KnowledgeBaseException() => error.status,
+        _ => null,
+      };
+      message = switch (status) {
+        400 => '模型配置无法测试，请检查接口地址。',
+        401 => '登录已过期，请重新登录后再测试。',
+        403 => '该模型不可访问，或你没有测试权限。',
+        404 => '模型或测试接口不可用，请刷新列表后重试。',
+        _ => '未能完成连通性测试，请稍后重试。',
+      };
+    } finally {
+      if (mounted) setState(() => _testing = null);
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _delete(KnowledgeModel model) async {

@@ -441,6 +441,8 @@ void main() {
       tester.widget<SettingsDialog>(find.byType(SettingsDialog)).initPage,
       SettingsPage.aiProvider,
     );
+    expect(find.text('模型管理'), findsWidgets);
+    expect(find.text('内部 AI 对话'), findsNothing);
     expect(tester.getSize(find.byType(Scaffold)), const Size(1261, 800));
     tester.view.physicalSize = const Size(1000, 700);
     await tester.pump(const Duration(milliseconds: 50));

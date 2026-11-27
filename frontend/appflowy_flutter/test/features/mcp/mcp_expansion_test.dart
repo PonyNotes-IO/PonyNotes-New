@@ -106,7 +106,7 @@ void main() {
       File('test/fixtures/mcp-approved-tools.json').readAsStringSync(),
     ) as Map;
     final selected = (approved['tools'] as List).cast<Map>();
-    expect(selected.length, 66);
+    expect(selected.length, approved['approved_count']);
     expect(specs.map((s) => s.name).toSet(), {
       ...McpPermissions.legacyTools,
       ...selected.map((t) => t['name'] as String),

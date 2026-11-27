@@ -47,7 +47,6 @@ class SettingsMenuElement extends StatelessWidget {
         SettingsPage.manageData => Symbols.database,
         SettingsPage.shortcuts => Symbols.keyboard,
         SettingsPage.ai || SettingsPage.aiProvider => Symbols.auto_awesome,
-        SettingsPage.aiChat => Symbols.forum,
         SettingsPage.cloud => Symbols.cloud,
         SettingsPage.featureFlags => Symbols.flag,
         SettingsPage.mcp => Symbols.network_node,

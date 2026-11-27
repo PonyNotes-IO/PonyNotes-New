@@ -44,7 +44,6 @@ enum SettingsPage {
   featureFlags,
   mcp,
   aiProvider,
-  aiChat,
 }
 
 class SettingsDialogBloc

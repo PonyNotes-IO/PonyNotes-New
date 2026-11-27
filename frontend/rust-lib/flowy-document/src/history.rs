@@ -30,6 +30,76 @@ pub struct DocumentHistoryListPB {
   pub has_more: bool,
   #[pb(index = 3)]
   pub retention_days: i32,
+  #[pb(index = 4)]
+  pub storage_limited: bool,
+}
+
+#[derive(Default, flowy_derive::ProtoBuf)]
+pub struct DocumentHistoryIndexQueryPB {
+  #[pb(index = 1)]
+  pub search: String,
+  #[pb(index = 2)]
+  pub workspace_id: String,
+  #[pb(index = 3)]
+  pub before: i64,
+  #[pb(index = 4)]
+  pub before_document: String,
+}
+
+#[derive(Default, flowy_derive::ProtoBuf)]
+pub struct DocumentHistoryIndexPB {
+  #[pb(index = 1)]
+  pub items: Vec<DocumentHistorySummaryPB>,
+  #[pb(index = 2)]
+  pub has_more: bool,
+}
+
+#[derive(Default, flowy_derive::ProtoBuf)]
+pub struct DocumentHistorySummaryPB {
+  #[pb(index = 1)]
+  pub workspace_id: String,
+  #[pb(index = 2)]
+  pub document_id: String,
+  #[pb(index = 3)]
+  pub name: String,
+  #[pb(index = 4)]
+  pub workspace_name: String,
+  #[pb(index = 5)]
+  pub path: Vec<String>,
+  #[pb(index = 6)]
+  pub latest_version_at: i64,
+}
+
+pub(crate) async fn list_documents_with_history_handler(
+  data: AFPluginData<DocumentHistoryIndexQueryPB>,
+  manager: AFPluginState<Weak<DocumentManager>>,
+) -> DataResult<DocumentHistoryIndexPB, FlowyError> {
+  let manager = manager.upgrade().ok_or_else(FlowyError::ref_drop)?;
+  let query = data.into_inner();
+  let result = manager
+    .cloud_service
+    .list_documents_with_history(
+      &query.search,
+      &query.workspace_id,
+      query.before,
+      &query.before_document,
+    )
+    .await?;
+  data_result_ok(DocumentHistoryIndexPB {
+    items: result
+      .items
+      .into_iter()
+      .map(|item| DocumentHistorySummaryPB {
+        workspace_id: item.workspace_id,
+        document_id: item.document_id,
+        name: item.name,
+        workspace_name: item.workspace_name,
+        path: item.path,
+        latest_version_at: item.latest_version_at,
+      })
+      .collect(),
+    has_more: result.has_more,
+  })
 }
 
 fn parse(manager: &DocumentManager, query: &DocumentHistoryQueryPB) -> FlowyResult<(Uuid, Uuid)> {
@@ -54,6 +124,7 @@ impl From<flowy_document_pub::cloud::DocumentVersionMeta> for DocumentSnapshotMe
       object_id: v.object_id,
       created_at: v.created_at,
       reused: v.reused,
+      source: v.source,
     }
   }
 }
@@ -74,6 +145,7 @@ pub(crate) async fn list_document_versions_handler(
     items: result.items.into_iter().map(Into::into).collect(),
     has_more: result.has_more,
     retention_days: result.retention_days,
+    storage_limited: result.storage_limited,
   })
 }
 
@@ -126,6 +198,15 @@ pub(crate) async fn restore_document_version_handler(
     .get_document_version(&document, &workspace, &snapshot)
     .await?;
   let live = manager.editable_document(&document).await?;
+  if !query.workspace_id.is_empty() {
+    let remote = manager
+      .get_cloud_document_data(&document, Some(workspace))
+      .await?;
+    let current = live.read().await.get_document_data()?;
+    if serde_json::to_value(&current)? != serde_json::to_value(remote)? {
+      return Err(FlowyError::invalid_data().with_context("history_document_changed"));
+    }
+  }
   let backup = restore_with_backup(
     &live,
     manager.cloud_service.as_ref(),
@@ -148,7 +229,7 @@ async fn restore_with_backup(
   Document::create(&document.to_string(), target.clone())?;
   let current = live.read().await.get_document_data()?;
   let backup = cloud
-    .save_document_version(document, workspace, current.clone())
+    .save_document_backup(document, workspace, current.clone())
     .await?;
   replace_if_unchanged(&mut *live.write().await, &current, target)?;
   Ok(backup)
@@ -231,6 +312,7 @@ mod tests {
         object_id: document.to_string(),
         created_at: 0,
         reused,
+        source: String::new(),
       })
     }
     async fn get_document_doc_state(&self, _: &Uuid, _: &Uuid) -> FlowyResult<Vec<u8>> {

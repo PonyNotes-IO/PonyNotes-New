@@ -5,6 +5,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -61,10 +62,16 @@ class AgentInternalService {
   final http.Client? _client;
   final Future<AgentCloudAccount> Function() _account;
   static const _secure = FlutterSecureStorage();
+  static const _customModelPrefix = 'custom:';
   DateTime? _expiresAt;
   bool get sessionNeedsRefresh =>
       _expiresAt == null ||
       DateTime.now().add(const Duration(minutes: 5)).isAfter(_expiresAt!);
+
+  // Ad hoc macOS builds cannot access the data protection keychain.
+  static bool _missingKeychainEntitlement(PlatformException error) =>
+      error.code == 'Unexpected security result code' &&
+      error.details == -34018;
 
   Future<Map<String, dynamic>> _request(
     String path, {
@@ -131,50 +138,61 @@ class AgentInternalService {
     List<AiProviderConfig>? available,
     String? workspaceId,
   }) async {
-    final custom = await const AiProviderConfigStorage().load();
     // Existing custom endpoints keep working without a cloud account.
     AgentCloudAccount account;
     try {
       account = await _account();
     } catch (_) {
-      if ((!getIt.isRegistered<AppFlowyCloudSharedEnv>() ||
-              !getIt<AppFlowyCloudSharedEnv>()
-                  .authenticatorType
-                  .isAppFlowyCloudEnabled) &&
-          custom.isComplete) {
-        return custom;
+      if (!getIt.isRegistered<AppFlowyCloudSharedEnv>() ||
+          !getIt<AppFlowyCloudSharedEnv>()
+              .authenticatorType
+              .isAppFlowyCloudEnabled) {
+        final custom = await const AiProviderConfigStorage().load();
+        if (custom.isComplete) return custom;
       }
       rethrow;
     }
     final prefs = await SharedPreferences.getInstance();
     final model = prefs.getString(account.selectionKey);
-    if (model != null) {
+    if (model != null && !model.startsWith(_customModelPrefix)) {
       available ??= await models(account: account);
       if (available.isEmpty) throw StateError('暂无可用内部模型，请联系管理员');
       return available.where((value) => value.modelName == model).firstOrNull ??
           available.first;
     }
-    final selectedCustom = await _secure.read(key: account.customSelectionKey);
-    if (selectedCustom != null) {
-      final data = jsonDecode(selectedCustom) as Map<String, dynamic>;
-      if (data['customModelId'] != null) {
-        workspaceId ??= (await UserBackendService.getCurrentWorkspace())
-            .fold((value) => value.id, (_) => throw StateError('无法读取工作区'));
-        final models = await customModels(workspaceId!, personal: true);
-        final match = models
-            .where((m) => m['id'] == 'custom:${data['customModelId']}')
-            .firstOrNull;
-        if (match != null) return customConfig(match);
-        available ??= await this.models(account: account);
-        if (available.isEmpty) throw StateError('所选模型已删除或无权使用，请重新选择');
-        return available.first;
+    Map<String, dynamic>? legacySelection;
+    if (model == null) {
+      try {
+        final raw = await _secure.read(key: account.customSelectionKey);
+        if (raw != null) {
+          legacySelection = jsonDecode(raw) as Map<String, dynamic>;
+        }
+      } on PlatformException catch (e) {
+        if (!_missingKeychainEntitlement(e)) rethrow;
       }
+    }
+    final legacyCustomId = legacySelection?['customModelId'] as String?;
+    final customModelId =
+        model?.substring(_customModelPrefix.length) ?? legacyCustomId;
+    if (customModelId != null) {
+      workspaceId ??= (await UserBackendService.getCurrentWorkspace())
+          .fold((value) => value.id, (_) => throw StateError('无法读取工作区'));
+      final models = await customModels(workspaceId!, personal: true);
+      final match = models
+          .where((m) => m['id'] == '$_customModelPrefix$customModelId')
+          .firstOrNull;
+      if (match != null) return customConfig(match);
+      available ??= await this.models(account: account);
+      if (available.isEmpty) throw StateError('所选模型已删除或无权使用，请重新选择');
+      return available.first;
+    }
+    if (legacySelection != null) {
       final config = AiProviderConfig(
-        baseUrl: data['baseUrl'] as String,
-        modelName: data['modelName'] as String,
-        apiKey: data['apiKey'] as String,
-        supportsReasoning: data['supportsReasoning'] == true,
-        creatorName: data['creatorName'] as String? ?? '',
+        baseUrl: legacySelection['baseUrl'] as String,
+        modelName: legacySelection['modelName'] as String,
+        apiKey: legacySelection['apiKey'] as String,
+        supportsReasoning: legacySelection['supportsReasoning'] == true,
+        creatorName: legacySelection['creatorName'] as String? ?? '',
       );
       if (config.isComplete) return config;
     }
@@ -184,44 +202,42 @@ class AgentInternalService {
   }
 
   Future<void> select(AiProviderConfig config) async {
-    if (!config.isInternal) {
-      AgentCloudAccount? account;
-      try {
-        account = await _account();
-      } catch (_) {
-        if (config.customModelId.isNotEmpty ||
-            (getIt.isRegistered<AppFlowyCloudSharedEnv>() &&
-                getIt<AppFlowyCloudSharedEnv>()
-                    .authenticatorType
-                    .isAppFlowyCloudEnabled)) {
-          rethrow;
-        }
-      }
-      if (config.customModelId.isEmpty) {
-        await const AiProviderConfigStorage().save(config);
-      }
-      if (account != null) {
-        final prefs = await SharedPreferences.getInstance();
-        await _secure.write(
-          key: account.customSelectionKey,
-          value: jsonEncode({
-            if (config.customModelId.isNotEmpty)
-              'customModelId': config.customModelId,
-            'baseUrl': config.baseUrl,
-            'modelName': config.modelName,
-            'apiKey': config.apiKey,
-            'supportsReasoning': config.supportsReasoning,
-            'creatorName': config.creatorName,
-          }),
-        );
-        await prefs.remove(account.selectionKey);
-      }
+    if (config.isInternal || config.customModelId.isNotEmpty) {
+      final account = await _account();
+      final prefs = await SharedPreferences.getInstance();
+      final selection = config.isInternal
+          ? config.modelName
+          : '$_customModelPrefix${config.customModelId}';
+      await prefs.setString(account.selectionKey, selection);
       return;
     }
-    final account = await _account();
+
+    AgentCloudAccount? account;
+    try {
+      account = await _account();
+    } catch (_) {
+      if (getIt.isRegistered<AppFlowyCloudSharedEnv>() &&
+          getIt<AppFlowyCloudSharedEnv>()
+              .authenticatorType
+              .isAppFlowyCloudEnabled) {
+        rethrow;
+      }
+    }
+    await const AiProviderConfigStorage().save(config);
+    if (account == null) return;
+
     final prefs = await SharedPreferences.getInstance();
-    await _secure.delete(key: account.customSelectionKey);
-    await prefs.setString(account.selectionKey, config.modelName);
+    await _secure.write(
+      key: account.customSelectionKey,
+      value: jsonEncode({
+        'baseUrl': config.baseUrl,
+        'modelName': config.modelName,
+        'apiKey': config.apiKey,
+        'supportsReasoning': config.supportsReasoning,
+        'creatorName': config.creatorName,
+      }),
+    );
+    await prefs.remove(account.selectionKey);
   }
 
   Future<Map<String, dynamic>> customCatalog(
@@ -254,6 +270,15 @@ class AgentInternalService {
     return response['id'] as String;
   }
 
+  Future<bool> testCustomModel(String workspaceId, String id) async {
+    final path = Uri.encodeComponent(id.replaceFirst('custom:', ''));
+    final result = await _request(
+      '/api/ai/agent/custom-models/$workspaceId/$path/test',
+      post: true,
+    );
+    return result['available'] as bool;
+  }
+
   Future<void> deleteCustomModel(String workspaceId, String id) async {
     await _request(
       '/api/ai/agent/custom-models/$workspaceId/${id.replaceFirst('custom:', '')}',
@@ -276,7 +301,13 @@ class AgentInternalService {
   }
 
   Future<List<AiProviderConfig>> legacyProfiles() async {
-    final profiles = await const AiProviderConfigStorage().loadProfiles();
+    final List<AiProviderConfig> profiles;
+    try {
+      profiles = await const AiProviderConfigStorage().loadProfiles();
+    } on PlatformException catch (e) {
+      if (!_missingKeychainEntitlement(e)) rethrow;
+      return [];
+    }
     if (profiles.isEmpty) return profiles;
     AgentCloudAccount account;
     try {

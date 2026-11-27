@@ -299,7 +299,20 @@ void main() {
     expect(McpServerService.constantTimeEquals('short', digest), isFalse);
   });
 
-  test('server exposes the read tools', () async {
+  test('server keeps supported tools and ignores removed netdisk permissions',
+      () async {
+    const removed = ['storage_authorization', 'remote_storage_files'];
+    SharedPreferences.setMockInitialValues({
+      'mcp_enabled_extended_tools': [
+        ...removed,
+        'create_space',
+        'assets',
+        'document_transfer',
+      ],
+    });
+    await McpPermissions.instance.load();
+    addTearDown(McpPermissions.instance.allowAll);
+
     final toServer = StreamController<List<int>>();
     final toClient = StreamController<List<int>>();
     final serverTransport = IOStreamTransport(
@@ -325,8 +338,9 @@ void main() {
     await client.connect(clientTransport);
 
     final tools = await client.listTools();
+    final names = tools.tools.map((tool) => tool.name);
     expect(
-      tools.tools.map((tool) => tool.name),
+      names,
       containsAll([
         'get_context',
         'list_workspaces',
@@ -355,8 +369,23 @@ void main() {
         'insert_block',
         'update_block',
         'delete_block',
+        'assets',
+        'document_transfer',
       ]),
     );
+    for (final name in removed) {
+      expect(names, isNot(contains(name)));
+      await expectLater(
+        client.callTool(CallToolRequest(name: name)),
+        throwsA(
+          isA<McpError>().having(
+            (error) => error.message,
+            'message',
+            "Tool '$name' not found",
+          ),
+        ),
+      );
+    }
   });
 
   // 回归：注册表一度只填了 3 个工具，内部 AI 因此看不到检索与写操作。
@@ -364,7 +393,7 @@ void main() {
     final tools = McpTools(endpoint: 'test', version: '1.0.0');
     final specs = tools.toolSpecs;
 
-    expect(specs.length, 97);
+    expect(specs.length, 95);
     expect(
       specs.map((spec) => spec.name).toSet().length,
       specs.length,

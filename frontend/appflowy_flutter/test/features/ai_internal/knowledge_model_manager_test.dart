@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
@@ -17,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ModelApiFixture {
+  Completer<bool>? pendingTest;
   final requests = <(String, Map<String, dynamic>)>[];
   Map<String, dynamic>? saved;
   String? savedId;
@@ -41,12 +43,21 @@ class ModelApiFixture {
     ),
     client: MockClient((request) async {
       if (request.url.path.contains('/custom-models/')) {
+        if (request.url.pathSegments.last == 'test') {
+          expect(request.method, 'POST');
+          expect(request.headers['Authorization'], 'Bearer account-token');
+          expect(request.body, isEmpty);
+          requests.add(('shared_test', {'id': request.url.pathSegments[5]}));
+          return http.Response(jsonEncode({'available': false}), 200);
+        }
         if (request.method == 'GET') {
           return http.Response.bytes(
-            utf8.encode(jsonEncode({
-              'models': customModels,
-              'can_manage': canManage,
-            })),
+            utf8.encode(
+              jsonEncode({
+                'models': customModels,
+                'can_manage': canManage,
+              }),
+            ),
             rejectModels ? 503 : 200,
           );
         }
@@ -219,6 +230,8 @@ class ModelApiFixture {
                 ...additionalProviders,
               ],
             };
+          case 'model_test':
+            result = {'available': await pendingTest?.future ?? true};
           case 'model_save':
             if (rejectSave) return http.Response('{}', 409);
             savedId = data['id'] as String?;
@@ -421,7 +434,7 @@ void main() {
   });
 
   testWidgets(
-      'cards match the design size and surface; builtins and share slots stay inert',
+      'cards keep their design size; only saved custom models can be tested',
       (tester) async {
     final fixture = ModelApiFixture();
     addTearDown(fixture.service.close);
@@ -457,19 +470,24 @@ void main() {
     await tester.tap(builtin);
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);
-    final share = find.byKey(const ValueKey('model-share-placeholder-rank'));
-    final requests = fixture.requests.length;
-    await tester.tap(share);
-    await tester.pumpAndSettle();
-    expect(fixture.requests.length, requests);
-    expect(fixture.saved, isNull);
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(find.text('编辑模型'), findsNothing);
-    expect(
-      find.descendant(of: custom, matching: find.byType(IconButton)),
-      findsNWidgets(2),
+    final testButton = find.descendant(
+      of: custom,
+      matching: find.byTooltip('测试连通性'),
     );
-    expect(share, findsOneWidget);
+    final probe = fixture.pendingTest = Completer<bool>();
+    await tester.tap(testButton);
+    await tester.pump();
+    expect(find.bySemanticsLabel('正在测试连通性'), findsOneWidget);
+    expect(fixture.requests.last.$1, 'model_test');
+    expect(fixture.requests.last.$2, {
+      'workspace_id': ModelApiFixture.workspace,
+      'id': 'rank',
+    });
+    probe.complete(true);
+    await tester.pumpAndSettle();
+    expect(find.text('「gte-rerank-v2」连通性测试通过'), findsOneWidget);
+    expect(testButton, findsOneWidget);
+    expect(fixture.saved, isNull);
   });
 
   testWidgets(
@@ -858,7 +876,7 @@ void main() {
     final card = find.byKey(const ValueKey('model-card-editable-chat'));
     expect(
       find.descendant(of: card, matching: find.byType(InkWell)),
-      findsNWidgets(2),
+      findsNWidgets(3),
     );
     final requests = fixture.requests.length;
     await tester.tapAt(tester.getTopLeft(card) + const Offset(12, 40));
@@ -956,7 +974,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     final readonly = ModelApiFixture()..canManage = false;
     addTearDown(readonly.service.close);
-    await pumpModelManager(tester, readonly);
+    await pumpModelManager(tester, readonly, width: 320);
     expect(
       tester
           .widget<IconButton>(
@@ -977,21 +995,7 @@ void main() {
           .onPressed,
       isNull,
     );
-    expect(
-      tester
-          .widget<OutlinedButton>(
-            find
-                .ancestor(
-                  of: find.text('添加模型'),
-                  matching: find.byWidgetPredicate(
-                    (widget) => widget is OutlinedButton,
-                  ),
-                )
-                .first,
-          )
-          .onPressed,
-      isNull,
-    );
+    expect(find.text('添加模型'), findsNothing);
     expect(tester.takeException(), isNull);
   });
   testWidgets(
@@ -1035,13 +1039,15 @@ void main() {
     final edit =
         find.descendant(of: card, matching: find.byType(IconButton)).first;
     expect(tester.widget<IconButton>(edit).onPressed, isNull);
-    final add = find
-        .ancestor(
-          of: find.text('添加模型'),
-          matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-        )
-        .first;
-    expect(tester.widget<OutlinedButton>(add).onPressed, isNull);
+    expect(find.text('添加模型'), findsNothing);
+    final testButton =
+        find.descendant(of: card, matching: find.byTooltip('测试连通性'));
+    await tester.ensureVisible(testButton);
+    await tester.tap(testButton);
+    await tester.pumpAndSettle();
+    expect(fixture.requests.last.$1, 'shared_test');
+    expect(fixture.requests.last.$2, {'id': 'owned'});
+    expect(find.textContaining('连通性测试失败'), findsOneWidget);
   });
   testWidgets('workspace managers see custom models without creator labels',
       (tester) async {

@@ -533,6 +533,8 @@ pub struct DocumentSnapshotMetaPB {
   pub created_at: i64,
   #[pb(index = 4)]
   pub reused: bool,
+  #[pb(index = 5)]
+  pub source: String,
 }
 
 #[derive(Debug, Default, ProtoBuf)]

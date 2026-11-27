@@ -846,6 +846,7 @@ impl DocumentManager {
         object_id: meta.object_id,
         created_at: meta.created_at,
         reused: false,
+        source: String::new(),
       })
       .collect::<Vec<_>>();
 

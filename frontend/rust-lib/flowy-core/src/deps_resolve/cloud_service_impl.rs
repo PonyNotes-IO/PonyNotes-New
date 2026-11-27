@@ -25,7 +25,8 @@ use flowy_database_pub::cloud::{
 };
 use flowy_document::deps::DocumentData;
 use flowy_document_pub::cloud::{
-  DocumentCloudService, DocumentSnapshot, DocumentVersionList, DocumentVersionMeta,
+  DocumentCloudService, DocumentHistoryIndex, DocumentSnapshot, DocumentVersionList,
+  DocumentVersionMeta,
 };
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder_pub::cloud::{
@@ -603,6 +604,17 @@ impl DatabaseAIService for ServerProvider {
 
 #[async_trait]
 impl DocumentCloudService for ServerProvider {
+  async fn list_documents_with_history(
+    &self,
+    search: &str,
+    workspace: &str,
+    before: i64,
+    before_document: &str,
+  ) -> Result<DocumentHistoryIndex, FlowyError> {
+    self.get_server()?.document_service()
+      .list_documents_with_history(search, workspace, before, before_document).await
+  }
+
   async fn list_document_versions(
     &self,
     document: &Uuid,
@@ -640,6 +652,16 @@ impl DocumentCloudService for ServerProvider {
       .document_service()
       .save_document_version(document, workspace, data)
       .await
+  }
+
+  async fn save_document_backup(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    self.get_server()?.document_service()
+      .save_document_backup(document, workspace, data).await
   }
   async fn get_document_doc_state(
     &self,

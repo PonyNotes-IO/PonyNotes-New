@@ -5,11 +5,14 @@ import 'package:appflowy_backend/log.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:ohos_native_bridge/ohos_native_bridge.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'startup/startup.dart';
 import 'startup/android_privacy_consent.dart';
 import 'startup/startup_shell.dart';
+import 'startup/tasks/keyboard_state_fix_task.dart';
 import 'workspace/presentation/home/page_windows.dart';
 import 'util/performance_trace.dart';
 
@@ -57,6 +60,9 @@ Future<void> main(List<String> args) async {
   // 鼠标选工具偏移、绘图轨迹错位、画布整体漂移。改用标准 WidgetsFlutterBinding 彻底修复。
   // 代价：App 全局缩放(Cmd +/-)暂停用（相关调用已在 hotkeys/windows 中安全屏蔽，按键不再生效也不崩溃）。
   WidgetsFlutterBinding.ensureInitialized();
+  if (kDebugMode && Platform.isMacOS) {
+    KeyboardStateFixTask.installMacOSDebugKeyDataHandler();
+  }
   if (Platform.isAndroid) {
     if (!await AndroidPrivacyConsent.ensureAccepted()) return;
     await AndroidPrivacyConsent.initializePlugins();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:appflowy/env/backend_env.dart';
@@ -7,6 +8,7 @@ import 'package:appflowy/features/agent/application/agent_controller.dart';
 import 'package:appflowy/features/agent/application/agent_internal_service.dart';
 import 'package:appflowy/features/ai_internal/application/ai_provider_config.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -19,10 +21,72 @@ const account = AgentCloudAccount(
   userId: '1',
 );
 
+class _UnavailableKeychain extends MapBase<String, String> {
+  static final error = PlatformException(
+    code: 'Unexpected security result code',
+    details: -34018,
+  );
+
+  @override
+  String? operator [](Object? key) => throw error;
+
+  @override
+  void operator []=(String key, String value) => throw error;
+
+  @override
+  Iterable<String> get keys => throw error;
+
+  @override
+  void clear() => throw error;
+
+  @override
+  String? remove(Object? key) => throw error;
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
+  });
+
+  test('cloud models can be selected when macOS denies access to Keychain',
+      () async {
+    FlutterSecureStorage.setMockInitialValues(_UnavailableKeychain());
+    const id = '11111111-1111-4111-8111-111111111111';
+    const builtins = [
+      AiProviderConfig(modelName: 'deepseek-chat', isInternal: true),
+      AiProviderConfig(modelName: 'doubao', isInternal: true),
+    ];
+    final service = AgentInternalService(
+      account: () async => account,
+      client: MockClient((request) async {
+        expect(request.url.path, '/api/ai/agent/custom-models/home');
+        return http.Response(
+          '{"models":[{"id":"custom:$id","name":"custom-model"}]}',
+          200,
+        );
+      }),
+    );
+    expect(await service.legacyProfiles(), isEmpty);
+    expect(await service.preferred(available: builtins), same(builtins.first));
+
+    await service.select(builtins.last);
+    expect(await service.preferred(available: builtins), same(builtins.last));
+
+    final custom = AgentInternalService.customConfig(
+      (await service.customModels('home', personal: true)).single,
+    );
+    await service.select(custom.copyWith(apiKey: 'test-secret'));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    expect(prefs.getString(account.selectionKey), 'custom:$id');
+    final restored =
+        await service.preferred(available: builtins, workspaceId: 'home');
+    expect(restored.customModelId, id);
+    expect(restored.apiKey, isEmpty);
+
+    await service.select(builtins.first);
+    expect(await service.preferred(available: builtins), same(builtins.first));
   });
 
   test('new users discover managed models and give runtime only an Agent token',
@@ -417,9 +481,18 @@ void main() {
     expect(model.isComplete, true);
     expect(model.isInternal, false);
     expect(model.apiKey, isEmpty);
+    const builtins = [AiProviderConfig(modelName: 'builtin', isInternal: true)];
+    await const FlutterSecureStorage().write(
+      key: account.customSelectionKey,
+      value: jsonEncode({'customModelId': id}),
+    );
+    expect(
+      (await service.preferred(available: builtins, workspaceId: 'home'))
+          .customModelId,
+      id,
+    );
     await service.select(model);
     expect(await const AiProviderConfigStorage().loadProfiles(), isEmpty);
-    const builtins = [AiProviderConfig(modelName: 'builtin', isInternal: true)];
     expect(
       (await service.preferred(available: builtins, workspaceId: 'home'))
           .customModelId,

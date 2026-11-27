@@ -110,7 +110,6 @@ import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/e
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/editor_image.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
-import 'package:appflowy/plugins/file_library/services/baidu_cloud_service.dart';
 import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy/plugins/import_page/enhanced_pdf_import_dialog.dart';
 import 'package:appflowy/plugins/import_page/enhanced_word_import_dialog.dart';

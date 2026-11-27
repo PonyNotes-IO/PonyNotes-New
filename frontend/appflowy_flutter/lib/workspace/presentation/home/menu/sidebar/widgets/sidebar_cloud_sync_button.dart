@@ -243,6 +243,10 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
       Log.warn('[云同步弹框] UserWorkspaceBloc 不可用，使用传入的会员信息: $e');
     }
 
+    workspaceBloc?.add(
+      UserWorkspaceEvent.fetchCurrentSubscription(forceRefresh: true),
+    );
+
     await showDialog(
       context: context,
       barrierColor: Colors.transparent,

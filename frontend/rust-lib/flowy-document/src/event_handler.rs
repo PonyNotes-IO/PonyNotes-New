@@ -138,7 +138,20 @@ pub(crate) async fn get_document_data_handler(
   manager: AFPluginState<Weak<DocumentManager>>,
 ) -> DataResult<DocumentDataPB, FlowyError> {
   let manager = upgrade_document(manager)?;
-  let params: OpenDocumentParams = data.into_inner().try_into()?;
+  let payload = data.into_inner();
+  let workspace = if payload.workspace_id.is_empty() {
+    None
+  } else {
+    Some(Uuid::parse_str(&payload.workspace_id).map_err(|_| FlowyError::invalid_data())?)
+  };
+  let params: OpenDocumentParams = payload.try_into()?;
+  if let Some(workspace) = workspace {
+    let document_data = match manager.editable_document(&params.document_id).await {
+      Ok(live) => live.read().await.get_document_data()?,
+      Err(_) => manager.get_cloud_document_data(&params.document_id, Some(workspace)).await?,
+    };
+    return data_result_ok(document_data.into());
+  }
   let doc_id = params.document_id;
   let document_data = manager.get_document_data(&doc_id).await?;
   data_result_ok(DocumentDataPB::from(document_data))

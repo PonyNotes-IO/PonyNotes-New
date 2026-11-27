@@ -9,6 +9,16 @@ use uuid::Uuid;
 /// [flowy-server] crate for more information.
 #[async_trait]
 pub trait DocumentCloudService: Send + Sync + 'static {
+  async fn list_documents_with_history(
+    &self,
+    _search: &str,
+    _workspace: &str,
+    _before: i64,
+    _before_document: &str,
+  ) -> Result<DocumentHistoryIndex, FlowyError> {
+    Err(FlowyError::not_support())
+  }
+
   async fn list_document_versions(
     &self,
     _document: &Uuid,
@@ -34,6 +44,15 @@ pub trait DocumentCloudService: Send + Sync + 'static {
     _data: DocumentData,
   ) -> Result<DocumentVersionMeta, FlowyError> {
     Err(FlowyError::not_support())
+  }
+
+  async fn save_document_backup(
+    &self,
+    document: &Uuid,
+    workspace: &Uuid,
+    data: DocumentData,
+  ) -> Result<DocumentVersionMeta, FlowyError> {
+    self.save_document_version(document, workspace, data).await
   }
   async fn get_document_doc_state(
     &self,
@@ -74,10 +93,26 @@ pub struct DocumentVersionMeta {
   pub object_id: String,
   pub created_at: i64,
   pub reused: bool,
+  pub source: String,
+}
+
+pub struct DocumentHistoryIndex {
+  pub items: Vec<DocumentHistorySummary>,
+  pub has_more: bool,
+}
+
+pub struct DocumentHistorySummary {
+  pub workspace_id: String,
+  pub document_id: String,
+  pub name: String,
+  pub workspace_name: String,
+  pub path: Vec<String>,
+  pub latest_version_at: i64,
 }
 
 pub struct DocumentVersionList {
   pub items: Vec<DocumentVersionMeta>,
   pub has_more: bool,
   pub retention_days: i32,
+  pub storage_limited: bool,
 }

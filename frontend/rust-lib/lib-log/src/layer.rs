@@ -57,6 +57,18 @@ where
       .is_none_or(|f| f(metadata.target()))
   }
 
+  fn should_log_span(&self, metadata: &Metadata<'_>) -> bool {
+    if metadata.target() == "client_api::http"
+      && matches!(
+        metadata.name(),
+        "http_client_with_auth" | "get_profile" | "get_token_str"
+      )
+    {
+      return false;
+    }
+    self.should_log(metadata)
+  }
+
   fn serialize_fields(
     &self,
     map_serializer: &mut impl SerializeMap<Error = serde_json::Error>,
@@ -241,7 +253,7 @@ where
 
   fn on_new_span(&self, _attrs: &Attributes, id: &Id, ctx: Context<'_, S>) {
     let span = ctx.span(id).expect("Span not found, this is a bug");
-    if !self.should_log(span.metadata()) {
+    if !self.should_log_span(span.metadata()) {
       return;
     }
     if let Ok(serialized) = self.serialize_span(&span, Type::EnterSpan, &ctx) {
@@ -251,11 +263,45 @@ where
 
   fn on_close(&self, id: Id, ctx: Context<'_, S>) {
     let span = ctx.span(&id).expect("Span not found, this is a bug");
-    if !self.should_log(span.metadata()) {
+    if !self.should_log_span(span.metadata()) {
       return;
     }
     if let Ok(serialized) = self.serialize_span(&span, Type::ExitSpan, &ctx) {
       let _ = self.emit(serialized);
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::sync::Mutex;
+  use tracing_subscriber::layer::SubscriberExt;
+
+  #[test]
+  fn skips_repetitive_http_span_boundaries_but_keeps_events() {
+    static OUTPUT: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+    let subscriber =
+      tracing_subscriber::registry().with(FlowyFormattingLayer::new(|| OUTPUT.make_writer()));
+    tracing::subscriber::with_default(subscriber, || {
+      let auth = tracing::debug_span!(target: "client_api::http", "http_client_with_auth");
+      auth.in_scope(|| tracing::error!(target: "client_api::http", "request setup failed"));
+      drop(tracing::info_span!(target: "client_api::http", "get_profile"));
+      drop(tracing::debug_span!(target: "client_api::http", "get_token_str"));
+      drop(tracing::info_span!(target: "client_api::http", "get_workspaces_opt"));
+      drop(tracing::info_span!(target: "another_module", "get_profile"));
+    });
+
+    let output = OUTPUT.lock().unwrap();
+    let entries = std::str::from_utf8(&output)
+      .unwrap()
+      .lines()
+      .collect::<Vec<_>>();
+    assert_eq!(entries.len(), 5, "{:?}", entries);
+    assert!(entries[0].contains("[HTTP_CLIENT_WITH_AUTH - EVENT] request setup failed"));
+    assert!(entries[1].contains("GET_WORKSPACES_OPT - START"));
+    assert!(entries[2].contains("GET_WORKSPACES_OPT - END"));
+    assert!(entries[3].contains("GET_PROFILE - START"));
+    assert!(entries[4].contains("GET_PROFILE - END"));
   }
 }
